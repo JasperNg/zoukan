@@ -50,9 +50,11 @@ left to right, paged right to left, vertical, webtoon and continuous vertical.
 | N or `]`, P or `[` | Next / previous chapter |
 | `+` / `-` / `0`, Ctrl or Cmd + wheel, double-click | Zoom in / out / reset |
 | Wheel, drag | Pan; at the page edge the wheel turns the page (paged modes) |
-| Click left or right third | Previous / next page |
+| Click the tap zones | Previous / next page (Settings > Reader > Tap zones) |
 | Click the middle, M, Enter | Show or hide the menu |
 | F, F11 | Full screen |
+| R / Shift + R | Retry failed pages / load the shown page first |
+| D | Shift double pages by one |
 | `/` | Shortcut list |
 | Escape, Alt + Left, mouse back button | Back |
 

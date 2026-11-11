@@ -19,4 +19,7 @@ class ReaderActions {
     var zoomIn: () -> Unit = {}
     var zoomOut: () -> Unit = {}
     var zoomReset: () -> Unit = {}
+
+    /** Smooth auto scroll: scrolls a window's height over the given milliseconds; null where pages turn instead */
+    var smoothScroll: ((Long) -> Unit)? = null
 }

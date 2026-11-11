@@ -334,6 +334,9 @@ private fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
     }
     item { SliderPreference("Webtoon side padding", preferences.webtoonSidePadding(), 0..25) { "$it%" } }
     item { SwitchPreference("Show page number", preferences.showPageNumber()) }
+    // ZOUKAN -->
+    readerBehaviourSettings(preferences)
+    // ZOUKAN <--
 }
 
 /** Settings > Downloads: the format, concurrency and download password. */
