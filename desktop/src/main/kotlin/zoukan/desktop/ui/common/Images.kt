@@ -56,6 +56,10 @@ object Images {
             .components {
                 add(CoverKeyer())
                 add(CoverFetcher.Factory(coverDir))
+                // ZOUKAN -->
+                add(zoukan.desktop.ui.manga.PagePreviewKeyer())
+                add(zoukan.desktop.ui.manga.PagePreviewFetcher.Factory())
+                // ZOUKAN <--
             }
             .memoryCache {
                 MemoryCache.Builder().maxSizeBytes(256L * 1024 * 1024).build()

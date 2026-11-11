@@ -201,6 +201,11 @@ fun MangaInfoPane(
                 }
             }
         }
+        // ZOUKAN -->
+        // Komikku's related titles row, then SY's page previews, under the description
+        RelatedTitlesSection(manga)
+        PagePreviewSection(manga)
+        // ZOUKAN <--
     }
 }
 
