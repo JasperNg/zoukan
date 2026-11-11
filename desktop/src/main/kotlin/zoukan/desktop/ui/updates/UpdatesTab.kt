@@ -2,7 +2,9 @@ package zoukan.desktop.ui.updates
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
@@ -21,9 +25,16 @@ import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Deselect
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -74,6 +85,10 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.browse.sectionHeader
+import zoukan.desktop.ui.common.ContextMenu
+import zoukan.desktop.ui.common.ContextMenuDivider
+import zoukan.desktop.ui.common.ContextMenuItem
+import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -82,6 +97,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.downloads.DownloadsButton
 import zoukan.desktop.ui.library.ClickKind
@@ -209,14 +225,14 @@ class UpdatesScreenModel(
                 if (newlyRead.isNotEmpty()) downloadManager.afterMarkedRead(newlyRead)
             }
         }
-        clearSelection()
+        done(items)
     }
 
     fun setBookmark(items: List<UpdatesWithRelations>, bookmark: Boolean) {
         screenModelScope.launch {
             items.forEach { updateChapter.await(ChapterUpdate(id = it.chapterId, bookmark = bookmark)) }
         }
-        clearSelection()
+        done(items)
     }
 
     /** Chapters of [items] with their entry, grouped by entry; local chapters are left out. */
@@ -230,17 +246,25 @@ class UpdatesScreenModel(
         screenModelScope.launch {
             byEntry(items).forEach { (manga, chapters) -> downloadManager.enqueue(manga, chapters) }
         }
-        clearSelection()
+        done(items)
     }
 
     fun deleteDownloads(items: List<UpdatesWithRelations>) {
         screenModelScope.launch {
             byEntry(items).forEach { (manga, chapters) -> downloadManager.delete(manga, chapters) }
         }
-        clearSelection()
+        done(items)
     }
 
     fun cancelDownload(item: UpdatesWithRelations) = downloadManager.cancel(setOf(item.chapterId))
+
+    /**
+     * Ends an action on [items]: an action on the selection clears it, and one on a chapter outside
+     * the selection (its row's buttons or context menu) leaves the selection as it was.
+     */
+    private fun done(items: List<UpdatesWithRelations>) {
+        if (items.mapTo(HashSet()) { it.chapterId } == state.value.selected) clearSelection()
+    }
 
     fun toggleSelection(item: UpdatesWithRelations) = mutableState.update {
         it.copy(selected = if (item.chapterId in it.selected) it.selected - item.chapterId else it.selected + item.chapterId)
@@ -328,7 +352,21 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                             onDownload = { model.download(listOf(item)) },
                             onCancelDownload = { model.cancelDownload(item) },
                             onDeleteDownload = { model.deleteDownloads(listOf(item)) },
-                        )
+                        ) { menu ->
+                            // A right click on a selected chapter acts on the whole selection; on
+                            // any other chapter, on that chapter alone
+                            val selected = item.chapterId in state.selected
+                            UpdateContextMenu(
+                                menu = menu,
+                                state = state,
+                                model = model,
+                                item = item,
+                                targets = if (selected) state.selectedItems else listOf(item),
+                                selected = selected,
+                                onOpen = { navigator.push(ReaderScreen(item.mangaId, item.chapterId)) },
+                                onOpenManga = { navigator.push(MangaScreen(item.mangaId)) },
+                            )
+                        }
                     }
                 }
             }
@@ -388,6 +426,52 @@ private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScree
     }
 }
 
+/** A chapter's right-click menu: the selection toolbar's actions, for [targets]. */
+@Composable
+private fun ColumnScope.UpdateContextMenu(
+    menu: ContextMenuState,
+    state: UpdatesScreenModel.State,
+    model: UpdatesScreenModel,
+    item: UpdatesWithRelations,
+    targets: List<UpdatesWithRelations>,
+    selected: Boolean,
+    onOpen: () -> Unit,
+    onOpenManga: () -> Unit,
+) {
+    if (targets.size == 1) {
+        ContextMenuItem(menu, "Read", Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
+        ContextMenuItem(menu, "Open entry", Icons.AutoMirrored.Outlined.OpenInNew, onClick = onOpenManga)
+    }
+    if (selected) {
+        ContextMenuItem(menu, "Deselect", Icons.Outlined.Deselect) { model.toggleSelection(item) }
+    } else {
+        ContextMenuItem(menu, "Select", Icons.Outlined.CheckCircle) { model.toggleSelection(item) }
+    }
+    ContextMenuDivider()
+    if (targets.any { !it.read }) {
+        ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.setRead(targets, true) }
+    }
+    if (targets.any { it.read || it.lastPageRead > 0 }) {
+        ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.setRead(targets, false) }
+    }
+    if (targets.any { !it.bookmark }) {
+        ContextMenuItem(menu, "Bookmark", Icons.Outlined.BookmarkAdd) { model.setBookmark(targets, true) }
+    }
+    if (targets.any { it.bookmark }) {
+        ContextMenuItem(menu, "Remove bookmark", Icons.Outlined.BookmarkRemove) { model.setBookmark(targets, false) }
+    }
+    val remote = targets.filter { it.sourceId != LocalSource.ID }
+    if (remote.any { it.chapterId !in state.downloaded && it.chapterId !in state.queued }) {
+        ContextMenuItem(menu, "Download", Icons.Outlined.Download) { model.download(remote) }
+    }
+    if (remote.size == 1 && remote.single().chapterId in state.queued) {
+        ContextMenuItem(menu, "Cancel download", Icons.Outlined.Close) { model.cancelDownload(remote.single()) }
+    }
+    if (remote.any { it.chapterId in state.downloaded }) {
+        ContextMenuItem(menu, "Delete downloads", Icons.Outlined.Delete) { model.deleteDownloads(remote) }
+    }
+}
+
 @Composable
 private fun UpdateRow(
     item: UpdatesWithRelations,
@@ -400,50 +484,55 @@ private fun UpdateRow(
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onDeleteDownload: () -> Unit,
+    contextMenu: @Composable ColumnScope.(ContextMenuState) -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth()
-            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .selectableClick(onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CoverImage(
-            Cover.of(item.coverData),
-            Modifier.size(44.dp, 60.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenManga),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).alpha(if (item.read) 0.5f else 1f)) {
-            Text(item.mangaTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (item.bookmark) {
-                    Icon(Icons.Default.Bookmark, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+    val menu = rememberContextMenuState()
+    Box {
+        Row(
+            Modifier.fillMaxWidth()
+                .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                .selectableClick(menu::open, onClick)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CoverImage(
+                Cover.of(item.coverData),
+                Modifier.size(44.dp, 60.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenManga),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f).alpha(if (item.read) 0.5f else 1f)) {
+                Text(item.mangaTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (item.bookmark) {
+                        Icon(Icons.Default.Bookmark, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        item.chapterName + if (!item.read && item.lastPageRead > 0) " · Page ${item.lastPageRead + 1}" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                Text(
-                    item.chapterName + if (!item.read && item.lastPageRead > 0) " · Page ${item.lastPageRead + 1}" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            }
+            if (item.read) {
+                TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = onRead)
+            } else {
+                TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = onRead)
+            }
+            // ZOUKAN -->
+            // Android's Updates rows end with the chapter's download button
+            if (item.sourceId != LocalSource.ID) {
+                DownloadIndicator(
+                    downloaded = downloaded,
+                    download = download,
+                    onDownload = onDownload,
+                    onCancel = onCancelDownload,
+                    onDelete = onDeleteDownload,
                 )
             }
+            // ZOUKAN <--
         }
-        if (item.read) {
-            TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = onRead)
-        } else {
-            TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = onRead)
-        }
-        // ZOUKAN -->
-        // Android's Updates rows end with the chapter's download button
-        if (item.sourceId != LocalSource.ID) {
-            DownloadIndicator(
-                downloaded = downloaded,
-                download = download,
-                onDownload = onDownload,
-                onCancel = onCancelDownload,
-                onDelete = onDeleteDownload,
-            )
-        }
-        // ZOUKAN <--
+        ContextMenu(menu) { contextMenu(menu) }
     }
 }

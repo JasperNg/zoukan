@@ -440,14 +440,20 @@ class LibraryScreenModel(
 
     fun clearSelection() = mutableState.update { it.copy(selection = emptySet()) }
 
-    private fun selected(): List<Manga> {
-        val ids = state.value.selection
+    /**
+     * Ends an action on [ids]: an action on the selection clears it, and one from the context menu
+     * of an entry outside the selection leaves the selection as it was.
+     */
+    private fun done(ids: Set<Long>) {
+        if (ids == state.value.selection) clearSelection()
+    }
+
+    private fun selected(ids: Set<Long>): List<Manga> {
         return state.value.items.filter { it.id in ids }.distinctBy { it.id }.map { it.manga }
     }
 
     /** The categories every selected entry has, and the ones only some have. */
-    fun selectionCategories(): Pair<Set<Long>, Set<Long>> {
-        val ids = state.value.selection
+    fun selectionCategories(ids: Set<Long> = state.value.selection): Pair<Set<Long>, Set<Long>> {
         val per = state.value.items.filter { it.id in ids }.groupBy { it.id }.map { (_, rows) -> rows.flatMap { it.categories }.toSet() }
         if (per.isEmpty()) return emptySet<Long>() to emptySet()
         val all = per.reduce { a, b -> a intersect b }
@@ -455,8 +461,7 @@ class LibraryScreenModel(
         return all to some
     }
 
-    fun setCategories(add: Set<Long>, remove: Set<Long>) {
-        val ids = state.value.selection
+    fun setCategories(add: Set<Long>, remove: Set<Long>, ids: Set<Long> = state.value.selection) {
         val current = state.value.items.filter { it.id in ids }.groupBy { it.id }
             .mapValues { (_, rows) -> rows.flatMap { it.categories }.toSet() }
         screenModelScope.launch {
@@ -464,15 +469,15 @@ class LibraryScreenModel(
                 val updated = (categories - remove + add).filter { it != Category.UNCATEGORIZED_ID }
                 setMangaCategories.await(id, updated)
             }
-            clearSelection()
+            done(ids)
         }
     }
 
     private suspend fun chaptersOf(manga: Manga): List<Chapter> =
         if (manga.source == MERGED_SOURCE_ID) getMergedChaptersByMangaId.await(manga.id) else getChaptersByMangaId.await(manga.id)
 
-    fun markRead(read: Boolean) {
-        val mangas = selected()
+    fun markRead(read: Boolean, ids: Set<Long> = state.value.selection) {
+        val mangas = selected(ids)
         screenModelScope.launch {
             mangas.forEach { manga ->
                 val changed = chaptersOf(manga).filter { it.read != read }
@@ -482,13 +487,13 @@ class LibraryScreenModel(
                 if (read) downloadManager.afterMarkedRead(changed)
                 // ZOUKAN <--
             }
-            clearSelection()
+            done(ids)
         }
     }
 
     /** Queues the next [count] unread chapters of each selected entry, or all unread when null. */
-    fun download(count: Int?) {
-        val mangas = selected().filter { it.source != LocalSource.ID }
+    fun download(count: Int?, ids: Set<Long> = state.value.selection) {
+        val mangas = selected(ids).filter { it.source != LocalSource.ID }
         screenModelScope.launch {
             mangas.forEach { manga ->
                 val unread = chaptersOf(manga).filter { !it.read }.sortedByDescending { it.sourceOrder }
@@ -498,22 +503,22 @@ class LibraryScreenModel(
                     downloadManager.enqueue(entry, missing)
                 }
             }
-            clearSelection()
+            done(ids)
         }
     }
 
-    fun deleteDownloads() {
-        val mangas = selected().filter { it.source != LocalSource.ID }
+    fun deleteDownloads(ids: Set<Long> = state.value.selection) {
+        val mangas = selected(ids).filter { it.source != LocalSource.ID }
         screenModelScope.launch {
             mangas.forEach { manga ->
                 byEntry(manga, chaptersOf(manga)).forEach { (entry, chapters) -> downloadManager.delete(entry, chapters) }
             }
-            clearSelection()
+            done(ids)
         }
     }
 
-    fun removeFromLibrary(deleteDownloads: Boolean) {
-        val mangas = selected()
+    fun removeFromLibrary(deleteDownloads: Boolean, ids: Set<Long> = state.value.selection) {
+        val mangas = selected(ids)
         screenModelScope.launch {
             mangas.forEach { manga ->
                 if (deleteDownloads && manga.source != LocalSource.ID) {
@@ -522,7 +527,7 @@ class LibraryScreenModel(
                 mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
             }
             Toasts.show(if (mangas.size == 1) "Removed from library" else "Removed ${mangas.size} entries from library")
-            clearSelection()
+            done(ids)
         }
     }
 

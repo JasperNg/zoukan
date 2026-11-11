@@ -2,6 +2,7 @@ package zoukan.desktop.ui.library
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
@@ -23,10 +27,19 @@ import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.BookmarkRemove
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Deselect
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
@@ -58,6 +71,9 @@ import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.category.CategoryScreen
+import zoukan.desktop.ui.common.ContextMenuDivider
+import zoukan.desktop.ui.common.ContextMenuItem
+import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
@@ -84,8 +100,9 @@ fun LibraryTab(model: LibraryScreenModel) {
     val showSyncFavorites = LibrarySync.showFavorites()
     val showSyncLibrary = LibrarySync.showLibrary()
     // ZOUKAN <--
-    var categoryDialog by remember { mutableStateOf(false) }
-    var removeDialog by remember { mutableStateOf(false) }
+    // The entries a categories or remove dialog is for: the selection, or one entry's context menu
+    var categoryDialog by remember { mutableStateOf<Set<Long>?>(null) }
+    var removeDialog by remember { mutableStateOf<Set<Long>?>(null) }
     val settings = state.settings
     val visible = state.visible
     // Ctrl/Cmd + A selects everything shown; Escape clears the selection before it means "back"
@@ -105,8 +122,8 @@ fun LibraryTab(model: LibraryScreenModel) {
             SelectionBar(
                 model,
                 count = state.selection.size,
-                onCategories = { categoryDialog = true },
-                onRemove = { removeDialog = true },
+                onCategories = { categoryDialog = state.selection },
+                onRemove = { removeDialog = state.selection },
                 // ZOUKAN -->
                 onMigrate = {
                     // In the library's order, as the Android app's selection
@@ -237,13 +254,43 @@ fun LibraryTab(model: LibraryScreenModel) {
                         if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show("No unread chapters")
                     }
                 },
+                contextMenu = { item, menu ->
+                    // A right click on a selected entry acts on the whole selection; on any other
+                    // entry, on that entry alone, and the selection stays as it was
+                    val ids = if (item.id in state.selection) state.selection else setOf(item.id)
+                    EntryContextMenu(
+                        menu = menu,
+                        model = model,
+                        item = item,
+                        ids = ids,
+                        selected = item.id in state.selection,
+                        onOpen = { navigator.push(MangaScreen(item.id)) },
+                        onContinue = {
+                            scope.launch {
+                                val chapter = model.nextChapter(item.id)
+                                if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show("No unread chapters")
+                            }
+                        },
+                        onCategories = { categoryDialog = ids },
+                        onRemove = { removeDialog = ids },
+                        onMigrate = {
+                            val ordered = state.visible.map { it.id }.filter { it in ids }.ifEmpty { ids.toList() }
+                            if (ids == state.selection) model.clearSelection()
+                            navigator.push(MigrationConfigScreen(ordered))
+                        },
+                    )
+                },
             )
         }
     }
 
     if (settingsDialog) LibrarySettingsDialog(model) { settingsDialog = false }
-    if (categoryDialog) CategoriesDialog(model, state.categories.filter { !it.isSystemCategory }) { categoryDialog = false }
-    if (removeDialog) RemoveDialog(state.selection.size, onConfirm = model::removeFromLibrary) { removeDialog = false }
+    categoryDialog?.let { ids ->
+        CategoriesDialog(model, ids, state.categories.filter { !it.isSystemCategory }) { categoryDialog = null }
+    }
+    removeDialog?.let { ids ->
+        RemoveDialog(ids.size, onConfirm = { model.removeFromLibrary(it, ids) }) { removeDialog = null }
+    }
     // ZOUKAN -->
     when (favoritesSyncDialog) {
         FavoritesSyncDialog.Notes -> SyncFavoritesNotesDialog(
@@ -254,6 +301,66 @@ fun LibraryTab(model: LibraryScreenModel) {
         null -> {}
     }
     // ZOUKAN <--
+}
+
+/** How many unread chapters of each entry a download queues; null for all of them. */
+private val downloadChoices = listOf(
+    1 to "Next chapter",
+    5 to "Next 5 chapters",
+    10 to "Next 10 chapters",
+    25 to "Next 25 chapters",
+    null to "Unread chapters",
+)
+
+/** An entry's right-click menu: the selection bar's actions, for [ids]. */
+@Composable
+private fun ColumnScope.EntryContextMenu(
+    menu: ContextMenuState,
+    model: LibraryScreenModel,
+    item: LibraryScreenModel.Item,
+    ids: Set<Long>,
+    selected: Boolean,
+    onOpen: () -> Unit,
+    onContinue: () -> Unit,
+    onCategories: () -> Unit,
+    onRemove: () -> Unit,
+    onMigrate: () -> Unit,
+) {
+    // Download opens its choices in place of the menu, as the selection bar's download button does
+    var downloads by remember(menu.isOpen) { mutableStateOf(false) }
+    if (downloads) {
+        downloadChoices.forEach { (n, label) ->
+            ContextMenuItem(menu, label) { model.download(n, ids) }
+        }
+        return
+    }
+    if (ids.size == 1) {
+        ContextMenuItem(menu, "Open", Icons.AutoMirrored.Outlined.OpenInNew, onClick = onOpen)
+        if (item.library.unreadCount > 0) ContextMenuItem(menu, "Continue reading", Icons.Outlined.PlayArrow, onClick = onContinue)
+    }
+    if (selected) {
+        ContextMenuItem(menu, "Deselect", Icons.Outlined.Deselect) { model.toggleSelection(item.id) }
+    } else {
+        ContextMenuItem(menu, "Select", Icons.Outlined.CheckCircle) { model.toggleSelection(item.id) }
+    }
+    ContextMenuDivider()
+    ContextMenuItem(menu, "Change categories", Icons.AutoMirrored.Outlined.Label, onClick = onCategories)
+    ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.markRead(true, ids) }
+    ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.markRead(false, ids) }
+    if (ids.any { id -> model.state.value.items.any { it.id == id && !it.isLocal } }) {
+        DropdownMenuItem(
+            text = { Text("Download") },
+            leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+            trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
+            onClick = { downloads = true },
+        )
+        ContextMenuItem(menu, "Delete downloads", Icons.Outlined.BookmarkRemove) { model.deleteDownloads(ids) }
+    }
+    // ZOUKAN -->
+    ContextMenuItem(menu, "Migrate", Icons.Outlined.SwapHoriz, onClick = onMigrate)
+    // ZOUKAN <--
+    ContextMenuDivider()
+    ContextMenuItem(menu, "Remove from library", Icons.Outlined.Delete, onClick = onRemove)
 }
 
 @Composable
@@ -279,7 +386,7 @@ private fun SelectionBar(
             Row {
                 TooltipIconButton(Icons.Default.Download, "Download", onClick = { downloadMenu = true })
                 DropdownMenu(downloadMenu, onDismissRequest = { downloadMenu = false }) {
-                    listOf(1 to "Next chapter", 5 to "Next 5 chapters", 10 to "Next 10 chapters", 25 to "Next 25 chapters", null to "Unread chapters")
+                    downloadChoices
                         .forEach { (n, label) ->
                             DropdownMenuItem(
                                 text = { Text(label) },
@@ -302,8 +409,8 @@ private fun SelectionBar(
 
 /** Sets the categories of the selected entries; a dash keeps each entry's own. */
 @Composable
-private fun CategoriesDialog(model: LibraryScreenModel, categories: List<Category>, onDismiss: () -> Unit) {
-    val (all, some) = remember { model.selectionCategories() }
+private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categories: List<Category>, onDismiss: () -> Unit) {
+    val (all, some) = remember { model.selectionCategories(ids) }
     val states = remember {
         androidx.compose.runtime.mutableStateMapOf<Long, ToggleableState>().apply {
             categories.forEach { c ->
@@ -343,7 +450,7 @@ private fun CategoriesDialog(model: LibraryScreenModel, categories: List<Categor
             TextButton(onClick = {
                 val add = states.filterValues { it == ToggleableState.On }.keys
                 val remove = states.filterValues { it == ToggleableState.Off }.keys
-                model.setCategories(add, remove)
+                model.setCategories(add, remove, ids)
                 onDismiss()
             }) { Text("OK") }
         },

@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerButton
@@ -48,24 +50,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import zoukan.desktop.ui.common.ContextMenu
+import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LazyVerticalGrid
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.rememberContextMenuState
 
-/** How a click on an entry was made: a plain click, Ctrl/Cmd + click, Shift + click or right click. */
+/** How a click on an entry was made: a plain click, Ctrl/Cmd + click or Shift + click. */
 enum class ClickKind { Plain, Toggle, Range }
 
-/** Clicks that know the keyboard modifiers and the right button, for selecting like a file manager. */
+/**
+ * Clicks that know the keyboard modifiers, for selecting like a file manager. A right click opens
+ * [onContextMenu] at the pointer; without one, it toggles the selection as Ctrl/Cmd + click does.
+ */
 @OptIn(ExperimentalComposeUiApi::class)
-fun Modifier.selectableClick(onClick: (ClickKind) -> Unit): Modifier {
+fun Modifier.selectableClick(onContextMenu: ((Offset) -> Unit)? = null, onClick: (ClickKind) -> Unit): Modifier {
     var mods: PointerKeyboardModifiers? = null
     return this
         .onPointerEvent(PointerEventType.Press) { event ->
             mods = event.keyboardModifiers
-            if (event.button == PointerButton.Secondary) onClick(ClickKind.Toggle)
+            if (event.button == PointerButton.Secondary) {
+                if (onContextMenu != null) {
+                    onContextMenu(event.changes.firstOrNull()?.position ?: Offset.Zero)
+                } else {
+                    onClick(ClickKind.Toggle)
+                }
+            }
         }
         .clickable {
             val m = mods
@@ -141,12 +155,13 @@ fun LibraryContent(
     selection: Set<Long>,
     onClick: (LibraryScreenModel.Item, ClickKind) -> Unit,
     onContinue: (LibraryScreenModel.Item) -> Unit,
+    contextMenu: @Composable ColumnScope.(LibraryScreenModel.Item, ContextMenuState) -> Unit,
 ) {
     val display = settings.display
     if (display == LibraryDisplayMode.List) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
             items(items, key = { it.id }) { item ->
-                ListItem(item, settings, item.id in selection, { onClick(item, it) }, { onContinue(item) })
+                ListItem(item, settings, item.id in selection, { onClick(item, it) }, { onContinue(item) }) { contextMenu(item, it) }
             }
         }
         return
@@ -161,7 +176,7 @@ fun LibraryContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(items, key = { it.id }) { item ->
-            GridItem(item, settings, item.id in selection, { onClick(item, it) }, { onContinue(item) })
+            GridItem(item, settings, item.id in selection, { onClick(item, it) }, { onContinue(item) }) { contextMenu(item, it) }
         }
     }
 }
@@ -173,7 +188,9 @@ private fun GridItem(
     selected: Boolean,
     onClick: (ClickKind) -> Unit,
     onContinue: () -> Unit,
+    contextMenu: @Composable ColumnScope.(ContextMenuState) -> Unit,
 ) {
+    val menu = rememberContextMenuState()
     val display = settings.display
     val titleBelow = display == LibraryDisplayMode.ComfortableGrid || display == LibraryDisplayMode.ComfortableGridPanorama
     val titleOver = display == LibraryDisplayMode.CompactGrid
@@ -183,41 +200,44 @@ private fun GridItem(
     } else {
         Modifier.coverOutline(RoundedCornerShape(8.dp))
     }
-    Column(Modifier.testTag("manga-item").clip(RoundedCornerShape(8.dp)).selectableClick(onClick)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp)).then(border)) {
-            CoverImage(Cover.of(item.manga), Modifier.fillMaxSize())
-            if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)))
-            if (titleOver) {
-                Box(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
-                        .padding(start = 8.dp, end = if (settings.continueReading) 40.dp else 8.dp, top = 24.dp, bottom = 8.dp),
-                ) {
-                    Text(
-                        item.manga.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+    Box {
+        Column(Modifier.testTag("manga-item").clip(RoundedCornerShape(8.dp)).selectableClick(menu::open, onClick)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp)).then(border)) {
+                CoverImage(Cover.of(item.manga), Modifier.fillMaxSize())
+                if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)))
+                if (titleOver) {
+                    Box(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+                            .padding(start = 8.dp, end = if (settings.continueReading) 40.dp else 8.dp, top = 24.dp, bottom = 8.dp),
+                    ) {
+                        Text(
+                            item.manga.title,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Badges(badges(item, settings), Modifier.align(Alignment.TopStart).padding(6.dp))
+                if (selected) SelectedMark(Modifier.align(Alignment.TopEnd))
+                if (settings.continueReading && item.library.unreadCount > 0) {
+                    ContinueButton(onContinue, Modifier.align(Alignment.BottomEnd).padding(6.dp))
                 }
             }
-            Badges(badges(item, settings), Modifier.align(Alignment.TopStart).padding(6.dp))
-            if (selected) SelectedMark(Modifier.align(Alignment.TopEnd))
-            if (settings.continueReading && item.library.unreadCount > 0) {
-                ContinueButton(onContinue, Modifier.align(Alignment.BottomEnd).padding(6.dp))
+            if (titleBelow) {
+                Text(
+                    item.manga.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                )
             }
         }
-        if (titleBelow) {
-            Text(
-                item.manga.title,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
-            )
-        }
+        ContextMenu(menu) { contextMenu(menu) }
     }
 }
 
@@ -228,24 +248,29 @@ private fun ListItem(
     selected: Boolean,
     onClick: (ClickKind) -> Unit,
     onContinue: () -> Unit,
+    contextMenu: @Composable ColumnScope.(ContextMenuState) -> Unit,
 ) {
-    Surface(color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent) {
-        Row(
-            Modifier.testTag("manga-item").fillMaxWidth().selectableClick(onClick).padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CoverImage(Cover.of(item.manga), Modifier.height(56.dp).aspectRatio(1f).clip(RoundedCornerShape(6.dp)))
-            Text(
-                item.manga.title,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-            )
-            Badges(badges(item, settings))
-            if (settings.continueReading && item.library.unreadCount > 0) {
-                ContinueButton(onContinue, Modifier.padding(start = 8.dp))
+    val menu = rememberContextMenuState()
+    Box {
+        Surface(color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent) {
+            Row(
+                Modifier.testTag("manga-item").fillMaxWidth().selectableClick(menu::open, onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CoverImage(Cover.of(item.manga), Modifier.height(56.dp).aspectRatio(1f).clip(RoundedCornerShape(6.dp)))
+                Text(
+                    item.manga.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                )
+                Badges(badges(item, settings))
+                if (settings.continueReading && item.library.unreadCount > 0) {
+                    ContinueButton(onContinue, Modifier.padding(start = 8.dp))
+                }
             }
         }
+        ContextMenu(menu) { contextMenu(menu) }
     }
 }
