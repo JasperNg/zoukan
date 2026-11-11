@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
@@ -306,7 +308,9 @@ fun ZoukanContent(preferences: DesktopPreferences, onNavigator: (Navigator) -> U
                     onNavigator(navigator)
                     FadeTransition(navigator)
                 }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
+                    Snackbar(it, Modifier.testTag("toast"))
+                }
                 // ZOUKAN -->
                 zoukan.desktop.ui.security.LockOverlay()
                 // ZOUKAN <--

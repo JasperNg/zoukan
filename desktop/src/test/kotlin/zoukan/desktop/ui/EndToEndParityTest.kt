@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
@@ -347,6 +348,8 @@ class EndToEndParityTest {
                 shot("p17-settings-custom-color")
                 onAllNodesWithText("Cancel").onFirst().performClick()
 
+                // A message from an earlier step can sit over the rows clicked below
+                waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("toast").fetchSemanticsNodes().isEmpty() }
                 val list = onAllNodes(hasScrollAction()).onFirst()
                 list.performScrollToNode(hasText("Default category"))
                 onAllNodesWithText("Default category").onFirst().performClick()
@@ -392,7 +395,9 @@ class EndToEndParityTest {
                 // A source category with the local source in it, as Android stores them
                 sources.sourcesTabCategories().set(setOf("Comics"))
                 sources.sourcesTabSourcesInCategories().set(setOf("${LocalSource.ID}|Comics"))
-                onAllNodesWithText("Edit categories").onFirst().performClick()
+                // Browse's own "Edit categories", not Library's, wherever the scroll above left it
+                list.performScrollToKey("browse-categories")
+                onAllNodesWithText("Edit categories").onLast().performClick()
                 waitFor(hasText("Comics"))
                 shot("p23-source-categories")
                 runOnUiThread { navigator?.pop() }
