@@ -105,9 +105,29 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
             ),
         )
     }
+    item(key = "library-missing-chapters") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference("Hide missing chapter indicators", preferences.hideMissingChapters())
+    }
     item(key = "library-show-empty-categories-search") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         SwitchPreference("Show empty categories during search/filtering", preferences.showEmptyCategoriesSearch())
+    }
+    item(key = "library-fetch-metadata-on-add") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference(
+            "Fetch metadata when adding to library",
+            preferences.fetchMetadataOnAdd(),
+            "Automatically fetches the metadata of a new entry when adding it to the library",
+        )
+    }
+    item(key = "library-fetch-chapters-on-add") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference(
+            "Fetch chapters when adding to library",
+            preferences.fetchChaptersOnAdd(),
+            "Automatically fetches the chapter list of a new entry when adding it to the library",
+        )
     }
 
     // SY's sorting settings
