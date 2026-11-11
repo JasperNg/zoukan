@@ -101,6 +101,10 @@ data class SourceScreen(
         val model = rememberScreenModel { SourceScreenModel(sourceId, latest, query, savedSearchId = savedSearch) }
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
+        // ZOUKAN -->
+        val libraryToggle = rememberQuickLibraryToggle()
+        QuickLibraryToggleDialogs(libraryToggle)
+        // ZOUKAN <--
         val source = model.source
         var searchText by rememberSaveable { mutableStateOf(query.orEmpty()) }
         var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -210,6 +214,9 @@ data class SourceScreen(
                                     badge = if (manga.id in state.favorites) "In library" else null,
                                     dimmed = manga.id in state.favorites,
                                     onClick = { navigator.push(MangaScreen(manga.id)) },
+                                    // ZOUKAN -->
+                                    onSecondaryClick = { libraryToggle.toggle(manga) },
+                                    // ZOUKAN <--
                                 )
                             }
                             item(span = { GridItemSpan(maxLineSpan) }) {

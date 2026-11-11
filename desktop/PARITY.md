@@ -32,6 +32,14 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |
 | Bulk migration (source priority, smart search, progress, manual pick) | Yes | Library selection > Migrate: sources in priority order, the Android options (data to migrate, extra keywords, hide unmatched or without newer chapters, advanced search, match by chapter number, smart search), then per-entry search, Don't migrate, Migrate now, and Migrate or Copy all with progress |
 | Edit entry info, notes, custom cover | Yes | Manga > More > Edit; local entries write ComicInfo.xml and cover files, as on Android |
+| Entry update frequency (smart update interval) | Yes | Manga > More > Update frequency, for library entries: the predicted next update and, with "Predict next release time" on, a custom interval or none, as Android's dialog |
+| Cover actions: save, share, change, delete custom cover | Yes, changed | Click the cover or Manga > More > Cover. Save goes to Pictures/Zoukan; Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
+| Duplicate check on adding to the library | Yes | Same-title library entries, each to open or migrate, or add anyway; on the manga screen and on a right-click in Browse |
+| Add or remove from Browse (long press) | Yes, changed | Right-click a browse result, as Android's long press: removing asks first, adding checks duplicates and categories |
+| Fetch metadata and chapters when adding to library (KMK) | Yes | Settings > Library; applies to entries added from Browse, as on Android |
+| Missing chapter indicators, hide setting | Yes | "Missing N chapters" between chapter rows; Settings > Library > Hide missing chapter indicators |
+| Share entry link | Yes, changed | Manga > More > Copy link, as there is no desktop share sheet |
+| Download next chapters: 1, 5, 10, 25, custom, unread, bookmarked | Yes | Custom asks for a number of unread chapters |
 | Recommendations and related entries | Yes | Manga > More > Similar titles: the source's related titles, then AniList, MyAnimeList, MangaUpdates and the other recommendation sources |
 
 ## Settings
