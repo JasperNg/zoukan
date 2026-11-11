@@ -272,6 +272,17 @@ fun UpdatesTab(model: UpdatesScreenModel) {
     val state by model.state.collectAsState()
     val refresh by Injekt.get<LibraryUpdater>().progress.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
+    // Ctrl/Cmd + A selects every chapter shown; Escape clears the selection before it means "back"
+    zoukan.desktop.ui.OnShortcut { action ->
+        when (action) {
+            zoukan.desktop.ui.Shortcuts.Action.SelectAll -> {
+                model.selectAll()
+                true
+            }
+            zoukan.desktop.ui.Shortcuts.Action.Back -> state.selecting.also { if (it) model.clearSelection() }
+            else -> false
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         if (state.selecting) {
             SelectionHeader(state, model)
