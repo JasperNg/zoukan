@@ -42,6 +42,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import mihon.domain.manga.model.toDomainManga
+import okio.sink
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.TriState
@@ -504,7 +505,7 @@ class EndToEndParityTest {
                     ),
                     backupSources = listOf(eu.kanade.tachiyomi.data.backup.models.BackupSource("Ghost Source", 4242L)),
                 )
-                okio.buffer(okio.sink(file)).use { eu.kanade.tachiyomi.data.backup.BackupCodec.write(backup, it) }
+                file.sink().use { eu.kanade.tachiyomi.data.backup.BackupCodec.write(backup, it) }
                 runOnUiThread { navigator?.push(zoukan.desktop.ui.settings.RestoreBackupScreen(file.path)) }
                 waitFor(hasText("Missing sources:", substring = true))
                 waitFor(hasText("Ghost Source", substring = true))
