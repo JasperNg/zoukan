@@ -408,7 +408,7 @@ private fun HistoryRow(
         Modifier.fillMaxWidth()
             .testTag("history-item")
             .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .selectableClick(onClick)
+            .selectableClick(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
