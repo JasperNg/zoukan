@@ -39,6 +39,9 @@ class DesktopPreferences(private val store: PreferenceStore) {
     /** Desktop only: closing the window keeps Zoukan running in the tray, so background work goes on */
     fun closeToTray() = store.getBoolean("zoukan_close_to_tray", true)
 
+    /** Desktop only: where the window was when Zoukan closed (WindowBounds), to open there again */
+    fun windowBounds() = store.getString(Preference.appStateKey("zoukan_window_bounds"), "")
+
     /** Desktop only: set once the user has been told that closing keeps Zoukan in the tray */
     fun toldAboutTray() = store.getBoolean(Preference.appStateKey("zoukan_told_about_tray"), false)
 

@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +25,7 @@ import tachiyomi.domain.category.model.Category
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.discord.DiscordPresence
+import zoukan.desktop.ui.common.verticalScrollWithBar
 
 /** Settings > Discord: Rich Presence, with the Android app's options. */
 fun LazyListScope.discordSettings() {
@@ -100,7 +99,7 @@ private fun HiddenCategoriesDialog(presence: DiscordPresence, onDismiss: () -> U
         onDismissRequest = onDismiss,
         title = { Text("Hide these categories") },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
                 categories.forEach { category ->
                     val id = category.id.toString()
                     Row(verticalAlignment = Alignment.CenterVertically) {

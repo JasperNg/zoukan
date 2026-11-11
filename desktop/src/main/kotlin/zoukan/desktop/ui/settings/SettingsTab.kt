@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -59,6 +58,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -95,6 +95,7 @@ import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
@@ -569,6 +570,11 @@ fun openFolder(folder: File) {
 /** The search field over the settings list, as the search button of the Android app's settings. */
 @Composable
 private fun SearchField() {
+    // Ctrl/Cmd + F puts the cursor here, as in the other screens' search boxes
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    zoukan.desktop.ui.OnShortcut { action ->
+        action == zoukan.desktop.ui.Shortcuts.Action.Find && runCatching { focus.requestFocus() }.isSuccess
+    }
     OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
@@ -585,6 +591,7 @@ private fun SearchField() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .testTag("settings-search")
+            .focusRequester(focus)
             // Escape clears the search before it goes back
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && searchQuery.isNotEmpty()) {

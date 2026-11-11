@@ -27,4 +27,13 @@ class ShortcutsTest {
         action(Key.DirectionLeft, alt = true) shouldBe Shortcuts.Action.Back
         action(Key.DirectionLeft) shouldBe null
     }
+
+    @Test
+    fun `find and select all`() {
+        action(Key.F, ctrl = true) shouldBe Shortcuts.Action.Find
+        action(Key.F) shouldBe null
+        action(Key.F, ctrl = true, shift = true) shouldBe null
+        action(Key.A, ctrl = true) shouldBe Shortcuts.Action.SelectAll
+        action(Key.A) shouldBe null
+    }
 }

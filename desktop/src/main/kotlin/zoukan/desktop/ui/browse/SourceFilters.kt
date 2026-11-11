@@ -9,10 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -45,8 +42,10 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.verticalScrollWithBar
 
 /**
  * Android's Browse > Sources > filter (SourcesFilterScreen): a switch per language, and under each
@@ -241,7 +240,7 @@ internal fun SourceCategoriesDialog(
             if (categories.isEmpty()) {
                 Text("You have no categories. Add one to organize your sources.")
             } else {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.verticalScrollWithBar()) {
                     categories.forEach { category ->
                         Row(
                             Modifier.fillMaxWidth().clickable { chosen = if (category in chosen) chosen - category else chosen + category }.padding(vertical = 4.dp),

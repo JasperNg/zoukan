@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Close
@@ -22,7 +20,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.BookmarkRemove
@@ -30,10 +27,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -60,12 +55,16 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
+import zoukan.desktop.ui.OnShortcut
+import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadsButton
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.migration.MigrationConfigScreen
@@ -84,6 +83,17 @@ fun LibraryTab(model: LibraryScreenModel) {
     var removeDialog by remember { mutableStateOf(false) }
     val settings = state.settings
     val visible = state.visible
+    // Ctrl/Cmd + A selects everything shown; Escape clears the selection before it means "back"
+    OnShortcut { action ->
+        when (action) {
+            Shortcuts.Action.SelectAll -> {
+                model.selectAll()
+                true
+            }
+            Shortcuts.Action.Back -> state.selection.isNotEmpty().also { if (it) model.clearSelection() }
+            else -> false
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         if (state.selection.isNotEmpty()) {
@@ -107,15 +117,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                 subtitle = if (state.loading) null else "${state.items.distinctBy { it.id }.size} entries",
                 showBack = false,
             ) {
-                OutlinedTextField(
-                    value = state.query,
-                    onValueChange = model::search,
-                    placeholder = { Text("Search library") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    singleLine = true,
-                    modifier = Modifier.width(280.dp).padding(end = 8.dp),
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                )
+                SearchField(state.query, model::search, "Search library", Modifier.width(280.dp).padding(end = 8.dp))
                 TooltipIconButton(
                     Icons.Default.FilterList,
                     if (settings.hasFilter) "Filter, sort and display (filtered)" else "Filter, sort and display",
@@ -287,7 +289,7 @@ private fun CategoriesDialog(model: LibraryScreenModel, categories: List<Categor
             if (categories.isEmpty()) {
                 Text("There are no categories yet. Add them from More > Edit categories.")
             } else {
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
                     categories.forEach { c ->
                         val value = states[c.id] ?: ToggleableState.Off
                         val next = {

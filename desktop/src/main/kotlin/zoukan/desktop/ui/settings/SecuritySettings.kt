@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +30,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.security.AppLock
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.extension.DesktopExtensionManager
 
 /** Settings > Security and privacy: the app lock and incognito mode, as on Android. */
@@ -198,7 +197,7 @@ private fun TimesDialog(preferences: SecurityPreferences, onDismiss: () -> Unit)
         onDismissRequest = onDismiss,
         title = { Text("Lock at these times") },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
                 Text("Without times the lock works all day.", style = MaterialTheme.typography.bodyMedium)
                 ranges.toList().forEach { value ->
                     val range = AppLock.parseRange(value) ?: return@forEach
@@ -244,7 +243,7 @@ private fun IncognitoExtensionsDialog(incognito: Incognito, onDismiss: () -> Uni
         onDismissRequest = onDismiss,
         title = { Text("Incognito extensions") },
         text = {
-            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar()) {
                 extensions.forEach { (pkg, name) ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(pkg in selected, onCheckedChange = { incognito.setExtension(pkg, it) })

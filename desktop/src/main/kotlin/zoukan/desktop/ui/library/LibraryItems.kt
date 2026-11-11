@@ -15,9 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -52,6 +50,10 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
+import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.LazyVerticalGrid
+import zoukan.desktop.ui.common.Tooltip
+import zoukan.desktop.ui.common.coverOutline
 
 /** How a click on an entry was made: a plain click, Ctrl/Cmd + click, Shift + click or right click. */
 enum class ClickKind { Plain, Toggle, Range }
@@ -110,12 +112,14 @@ private fun Badges(list: List<Pair<String, Boolean>>, modifier: Modifier = Modif
 
 @Composable
 private fun ContinueButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    FilledIconButton(
-        onClick = onClick,
-        modifier = modifier.size(32.dp),
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)),
-    ) {
-        Icon(Icons.Filled.PlayArrow, contentDescription = "Continue reading", modifier = Modifier.size(18.dp))
+    Tooltip("Continue reading", modifier) {
+        FilledIconButton(
+            onClick = onClick,
+            modifier = Modifier.size(32.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)),
+        ) {
+            Icon(Icons.Filled.PlayArrow, contentDescription = "Continue reading", modifier = Modifier.size(18.dp))
+        }
     }
 }
 
@@ -174,7 +178,11 @@ private fun GridItem(
     val titleBelow = display == LibraryDisplayMode.ComfortableGrid || display == LibraryDisplayMode.ComfortableGridPanorama
     val titleOver = display == LibraryDisplayMode.CompactGrid
     val ratio = if (display == LibraryDisplayMode.ComfortableGridPanorama) 16f / 9f else 2f / 3f
-    val border = if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier
+    val border = if (selected) {
+        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+    } else {
+        Modifier.coverOutline(RoundedCornerShape(8.dp))
+    }
     Column(Modifier.testTag("manga-item").clip(RoundedCornerShape(8.dp)).selectableClick(onClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp)).then(border)) {
             CoverImage(Cover.of(item.manga), Modifier.fillMaxSize())

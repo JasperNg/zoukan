@@ -65,7 +65,10 @@ left to right, paged right to left, vertical, webtoon and continuous vertical.
 | Ctrl/Cmd + 1 to 5 | Library, Updates, History, Browse, More |
 | Ctrl/Cmd + `,` | Settings |
 | Ctrl/Cmd + Shift + U | Update the library |
-| Escape, Alt + Left, mouse back button | Back |
+| Ctrl/Cmd + F | Search the screen (library, history, browse, a source) |
+| Ctrl/Cmd + A | Select everything in the library, or every chapter of an entry |
+| Escape | Empty the search box, clear the selection or go back |
+| Alt + Left, mouse back button | Back |
 
 The reader's keys win while it is open. Settings > Keyboard shortcuts lists them too.
 
