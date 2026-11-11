@@ -42,6 +42,16 @@ fun LazyListScope.browseSettings() {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         SwitchPreference("Suggestions", preferences.relatedMangas(), "Show source-website's Suggestions while viewing entry")
     }
+    // ZOUKAN -->
+    item(key = "browse-related-expand") {
+        val preferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
+        SwitchPreference("Expand related titles", preferences.expandRelatedMangas(), "Show the related titles row open on the entry page")
+    }
+    item(key = "browse-related-overflow") {
+        val preferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
+        SwitchPreference("Related titles in overflow menu", preferences.relatedMangasInOverflow(), "Only show related titles from the entry's More menu")
+    }
+    // ZOUKAN <--
     item(key = "browse-categories") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         val navigator = LocalNavigator.currentOrThrow
