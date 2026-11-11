@@ -86,6 +86,8 @@ class MangaScreenModel(
         val duplicates: List<tachiyomi.domain.manga.model.MangaWithChapterCount>? = null,
         /** Scanlators whose chapters the entry hides, as on Android */
         val excludedScanlators: Set<String> = emptySet(),
+        /** More > Downloaded only, which shows only downloaded chapters, as on Android */
+        val downloadedOnly: Boolean = false,
         // ZOUKAN <--
     ) {
         val isLocal: Boolean get() = manga?.source == LocalSource.ID
@@ -100,11 +102,11 @@ class MangaScreenModel(
 
         /** Whether a filter of the chapter settings hides chapters, which tints its button */
         val filterActive: Boolean
-            get() = scanlatorFilterActive || manga?.let { ChapterSettings.filtered(it) } == true
+            get() = scanlatorFilterActive || manga?.let { ChapterSettings.filtered(it, downloadedOnly) } == true
 
         /** The chapters the list shows: filtered and sorted by the entry's chapter settings */
         val sortedChapters: List<Chapter> by lazy {
-            manga?.let { ChapterSettings.apply(it, chapters, excludedScanlators, downloaded, isLocal) } ?: chapters
+            manga?.let { ChapterSettings.apply(it, chapters, excludedScanlators, downloaded, isLocal, downloadedOnly) } ?: chapters
         }
 
         /**
@@ -164,6 +166,11 @@ class MangaScreenModel(
         screenModelScope.launch {
             chapterSettings.excludedScanlators(mangaId).collect { excluded ->
                 mutableState.update { it.copy(excludedScanlators = excluded) }
+            }
+        }
+        screenModelScope.launch {
+            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes().collect { on ->
+                mutableState.update { it.copy(downloadedOnly = on) }
             }
         }
         // The metadata block and namespace tags, as Android's MangaScreenModel raises them

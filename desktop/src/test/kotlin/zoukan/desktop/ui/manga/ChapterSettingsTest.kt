@@ -38,7 +38,8 @@ class ChapterSettingsTest {
         excluded: Set<String> = emptySet(),
         downloaded: Set<Long> = emptySet(),
         isLocal: Boolean = false,
-    ) = ChapterSettings.apply(manga(flags), chapters, excluded, downloaded, isLocal).map { it.id }
+        downloadedOnly: Boolean = false,
+    ) = ChapterSettings.apply(manga(flags), chapters, excluded, downloaded, isLocal, downloadedOnly).map { it.id }
 
     @Test
     fun `default settings list chapters newest first in source order`() {
@@ -65,6 +66,13 @@ class ChapterSettingsTest {
     }
 
     @Test
+    fun `Downloaded only forces the downloaded filter on`() {
+        apply(0, downloaded = setOf(2L), downloadedOnly = true) shouldBe listOf(2L)
+        apply(Manga.CHAPTER_SHOW_NOT_DOWNLOADED, downloaded = setOf(2L), downloadedOnly = true) shouldBe listOf(2L)
+        ChapterSettings.filtered(manga(0), downloadedOnly = true) shouldBe true
+    }
+
+    @Test
     fun `a local entry's chapters all count as downloaded`() {
         apply(Manga.CHAPTER_SHOW_DOWNLOADED, isLocal = true) shouldBe listOf(3L, 2L, 1L)
         apply(Manga.CHAPTER_SHOW_NOT_DOWNLOADED, isLocal = true) shouldBe emptyList()
@@ -78,7 +86,7 @@ class ChapterSettingsTest {
 
     @Test
     fun `reports when a filter is on`() {
-        ChapterSettings.filtered(manga(Manga.CHAPTER_SORTING_NUMBER or Manga.CHAPTER_SORT_ASC)) shouldBe false
-        ChapterSettings.filtered(manga(Manga.CHAPTER_SHOW_NOT_DOWNLOADED)) shouldBe true
+        ChapterSettings.filtered(manga(Manga.CHAPTER_SORTING_NUMBER or Manga.CHAPTER_SORT_ASC), downloadedOnly = false) shouldBe false
+        ChapterSettings.filtered(manga(Manga.CHAPTER_SHOW_NOT_DOWNLOADED), downloadedOnly = false) shouldBe true
     }
 }

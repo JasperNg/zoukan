@@ -77,7 +77,12 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
                         0 -> {
                             // A local entry's chapters are all on disk
                             if (!state.isLocal) {
-                                TriStateRow("Downloaded", ChapterSettings.downloadedFilter(manga), model::setDownloadedFilter)
+                                // More > Downloaded only keeps it on, as on Android
+                                TriStateRow(
+                                    "Downloaded",
+                                    ChapterSettings.downloadedFilter(manga, state.downloadedOnly),
+                                    model::setDownloadedFilter.takeUnless { state.downloadedOnly },
+                                )
                             }
                             TriStateRow("Unread", manga.unreadFilter, model::setUnreadFilter)
                             TriStateRow("Bookmarked", manga.bookmarkedFilter, model::setBookmarkedFilter)
@@ -120,9 +125,9 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
 }
 
 @Composable
-private fun TriStateRow(label: String, value: TriState, onChange: (TriState) -> Unit) {
+private fun TriStateRow(label: String, value: TriState, onChange: ((TriState) -> Unit)?) {
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(value.next()) }.padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().clickable(enabled = onChange != null) { onChange?.invoke(value.next()) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TriStateCheckbox(
@@ -131,7 +136,8 @@ private fun TriStateRow(label: String, value: TriState, onChange: (TriState) -> 
                 TriState.ENABLED_IS -> ToggleableState.On
                 TriState.ENABLED_NOT -> ToggleableState.Indeterminate
             },
-            onClick = { onChange(value.next()) },
+            onClick = onChange?.let { { it(value.next()) } },
+            enabled = onChange != null,
         )
         Text(if (value == TriState.ENABLED_NOT) "Not ${label.lowercase()}" else label)
     }

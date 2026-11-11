@@ -94,16 +94,20 @@ class ChapterSettings(
     }
 
     companion object {
-        /** The downloaded filter of [manga]. Android's also follows "Downloaded only", which desktop lacks. */
-        fun downloadedFilter(manga: Manga): TriState = when (manga.downloadedFilterRaw) {
+        /** The downloaded filter of [manga], forced on by More > Downloaded only, as on Android */
+        fun downloadedFilter(manga: Manga, downloadedOnly: Boolean): TriState = if (downloadedOnly) {
+            TriState.ENABLED_IS
+        } else {
+            when (manga.downloadedFilterRaw) {
             Manga.CHAPTER_SHOW_DOWNLOADED -> TriState.ENABLED_IS
             Manga.CHAPTER_SHOW_NOT_DOWNLOADED -> TriState.ENABLED_NOT
-            else -> TriState.DISABLED
+                else -> TriState.DISABLED
+            }
         }
 
         /** Whether the unread, downloaded or bookmarked filter is on */
-        fun filtered(manga: Manga): Boolean = manga.unreadFilter != TriState.DISABLED ||
-            downloadedFilter(manga) != TriState.DISABLED ||
+        fun filtered(manga: Manga, downloadedOnly: Boolean): Boolean = manga.unreadFilter != TriState.DISABLED ||
+            downloadedFilter(manga, downloadedOnly) != TriState.DISABLED ||
             manga.bookmarkedFilter != TriState.DISABLED
 
         /**
@@ -116,10 +120,11 @@ class ChapterSettings(
             excluded: Set<String>,
             downloaded: Set<Long>,
             isLocal: Boolean,
+            downloadedOnly: Boolean = false,
         ): List<Chapter> {
             val unread = manga.unreadFilter
             val bookmarked = manga.bookmarkedFilter
-            val download = downloadedFilter(manga)
+            val download = downloadedFilter(manga, downloadedOnly)
             return chapters.asSequence()
                 .filter { it.scanlator.isNullOrBlank() || it.scanlator !in excluded }
                 .filter { applyFilter(unread) { !it.read } }
