@@ -59,4 +59,13 @@ class UpdateCheckerTest {
         val only = """[{"tag_name": "desktop-v1.0.1", "name": "", "html_url": "x", "assets": []}]"""
         UpdateChecker.select(only, v100, Platform.WINDOWS)!!.name shouldBe "Zoukan 1.0.1"
     }
+
+    @Test
+    fun `reads a release's notes for What's new`() {
+        val body = """{"tag_name": "desktop-v1.1.0", "name": "", "body": "## Fixes\n- One", "html_url": "https://github.com/o/r/releases/tag/desktop-v1.1.0"}"""
+        val notes = UpdateChecker.parseNotes(body, Version(listOf(1, 1, 0)))
+        notes.name shouldBe "Zoukan 1.1.0"
+        notes.body shouldBe "## Fixes\n- One"
+        notes.pageUrl shouldBe "https://github.com/o/r/releases/tag/desktop-v1.1.0"
+    }
 }

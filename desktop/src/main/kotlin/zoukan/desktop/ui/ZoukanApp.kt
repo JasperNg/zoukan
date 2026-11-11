@@ -1,30 +1,33 @@
 package zoukan.desktop.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.NewReleases
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
@@ -91,7 +95,9 @@ import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.LibraryScreenModel
 import zoukan.desktop.ui.library.LibraryTab
-import zoukan.desktop.ui.settings.SettingsTab
+import zoukan.desktop.ui.more.AppStateBanners
+import zoukan.desktop.ui.more.MoreTab
+import zoukan.desktop.ui.more.SettingsScreen
 import zoukan.desktop.ui.updates.UpdatesScreenModel
 import zoukan.desktop.ui.updates.UpdatesTab
 import zoukan.desktop.update.Updates
@@ -221,7 +227,7 @@ fun runZoukanApp() {
                 onKeyEvent = { event -> Shortcuts.handle(event, navigatorRef) },
             ) {
                 CompositionLocalProvider(LocalWindow provides this, LocalWindowState provides windowState) {
-                    ZoukanContent(preferences) { navigatorRef = it }
+                    ZoukanContent(preferences, onNavigator = { navigatorRef = it }, firstRun = true)
                 }
                 LaunchedEffect(Unit) {
                     // Zoukan was opened again: bring this window back
@@ -235,7 +241,7 @@ fun runZoukanApp() {
                 LaunchedEffect(Unit) {
                     CrashReporter.previousRunCrashed?.let {
                         delay(1500)
-                        Toasts.show("Zoukan closed unexpectedly last time. The crash log is in Settings > About.")
+                        Toasts.show("Zoukan closed unexpectedly last time. The crash log is in More > Settings > About.")
                     }
                 }
             }
@@ -280,9 +286,12 @@ fun startUi(dirs: ZoukanDirs) {
     Updates.start(AppScope)
 }
 
-/** The window's content: theme, navigation and messages. */
+/**
+ * The window's content: theme, navigation and messages. [firstRun] shows the first-run setup and
+ * the What's new dialog after an update; tests leave it off.
+ */
 @Composable
-fun ZoukanContent(preferences: DesktopPreferences, onNavigator: (Navigator) -> Unit = {}) {
+fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, onNavigator: (Navigator) -> Unit = {}) {
     var navigatorRef by remember { mutableStateOf<Navigator?>(null) }
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(
@@ -301,11 +310,22 @@ fun ZoukanContent(preferences: DesktopPreferences, onNavigator: (Navigator) -> U
                 Toasts.flow.collect { snackbar.showSnackbar(it) }
             }
             Box(Modifier.fillMaxSize()) {
-                Navigator(HomeScreen) { navigator ->
-                    navigatorRef = navigator
-                    onNavigator(navigator)
-                    FadeTransition(navigator)
+                // ZOUKAN -->
+                // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
+                Column(Modifier.fillMaxSize()) {
+                    AppStateBanners()
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        Navigator(HomeScreen) { navigator ->
+                            navigatorRef = navigator
+                            onNavigator(navigator)
+                            FadeTransition(navigator)
+                        }
+                    }
                 }
+                // ZOUKAN <--
+                // The first-run setup covers the app, but not its messages
+                if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
+                zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 // ZOUKAN -->
                 zoukan.desktop.ui.security.LockOverlay()
@@ -320,7 +340,7 @@ enum class HomeTab(val label: String, val icon: ImageVector, val selectedIcon: I
     Updates("Updates", Icons.Outlined.NewReleases, Icons.Filled.NewReleases),
     History("History", Icons.Outlined.History, Icons.Filled.History),
     Browse("Browse", Icons.Outlined.Explore, Icons.Filled.Explore),
-    Settings("Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
+    More("More", Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz),
 }
 
 /** The main screen: a navigation rail with the five tabs. */
@@ -329,6 +349,13 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
 
     /** Lets other screens switch the tab, for example "Browse" from an empty library. */
     var selectTab: (HomeTab) -> Unit = {}
+
+    /** Opens Settings (More > Settings) from anywhere: Ctrl/Cmd + comma, and tests. */
+    fun openSettings(navigator: Navigator) {
+        navigator.popUntilRoot()
+        selectTab(HomeTab.More)
+        navigator.push(SettingsScreen)
+    }
 
     @Composable
     override fun Content() {
@@ -343,7 +370,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                     HomeTab.Updates -> zoukan.desktop.discord.DiscordPresence.Screen.UPDATES
                     HomeTab.History -> zoukan.desktop.discord.DiscordPresence.Screen.HISTORY
                     HomeTab.Browse -> zoukan.desktop.discord.DiscordPresence.Screen.BROWSE
-                    HomeTab.Settings -> zoukan.desktop.discord.DiscordPresence.Screen.MORE
+                    HomeTab.More -> zoukan.desktop.discord.DiscordPresence.Screen.MORE
                 },
             )
         }
@@ -362,6 +389,10 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val showLabels by ui.bottomBarLabels().changes().collectAsState(ui.bottomBarLabels().get())
         val showBadge by libraryPreferences.newShowUpdatesCount().changes().collectAsState(libraryPreferences.newShowUpdatesCount().get())
         val newUpdates by libraryPreferences.newUpdatesCount().changes().collectAsState(libraryPreferences.newUpdatesCount().get())
+        // Browse shows how many extensions have an update, as Android's extensionUpdatesCount
+        val extensions = remember { Injekt.get<DesktopExtensionManager>() }
+        val installedExtensions by extensions.installedExtensionsFlow.collectAsState()
+        val extensionUpdates = installedExtensions.values.count { it.hasUpdate }
         val shownTabs = HomeTab.entries.filter {
             (it != HomeTab.Updates || showUpdates) && (it != HomeTab.History || showHistory)
         }
@@ -371,37 +402,49 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         }
         // ZOUKAN <--
         Row(Modifier.fillMaxSize()) {
-            NavigationRail(Modifier.fillMaxHeight()) {
-                shownTabs.forEach { item ->
-                    NavigationRailItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
-                        icon = {
-                            // ZOUKAN -->
-                            androidx.compose.material3.BadgedBox(
-                                badge = {
-                                    if (item == HomeTab.Updates && showBadge && newUpdates > 0) {
-                                        androidx.compose.material3.Badge { Text(newUpdates.toString()) }
-                                    }
-                                },
-                            ) {
-                                Icon(if (tab == item) item.selectedIcon else item.icon, contentDescription = null)
-                            }
-                            // ZOUKAN <--
-                        },
-                        label = { Text(item.label) },
-                        alwaysShowLabel = showLabels,
-                    )
+            // Komikku's tablet rail: tinted with the theme color and its items centered
+            Surface(Modifier.fillMaxHeight(), tonalElevation = 3.dp) {
+                Column(
+                    Modifier.fillMaxHeight().widthIn(min = 80.dp).padding(vertical = 4.dp).selectableGroup(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                ) {
+                    shownTabs.forEach { item ->
+                        val badge = when {
+                            item == HomeTab.Updates && showBadge && newUpdates > 0 -> newUpdates
+                            item == HomeTab.Browse && extensionUpdates > 0 -> extensionUpdates
+                            else -> 0
+                        }
+                        NavigationRailItem(
+                            selected = tab == item,
+                            onClick = { tab = item },
+                            icon = {
+                                androidx.compose.material3.BadgedBox(
+                                    badge = { if (badge > 0) androidx.compose.material3.Badge { Text(badge.toString()) } },
+                                ) {
+                                    Icon(if (tab == item) item.selectedIcon else item.icon, contentDescription = null)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    item.label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            alwaysShowLabel = showLabels,
+                        )
+                    }
                 }
             }
-            VerticalDivider()
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
                     HomeTab.Library -> LibraryTab(library)
                     HomeTab.Updates -> UpdatesTab(updates)
                     HomeTab.History -> HistoryTab(history)
                     HomeTab.Browse -> BrowseTab(browse, feed)
-                    HomeTab.Settings -> SettingsTab()
+                    HomeTab.More -> MoreTab()
                 }
             }
         }
