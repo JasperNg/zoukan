@@ -41,6 +41,24 @@ object Dates {
         }
     }
 
+    /**
+     * How long ago [epochMillis] was, as Android's relativeTimeSpanString: "Never" for 0, "Just now"
+     * within a minute, then minutes, hours and days, and the date from a week on.
+     */
+    fun timeAgo(epochMillis: Long, now: Long = System.currentTimeMillis()): String {
+        if (epochMillis <= 0L) return "Never"
+        val minutes = (now - epochMillis) / 60_000
+        val hours = minutes / 60
+        val days = hours / 24
+        return when {
+            minutes < 1 -> "Just now"
+            minutes < 60 -> if (minutes == 1L) "1 minute ago" else "$minutes minutes ago"
+            hours < 24 -> if (hours == 1L) "1 hour ago" else "$hours hours ago"
+            days < 7 -> if (days == 1L) "Yesterday" else "$days days ago"
+            else -> format(toLocalDate(epochMillis))
+        }
+    }
+
     /** The date formats Settings offers, as Android's ("" is the system's short format). */
     val formats = listOf("", "MM/dd/yy", "dd/MM/yy", "yyyy-MM-dd", "dd MMM yyyy", "MMM dd, yyyy")
 }

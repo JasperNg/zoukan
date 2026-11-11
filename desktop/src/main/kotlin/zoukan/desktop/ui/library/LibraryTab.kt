@@ -79,6 +79,11 @@ fun LibraryTab(model: LibraryScreenModel) {
     val scope = rememberCoroutineScope()
     var settingsDialog by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    // ZOUKAN -->
+    var favoritesSyncDialog by remember { mutableStateOf<FavoritesSyncDialog?>(null) }
+    val showSyncFavorites = LibrarySync.showFavorites()
+    val showSyncLibrary = LibrarySync.showLibrary()
+    // ZOUKAN <--
     var categoryDialog by remember { mutableStateOf(false) }
     var removeDialog by remember { mutableStateOf(false) }
     val settings = state.settings
@@ -164,6 +169,27 @@ fun LibraryTab(model: LibraryScreenModel) {
                                 navigator.push(UpdateErrorsScreen)
                             },
                         )
+                        // ZOUKAN -->
+                        // SY's sync entries, as Android's library overflow
+                        if (showSyncFavorites) {
+                            DropdownMenuItem(
+                                text = { Text("Sync EH favorites") },
+                                onClick = {
+                                    moreMenu = false
+                                    favoritesSyncDialog = if (LibrarySync.showsNotes()) FavoritesSyncDialog.Notes else FavoritesSyncDialog.Confirm
+                                },
+                            )
+                        }
+                        if (showSyncLibrary) {
+                            DropdownMenuItem(
+                                text = { Text("Sync library") },
+                                onClick = {
+                                    moreMenu = false
+                                    LibrarySync.syncLibrary()
+                                },
+                            )
+                        }
+                        // ZOUKAN <--
                     }
                 }
             }
@@ -218,6 +244,16 @@ fun LibraryTab(model: LibraryScreenModel) {
     if (settingsDialog) LibrarySettingsDialog(model) { settingsDialog = false }
     if (categoryDialog) CategoriesDialog(model, state.categories.filter { !it.isSystemCategory }) { categoryDialog = false }
     if (removeDialog) RemoveDialog(state.selection.size, onConfirm = model::removeFromLibrary) { removeDialog = false }
+    // ZOUKAN -->
+    when (favoritesSyncDialog) {
+        FavoritesSyncDialog.Notes -> SyncFavoritesNotesDialog(
+            onDismiss = { favoritesSyncDialog = null },
+            onAccept = { favoritesSyncDialog = null },
+        )
+        FavoritesSyncDialog.Confirm -> SyncFavoritesConfirmDialog { favoritesSyncDialog = null }
+        null -> {}
+    }
+    // ZOUKAN <--
 }
 
 @Composable
