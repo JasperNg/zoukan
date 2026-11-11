@@ -107,7 +107,11 @@ class UpdatesScreenModel(
                         hideExcludedScanlators = f.hideExcludedScanlators,
                     )
                 }
-            combine(updates, filters, downloadManager.changes) { items, f, _ -> items to f }
+            // ZOUKAN: More > Downloaded only shows only downloaded chapters, as Android's Updates
+            val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
+            combine(updates, filters, downloadedOnly, downloadManager.changes) { items, f, only, _ ->
+                items to if (only) f.copy(downloaded = TriState.ENABLED_IS) else f
+            }
                 .collectLatest { (items, f) ->
                     val shown = if (f.downloaded == TriState.DISABLED) {
                         items
@@ -125,6 +129,7 @@ class UpdatesScreenModel(
     }
 
     private fun isDownloaded(item: UpdatesWithRelations): Boolean = runCatching {
+        if (item.sourceId == zoukan.desktop.local.LocalSource.ID) return@runCatching true
         val manga = Manga.create().copy(id = item.mangaId, ogTitle = item.ogMangaTitle, source = item.sourceId)
         val chapter = Chapter.create().copy(
             id = item.chapterId,

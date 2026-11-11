@@ -1,40 +1,16 @@
 package zoukan.desktop.ui.reader
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.PauseCircle
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,7 +18,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,7 +36,6 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -70,9 +44,7 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import zoukan.desktop.ui.LocalWindowState
-import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.ReadingModes
-import kotlin.math.roundToInt
 
 data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
@@ -98,6 +70,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
         var showKeys by remember { mutableStateOf(false) }
         // ZOUKAN -->
         var showSettings by remember { mutableStateOf(false) }
+        var showChapters by remember { mutableStateOf(false) }
         var autoScroll by remember { mutableStateOf(false) }
         val autoScrollInterval by prefs.autoscrollInterval().changes().collectAsState(prefs.autoscrollInterval().get())
         val filter = ReaderFilter.collect(prefs)
@@ -162,6 +135,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
                 // ZOUKAN -->
                 Key.A -> autoScroll = !autoScroll
                 Key.S -> showSettings = !showSettings
+                Key.B -> model.toggleBookmark()
+                Key.C -> showChapters = !showChapters
                 // ZOUKAN <--
                 Key.Escape -> when {
                     showKeys -> showKeys = false
@@ -224,18 +199,81 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
                 )
             }
 
-            AnimatedVisibility(menuVisible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
-                TopBar(state, model, fitMode, webtoon, windowState.placement == WindowPlacement.Fullscreen, ::toggleFullscreen, { showKeys = true }, { showSettings = true }, autoScroll, { autoScroll = !autoScroll }) {
-                    navigator.pop()
-                }
-            }
-            AnimatedVisibility(menuVisible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
-                BottomBar(state, model, actions)
-            }
+            // ZOUKAN -->
+            val buttons by prefs.readerBottomButtons().changes().collectAsState(prefs.readerBottomButtons().get())
+            val forceHorizontal by prefs.forceHorizontalSeekbar().changes().collectAsState(prefs.forceHorizontalSeekbar().get())
+            val verticalInLandscape by prefs.landscapeVerticalSeekbar().changes().collectAsState(prefs.landscapeVerticalSeekbar().get())
+            val leftHanded by prefs.leftVerticalSeekbar().changes().collectAsState(prefs.leftVerticalSeekbar().get())
+            val pageLayout by prefs.pageLayout().changes().collectAsState(prefs.pageLayout().get())
+            ReaderAppBars(
+                visible = menuVisible,
+                menu = ReaderMenuState(
+                    mangaTitle = state.manga?.title.orEmpty(),
+                    chapterTitle = state.chapter?.name.orEmpty() + when {
+                        !state.fromDisk || state.loading -> ""
+                        state.manga?.source == zoukan.desktop.local.LocalSource.ID -> " · Local file"
+                        else -> " · Downloaded"
+                    },
+                    bookmarked = state.chapter?.bookmark == true,
+                    autoScroll = autoScroll,
+                    fullscreen = windowState.placement == WindowPlacement.Fullscreen,
+                    readingMode = state.readingMode,
+                    fitMode = fitMode,
+                    cropEnabled = if (webtoon) cropWebtoon else crop,
+                    pageLayout = pageLayout,
+                    buttons = buttons,
+                    forceHorizontalSlider = forceHorizontal,
+                    verticalSliderInLandscape = verticalInLandscape,
+                    leftHandedSlider = leftHanded,
+                    currentPage = state.currentPage,
+                    currentPageText = currentPageText(state),
+                    totalPages = state.pages.size,
+                    hasPrevious = state.previousChapter != null,
+                    hasNext = state.nextChapter != null,
+                    generation = state.generation,
+                ),
+                actions = ReaderMenuActions(
+                    onBack = { navigator.pop() },
+                    onToggleBookmark = { model.toggleBookmark() },
+                    onAutoScroll = { autoScroll = !autoScroll },
+                    onKeys = { showKeys = true },
+                    onFullscreen = ::toggleFullscreen,
+                    onChapters = { showChapters = true },
+                    onWebView = model::openChapterInWebView,
+                    onBrowser = model::openChapterInBrowser,
+                    onReadingMode = model::setReadingMode,
+                    onFitMode = { prefs.readerFitMode().set(it) },
+                    onToggleCrop = {
+                        val pref = if (webtoon) prefs.cropBordersWebtoon() else prefs.cropBorders()
+                        pref.set(!pref.get())
+                    },
+                    onPageLayout = { prefs.pageLayout().set(it) },
+                    onSettings = { showSettings = true },
+                    onPreviousChapter = { model.previousChapter() },
+                    onNextChapter = { model.nextChapter() },
+                    onPage = { actions.goTo(it) },
+                ),
+            )
+            // ZOUKAN <--
         }
 
         if (showKeys) KeyboardHelp { showKeys = false }
         if (showSettings) ReaderSettingsDialog(model) { showSettings = false }
+        // ZOUKAN -->
+        if (showChapters) {
+            ReaderChapterListDialog(
+                chapters = state.navigable,
+                current = state.chapter?.id,
+                onOpen = {
+                    showChapters = false
+                    model.openChapter(it)
+                },
+                onBookmark = model::toggleBookmark,
+                onDismiss = { showChapters = false },
+            )
+        }
+        LaunchedEffect(showChapters, showSettings) { if (!showChapters && !showSettings) focus.requestFocus() }
+        // ZOUKAN <--
         // ZOUKAN -->
         val pageActions by model.pageActions.collectAsState()
         pageActions?.let { target ->
@@ -251,132 +289,6 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
         }
         LaunchedEffect(pageActions) { if (pageActions == null) focus.requestFocus() }
         // ZOUKAN <--
-    }
-}
-
-@Composable
-private fun TopBar(
-    state: ReaderScreenModel.State,
-    model: ReaderScreenModel,
-    fitMode: Int,
-    webtoon: Boolean,
-    fullscreen: Boolean,
-    onFullscreen: () -> Unit,
-    onKeys: () -> Unit,
-    onSettings: () -> Unit,
-    autoScroll: Boolean,
-    onAutoScroll: () -> Unit,
-    onBack: () -> Unit,
-) {
-    var modeMenu by remember { mutableStateOf(false) }
-    var fitMenu by remember { mutableStateOf(false) }
-    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(state.manga?.title.orEmpty(), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    state.chapter?.name.orEmpty() + when {
-                        !state.fromDisk || state.loading -> ""
-                        state.manga?.source == zoukan.desktop.local.LocalSource.ID -> " · Local file"
-                        else -> " · Downloaded"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Box {
-                TextButton(onClick = { modeMenu = true }) {
-                    Icon(Icons.AutoMirrored.Filled.ChromeReaderMode, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(ReadingModes.label(state.readingMode))
-                }
-                DropdownMenu(modeMenu, onDismissRequest = { modeMenu = false }) {
-                    ReadingModes.all.forEach { mode ->
-                        DropdownMenuItem(
-                            text = { Text(ReadingModes.label(mode)) },
-                            leadingIcon = { RadioButton(selected = state.readingMode == mode, onClick = null) },
-                            onClick = {
-                                model.setReadingMode(mode)
-                                modeMenu = false
-                            },
-                        )
-                    }
-                }
-            }
-            if (!webtoon) {
-                Box {
-                    TextButton(onClick = { fitMenu = true }) {
-                        Icon(Icons.Default.AspectRatio, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(FitModes.label(fitMode))
-                    }
-                    DropdownMenu(fitMenu, onDismissRequest = { fitMenu = false }) {
-                        FitModes.all.forEach { mode ->
-                            DropdownMenuItem(
-                                text = { Text(FitModes.label(mode)) },
-                                leadingIcon = { RadioButton(selected = fitMode == mode, onClick = null) },
-                                onClick = {
-                                    model.preferences.readerFitMode().set(mode)
-                                    fitMenu = false
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-            // ZOUKAN -->
-            IconButton(onClick = onAutoScroll) {
-                Icon(if (autoScroll) Icons.Default.PauseCircle else Icons.Default.PlayCircle, if (autoScroll) "Stop auto scroll" else "Auto scroll")
-            }
-            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Reader settings") }
-            // ZOUKAN <--
-            IconButton(onClick = onKeys) { Icon(Icons.Default.Keyboard, "Keyboard shortcuts") }
-            IconButton(onClick = onFullscreen) {
-                Icon(if (fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, "Full screen")
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomBar(state: ReaderScreenModel.State, model: ReaderScreenModel, actions: ReaderActions) {
-    val rtl = state.readingMode == ReadingModes.RIGHT_TO_LEFT
-    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { model.previousChapter() }, enabled = state.previousChapter != null) {
-                Icon(Icons.Default.SkipPrevious, "Previous chapter")
-            }
-            Text("${state.currentPage + 1}", modifier = Modifier.width(40.dp), style = MaterialTheme.typography.labelLarge)
-            val count = state.pages.size
-            if (count > 1) {
-                var dragging by remember(state.generation) { mutableStateOf(false) }
-                var value by remember(state.generation) { mutableFloatStateOf(state.currentPage.toFloat()) }
-                if (!dragging) value = state.currentPage.toFloat()
-                Slider(
-                    value = if (rtl) (count - 1) - value else value,
-                    onValueChange = {
-                        dragging = true
-                        value = if (rtl) (count - 1) - it else it
-                    },
-                    onValueChangeFinished = {
-                        dragging = false
-                        actions.goTo(value.roundToInt())
-                    },
-                    valueRange = 0f..(count - 1).toFloat(),
-                    steps = (count - 2).coerceAtLeast(0),
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
-            Text("$count", modifier = Modifier.width(40.dp).padding(start = 8.dp), style = MaterialTheme.typography.labelLarge)
-            IconButton(onClick = { model.nextChapter() }, enabled = state.nextChapter != null) {
-                Icon(Icons.Default.SkipNext, "Next chapter")
-            }
-        }
     }
 }
 
@@ -397,6 +309,8 @@ private fun KeyboardHelp(onDismiss: () -> Unit) {
         "Escape" to "Close the menu, leave full screen, or close the reader",
         "A" to "Start or stop auto scroll",
         "S" to "Reader settings",
+        "B" to "Bookmark the chapter or remove its bookmark",
+        "C" to "Chapter list",
         "Right-click or long-press a page" to "Set it as the cover, copy it or save it",
     )
     AlertDialog(

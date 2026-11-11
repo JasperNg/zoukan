@@ -360,8 +360,7 @@ class EndToEndParityTest {
             step("Settings: appearance, library and downloads") {
                 val ui = Injekt.get<UiPreferences>()
                 runOnUiThread {
-                    navigator?.popUntilRoot()
-                    HomeScreen.selectTab(HomeTab.Settings)
+                    navigator?.let { HomeScreen.openSettings(it) }
                 }
                 waitFor(hasText("App theme"))
                 shot("p15-settings-appearance")

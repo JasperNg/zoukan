@@ -13,7 +13,8 @@ class ShortcutsTest {
     fun `ctrl and a digit open the tabs`() {
         action(Key.One, ctrl = true) shouldBe Shortcuts.Action.OpenTab(HomeTab.Library)
         action(Key.Four, ctrl = true) shouldBe Shortcuts.Action.OpenTab(HomeTab.Browse)
-        action(Key.Comma, ctrl = true) shouldBe Shortcuts.Action.OpenTab(HomeTab.Settings)
+        action(Key.Five, ctrl = true) shouldBe Shortcuts.Action.OpenTab(HomeTab.More)
+        action(Key.Comma, ctrl = true) shouldBe Shortcuts.Action.OpenSettings
         action(Key.One) shouldBe null
         action(Key.One, ctrl = true, alt = true) shouldBe null
     }
