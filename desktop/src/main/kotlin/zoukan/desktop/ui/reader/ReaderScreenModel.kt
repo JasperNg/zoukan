@@ -401,7 +401,7 @@ class ReaderScreenModel(
         val ahead = preferences.preloadSize().get().coerceIn(1, 50)
         val keepAhead = maxOf(KEEP_AHEAD, ahead + 2)
         val wanted = (center - 2..center + ahead).filter { it in pages.indices }
-        // ZOUKAN <--
+            // ZOUKAN <--
             .sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
         wanted.forEach(::loadPage)
         pages.forEach { page ->

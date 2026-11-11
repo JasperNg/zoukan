@@ -331,8 +331,28 @@ fun PagedViewer(
                     val x = position.x / size.width.coerceAtLeast(1)
                     val y = position.y / size.height.coerceAtLeast(1)
                     when (ReaderNavigation.regionAt(x, y, zones)) {
-                        ReaderNavigation.Region.NEXT -> panOrTurn(if (vertical) 0 else if (rtl) -1 else 1, if (vertical) 1 else 0, forward = true)
-                        ReaderNavigation.Region.PREV -> panOrTurn(if (vertical) 0 else if (rtl) 1 else -1, if (vertical) -1 else 0, forward = false)
+                        ReaderNavigation.Region.NEXT -> panOrTurn(
+                            if (vertical) {
+                                0
+                            } else if (rtl) {
+                                -1
+                            } else {
+                                1
+                            },
+                            if (vertical) 1 else 0,
+                            forward = true,
+                        )
+                        ReaderNavigation.Region.PREV -> panOrTurn(
+                            if (vertical) {
+                                0
+                            } else if (rtl) {
+                                1
+                            } else {
+                                -1
+                            },
+                            if (vertical) -1 else 0,
+                            forward = false,
+                        )
                         ReaderNavigation.Region.RIGHT -> panOrTurn(1, 0, forward = vertical || !rtl)
                         ReaderNavigation.Region.LEFT -> panOrTurn(-1, 0, forward = !vertical && rtl)
                         ReaderNavigation.Region.MENU -> model.toggleMenu()
@@ -440,20 +460,20 @@ private fun ZoomablePage(
                     }
                 }
                 val pageModifier = Modifier
-                        .layout { measurable, _ ->
-                            val placeable = measurable.measure(Constraints.fixed(width, height))
-                            layout(viewport.width, viewport.height) {
-                                // A new page (pan zero) starts at its top
-                                val at = PageZoom.clamp(zoom.pan, viewport, content)
-                                placeable.place(at.x.roundToInt(), at.y.roundToInt())
-                            }
+                    .layout { measurable, _ ->
+                        val placeable = measurable.measure(Constraints.fixed(width, height))
+                        layout(viewport.width, viewport.height) {
+                            // A new page (pan zero) starts at its top
+                            val at = PageZoom.clamp(zoom.pan, viewport, content)
+                            placeable.place(at.x.roundToInt(), at.y.roundToInt())
                         }
-                        .pointerInput(zoom) {
-                            detectDragGestures { change, drag ->
-                                change.consume()
-                                zoom.panBy(drag)
-                            }
+                    }
+                    .pointerInput(zoom) {
+                        detectDragGestures { change, drag ->
+                            change.consume()
+                            zoom.panBy(drag)
                         }
+                    }
                 if (part == PagePart.WHOLE && rotation == 0 && gap == 0) {
                     PageSlices(image, pageModifier)
                 } else {

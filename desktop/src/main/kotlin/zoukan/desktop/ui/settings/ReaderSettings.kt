@@ -16,10 +16,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.reader.ReaderNavigation
 import zoukan.desktop.ui.reader.ReaderSettingChoices
+import kotlin.math.roundToInt
 
 /**
  * Settings > Reader beyond the basics: Android's SettingsReaderScreen (display, reading, paged,
