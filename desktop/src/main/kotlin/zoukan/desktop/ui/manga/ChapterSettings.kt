@@ -99,8 +99,8 @@ class ChapterSettings(
             TriState.ENABLED_IS
         } else {
             when (manga.downloadedFilterRaw) {
-            Manga.CHAPTER_SHOW_DOWNLOADED -> TriState.ENABLED_IS
-            Manga.CHAPTER_SHOW_NOT_DOWNLOADED -> TriState.ENABLED_NOT
+                Manga.CHAPTER_SHOW_DOWNLOADED -> TriState.ENABLED_IS
+                Manga.CHAPTER_SHOW_NOT_DOWNLOADED -> TriState.ENABLED_NOT
                 else -> TriState.DISABLED
             }
         }
