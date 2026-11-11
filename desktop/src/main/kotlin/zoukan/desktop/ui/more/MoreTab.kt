@@ -12,14 +12,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -44,26 +47,31 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
+import tachiyomi.core.common.Constants
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.ExternalLinks
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.UpdateErrorsScreen
+import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settings.SettingsTab
+import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.stats.StatsScreen
 import zoukan.desktop.ui.updates.UpdatesScreenModel
 import zoukan.desktop.ui.updates.UpdatesTab
 
 /**
  * Android's More tab (MoreScreen): the app-wide switches, then the screens that have no tab of their
- * own, then Settings.
+ * own, then Settings, About and Help.
  */
 @Composable
 fun MoreTab() {
@@ -118,8 +126,25 @@ fun MoreTab() {
         item { MoreRow(Icons.AutoMirrored.Outlined.Label, "Categories") { navigator.push(CategoryScreen) } }
         item { MoreRow(Icons.Outlined.QueryStats, "Statistics") { navigator.push(StatsScreen) } }
         item { MoreRow(Icons.Outlined.ErrorOutline, "Library update errors") { navigator.push(UpdateErrorsScreen) } }
+        item {
+            MoreRow(Icons.Outlined.Storage, "Data and storage") {
+                openSettingsCategory(SettingsCategory.Data)
+                navigator.push(SettingsScreen)
+            }
+        }
         item { HorizontalDivider() }
         item { MoreRow(Icons.Outlined.Settings, "Settings") { navigator.push(SettingsScreen) } }
+        item {
+            MoreRow(Icons.Outlined.Info, "About") {
+                openSettingsCategory(SettingsCategory.About)
+                navigator.push(SettingsScreen)
+            }
+        }
+        item {
+            MoreRow(Icons.AutoMirrored.Outlined.HelpOutline, "Help") {
+                runCatching { ExternalLinks.browse(Constants.URL_HELP) }.onFailure { Toasts.error("Could not open the page", it) }
+            }
+        }
     }
 }
 

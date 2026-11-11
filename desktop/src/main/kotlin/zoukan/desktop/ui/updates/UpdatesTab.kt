@@ -36,11 +36,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -49,6 +52,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -62,6 +66,7 @@ import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
@@ -322,6 +327,8 @@ fun UpdatesTab(model: UpdatesScreenModel) {
             state.items.isEmpty() && state.filters.active -> EmptyScreen("No updates match the filters")
             state.items.isEmpty() -> EmptyScreen("No recent updates. Press refresh to check your library for new chapters.")
             else -> LazyColumn(Modifier.fillMaxSize()) {
+                // Android's "Library last updated" line above the updates
+                item(key = "updates-lastUpdated") { LastUpdatedLine() }
                 state.items.groupBy { zoukan.desktop.ui.common.Dates.relative(it.dateFetch) }.forEach { (date, items) ->
                     sectionHeader(date)
                     items(items, key = { it.chapterId }) { item ->
@@ -362,6 +369,24 @@ fun UpdatesTab(model: UpdatesScreenModel) {
             }
         }
     }
+}
+
+/** "Library last updated: 5 minutes ago", kept current each minute, as Android's updatesLastUpdatedItem. */
+@Composable
+private fun LastUpdatedLine() {
+    val preferences = remember { Injekt.get<LibraryPreferences>() }
+    val last by preferences.lastUpdatedTimestamp().changes().collectAsState(preferences.lastUpdatedTimestamp().get())
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) {
+            delay(60_000)
+            value = System.currentTimeMillis()
+        }
+    }
+    Text(
+        "Library last updated: ${zoukan.desktop.ui.common.Dates.timeAgo(last, now)}",
+        fontStyle = FontStyle.Italic,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
 }
 
 /** The toolbar while chapters are selected: the count and the bulk actions, as on Android. */

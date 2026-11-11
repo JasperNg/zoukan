@@ -90,6 +90,11 @@ fun LibraryTab(model: LibraryScreenModel) {
     val scope = rememberCoroutineScope()
     var settingsDialog by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    // ZOUKAN -->
+    var favoritesSyncDialog by remember { mutableStateOf<FavoritesSyncDialog?>(null) }
+    val showSyncFavorites = LibrarySync.showFavorites()
+    val showSyncLibrary = LibrarySync.showLibrary()
+    // ZOUKAN <--
     // The entries a categories or remove dialog is for: the selection, or one entry's context menu
     var categoryDialog by remember { mutableStateOf<Set<Long>?>(null) }
     var removeDialog by remember { mutableStateOf<Set<Long>?>(null) }
@@ -176,6 +181,27 @@ fun LibraryTab(model: LibraryScreenModel) {
                                 navigator.push(UpdateErrorsScreen)
                             },
                         )
+                        // ZOUKAN -->
+                        // SY's sync entries, as Android's library overflow
+                        if (showSyncFavorites) {
+                            DropdownMenuItem(
+                                text = { Text("Sync EH favorites") },
+                                onClick = {
+                                    moreMenu = false
+                                    favoritesSyncDialog = if (LibrarySync.showsNotes()) FavoritesSyncDialog.Notes else FavoritesSyncDialog.Confirm
+                                },
+                            )
+                        }
+                        if (showSyncLibrary) {
+                            DropdownMenuItem(
+                                text = { Text("Sync library") },
+                                onClick = {
+                                    moreMenu = false
+                                    LibrarySync.syncLibrary()
+                                },
+                            )
+                        }
+                        // ZOUKAN <--
                     }
                 }
             }
@@ -260,6 +286,16 @@ fun LibraryTab(model: LibraryScreenModel) {
     removeDialog?.let { ids ->
         RemoveDialog(ids.size, onConfirm = { model.removeFromLibrary(it, ids) }) { removeDialog = null }
     }
+    // ZOUKAN -->
+    when (favoritesSyncDialog) {
+        FavoritesSyncDialog.Notes -> SyncFavoritesNotesDialog(
+            onDismiss = { favoritesSyncDialog = null },
+            onAccept = { favoritesSyncDialog = null },
+        )
+        FavoritesSyncDialog.Confirm -> SyncFavoritesConfirmDialog { favoritesSyncDialog = null }
+        null -> {}
+    }
+    // ZOUKAN <--
 }
 
 /** How many unread chapters of each entry a download queues; null for all of them. */
