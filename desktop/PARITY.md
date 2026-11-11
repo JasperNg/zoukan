@@ -18,6 +18,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Manga details, chapters, mark read, bookmark, download, delete | Yes | Phase 3, Phase 5 |
 | Reader: paged, right to left, vertical, webtoon, continuous | Yes | Phase 4; keyboard, mouse and wheel |
 | Reader settings sheet | Yes | Reading mode, General and Filter tabs (S) |
+| Reader menu: chapter navigator, bottom buttons, bookmark, chapter list | Yes, changed | As Komikku's: previous and next chapter either side of a floating page slider, standing on the side in vertical modes when the window is taller than wide (or always, with that setting). Bottom row: chapters (C), WebView, browser, reading mode, scale type (in place of rotation), crop borders, page layout and settings; the choice dialogs are menus. Bookmark from the top bar or B |
 | Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
