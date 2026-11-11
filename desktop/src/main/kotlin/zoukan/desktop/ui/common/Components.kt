@@ -180,10 +180,11 @@ fun ScreenHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     showBack: Boolean = true,
+    color: Color = MaterialTheme.colorScheme.surface,
     actions: @Composable () -> Unit = {},
 ) {
     val navigator = LocalNavigator.currentOrThrow
-    Surface(color = MaterialTheme.colorScheme.surface, modifier = modifier.fillMaxWidth()) {
+    Surface(color = color, modifier = modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp),
             verticalAlignment = Alignment.CenterVertically,
