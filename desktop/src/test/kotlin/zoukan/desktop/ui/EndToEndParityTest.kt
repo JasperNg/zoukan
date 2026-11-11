@@ -9,7 +9,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -363,7 +362,7 @@ class EndToEndParityTest {
                 runOnUiThread {
                     navigator?.let { HomeScreen.openSettings(it) }
                 }
-                waitFor(hasText("App theme"))
+                settingsPage(SettingsCategory.Appearance).performScrollToNode(hasText("App theme"))
                 shot("p15-settings-appearance")
                 // An Android color scheme, dark and pure black, with a date format
                 ui.appTheme().set(AppTheme.NORD)
@@ -380,7 +379,6 @@ class EndToEndParityTest {
                 shot("p17-settings-custom-color")
                 onAllNodesWithText("Cancel").onFirst().performClick()
 
-                // Two-pane Settings: the page list on the left, the open page in "settings-page"
                 var list = settingsPage(SettingsCategory.Library)
                 list.performScrollToNode(hasText("Default category"))
                 onAllNodesWithText("Default category").onFirst().performClick()
@@ -524,14 +522,6 @@ class EndToEndParityTest {
                 writer.write("%03d.png".format(i), ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray())
             }
         }
-    }
-
-    /** Opens a page of the two-pane Settings from the list on the left; returns the page's list. */
-    private fun ComposeUiTest.settingsPage(category: SettingsCategory): SemanticsNodeInteraction {
-        onNodeWithTag("settings-list").performScrollToNode(hasText(category.subtitle))
-        onAllNodesWithText(category.subtitle).onFirst().performClick()
-        waitForIdle()
-        return onNodeWithTag("settings-page")
     }
 
     private fun step(name: String, block: () -> Unit) {

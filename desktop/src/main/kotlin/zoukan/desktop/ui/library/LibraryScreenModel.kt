@@ -2,7 +2,9 @@ package zoukan.desktop.ui.library
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.source.model.SManga
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,7 @@ import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.history.interactor.GetNextChapters
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.sort
@@ -37,6 +40,7 @@ import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
@@ -91,6 +95,10 @@ class LibraryScreenModel(
         /** The "Tag sorting" tags (SY), in their order */
         val sortTags: List<String> = emptyList(),
         val showEmptyCategoriesSearch: Boolean = false,
+        // ZOUKAN -->
+        /** How the tabs split the library: by category, source, status or tracking status (SY) */
+        val group: Int = LibraryGroup.BY_DEFAULT,
+        // ZOUKAN <--
     ) {
         val hasFilter: Boolean
             get() = listOf(downloaded, unread, started, bookmarked, completed).any { it != TriState.DISABLED } ||
@@ -120,7 +128,49 @@ class LibraryScreenModel(
         val downloadCounts: Map<Long, Int> = emptyMap(),
         val selection: Set<Long> = emptySet(),
         val sources: Map<Long, Pair<String, String>> = emptyMap(),
+        // ZOUKAN -->
+        /** Each entry's tracking statuses, for grouping by tracking status */
+        val trackStatuses: Map<Long, List<TrackStatus>> = emptyMap(),
+        // ZOUKAN <--
     ) {
+        val grouped: Boolean get() = settings.group != LibraryGroup.BY_DEFAULT
+
+        // ZOUKAN -->
+        /**
+         * The tabs when the library is grouped by source, status or tracking status, with the entries
+         * in each, as Android's getGroupedMangaItems. Ungrouped has none, so only All shows.
+         */
+        val groups: List<Pair<Category, Set<Long>>>
+            get() {
+                fun tab(id: Long, name: String, order: Long) = Category(id = id, name = name, order = order, flags = 0, hidden = false)
+                return when (settings.group) {
+                    LibraryGroup.BY_SOURCE -> items.groupBy { it.manga.source }
+                        .map { (source, list) ->
+                            val name = if (source == LocalSource.ID) "Local source" else sources[source]?.first?.ifBlank { null } ?: source.toString()
+                            name to (source to list)
+                        }
+                        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.first })
+                        .mapIndexed { i, (name, pair) -> tab(pair.first, name, i.toLong()) to pair.second.mapTo(HashSet()) { it.id } }
+                    LibraryGroup.BY_STATUS -> items.groupBy { it.manga.status }
+                        .map { (status, list) ->
+                            val (name, order) = STATUS_GROUPS[status] ?: ("Unknown" to 7L)
+                            tab(status + 1, name, order) to list.mapTo(HashSet()) { it.id }
+                        }
+                        .sortedBy { it.first.order }
+                    LibraryGroup.BY_TRACK_STATUS -> {
+                        val members = mutableMapOf<TrackStatus, MutableSet<Long>>()
+                        items.forEach { item ->
+                            trackStatuses[item.id].orEmpty().ifEmpty { listOf(TrackStatus.OTHER) }
+                                .forEach { members.getOrPut(it) { HashSet() }.add(item.id) }
+                        }
+                        members.entries.sortedBy { it.key.ordinal }
+                            .map { (status, ids) -> tab(status.int.toLong(), localized(status.res), status.ordinal.toLong()) to ids }
+                    }
+                    else -> emptyList()
+                }
+            }
+        // ZOUKAN <--
+
         /**
          * Category tabs: the user's categories, plus Default when entries have no category. While
          * searching or filtering, categories with no match are left out unless "Show empty
@@ -128,6 +178,9 @@ class LibraryScreenModel(
          */
         val tabs: List<Category>
             get() {
+                // ZOUKAN -->
+                if (grouped) return groups.map { it.first }
+                // ZOUKAN <--
                 val hasUncategorized = items.any { it.categories.isEmpty() || Category.UNCATEGORIZED_ID in it.categories }
                 val shown = categories.filter { !it.hidden && (!it.isSystemCategory || hasUncategorized) }
                 val searching = query.isNotBlank() || settings.hasFilter
@@ -135,15 +188,19 @@ class LibraryScreenModel(
                 return shown.filter { countIn(it.id) > 0 }
             }
 
-        val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }
+        val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }.takeIf { !grouped }
 
         /** The sort in effect: the category's own when categories keep their own settings. */
         val sort: LibrarySort
             get() = selectedCategoryModel?.takeIf { settings.categorized }?.sort ?: settings.sort
 
-        fun inCategory(category: Long?): List<LibraryManga> = when (category) {
-            null -> items
-            Category.UNCATEGORIZED_ID -> items.filter { it.categories.isEmpty() || category in it.categories }
+        fun inCategory(category: Long?): List<LibraryManga> = when {
+            category == null -> items
+            // ZOUKAN -->
+            grouped -> groups.firstOrNull { it.first.id == category }?.second
+                .orEmpty().let { ids -> items.filter { it.id in ids } }
+            // ZOUKAN <--
+            category == Category.UNCATEGORIZED_ID -> items.filter { it.categories.isEmpty() || category in it.categories }
             else -> items.filter { category in it.categories }
         }.distinctBy { it.id }
 
@@ -255,10 +312,23 @@ class LibraryScreenModel(
                 }
         }
         screenModelScope.launch {
-            getTracksPerManga.subscribe().collect { tracks -> mutableState.update { it.copy(tracks = tracks) } }
+            getTracksPerManga.subscribe().collect { tracks ->
+                // ZOUKAN -->
+                val statuses = tracks.mapValues { (_, list) ->
+                    list.mapNotNull { TrackStatus.parseTrackerStatus(trackerManager, it.trackerId, it.status) }.distinct()
+                }
+                mutableState.update { it.copy(tracks = tracks, trackStatuses = statuses) }
+                // ZOUKAN <--
+            }
         }
         screenModelScope.launch {
-            settingsFlow().collect { settings -> mutableState.update { it.copy(settings = settings) } }
+            settingsFlow().collect { settings ->
+                mutableState.update {
+                    // A new grouping has other tabs, so it starts from All
+                    val tab = if (settings.group != it.settings.group) null else it.selectedCategory
+                    it.copy(settings = settings, selectedCategory = tab)
+                }
+            }
         }
     }
 
@@ -282,6 +352,7 @@ class LibraryScreenModel(
             // ZOUKAN -->
             // More > Downloaded only shows only downloaded entries, as Android's library
             Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes(),
+            p.groupLibraryBy().changes(),
             // ZOUKAN <--
             p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
         ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
@@ -305,9 +376,10 @@ class LibraryScreenModel(
                 continueReading = v[15] as Boolean,
                 categoryTabs = v[16] as Boolean,
                 itemCounts = v[17] as Boolean,
-                sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[19] as Set<*>).filterIsInstance<String>().toSet()),
-                showEmptyCategoriesSearch = v[20] as Boolean,
-                tracking = trackerIds.mapIndexed { i, id -> id to v[21 + i] as TriState }.toMap(),
+                group = v[19] as Int,
+                sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[20] as Set<*>).filterIsInstance<String>().toSet()),
+                showEmptyCategoriesSearch = v[21] as Boolean,
+                tracking = trackerIds.mapIndexed { i, id -> id to v[22 + i] as TriState }.toMap(),
             )
         }
     }
@@ -332,7 +404,14 @@ class LibraryScreenModel(
     /** Updates the open category, or the library (by the library update settings) from "All". */
     fun refresh() {
         val category = state.value.selectedCategory
-        val started = Injekt.get<LibraryUpdater>().start(categoryId = category)
+        // ZOUKAN -->
+        // A source, status or tracking tab updates the entries in it
+        val started = if (state.value.grouped && category != null) {
+            Injekt.get<LibraryUpdater>().start(mangaIds = state.value.inCategory(category).mapTo(HashSet()) { it.id })
+        } else {
+            Injekt.get<LibraryUpdater>().start(categoryId = category)
+        }
+        // ZOUKAN <--
         if (!started) Toasts.show("A library update is already running")
     }
 
@@ -458,3 +537,15 @@ class LibraryScreenModel(
     /** A random entry of what is shown, for "Open a random entry". */
     fun randomEntry(): Long? = state.value.visible.randomOrNull()?.id
 }
+
+// ZOUKAN -->
+/** Status tabs' names and order, as Komikku's statusMap */
+private val STATUS_GROUPS: Map<Long, Pair<String, Long>> = mapOf(
+    SManga.ONGOING.toLong() to ("Ongoing" to 1L),
+    SManga.COMPLETED.toLong() to ("Completed" to 2L),
+    SManga.PUBLISHING_FINISHED.toLong() to ("Publishing finished" to 3L),
+    SManga.LICENSED.toLong() to ("Licensed" to 4L),
+    SManga.ON_HIATUS.toLong() to ("On hiatus" to 5L),
+    SManga.CANCELLED.toLong() to ("Cancelled" to 6L),
+)
+// ZOUKAN <--
