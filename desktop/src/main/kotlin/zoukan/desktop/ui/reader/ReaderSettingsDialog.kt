@@ -31,12 +31,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
 /** The reader's settings sheet, as Android's: Reading mode, General and Filter. */
@@ -47,11 +52,11 @@ fun ReaderSettingsDialog(model: ReaderScreenModel, onDismiss: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
         text = {
             Column(Modifier.width(460.dp)) {
                 PrimaryTabRow(selectedTabIndex = tab) {
-                    listOf("Reading mode", "General", "Filter").forEachIndexed { i, label ->
+                    listOf(localized(MR.strings.viewer), localized(MR.strings.pref_category_general), localized(MR.strings.action_filter)).forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
@@ -116,82 +121,82 @@ private fun IntSlider(label: String, preference: Preference<Int>, range: IntRang
 
 @Composable
 private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPreferences, shifted: Boolean) {
-    Heading("Reading mode for this entry")
+    Heading(localized(DMR.strings.reading_mode_for_this_entry))
     Choices(mode, ReadingModes.all.map { it to ReadingModes.label(it) }) { model.setReadingMode(it) }
     val webtoon = mode == ReadingModes.WEBTOON || mode == ReadingModes.CONTINUOUS_VERTICAL
     if (webtoon) {
-        Heading("Webtoon")
-        IntSlider("Side padding", prefs.webtoonSidePadding(), 0..25) { "$it%" }
-        SwitchRow("Crop borders", prefs.cropBordersWebtoon())
+        Heading(localized(SYMR.strings.entry_type_webtoon))
+        IntSlider(localized(MR.strings.pref_webtoon_side_padding), prefs.webtoonSidePadding(), 0..25) { "$it%" }
+        SwitchRow(localized(MR.strings.pref_crop_borders), prefs.cropBordersWebtoon())
         // ZOUKAN -->
-        Heading("Tap zones")
+        Heading(localized(MR.strings.pref_viewer_nav))
         PrefChoices(prefs.navigationModeWebtoon(), ReaderNavigation.layouts)
-        Heading("Invert tap zones")
+        Heading(localized(MR.strings.pref_read_with_tapping_inverted))
         PrefChoices(prefs.webtoonNavInverted(), ReaderNavigation.inverts.map { it.first.name to it.second })
-        SwitchRow("Split wide pages", prefs.dualPageSplitWebtoon())
-        SwitchRow("Invert split page placement", prefs.dualPageInvertWebtoon())
-        SwitchRow("Rotate wide pages to fit", prefs.dualPageRotateToFitWebtoon())
-        SwitchRow("Flip orientation of rotated wide pages", prefs.dualPageRotateToFitInvertWebtoon())
-        SwitchRow("Double tap to zoom", prefs.webtoonDoubleTapZoomEnabled())
-        SwitchRow("Disable zoom out", prefs.webtoonDisableZoomOut())
-        SwitchRow("Animate page transitions", prefs.pageTransitionsWebtoon())
+        SwitchRow(localized(MR.strings.pref_dual_page_split), prefs.dualPageSplitWebtoon())
+        SwitchRow(localized(MR.strings.pref_dual_page_invert), prefs.dualPageInvertWebtoon())
+        SwitchRow(localized(MR.strings.pref_page_rotate), prefs.dualPageRotateToFitWebtoon())
+        SwitchRow(localized(MR.strings.pref_page_rotate_invert), prefs.dualPageRotateToFitInvertWebtoon())
+        SwitchRow(localized(MR.strings.pref_double_tap_zoom), prefs.webtoonDoubleTapZoomEnabled())
+        SwitchRow(localized(MR.strings.pref_webtoon_disable_zoom_out), prefs.webtoonDisableZoomOut())
+        SwitchRow(localized(MR.strings.pref_page_transitions), prefs.pageTransitionsWebtoon())
         // ZOUKAN <--
     } else {
-        Heading("Scale type")
+        Heading(localized(MR.strings.pref_image_scale_type))
         PrefChoices(prefs.readerFitMode(), FitModes.all.map { it to FitModes.label(it) })
-        Heading("Page layout")
-        PrefChoices(prefs.pageLayout(), listOf(0 to "Single page", 1 to "Double pages", 2 to "Automatic (double in a wide window)"))
-        SwitchRow("Invert double pages", prefs.invertDoublePages())
+        Heading(localized(SYMR.strings.page_layout))
+        PrefChoices(prefs.pageLayout(), listOf(0 to localized(SYMR.strings.single_page), 1 to localized(SYMR.strings.double_pages), 2 to localized(DMR.strings.automatic_double_in_a_wide_window)))
+        SwitchRow(localized(SYMR.strings.invert_double_pages), prefs.invertDoublePages())
         // ZOUKAN -->
         Row(Modifier.fillMaxWidth().clickable { model.toggleShiftDoublePages() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Shift double pages", style = MaterialTheme.typography.bodyMedium)
-                Text("Pairs from the first page, for this chapter (D)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localized(DMR.strings.shift_double_pages), style = MaterialTheme.typography.bodyMedium)
+                Text(localized(DMR.strings.pairs_from_the_first_page_for), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(shifted, onCheckedChange = { model.toggleShiftDoublePages() })
         }
-        Heading("Center margin")
+        Heading(localized(DMR.strings.center_margin))
         PrefChoices(prefs.centerMarginType(), ReaderSettingChoices.centerMargins)
         // ZOUKAN <--
-        SwitchRow("Crop borders", prefs.cropBorders())
+        SwitchRow(localized(MR.strings.pref_crop_borders), prefs.cropBorders())
         // ZOUKAN -->
-        Heading("Tap zones")
+        Heading(localized(MR.strings.pref_viewer_nav))
         PrefChoices(prefs.navigationModePager(), ReaderNavigation.layouts)
-        Heading("Invert tap zones")
+        Heading(localized(MR.strings.pref_read_with_tapping_inverted))
         PrefChoices(prefs.pagerNavInverted(), ReaderNavigation.inverts.map { it.first.name to it.second })
-        Heading("Zoom start position")
+        Heading(localized(MR.strings.pref_zoom_start))
         PrefChoices(prefs.zoomStart(), ReaderSettingChoices.zoomStarts)
-        SwitchRow("Split wide pages", prefs.dualPageSplitPaged())
-        SwitchRow("Invert split page placement", prefs.dualPageInvertPaged())
-        SwitchRow("Rotate wide pages to fit", prefs.dualPageRotateToFit())
-        SwitchRow("Flip orientation of rotated wide pages", prefs.dualPageRotateToFitInvert())
-        SwitchRow("Pan wide images when tapping", prefs.navigateToPan())
-        SwitchRow("Disable zoom in", prefs.pagedDisableZoomIn())
-        SwitchRow("Double tap to zoom", prefs.pagedDoubleTapZoomEnabled())
-        SwitchRow("Animate page transitions", prefs.pageTransitionsPager())
+        SwitchRow(localized(MR.strings.pref_dual_page_split), prefs.dualPageSplitPaged())
+        SwitchRow(localized(MR.strings.pref_dual_page_invert), prefs.dualPageInvertPaged())
+        SwitchRow(localized(MR.strings.pref_page_rotate), prefs.dualPageRotateToFit())
+        SwitchRow(localized(MR.strings.pref_page_rotate_invert), prefs.dualPageRotateToFitInvert())
+        SwitchRow(localized(DMR.strings.pan_wide_images_when_tapping), prefs.navigateToPan())
+        SwitchRow(localized(KMR.strings.pref_paged_disable_zoom_in), prefs.pagedDisableZoomIn())
+        SwitchRow(localized(MR.strings.pref_double_tap_zoom), prefs.pagedDoubleTapZoomEnabled())
+        SwitchRow(localized(MR.strings.pref_page_transitions), prefs.pageTransitionsPager())
         // ZOUKAN <--
     }
 }
 
 @Composable
 private fun GeneralPage(prefs: DesktopPreferences) {
-    Heading("Background color")
-    PrefChoices(prefs.readerTheme(), listOf(0 to "White", 1 to "Black", 2 to "Gray"))
-    SwitchRow("Show page number", prefs.showPageNumber())
-    SwitchRow("Always show chapter transition", prefs.alwaysShowChapterTransition())
-    Heading("Chapters")
-    SwitchRow("Skip chapters marked read", prefs.skipRead())
-    SwitchRow("Skip filtered chapters", prefs.skipFiltered(), "The ones the entry's chapter filters hide")
-    SwitchRow("Skip duplicate chapters", prefs.skipDupe(), "Keep one chapter per number, the same scanlator's where it can")
+    Heading(localized(MR.strings.pref_reader_theme))
+    PrefChoices(prefs.readerTheme(), listOf(0 to localized(MR.strings.white_background), 1 to localized(MR.strings.black_background), 2 to localized(MR.strings.gray_background)))
+    SwitchRow(localized(MR.strings.pref_show_page_number), prefs.showPageNumber())
+    SwitchRow(localized(MR.strings.pref_always_show_chapter_transition), prefs.alwaysShowChapterTransition())
+    Heading(localized(MR.strings.chapters))
+    SwitchRow(localized(MR.strings.pref_skip_read_chapters), prefs.skipRead())
+    SwitchRow(localized(MR.strings.pref_skip_filtered_chapters), prefs.skipFiltered(), localized(DMR.strings.the_ones_the_entrys_chapter_filters))
+    SwitchRow(localized(MR.strings.pref_skip_dupe_chapters), prefs.skipDupe(), localized(DMR.strings.keep_one_chapter_per_number_the))
     // ZOUKAN -->
-    SwitchRow("Save pages into separate folders", prefs.folderPerManga(), "Creates folders according to entries' title")
+    SwitchRow(localized(MR.strings.pref_create_folder_per_manga), prefs.folderPerManga(), localized(MR.strings.pref_create_folder_per_manga_summary))
     // ZOUKAN <--
     // ZOUKAN -->
-    Heading("Menu")
-    SwitchRow("Force horizontal page slider", prefs.forceHorizontalSeekbar(), "Vertical modes keep the slider at the bottom")
-    SwitchRow("Vertical page slider in a wide window", prefs.landscapeVerticalSeekbar(), "In vertical modes, also when the window is wider than tall")
-    SwitchRow("Left-handed vertical page slider", prefs.leftVerticalSeekbar())
-    Text("Bottom bar buttons", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+    Heading(localized(MR.strings.action_menu))
+    SwitchRow(localized(DMR.strings.force_horizontal_page_slider), prefs.forceHorizontalSeekbar(), localized(DMR.strings.vertical_modes_keep_the_slider_at))
+    SwitchRow(localized(DMR.strings.vertical_page_slider_in_a_wide), prefs.landscapeVerticalSeekbar(), localized(DMR.strings.in_vertical_modes_also_when_the))
+    SwitchRow(localized(DMR.strings.left_handed_vertical_page_slider), prefs.leftVerticalSeekbar())
+    Text(localized(DMR.strings.bottom_bar_buttons), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
     val buttons by prefs.readerBottomButtons().changes().collectAsState(prefs.readerBottomButtons().get())
     ReaderBottomButtons.all.forEach { (value, label) ->
         val on = value in buttons
@@ -201,47 +206,47 @@ private fun GeneralPage(prefs: DesktopPreferences) {
             Text(label)
         }
     }
-    SwitchRow("Show reading mode", prefs.showReadingMode(), "Briefly shows the current mode when the reader opens")
-    SwitchRow("Keep screen on", prefs.keepScreenOn())
-    SwitchRow("Show actions on long tap", prefs.readWithLongTap())
-    SwitchRow("Smaller tap zones", prefs.smallerTapZone())
+    SwitchRow(localized(MR.strings.pref_show_reading_mode), prefs.showReadingMode(), localized(DMR.strings.briefly_shows_the_current_mode_when))
+    SwitchRow(localized(MR.strings.pref_keep_screen_on), prefs.keepScreenOn())
+    SwitchRow(localized(MR.strings.pref_read_with_long_tap), prefs.readWithLongTap())
+    SwitchRow(localized(KMR.strings.pref_viewer_nav_smaller_tap_zone), prefs.smallerTapZone())
     // ZOUKAN <--
-    Heading("Auto scroll")
+    Heading(localized(DMR.strings.auto_scroll))
     val interval by prefs.autoscrollInterval().changes().collectAsState(prefs.autoscrollInterval().get())
-    Text("Every ${"%.1f".format(interval)} seconds (A starts and stops it)", style = MaterialTheme.typography.bodyMedium)
+    Text(localized(DMR.strings.every_seconds_a_starts_and_stops, "%.1f".format(interval)), style = MaterialTheme.typography.bodyMedium)
     Slider(
         value = interval,
         onValueChange = { prefs.autoscrollInterval().set((it * 2).roundToInt() / 2f) },
         valueRange = 0.5f..30f,
     )
     // ZOUKAN -->
-    SwitchRow("Smooth auto scroll", prefs.smoothAutoScroll(), "Webtoon modes glide instead of jumping")
+    SwitchRow(localized(DMR.strings.smooth_auto_scroll), prefs.smoothAutoScroll(), localized(DMR.strings.webtoon_modes_glide_instead_of_jumping))
     // ZOUKAN <--
 }
 
 // ZOUKAN -->
 /** Choice labels shared by the reader's settings sheet and Settings > Reader */
 object ReaderSettingChoices {
-    val zoomStarts = listOf(1 to "Automatic", 2 to "Left", 3 to "Right", 4 to "Center")
-    val centerMargins = listOf(0 to "None", 1 to "Double pages", 2 to "Wide pages", 3 to "Double and wide pages")
-    val flashColors = listOf("BLACK" to "Black", "WHITE" to "White", "WHITE_BLACK" to "White and black")
+    val zoomStarts = listOf(1 to localized(MR.strings.zoom_start_automatic), 2 to localized(MR.strings.nav_zone_left), 3 to localized(MR.strings.nav_zone_right), 4 to localized(MR.strings.zoom_start_center))
+    val centerMargins = listOf(0 to localized(MR.strings.none), 1 to localized(SYMR.strings.double_pages), 2 to localized(DMR.strings.wide_pages), 3 to localized(DMR.strings.double_and_wide_pages))
+    val flashColors = listOf("BLACK" to localized(MR.strings.black_background), "WHITE" to localized(MR.strings.white_background), "WHITE_BLACK" to localized(DMR.strings.white_and_black))
 }
 // ZOUKAN <--
 
 @Composable
 private fun FilterPage(prefs: DesktopPreferences) {
-    SwitchRow("Custom brightness", prefs.customBrightness())
+    SwitchRow(localized(MR.strings.pref_custom_brightness), prefs.customBrightness())
     val brightnessOn by prefs.customBrightness().changes().collectAsState(prefs.customBrightness().get())
-    if (brightnessOn) IntSlider("Brightness", prefs.customBrightnessValue(), -75..100)
-    SwitchRow("Color filter", prefs.colorFilter())
+    if (brightnessOn) IntSlider(localized(DMR.strings.brightness), prefs.customBrightnessValue(), -75..100)
+    SwitchRow(localized(DMR.strings.color_filter), prefs.colorFilter())
     val colorOn by prefs.colorFilter().changes().collectAsState(prefs.colorFilter().get())
     if (colorOn) {
         val argb by prefs.colorFilterValue().changes().collectAsState(prefs.colorFilterValue().get())
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(28.dp).background(Color(argb), Corners.Medium))
-            Text("  The color laid over pages", style = MaterialTheme.typography.bodySmall)
+            Text("  " + localized(DMR.strings.color_laid_over_pages), style = MaterialTheme.typography.bodySmall)
         }
-        listOf("Red" to 16, "Green" to 8, "Blue" to 0, "Alpha" to 24).forEach { (name, shift) ->
+        listOf(localized(MR.strings.color_filter_r_value) to 16, localized(MR.strings.color_filter_g_value) to 8, localized(MR.strings.color_filter_b_value) to 0, localized(MR.strings.color_filter_a_value) to 24).forEach { (name, shift) ->
             val channel = (argb ushr shift) and 0xFF
             Text("$name: $channel", style = MaterialTheme.typography.bodyMedium)
             Slider(
@@ -253,12 +258,12 @@ private fun FilterPage(prefs: DesktopPreferences) {
                 valueRange = 0f..255f,
             )
         }
-        Heading("Blend mode")
+        Heading(localized(DMR.strings.blend_mode))
         PrefChoices(
             prefs.colorFilterMode(),
-            listOf(0 to "Default", 1 to "Multiply", 2 to "Screen", 3 to "Overlay", 4 to "Lighten", 5 to "Darken"),
+            listOf(0 to localized(MR.strings.label_default), 1 to localized(MR.strings.filter_mode_multiply), 2 to localized(MR.strings.filter_mode_screen), 3 to localized(MR.strings.overlay_header), 4 to localized(DMR.strings.lighten), 5 to localized(DMR.strings.darken)),
         )
     }
-    SwitchRow("Grayscale", prefs.grayscale())
-    SwitchRow("Inverted colors", prefs.invertedColors())
+    SwitchRow(localized(MR.strings.pref_grayscale), prefs.grayscale())
+    SwitchRow(localized(DMR.strings.inverted_colors), prefs.invertedColors())
 }

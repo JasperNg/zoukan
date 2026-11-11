@@ -22,11 +22,15 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 /** Set while a clean-up runs, so a second one waits, as Android's single job. */
 private val cleanupRunning = mutableStateOf(false)
@@ -40,8 +44,8 @@ fun CleanupDownloadsPreference() {
     var open by remember { mutableStateOf(false) }
     val running by cleanupRunning
     SettingRow(
-        "Clean up downloaded chapters",
-        "Delete non-existent, partially downloaded, and read chapter folders",
+        localized(SYMR.strings.clean_up_downloaded_chapters),
+        localized(SYMR.strings.delete_unused_chapters),
         enabled = !running,
         onClick = { open = true },
     ) { if (running) CircularProgressIndicator(Modifier.size(24.dp)) }
@@ -56,7 +60,7 @@ fun CleanupDownloadsPreference() {
 private fun runCleanup(removeRead: Boolean, removeNonFavorite: Boolean) {
     if (cleanupRunning.value) return
     cleanupRunning.value = true
-    Toasts.show("Starting cleanup")
+    Toasts.show(localized(SYMR.strings.starting_cleanup))
     AppScope.launch {
         try {
             val cleared = Injekt.get<DownloadManager>().cleanup(
@@ -67,14 +71,14 @@ private fun runCleanup(removeRead: Boolean, removeNonFavorite: Boolean) {
             )
             Toasts.show(
                 when (cleared) {
-                    0 -> "No folders to cleanup"
-                    1 -> "Cleanup done. Removed 1 folder"
-                    else -> "Cleanup done. Removed $cleared folders"
+                    0 -> localized(SYMR.strings.no_folders_to_cleanup)
+                    1 -> localized(DMR.strings.cleanup_done_removed_1_folder)
+                    else -> localized(DMR.strings.cleanup_done_removed_folders, cleared)
                 },
             )
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Toasts.error("Cleaning up downloads failed", e)
+            Toasts.error(localized(DMR.strings.cleaning_up_downloads_failed), e)
         } finally {
             cleanupRunning.value = false
         }
@@ -87,17 +91,17 @@ private fun CleanupDownloadsDialog(onDismiss: () -> Unit, onConfirm: (removeRead
     var removeNonFavorite by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Clean up downloaded chapters") },
+        title = { Text(localized(SYMR.strings.clean_up_downloaded_chapters)) },
         text = {
             Column {
                 // Always on, as on Android
-                CheckRow("Clean orphaned", checked = true, enabled = false) {}
-                CheckRow("Clean read", removeRead) { removeRead = it }
-                CheckRow("Clean entries not in library", removeNonFavorite) { removeNonFavorite = it }
+                CheckRow(localized(SYMR.strings.clean_orphaned_downloads), checked = true, enabled = false) {}
+                CheckRow(localized(SYMR.strings.clean_read_downloads), removeRead) { removeRead = it }
+                CheckRow(localized(SYMR.strings.clean_read_entries_not_in_library), removeNonFavorite) { removeNonFavorite = it }
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(removeRead, removeNonFavorite) }) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 

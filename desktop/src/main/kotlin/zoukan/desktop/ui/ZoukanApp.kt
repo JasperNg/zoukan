@@ -75,12 +75,14 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.SingleInstance
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.BackgroundJobs
 import zoukan.desktop.library.LibraryUpdater
@@ -105,6 +107,7 @@ import zoukan.desktop.ui.updates.UpdatesScreenModel
 import zoukan.desktop.ui.updates.UpdatesTab
 import zoukan.desktop.update.Updates
 import zoukan.extension.DesktopExtensionManager
+import zoukan.i18n.desktop.DMR
 import java.awt.SystemTray
 
 /** The app's long-lived background work (extension loading, library refreshes). */
@@ -186,15 +189,15 @@ fun runZoukanApp() {
                 tooltip = "Zoukan",
                 onAction = { visible = true },
                 menu = {
-                    Item("Open Zoukan", onClick = { visible = true })
-                    Item("Update library", onClick = { updater.start() })
+                    Item(localized(DMR.strings.open_zoukan), onClick = { visible = true })
+                    Item(localized(MR.strings.action_update_library), onClick = { updater.start() })
                     if (downloading) {
-                        Item("Pause downloads", onClick = { downloads.pause() })
+                        Item(localized(DMR.strings.pause_downloads), onClick = { downloads.pause() })
                     } else {
-                        Item("Start downloads", onClick = { downloads.start() })
+                        Item(localized(DMR.strings.start_downloads), onClick = { downloads.start() })
                     }
                     Separator()
-                    Item("Quit", onClick = ::exitApplication)
+                    Item(localized(DMR.strings.quit), onClick = ::exitApplication)
                 },
             )
             LaunchedEffect(Unit) {
@@ -208,7 +211,7 @@ fun runZoukanApp() {
                     // "Hide notification content", as on Android
                     val hide = Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>().hideNotificationContent().get()
                     trayState.sendNotification(
-                        if (hide) Notification("Zoukan", "Open Zoukan to see the details", type) else Notification(message.title, message.text, type),
+                        if (hide) Notification("Zoukan", localized(DMR.strings.open_zoukan_to_see_the_details), type) else Notification(message.title, message.text, type),
                     )
                     // ZOUKAN <--
                 }
@@ -228,7 +231,7 @@ fun runZoukanApp() {
                         if (!preferences.toldAboutTray().get()) {
                             preferences.toldAboutTray().set(true)
                             trayState.sendNotification(
-                                Notification("Zoukan is still running", "Library updates and downloads go on. Quit from the tray icon."),
+                                Notification(localized(DMR.strings.zoukan_is_still_running), localized(DMR.strings.library_updates_and_downloads_go_on)),
                             )
                         }
                     } else {
@@ -260,7 +263,7 @@ fun runZoukanApp() {
                 LaunchedEffect(Unit) {
                     CrashReporter.previousRunCrashed?.let {
                         delay(1500)
-                        Toasts.show("Zoukan closed unexpectedly last time. The crash log is in More > Settings > About.")
+                        Toasts.show(localized(DMR.strings.zoukan_closed_unexpectedly_last_time_the))
                     }
                 }
             }
@@ -269,7 +272,7 @@ fun runZoukanApp() {
 }
 
 private fun showAlreadyRunning() {
-    val message = "Zoukan is already running. Open it from its icon in the tray or menu bar."
+    val message = localized(DMR.strings.zoukan_is_already_running_open_it)
     if (java.awt.GraphicsEnvironment.isHeadless()) {
         System.err.println(message)
     } else {
@@ -355,11 +358,11 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
 }
 
 enum class HomeTab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
-    Library("Library", Icons.Outlined.CollectionsBookmark, Icons.Filled.CollectionsBookmark),
-    Updates("Updates", Icons.Outlined.NewReleases, Icons.Filled.NewReleases),
-    History("History", Icons.Outlined.History, Icons.Filled.History),
-    Browse("Browse", Icons.Outlined.Explore, Icons.Filled.Explore),
-    More("More", Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz),
+    Library(localized(MR.strings.label_library), Icons.Outlined.CollectionsBookmark, Icons.Filled.CollectionsBookmark),
+    Updates(localized(MR.strings.label_recent_updates), Icons.Outlined.NewReleases, Icons.Filled.NewReleases),
+    History(localized(MR.strings.history), Icons.Outlined.History, Icons.Filled.History),
+    Browse(localized(MR.strings.browse), Icons.Outlined.Explore, Icons.Filled.Explore),
+    More(localized(MR.strings.label_more), Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz),
 }
 
 /** The main screen: a navigation rail with the five tabs. */

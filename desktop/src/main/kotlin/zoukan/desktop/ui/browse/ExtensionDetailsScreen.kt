@@ -57,8 +57,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
@@ -69,6 +71,7 @@ import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.extension.DesktopExtensionManager
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's extension details (ExtensionDetailsScreenModel): the extension's version, language and
@@ -143,14 +146,14 @@ class ExtensionDetailsScreenModel(
         screenModelScope.launch(Dispatchers.IO) {
             val jar = Injekt.get<NetworkHelper>().cookieJar
             val cleared = urls.sumOf { url -> runCatching { url.toHttpUrlOrNull()?.let(jar::remove) ?: 0 }.getOrDefault(0) }
-            Toasts.show(if (cleared == 1) "Cleared 1 cookie" else "Cleared $cleared cookies")
+            Toasts.show(if (cleared == 1) localized(DMR.strings.cleared_1_cookie) else localized(DMR.strings.cleared_cookies, cleared))
         }
     }
 
     fun uninstall() {
         val extension = state.value.extension ?: return
         extensionManager.uninstallExtension(extension.pkgName)
-        Toasts.show("Uninstalled ${extension.name}")
+        Toasts.show(localized(DMR.strings.uninstalled, extension.name))
     }
 }
 
@@ -169,20 +172,20 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
         val extension = state.extension
 
         Column(Modifier.fillMaxSize().testTag("extension-details")) {
-            ScreenHeader("Extension info", subtitle = extension?.name) {
+            ScreenHeader(localized(MR.strings.label_extension_info), subtitle = extension?.name) {
                 if (extension != null) {
                     Box {
-                        TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { menu = true })
+                        TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { menu = true })
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Enable all") }, onClick = {
+                            DropdownMenuItem(text = { Text(localized(MR.strings.action_enable_all)) }, onClick = {
                                 menu = false
                                 model.toggleSources(true)
                             })
-                            DropdownMenuItem(text = { Text("Disable all") }, onClick = {
+                            DropdownMenuItem(text = { Text(localized(MR.strings.action_disable_all)) }, onClick = {
                                 menu = false
                                 model.toggleSources(false)
                             })
-                            DropdownMenuItem(text = { Text("Clear cookies") }, onClick = {
+                            DropdownMenuItem(text = { Text(localized(MR.strings.pref_clear_cookies)) }, onClick = {
                                 menu = false
                                 model.clearCookies()
                             })
@@ -191,7 +194,7 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
                 }
             }
             if (extension == null) {
-                EmptyScreen("This extension is not installed.")
+                EmptyScreen(localized(DMR.strings.this_extension_is_not_installed))
                 return@Column
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -207,15 +210,15 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
                 }
                 item(key = "info") {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                        InfoText(extension.versionName, "Version")
-                        InfoText(languageName(extension.lang), "Language")
-                        if (extension.isNsfw) InfoText("18+", "Age rating", error = true)
-                        extension.storeName?.let { InfoText(it, "Store") }
+                        InfoText(extension.versionName, localized(MR.strings.version))
+                        InfoText(languageName(extension.lang), localized(MR.strings.action_display_language_badge))
+                        if (extension.isNsfw) InfoText("18+", localized(MR.strings.ext_info_age_rating), error = true)
+                        extension.storeName?.let { InfoText(it, localized(DMR.strings.store)) }
                     }
                 }
                 item(key = "actions") {
                     Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { confirmUninstall = true }, modifier = Modifier.weight(1f)) { Text("Uninstall") }
+                        OutlinedButton(onClick = { confirmUninstall = true }, modifier = Modifier.weight(1f)) { Text(localized(MR.strings.ext_uninstall)) }
                     }
                 }
                 item(key = "incognito") {
@@ -224,9 +227,9 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Incognito mode", style = MaterialTheme.typography.bodyLarge)
+                            Text(localized(MR.strings.pref_incognito_mode), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "Pauses reading history and tracking for this extension's sources",
+                                localized(DMR.strings.pauses_reading_history_and_tracking_for),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -248,7 +251,7 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
                             }
                         }
                         if (item.configurable) {
-                            TooltipIconButton(Icons.Outlined.Settings, "Source settings", onClick = { navigator.push(SourceSettingsScreen(item.source.id)) })
+                            TooltipIconButton(Icons.Outlined.Settings, localized(MR.strings.source_settings), onClick = { navigator.push(SourceSettingsScreen(item.source.id)) })
                         }
                         Switch(item.enabled, onCheckedChange = { model.toggleSource(item.source.id) })
                     }
@@ -258,14 +261,14 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
         if (confirmUninstall) {
             AlertDialog(
                 onDismissRequest = { confirmUninstall = false },
-                title = { Text("Uninstall ${extension?.name}?") },
+                title = { Text(localized(DMR.strings.uninstall, extension?.name)) },
                 confirmButton = {
                     Button(onClick = {
                         confirmUninstall = false
                         model.uninstall()
-                    }) { Text("Uninstall") }
+                    }) { Text(localized(MR.strings.ext_uninstall)) }
                 },
-                dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
     }

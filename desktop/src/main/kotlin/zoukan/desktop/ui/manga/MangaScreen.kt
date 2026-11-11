@@ -73,8 +73,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
@@ -96,6 +98,7 @@ import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.track.TrackingDialog
+import zoukan.i18n.desktop.DMR
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -130,10 +133,10 @@ data class MangaScreen(val mangaId: Long) : Screen {
         CoverBasedTheme(manga) {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.fillMaxSize()) {
-                    ScreenHeader(title = manga.title, subtitle = state.source?.toString() ?: "Source not installed") {
-                        TooltipIconButton(Icons.Outlined.Refresh, "Refresh", onClick = { model.refresh() }, enabled = !state.refreshing)
+                    ScreenHeader(title = manga.title, subtitle = state.source?.toString() ?: localized(DMR.strings.source_not_installed_2)) {
+                        TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_webview_refresh), onClick = { model.refresh() }, enabled = !state.refreshing)
                         if (state.source is eu.kanade.tachiyomi.source.online.HttpSource) {
-                            TooltipIconButton(Icons.Outlined.OpenInBrowser, "Open in your browser", onClick = model::openInBrowser)
+                            TooltipIconButton(Icons.Outlined.OpenInBrowser, localized(DMR.strings.open_in_your_browser), onClick = model::openInBrowser)
                         }
                         // ZOUKAN -->
                         MoreMenu(
@@ -173,11 +176,11 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             Text(
                                                 when {
-                                                    state.refreshing -> "Loading chapters…"
+                                                    state.refreshing -> localized(DMR.strings.loading_chapters)
                                                     // ZOUKAN -->
-                                                    state.chapters.isNotEmpty() -> "No chapters match the filters"
+                                                    state.chapters.isNotEmpty() -> localized(DMR.strings.no_chapters_match_the_filters)
                                                     // ZOUKAN <--
-                                                    else -> "No chapters"
+                                                    else -> localized(DMR.strings.no_chapters)
                                                 },
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -269,7 +272,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                     ExtendedFloatingActionButton(onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } }) {
                                         Icon(Icons.Filled.PlayArrow, null)
                                         Spacer(Modifier.width(12.dp))
-                                        Text(if (state.hasStarted) "Resume" else "Start")
+                                        Text(if (state.hasStarted) localized(MR.strings.action_resume) else localized(MR.strings.action_start))
                                     }
                                 }
                                 // ZOUKAN <--
@@ -289,10 +292,10 @@ data class MangaScreen(val mangaId: Long) : Screen {
         state.askTrackChapter?.let { chapter ->
             AlertDialog(
                 onDismissRequest = { model.answerTrackQuestion(false) },
-                title = { Text("Update tracking?") },
-                text = { Text("Set the trackers' progress to chapter ${chapter.toString().removeSuffix(".0")}?") },
-                confirmButton = { TextButton(onClick = { model.answerTrackQuestion(true) }) { Text("Update") } },
-                dismissButton = { TextButton(onClick = { model.answerTrackQuestion(false) }) { Text("Not now") } },
+                title = { Text(localized(DMR.strings.update_tracking)) },
+                text = { Text(localized(DMR.strings.set_the_trackers_progress_to_chapter, chapter.toString().removeSuffix(".0"))) },
+                confirmButton = { TextButton(onClick = { model.answerTrackQuestion(true) }) { Text(localized(MR.strings.ext_update)) } },
+                dismissButton = { TextButton(onClick = { model.answerTrackQuestion(false) }) { Text(localized(MR.strings.action_not_now)) } },
             )
         }
         // ZOUKAN <--
@@ -340,43 +343,43 @@ private fun MoreMenu(
     var open by remember { mutableStateOf(false) }
     val merged = manga.source == exh.source.MERGED_SOURCE_ID
     Box {
-        TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { open = true })
+        TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Edit details, notes and cover") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(DMR.strings.edit_details_notes_and_cover)) }, onClick = {
                 open = false
                 onEdit()
             })
-            DropdownMenuItem(text = { Text("Cover") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.manga_cover)) }, onClick = {
                 open = false
                 onCover()
             })
             if (manga.favorite) {
-                DropdownMenuItem(text = { Text("Update frequency") }, onClick = {
+                DropdownMenuItem(text = { Text(localized(DMR.strings.update_frequency)) }, onClick = {
                     open = false
                     onFetchInterval()
                 })
             }
             if (onCopyLink != null) {
-                DropdownMenuItem(text = { Text("Copy link") }, onClick = {
+                DropdownMenuItem(text = { Text(localized(MR.strings.action_copy_link)) }, onClick = {
                     open = false
                     onCopyLink()
                 })
             }
-            DropdownMenuItem(text = { Text("Similar titles and recommendations") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(DMR.strings.similar_titles_and_recommendations)) }, onClick = {
                 open = false
                 navigator.push(zoukan.desktop.ui.recs.RecommendsScreen(manga.id))
             })
-            DropdownMenuItem(text = { Text(if (merged) "Merge another entry" else "Merge with another entry") }, onClick = {
+            DropdownMenuItem(text = { Text(if (merged) localized(DMR.strings.merge_another_entry) else localized(DMR.strings.merge_with_another_entry)) }, onClick = {
                 open = false
                 navigator.push(pickScreen(manga, merge = true))
             })
             if (merged) {
-                DropdownMenuItem(text = { Text("Edit merged entries") }, onClick = {
+                DropdownMenuItem(text = { Text(localized(DMR.strings.edit_merged_entries)) }, onClick = {
                     open = false
                     onEditMerged()
                 })
             } else if (manga.source != zoukan.desktop.local.LocalSource.ID) {
-                DropdownMenuItem(text = { Text("Migrate to another source") }, onClick = {
+                DropdownMenuItem(text = { Text(localized(DMR.strings.migrate_to_another_source)) }, onClick = {
                     open = false
                     navigator.push(pickScreen(manga, merge = false))
                 })
@@ -407,7 +410,7 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             // ZOUKAN -->
             val shown = state.sortedChapters.size
             Text(
-                if (shown == state.chapters.size) "${state.chapters.size} chapters" else "$shown of ${state.chapters.size} chapters",
+                if (shown == state.chapters.size) localized(DMR.strings.chapters, state.chapters.size) else localized(DMR.strings.of_chapters, shown, state.chapters.size),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -417,25 +420,25 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides tint) {
                 TooltipIconButton(
                     Icons.Outlined.FilterList,
-                    if (state.filterActive) "Filter and sort (filters on)" else "Filter and sort",
+                    if (state.filterActive) localized(DMR.strings.filter_and_sort_filters_on) else localized(DMR.strings.filter_and_sort),
                     onClick = { settings = true },
                 )
             }
             if (settings) ChapterSettingsDialog(state, model, onDismiss = { settings = false })
             // ZOUKAN <--
             if (!state.isLocal) DownloadMenu(model)
-            TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+            TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
         } else {
             val selected = state.chapters.filter { it.id in state.selected }
-            TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
-            Text("${selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = { model.markRead(selected, true) })
-            TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = { model.markRead(selected, false) })
-            TooltipIconButton(Icons.Outlined.BookmarkAdd, "Bookmark", onClick = { model.setBookmark(selected, true) })
-            TooltipIconButton(Icons.Outlined.BookmarkRemove, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
+            TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
+            Text(localized(DMR.strings.selected, selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.markRead(selected, true) })
+            TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = { model.markRead(selected, false) })
+            TooltipIconButton(Icons.Outlined.BookmarkAdd, localized(DMR.strings.bookmark), onClick = { model.setBookmark(selected, true) })
+            TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.remove_bookmark), onClick = { model.setBookmark(selected, false) })
             if (!state.isLocal) {
-                TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { model.download(selected) })
-                TooltipIconButton(Icons.Outlined.Delete, "Delete downloads", onClick = { model.deleteDownloads(selected) })
+                TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(selected) })
+                TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { model.deleteDownloads(selected) })
             }
         }
     }
@@ -445,15 +448,15 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
 @Composable
 private fun ColumnScope.ChapterSelectionMenu(menu: ContextMenuState, state: MangaScreenModel.State, model: MangaScreenModel) {
     val selected = state.chapters.filter { it.id in state.selected }
-    ContextMenuItem(menu, "Clear selection", Icons.Outlined.Close, onClick = model::clearSelection)
+    ContextMenuItem(menu, localized(DMR.strings.clear_selection), Icons.Outlined.Close, onClick = model::clearSelection)
     ContextMenuDivider()
-    ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.markRead(selected, true) }
-    ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.markRead(selected, false) }
-    ContextMenuItem(menu, "Bookmark", Icons.Outlined.BookmarkAdd) { model.setBookmark(selected, true) }
-    ContextMenuItem(menu, "Remove bookmark", Icons.Outlined.BookmarkRemove) { model.setBookmark(selected, false) }
+    ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll) { model.markRead(selected, true) }
+    ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone) { model.markRead(selected, false) }
+    ContextMenuItem(menu, localized(DMR.strings.bookmark), Icons.Outlined.BookmarkAdd) { model.setBookmark(selected, true) }
+    ContextMenuItem(menu, localized(DMR.strings.remove_bookmark), Icons.Outlined.BookmarkRemove) { model.setBookmark(selected, false) }
     if (!state.isLocal) {
-        ContextMenuItem(menu, "Download", Icons.Outlined.Download) { model.download(selected) }
-        ContextMenuItem(menu, "Delete downloads", Icons.Outlined.Delete) { model.deleteDownloads(selected) }
+        ContextMenuItem(menu, localized(MR.strings.action_download), Icons.Outlined.Download) { model.download(selected) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { model.deleteDownloads(selected) }
     }
 }
 
@@ -503,7 +506,7 @@ private fun ChapterRow(
                 val details = listOfNotNull(
                     chapter.dateUpload.takeIf { SyncChapters.hasSourceDate(chapter) }?.let(zoukan.desktop.ui.common.Dates::relative),
                     chapter.scanlator?.takeIf { it.isNotBlank() },
-                    if (!chapter.read && chapter.lastPageRead > 0) "Page ${chapter.lastPageRead + 1}" else null,
+                    if (!chapter.read && chapter.lastPageRead > 0) localized(DMR.strings.page, chapter.lastPageRead + 1) else null,
                 )
                 if (details.isNotEmpty()) {
                     Text(
@@ -528,29 +531,29 @@ private fun ChapterRow(
                 selectionMenu(menu)
                 return@ContextMenu
             }
-            ContextMenuItem(menu, "Read", Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
+            ContextMenuItem(menu, localized(MR.strings.label_read_chapters), Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
             if (selected) {
-                ContextMenuItem(menu, "Deselect", Icons.Outlined.Deselect, onClick = onToggleSelect)
+                ContextMenuItem(menu, localized(DMR.strings.deselect), Icons.Outlined.Deselect, onClick = onToggleSelect)
             } else {
-                ContextMenuItem(menu, "Select", Icons.Outlined.CheckCircle, onClick = onToggleSelect)
+                ContextMenuItem(menu, localized(DMR.strings.select), Icons.Outlined.CheckCircle, onClick = onToggleSelect)
             }
             ContextMenuDivider()
             if (chapter.read) {
-                ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone, onClick = onMarkRead)
+                ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone, onClick = onMarkRead)
             } else {
-                ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll, onClick = onMarkRead)
+                ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll, onClick = onMarkRead)
             }
-            ContextMenuItem(menu, "Mark previous as read", Icons.Outlined.DoneAll, onClick = onMarkPreviousRead)
+            ContextMenuItem(menu, localized(MR.strings.action_mark_previous_as_read), Icons.Outlined.DoneAll, onClick = onMarkPreviousRead)
             if (chapter.bookmark) {
-                ContextMenuItem(menu, "Remove bookmark", Icons.Outlined.BookmarkRemove, onClick = onBookmark)
+                ContextMenuItem(menu, localized(DMR.strings.remove_bookmark), Icons.Outlined.BookmarkRemove, onClick = onBookmark)
             } else {
-                ContextMenuItem(menu, "Bookmark", Icons.Outlined.BookmarkAdd, onClick = onBookmark)
+                ContextMenuItem(menu, localized(DMR.strings.bookmark), Icons.Outlined.BookmarkAdd, onClick = onBookmark)
             }
             if (showDownload) {
                 when {
-                    download != null -> ContextMenuItem(menu, "Cancel download", Icons.Outlined.Close, onClick = onCancelDownload)
-                    downloaded -> ContextMenuItem(menu, "Delete download", Icons.Outlined.Delete, onClick = onDeleteDownload)
-                    else -> ContextMenuItem(menu, "Download", Icons.Outlined.Download, onClick = onDownload)
+                    download != null -> ContextMenuItem(menu, localized(DMR.strings.cancel_download), Icons.Outlined.Close, onClick = onCancelDownload)
+                    downloaded -> ContextMenuItem(menu, localized(DMR.strings.delete_download), Icons.Outlined.Delete, onClick = onDeleteDownload)
+                    else -> ContextMenuItem(menu, localized(MR.strings.action_download), Icons.Outlined.Download, onClick = onDownload)
                 }
             }
         }
@@ -565,26 +568,26 @@ private fun DownloadMenu(model: MangaScreenModel) {
     if (custom) CustomDownloadDialog(onConfirm = { model.downloadUnread(it) }, onDismiss = { custom = false })
     // ZOUKAN <--
     Box {
-        TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { open = true })
+        TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }) {
             listOf(1, 5, 10, 25).forEach { count ->
-                DropdownMenuItem(text = { Text(if (count == 1) "Next chapter" else "Next $count chapters") }, onClick = {
+                DropdownMenuItem(text = { Text(if (count == 1) localized(MR.strings.action_next_chapter) else localized(DMR.strings.next_chapters, count)) }, onClick = {
                     open = false
                     model.downloadUnread(count)
                 })
             }
             // ZOUKAN -->
-            DropdownMenuItem(text = { Text("Custom…") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(DMR.strings.custom)) }, onClick = {
                 open = false
                 custom = true
             })
             // ZOUKAN <--
-            DropdownMenuItem(text = { Text("Unread chapters") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.action_display_unread_badge)) }, onClick = {
                 open = false
                 model.downloadUnread(null)
             })
             // ZOUKAN -->
-            DropdownMenuItem(text = { Text("Bookmarked chapters") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(DMR.strings.bookmarked_chapters)) }, onClick = {
                 open = false
                 model.downloadBookmarked()
             })
@@ -602,7 +605,7 @@ internal fun CategoryDialog(
     var chosen by remember { mutableStateOf(emptySet<Long>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add to categories") },
+        title = { Text(localized(DMR.strings.add_to_categories)) },
         text = {
             Column {
                 categories.forEach { category ->
@@ -620,8 +623,8 @@ internal fun CategoryDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(chosen.toList()) }) { Text("Add") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onConfirm(chosen.toList()) }) { Text(localized(MR.strings.action_add)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -634,11 +637,11 @@ fun formatDateTime(epochMillis: Long): String =
 fun formatDate(epochMillis: Long): String = zoukan.desktop.ui.common.Dates.format(epochMillis)
 
 fun statusLabel(status: Long): String? = when (status.toInt()) {
-    SManga.ONGOING -> "Ongoing"
-    SManga.COMPLETED -> "Completed"
-    SManga.LICENSED -> "Licensed"
-    SManga.PUBLISHING_FINISHED -> "Publishing finished"
-    SManga.CANCELLED -> "Cancelled"
-    SManga.ON_HIATUS -> "On hiatus"
+    SManga.ONGOING -> localized(MR.strings.ongoing)
+    SManga.COMPLETED -> localized(MR.strings.completed)
+    SManga.LICENSED -> localized(MR.strings.licensed)
+    SManga.PUBLISHING_FINISHED -> localized(MR.strings.publishing_finished)
+    SManga.CANCELLED -> localized(MR.strings.cancelled)
+    SManga.ON_HIATUS -> localized(MR.strings.on_hiatus)
     else -> null
 }

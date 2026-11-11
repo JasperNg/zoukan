@@ -29,7 +29,9 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 /**
  * The Markdown of GitHub release notes, read into blocks: Android's What's new screen renders the
@@ -225,7 +227,7 @@ private fun inlineText(text: String, linkColor: Color, codeBackground: Color): A
                         tag = span.url,
                         styles = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
                     ) {
-                        runCatching { ExternalLinks.browse(span.url) }.onFailure { Toasts.error("Could not open the page", it) }
+                        runCatching { ExternalLinks.browse(span.url) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
                     }
                     withLink(link) { append(span.text) }
                 } else {

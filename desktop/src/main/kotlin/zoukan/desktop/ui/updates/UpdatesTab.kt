@@ -73,8 +73,10 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import tachiyomi.domain.updates.service.UpdatesPreferences
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
@@ -103,6 +105,7 @@ import zoukan.desktop.ui.library.selectableClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.upcoming.UpcomingScreen
+import zoukan.i18n.desktop.DMR
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -289,7 +292,7 @@ class UpdatesScreenModel(
     // ZOUKAN <--
 
     fun refresh() {
-        if (!Injekt.get<LibraryUpdater>().start()) Toasts.show("A library update is already running")
+        if (!Injekt.get<LibraryUpdater>().start()) Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
     }
 }
 
@@ -313,19 +316,19 @@ fun UpdatesTab(model: UpdatesScreenModel) {
         if (state.selecting) {
             SelectionHeader(state, model)
         } else {
-            ScreenHeader("Updates", subtitle = "New chapters in your library from the last 90 days", showBack = false) {
+            ScreenHeader(localized(MR.strings.label_recent_updates), subtitle = localized(DMR.strings.new_chapters_in_your_library_from), showBack = false) {
                 UpdatesFilterButton(model, state.filters)
                 // Android's Updates toolbar opens Upcoming from its calendar button
-                TooltipIconButton(Icons.Outlined.CalendarMonth, "View Upcoming Updates", onClick = { navigator.push(UpcomingScreen) })
+                TooltipIconButton(Icons.Outlined.CalendarMonth, localized(MR.strings.action_view_upcoming), onClick = { navigator.push(UpcomingScreen) })
                 DownloadsButton()
-                TooltipIconButton(Icons.Outlined.Refresh, "Update library", onClick = model::refresh, enabled = refresh == null)
+                TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_update_library), onClick = model::refresh, enabled = refresh == null)
             }
         }
         LibraryUpdateProgress()
         when {
             state.loading -> LoadingScreen()
-            state.items.isEmpty() && state.filters.active -> EmptyScreen("No updates match the filters")
-            state.items.isEmpty() -> EmptyScreen("No recent updates. Press refresh to check your library for new chapters.")
+            state.items.isEmpty() && state.filters.active -> EmptyScreen(localized(DMR.strings.no_updates_match_the_filters))
+            state.items.isEmpty() -> EmptyScreen(localized(DMR.strings.no_recent_updates_press_refresh_to))
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 // Android's "Library last updated" line above the updates
                 item(key = "updates-lastUpdated") { LastUpdatedLine() }
@@ -383,7 +386,7 @@ private fun LastUpdatedLine() {
         }
     }
     Text(
-        "Library last updated: ${zoukan.desktop.ui.common.Dates.timeAgo(last, now)}",
+        localized(MR.strings.updates_last_update_info, zoukan.desktop.ui.common.Dates.timeAgo(last, now)),
         fontStyle = FontStyle.Italic,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
@@ -397,28 +400,28 @@ private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScree
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
-        Text("${selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
-        TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
+        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
+        Text(localized(DMR.strings.selected, selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
+        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
         if (selected.any { !it.read }) {
-            TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = { model.setRead(selected, true) })
+            TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.setRead(selected, true) })
         }
         if (selected.any { it.read || it.lastPageRead > 0 }) {
-            TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = { model.setRead(selected, false) })
+            TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = { model.setRead(selected, false) })
         }
         if (selected.any { !it.bookmark }) {
-            TooltipIconButton(Icons.Outlined.BookmarkAdd, "Bookmark", onClick = { model.setBookmark(selected, true) })
+            TooltipIconButton(Icons.Outlined.BookmarkAdd, localized(DMR.strings.bookmark), onClick = { model.setBookmark(selected, true) })
         }
         if (selected.any { it.bookmark }) {
-            TooltipIconButton(Icons.Outlined.BookmarkRemove, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
+            TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.remove_bookmark), onClick = { model.setBookmark(selected, false) })
         }
         val remote = selected.filter { it.sourceId != LocalSource.ID }
         if (remote.any { it.chapterId !in state.downloaded && it.chapterId !in state.queued }) {
-            TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { model.download(remote) })
+            TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(remote) })
         }
         if (remote.any { it.chapterId in state.downloaded }) {
-            TooltipIconButton(Icons.Outlined.Delete, "Delete downloads", onClick = { model.deleteDownloads(remote) })
+            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { model.deleteDownloads(remote) })
         }
     }
 }
@@ -436,36 +439,36 @@ private fun ColumnScope.UpdateContextMenu(
     onOpenManga: () -> Unit,
 ) {
     if (targets.size == 1) {
-        ContextMenuItem(menu, "Read", Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
-        ContextMenuItem(menu, "Open entry", Icons.AutoMirrored.Outlined.OpenInNew, onClick = onOpenManga)
+        ContextMenuItem(menu, localized(MR.strings.label_read_chapters), Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
+        ContextMenuItem(menu, localized(DMR.strings.open_entry), Icons.AutoMirrored.Outlined.OpenInNew, onClick = onOpenManga)
     }
     if (selected) {
-        ContextMenuItem(menu, "Deselect", Icons.Outlined.Deselect) { model.toggleSelection(item) }
+        ContextMenuItem(menu, localized(DMR.strings.deselect), Icons.Outlined.Deselect) { model.toggleSelection(item) }
     } else {
-        ContextMenuItem(menu, "Select", Icons.Outlined.CheckCircle) { model.toggleSelection(item) }
+        ContextMenuItem(menu, localized(DMR.strings.select), Icons.Outlined.CheckCircle) { model.toggleSelection(item) }
     }
     ContextMenuDivider()
     if (targets.any { !it.read }) {
-        ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.setRead(targets, true) }
+        ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll) { model.setRead(targets, true) }
     }
     if (targets.any { it.read || it.lastPageRead > 0 }) {
-        ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.setRead(targets, false) }
+        ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone) { model.setRead(targets, false) }
     }
     if (targets.any { !it.bookmark }) {
-        ContextMenuItem(menu, "Bookmark", Icons.Outlined.BookmarkAdd) { model.setBookmark(targets, true) }
+        ContextMenuItem(menu, localized(DMR.strings.bookmark), Icons.Outlined.BookmarkAdd) { model.setBookmark(targets, true) }
     }
     if (targets.any { it.bookmark }) {
-        ContextMenuItem(menu, "Remove bookmark", Icons.Outlined.BookmarkRemove) { model.setBookmark(targets, false) }
+        ContextMenuItem(menu, localized(DMR.strings.remove_bookmark), Icons.Outlined.BookmarkRemove) { model.setBookmark(targets, false) }
     }
     val remote = targets.filter { it.sourceId != LocalSource.ID }
     if (remote.any { it.chapterId !in state.downloaded && it.chapterId !in state.queued }) {
-        ContextMenuItem(menu, "Download", Icons.Outlined.Download) { model.download(remote) }
+        ContextMenuItem(menu, localized(MR.strings.action_download), Icons.Outlined.Download) { model.download(remote) }
     }
     if (remote.size == 1 && remote.single().chapterId in state.queued) {
-        ContextMenuItem(menu, "Cancel download", Icons.Outlined.Close) { model.cancelDownload(remote.single()) }
+        ContextMenuItem(menu, localized(DMR.strings.cancel_download), Icons.Outlined.Close) { model.cancelDownload(remote.single()) }
     }
     if (remote.any { it.chapterId in state.downloaded }) {
-        ContextMenuItem(menu, "Delete downloads", Icons.Outlined.Delete) { model.deleteDownloads(remote) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { model.deleteDownloads(remote) }
     }
 }
 
@@ -504,7 +507,7 @@ private fun UpdateRow(
                         Icon(Icons.Default.Bookmark, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                     Text(
-                        item.chapterName + if (!item.read && item.lastPageRead > 0) " · Page ${item.lastPageRead + 1}" else "",
+                        if (!item.read && item.lastPageRead > 0) localized(DMR.strings.chapter_subtitle_page, item.chapterName, item.lastPageRead + 1) else item.chapterName,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -513,9 +516,9 @@ private fun UpdateRow(
                 }
             }
             if (item.read) {
-                TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = onRead)
+                TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = onRead)
             } else {
-                TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = onRead)
+                TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = onRead)
             }
             // ZOUKAN -->
             // Android's Updates rows end with the chapter's download button

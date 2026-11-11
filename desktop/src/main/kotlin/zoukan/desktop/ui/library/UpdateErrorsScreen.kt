@@ -65,8 +65,12 @@ import tachiyomi.domain.libraryUpdateErrorMessage.interactor.GetLibraryUpdateErr
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdateErrors
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.ui.common.Corners
@@ -81,6 +85,7 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.pickScreen
+import zoukan.i18n.desktop.DMR
 
 /**
  * Komikku's library update errors screen: the entries whose last update failed, grouped by the
@@ -144,7 +149,7 @@ class UpdateErrorsScreenModel(
             .toSortedMap()
             .map { (messageId, errors) ->
                 Group(
-                    messages[messageId] ?: "Unknown error",
+                    messages[messageId] ?: localized(MR.strings.unknown_error),
                     errors.map { Item(it, sourceManager.getOrStub(it.mangaSource).name) },
                 )
             }
@@ -196,17 +201,17 @@ class UpdateErrorsScreenModel(
             val fixed = result.updated - result.failures.size
             Toasts.show(
                 when {
-                    result.failures.isEmpty() -> if (fixed == 1) "The entry updated" else "All $fixed entries updated"
-                    fixed == 0 -> if (result.failures.size == 1) "The entry failed again" else "All ${result.failures.size} entries failed again"
-                    else -> "$fixed updated, ${result.failures.size} failed again"
+                    result.failures.isEmpty() -> if (fixed == 1) localized(DMR.strings.the_entry_updated) else localized(DMR.strings.all_entries_updated, fixed)
+                    fixed == 0 -> if (result.failures.size == 1) localized(DMR.strings.the_entry_failed_again) else localized(DMR.strings.all_entries_failed_again, result.failures.size)
+                    else -> localized(DMR.strings.updated_failed_again, fixed, result.failures.size)
                 },
             )
         }
         if (started) {
-            Toasts.show(if (targets.size == 1) "Retrying ${targets.first().error.mangaTitle}" else "Retrying ${targets.size} entries")
+            Toasts.show(if (targets.size == 1) localized(DMR.strings.retrying, targets.first().error.mangaTitle) else localized(DMR.strings.retrying_entries, targets.size))
             if (item == null) clearSelection()
         } else {
-            Toasts.show("A library update is already running")
+            Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
         }
     }
 
@@ -229,7 +234,7 @@ object UpdateErrorsScreen : Screen {
 
         fun migrate(item: UpdateErrorsScreenModel.Item) {
             scope.launch {
-                val manga = model.manga(item) ?: return@launch Toasts.show("The entry is gone")
+                val manga = model.manga(item) ?: return@launch Toasts.show(localized(DMR.strings.the_entry_is_gone))
                 navigator.push(pickScreen(manga, merge = false))
             }
         }
@@ -241,39 +246,39 @@ object UpdateErrorsScreen : Screen {
                         Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
+                        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
                         Text(
-                            "${state.selection.size} selected",
+                            localized(DMR.strings.selected, state.selection.size),
                             style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.weight(1f).padding(start = 8.dp),
                         )
-                        TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
-                        TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
-                        TooltipIconButton(Icons.Outlined.Refresh, "Retry", onClick = { model.retry() }, enabled = updating == null)
+                        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
+                        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
+                        TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_retry), onClick = { model.retry() }, enabled = updating == null)
                         TooltipIconButton(
                             Icons.Outlined.FindReplace,
-                            if (state.selection.size == 1) "Migrate" else "Migrate (one entry at a time)",
+                            if (state.selection.size == 1) localized(MR.strings.action_migrate) else localized(DMR.strings.migrate_one_entry_at_a_time),
                             onClick = { state.selected.singleOrNull()?.let(::migrate) },
                             enabled = state.selection.size == 1,
                         )
-                        TooltipIconButton(Icons.Outlined.DeleteOutline, "Delete", onClick = { model.delete() })
+                        TooltipIconButton(Icons.Outlined.DeleteOutline, localized(MR.strings.action_delete), onClick = { model.delete() })
                     }
                 }
             } else {
-                ScreenHeader("Library update errors (${state.items.size})") {
+                ScreenHeader(localized(DMR.strings.library_update_errors, state.items.size)) {
                     TooltipIconButton(
                         Icons.Outlined.Refresh,
-                        "Retry all",
+                        localized(SYMR.strings.eh_retry_all),
                         onClick = { model.retry() },
                         enabled = updating == null && state.items.isNotEmpty(),
                     )
-                    if (state.items.isNotEmpty()) TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+                    if (state.items.isNotEmpty()) TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
                 }
             }
             LibraryUpdateProgress()
             when {
                 state.loading -> LoadingScreen()
-                state.items.isEmpty() -> EmptyScreen("You have no library update errors.")
+                state.items.isEmpty() -> EmptyScreen(localized(KMR.strings.info_empty_library_update_errors))
                 else -> {
                     ErrorList(
                         state,
@@ -366,10 +371,10 @@ private fun ErrorList(
                             )
                         }
                         if (state.selection.isEmpty()) {
-                            TooltipIconButton(Icons.AutoMirrored.Outlined.OpenInNew, "Open entry", onClick = { onOpen(item) })
-                            TooltipIconButton(Icons.Outlined.Refresh, "Retry", onClick = { onRetry(item) }, enabled = retryEnabled)
-                            TooltipIconButton(Icons.Outlined.FindReplace, "Migrate", onClick = { onMigrate(item) })
-                            TooltipIconButton(Icons.Outlined.DeleteOutline, "Delete", onClick = { onDelete(item) })
+                            TooltipIconButton(Icons.AutoMirrored.Outlined.OpenInNew, localized(DMR.strings.open_entry), onClick = { onOpen(item) })
+                            TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_retry), onClick = { onRetry(item) }, enabled = retryEnabled)
+                            TooltipIconButton(Icons.Outlined.FindReplace, localized(MR.strings.action_migrate), onClick = { onMigrate(item) })
+                            TooltipIconButton(Icons.Outlined.DeleteOutline, localized(MR.strings.action_delete), onClick = { onDelete(item) })
                         }
                     }
                 }
@@ -390,25 +395,25 @@ private fun ScrollBar(state: UpdateErrorsScreenModel.State, listState: LazyListS
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
             TooltipIconButton(
                 Icons.Outlined.VerticalAlignTop,
-                "Scroll to top",
+                localized(KMR.strings.action_scroll_to_top),
                 onClick = { scope.launch { listState.scrollToItem(0) } },
                 enabled = first > 0,
             )
             TooltipIconButton(
                 Icons.Outlined.ArrowUpward,
-                "Previous error",
+                localized(DMR.strings.previous_error),
                 onClick = { scope.launch { listState.scrollToItem(headers.filter { it < first }.maxOrNull() ?: 0) } },
                 enabled = headers.any { it < first },
             )
             TooltipIconButton(
                 Icons.Outlined.ArrowDownward,
-                "Next error",
+                localized(DMR.strings.next_error),
                 onClick = { scope.launch { headers.firstOrNull { it > first }?.let { listState.scrollToItem(it) } } },
                 enabled = canScrollForward && headers.any { it > first },
             )
             TooltipIconButton(
                 Icons.Outlined.VerticalAlignBottom,
-                "Scroll to bottom",
+                localized(KMR.strings.action_scroll_to_bottom),
                 onClick = { scope.launch { listState.scrollToItem(lastIndex.coerceAtLeast(0)) } },
                 enabled = canScrollForward,
             )

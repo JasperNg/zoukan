@@ -47,12 +47,16 @@ import com.materialkolor.PaletteStyle
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ThemeMode
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
+import zoukan.i18n.desktop.DMR
 import java.time.LocalDate
 
 /**
@@ -61,20 +65,20 @@ import java.time.LocalDate
  * options. Every setting is the Android one (UiPreferences), so backups carry them both ways.
  */
 fun LazyListScope.appearanceSettings() {
-    settingsGroup("Appearance")
+    settingsGroup(localized(MR.strings.pref_category_appearance))
     item(key = "appearance-theme") { ThemeSection() }
     item(key = "appearance-display") { DisplaySection() }
     // ZOUKAN -->
-    settingsGroup("Entry page")
+    settingsGroup(localized(DMR.strings.entry_page))
     item(key = "appearance-manga-info") { MangaInfoSection() }
     // ZOUKAN <--
-    settingsGroup("Navigation")
+    settingsGroup(localized(MR.strings.pref_reader_navigation))
     item(key = "appearance-navigation") { NavigationSection() }
     // ZOUKAN -->
-    settingsGroup("Entry page")
+    settingsGroup(localized(DMR.strings.entry_page))
     item(key = "appearance-previews") {
         val ui = remember { Injekt.get<UiPreferences>() }
-        SliderPreference("Page preview rows", ui.previewsRowCount(), 0..10) { if (it == 0) "Hidden" else "$it" }
+        SliderPreference(localized(DMR.strings.page_preview_rows), ui.previewsRowCount(), 0..10) { if (it == 0) localized(DMR.strings.hidden) else "$it" }
     }
     // ZOUKAN <--
 }
@@ -97,9 +101,9 @@ internal fun ThemeSection() {
     val shownTheme = if (theme == AppTheme.MONET) AppTheme.DEFAULT else theme
 
     Column {
-        SettingRow("App theme")
+        SettingRow(localized(MR.strings.pref_app_theme))
         Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(ThemeMode.SYSTEM to "System", ThemeMode.LIGHT to "Light", ThemeMode.DARK to "Dark").forEach { (value, label) ->
+            listOf(ThemeMode.SYSTEM to localized(MR.strings.theme_system), ThemeMode.LIGHT to localized(MR.strings.theme_light), ThemeMode.DARK to localized(MR.strings.theme_dark)).forEach { (value, label) ->
                 FilterChip(selected = mode == value, onClick = { ui.themeMode().set(value) }, label = { Text(label) })
             }
         }
@@ -121,20 +125,20 @@ internal fun ThemeSection() {
             }
         }
         SettingRow(
-            "Custom color",
-            "The color the custom theme is made from",
+            localized(DMR.strings.custom_color),
+            localized(DMR.strings.the_color_the_custom_theme_is),
             enabled = shownTheme == AppTheme.CUSTOM,
             onClick = { pickingColor = true },
         ) {
             Box(Modifier.size(28.dp).clip(CircleShape).background(Color(seed)))
         }
         ChoiceSetting(
-            "Custom theme style",
+            localized(KMR.strings.pref_custom_theme_style),
             style,
             PaletteStyle.entries.map { it to paletteStyleLabel(it) },
             enabled = shownTheme == AppTheme.CUSTOM,
         ) { ui.customThemeStyle().set(it) }
-        SwitchSetting("Pure black dark mode", checked = amoled, enabled = mode != ThemeMode.LIGHT) { ui.themeDarkAmoled().set(it) }
+        SwitchSetting(localized(MR.strings.pref_dark_theme_pure_black), checked = amoled, enabled = mode != ThemeMode.LIGHT) { ui.themeDarkAmoled().set(it) }
     }
     if (pickingColor) {
         ColorPickerDialog(
@@ -156,9 +160,9 @@ private fun MangaInfoSection() {
     val coverBased by ui.themeCoverBased().changes().collectAsState(ui.themeCoverBased().get())
     val style by ui.themeCoverBasedStyle().changes().collectAsState(ui.themeCoverBasedStyle().get())
     Column {
-        SwitchSetting("Theme based on cover", checked = coverBased) { ui.themeCoverBased().set(it) }
+        SwitchSetting(localized(KMR.strings.pref_theme_cover_based), checked = coverBased) { ui.themeCoverBased().set(it) }
         ChoiceSetting(
-            "Cover based theme style",
+            localized(KMR.strings.pref_theme_cover_based_style),
             style,
             PaletteStyle.entries.map { it to paletteStyleLabel(it) },
             enabled = coverBased,
@@ -254,16 +258,16 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Custom color") },
+        title = { Text(localized(DMR.strings.custom_color)) },
         text = {
             Column(Modifier.width(360.dp)) {
                 Box(Modifier.fillMaxWidth().height(56.dp).clip(Corners.Large).background(color))
                 Spacer(Modifier.height(12.dp))
-                Text("Hue", style = MaterialTheme.typography.labelMedium)
+                Text(localized(DMR.strings.hue), style = MaterialTheme.typography.labelMedium)
                 Slider(hue, { hue = it }, valueRange = 0f..1f)
-                Text("Saturation", style = MaterialTheme.typography.labelMedium)
+                Text(localized(DMR.strings.saturation), style = MaterialTheme.typography.labelMedium)
                 Slider(saturation, { saturation = it }, valueRange = 0f..1f)
-                Text("Brightness", style = MaterialTheme.typography.labelMedium)
+                Text(localized(DMR.strings.brightness), style = MaterialTheme.typography.labelMedium)
                 Slider(value, { value = it }, valueRange = 0f..1f)
                 OutlinedTextField(
                     hex,
@@ -272,7 +276,7 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
                         hex.toIntOrNull(16)?.takeIf { hex.length == 6 }?.let { setColor(Color(it or (0xFF shl 24))) }
                     },
                     singleLine = true,
-                    label = { Text("Hex") },
+                    label = { Text(localized(DMR.strings.hex)) },
                     prefix = { Text("#") },
                 )
                 Spacer(Modifier.height(12.dp))
@@ -286,7 +290,7 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
             }
         },
         confirmButton = { TextButton(onClick = { onPick(color) }) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -302,14 +306,14 @@ private fun DisplaySection() {
     val format by ui.dateFormat().changes().collectAsState(ui.dateFormat().get())
     Column {
         ChoiceSetting(
-            "Date format",
+            localized(MR.strings.pref_date_format),
             format,
             Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { "Default" }} (${Dates.format(now, pattern)})" },
         ) { ui.dateFormat().set(it) }
         SwitchPreference(
-            "Relative timestamps",
+            localized(MR.strings.pref_relative_format),
             ui.relativeTime(),
-            "\"Today\" instead of \"${Dates.format(now, format)}\"",
+            localized(DMR.strings.today_instead_of, Dates.format(now, format)),
         )
     }
 }
@@ -318,45 +322,45 @@ private fun DisplaySection() {
 private fun NavigationSection() {
     val ui = remember { Injekt.get<UiPreferences>() }
     Column {
-        SwitchPreference("Show Updates button", ui.showNavUpdates())
-        SwitchPreference("Show History button", ui.showNavHistory())
-        SwitchPreference("Always show navigation labels", ui.bottomBarLabels(), "Otherwise only the open tab's")
+        SwitchPreference(localized(DMR.strings.show_updates_button), ui.showNavUpdates())
+        SwitchPreference(localized(DMR.strings.show_history_button), ui.showNavHistory())
+        SwitchPreference(localized(DMR.strings.always_show_navigation_labels), ui.bottomBarLabels(), localized(DMR.strings.otherwise_only_the_open_tabs))
     }
 }
 
 /** The Android app's English theme names. */
 fun themeLabel(theme: AppTheme): String = when (theme) {
-    AppTheme.DEFAULT, AppTheme.MONET -> "Default"
-    AppTheme.CUSTOM -> "Custom"
-    AppTheme.COTTONCANDY -> "Cotton candy"
-    AppTheme.MOCHA -> "Mocha"
-    AppTheme.CATPPUCCIN -> "Catppuccin"
-    AppTheme.GREEN_APPLE -> "Green Apple"
-    AppTheme.LAVENDER -> "Lavender"
-    AppTheme.MIDNIGHT_DUSK -> "Midnight Dusk"
-    AppTheme.NORD -> "Nord"
-    AppTheme.STRAWBERRY_DAIQUIRI -> "Strawberry Daiquiri"
-    AppTheme.TAKO -> "Tako"
-    AppTheme.TEALTURQUOISE -> "Teal & Turquoise"
-    AppTheme.TIDAL_WAVE -> "Tidal Wave"
-    AppTheme.YINYANG -> "Yin & Yang"
-    AppTheme.YOTSUBA -> "Yotsuba"
-    AppTheme.MONOCHROME -> "Monochrome"
-    AppTheme.CLOUDFLARE -> "Cloudflare"
-    AppTheme.DOOM -> "Doom"
-    AppTheme.MATRIX -> "Matrix"
-    AppTheme.SAPPHIRE -> "Sapphire"
+    AppTheme.DEFAULT, AppTheme.MONET -> localized(MR.strings.label_default)
+    AppTheme.CUSTOM -> localized(DMR.strings.custom_2)
+    AppTheme.COTTONCANDY -> localized(DMR.strings.cotton_candy)
+    AppTheme.MOCHA -> localized(KMR.strings.theme_mocha)
+    AppTheme.CATPPUCCIN -> localized(MR.strings.theme_catppuccin)
+    AppTheme.GREEN_APPLE -> localized(MR.strings.theme_greenapple)
+    AppTheme.LAVENDER -> localized(MR.strings.theme_lavender)
+    AppTheme.MIDNIGHT_DUSK -> localized(MR.strings.theme_midnightdusk)
+    AppTheme.NORD -> localized(MR.strings.theme_nord)
+    AppTheme.STRAWBERRY_DAIQUIRI -> localized(MR.strings.theme_strawberrydaiquiri)
+    AppTheme.TAKO -> localized(MR.strings.theme_tako)
+    AppTheme.TEALTURQUOISE -> localized(MR.strings.theme_tealturquoise)
+    AppTheme.TIDAL_WAVE -> localized(MR.strings.theme_tidalwave)
+    AppTheme.YINYANG -> localized(MR.strings.theme_yinyang)
+    AppTheme.YOTSUBA -> localized(MR.strings.theme_yotsuba)
+    AppTheme.MONOCHROME -> localized(MR.strings.theme_monochrome)
+    AppTheme.CLOUDFLARE -> localized(KMR.strings.theme_cloudflare)
+    AppTheme.DOOM -> localized(KMR.strings.theme_doom)
+    AppTheme.MATRIX -> localized(KMR.strings.theme_matrix)
+    AppTheme.SAPPHIRE -> localized(KMR.strings.theme_sapphire)
     else -> theme.name
 }
 
 private fun paletteStyleLabel(style: PaletteStyle): String = when (style) {
-    PaletteStyle.TonalSpot -> "Tonal spot"
-    PaletteStyle.Neutral -> "Neutral"
-    PaletteStyle.Vibrant -> "Vibrant"
-    PaletteStyle.Expressive -> "Expressive"
-    PaletteStyle.Rainbow -> "Rainbow"
-    PaletteStyle.FruitSalad -> "Fruit salad"
-    PaletteStyle.Monochrome -> "Monochrome"
-    PaletteStyle.Fidelity -> "Fidelity"
-    PaletteStyle.Content -> "Content"
+    PaletteStyle.TonalSpot -> localized(DMR.strings.tonal_spot)
+    PaletteStyle.Neutral -> localized(KMR.strings.pref_theme_cover_based_style_neutral)
+    PaletteStyle.Vibrant -> localized(KMR.strings.pref_theme_cover_based_style_vibrant)
+    PaletteStyle.Expressive -> localized(KMR.strings.pref_theme_cover_based_style_expressive)
+    PaletteStyle.Rainbow -> localized(KMR.strings.pref_theme_cover_based_style_rainbow)
+    PaletteStyle.FruitSalad -> localized(DMR.strings.fruit_salad)
+    PaletteStyle.Monochrome -> localized(MR.strings.theme_monochrome)
+    PaletteStyle.Fidelity -> localized(KMR.strings.pref_theme_cover_based_style_fidelity)
+    PaletteStyle.Content -> localized(KMR.strings.pref_theme_cover_based_style_content)
 }

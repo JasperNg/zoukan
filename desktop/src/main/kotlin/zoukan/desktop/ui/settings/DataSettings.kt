@@ -39,15 +39,19 @@ import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.AutoBackup
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
 
@@ -57,38 +61,38 @@ import java.io.File
  * in its own group (SyncSettings), as on Android it follows these.
  */
 fun LazyListScope.dataSettings() {
-    settingsGroup("Data and storage")
+    settingsGroup(localized(MR.strings.label_data_storage))
     item(key = "data-storage-location") { StorageLocationPreference() }
-    item(key = "data-storage-info") { InfoText("Used for automatic backups, chapter downloads, and local source.") }
+    item(key = "data-storage-info") { InfoText(localized(MR.strings.pref_storage_location_info)) }
     item(key = "data-open-downloads") {
         val storage = remember { Injekt.get<ZoukanStorage>() }
-        SettingRow("Open the downloads folder", onClick = { openFolder(storage.downloads) })
+        SettingRow(localized(DMR.strings.open_the_downloads_folder), onClick = { openFolder(storage.downloads) })
     }
     item(key = "data-open-local") {
         val storage = remember { Injekt.get<ZoukanStorage>() }
         SettingRow(
-            "Open the local source folder",
-            "Put a folder per entry here, with chapters as folders, CBZ, ZIP, RAR, 7z, TAR or EPUB files",
+            localized(DMR.strings.open_the_local_source_folder),
+            localized(DMR.strings.put_a_folder_per_entry_here),
             onClick = { openFolder(storage.local) },
         )
     }
 
-    settingsGroup("Backup and restore")
+    settingsGroup(localized(MR.strings.label_backup))
     item(key = "data-backup-buttons") { BackupButtons() }
     item(key = "data-backup-interval") {
         val preferences = remember { Injekt.get<BackupPreferences>() }
         ChoicePreference(
-            "Automatic backup frequency",
+            localized(MR.strings.pref_backup_interval),
             preferences.backupInterval(),
             listOf(
-                0 to "Off",
-                1 to "Every hour",
-                3 to "Every 3 hours",
-                6 to "Every 6 hours",
-                12 to "Every 12 hours",
-                24 to "Daily",
-                48 to "Every 2 days",
-                168 to "Weekly",
+                0 to localized(MR.strings.off),
+                1 to localized(SYMR.strings.update_1hour),
+                3 to localized(MR.strings.update_3hour),
+                6 to localized(MR.strings.update_6hour),
+                12 to localized(MR.strings.update_12hour),
+                24 to localized(MR.strings.update_24hour),
+                48 to localized(MR.strings.update_48hour),
+                168 to localized(MR.strings.update_weekly),
             ),
         )
     }
@@ -96,47 +100,48 @@ fun LazyListScope.dataSettings() {
         val preferences = remember { Injekt.get<BackupPreferences>() }
         val last by preferences.lastAutoBackupTimestamp().changes().collectAsState(preferences.lastAutoBackupTimestamp().get())
         InfoText(
-            "You should keep copies of backups in other places as well. Backups may contain sensitive data including any " +
-                "stored passwords; be careful if sharing.\n\nLast automatically backed up: " +
-                if (last > 0) zoukan.desktop.ui.manga.formatDateTime(last) else "Never",
+            localized(
+                DMR.strings.backup_info,
+                if (last > 0) zoukan.desktop.ui.manga.formatDateTime(last) else localized(MR.strings.lock_never),
+            ),
         )
     }
     item(key = "data-backup-folder") {
         val dirs = remember { Injekt.get<ZoukanDirs>() }
-        SettingRow("Open the backup folder", onClick = { openFolder(dirs.backups) })
+        SettingRow(localized(DMR.strings.open_the_backup_folder), onClick = { openFolder(dirs.backups) })
     }
     item(key = "data-auto-backup-folder") {
         val storage = remember { Injekt.get<ZoukanStorage>() }
         SettingRow(
-            "Open the automatic backup folder",
-            "The newest ${AutoBackup.MAX_AUTO_BACKUPS} are kept. They are not encrypted, so keep the folder private.",
+            localized(DMR.strings.open_the_automatic_backup_folder),
+            localized(DMR.strings.the_newest_are_kept_they_are, AutoBackup.MAX_AUTO_BACKUPS),
             onClick = { openFolder(storage.autoBackups) },
         )
     }
 
-    settingsGroup("Storage usage")
+    settingsGroup(localized(MR.strings.pref_storage_usage))
     item(key = "data-storage-usage") { StorageUsage() }
     item(key = "data-chapter-cache") { ChapterCachePreference() }
     item(key = "data-auto-clear-cache") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        SwitchPreference("Clear chapter cache on app launch", preferences.autoClearChapterCache())
+        SwitchPreference(localized(MR.strings.pref_auto_clear_chapter_cache), preferences.autoClearChapterCache())
     }
     item(key = "data-cover-cache") {
         val dirs = remember { Injekt.get<ZoukanDirs>() }
         val scope = rememberCoroutineScope()
-        SettingRow("Clear cover cache", "Covers download again when shown", onClick = {
+        SettingRow(localized(DMR.strings.clear_cover_cache), localized(DMR.strings.covers_download_again_when_shown), onClick = {
             scope.launch(Dispatchers.IO) {
                 dirs.covers.listFiles()?.forEach { it.delete() }
-                Toasts.show("Cover cache cleared")
+                Toasts.show(localized(DMR.strings.cover_cache_cleared))
             }
         })
     }
     item(key = "data-folder") {
         val dirs = remember { Injekt.get<ZoukanDirs>() }
-        SettingRow("Data folder", dirs.root.absolutePath, onClick = { openFolder(dirs.root) })
+        SettingRow(localized(DMR.strings.data_folder), dirs.root.absolutePath, onClick = { openFolder(dirs.root) })
     }
 
-    settingsGroup("Export")
+    settingsGroup(localized(MR.strings.export))
     item(key = "data-export") { ExportLibraryPreference() }
 }
 
@@ -147,7 +152,7 @@ internal fun StorageLocationPreference() {
     val window = LocalWindow.current?.window
     val folder by storage.folderPreference.changes().collectAsState(storage.folderPreference.get())
     SettingRow(
-        "Storage location",
+        localized(MR.strings.pref_storage_location),
         // Read again when the setting changes
         remember(folder) { storage.root.path },
         onClick = {
@@ -161,7 +166,7 @@ internal fun StorageLocationPreference() {
             TextButton(onClick = {
                 storage.folderPreference.set("")
                 Injekt.get<DownloadManager>().invalidateCache()
-            }) { Text("Reset") }
+            }) { Text(localized(MR.strings.action_reset)) }
         }
     }
 }
@@ -172,17 +177,17 @@ private fun BackupButtons() {
     val dirs = remember { Injekt.get<ZoukanDirs>() }
     val window = LocalWindow.current?.window
     val status by backupStatusFlow.collectAsState()
-    SearchTerms("Create backup", "Restore backup")
+    SearchTerms(localized(MR.strings.pref_create_backup), localized(MR.strings.pref_restore_backup))
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { createBackup(dirs.backups) }, enabled = status == null, modifier = Modifier.weight(1f)) {
-                Text("Create backup")
+                Text(localized(MR.strings.pref_create_backup))
             }
             OutlinedButton(
                 onClick = { pickAndRestoreBackup(window, dirs) },
                 enabled = status == null,
                 modifier = Modifier.weight(1f),
-            ) { Text("Restore backup") }
+            ) { Text(localized(MR.strings.pref_restore_backup)) }
         }
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -191,8 +196,7 @@ private fun BackupButtons() {
                 Spacer(Modifier.width(8.dp))
             }
             Text(
-                status ?: "Backs up the library, categories, history, tracking and settings to ${dirs.backups}. " +
-                    "Restores Komikku, Mihon, TachiyomiSY and Zoukan backups (.tachibk).",
+                status ?: localized(DMR.strings.backs_up_the_library_categories_history, dirs.backups),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -202,7 +206,7 @@ private fun BackupButtons() {
 
 /** Asks for a backup file and restores it; returns whether one was chosen. The first-run setup uses it too. */
 internal fun pickAndRestoreBackup(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): Boolean {
-    val dialog = FileDialog(window as java.awt.Frame?, "Select backup file", FileDialog.LOAD).apply {
+    val dialog = FileDialog(window as java.awt.Frame?, localized(MR.strings.file_select_backup), FileDialog.LOAD).apply {
         directory = dirs.backups.absolutePath
         setFilenameFilter { _, name -> name.endsWith(".tachibk") || name.endsWith(".proto.gz") }
         isVisible = true
@@ -220,7 +224,7 @@ private fun StorageUsage() {
     val root = remember(folder) { storage.root.also { it.mkdirs() } }
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }
-    SearchTerms("Storage usage", "Disk space")
+    SearchTerms(localized(MR.strings.pref_storage_usage), localized(DMR.strings.disk_space))
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(root.absolutePath, style = MaterialTheme.typography.bodyMedium)
         LinearProgressIndicator(
@@ -228,7 +232,7 @@ private fun StorageUsage() {
             modifier = Modifier.clip(MaterialTheme.shapes.small).fillMaxWidth().height(12.dp),
         )
         Text(
-            "Available: ${formatSize(available)} / Total: ${formatSize(total)}",
+            localized(MR.strings.available_disk_space_info, formatSize(available), formatSize(total)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -244,13 +248,13 @@ private fun ChapterCachePreference() {
     val scope = rememberCoroutineScope()
     var version by remember { mutableIntStateOf(0) }
     val size by produceState(0L, version) { value = withContext(Dispatchers.IO) { Archives.cacheSize() } }
-    SettingRow("Clear chapter cache", "Used: ${formatSize(size)}", onClick = {
+    SettingRow(localized(MR.strings.pref_clear_chapter_cache), localized(MR.strings.used_cache, formatSize(size)), onClick = {
         scope.launch {
             try {
                 val deleted = withContext(Dispatchers.IO) { Archives.clearCache() }
-                Toasts.show("Cache cleared, $deleted files deleted")
+                Toasts.show(localized(DMR.strings.cache_cleared_files_deleted, deleted))
             } catch (e: Exception) {
-                Toasts.error("Error occurred while clearing", e)
+                Toasts.error(localized(MR.strings.cache_delete_error), e)
             }
             version++
         }
@@ -263,25 +267,25 @@ private fun ExportLibraryPreference() {
     val window = LocalWindow.current?.window
     val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf(false) }
-    SettingRow("Library List", onClick = { dialog = true })
+    SettingRow(localized(MR.strings.library_list), onClick = { dialog = true })
     if (!dialog) return
     var title by remember { mutableStateOf(true) }
     var author by remember { mutableStateOf(true) }
     var artist by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = { dialog = false },
-        title = { Text("Select data to include") },
+        title = { Text(localized(MR.strings.migration_dialog_what_to_include)) },
         text = {
             Column {
-                CheckRow("Title", title) { title = it }
-                CheckRow("Author", author, enabled = title) { author = it }
-                CheckRow("Artist", artist, enabled = title) { artist = it }
+                CheckRow(localized(MR.strings.title), title) { title = it }
+                CheckRow(localized(MR.strings.author), author, enabled = title) { author = it }
+                CheckRow(localized(MR.strings.artist), artist, enabled = title) { artist = it }
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 dialog = false
-                val chooser = FileDialog(window as java.awt.Frame?, "Export library", FileDialog.SAVE).apply {
+                val chooser = FileDialog(window as java.awt.Frame?, localized(DMR.strings.export_library), FileDialog.SAVE).apply {
                     file = "komikku_library.csv"
                     isVisible = true
                 }
@@ -293,14 +297,14 @@ private fun ExportLibraryPreference() {
                         withContext(Dispatchers.IO) {
                             target.writeText(LibraryCsv.generate(Injekt.get<GetFavorites>().await(), options))
                         }
-                        Toasts.show("Library Exported")
+                        Toasts.show(localized(MR.strings.library_exported))
                     } catch (e: Exception) {
-                        Toasts.error("Could not export the library", e)
+                        Toasts.error(localized(DMR.strings.could_not_export_the_library), e)
                     }
                 }
-            }) { Text("Save") }
+            }) { Text(localized(MR.strings.action_save)) }
         },
-        dismissButton = { TextButton(onClick = { dialog = false }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { dialog = false }) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 

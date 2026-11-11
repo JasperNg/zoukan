@@ -35,14 +35,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.DeleteFavoriteEntries
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.EhGalleryUpdater
 import zoukan.desktop.exh.EhLogin
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.manga.formatDateTime
+import zoukan.i18n.desktop.DMR
 
 /** Settings > E-Hentai: the built-in E-Hentai and ExHentai sources, as the Android app's E-Hentai settings. */
 fun LazyListScope.ehSettings() {
@@ -64,39 +68,39 @@ private fun EhSettings() {
         SwitchPreference(
             "E-Hentai",
             preferences.isHentaiEnabled(),
-            "Adds the built-in E-Hentai sources to Browse",
+            localized(DMR.strings.adds_the_built_in_e_hentai),
         )
         if (!enabled) return@Column
         SettingRow(
             "ExHentai",
-            if (exhentai) "Signed in. ExHentai sources are in Browse." else "Sign in with an E-Hentai account that can open ExHentai",
+            if (exhentai) localized(DMR.strings.signed_in_exhentai_sources_are_in) else localized(DMR.strings.sign_in_with_an_e_hentai),
         ) {
             when {
                 busy -> CircularProgressIndicator(Modifier.size(24.dp))
-                exhentai -> TextButton(onClick = { login.logout() }) { Text("Sign out") }
+                exhentai -> TextButton(onClick = { login.logout() }) { Text(localized(DMR.strings.sign_out)) }
                 else -> Row {
-                    TextButton(onClick = { cookieDialog = true }) { Text("Use cookies") }
+                    TextButton(onClick = { cookieDialog = true }) { Text(localized(DMR.strings.use_cookies)) }
                     OutlinedButton(onClick = {
                         busy = true
                         scope.launch {
                             runCatching { login.login() }
-                                .onSuccess { if (it) Toasts.show("Signed in to ExHentai") }
-                                .onFailure { Toasts.error("Signing in to ExHentai failed", it) }
+                                .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to_exhentai)) }
+                                .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_exhentai_failed), it) }
                             busy = false
                         }
-                    }) { Text("Sign in") }
+                    }) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
                 }
             }
         }
-        SwitchPreference("Use Japanese titles", preferences.useJapaneseTitle(), "Show the Japanese title of a gallery when it has one")
-        SwitchPreference("Original images", preferences.exhUseOriginalImages(), "Download the original files, which cost image limit")
+        SwitchPreference(localized(DMR.strings.use_japanese_titles), preferences.useJapaneseTitle(), localized(DMR.strings.show_the_japanese_title_of_a))
+        SwitchPreference(localized(DMR.strings.original_images), preferences.exhUseOriginalImages(), localized(DMR.strings.download_the_original_files_which_cost))
         SwitchPreference(
-            "Watched list by default",
+            localized(DMR.strings.watched_list_by_default),
             preferences.exhWatchedListDefaultState(),
-            "Browse opens on the galleries of the tags you watch",
+            localized(DMR.strings.browse_opens_on_the_galleries_of),
         )
-        SwitchPreference("Enhanced E-Hentai view", preferences.enhancedEHentaiView(), "Show gallery details (rating, tags, uploader) on the entry")
-        SwitchPreference("Incognito", preferences.ehIncognitoMode(), "Do not add read galleries to the history")
+        SwitchPreference(localized(DMR.strings.enhanced_e_hentai_view), preferences.enhancedEHentaiView(), localized(DMR.strings.show_gallery_details_rating_tags_uploader))
+        SwitchPreference(localized(DMR.strings.incognito), preferences.ehIncognitoMode(), localized(DMR.strings.do_not_add_read_galleries_to))
         if (exhentai) EhSiteSettings(preferences)
         EhUpdateSettings(preferences)
         if (exhentai) EhFavoritesSync(preferences)
@@ -109,16 +113,16 @@ private fun EhSettings() {
         var error by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { if (!busy) cookieDialog = false },
-            title = { Text("Sign in with cookies") },
+            title = { Text(localized(DMR.strings.sign_in_with_cookies)) },
             text = {
                 Column {
                     Text(
-                        "Copy these cookies of e-hentai.org from a browser where you are signed in.",
+                        localized(DMR.strings.copy_these_cookies_of_e_hentai),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     OutlinedTextField(memberId, { memberId = it.trim() }, singleLine = true, label = { Text("ipb_member_id") })
                     OutlinedTextField(passHash, { passHash = it.trim() }, singleLine = true, label = { Text("ipb_pass_hash") })
-                    OutlinedTextField(igneous, { igneous = it.trim() }, singleLine = true, label = { Text("igneous (optional)") })
+                    OutlinedTextField(igneous, { igneous = it.trim() }, singleLine = true, label = { Text(localized(DMR.strings.igneous_optional)) })
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -133,18 +137,18 @@ private fun EhSettings() {
                                 .onSuccess { ok ->
                                     if (ok) {
                                         cookieDialog = false
-                                        Toasts.show("Signed in to ExHentai")
+                                        Toasts.show(localized(DMR.strings.signed_in_to_exhentai))
                                     } else {
-                                        error = "These cookies did not sign in"
+                                        error = localized(DMR.strings.these_cookies_did_not_sign_in)
                                     }
                                 }
                                 .onFailure { error = it.message }
                             busy = false
                         }
                     },
-                ) { Text("Sign in") }
+                ) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             },
-            dismissButton = { TextButton(onClick = { cookieDialog = false }, enabled = !busy) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { cookieDialog = false }, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
@@ -158,29 +162,29 @@ private fun EhSiteSettings(preferences: ExhPreferences) {
     var categories by remember { mutableStateOf(false) }
     Column {
         ChoicePreference(
-            "Image quality",
+            localized(SYMR.strings.eh_image_quality),
             preferences.imageQuality(),
-            listOf("auto" to "Auto", "ovrs_2400" to "2400x", "ovrs_1600" to "1600x", "high" to "1280x", "med" to "980x", "low" to "780x"),
+            listOf("auto" to localized(MR.strings.label_auto), "ovrs_2400" to "2400x", "ovrs_1600" to "1600x", "high" to "1280x", "med" to "980x", "low" to "780x"),
         )
         ChoicePreference(
             "Hentai@Home",
             preferences.useHentaiAtHome(),
-            listOf(0 to "Any client (recommended)", 1 to "Default port clients only", 2 to "No (donators only)"),
+            listOf(0 to localized(DMR.strings.any_client_recommended), 1 to localized(SYMR.strings.use_hentai_at_home_option_2), 2 to localized(DMR.strings.no_donators_only)),
         )
-        SliderPreference("Tag filtering threshold", preferences.ehTagFilterValue(), -9999..0) { it.toString() }
-        SliderPreference("Tag watching threshold", preferences.ehTagWatchingValue(), 0..9999) { it.toString() }
-        SettingRow("Language filtering", "Hide galleries in these languages from searches", onClick = { languages = true })
-        SettingRow("Front page categories", "The categories searches show by default", onClick = { categories = true })
+        SliderPreference(localized(DMR.strings.tag_filtering_threshold), preferences.ehTagFilterValue(), -9999..0) { it.toString() }
+        SliderPreference(localized(DMR.strings.tag_watching_threshold), preferences.ehTagWatchingValue(), 0..9999) { it.toString() }
+        SettingRow(localized(DMR.strings.language_filtering), localized(DMR.strings.hide_galleries_in_these_languages_from), onClick = { languages = true })
+        SettingRow(localized(DMR.strings.front_page_categories), localized(DMR.strings.the_categories_searches_show_by_default), onClick = { categories = true })
         SettingRow(
-            "Apply to my account",
-            "Uploads these settings to your E-Hentai account profile, as the Android app does when you leave its settings",
+            localized(DMR.strings.apply_to_my_account),
+            localized(DMR.strings.uploads_these_settings_to_your_e),
             enabled = !busy,
             onClick = {
                 busy = true
                 scope.launch {
                     runCatching { withContext(Dispatchers.IO) { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() } }
-                        .onSuccess { Toasts.show("E-Hentai settings applied") }
-                        .onFailure { Toasts.error("Applying the E-Hentai settings failed", it) }
+                        .onSuccess { Toasts.show(localized(DMR.strings.e_hentai_settings_applied)) }
+                        .onFailure { Toasts.error(localized(DMR.strings.applying_the_e_hentai_settings_failed), it) }
                     busy = false
                 }
             },
@@ -191,8 +195,8 @@ private fun EhSiteSettings(preferences: ExhPreferences) {
 }
 
 private val EH_LANGUAGES = listOf(
-    "Japanese", "English", "Chinese", "Dutch", "French", "German", "Hungarian", "Italian", "Korean",
-    "Polish", "Portuguese", "Russian", "Spanish", "Thai", "Vietnamese", "N/A", "Other",
+    localized(DMR.strings.japanese), localized(DMR.strings.english), localized(DMR.strings.chinese), localized(DMR.strings.dutch), localized(DMR.strings.french), localized(DMR.strings.german), localized(DMR.strings.hungarian), localized(DMR.strings.italian), localized(DMR.strings.korean),
+    localized(DMR.strings.polish), localized(DMR.strings.portuguese), localized(DMR.strings.russian), localized(DMR.strings.spanish), localized(DMR.strings.thai), localized(DMR.strings.vietnamese), "N/A", localized(MR.strings.other_source),
 )
 
 /** "original*translated*rewrite" per language, one line each; Japanese has no "original" filter. */
@@ -205,12 +209,12 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Language filtering") },
+        title = { Text(localized(DMR.strings.language_filtering)) },
         text = {
             Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar()) {
                 Row {
-                    Text("Language", Modifier.width(120.dp))
-                    listOf("Original", "Translated", "Rewrite").forEach { Text(it, Modifier.width(90.dp)) }
+                    Text(localized(MR.strings.action_display_language_badge), Modifier.width(120.dp))
+                    listOf(localized(DMR.strings.original), localized(SYMR.strings.translated), localized(DMR.strings.rewrite)).forEach { Text(it, Modifier.width(90.dp)) }
                 }
                 EH_LANGUAGES.forEachIndexed { index, language ->
                     val row = rows.getOrNull(index) ?: listOf(false, false, false)
@@ -235,12 +239,12 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
 private val EH_CATEGORIES = listOf(
-    "Doujinshi", "Manga", "Artist CG", "Game CG", "Western", "Non-H", "Image set", "Cosplay", "Asian porn", "Misc",
+    localized(SYMR.strings.doujinshi), localized(SYMR.strings.entry_type_manga), localized(SYMR.strings.artist_cg), localized(SYMR.strings.game_cg), localized(SYMR.strings.western), localized(SYMR.strings.non_h), localized(DMR.strings.image_set), localized(SYMR.strings.cosplay), localized(DMR.strings.asian_porn), localized(SYMR.strings.misc),
 )
 
 /** Stored as "is hidden" per category, comma separated. */
@@ -249,7 +253,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
     val shown = remember { mutableStateListOf(*preferences.exhEnabledCategories().get().split(",").map { !it.toBoolean() }.toTypedArray()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Front page categories") },
+        title = { Text(localized(DMR.strings.front_page_categories)) },
         text = {
             Column {
                 EH_CATEGORIES.forEachIndexed { index, name ->
@@ -266,7 +270,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -278,28 +282,28 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
     var busy by remember { mutableStateOf(false) }
     Column {
         ChoicePreference(
-            "Time between update batches",
+            localized(SYMR.strings.time_between_batches),
             preferences.exhAutoUpdateFrequency(),
-            listOf(0 to "Never update galleries", 1 to "1 hour", 2 to "2 hours", 3 to "3 hours", 6 to "6 hours", 12 to "12 hours", 24 to "24 hours", 48 to "48 hours"),
+            listOf(0 to localized(SYMR.strings.time_between_batches_never), 1 to localized(SYMR.strings.time_between_batches_1_hour), 2 to localized(SYMR.strings.time_between_batches_2_hours), 3 to localized(SYMR.strings.time_between_batches_3_hours), 6 to localized(SYMR.strings.time_between_batches_6_hours), 12 to localized(SYMR.strings.time_between_batches_12_hours), 24 to localized(SYMR.strings.time_between_batches_24_hours), 48 to localized(SYMR.strings.time_between_batches_48_hours)),
         )
         // Android also offers Wi-Fi and unmetered network, which a desktop cannot tell; they stay in the setting
         val frequency by preferences.exhAutoUpdateFrequency().changes().collectAsState(preferences.exhAutoUpdateFrequency().get())
         MultiSelectPreference(
-            "Auto update restrictions",
+            localized(SYMR.strings.auto_update_restrictions),
             preferences.exhAutoUpdateRequirements(),
-            listOf(LibraryPreferences.DEVICE_CHARGING to "Charging (on mains power)"),
+            listOf(LibraryPreferences.DEVICE_CHARGING to localized(DMR.strings.charging_on_mains_power)),
             enabled = frequency > 0,
         )
         val stats = updater.stats()
         SettingRow(
-            "Update galleries now",
-            stats?.let { "Last run ${formatDateTime(it.startTime)}: ${it.updateCount} of ${it.possibleUpdates} galleries checked" }
-                ?: "Checks up to 50 library galleries for new versions",
+            localized(DMR.strings.update_galleries_now),
+            stats?.let { localized(DMR.strings.last_run_of_galleries_checked, formatDateTime(it.startTime), it.updateCount, it.possibleUpdates) }
+                ?: localized(DMR.strings.checks_up_to_50_library_galleries),
             enabled = !busy,
             onClick = {
                 busy = true
                 scope.launch {
-                    runCatching { updater.run() }.onFailure { Toasts.error("Updating galleries failed", it) }
+                    runCatching { updater.run() }.onFailure { Toasts.error(localized(DMR.strings.updating_galleries_failed), it) }
                     busy = false
                 }
             },
@@ -316,49 +320,49 @@ private fun EhFavoritesSync(preferences: ExhPreferences) {
     var reset by remember { mutableStateOf(false) }
     Column {
         SettingRow(
-            "Sync favorites",
-            "Two-way sync of your ExHentai favorites with the library: ${favoritesSyncText(status)}",
+            localized(DMR.strings.sync_favorites),
+            localized(DMR.strings.two_way_sync_of_your_exhentai, favoritesSyncText(status)),
             enabled = status is FavoritesSyncStatus.Idle || status is FavoritesSyncStatus.SyncError || status is FavoritesSyncStatus.CompleteWithErrors ||
                 status is FavoritesSyncStatus.BadLibraryState,
             onClick = { sync.runSync(AppScope) },
         )
-        SwitchPreference("Disable favorites uploading", preferences.exhReadOnlySync(), "Favorites are only downloaded from ExHentai")
-        SwitchPreference("Ignore sync errors when possible", preferences.exhLenientSync())
-        SettingRow("Force sync state reset", "Forget what was synced; the next sync compares everything again", onClick = { reset = true })
+        SwitchPreference(localized(SYMR.strings.disable_favorites_uploading), preferences.exhReadOnlySync(), localized(DMR.strings.favorites_are_only_downloaded_from_exhentai))
+        SwitchPreference(localized(SYMR.strings.ignore_sync_errors), preferences.exhLenientSync())
+        SettingRow(localized(SYMR.strings.force_sync_state_reset), localized(DMR.strings.forget_what_was_synced_the_next), onClick = { reset = true })
     }
     if (reset) {
         AlertDialog(
             onDismissRequest = { reset = false },
-            title = { Text("Reset the sync state?") },
-            text = { Text("The next sync treats every favorite as new.") },
+            title = { Text(localized(DMR.strings.reset_the_sync_state)) },
+            text = { Text(localized(DMR.strings.the_next_sync_treats_every_favorite)) },
             confirmButton = {
                 TextButton(onClick = {
                     reset = false
                     scope.launch(Dispatchers.IO) {
                         Injekt.get<DeleteFavoriteEntries>().await()
-                        Toasts.show("Sync state reset")
+                        Toasts.show(localized(SYMR.strings.sync_state_reset))
                     }
-                }) { Text("Reset") }
+                }) { Text(localized(MR.strings.action_reset)) }
             },
-            dismissButton = { TextButton(onClick = { reset = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { reset = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
 
 fun favoritesSyncText(status: FavoritesSyncStatus): String = when (status) {
-    FavoritesSyncStatus.Idle -> "ready"
-    FavoritesSyncStatus.Initializing -> "starting"
-    FavoritesSyncStatus.Processing.VerifyingLibrary -> "checking the library"
-    FavoritesSyncStatus.Processing.DownloadingFavorites -> "downloading favorites"
-    FavoritesSyncStatus.Processing.CalculatingRemoteChanges, FavoritesSyncStatus.Processing.CalculatingLocalChanges -> "comparing"
-    FavoritesSyncStatus.Processing.SyncingCategoryNames -> "syncing category names"
-    is FavoritesSyncStatus.Processing.RemovingRemoteGalleries -> "removing ${status.galleryCount} galleries from ExHentai"
-    is FavoritesSyncStatus.Processing.AddingGalleryToRemote -> "adding ${status.index} of ${status.total} to ExHentai"
-    is FavoritesSyncStatus.Processing.RemovingGalleryFromLocal -> "removing ${status.index} of ${status.total} from the library"
-    is FavoritesSyncStatus.Processing.AddingGalleryToLocal -> "adding ${status.index} of ${status.total} to the library"
-    FavoritesSyncStatus.Processing.CleaningUp -> "cleaning up"
+    FavoritesSyncStatus.Idle -> localized(DMR.strings.favorites_sync_ready)
+    FavoritesSyncStatus.Initializing -> localized(DMR.strings.favorites_sync_starting)
+    FavoritesSyncStatus.Processing.VerifyingLibrary -> localized(DMR.strings.checking_the_library)
+    FavoritesSyncStatus.Processing.DownloadingFavorites -> localized(DMR.strings.downloading_favorites)
+    FavoritesSyncStatus.Processing.CalculatingRemoteChanges, FavoritesSyncStatus.Processing.CalculatingLocalChanges -> localized(DMR.strings.favorites_sync_comparing)
+    FavoritesSyncStatus.Processing.SyncingCategoryNames -> localized(DMR.strings.syncing_category_names)
+    is FavoritesSyncStatus.Processing.RemovingRemoteGalleries -> localized(DMR.strings.removing_galleries_from_exhentai, status.galleryCount)
+    is FavoritesSyncStatus.Processing.AddingGalleryToRemote -> localized(DMR.strings.adding_of_to_exhentai, status.index, status.total)
+    is FavoritesSyncStatus.Processing.RemovingGalleryFromLocal -> localized(DMR.strings.removing_of_from_the_library, status.index, status.total)
+    is FavoritesSyncStatus.Processing.AddingGalleryToLocal -> localized(DMR.strings.adding_of_to_the_library, status.index, status.total)
+    FavoritesSyncStatus.Processing.CleaningUp -> localized(DMR.strings.cleaning_up)
     is FavoritesSyncStatus.BadLibraryState.MangaInMultipleCategories ->
-        "${status.mangaTitle} is in several categories (${status.categories.joinToString()}); keep it in one"
-    is FavoritesSyncStatus.CompleteWithErrors -> "done with ${status.messages.size} errors"
-    is FavoritesSyncStatus.SyncError -> "failed (${status::class.simpleName})"
+        localized(DMR.strings.is_in_several_categories_keep_it, status.mangaTitle, status.categories.joinToString())
+    is FavoritesSyncStatus.CompleteWithErrors -> localized(DMR.strings.done_with_errors, status.messages.size)
+    is FavoritesSyncStatus.SyncError -> localized(DMR.strings.failed_2, status::class.simpleName)
 }

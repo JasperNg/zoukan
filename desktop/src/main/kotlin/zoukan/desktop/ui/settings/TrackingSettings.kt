@@ -29,22 +29,25 @@ import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.launch
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackerLogin
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 /** Settings > Tracking: the tracking options and the trackers' sign-ins, as on Android. */
 fun LazyListScope.trackingSettings() {
-    settingsGroup("Tracking")
+    settingsGroup(localized(MR.strings.track))
     item(key = "tracking-options") { TrackingOptions() }
     val trackers = Injekt.get<TrackerManager>().trackers
     items(trackers, key = { "tracker-${it.id}" }) { TrackerSetting(it) }
     item(key = "tracking-info") {
         SettingRow(
-            "About sign-ins",
-            "MyAnimeList, AniList, Shikimori and Bangumi open their sign-in page in the built-in browser. " +
-                "Komga, Kavita and Suwayomi track entries from their own sources and need no sign-in.",
+            localized(DMR.strings.about_sign_ins),
+            localized(DMR.strings.myanimelist_anilist_shikimori_and_bangumi_open),
         )
     }
 }
@@ -53,22 +56,22 @@ fun LazyListScope.trackingSettings() {
 private fun TrackingOptions() {
     val preferences = remember { Injekt.get<TrackPreferences>() }
     Column {
-        SwitchPreference("Track when adding to the library", preferences.trackOnAddingToLibrary())
-        SwitchPreference("Update progress after reading", preferences.autoUpdateTrack())
+        SwitchPreference(localized(DMR.strings.track_when_adding_to_the_library), preferences.trackOnAddingToLibrary())
+        SwitchPreference(localized(MR.strings.pref_auto_update_manga_sync), preferences.autoUpdateTrack())
         ChoicePreference(
-            "Update progress when marking as read",
+            localized(DMR.strings.update_progress_when_marking_as_read),
             preferences.autoUpdateTrackOnMarkRead(),
-            listOf(AutoTrackState.ALWAYS to "Always", AutoTrackState.NEVER to "Never", AutoTrackState.ASK to "Ask"),
+            listOf(AutoTrackState.ALWAYS to localized(MR.strings.lock_always), AutoTrackState.NEVER to localized(MR.strings.lock_never), AutoTrackState.ASK to localized(DMR.strings.ask)),
         )
         SwitchPreference(
-            "Sync progress from trackers",
+            localized(DMR.strings.sync_progress_from_trackers),
             preferences.autoSyncProgressFromTrackers(),
-            "Mark chapters read when a tracker is further along",
+            localized(DMR.strings.mark_chapters_read_when_a_tracker),
         )
         SwitchPreference(
-            "Resolve with source metadata",
+            localized(DMR.strings.resolve_with_source_metadata),
             preferences.resolveUsingSourceMetadata(),
-            "Find the tracker entry from the ids some sources (MangaDex, E-Hentai) list",
+            localized(DMR.strings.find_the_tracker_entry_from_the),
         )
     }
 }
@@ -87,34 +90,35 @@ private fun TrackerSetting(tracker: Tracker) {
     val subtitle = when {
         kind == TrackerLogin.Kind.ENHANCED -> {
             val sources = remember { Injekt.get<SourceManager>().getAll() }
-            if ((tracker as EnhancedTracker).accept(sources)) "Tracks entries from its source" else "Its source extension is not installed"
+            if ((tracker as EnhancedTracker).accept(sources)) localized(DMR.strings.tracks_entries_from_its_source) else localized(DMR.strings.its_source_extension_is_not_installed)
         }
-        loggedIn -> "Signed in" + tracker.getUsername().takeIf { it.isNotBlank() && kind == TrackerLogin.Kind.PASSWORD }?.let { " as $it" }.orEmpty()
-        else -> "Not signed in"
+        loggedIn -> tracker.getUsername().takeIf { it.isNotBlank() && kind == TrackerLogin.Kind.PASSWORD }
+            ?.let { localized(DMR.strings.signed_in_as, it) } ?: localized(DMR.strings.signed_in)
+        else -> localized(DMR.strings.not_signed_in)
     }
     SettingRow(tracker.name, subtitle) {
         when {
             busy -> CircularProgressIndicator(Modifier.size(24.dp))
             kind == TrackerLogin.Kind.ENHANCED -> {
                 if (loggedIn) {
-                    TextButton(onClick = { tracker.logout() }) { Text("Turn off") }
+                    TextButton(onClick = { tracker.logout() }) { Text(localized(DMR.strings.turn_off)) }
                 } else {
-                    TextButton(onClick = { (tracker as EnhancedTracker).loginNoop() }) { Text("Turn on") }
+                    TextButton(onClick = { (tracker as EnhancedTracker).loginNoop() }) { Text(localized(DMR.strings.turn_on)) }
                 }
             }
-            loggedIn -> TextButton(onClick = { confirmLogout = true }) { Text("Sign out") }
-            kind == TrackerLogin.Kind.PASSWORD -> OutlinedButton(onClick = { passwordDialog = true }) { Text("Sign in") }
+            loggedIn -> TextButton(onClick = { confirmLogout = true }) { Text(localized(DMR.strings.sign_out)) }
+            kind == TrackerLogin.Kind.PASSWORD -> OutlinedButton(onClick = { passwordDialog = true }) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             else -> Row {
-                TextButton(onClick = { pasteDialog = true }) { Text("Other browser") }
+                TextButton(onClick = { pasteDialog = true }) { Text(localized(DMR.strings.other_browser)) }
                 OutlinedButton(onClick = {
                     busy = true
                     scope.launch {
                         runCatching { login.loginWithBrowser(tracker) }
-                            .onSuccess { if (it) Toasts.show("Signed in to ${tracker.name}") }
-                            .onFailure { Toasts.error("Signing in to ${tracker.name} failed", it) }
+                            .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
+                            .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_failed, tracker.name), it) }
                         busy = false
                     }
-                }) { Text("Sign in") }
+                }) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             }
         }
     }
@@ -122,15 +126,15 @@ private fun TrackerSetting(tracker: Tracker) {
     if (confirmLogout) {
         AlertDialog(
             onDismissRequest = { confirmLogout = false },
-            title = { Text("Sign out of ${tracker.name}?") },
-            text = { Text("Tracked entries stay linked; their progress is not sent until you sign in again.") },
+            title = { Text(localized(DMR.strings.sign_out_of, tracker.name)) },
+            text = { Text(localized(DMR.strings.tracked_entries_stay_linked_their_progress)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmLogout = false
                     tracker.logout()
-                }) { Text("Sign out") }
+                }) { Text(localized(DMR.strings.sign_out)) }
             },
-            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 
@@ -140,7 +144,7 @@ private fun TrackerSetting(tracker: Tracker) {
         var error by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { if (!busy) passwordDialog = false },
-            title = { Text("Sign in to ${tracker.name}") },
+            title = { Text(localized(DMR.strings.sign_in_to, tracker.name)) },
             text = {
                 Column {
                     OutlinedTextField(user, { user = it }, singleLine = true, label = { Text(login.userNameLabel(tracker)) })
@@ -148,7 +152,7 @@ private fun TrackerSetting(tracker: Tracker) {
                         password,
                         { password = it },
                         singleLine = true,
-                        label = { Text("Password") },
+                        label = { Text(localized(MR.strings.password)) },
                         visualTransformation = PasswordVisualTransformation(),
                     )
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -164,18 +168,18 @@ private fun TrackerSetting(tracker: Tracker) {
                             runCatching { login.loginWithPassword(tracker, user.trim(), password) }
                                 .onSuccess {
                                     passwordDialog = false
-                                    Toasts.show("Signed in to ${tracker.name}")
+                                    Toasts.show(localized(DMR.strings.signed_in_to, tracker.name))
                                 }
                                 .onFailure {
                                     tracker.logout()
-                                    error = it.message ?: "Could not sign in"
+                                    error = it.message ?: localized(DMR.strings.could_not_sign_in)
                                 }
                             busy = false
                         }
                     },
-                ) { Text("Sign in") }
+                ) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             },
-            dismissButton = { TextButton(onClick = { passwordDialog = false }, enabled = !busy) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { passwordDialog = false }, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 
@@ -184,17 +188,16 @@ private fun TrackerSetting(tracker: Tracker) {
         var error by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { if (!busy) pasteDialog = false },
-            title = { Text("Sign in with another browser") },
+            title = { Text(localized(DMR.strings.sign_in_with_another_browser)) },
             text = {
                 Column {
                     Text(
-                        "Sign in on the page that opens. When it is done, the browser tries to open an address starting " +
-                            "with komikku:// and cannot. Copy that address from the browser and paste it here.",
+                        localized(DMR.strings.sign_in_on_the_page_that),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     TextButton(onClick = {
                         login.authUrl(tracker)?.let { runCatching { zoukan.desktop.app.ExternalLinks.browse(it) } }
-                    }) { Text("Open the sign-in page") }
+                    }) { Text(localized(DMR.strings.open_the_sign_in_page)) }
                     OutlinedTextField(address, { address = it }, singleLine = true, label = { Text("komikku://…") })
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
@@ -209,18 +212,18 @@ private fun TrackerSetting(tracker: Tracker) {
                                 .onSuccess { ok ->
                                     if (ok) {
                                         pasteDialog = false
-                                        Toasts.show("Signed in to ${tracker.name}")
+                                        Toasts.show(localized(DMR.strings.signed_in_to, tracker.name))
                                     } else {
-                                        error = "${tracker.name} did not accept the sign-in"
+                                        error = localized(DMR.strings.did_not_accept_the_sign_in, tracker.name)
                                     }
                                 }
                                 .onFailure { error = it.message }
                             busy = false
                         }
                     },
-                ) { Text("Sign in") }
+                ) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             },
-            dismissButton = { TextButton(onClick = { pasteDialog = false }, enabled = !busy) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pasteDialog = false }, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }

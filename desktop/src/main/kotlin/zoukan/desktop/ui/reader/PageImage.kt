@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.IRect
 import org.jetbrains.skia.Image
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
 
@@ -28,7 +30,7 @@ class PageImage(val width: Int, val height: Int, val slices: List<ImageBitmap>) 
             } catch (e: Exception) {
                 // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys covers a few more
                 val buffered = ImageIO.read(ByteArrayInputStream(bytes))
-                    ?: throw IllegalArgumentException("Unsupported image format (${sniff(bytes)})", e)
+                    ?: throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
                 val bitmap = buffered.toComposeImageBitmap()
                 if (buffered.height <= MAX_SLICE) return PageImage(buffered.width, buffered.height, listOf(bitmap))
                 return slice(buffered.width, buffered.height) { y, h ->
@@ -131,8 +133,8 @@ class PageImage(val width: Int, val height: Int, val slices: List<ImageBitmap>) 
                 at(4, "ftypavif") || at(4, "ftypavis") -> "AVIF"
                 at(4, "ftypheic") || at(4, "ftypmif1") -> "HEIF"
                 bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0x0A.toByte() -> "JPEG XL"
-                at(0, "<") || at(0, "\n<") -> "an HTML page, not an image"
-                else -> "${bytes.size} bytes"
+                at(0, "<") || at(0, "\n<") -> localized(DMR.strings.an_html_page_not_an_image)
+                else -> localized(DMR.strings.bytes, bytes.size)
             }
         }
     }

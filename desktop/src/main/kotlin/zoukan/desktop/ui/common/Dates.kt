@@ -1,8 +1,11 @@
 package zoukan.desktop.ui.common
 
 import eu.kanade.domain.ui.UiPreferences
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -34,9 +37,9 @@ object Dates {
         val difference = ChronoUnit.DAYS.between(date, today)
         return when {
             difference < -7 -> format(date)
-            difference < 0 -> if (difference == -1L) "Tomorrow" else "In ${difference.absoluteValue} days"
-            difference < 1 -> "Today"
-            difference < 7 -> if (difference == 1L) "Yesterday" else "$difference days ago"
+            difference < 0 -> if (difference == -1L) localized(DMR.strings.tomorrow) else localized(DMR.strings.in_days, difference.absoluteValue)
+            difference < 1 -> localized(MR.strings.relative_time_today)
+            difference < 7 -> if (difference == 1L) localized(DMR.strings.yesterday) else localized(DMR.strings.days_ago, difference)
             else -> format(date)
         }
     }
@@ -46,15 +49,15 @@ object Dates {
      * within a minute, then minutes, hours and days, and the date from a week on.
      */
     fun timeAgo(epochMillis: Long, now: Long = System.currentTimeMillis()): String {
-        if (epochMillis <= 0L) return "Never"
+        if (epochMillis <= 0L) return localized(MR.strings.lock_never)
         val minutes = (now - epochMillis) / 60_000
         val hours = minutes / 60
         val days = hours / 24
         return when {
-            minutes < 1 -> "Just now"
-            minutes < 60 -> if (minutes == 1L) "1 minute ago" else "$minutes minutes ago"
-            hours < 24 -> if (hours == 1L) "1 hour ago" else "$hours hours ago"
-            days < 7 -> if (days == 1L) "Yesterday" else "$days days ago"
+            minutes < 1 -> localized(MR.strings.updates_last_update_info_just_now)
+            minutes < 60 -> if (minutes == 1L) localized(DMR.strings.n_1_minute_ago) else localized(DMR.strings.minutes_ago, minutes)
+            hours < 24 -> if (hours == 1L) localized(DMR.strings.n_1_hour_ago) else localized(DMR.strings.hours_ago, hours)
+            days < 7 -> if (days == 1L) localized(DMR.strings.yesterday) else localized(DMR.strings.days_ago, days)
             else -> format(toLocalDate(epochMillis))
         }
     }

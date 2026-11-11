@@ -36,13 +36,16 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 
 private val SORTS = listOf(
-    Manga.CHAPTER_SORTING_SOURCE to "By source",
-    Manga.CHAPTER_SORTING_NUMBER to "By chapter number",
-    Manga.CHAPTER_SORTING_UPLOAD_DATE to "By upload date",
-    Manga.CHAPTER_SORTING_ALPHABET to "Alphabetically",
+    Manga.CHAPTER_SORTING_SOURCE to localized(MR.strings.sort_by_source),
+    Manga.CHAPTER_SORTING_NUMBER to localized(MR.strings.action_order_by_chapter_number),
+    Manga.CHAPTER_SORTING_UPLOAD_DATE to localized(MR.strings.action_order_by_upload_date),
+    Manga.CHAPTER_SORTING_ALPHABET to localized(MR.strings.action_sort_alpha),
 )
 
 /**
@@ -57,17 +60,17 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
     var setAsDefault by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
         dismissButton = {
             Row {
-                TextButton(onClick = model::resetChapterSettings) { Text("Reset") }
-                TextButton(onClick = { setAsDefault = true }) { Text("Set as default") }
+                TextButton(onClick = model::resetChapterSettings) { Text(localized(MR.strings.action_reset)) }
+                TextButton(onClick = { setAsDefault = true }) { Text(localized(MR.strings.set_chapter_settings_as_default)) }
             }
         },
         text = {
             Column(Modifier.width(420.dp)) {
                 PrimaryTabRow(selectedTabIndex = tab) {
-                    listOf("Filter", "Sort").forEachIndexed { i, label ->
+                    listOf(localized(MR.strings.action_filter), localized(MR.strings.action_sort)).forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
@@ -78,18 +81,18 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
                             if (!state.isLocal) {
                                 // More > Downloaded only keeps it on, as on Android
                                 TriStateRow(
-                                    "Downloaded",
+                                    localized(MR.strings.label_downloaded),
                                     ChapterSettings.downloadedFilter(manga, state.downloadedOnly),
                                     model::setDownloadedFilter.takeUnless { state.downloadedOnly },
                                 )
                             }
-                            TriStateRow("Unread", manga.unreadFilter, model::setUnreadFilter)
-                            TriStateRow("Bookmarked", manga.bookmarkedFilter, model::setBookmarkedFilter)
+                            TriStateRow(localized(MR.strings.action_filter_unread), manga.unreadFilter, model::setUnreadFilter)
+                            TriStateRow(localized(MR.strings.action_filter_bookmarked), manga.bookmarkedFilter, model::setBookmarkedFilter)
                             if (state.availableScanlators.isNotEmpty()) {
                                 ScanlatorRow(active = state.scanlatorFilterActive, onClick = { scanlators = true })
                             }
                             Text(
-                                "A box with a dash shows chapters that are not.",
+                                localized(DMR.strings.a_box_with_a_dash_shows_2),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 8.dp),
@@ -138,7 +141,7 @@ private fun TriStateRow(label: String, value: TriState, onChange: ((TriState) ->
             onClick = onChange?.let { { it(value.next()) } },
             enabled = onChange != null,
         )
-        Text(if (value == TriState.ENABLED_NOT) "Not ${label.lowercase()}" else label)
+        Text(if (value == TriState.ENABLED_NOT) localized(DMR.strings.not, label.lowercase()) else label)
     }
 }
 
@@ -154,7 +157,7 @@ private fun ScanlatorRow(active: Boolean, onClick: () -> Unit) {
             contentDescription = null,
             tint = if (active) MaterialTheme.colorScheme.primary else LocalContentColor.current,
         )
-        Text(if (active) "Scanlators (some hidden)" else "Scanlators")
+        Text(if (active) localized(DMR.strings.scanlators_some_hidden) else localized(DMR.strings.scanlators))
     }
 }
 
@@ -168,7 +171,7 @@ private fun SortRow(label: String, descending: Boolean?, onClick: () -> Unit) {
         if (descending != null) {
             Icon(
                 if (descending) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward,
-                contentDescription = if (descending) "Descending" else "Ascending",
+                contentDescription = if (descending) localized(MR.strings.action_desc) else localized(MR.strings.action_asc),
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -187,7 +190,7 @@ private fun ScanlatorFilterDialog(
     var hidden by remember { mutableStateOf(excluded.intersect(available)) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Scanlators") },
+        title = { Text(localized(DMR.strings.scanlators)) },
         text = {
             Column(Modifier.width(360.dp).heightIn(max = 420.dp).verticalScrollWithBar()) {
                 available.forEach { scanlator ->
@@ -209,13 +212,13 @@ private fun ScanlatorFilterDialog(
                 // Keeps the hidden scanlators that no chapter has now, as Android does
                 onConfirm(hidden + (excluded - available))
                 onDismiss()
-            }) { Text("Save") }
+            }) { Text(localized(MR.strings.action_save)) }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = { hidden = emptySet() }) { Text("Show all") }
+                TextButton(onClick = { hidden = emptySet() }) { Text(localized(DMR.strings.show_all)) }
                 Spacer(Modifier.width(4.dp))
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) }
             }
         },
     )
@@ -226,16 +229,16 @@ private fun SetAsDefaultDialog(onConfirm: (toLibrary: Boolean) -> Unit, onDismis
     var toLibrary by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chapter settings") },
+        title = { Text(localized(MR.strings.chapter_settings)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Make these the default chapter settings? Entries outside the library start with them, and Reset goes back to them.")
+                Text(localized(DMR.strings.make_these_the_default_chapter_settings))
                 Row(
                     Modifier.fillMaxWidth().clickable { toLibrary = !toLibrary },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(toLibrary, onCheckedChange = { toLibrary = it })
-                    Text("Also apply them to every entry in the library")
+                    Text(localized(DMR.strings.also_apply_them_to_every_entry))
                 }
             }
         },
@@ -245,6 +248,6 @@ private fun SetAsDefaultDialog(onConfirm: (toLibrary: Boolean) -> Unit, onDismis
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }

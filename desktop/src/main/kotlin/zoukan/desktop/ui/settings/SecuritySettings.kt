@@ -25,28 +25,32 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import exh.source.EH_PACKAGE
 import exh.source.LOCAL_SOURCE_PACKAGE
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.security.AppLock
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.extension.DesktopExtensionManager
+import zoukan.i18n.desktop.DMR
 
 /** Settings > Security and privacy: the app lock and incognito mode, as on Android. */
 fun LazyListScope.securitySettings() {
-    settingsGroup("Security and privacy")
+    settingsGroup(localized(MR.strings.pref_category_security))
     item(key = "security") { SecuritySettings() }
 }
 
 private val DAYS = listOf(
-    "Monday" to AppLock.LOCK_MONDAY,
-    "Tuesday" to AppLock.LOCK_TUESDAY,
-    "Wednesday" to AppLock.LOCK_WEDNESDAY,
-    "Thursday" to AppLock.LOCK_THURSDAY,
-    "Friday" to AppLock.LOCK_FRIDAY,
-    "Saturday" to AppLock.LOCK_SATURDAY,
-    "Sunday" to AppLock.LOCK_SUNDAY,
+    localized(SYMR.strings.monday) to AppLock.LOCK_MONDAY,
+    localized(SYMR.strings.tuesday) to AppLock.LOCK_TUESDAY,
+    localized(SYMR.strings.wednesday) to AppLock.LOCK_WEDNESDAY,
+    localized(SYMR.strings.thursday) to AppLock.LOCK_THURSDAY,
+    localized(SYMR.strings.friday) to AppLock.LOCK_FRIDAY,
+    localized(SYMR.strings.saturday) to AppLock.LOCK_SATURDAY,
+    localized(SYMR.strings.sunday) to AppLock.LOCK_SUNDAY,
 )
 
 @Composable
@@ -61,32 +65,32 @@ private fun SecuritySettings() {
     var extensionsDialog by remember { mutableStateOf(false) }
 
     Column {
-        SwitchSetting("Require unlock", "Ask for a password when Zoukan opens and after it was away", useLock) { on ->
+        SwitchSetting(localized(MR.strings.lock_with_biometrics), localized(DMR.strings.ask_for_a_password_when_zoukan), useLock) { on ->
             if (on && !lock.hasPassword()) passwordDialog = true else preferences.useAuthenticator().set(on)
         }
         if (useLock) {
-            SettingRow("Change password", onClick = { passwordDialog = true })
+            SettingRow(localized(DMR.strings.change_password), onClick = { passwordDialog = true })
             ChoicePreference(
-                "Lock when idle",
+                localized(MR.strings.lock_when_idle),
                 preferences.lockAppAfter(),
-                listOf(0 to "Always", 1 to "After 1 minute", 2 to "After 2 minutes", 5 to "After 5 minutes", 10 to "After 10 minutes", -1 to "Never"),
+                listOf(0 to localized(MR.strings.lock_always), 1 to localized(DMR.strings.after_1_minute), 2 to localized(DMR.strings.after_2_minutes), 5 to localized(DMR.strings.after_5_minutes), 10 to localized(DMR.strings.after_10_minutes), -1 to localized(MR.strings.lock_never)),
             )
             val days by preferences.authenticatorDays().changes().collectAsState(preferences.authenticatorDays().get())
             SettingRow(
-                "Lock on these days",
-                if (days == AppLock.LOCK_ALL_DAYS) "Every day" else DAYS.filter { days and it.second != 0 }.joinToString { it.first }.ifEmpty { "No day" },
+                localized(DMR.strings.lock_on_these_days),
+                if (days == AppLock.LOCK_ALL_DAYS) localized(DMR.strings.every_day) else DAYS.filter { days and it.second != 0 }.joinToString { it.first }.ifEmpty { localized(DMR.strings.no_day) },
                 onClick = { daysDialog = true },
             )
             val ranges by preferences.authenticatorTimeRanges().changes().collectAsState(preferences.authenticatorTimeRanges().get())
             SettingRow(
-                "Lock at these times",
-                ranges.mapNotNull(AppLock::parseRange).joinToString { "${hhmm(it.start)} to ${hhmm(it.endInclusive)}" }.ifEmpty { "All day" },
+                localized(DMR.strings.lock_at_these_times),
+                ranges.mapNotNull(AppLock::parseRange).joinToString { localized(DMR.strings.to, hhmm(it.start), hhmm(it.endInclusive)) }.ifEmpty { localized(DMR.strings.all_day) },
                 onClick = { timesDialog = true },
             )
         }
-        SwitchPreference("Hide notification content", preferences.hideNotificationContent(), "Notifications say only that there is news")
-        SwitchPreference("Incognito mode", incognito.mode(), "Reading keeps no history, progress or tracking")
-        SettingRow("Incognito extensions", "Always read these sources in incognito", onClick = { extensionsDialog = true })
+        SwitchPreference(localized(MR.strings.hide_notification_content), preferences.hideNotificationContent(), localized(DMR.strings.notifications_say_only_that_there_is))
+        SwitchPreference(localized(MR.strings.pref_incognito_mode), incognito.mode(), localized(DMR.strings.reading_keeps_no_history_progress_or))
+        SettingRow(localized(DMR.strings.incognito_extensions), localized(DMR.strings.always_read_these_sources_in_incognito), onClick = { extensionsDialog = true })
     }
 
     if (passwordDialog) PasswordDialog(lock, preferences) { passwordDialog = false }
@@ -106,36 +110,36 @@ private fun PasswordDialog(lock: AppLock, preferences: SecurityPreferences, onDi
     val hasPassword = remember { lock.hasPassword() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (hasPassword) "Change the password" else "Set a password") },
+        title = { Text(if (hasPassword) localized(DMR.strings.change_the_password) else localized(DMR.strings.set_a_password)) },
         text = {
             Column {
                 Text(
-                    "Zoukan asks for it to unlock. It is kept, hashed, in the system's secret store; there is no way to recover it.",
+                    localized(DMR.strings.zoukan_asks_for_it_to_unlock),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (hasPassword) {
-                    OutlinedTextField(current, { current = it }, label = { Text("Current password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    OutlinedTextField(current, { current = it }, label = { Text(localized(DMR.strings.current_password)) }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 }
-                OutlinedTextField(password, { password = it }, label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-                OutlinedTextField(repeat, { repeat = it }, label = { Text("Repeat it") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                OutlinedTextField(password, { password = it }, label = { Text(localized(DMR.strings.new_password)) }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                OutlinedTextField(repeat, { repeat = it }, label = { Text(localized(DMR.strings.repeat_it)) }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 error = when {
-                    hasPassword && !lock.verify(current) -> "The current password is wrong"
-                    password.length < 4 -> "Use at least 4 characters"
-                    password != repeat -> "The passwords differ"
+                    hasPassword && !lock.verify(current) -> localized(DMR.strings.the_current_password_is_wrong)
+                    password.length < 4 -> localized(DMR.strings.use_at_least_4_characters)
+                    password != repeat -> localized(DMR.strings.the_passwords_differ)
                     else -> null
                 }
                 if (error == null) {
                     lock.setPassword(password)
                     preferences.useAuthenticator().set(true)
-                    Toasts.show("Password set")
+                    Toasts.show(localized(DMR.strings.password_set))
                     onDismiss()
                 }
-            }) { Text("Save") }
+            }) { Text(localized(MR.strings.action_save)) }
         },
         dismissButton = {
             Row {
@@ -145,11 +149,11 @@ private fun PasswordDialog(lock: AppLock, preferences: SecurityPreferences, onDi
                             lock.clearPassword()
                             onDismiss()
                         } else {
-                            error = "Enter the current password to turn the lock off"
+                            error = localized(DMR.strings.enter_the_current_password_to_turn)
                         }
-                    }) { Text("Remove the lock") }
+                    }) { Text(localized(DMR.strings.remove_the_lock)) }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) }
             }
         },
     )
@@ -160,7 +164,7 @@ private fun DaysDialog(preferences: SecurityPreferences, onDismiss: () -> Unit) 
     var days by remember { mutableStateOf(preferences.authenticatorDays().get()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lock on these days") },
+        title = { Text(localized(DMR.strings.lock_on_these_days)) },
         text = {
             Column {
                 DAYS.forEach { (name, bit) ->
@@ -177,7 +181,7 @@ private fun DaysDialog(preferences: SecurityPreferences, onDismiss: () -> Unit) 
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -195,26 +199,26 @@ private fun TimesDialog(preferences: SecurityPreferences, onDismiss: () -> Unit)
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lock at these times") },
+        title = { Text(localized(DMR.strings.lock_at_these_times)) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
-                Text("Without times the lock works all day.", style = MaterialTheme.typography.bodyMedium)
+                Text(localized(DMR.strings.without_times_the_lock_works_all), style = MaterialTheme.typography.bodyMedium)
                 ranges.toList().forEach { value ->
                     val range = AppLock.parseRange(value) ?: return@forEach
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${hhmm(range.start)} to ${hhmm(range.endInclusive)}", Modifier.weight(1f))
-                        TextButton(onClick = { ranges.remove(value) }) { Text("Remove") }
+                        Text(localized(DMR.strings.to, hhmm(range.start), hhmm(range.endInclusive)), Modifier.weight(1f))
+                        TextButton(onClick = { ranges.remove(value) }) { Text(localized(MR.strings.action_remove)) }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(start, { start = it }, label = { Text("From") }, singleLine = true, modifier = Modifier.weight(1f))
-                    OutlinedTextField(end, { end = it }, label = { Text("To") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(start, { start = it }, label = { Text(localized(DMR.strings.from)) }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(end, { end = it }, label = { Text(localized(DMR.strings.to_2)) }, singleLine = true, modifier = Modifier.weight(1f))
                     TextButton(onClick = {
                         val from = minutes(start)
                         val to = minutes(end)
-                        error = if (from == null || to == null || to <= from) "Use HH:MM, with the end after the start" else null
+                        error = if (from == null || to == null || to <= from) localized(DMR.strings.use_hh_mm_with_the_end) else null
                         if (from != null && to != null && to > from) ranges += "$from,$to"
-                    }) { Text("Add") }
+                    }) { Text(localized(MR.strings.action_add)) }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
@@ -225,7 +229,7 @@ private fun TimesDialog(preferences: SecurityPreferences, onDismiss: () -> Unit)
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -234,14 +238,14 @@ private fun IncognitoExtensionsDialog(incognito: Incognito, onDismiss: () -> Uni
     val preference = remember { Injekt.get<SourcePreferences>().incognitoExtensions() }
     val selected by preference.changes().collectAsState(preference.get())
     val extensions = remember {
-        listOf(LOCAL_SOURCE_PACKAGE to "Local source", EH_PACKAGE to "E-Hentai") +
+        listOf(LOCAL_SOURCE_PACKAGE to localized(MR.strings.action_display_local_badge), EH_PACKAGE to "E-Hentai") +
             Injekt.get<DesktopExtensionManager>().installedExtensionsFlow.value.values
                 .sortedBy { it.name.lowercase() }
                 .map { it.pkgName to it.name }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Incognito extensions") },
+        title = { Text(localized(DMR.strings.incognito_extensions)) },
         text = {
             Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar()) {
                 extensions.forEach { (pkg, name) ->
@@ -252,6 +256,6 @@ private fun IncognitoExtensionsDialog(incognito: Incognito, onDismiss: () -> Uni
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(DMR.strings.done)) } },
     )
 }

@@ -123,6 +123,7 @@ dependencies {
     implementation(projects.i18n)
     implementation(projects.i18nSy)
     implementation(projects.i18nKmk)
+    implementation(projects.i18nDesktop)
 
     implementation(kotlinx.coroutines.core)
     implementation(kotlinx.serialization.json)
@@ -221,5 +222,7 @@ tasks.test {
     providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
     providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    // The UI text comes from string resources in the system language; the tests check the English text
+    systemProperty("user.language", "en")
 }
 // ZOUKAN <--

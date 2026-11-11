@@ -11,10 +11,15 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 /**
  * The rest of Settings > Library, as the Android app's SettingsLibraryScreen: the default
@@ -25,13 +30,13 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
     item(key = "library-default-category") { DefaultCategoryPreference(categories) }
     item(key = "library-categorized") { CategorizedDisplayPreference() }
 
-    settingsGroup("Global update")
+    settingsGroup(localized(MR.strings.pref_category_library_update))
     item(key = "library-update-interval") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         ChoicePreference(
-            "Automatic updates",
+            localized(MR.strings.pref_library_update_interval),
             preferences.autoUpdateInterval(),
-            listOf(0 to "Off", 12 to "Every 12 hours", 24 to "Daily", 48 to "Every 2 days", 72 to "Every 3 days", 168 to "Weekly"),
+            listOf(0 to localized(MR.strings.off), 12 to localized(MR.strings.update_12hour), 24 to localized(MR.strings.update_24hour), 48 to localized(MR.strings.update_48hour), 72 to localized(MR.strings.update_72hour), 168 to localized(MR.strings.update_weekly)),
         )
     }
     item(key = "library-update-restrictions") {
@@ -39,17 +44,17 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
         val interval by preferences.autoUpdateInterval().changes().collectAsState(preferences.autoUpdateInterval().get())
         // Wi-Fi and unmetered network are Android's; they stay in the setting and are not shown
         MultiSelectPreference(
-            "Automatic updates device restrictions",
+            localized(MR.strings.pref_library_update_restriction),
             preferences.autoUpdateDeviceRestrictions(),
-            listOf(LibraryPreferences.DEVICE_CHARGING to "Charging (on mains power)"),
+            listOf(LibraryPreferences.DEVICE_CHARGING to localized(DMR.strings.charging_on_mains_power)),
             enabled = interval > 0,
         )
     }
     item(key = "library-update-categories") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         CategoriesIncludeExcludePreference(
-            "Categories",
-            "Entries in excluded categories will not be updated even if they are also in included categories.",
+            localized(MR.strings.categories),
+            localized(MR.strings.pref_library_update_categories_details),
             categories,
             preferences.updateCategories(),
             preferences.updateCategoriesExclude(),
@@ -58,100 +63,100 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
     item(key = "library-update-metadata") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         SwitchPreference(
-            "Automatically refresh metadata",
+            localized(MR.strings.pref_library_update_refresh_metadata),
             preferences.autoUpdateMetadata(),
-            "Check for new cover and details when updating library",
+            localized(MR.strings.pref_library_update_refresh_metadata_summary),
         )
     }
     // "Update library manga titles to match source" is in Advanced, as on Android
     item(key = "library-update-smart") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         MultiSelectPreference(
-            "Smart update",
+            localized(MR.strings.pref_library_update_smart_update),
             preferences.autoUpdateMangaRestrictions(),
             listOf(
-                LibraryPreferences.MANGA_HAS_UNREAD to "Skip entries with unread chapter(s)",
-                LibraryPreferences.MANGA_NON_READ to "Skip unstarted entries",
-                LibraryPreferences.MANGA_NON_COMPLETED to "Skip entries with \"Completed\" status",
-                LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD to "Predict next release time",
+                LibraryPreferences.MANGA_HAS_UNREAD to localized(MR.strings.pref_update_only_completely_read),
+                LibraryPreferences.MANGA_NON_READ to localized(MR.strings.pref_update_only_started),
+                LibraryPreferences.MANGA_NON_COMPLETED to localized(MR.strings.pref_update_only_non_completed),
+                LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD to localized(MR.strings.pref_update_only_in_release_period),
             ),
         )
     }
     item(key = "library-update-badge") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        SwitchPreference("Show unread count on Updates icon", preferences.newShowUpdatesCount())
+        SwitchPreference(localized(MR.strings.pref_library_update_show_tab_badge), preferences.newShowUpdatesCount())
     }
     item(key = "library-update-now") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         val last by preferences.lastUpdatedTimestamp().changes().collectAsState(preferences.lastUpdatedTimestamp().get())
         SettingRow(
-            "Update the library now",
-            if (last > 0) "Last update: ${zoukan.desktop.ui.manga.formatDateTime(last)}" else "Never updated",
+            localized(DMR.strings.update_the_library_now),
+            if (last > 0) localized(DMR.strings.last_update, zoukan.desktop.ui.manga.formatDateTime(last)) else localized(DMR.strings.never_updated),
             onClick = {
-                if (!Injekt.get<LibraryUpdater>().start()) Toasts.show("A library update is already running")
+                if (!Injekt.get<LibraryUpdater>().start()) Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
             },
         )
     }
 
-    settingsGroup("Behavior")
+    settingsGroup(localized(MR.strings.pref_behavior))
     item(key = "library-duplicates") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         MultiSelectPreference(
-            "Mark duplicate read chapter as read",
+            localized(MR.strings.pref_mark_duplicate_read_chapter_read),
             preferences.markDuplicateReadChapterAsRead(),
             listOf(
-                LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING to "After reading a chapter",
-                LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_NEW to "After fetching new chapter",
+                LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING to localized(MR.strings.pref_mark_duplicate_read_chapter_read_existing),
+                LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_NEW to localized(MR.strings.pref_mark_duplicate_read_chapter_read_new),
             ),
         )
     }
     item(key = "library-missing-chapters") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        SwitchPreference("Hide missing chapter indicators", preferences.hideMissingChapters())
+        SwitchPreference(localized(MR.strings.pref_hide_missing_chapter_indicators), preferences.hideMissingChapters())
     }
     item(key = "library-show-empty-categories-search") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        SwitchPreference("Show empty categories during search/filtering", preferences.showEmptyCategoriesSearch())
+        SwitchPreference(localized(KMR.strings.pref_show_empty_categories_search), preferences.showEmptyCategoriesSearch())
     }
     item(key = "library-fetch-metadata-on-add") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         SwitchPreference(
-            "Fetch metadata when adding to library",
+            localized(KMR.strings.pref_fetch_manga_metadata_on_add),
             preferences.fetchMetadataOnAdd(),
-            "Automatically fetches the metadata of a new entry when adding it to the library",
+            localized(DMR.strings.automatically_fetches_the_metadata_of_a),
         )
     }
     item(key = "library-fetch-chapters-on-add") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         SwitchPreference(
-            "Fetch chapters when adding to library",
+            localized(KMR.strings.pref_fetch_manga_chapters_on_add),
             preferences.fetchChaptersOnAdd(),
-            "Automatically fetches the chapter list of a new entry when adding it to the library",
+            localized(DMR.strings.automatically_fetches_the_chapter_list_of),
         )
     }
 
     // SY's sorting settings
-    settingsGroup("Sorting")
+    settingsGroup(localized(DMR.strings.sorting))
     item(key = "library-sort-tags") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         val tags by preferences.sortTagsForLibrary().changes().collectAsState(preferences.sortTagsForLibrary().get())
         val navigator = LocalNavigator.currentOrThrow
         SettingRow(
-            "Tag sorting tags",
-            if (tags.size == 1) "1 tag" else "${tags.size} tags",
+            localized(SYMR.strings.pref_tag_sorting),
+            if (tags.size == 1) localized(DMR.strings.n_1_tag) else localized(DMR.strings.tags, tags.size),
             onClick = { navigator.push(zoukan.desktop.ui.library.SortTagScreen) },
         )
     }
 
     // ZOUKAN -->
-    settingsGroup("Chapter swipe")
+    settingsGroup(localized(DMR.strings.chapter_swipe))
     item(key = "library-swipe-start") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        ChoicePreference("Swipe to left action", preferences.swipeToStartAction(), zoukan.desktop.ui.common.CHAPTER_SWIPE_ACTIONS)
+        ChoicePreference(localized(DMR.strings.swipe_to_left_action), preferences.swipeToStartAction(), zoukan.desktop.ui.common.CHAPTER_SWIPE_ACTIONS)
     }
     item(key = "library-swipe-end") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        ChoicePreference("Swipe to right action", preferences.swipeToEndAction(), zoukan.desktop.ui.common.CHAPTER_SWIPE_ACTIONS)
+        ChoicePreference(localized(DMR.strings.swipe_to_right_action), preferences.swipeToEndAction(), zoukan.desktop.ui.common.CHAPTER_SWIPE_ACTIONS)
     }
     // ZOUKAN <--
 }
@@ -160,8 +165,8 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
 @Composable
 private fun DefaultCategoryPreference(categories: List<Category>) {
     val preferences = remember { Injekt.get<LibraryPreferences>() }
-    val choices = listOf(-1 to "Always ask") + categories.map { it.id.toInt() to categoryName(it) }
-    ChoicePreference("Default category", preferences.defaultCategory(), choices)
+    val choices = listOf(-1 to localized(MR.strings.default_category_summary)) + categories.map { it.id.toInt() to categoryName(it) }
+    ChoicePreference(localized(MR.strings.default_category), preferences.defaultCategory(), choices)
 }
 
 /** Android's "Per-category settings for sort": turning it off resets each category's own sort. */
@@ -170,7 +175,7 @@ private fun CategorizedDisplayPreference() {
     val preferences = remember { Injekt.get<LibraryPreferences>() }
     val value by preferences.categorizedDisplaySettings().changes().collectAsState(preferences.categorizedDisplaySettings().get())
     val scope = rememberCoroutineScope()
-    SwitchSetting("Per-category settings for sort", checked = value) { on ->
+    SwitchSetting(localized(MR.strings.categorized_display_settings), checked = value) { on ->
         preferences.categorizedDisplaySettings().set(on)
         if (!on) scope.launch { runCatching { Injekt.get<tachiyomi.domain.category.interactor.ResetCategoryFlags>().await() } }
     }

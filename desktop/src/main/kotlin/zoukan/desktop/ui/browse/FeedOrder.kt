@@ -27,8 +27,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import tachiyomi.i18n.kmk.KMR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.i18n.desktop.DMR
 
 /**
  * Komikku's feed order screen (FeedOrderScreen and SourceFeedOrderScreen): drag the saved feeds,
@@ -58,7 +61,7 @@ fun FeedOrderDialog(model: FeedScreenModel, rows: List<FeedScreenModel.Row>, onD
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Feed order") },
+        title = { Text(localized(DMR.strings.feed_order)) },
         text = {
             LazyColumn(
                 state = listState,
@@ -69,16 +72,16 @@ fun FeedOrderDialog(model: FeedScreenModel, rows: List<FeedScreenModel.Row>, onD
                     ReorderableItem(reorderable, row.feed.id) {
                         ElevatedCard {
                             Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.DragHandle, "Reorder", Modifier.padding(12.dp).draggableHandle())
+                                Icon(Icons.Outlined.DragHandle, localized(DMR.strings.reorder), Modifier.padding(12.dp).draggableHandle())
                                 Text(row.title, modifier = Modifier.weight(1f))
-                                TooltipIconButton(Icons.Outlined.KeyboardArrowUp, "Move up", onClick = { moveBy(row, -1) }, enabled = items.firstOrNull() != row)
-                                TooltipIconButton(Icons.Outlined.KeyboardArrowDown, "Move down", onClick = { moveBy(row, 1) }, enabled = items.lastOrNull() != row)
+                                TooltipIconButton(Icons.Outlined.KeyboardArrowUp, localized(KMR.strings.action_move_up), onClick = { moveBy(row, -1) }, enabled = items.firstOrNull() != row)
+                                TooltipIconButton(Icons.Outlined.KeyboardArrowDown, localized(KMR.strings.action_move_down), onClick = { moveBy(row, 1) }, enabled = items.lastOrNull() != row)
                             }
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(DMR.strings.done)) } },
     )
 }

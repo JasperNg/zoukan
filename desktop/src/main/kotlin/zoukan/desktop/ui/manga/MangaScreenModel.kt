@@ -29,9 +29,11 @@ import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.download.Download
@@ -40,6 +42,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicInteger
 
 class MangaScreenModel(
@@ -277,7 +280,7 @@ class MangaScreenModel(
                 refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = true)
                 null
             } catch (e: NoChaptersException) {
-                "The source lists no chapters"
+                localized(DMR.strings.the_source_lists_no_chapters)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -296,7 +299,7 @@ class MangaScreenModel(
                 // ZOUKAN -->
                 addToLibraryFlow.remove(manga)
                 // ZOUKAN <--
-                Toasts.show("Removed from library")
+                Toasts.show(localized(MR.strings.manga_removed_library))
             } else {
                 // ZOUKAN -->
                 // Android's duplicate check, then the default category or a choice
@@ -336,7 +339,7 @@ class MangaScreenModel(
             // As on Android: bind the enhanced trackers, then offer tracking
             addToLibraryFlow.add(manga, categoryIds)
             // ZOUKAN <--
-            Toasts.show("Added to library")
+            Toasts.show(localized(MR.strings.manga_added_library))
             if (trackPreferences.trackOnAddingToLibrary().get() && trackerManager.loggedInTrackers().isNotEmpty()) {
                 setTrackingVisible(true)
             }
@@ -362,7 +365,7 @@ class MangaScreenModel(
 
     fun setChapterSettingsAsDefault(toLibrary: Boolean) = updateFlags {
         chapterSettings.setAsDefault(it, toLibrary)
-        Toasts.show("Default chapter settings updated")
+        Toasts.show(localized(DMR.strings.default_chapter_settings_updated))
     }
 
     fun setExcludedScanlators(excluded: Set<String>) {
@@ -441,19 +444,19 @@ class MangaScreenModel(
 
     /** Opens the entry's page in the built-in browser, which shares cookies with the app. */
     fun openInWebView() {
-        val url = mangaUrl() ?: return Toasts.show("This source has no web page")
+        val url = mangaUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         AppScope.launch {
             val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
-            if (!BrowserWindow(url, userAgent).open()) Toasts.show("The built-in browser could not start")
+            if (!BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
     }
 
     fun openInBrowser() {
-        val url = mangaUrl() ?: return Toasts.show("This source has no web page")
+        val url = mangaUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         AppScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }
-                    .onFailure { Toasts.error("Could not open the browser", it) }
+                    .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_browser), it) }
             }
         }
     }

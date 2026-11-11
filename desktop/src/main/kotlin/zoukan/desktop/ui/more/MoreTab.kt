@@ -48,9 +48,12 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
 import tachiyomi.core.common.Constants
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
@@ -68,6 +71,7 @@ import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.stats.StatsScreen
 import zoukan.desktop.ui.updates.UpdatesScreenModel
 import zoukan.desktop.ui.updates.UpdatesTab
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's More tab (MoreScreen): the app-wide switches, then the screens that have no tab of their
@@ -92,8 +96,8 @@ fun MoreTab() {
         item {
             MoreSwitch(
                 icon = Icons.Outlined.CloudOff,
-                title = "Downloaded only",
-                subtitle = "Filters all entries in your library",
+                title = localized(MR.strings.label_downloaded_only),
+                subtitle = localized(MR.strings.downloaded_only_summary),
                 checked = downloadedOnly,
                 onCheckedChange = { preferences.downloadedOnly().set(it) },
             )
@@ -101,8 +105,8 @@ fun MoreTab() {
         item {
             MoreSwitch(
                 icon = Icons.Outlined.VisibilityOff,
-                title = "Incognito mode",
-                subtitle = "Pauses reading history",
+                title = localized(MR.strings.pref_incognito_mode),
+                subtitle = localized(MR.strings.pref_incognito_mode_summary),
                 checked = incognitoMode,
                 onCheckedChange = { incognito.mode().set(it) },
             )
@@ -110,39 +114,39 @@ fun MoreTab() {
         item { HorizontalDivider() }
         // Updates and History, when they are hidden from the rail, as SY's More tab
         if (!showUpdates) {
-            item { MoreRow(Icons.Outlined.NewReleases, "Updates") { navigator.push(UpdatesScreen) } }
+            item { MoreRow(Icons.Outlined.NewReleases, localized(MR.strings.label_recent_updates)) { navigator.push(UpdatesScreen) } }
         }
         if (!showHistory) {
-            item { MoreRow(Icons.Outlined.History, "History") { navigator.push(HistoryScreen) } }
+            item { MoreRow(Icons.Outlined.History, localized(MR.strings.history)) { navigator.push(HistoryScreen) } }
         }
         item {
             val subtitle = when {
                 queue.isEmpty() -> null
-                running -> "${queue.size} remaining"
-                else -> "Paused · ${queue.size} remaining"
+                running -> localized(DMR.strings.remaining, queue.size)
+                else -> localized(DMR.strings.paused_remaining, queue.size)
             }
-            MoreRow(Icons.Outlined.GetApp, "Download queue", subtitle) { navigator.push(DownloadsScreen) }
+            MoreRow(Icons.Outlined.GetApp, localized(MR.strings.label_download_queue), subtitle) { navigator.push(DownloadsScreen) }
         }
-        item { MoreRow(Icons.AutoMirrored.Outlined.Label, "Categories") { navigator.push(CategoryScreen) } }
-        item { MoreRow(Icons.Outlined.QueryStats, "Statistics") { navigator.push(StatsScreen) } }
-        item { MoreRow(Icons.Outlined.ErrorOutline, "Library update errors") { navigator.push(UpdateErrorsScreen) } }
+        item { MoreRow(Icons.AutoMirrored.Outlined.Label, localized(MR.strings.categories)) { navigator.push(CategoryScreen) } }
+        item { MoreRow(Icons.Outlined.QueryStats, localized(MR.strings.label_stats)) { navigator.push(StatsScreen) } }
+        item { MoreRow(Icons.Outlined.ErrorOutline, localized(KMR.strings.option_label_library_update_errors)) { navigator.push(UpdateErrorsScreen) } }
         item {
-            MoreRow(Icons.Outlined.Storage, "Data and storage") {
+            MoreRow(Icons.Outlined.Storage, localized(MR.strings.label_data_storage)) {
                 openSettingsCategory(SettingsCategory.Data)
                 navigator.push(SettingsScreen)
             }
         }
         item { HorizontalDivider() }
-        item { MoreRow(Icons.Outlined.Settings, "Settings") { navigator.push(SettingsScreen) } }
+        item { MoreRow(Icons.Outlined.Settings, localized(MR.strings.action_settings)) { navigator.push(SettingsScreen) } }
         item {
-            MoreRow(Icons.Outlined.Info, "About") {
+            MoreRow(Icons.Outlined.Info, localized(MR.strings.pref_category_about)) {
                 openSettingsCategory(SettingsCategory.About)
                 navigator.push(SettingsScreen)
             }
         }
         item {
-            MoreRow(Icons.AutoMirrored.Outlined.HelpOutline, "Help") {
-                runCatching { ExternalLinks.browse(Constants.URL_HELP) }.onFailure { Toasts.error("Could not open the page", it) }
+            MoreRow(Icons.AutoMirrored.Outlined.HelpOutline, localized(MR.strings.label_help)) {
+                runCatching { ExternalLinks.browse(Constants.URL_HELP) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
             }
         }
     }
@@ -247,10 +251,10 @@ fun AppStateBanners(modifier: Modifier = Modifier) {
     val incognitoMode by incognito.mode().changes().collectAsState(incognito.mode().get())
     Column(modifier.fillMaxWidth()) {
         if (downloadedOnly) {
-            Banner("Downloaded only", MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.onTertiary)
+            Banner(localized(MR.strings.label_downloaded_only), MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.onTertiary)
         }
         if (incognitoMode) {
-            Banner("Incognito mode", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
+            Banner(localized(MR.strings.pref_incognito_mode), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
         }
     }
 }

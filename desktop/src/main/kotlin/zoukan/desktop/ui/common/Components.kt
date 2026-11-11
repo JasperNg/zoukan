@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.SubcomposeAsyncImage
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 
 /** A cover with Coil, a placeholder while loading and an icon when it fails. */
 @Composable
@@ -198,7 +200,7 @@ fun ScreenHeader(
         ) {
             if (showBack && navigator.canPop) {
                 IconButton(onClick = { navigator.pop() }) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = localized(MR.strings.action_webview_back))
                 }
             } else {
                 Spacer(Modifier.size(8.dp))

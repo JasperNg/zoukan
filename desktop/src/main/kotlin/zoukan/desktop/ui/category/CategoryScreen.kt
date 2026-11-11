@@ -64,14 +64,18 @@ import tachiyomi.domain.category.interactor.RenameCategory
 import tachiyomi.domain.category.interactor.ReorderCategory
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.i18n.desktop.DMR
 
 /** Android's CategoryScreenModel: the user's categories, without the system Default one. */
 class CategoryScreenModel(
@@ -126,7 +130,7 @@ class CategoryScreenModel(
 
     private fun launchReporting(block: suspend () -> Boolean) {
         screenModelScope.launch {
-            if (block()) Toasts.show("An internal error occurred")
+            if (block()) Toasts.show(localized(DMR.strings.an_internal_error_occurred))
         }
     }
 }
@@ -151,13 +155,13 @@ object CategoryScreen : Screen {
 
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                ScreenHeader("Edit categories")
+                ScreenHeader(localized(MR.strings.action_edit_categories))
                 when {
                     categories == null -> LoadingScreen()
                     else -> {
                         DefaultCategoryRow(model, categories)
                         if (categories.isEmpty()) {
-                            EmptyScreen("You have no categories. Click the plus button to create one for organizing your library.")
+                            EmptyScreen(localized(DMR.strings.you_have_no_categories_click_the))
                         } else {
                             CategoryList(model, categories)
                         }
@@ -165,7 +169,7 @@ object CategoryScreen : Screen {
                 }
             }
             ExtendedFloatingActionButton(
-                text = { Text("Add") },
+                text = { Text(localized(MR.strings.action_add)) },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 onClick = { model.showDialog(CategoryDialog.Create) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("category-add"),
@@ -176,15 +180,15 @@ object CategoryScreen : Screen {
         when (val dialog = state.dialog) {
             null -> {}
             CategoryDialog.Create -> CategoryNameDialog(
-                title = "Add category",
-                confirmLabel = "Add",
+                title = localized(MR.strings.action_add_category),
+                confirmLabel = localized(MR.strings.action_add),
                 initial = "",
                 existing = names,
                 onDismiss = model::dismissDialog,
                 onConfirm = model::createCategory,
             )
             is CategoryDialog.Rename -> CategoryNameDialog(
-                title = "Rename category",
+                title = localized(MR.strings.action_rename_category),
                 confirmLabel = "OK",
                 initial = dialog.category.name,
                 existing = names,
@@ -193,8 +197,8 @@ object CategoryScreen : Screen {
             )
             is CategoryDialog.Delete -> AlertDialog(
                 onDismissRequest = model::dismissDialog,
-                title = { Text("Delete category") },
-                text = { Text("Do you wish to delete the category \"${dialog.category.name}\"?") },
+                title = { Text(localized(MR.strings.delete_category)) },
+                text = { Text(localized(MR.strings.delete_category_confirmation, dialog.category.name)) },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -204,7 +208,7 @@ object CategoryScreen : Screen {
                         modifier = Modifier.testTag("category-confirm"),
                     ) { Text("OK") }
                 },
-                dismissButton = { TextButton(onClick = model::dismissDialog) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
     }
@@ -216,9 +220,9 @@ private fun DefaultCategoryRow(model: CategoryScreenModel, categories: List<Cate
     val selected by model.defaultCategory.changes().collectAsState(model.defaultCategory.get())
     var menu by remember { mutableStateOf(false) }
     val label = when (selected) {
-        -1 -> "Always ask"
-        0 -> "Default"
-        else -> categories.firstOrNull { it.id == selected.toLong() }?.name ?: "Always ask"
+        -1 -> localized(MR.strings.default_category_summary)
+        0 -> localized(MR.strings.label_default)
+        else -> categories.firstOrNull { it.id == selected.toLong() }?.name ?: localized(MR.strings.default_category_summary)
     }
     Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
@@ -226,13 +230,13 @@ private fun DefaultCategoryRow(model: CategoryScreenModel, categories: List<Cate
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Default category", style = MaterialTheme.typography.titleMedium)
+                Text(localized(MR.strings.default_category), style = MaterialTheme.typography.titleMedium)
                 Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(menu, onDismissRequest = { menu = false }) {
-            val options = listOf(-1 to "Always ask", 0 to "Default") + categories.map { it.id.toInt() to it.name }
+            val options = listOf(-1 to localized(MR.strings.default_category_summary), 0 to localized(MR.strings.label_default)) + categories.map { it.id.toInt() to it.name }
             options.forEach { (id, name) ->
                 DropdownMenuItem(
                     text = { Text(name) },
@@ -295,7 +299,7 @@ private fun ReorderableCollectionItemScope.CategoryListItem(
         ) {
             Icon(
                 Icons.Outlined.DragHandle,
-                contentDescription = "Reorder",
+                contentDescription = localized(DMR.strings.reorder),
                 modifier = Modifier.padding(12.dp).draggableHandle(),
             )
             Text(
@@ -304,13 +308,13 @@ private fun ReorderableCollectionItemScope.CategoryListItem(
                 textDecoration = TextDecoration.LineThrough.takeIf { category.hidden },
                 modifier = Modifier.weight(1f),
             )
-            TooltipIconButton(Icons.Outlined.Edit, "Rename category", onClick = onRename)
+            TooltipIconButton(Icons.Outlined.Edit, localized(MR.strings.action_rename_category), onClick = onRename)
             TooltipIconButton(
                 if (category.hidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
-                if (category.hidden) "Show" else "Hide",
+                if (category.hidden) localized(DMR.strings.show) else localized(KMR.strings.action_hide),
                 onClick = onHide,
             )
-            TooltipIconButton(Icons.Outlined.Delete, "Delete", onClick = onDelete)
+            TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_delete), onClick = onDelete)
         }
     }
 }
@@ -336,8 +340,8 @@ private fun CategoryNameDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
-                supportingText = { Text(if (name.isNotEmpty() && exists) "A category with this name already exists!" else "*required") },
+                label = { Text(localized(MR.strings.name)) },
+                supportingText = { Text(if (name.isNotEmpty() && exists) localized(MR.strings.error_category_exists) else localized(MR.strings.information_required_plain)) },
                 isError = name.isNotEmpty() && exists,
                 singleLine = true,
                 modifier = Modifier.focusRequester(focusRequester).testTag("category-name"),
@@ -353,7 +357,7 @@ private fun CategoryNameDialog(
                 modifier = Modifier.testTag("category-confirm"),
             ) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
     LaunchedEffect(focusRequester) { focusRequester.requestFocus() }
 }

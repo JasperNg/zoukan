@@ -20,28 +20,33 @@ import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
+import zoukan.i18n.desktop.DMR
 import java.text.DateFormat
 import java.util.Date
 
 /** Settings > Data sync: SyncYomi or WebDAV, as on Android. Google Drive needs the app's OAuth secrets. */
 fun LazyListScope.syncSettings() {
-    settingsGroup("Data sync")
+    settingsGroup(localized(DMR.strings.data_sync))
     item(key = "sync") { SyncSettingsSection() }
 }
 
 private val INTERVALS = listOf(
-    0 to "Manually",
-    30 to "Every 30 minutes",
-    60 to "Every hour",
-    180 to "Every 3 hours",
-    360 to "Every 6 hours",
-    720 to "Every 12 hours",
-    1440 to "Every day",
-    2880 to "Every 2 days",
-    10080 to "Every week",
+    0 to localized(DMR.strings.manually),
+    30 to localized(SYMR.strings.update_30min),
+    60 to localized(SYMR.strings.update_1hour),
+    180 to localized(MR.strings.update_3hour),
+    360 to localized(MR.strings.update_6hour),
+    720 to localized(MR.strings.update_12hour),
+    1440 to localized(DMR.strings.every_day),
+    2880 to localized(MR.strings.update_48hour),
+    10080 to localized(DMR.strings.every_week),
 )
 
 @Composable
@@ -58,39 +63,39 @@ private fun SyncSettingsSection() {
 
     Column {
         ChoicePreference(
-            "Sync service",
+            localized(DMR.strings.sync_service),
             preferences.syncService(),
             listOf(
-                SyncManager.SyncService.NONE.value to "Off",
-                SyncManager.SyncService.SYNCYOMI.value to "SyncYomi",
-                SyncManager.SyncService.WEB_DAV.value to "WebDAV",
+                SyncManager.SyncService.NONE.value to localized(MR.strings.off),
+                SyncManager.SyncService.SYNCYOMI.value to localized(SYMR.strings.syncyomi),
+                SyncManager.SyncService.WEB_DAV.value to localized(KMR.strings.web_dav),
             ),
         )
         when (SyncManager.SyncService.fromInt(service)) {
             SyncManager.SyncService.SYNCYOMI -> {
-                TextRow("Host", preferences.clientHost()) {
+                TextRow(localized(SYMR.strings.pref_sync_host), preferences.clientHost()) {
                     edit = it
                     secret = false
                 }
-                TextRow("API key", preferences.clientAPIKey(), hidden = true) {
+                TextRow(localized(SYMR.strings.pref_sync_api_key), preferences.clientAPIKey(), hidden = true) {
                     edit = it
                     secret = true
                 }
             }
             SyncManager.SyncService.WEB_DAV -> {
-                TextRow("Server URL", preferences.webDavUrl()) {
+                TextRow(localized(DMR.strings.server_url), preferences.webDavUrl()) {
                     edit = it
                     secret = false
                 }
-                TextRow("Username", preferences.webDavUsername()) {
+                TextRow(localized(MR.strings.username), preferences.webDavUsername()) {
                     edit = it
                     secret = false
                 }
-                TextRow("Password", preferences.webDavPassword(), hidden = true) {
+                TextRow(localized(MR.strings.password), preferences.webDavPassword(), hidden = true) {
                     edit = it
                     secret = true
                 }
-                TextRow("Folder", preferences.webDavFolder()) {
+                TextRow(localized(DMR.strings.folder), preferences.webDavFolder()) {
                     edit = it
                     secret = false
                 }
@@ -98,17 +103,17 @@ private fun SyncSettingsSection() {
             else -> Unit
         }
         if (service != SyncManager.SyncService.NONE.value) {
-            ChoicePreference("Automatic sync", preferences.syncInterval(), INTERVALS)
-            SettingRow("What to sync", onClick = { whatDialog = true })
-            SettingRow("When to sync", "On start, when the window comes back, or when reading", onClick = { triggersDialog = true })
+            ChoicePreference(localized(DMR.strings.automatic_sync), preferences.syncInterval(), INTERVALS)
+            SettingRow(localized(DMR.strings.what_to_sync), onClick = { whatDialog = true })
+            SettingRow(localized(DMR.strings.when_to_sync), localized(DMR.strings.on_start_when_the_window_comes), onClick = { triggersDialog = true })
             SettingRow(
-                if (running) "Syncing…" else "Sync now",
-                if (last == 0L) "Never synced" else "Last synced ${DateFormat.getDateTimeInstance().format(Date(last))}",
+                if (running) localized(DMR.strings.syncing) else localized(SYMR.strings.pref_sync_now),
+                if (last == 0L) localized(DMR.strings.never_synced) else localized(DMR.strings.last_synced, DateFormat.getDateTimeInstance().format(Date(last))),
                 onClick = { if (!running) AppScope.launch { manager.syncData() } },
             )
             SettingRow(
-                "Reset the last sync time",
-                "The next sync uploads this library first, as a first sync does",
+                localized(DMR.strings.reset_the_last_sync_time),
+                localized(DMR.strings.the_next_sync_uploads_this_library),
                 onClick = { preferences.lastSyncTimestamp().set(0L) },
             )
         }
@@ -127,7 +132,7 @@ private fun TextRow(title: String, preference: Preference<String>, hidden: Boole
     SettingRow(
         title,
         when {
-            value.isEmpty() -> "Not set"
+            value.isEmpty() -> localized(DMR.strings.not_set)
             hidden -> "••••••••"
             else -> value
         },
@@ -155,7 +160,7 @@ private fun TextDialog(title: String, preference: Preference<String>, secret: Bo
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -172,21 +177,21 @@ private fun WhatDialog(preferences: SyncPreferences, onDismiss: () -> Unit) {
     var s by remember { mutableStateOf(preferences.getSyncSettings()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("What to sync") },
+        title = { Text(localized(DMR.strings.what_to_sync)) },
         text = {
             Column {
-                CheckRow("Library entries", s.libraryEntries) { s = s.copy(libraryEntries = it) }
-                CheckRow("Categories", s.categories) { s = s.copy(categories = it) }
-                CheckRow("Chapters", s.chapters) { s = s.copy(chapters = it) }
-                CheckRow("Tracking", s.tracking) { s = s.copy(tracking = it) }
-                CheckRow("History", s.history) { s = s.copy(history = it) }
-                CheckRow("Custom details", s.customInfo) { s = s.copy(customInfo = it) }
-                CheckRow("Read entries outside the library", s.readEntries) { s = s.copy(readEntries = it) }
-                CheckRow("Saved searches and feeds", s.savedSearchesFeeds) { s = s.copy(savedSearchesFeeds = it) }
-                CheckRow("App settings", s.appSettings) { s = s.copy(appSettings = it) }
-                CheckRow("Extension repos", s.extensionStores) { s = s.copy(extensionStores = it) }
-                CheckRow("Source settings", s.sourceSettings) { s = s.copy(sourceSettings = it) }
-                CheckRow("Private settings (logins, keys)", s.privateSettings) { s = s.copy(privateSettings = it) }
+                CheckRow(localized(MR.strings.manga), s.libraryEntries) { s = s.copy(libraryEntries = it) }
+                CheckRow(localized(MR.strings.categories), s.categories) { s = s.copy(categories = it) }
+                CheckRow(localized(MR.strings.chapters), s.chapters) { s = s.copy(chapters = it) }
+                CheckRow(localized(MR.strings.track), s.tracking) { s = s.copy(tracking = it) }
+                CheckRow(localized(MR.strings.history), s.history) { s = s.copy(history = it) }
+                CheckRow(localized(DMR.strings.custom_details), s.customInfo) { s = s.copy(customInfo = it) }
+                CheckRow(localized(DMR.strings.read_entries_outside_the_library), s.readEntries) { s = s.copy(readEntries = it) }
+                CheckRow(localized(DMR.strings.saved_searches_and_feeds), s.savedSearchesFeeds) { s = s.copy(savedSearchesFeeds = it) }
+                CheckRow(localized(MR.strings.app_settings), s.appSettings) { s = s.copy(appSettings = it) }
+                CheckRow(localized(DMR.strings.extension_repos), s.extensionStores) { s = s.copy(extensionStores = it) }
+                CheckRow(localized(MR.strings.source_settings), s.sourceSettings) { s = s.copy(sourceSettings = it) }
+                CheckRow(localized(DMR.strings.private_settings_logins_keys), s.privateSettings) { s = s.copy(privateSettings = it) }
             }
         },
         confirmButton = {
@@ -195,7 +200,7 @@ private fun WhatDialog(preferences: SyncPreferences, onDismiss: () -> Unit) {
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -204,13 +209,13 @@ private fun TriggersDialog(preferences: SyncPreferences, onDismiss: () -> Unit) 
     var t by remember { mutableStateOf(preferences.getSyncTriggerOptions()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("When to sync") },
+        title = { Text(localized(DMR.strings.when_to_sync)) },
         text = {
             Column {
-                CheckRow("When Zoukan starts", t.syncOnAppStart) { t = t.copy(syncOnAppStart = it) }
-                CheckRow("When the window comes back", t.syncOnAppResume) { t = t.copy(syncOnAppResume = it) }
-                CheckRow("When a chapter opens", t.syncOnChapterOpen) { t = t.copy(syncOnChapterOpen = it) }
-                CheckRow("When a chapter is read", t.syncOnChapterRead) { t = t.copy(syncOnChapterRead = it) }
+                CheckRow(localized(DMR.strings.when_zoukan_starts), t.syncOnAppStart) { t = t.copy(syncOnAppStart = it) }
+                CheckRow(localized(DMR.strings.when_the_window_comes_back), t.syncOnAppResume) { t = t.copy(syncOnAppResume = it) }
+                CheckRow(localized(DMR.strings.when_a_chapter_opens), t.syncOnChapterOpen) { t = t.copy(syncOnChapterOpen = it) }
+                CheckRow(localized(DMR.strings.when_a_chapter_is_read), t.syncOnChapterRead) { t = t.copy(syncOnChapterRead = it) }
             }
         },
         confirmButton = {
@@ -219,6 +224,6 @@ private fun TriggersDialog(preferences: SyncPreferences, onDismiss: () -> Unit) 
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }

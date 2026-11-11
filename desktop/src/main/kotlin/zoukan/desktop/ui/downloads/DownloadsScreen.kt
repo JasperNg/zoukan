@@ -40,8 +40,10 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.storage.ZoukanStorage
@@ -50,6 +52,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.openFolder
+import zoukan.i18n.desktop.DMR
 
 /** The download queue. */
 object DownloadsScreen : Screen {
@@ -64,20 +67,20 @@ object DownloadsScreen : Screen {
         val queue by manager.queue.collectAsState()
         val running by manager.running.collectAsState()
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Downloads", subtitle = if (queue.isEmpty()) storage.downloads.path else "${queue.size} in the queue") {
+            ScreenHeader(localized(MR.strings.pref_category_downloads), subtitle = if (queue.isEmpty()) storage.downloads.path else localized(DMR.strings.in_the_queue, queue.size)) {
                 if (queue.isNotEmpty()) {
                     if (running) {
-                        TooltipIconButton(Icons.Outlined.Pause, "Pause", onClick = manager::pause)
+                        TooltipIconButton(Icons.Outlined.Pause, localized(MR.strings.action_pause), onClick = manager::pause)
                     } else {
-                        TooltipIconButton(Icons.Outlined.PlayArrow, "Start", onClick = manager::start)
+                        TooltipIconButton(Icons.Outlined.PlayArrow, localized(MR.strings.action_start), onClick = manager::start)
                     }
                     QueueSortButton(manager)
-                    TooltipIconButton(Icons.Outlined.ClearAll, "Cancel all", onClick = manager::clearQueue)
+                    TooltipIconButton(Icons.Outlined.ClearAll, localized(MR.strings.action_cancel_all), onClick = manager::clearQueue)
                 }
-                TooltipIconButton(Icons.Outlined.FolderOpen, "Open the downloads folder", onClick = { openFolder(storage.downloads) })
+                TooltipIconButton(Icons.Outlined.FolderOpen, localized(DMR.strings.open_the_downloads_folder), onClick = { openFolder(storage.downloads) })
             }
             if (queue.isEmpty()) {
-                EmptyScreen("No downloads queued. Download chapters from an entry's chapter list.")
+                EmptyScreen(localized(DMR.strings.no_downloads_queued_download_chapters_from))
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(queue, key = { it.chapter.id }) { download ->
@@ -115,7 +118,7 @@ private fun DownloadRow(download: Download, manager: DownloadManager) {
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
                 Download.State.ERROR -> Text(
-                    download.error ?: "Failed",
+                    download.error ?: localized(DMR.strings.failed),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 2,
@@ -127,9 +130,9 @@ private fun DownloadRow(download: Download, manager: DownloadManager) {
             Text("${progress.first} / ${progress.second}", style = MaterialTheme.typography.labelMedium)
         }
         if (state == Download.State.QUEUED) {
-            TooltipIconButton(Icons.Outlined.VerticalAlignTop, "Download first", onClick = { manager.moveToTop(download) })
+            TooltipIconButton(Icons.Outlined.VerticalAlignTop, localized(DMR.strings.download_first), onClick = { manager.moveToTop(download) })
         }
-        TooltipIconButton(Icons.Outlined.Close, "Cancel", onClick = { manager.cancel(setOf(download.chapter.id)) })
+        TooltipIconButton(Icons.Outlined.Close, localized(MR.strings.action_cancel), onClick = { manager.cancel(setOf(download.chapter.id)) })
         DownloadMenu(download, manager)
     }
 }
@@ -139,30 +142,30 @@ private fun DownloadRow(download: Download, manager: DownloadManager) {
 private fun DownloadMenu(download: Download, manager: DownloadManager) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { open = true })
+        TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Move to top") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.action_move_to_top)) }, onClick = {
                 open = false
                 manager.moveToTop(download)
             })
-            DropdownMenuItem(text = { Text("Move series to top") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.action_move_to_top_all_for_series)) }, onClick = {
                 open = false
                 manager.moveSeries(download.manga.id, toTop = true)
             })
-            DropdownMenuItem(text = { Text("Move to bottom") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.action_move_to_bottom)) }, onClick = {
                 open = false
                 manager.moveToBottom(download)
             })
-            DropdownMenuItem(text = { Text("Move series to bottom") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.action_move_to_bottom_all_for_series)) }, onClick = {
                 open = false
                 manager.moveSeries(download.manga.id, toTop = false)
             })
             HorizontalDivider()
-            DropdownMenuItem(text = { Text("Cancel") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.action_cancel)) }, onClick = {
                 open = false
                 manager.cancel(setOf(download.chapter.id))
             })
-            DropdownMenuItem(text = { Text("Cancel all for this series") }, onClick = {
+            DropdownMenuItem(text = { Text(localized(MR.strings.cancel_all_for_series)) }, onClick = {
                 open = false
                 manager.cancelSeries(download.manga.id)
             })
@@ -175,13 +178,13 @@ private fun DownloadMenu(download: Download, manager: DownloadManager) {
 private fun QueueSortButton(manager: DownloadManager) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, "Sort", onClick = { open = true })
+        TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, localized(MR.strings.action_sort), onClick = { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val sorts: List<Pair<String, () -> Unit>> = listOf(
-                "Upload date, newest" to { manager.sortQueue(descending = true) { it.chapter.dateUpload } },
-                "Upload date, oldest" to { manager.sortQueue(descending = false) { it.chapter.dateUpload } },
-                "Chapter number, ascending" to { manager.sortQueue(descending = false) { it.chapter.chapterNumber } },
-                "Chapter number, descending" to { manager.sortQueue(descending = true) { it.chapter.chapterNumber } },
+                localized(DMR.strings.upload_date_newest) to { manager.sortQueue(descending = true) { it.chapter.dateUpload } },
+                localized(DMR.strings.upload_date_oldest) to { manager.sortQueue(descending = false) { it.chapter.dateUpload } },
+                localized(DMR.strings.chapter_number_ascending) to { manager.sortQueue(descending = false) { it.chapter.chapterNumber } },
+                localized(DMR.strings.chapter_number_descending) to { manager.sortQueue(descending = true) { it.chapter.chapterNumber } },
             )
             sorts.forEach { (label, sort) ->
                 DropdownMenuItem(text = { Text(label) }, onClick = {
@@ -201,7 +204,7 @@ fun DownloadsButton() {
     val navigator = LocalNavigator.currentOrThrow
     Box {
         BadgedBox(badge = { if (queue.isNotEmpty()) Badge { Text("${queue.size}") } }) {
-            TooltipIconButton(Icons.Outlined.Download, "Downloads", onClick = { navigator.push(DownloadsScreen) })
+            TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.pref_category_downloads), onClick = { navigator.push(DownloadsScreen) })
         }
     }
 }

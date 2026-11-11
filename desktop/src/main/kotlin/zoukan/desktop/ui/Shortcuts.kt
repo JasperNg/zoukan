@@ -14,10 +14,13 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import cafe.adriel.voyager.navigator.Navigator
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 /**
  * The app-wide keyboard shortcuts. They run only when the focused screen did not use the key, so
@@ -53,13 +56,13 @@ object Shortcuts {
 
     /** Shortcut list for the README and the help in Settings. */
     val list = listOf(
-        "Ctrl/Cmd + 1 to 5" to "Library, Updates, History, Browse, More",
-        "Ctrl/Cmd + ," to "Settings",
-        "Ctrl/Cmd + Shift + U" to "Update the library",
-        "Ctrl/Cmd + F" to "Search the screen",
-        "Ctrl/Cmd + A" to "Select everything in the library, or every chapter of an entry",
-        "Escape" to "Empty the search box, clear the selection or go back",
-        "Alt + Left, mouse back button" to "Back",
+        "Ctrl/Cmd + 1 to 5" to localized(DMR.strings.library_updates_history_browse_more),
+        "Ctrl/Cmd + ," to localized(MR.strings.action_settings),
+        "Ctrl/Cmd + Shift + U" to localized(DMR.strings.update_the_library),
+        "Ctrl/Cmd + F" to localized(DMR.strings.search_the_screen),
+        "Ctrl/Cmd + A" to localized(DMR.strings.select_everything_in_the_library_or),
+        localized(DMR.strings.escape) to localized(DMR.strings.empty_the_search_box_clear_the),
+        "Alt + Left, mouse back button" to localized(MR.strings.action_webview_back),
     )
 
     fun actionFor(key: Key, ctrl: Boolean, shift: Boolean, alt: Boolean): Action? {
@@ -100,9 +103,9 @@ object Shortcuts {
             }
             Action.UpdateLibrary -> {
                 if (!Injekt.get<LibraryUpdater>().start()) {
-                    Toasts.show("A library update is already running")
+                    Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
                 } else {
-                    Toasts.show("Updating the library")
+                    Toasts.show(localized(DMR.strings.updating_the_library))
                 }
                 true
             }

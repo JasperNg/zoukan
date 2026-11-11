@@ -1,5 +1,9 @@
 package zoukan.desktop.ui.reader
 
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
+
 /**
  * The reader's tap zones, as Android's ViewerNavigation and its layouts (L shaped, Kindle-ish,
  * Edge, Right and left, Disabled). Positions are fractions of the reader's size, 0 to 1.
@@ -29,19 +33,19 @@ object ReaderNavigation {
     const val DISABLED = 5
 
     val layouts = listOf(
-        DEFAULT to "Default",
-        L_SHAPED to "L shaped",
-        KINDLISH to "Kindle-ish",
-        EDGE to "Edge",
-        RIGHT_AND_LEFT to "Right and left",
-        DISABLED to "Disabled",
+        DEFAULT to localized(MR.strings.label_default),
+        L_SHAPED to localized(MR.strings.l_nav),
+        KINDLISH to localized(MR.strings.kindlish_nav),
+        EDGE to localized(MR.strings.edge_nav),
+        RIGHT_AND_LEFT to localized(DMR.strings.right_and_left),
+        DISABLED to localized(MR.strings.disabled),
     )
 
     val inverts = listOf(
-        Invert.NONE to "None",
-        Invert.HORIZONTAL to "Horizontal",
-        Invert.VERTICAL to "Vertical",
-        Invert.BOTH to "Both",
+        Invert.NONE to localized(MR.strings.none),
+        Invert.HORIZONTAL to localized(MR.strings.tapping_inverted_horizontal),
+        Invert.VERTICAL to localized(MR.strings.tapping_inverted_vertical),
+        Invert.BOTH to localized(MR.strings.tapping_inverted_both),
     )
 
     data class Zone(val left: Float, val top: Float, val right: Float, val bottom: Float, val region: Region) {

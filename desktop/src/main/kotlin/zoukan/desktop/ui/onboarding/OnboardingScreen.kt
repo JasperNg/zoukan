@@ -38,9 +38,11 @@ import cafe.adriel.voyager.navigator.Navigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.interactor.GetFavorites
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.LocalWindow
@@ -53,6 +55,7 @@ import zoukan.desktop.ui.settings.pickAndRestoreBackup
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.ui.whatsnew.WhatsNew
 import zoukan.desktop.ui.whatsnew.WhatsNewScreen
+import zoukan.i18n.desktop.DMR
 
 /** Komikku's getting started guide, which Android's onboarding links to; it covers Zoukan too. */
 const val GETTING_STARTED_URL = "https://komikku-app.github.io/docs/guides/getting-started"
@@ -115,15 +118,15 @@ fun OnboardingScreen(onComplete: () -> Unit, onOpenSettings: () -> Unit, onClose
     ) {
         InfoScreen(
             icon = Icons.Outlined.RocketLaunch,
-            headingText = "Welcome!",
-            subtitleText = "Let's set some things up first. You can always change these in Settings later too.",
-            acceptText = if (last) "Get started" else "Next",
+            headingText = localized(MR.strings.onboarding_heading),
+            subtitleText = localized(DMR.strings.lets_set_some_things_up_first),
+            acceptText = if (last) localized(MR.strings.onboarding_action_finish) else localized(MR.strings.nav_zone_next),
             canAccept = steps[step].isComplete(),
             onAcceptClick = { if (last) onComplete() else step++ },
             secondaryButton = {
                 when {
-                    step > 0 -> TextButton(onClick = { step-- }) { Text("Back") }
-                    onClose != null -> TextButton(onClick = onClose) { Text("Close") }
+                    step > 0 -> TextButton(onClick = { step-- }) { Text(localized(MR.strings.action_webview_back)) }
+                    onClose != null -> TextButton(onClick = onClose) { Text(localized(MR.strings.action_close)) }
                 }
             },
         ) {
@@ -177,8 +180,7 @@ enum class OnboardingStep {
 private fun StorageStep() {
     Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Select a folder where Zoukan will store chapter downloads, automatic backups and local source entries. " +
-                "The folder below is fine for most people; a folder on a larger disk helps with many downloads.",
+            localized(DMR.strings.select_a_folder_where_zoukan_will),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(horizontal = 24.dp),
         )
@@ -189,17 +191,17 @@ private fun StorageStep() {
 @Composable
 private fun GuidesStep(onRestoreBackup: () -> Unit) {
     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("New to Zoukan? We recommend checking out the getting started guide.", style = MaterialTheme.typography.bodyMedium)
+        Text(localized(DMR.strings.new_to_zoukan_we_recommend_checking), style = MaterialTheme.typography.bodyMedium)
         Button(
-            onClick = { runCatching { ExternalLinks.browse(GETTING_STARTED_URL) }.onFailure { Toasts.error("Could not open the page", it) } },
+            onClick = { runCatching { ExternalLinks.browse(GETTING_STARTED_URL) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) } },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Getting started guide") }
+        ) { Text(localized(MR.strings.getting_started_guide)) }
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onPrimaryContainer)
         Text(
-            "Coming from Komikku, Mihon, TachiyomiSY or Zoukan on another computer? Restore a backup to bring your library over.",
+            localized(DMR.strings.coming_from_komikku_mihon_tachiyomisy_or),
             style = MaterialTheme.typography.bodyMedium,
         )
-        Button(onClick = onRestoreBackup, modifier = Modifier.fillMaxWidth()) { Text("Restore backup") }
+        Button(onClick = onRestoreBackup, modifier = Modifier.fillMaxWidth()) { Text(localized(MR.strings.pref_restore_backup)) }
     }
 }
 

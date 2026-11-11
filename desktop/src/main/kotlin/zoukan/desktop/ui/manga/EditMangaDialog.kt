@@ -26,8 +26,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.manga.EditManga
 import zoukan.desktop.ui.LocalWindow
@@ -38,6 +40,7 @@ import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice
+import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
 
@@ -49,7 +52,7 @@ private val STATUSES = listOf(
     SManga.PUBLISHING_FINISHED,
     SManga.CANCELLED,
     SManga.ON_HIATUS,
-).map { it.toLong() to (statusLabel(it.toLong()) ?: "Unknown") }
+).map { it.toLong() to (statusLabel(it.toLong()) ?: localized(MR.strings.unknown)) }
 
 /** Edits the entry's details, notes and cover, as the Android app's edit dialog. */
 @Composable
@@ -69,34 +72,34 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
     fun run(block: suspend () -> Unit) {
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { block() } }
-                .onFailure { Toasts.error("Could not save", it) }
+                .onFailure { Toasts.error(localized(DMR.strings.could_not_save), it) }
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit") },
+        title = { Text(localized(MR.strings.action_edit)) },
         text = {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.width(160.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     CoverImage(Cover.of(manga), Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Corners.Medium).coverOutline(Corners.Medium))
                     if (edit.canEditCover(manga)) {
                         OutlinedButton(onClick = {
-                            val dialog = FileDialog(window, "Choose a cover", FileDialog.LOAD).apply {
+                            val dialog = FileDialog(window, localized(DMR.strings.choose_a_cover), FileDialog.LOAD).apply {
                                 setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png", "webp", "gif", "avif") }
                                 isVisible = true
                             }
                             val name = dialog.file ?: return@OutlinedButton
                             run {
                                 edit.setCover(manga, File(dialog.directory, name))
-                                Toasts.show("Cover updated")
+                                Toasts.show(localized(MR.strings.cover_updated))
                             }
-                        }) { Text("Change cover") }
+                        }) { Text(localized(DMR.strings.change_cover)) }
                         if (edit.hasCustomCover(manga)) {
-                            TextButton(onClick = { run { edit.deleteCustomCover(manga) } }) { Text("Use the source's cover") }
+                            TextButton(onClick = { run { edit.deleteCustomCover(manga) } }) { Text(localized(DMR.strings.use_the_sources_cover)) }
                         }
                     } else {
-                        Text("Add the entry to the library to change its cover.")
+                        Text(localized(DMR.strings.add_the_entry_to_the_library))
                     }
                 }
                 Column(
@@ -104,16 +107,16 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (!isLocal && !manga.favorite) {
-                        Text("Details of entries outside the library are not kept; add it to the library to edit them.")
+                        Text(localized(DMR.strings.details_of_entries_outside_the_library))
                     }
                     val editable = isLocal || manga.favorite
-                    OutlinedTextField(title, { title = it }, label = { Text("Title") }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(author, { author = it }, label = { Text("Author") }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(artist, { artist = it }, label = { Text("Artist") }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(description, { description = it }, label = { Text("Description") }, enabled = editable, minLines = 3, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(genres, { genres = it }, label = { Text("Genres, separated by commas") }, enabled = editable, modifier = Modifier.fillMaxWidth())
-                    if (editable) Choice("Status", statusLabel(status) ?: "Unknown", STATUSES) { status = it }
-                    OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(title, { title = it }, label = { Text(localized(MR.strings.title)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(author, { author = it }, label = { Text(localized(MR.strings.author)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(artist, { artist = it }, label = { Text(localized(MR.strings.artist)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(description, { description = it }, label = { Text(localized(DMR.strings.description)) }, enabled = editable, minLines = 3, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(genres, { genres = it }, label = { Text(localized(DMR.strings.genres_separated_by_commas)) }, enabled = editable, modifier = Modifier.fillMaxWidth())
+                    if (editable) Choice(localized(MR.strings.status), statusLabel(status) ?: localized(MR.strings.unknown), STATUSES) { status = it }
+                    OutlinedTextField(notes, { notes = it }, label = { Text(localized(MR.strings.action_notes)) }, minLines = 2, modifier = Modifier.fillMaxWidth())
                 }
             }
         },
@@ -132,7 +135,7 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     if (notes != manga.notes) edit.saveNotes(manga, notes)
                 }
                 onDismiss()
-            }) { Text("Save") }
+            }) { Text(localized(MR.strings.action_save)) }
         },
         dismissButton = {
             Row {
@@ -140,9 +143,9 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     TextButton(onClick = {
                         run { edit.resetInfo(manga) }
                         onDismiss()
-                    }) { Text("Reset details") }
+                    }) { Text(localized(DMR.strings.reset_details)) }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) }
             }
         },
     )

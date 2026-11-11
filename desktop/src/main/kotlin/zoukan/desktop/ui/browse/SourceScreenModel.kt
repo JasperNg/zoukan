@@ -27,8 +27,10 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 class SourceScreenModel(
     sourceId: Long,
@@ -170,11 +172,11 @@ class SourceScreenModel(
      */
     fun openWebsite() {
         val url = (source as? HttpSource)?.baseUrl?.takeIf { it.isNotBlank() }
-            ?: return Toasts.show("This source has no website")
+            ?: return Toasts.show(localized(DMR.strings.this_source_has_no_website))
         screenModelScope.launch(Dispatchers.IO) {
             val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
-            val window = BrowserWindow(url, userAgent, message = "Sign in or pass the site's check, then press Done.")
-            if (!window.open()) return@launch Toasts.show("The built-in browser could not start")
+            val window = BrowserWindow(url, userAgent, message = localized(DMR.strings.sign_in_or_pass_the_sites))
+            if (!window.open()) return@launch Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
             window.await(Long.MAX_VALUE)
             withContext(Dispatchers.Main) { state.value.let { setListing(it.listing, it.savedSearch) } }
         }
