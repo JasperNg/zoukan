@@ -141,7 +141,10 @@ class EndToEndMigrationTest {
 
             step("Select both entries and open the migration") {
                 waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
+                // A right click opens the entry's menu; Select there starts the selection
                 onAllNodesWithText("Alpha").onFirst().performMouseInput { rightClick() }
+                waitFor(hasText("Select"))
+                onAllNodesWithText("Select").onFirst().performClick()
                 waitFor(hasText("1 selected"))
                 onAllNodesWithText("Bravo").onFirst().performClick()
                 waitFor(hasText("2 selected"))

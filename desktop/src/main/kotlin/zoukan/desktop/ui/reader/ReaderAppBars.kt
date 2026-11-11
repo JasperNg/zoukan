@@ -51,7 +51,6 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -102,6 +101,7 @@ import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReaderBottomButtons
