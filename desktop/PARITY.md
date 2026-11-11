@@ -19,12 +19,15 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Manga details, chapters, mark read, bookmark, download, delete | Yes | Phase 3, Phase 5 |
 | Reader: paged, right to left, vertical, webtoon, continuous | Yes | Phase 4; keyboard, mouse and wheel |
 | Reader settings sheet | Yes | Reading mode, General and Filter tabs (S) |
+| Reader menu: chapter navigator, bottom buttons, bookmark, chapter list | Yes, changed | As Komikku's: previous and next chapter either side of a floating page slider, standing on the side in vertical modes when the window is taller than wide (or always, with that setting). Bottom row: chapters (C), WebView, browser, reading mode, scale type (in place of rotation), crop borders, page layout and settings; the choice dialogs are menus. Bookmark from the top bar or B |
 | Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
 | Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
+| More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
+| Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
