@@ -18,11 +18,20 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Manga details, chapters, mark read, bookmark, download, delete | Yes | Phase 3, Phase 5 |
 | Reader: paged, right to left, vertical, webtoon, continuous | Yes | Phase 4; keyboard, mouse and wheel |
 | Reader settings sheet | Yes | Reading mode, General and Filter tabs (S) |
+| Reader menu: chapter navigator, bottom buttons, bookmark, chapter list | Yes, changed | As Komikku's: previous and next chapter either side of a floating page slider, standing on the side in vertical modes when the window is taller than wide (or always, with that setting). Bottom row: chapters (C), WebView, browser, reading mode, scale type (in place of rotation), crop borders, page layout and settings; the choice dialogs are menus. Bookmark from the top bar or B |
+| Settings > Reader: tap zones and inverting, zoom start, double tap zoom, disable zoom in or out, page transitions | Yes | Android's layouts (L shaped, Kindle-ish, Edge, Right and left, Disabled) and smaller tap zones; also in the reader's settings sheet |
+| Split or rotate wide pages, center margin, shift double pages | Yes | Paged and webtoon, with invert; wide pages stand alone in double page mode, as SY. Shift with D or the settings sheet |
+| Auto webtoon mode, preserve reading position | Yes | SY's tag and source rules |
+| Page loading: preload size, reader threads, aggressive loading, instant retry, retry all, boost page | Yes | Retry all is R, boost page Shift+R |
+| Show reading mode, keep screen on, flash on page change, smooth auto scroll, show actions on long tap | Yes, changed | Keep screen on uses SetThreadExecutionState on Windows and `caffeinate` on macOS. Long tap gates the long press only; a right-click always opens page actions |
+| Reader: volume keys, display cutout, orientation, landscape zoom, pinch to zoom, fullscreen (system bars) | No | Phone hardware and gestures; the desktop has F11 for full screen and Ctrl + wheel to zoom |
 | Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
+| More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
+| Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
@@ -69,6 +78,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: enable delegated sources, log level | Yes | Read at start, as on Android |
 | Advanced: hentai features toggle | Yes | Settings > E-Hentai |
 | Advanced: encrypt database | Yes, changed | The desktop database is always encrypted (SQLCipher), so there is no switch |
+| Settings search | Yes, changed | A field over the settings list matches every setting's title and summary. The results are the settings themselves, so they can be changed there; each one's page and group opens the page at it, highlighted, as on Android |
 | Advanced: onboarding guide | Yes | Opens the first-run setup again |
 | Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |

@@ -43,7 +43,6 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.ExternalLinks
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
-import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.InfoScreen
@@ -82,7 +81,10 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
     }
     if (!checked) return
     if (!onboardingDone) {
-        OnboardingScreen(onComplete = { preferences.shownOnboardingFlow().set(true) })
+        OnboardingScreen(
+            onComplete = { preferences.shownOnboardingFlow().set(true) },
+            onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
+        )
     } else if (updatedDialog) {
         UpdatedDialog(
             onDismiss = { updatedDialog = false },
@@ -100,7 +102,7 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
  * behind it cannot be used until it is finished; Settings > Advanced opens it again.
  */
 @Composable
-fun OnboardingScreen(onComplete: () -> Unit, onClose: (() -> Unit)? = null) {
+fun OnboardingScreen(onComplete: () -> Unit, onOpenSettings: () -> Unit, onClose: (() -> Unit)? = null) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     val steps = remember { OnboardingStep.entries }
     val last = step == steps.lastIndex
@@ -147,7 +149,7 @@ fun OnboardingScreen(onComplete: () -> Unit, onClose: (() -> Unit)? = null) {
                                     onComplete()
                                     // The restore's progress shows in Settings > Data and storage
                                     zoukan.desktop.ui.settings.openSettingsCategory(zoukan.desktop.ui.settings.SettingsCategory.Data)
-                                    HomeScreen.selectTab(HomeTab.Settings)
+                                    onOpenSettings()
                                 }
                             },
                         )
@@ -208,7 +210,13 @@ object Onboarding {
 
 /** The setup reopened from Settings; it does not change whether the first run is finished. */
 @Composable
-fun ReopenedOnboarding() {
+fun ReopenedOnboarding(navigator: () -> Navigator?) {
     val open by Onboarding.reopen.collectAsState()
-    if (open) OnboardingScreen(onComplete = { Onboarding.reopen.value = false }, onClose = { Onboarding.reopen.value = false })
+    if (open) {
+        OnboardingScreen(
+            onComplete = { Onboarding.reopen.value = false },
+            onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
+            onClose = { Onboarding.reopen.value = false },
+        )
+    }
 }
