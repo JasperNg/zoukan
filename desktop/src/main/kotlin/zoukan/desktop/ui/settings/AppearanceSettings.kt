@@ -66,6 +66,13 @@ fun LazyListScope.appearanceSettings() {
     item(key = "appearance-display") { DisplaySection() }
     settingsGroup("Navigation")
     item(key = "appearance-navigation") { NavigationSection() }
+    // ZOUKAN -->
+    settingsGroup("Entry page")
+    item(key = "appearance-previews") {
+        val ui = remember { Injekt.get<UiPreferences>() }
+        SliderPreference("Page preview rows", ui.previewsRowCount(), 0..10) { if (it == 0) "Hidden" else "$it" }
+    }
+    // ZOUKAN <--
 }
 
 @Composable

@@ -58,19 +58,19 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library: update only on Wi-Fi or an unmetered network | No | Desktops give apps no reliable way to tell; the setting is kept for Android |
 | Library: unread count on the Updates icon | Yes | Cleared when Updates opens |
 | Library: mark duplicate read chapters as read | Yes | After reading a chapter, and after fetching new chapters |
-| Library: chapter swipe actions | No | No swipe on desktop; the chapter list has right-click and selection actions |
+| Library: chapter swipe actions | Yes | Settings > Library > Chapter swipe; drag a chapter row sideways with the mouse or a touch screen |
 | Downloads: delete after reading (nth to last), after marking read, bookmarked, excluded categories | Yes | As Android's: deleted when the reader closes |
 | Downloads: download new chapters, with categories to include and exclude | Yes | |
 | Downloads: download ahead while reading | Yes | When the open and the next chapter are downloaded |
 | Downloads: only on Wi-Fi | No | As for library updates |
 | Browse: suggestions, source categories, filter sources in categories, replace latest button, local source hidden folders | Yes | Settings > Browse. Source categories are made in Edit categories and set from a source's More menu (Android's long press) |
 | Browse: hide Feed tab, Feed tab position, hide library entries in the feed and in sources | Yes | |
-| Browse: expand related titles, related titles in the overflow menu, show home on related titles | No | They lay out the related-titles row inside the entry screen; the desktop shows related titles from the entry's More > Similar titles |
+| Browse: expand related titles, related titles in the overflow menu | Yes | The related titles row under the entry's description, with See all opening Similar titles. Show home on related titles is Android's and not shown |
 | Browse: extension stores, NSFW sources | Yes | Extension stores opens the same list as Browse > Stores |
 | Data and storage: storage location, backup and restore, automatic backup frequency, last automatic backup | Yes | Android's frequencies, every hour to weekly. The desktop also opens the backup, download and local source folders |
 | Data and storage: show restoring progress banner | No | The desktop shows a restore's progress in place of the backup buttons |
 | Data and storage: storage usage, clear chapter cache, clear it on launch | Yes, changed | The desktop reader keeps online pages in memory, so its chapter cache on disk is the unpacked RAR, 7z and TAR chapters |
-| Data and storage: clear page preview cache | No | No page previews on desktop |
+| Page previews (E-Hentai, nhentai, LANraragi) | Yes | On the entry page, Appearance > Page preview rows; More previews opens them all and a preview opens the reader at its page. Previews are kept in memory, so there is no cache to clear |
 | Data and storage: export library list (CSV) | Yes | The Android exporter's columns and quoting |
 | Advanced: share crash logs | Yes, changed | Saved to a file you choose: the environment, crash reports and the log, as Android has no desktop share sheet |
 | Advanced: reindex downloads, clear database | Yes | Clear database lists the sources with non-library entries, as Android, keeping entries with read chapters if asked |

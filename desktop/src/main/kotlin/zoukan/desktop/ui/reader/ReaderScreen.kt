@@ -46,14 +46,14 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.ReadingModes
 
-data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
+data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? = null) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
     // disposed screen's key: without it, leaving manga-1 cancelled manga-12's work
     override val key: ScreenKey = "reader-$mangaId-$chapterId/"
 
     @Composable
     override fun Content() {
-        val model = rememberScreenModel { ReaderScreenModel(mangaId, chapterId) }
+        val model = rememberScreenModel { ReaderScreenModel(mangaId, chapterId, initialPage = page) }
         val state by model.state.collectAsState()
         val menuVisible by model.menuVisible.collectAsState()
         val navigator = LocalNavigator.currentOrThrow

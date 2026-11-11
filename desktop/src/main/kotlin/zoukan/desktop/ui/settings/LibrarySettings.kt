@@ -103,6 +103,18 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
             ),
         )
     }
+
+    // ZOUKAN -->
+    settingsGroup("Chapter swipe")
+    item(key = "library-swipe-start") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        ChoicePreference("Swipe to left action", preferences.swipeToStartAction(), zoukan.desktop.ui.common.CHAPTER_SWIPE_ACTIONS)
+    }
+    item(key = "library-swipe-end") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        ChoicePreference("Swipe to right action", preferences.swipeToEndAction(), zoukan.desktop.ui.common.CHAPTER_SWIPE_ACTIONS)
+    }
+    // ZOUKAN <--
 }
 
 /** Android's "Default category": a category new entries go to, or ask every time. */
