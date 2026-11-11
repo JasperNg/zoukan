@@ -25,6 +25,20 @@ class DatesTest {
     }
 
     @Test
+    fun `time ago reads as Android's relative time span`() {
+        val now = 1_000_000_000_000L
+        val minute = 60_000L
+        Dates.timeAgo(0L, now) shouldBe "Never"
+        Dates.timeAgo(now - 30_000, now) shouldBe "Just now"
+        Dates.timeAgo(now - minute, now) shouldBe "1 minute ago"
+        Dates.timeAgo(now - 5 * minute, now) shouldBe "5 minutes ago"
+        Dates.timeAgo(now - 60 * minute, now) shouldBe "1 hour ago"
+        Dates.timeAgo(now - 3 * 60 * minute, now) shouldBe "3 hours ago"
+        Dates.timeAgo(now - 24 * 60 * minute, now) shouldBe "Yesterday"
+        Dates.timeAgo(now - 3 * 24 * 60 * minute, now) shouldBe "3 days ago"
+    }
+
+    @Test
     fun `category labels read as Android's`() {
         val categories = listOf(category(0, "Default", 0), category(1, "Reading", 1), category(2, "Done", 2))
         categoriesLabel(categories, emptySet(), emptySet()) shouldBe "Include: All\nExclude: None"
