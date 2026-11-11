@@ -247,6 +247,9 @@ class DesktopDomainModule : InjektModule {
         addFactory { tachiyomi.domain.source.interactor.GetSavedSearchBySourceIdFeed(get()) }
         addFactory { InsertFeedSavedSearch(get()) }
         addFactory { DeleteFeedSavedSearchById(get()) }
+        // ZOUKAN -->
+        addFactory { tachiyomi.domain.source.interactor.ReorderFeed(get()) }
+        // ZOUKAN <--
 
         addFactory { GetTotalReadDuration(get()) }
 
