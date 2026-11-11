@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -64,6 +62,7 @@ import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.reader.PageImages
 import zoukan.desktop.ui.track.Choice
 import java.awt.FileDialog
@@ -265,7 +264,7 @@ fun DuplicateDialog(
         onDismissRequest = onDismiss,
         title = { Text("Possible duplicates") },
         text = {
-            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.heightIn(max = 520.dp).verticalScrollWithBar(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(target.title, style = MaterialTheme.typography.titleMedium)
                 Text("You have entries in your library with a similar name. Select an entry to migrate or add anyway.")
                 duplicates.forEach { (manga, chapterCount) ->
