@@ -83,8 +83,12 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
         }
         LaunchedEffect(autoScroll, autoScrollInterval, state.generation) {
             while (autoScroll) {
-                kotlinx.coroutines.delay((autoScrollInterval.coerceAtLeast(0.5f) * 1000).toLong())
-                if (!model.menuVisible.value) actions.next()
+                val millis = (autoScrollInterval.coerceAtLeast(0.5f) * 1000).toLong()
+                // SY's "Smooth auto scroll" glides in webtoon modes; the paged modes turn pages
+                val smooth = actions.smoothScroll.takeIf { prefs.smoothAutoScroll().get() }
+                if (smooth != null && !model.menuVisible.value) smooth(millis)
+                kotlinx.coroutines.delay(millis)
+                if (smooth == null && !model.menuVisible.value) actions.next()
             }
         }
         // ZOUKAN <--
@@ -137,6 +141,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
                 Key.S -> showSettings = !showSettings
                 Key.B -> model.toggleBookmark()
                 Key.C -> showChapters = !showChapters
+                Key.R -> if (event.isShiftPressed) model.boostPage() else model.retryAllPages()
+                Key.D -> model.toggleShiftDoublePages()
                 // ZOUKAN <--
                 Key.Escape -> when {
                     showKeys -> showKeys = false
@@ -185,6 +191,10 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
                     }
                 }
             }
+
+            // ZOUKAN -->
+            ReaderEffects(model, state)
+            // ZOUKAN <--
 
             if (showPageNumber && !menuVisible && state.pages.isNotEmpty()) {
                 Text(
@@ -252,6 +262,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
                     onPreviousChapter = { model.previousChapter() },
                     onNextChapter = { model.nextChapter() },
                     onPage = { actions.goTo(it) },
+                    onRetryAll = model::retryAllPages,
+                    onBoostPage = model::boostPage,
                 ),
             )
             // ZOUKAN <--
@@ -311,6 +323,8 @@ private fun KeyboardHelp(onDismiss: () -> Unit) {
         "S" to "Reader settings",
         "B" to "Bookmark the chapter or remove its bookmark",
         "C" to "Chapter list",
+        "R / Shift+R" to "Retry failed pages / load the shown page first",
+        "D" to "Shift double pages by one",
         "Right-click or long-press a page" to "Set it as the cover, copy it or save it",
     )
     AlertDialog(
