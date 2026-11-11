@@ -13,7 +13,7 @@ import zoukan.desktop.local.LocalSource
 class LibraryGroupingTest {
 
     private fun entry(id: Long, source: Long, status: Int) = LibraryManga(
-        manga = Manga.create().copy(id = id, source = source, status = status.toLong(), title = "Entry $id", favorite = true),
+        manga = Manga.create().copy(id = id, source = source, ogStatus = status.toLong(), ogTitle = "Entry $id"),
         categories = listOf(0L),
         totalChapters = 0,
         readCount = 0,
