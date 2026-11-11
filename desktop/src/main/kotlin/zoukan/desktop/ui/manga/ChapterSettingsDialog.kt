@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.PeopleAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -167,7 +167,7 @@ private fun SortRow(label: String, descending: Boolean?, onClick: () -> Unit) {
         Text(label, Modifier.weight(1f))
         if (descending != null) {
             Icon(
-                if (descending) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                if (descending) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward,
                 contentDescription = if (descending) "Descending" else "Ascending",
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.primary,

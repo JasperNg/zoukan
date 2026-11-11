@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
@@ -166,7 +166,7 @@ object CategoryScreen : Screen {
             }
             ExtendedFloatingActionButton(
                 text = { Text("Add") },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 onClick = { model.showDialog(CategoryDialog.Create) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("category-add"),
             )
@@ -229,7 +229,7 @@ private fun DefaultCategoryRow(model: CategoryScreenModel, categories: List<Cate
                 Text("Default category", style = MaterialTheme.typography.titleMedium)
                 Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(menu, onDismissRequest = { menu = false }) {
             val options = listOf(-1 to "Always ask", 0 to "Default") + categories.map { it.id.toInt() to it.name }

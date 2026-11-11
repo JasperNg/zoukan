@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.ArrowDropUp
 import androidx.compose.material.icons.outlined.Delete
@@ -63,7 +63,7 @@ object SortTagScreen : Screen {
         var deleting by remember { mutableStateOf<String?>(null) }
         Column(Modifier.fillMaxSize()) {
             ScreenHeader("Edit tags", subtitle = "Sort the library by these tags, in this order, with Sort > Tag sorting") {
-                TooltipIconButton(Icons.Default.Add, "Add a tag", onClick = { adding = true })
+                TooltipIconButton(Icons.Outlined.Add, "Add a tag", onClick = { adding = true })
             }
             if (tags.isEmpty()) {
                 EmptyScreen(

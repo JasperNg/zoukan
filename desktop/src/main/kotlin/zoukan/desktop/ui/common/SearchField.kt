@@ -2,8 +2,8 @@ package zoukan.desktop.ui.common
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,13 +47,13 @@ fun SearchField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, maxLines = 1) },
-        leadingIcon = { Icon(Icons.Default.Search, null) },
+        leadingIcon = { Icon(Icons.Outlined.Search, null) },
         trailingIcon = if (value.isEmpty()) {
             null
         } else {
             {
                 IconButton(onClick = { onValueChange("") }) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear search", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Close, contentDescription = "Clear search", modifier = Modifier.size(18.dp))
                 }
             }
         },

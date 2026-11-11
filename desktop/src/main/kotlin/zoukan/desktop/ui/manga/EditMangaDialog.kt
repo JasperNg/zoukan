@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,9 +31,11 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.manga.EditManga
 import zoukan.desktop.ui.LocalWindow
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice
 import java.awt.FileDialog
@@ -78,7 +79,7 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
         text = {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.width(160.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CoverImage(Cover.of(manga), Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)))
+                    CoverImage(Cover.of(manga), Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Corners.Medium).coverOutline(Corners.Medium))
                     if (edit.canEditCover(manga)) {
                         OutlinedButton(onClick = {
                             val dialog = FileDialog(window, "Choose a cover", FileDialog.LOAD).apply {

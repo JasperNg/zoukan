@@ -15,17 +15,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FindReplace
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.VerticalAlignBottom
 import androidx.compose.material.icons.outlined.VerticalAlignTop
 import androidx.compose.material3.Checkbox
@@ -70,6 +69,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.library.LibraryUpdateErrors
 import zoukan.desktop.library.LibraryUpdater
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -78,6 +78,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.pickScreen
 
@@ -240,15 +241,15 @@ object UpdateErrorsScreen : Screen {
                         Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        TooltipIconButton(Icons.Default.Close, "Clear selection", onClick = model::clearSelection)
+                        TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
                         Text(
                             "${state.selection.size} selected",
                             style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.weight(1f).padding(start = 8.dp),
                         )
-                        TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
-                        TooltipIconButton(Icons.Default.FlipToBack, "Invert selection", onClick = model::invertSelection)
-                        TooltipIconButton(Icons.Default.Refresh, "Retry", onClick = { model.retry() }, enabled = updating == null)
+                        TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+                        TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
+                        TooltipIconButton(Icons.Outlined.Refresh, "Retry", onClick = { model.retry() }, enabled = updating == null)
                         TooltipIconButton(
                             Icons.Outlined.FindReplace,
                             if (state.selection.size == 1) "Migrate" else "Migrate (one entry at a time)",
@@ -261,12 +262,12 @@ object UpdateErrorsScreen : Screen {
             } else {
                 ScreenHeader("Library update errors (${state.items.size})") {
                     TooltipIconButton(
-                        Icons.Default.Refresh,
+                        Icons.Outlined.Refresh,
                         "Retry all",
                         onClick = { model.retry() },
                         enabled = updating == null && state.items.isNotEmpty(),
                     )
-                    if (state.items.isNotEmpty()) TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
+                    if (state.items.isNotEmpty()) TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
                 }
             }
             LibraryUpdateProgress()
@@ -351,7 +352,7 @@ private fun ErrorList(
                         }
                         CoverImage(
                             Cover.of(item.cover),
-                            Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = state.selection.isEmpty()) { onOpen(item) },
+                            Modifier.size(48.dp).clip(Corners.Medium).coverOutline(Corners.Medium).clickable(enabled = state.selection.isEmpty()) { onOpen(item) },
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
@@ -365,8 +366,8 @@ private fun ErrorList(
                             )
                         }
                         if (state.selection.isEmpty()) {
-                            TooltipIconButton(Icons.AutoMirrored.Filled.OpenInNew, "Open entry", onClick = { onOpen(item) })
-                            TooltipIconButton(Icons.Default.Refresh, "Retry", onClick = { onRetry(item) }, enabled = retryEnabled)
+                            TooltipIconButton(Icons.AutoMirrored.Outlined.OpenInNew, "Open entry", onClick = { onOpen(item) })
+                            TooltipIconButton(Icons.Outlined.Refresh, "Retry", onClick = { onRetry(item) }, enabled = retryEnabled)
                             TooltipIconButton(Icons.Outlined.FindReplace, "Migrate", onClick = { onMigrate(item) })
                             TooltipIconButton(Icons.Outlined.DeleteOutline, "Delete", onClick = { onDelete(item) })
                         }

@@ -11,13 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -51,6 +50,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -59,6 +59,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.migration.MigrationConfigScreen
 
@@ -100,7 +101,7 @@ fun MigrateSourcesList() {
             )
             val ascending = direction == MigrateSortingDirection.ASCENDING
             TooltipIconButton(
-                if (ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                if (ascending) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
                 if (ascending) "Ascending" else "Descending",
                 onClick = {
                     preferences.migrationSortingDirection().set(if (ascending) MigrateSortingDirection.DESCENDING else MigrateSortingDirection.ASCENDING)
@@ -139,7 +140,7 @@ fun MigrateSourcesList() {
                             color = if (item.installed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                         )
                     }
-                    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(12.dp)) {
+                    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = Corners.Large) {
                         Text(item.count.toString(), modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
                     }
                 }
@@ -175,8 +176,8 @@ data class MigrateMangaScreen(val sourceId: Long) : Screen {
         Column(Modifier.fillMaxSize().testTag("migrate-manga")) {
             ScreenHeader(sourceName, subtitle = "Pick the entries to migrate") {
                 val list = entries.orEmpty()
-                TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = { selected = list.mapTo(HashSet()) { it.id } })
-                TooltipIconButton(Icons.Default.FlipToBack, "Invert the selection", onClick = {
+                TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = { selected = list.mapTo(HashSet()) { it.id } })
+                TooltipIconButton(Icons.Outlined.FlipToBack, "Invert the selection", onClick = {
                     selected = list.map { it.id }.filterNot { it in selected }.toSet()
                 })
                 Spacer(Modifier.width(8.dp))
@@ -213,9 +214,9 @@ private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Uni
     ) {
         Checkbox(selected, onCheckedChange = { onToggle() })
         Spacer(Modifier.width(8.dp))
-        CoverImage(Cover.of(manga), Modifier.size(width = 40.dp, height = 56.dp).clip(RoundedCornerShape(4.dp)))
+        CoverImage(Cover.of(manga), Modifier.size(width = 40.dp, height = 56.dp).clip(Corners.Medium).coverOutline(Corners.Medium))
         Spacer(Modifier.width(12.dp))
         Text(manga.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.AutoMirrored.Filled.OpenInNew, "Open", onClick = onOpen)
+        TooltipIconButton(Icons.AutoMirrored.Outlined.OpenInNew, "Open", onClick = onOpen)
     }
 }

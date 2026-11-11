@@ -10,12 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -51,6 +50,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.AppScope
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -212,13 +212,13 @@ class BulkFavorite {
 /** The button that starts selecting, for a screen's header */
 @Composable
 fun BulkSelectButton(bulk: BulkFavorite) {
-    TooltipIconButton(Icons.Default.Checklist, "Select entries", onClick = { if (bulk.active) bulk.clear() else bulk.start() })
+    TooltipIconButton(Icons.Outlined.Checklist, "Select entries", onClick = { if (bulk.active) bulk.clear() else bulk.start() })
 }
 
 /** A grid item's border while it is selected. */
 @Composable
 fun Modifier.bulkSelected(selected: Boolean): Modifier =
-    if (selected) border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else this
+    if (selected) border(3.dp, MaterialTheme.colorScheme.primary, Corners.Medium) else this
 
 /** The selection bar over a list of results: count, select all, invert, clear and Add to library. */
 @Composable
@@ -226,10 +226,10 @@ fun BulkFavoriteBar(bulk: BulkFavorite, visible: List<Manga>) {
     if (!bulk.active) return
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().testTag("bulk-favorite-bar")) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(Icons.Default.Close, "Clear the selection", onClick = bulk::clear)
+            TooltipIconButton(Icons.Outlined.Close, "Clear the selection", onClick = bulk::clear)
             Text("${bulk.selection.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = { bulk.selectAll(visible) })
-            TooltipIconButton(Icons.Default.FlipToBack, "Invert the selection", onClick = { bulk.invert(visible) })
+            TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = { bulk.selectAll(visible) })
+            TooltipIconButton(Icons.Outlined.FlipToBack, "Invert the selection", onClick = { bulk.invert(visible) })
             Spacer(Modifier.width(8.dp))
             if (bulk.running) {
                 CircularProgressIndicator(Modifier.size(24.dp))

@@ -14,16 +14,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -79,6 +78,7 @@ import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.browse.QuickLibraryToggleDialogs
 import zoukan.desktop.ui.browse.rememberQuickLibraryToggle
 import zoukan.desktop.ui.browse.sectionHeader
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -296,7 +296,7 @@ fun HistoryTab(model: HistoryScreenModel) {
                 SearchField(state.query, model::search, "Search history", Modifier.width(280.dp).padding(end = 8.dp))
                 HistoryFilterButton(model.preferences, state.filters)
                 // Komikku's toolbar selects rows; removing them all clears the history
-                TooltipIconButton(Icons.Default.Checklist, "Select", onClick = model::startSelection, enabled = state.items.isNotEmpty())
+                TooltipIconButton(Icons.Outlined.Checklist, "Select", onClick = model::startSelection, enabled = state.items.isNotEmpty())
                 TooltipIconButton(Icons.Outlined.DeleteSweep, "Clear history", onClick = { confirmClear = true }, enabled = state.items.isNotEmpty())
             }
         }
@@ -377,10 +377,10 @@ private fun SelectionHeader(state: HistoryScreenModel.State, model: HistoryScree
             .testTag("history-selection"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TooltipIconButton(Icons.Default.Close, "Clear selection", onClick = model::clearSelection)
+        TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
         Text("${state.selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
-        TooltipIconButton(Icons.Default.FlipToBack, "Invert selection", onClick = model::invertSelection)
+        TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+        TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
         TooltipIconButton(Icons.Outlined.DeleteSweep, "Remove from history", onClick = onRemove, enabled = state.selected.isNotEmpty())
     }
 }
@@ -408,11 +408,11 @@ private fun HistoryRow(
         Modifier.fillMaxWidth()
             .testTag("history-item")
             .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .selectableClick(onClick)
+            .selectableClick(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val shape = RoundedCornerShape(6.dp)
+        val shape = Corners.Medium
         CoverImage(
             Cover.of(item.coverData),
             Modifier.size(if (wide) 107.dp else 44.dp, 60.dp).clip(shape).coverOutline(shape).clickable(onClick = onOpenManga),
@@ -481,7 +481,7 @@ private fun HistoryFilterButton(preferences: HistoryPreferences, filters: Histor
     var open by remember { mutableStateOf(false) }
     BadgedBox(badge = { if (filters.active) Badge() }) {
         TooltipIconButton(
-            Icons.Default.FilterList,
+            Icons.Outlined.FilterList,
             if (filters.active) "Filter (filtered)" else "Filter",
             onClick = { open = true },
         )

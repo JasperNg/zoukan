@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import kotlinx.coroutines.delay
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.ReadingModes
 
 /**
@@ -59,7 +59,7 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
             color = Color.White,
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                .background(Color.Black.copy(alpha = 0.6f), Corners.Large)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }

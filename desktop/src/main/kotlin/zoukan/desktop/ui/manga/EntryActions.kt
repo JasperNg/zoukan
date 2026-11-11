@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -58,10 +57,12 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.manga.EditManga
 import zoukan.desktop.ui.LocalWindow
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.reader.PageImages
 import zoukan.desktop.ui.track.Choice
@@ -185,7 +186,7 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 CoverImage(
                     Cover.of(manga),
-                    Modifier.width(320.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)),
+                    Modifier.width(320.dp).aspectRatio(2f / 3f).clip(Corners.Large),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CoverAction("Copy", Icons.Outlined.ContentCopy) {
@@ -239,7 +240,7 @@ private val COVER_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "avif"
 
 @Composable
 private fun CoverAction(title: String, icon: ImageVector, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, shape = RoundedCornerShape(12.dp)) {
+    OutlinedButton(onClick = onClick, shape = Corners.Large) {
         Icon(icon, null)
         Spacer(Modifier.width(6.dp))
         Text(title)
@@ -268,13 +269,13 @@ fun DuplicateDialog(
                 Text(target.title, style = MaterialTheme.typography.titleMedium)
                 Text("You have entries in your library with a similar name. Select an entry to migrate or add anyway.")
                 duplicates.forEach { (manga, chapterCount) ->
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(8.dp)) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = Corners.Medium) {
                         Row(
                             Modifier.fillMaxWidth().clickable { onOpen(manga) }.padding(8.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            CoverImage(Cover.of(manga), Modifier.width(56.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)))
+                            CoverImage(Cover.of(manga), Modifier.width(56.dp).aspectRatio(2f / 3f).clip(Corners.Medium).coverOutline(Corners.Medium))
                             Column(Modifier.weight(1f)) {
                                 Text(manga.title, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(

@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -72,7 +72,7 @@ fun LockOverlay() {
     ) {
         Box(contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.primary)
                 Text("Zoukan is locked", style = MaterialTheme.typography.headlineSmall)
                 OutlinedTextField(
                     value = password,

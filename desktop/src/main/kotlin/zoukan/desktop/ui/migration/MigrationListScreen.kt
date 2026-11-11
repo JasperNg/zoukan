@@ -15,13 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -53,6 +52,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.ui.browse.GlobalSearchScreen
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.LazyColumn
@@ -181,10 +181,10 @@ data class MigrationListScreen(
     private fun Header(title: String, complete: Boolean, onBack: () -> Unit, onCopy: () -> Unit, onMigrate: () -> Unit) {
         Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                TooltipIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onClick = onBack)
+                TooltipIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onClick = onBack)
                 Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                TooltipIconButton(Icons.Default.ContentCopy, "Copy", onClick = onCopy, enabled = complete)
-                TooltipIconButton(Icons.Default.SwapHoriz, "Migrate", onClick = onMigrate, enabled = complete)
+                TooltipIconButton(Icons.Outlined.ContentCopy, "Copy", onClick = onCopy, enabled = complete)
+                TooltipIconButton(Icons.Outlined.SwapHoriz, "Migrate", onClick = onMigrate, enabled = complete)
             }
         }
     }
@@ -210,7 +210,7 @@ data class MigrationListScreen(
                 Modifier.weight(1f),
                 onClick = { onOpen(item.manga) },
             )
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.padding(horizontal = 12.dp))
+            Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.padding(horizontal = 12.dp))
             Box(Modifier.weight(1f)) {
                 when (val result = item.result) {
                     SearchResult.Searching -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -234,7 +234,7 @@ data class MigrationListScreen(
                 }
             }
             Box {
-                TooltipIconButton(Icons.Default.MoreVert, "Actions", onClick = { menu = true })
+                TooltipIconButton(Icons.Outlined.MoreVert, "Actions", onClick = { menu = true })
                 DropdownMenu(menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Search manually") }, onClick = {
                         menu = false
@@ -267,10 +267,10 @@ data class MigrationListScreen(
         modifier: Modifier,
         onClick: () -> Unit,
     ) {
-        Row(modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier.clip(Corners.Medium).clickable(onClick = onClick).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             CoverImage(
                 Cover.of(manga),
-                Modifier.height(96.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)),
+                Modifier.height(96.dp).aspectRatio(2f / 3f).clip(Corners.Medium),
             )
             Column(Modifier.padding(start = 12.dp)) {
                 Text(manga.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)

@@ -11,9 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalButton
@@ -124,7 +124,7 @@ object SourceCategoryScreen : Screen {
         Column(Modifier.fillMaxSize()) {
             ScreenHeader("Edit categories") {
                 FilledTonalButton(onClick = { creating = true }) {
-                    Icon(Icons.Default.Add, null)
+                    Icon(Icons.Outlined.Add, null)
                     Spacer(Modifier.width(4.dp))
                     Text("Add")
                 }
@@ -136,8 +136,8 @@ object SourceCategoryScreen : Screen {
                     items(categories.sortedWith(String.CASE_INSENSITIVE_ORDER), key = { it }) { category ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(category, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            TooltipIconButton(Icons.Default.Edit, "Rename", onClick = { editing = category })
-                            TooltipIconButton(Icons.Default.Delete, "Delete", onClick = { deleting = category })
+                            TooltipIconButton(Icons.Outlined.Edit, "Rename", onClick = { editing = category })
+                            TooltipIconButton(Icons.Outlined.Delete, "Delete", onClick = { deleting = category })
                         }
                     }
                 }

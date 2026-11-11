@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +43,7 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import zoukan.desktop.ui.LocalWindowState
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.ReadingModes
 
 data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? = null) : Screen {
@@ -204,7 +204,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 8.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.5f), Corners.Large)
                         .padding(horizontal = 10.dp, vertical = 3.dp),
                 )
             }

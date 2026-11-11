@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -43,7 +42,7 @@ fun scrollbarStyle(): ScrollbarStyle {
     return LocalScrollbarStyle.current.copy(
         minimalHeight = 40.dp,
         thickness = 8.dp,
-        shape = RoundedCornerShape(4.dp),
+        shape = Corners.Small,
         hoverDurationMillis = 150,
         unhoverColor = color.copy(alpha = 0.3f),
         hoverColor = color.copy(alpha = 0.6f),

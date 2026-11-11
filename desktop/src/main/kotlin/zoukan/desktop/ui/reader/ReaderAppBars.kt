@@ -28,9 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.AspectRatio
@@ -98,6 +97,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
@@ -258,7 +258,7 @@ private fun ReaderTopBar(menu: ReaderMenuState, actions: ReaderMenuActions, modi
         modifier.fillMaxWidth().pointerInput(Unit) {}.padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MenuButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", actions.onBack, tint = LocalContentColor.current)
+        MenuButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", actions.onBack, tint = LocalContentColor.current)
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(menu.mangaTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (menu.chapterTitle.isNotEmpty()) {
@@ -460,7 +460,7 @@ private fun ChapterNavigator(rtl: Boolean, vertical: Boolean, menu: ReaderMenuSt
             ChapterButton(next = false)
             if (menu.totalPages > 1) {
                 Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(background).padding(vertical = 16.dp),
+                    Modifier.weight(1f).clip(Corners.ExtraLarge).background(background).padding(vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(menu.currentPageText, color = textColor, fontWeight = FontWeight.Medium)
@@ -486,7 +486,7 @@ private fun ChapterNavigator(rtl: Boolean, vertical: Boolean, menu: ReaderMenuSt
                             Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp)
-                                .clip(RoundedCornerShape(24.dp))
+                                .clip(Corners.ExtraLarge)
                                 .background(background)
                                 .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -592,7 +592,7 @@ private fun ReaderChapterRow(chapter: Chapter, current: Boolean, onClick: () -> 
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(Corners.Medium)
             .background(if (current) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),

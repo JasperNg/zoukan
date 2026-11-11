@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -92,7 +92,7 @@ fun SearchAgainField(query: String, onSearch: (String) -> Unit) {
                 false
             }
         },
-        trailingIcon = { TooltipIconButton(Icons.Default.Search, "Search", onClick = { if (text.isNotBlank()) onSearch(text.trim()) }) },
+        trailingIcon = { TooltipIconButton(Icons.Outlined.Search, "Search", onClick = { if (text.isNotBlank()) onSearch(text.trim()) }) },
     )
 }
 

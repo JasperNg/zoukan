@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.AlertDialog
@@ -50,6 +49,7 @@ import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ThemeMode
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
@@ -183,11 +183,11 @@ private fun ThemePreview(
         Box(
             Modifier
                 .size(width = 96.dp, height = 150.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(Corners.Large)
                 .border(
                     width = if (selected) 3.dp else 1.dp,
                     color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = Corners.Large,
                 )
                 .background(scheme.background)
                 .clickable(onClick = onClick)
@@ -195,9 +195,9 @@ private fun ThemePreview(
         ) {
             // A miniature screen: top bar, a cover with badges, and the navigation bar
             Column(Modifier.fillMaxWidth()) {
-                Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(4.dp)).background(scheme.onSurface.copy(alpha = 0.6f)))
+                Box(Modifier.fillMaxWidth().height(10.dp).clip(Corners.Small).background(scheme.onSurface.copy(alpha = 0.6f)))
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.size(width = 44.dp, height = 60.dp).clip(RoundedCornerShape(6.dp)).background(scheme.onSurface.copy(alpha = 0.15f))) {
+                Box(Modifier.size(width = 44.dp, height = 60.dp).clip(Corners.Medium).background(scheme.onSurface.copy(alpha = 0.15f))) {
                     Row(Modifier.padding(4.dp)) {
                         Box(Modifier.size(width = 10.dp, height = 8.dp).background(scheme.tertiary))
                         Box(Modifier.size(width = 10.dp, height = 8.dp).background(scheme.secondary))
@@ -205,7 +205,7 @@ private fun ThemePreview(
                 }
             }
             Row(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().clip(RoundedCornerShape(6.dp))
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().clip(Corners.Medium)
                     .background(scheme.surfaceContainer).padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
@@ -257,7 +257,7 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
         title = { Text("Custom color") },
         text = {
             Column(Modifier.width(360.dp)) {
-                Box(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(color))
+                Box(Modifier.fillMaxWidth().height(56.dp).clip(Corners.Large).background(color))
                 Spacer(Modifier.height(12.dp))
                 Text("Hue", style = MaterialTheme.typography.labelMedium)
                 Slider(hue, { hue = it }, valueRange = 0f..1f)

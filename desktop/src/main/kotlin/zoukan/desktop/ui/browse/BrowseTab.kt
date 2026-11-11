@@ -14,18 +14,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +61,7 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
@@ -121,10 +121,10 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
             )
             // ZOUKAN -->
             if (current == BrowsePage.SOURCES) {
-                TooltipIconButton(Icons.Default.FilterList, "Filter sources", onClick = { navigator.push(SourcesFilterScreen) })
+                TooltipIconButton(Icons.Outlined.FilterList, "Filter sources", onClick = { navigator.push(SourcesFilterScreen) })
             }
-            TooltipIconButton(Icons.AutoMirrored.Filled.PlaylistAdd, "Batch add", onClick = { navigator.push(BatchAddScreen) })
-            TooltipIconButton(Icons.Default.Link, "Open from a URL", onClick = { openUrl = true })
+            TooltipIconButton(Icons.AutoMirrored.Outlined.PlaylistAdd, "Batch add", onClick = { navigator.push(BatchAddScreen) })
+            TooltipIconButton(Icons.Outlined.Link, "Open from a URL", onClick = { openUrl = true })
             // ZOUKAN <--
         }
         val updates = state.installed.count { it.hasUpdate }
@@ -232,7 +232,7 @@ private fun SourceRow(
             TextButton(onClick = { push(SourceScreen(source.id, latest = true)) }) { Text("Latest") }
         }
         if (source is ConfigurableSource) {
-            TooltipIconButton(Icons.Default.Settings, "Source settings", onClick = { push(SourceSettingsScreen(source.id)) })
+            TooltipIconButton(Icons.Outlined.Settings, "Source settings", onClick = { push(SourceSettingsScreen(source.id)) })
         }
         TooltipIconButton(
             if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
@@ -242,7 +242,7 @@ private fun SourceRow(
         // ZOUKAN -->
         // Android's long-press dialog: pin, disable and set categories
         Box {
-            TooltipIconButton(Icons.Default.MoreVert, "More", onClick = { menu = true })
+            TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { menu = true })
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text(if (pinned) "Unpin" else "Pin") }, onClick = {
                     menu = false
@@ -295,7 +295,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             )
             Spacer(Modifier.width(8.dp))
             Box {
-                TooltipIconButton(Icons.Default.Translate, "Languages", onClick = { languageMenu = true })
+                TooltipIconButton(Icons.Outlined.Translate, "Languages", onClick = { languageMenu = true })
                 DropdownMenu(languageMenu, onDismissRequest = { languageMenu = false }) {
                     state.allLanguages.forEach { lang ->
                         DropdownMenuItem(
@@ -309,7 +309,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             if (state.refreshing) {
                 CircularProgressIndicator(Modifier.size(24.dp).padding(2.dp))
             } else {
-                TooltipIconButton(Icons.Default.Refresh, "Check the stores again", onClick = model::refreshAvailable)
+                TooltipIconButton(Icons.Outlined.Refresh, "Check the stores again", onClick = model::refreshAvailable)
             }
         }
         if (state.stores.isEmpty()) {
@@ -347,7 +347,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                             Button(onClick = { model.update(ext) }) { Text("Update") }
                             Spacer(Modifier.width(8.dp))
                         }
-                        TooltipIconButton(Icons.Default.Delete, "Uninstall", onClick = { model.uninstall(ext) })
+                        TooltipIconButton(Icons.Outlined.Delete, "Uninstall", onClick = { model.uninstall(ext) })
                     }
                 }
             }
@@ -381,7 +381,7 @@ private fun ExtensionRow(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CoverImage(iconUrl, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))
+        CoverImage(iconUrl, Modifier.size(40.dp).clip(Corners.Medium))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(extension.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -438,7 +438,7 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
             }
         }
         items(state.stores, key = { it.indexUrl }) { store ->
-            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(8.dp)) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = Corners.Medium) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(store.name, style = MaterialTheme.typography.titleMedium)
@@ -449,7 +449,7 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    TooltipIconButton(Icons.Default.Delete, "Remove", onClick = { model.removeStore(store) })
+                    TooltipIconButton(Icons.Outlined.Delete, "Remove", onClick = { model.removeStore(store) })
                 }
             }
         }

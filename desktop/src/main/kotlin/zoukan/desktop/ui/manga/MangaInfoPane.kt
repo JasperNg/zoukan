@@ -14,22 +14,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.PersonOutline
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -77,9 +77,11 @@ import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import java.util.concurrent.ConcurrentHashMap
 import androidx.compose.ui.graphics.Brush as GradientBrush
@@ -245,18 +247,22 @@ private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean,
                     Modifier
                         .fillMaxWidth(0.65f)
                         .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(Corners.Medium)
+                        .coverOutline(Corners.Medium)
                         .then(if (onCoverClick != null) Modifier.clickable(onClick = onCoverClick) else Modifier),
                 )
                 Spacer(Modifier.height(16.dp))
-                Text(
-                    manga.title.ifBlank { "Unknown title" },
-                    style = MaterialTheme.typography.titleLarge,
-                    textAlign = TextAlign.Center,
-                )
+                // Selectable, so the title can be copied
+                SelectionContainer {
+                    Text(
+                        manga.title.ifBlank { "Unknown title" },
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Spacer(Modifier.height(2.dp))
-                IconLine(Icons.Default.PersonOutline, manga.author?.takeIf { it.isNotBlank() } ?: "Unknown author")
-                manga.artist?.takeIf { it.isNotBlank() && it != manga.author }?.let { IconLine(Icons.Default.Brush, it) }
+                IconLine(Icons.Outlined.PersonOutline, manga.author?.takeIf { it.isNotBlank() } ?: "Unknown author")
+                manga.artist?.takeIf { it.isNotBlank() && it != manga.author }?.let { IconLine(Icons.Outlined.Brush, it) }
                 Spacer(Modifier.height(2.dp))
                 Row(Modifier.alpha(SECONDARY_ALPHA), verticalAlignment = Alignment.CenterVertically) {
                     Icon(statusIcon(manga.status), null, Modifier.padding(end = 4.dp).size(16.dp))
@@ -269,7 +275,7 @@ private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean,
                     Text(" • ", style = MaterialTheme.typography.bodyMedium)
                     if (missingSource) {
                         Icon(
-                            Icons.Default.Warning,
+                            Icons.Outlined.Warning,
                             null,
                             Modifier.padding(end = 4.dp).size(16.dp),
                             tint = MaterialTheme.colorScheme.error,
@@ -347,21 +353,35 @@ private fun RowScope.ActionButton(title: String, icon: ImageVector, color: Color
     }
 }
 
+/**
+ * The description, selectable so it can be copied. A click would start a selection, so the
+ * long text opens and closes with its own button instead of a click on the text.
+ */
 @Composable
 private fun Description(text: String) {
     var expanded by remember { mutableStateOf(false) }
+    var overflows by remember(text) { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+        shape = Corners.Medium,
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = if (expanded) Int.MAX_VALUE else 6,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(12.dp),
-        )
+        Column(Modifier.padding(12.dp)) {
+            SelectionContainer {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = if (expanded) Int.MAX_VALUE else 6,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow },
+                )
+            }
+            if (expanded || overflows) {
+                TextButton(onClick = { expanded = !expanded }, modifier = Modifier.align(Alignment.End)) {
+                    Text(if (expanded) "Show less" else "Show more")
+                }
+            }
+        }
     }
 }
 
