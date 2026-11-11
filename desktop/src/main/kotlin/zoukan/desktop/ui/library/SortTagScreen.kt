@@ -38,13 +38,18 @@ import eu.kanade.domain.manga.interactor.CreateSortTag
 import eu.kanade.domain.manga.interactor.DeleteSortTag
 import eu.kanade.domain.manga.interactor.GetSortTag
 import eu.kanade.domain.manga.interactor.ReorderSortTag
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.i18n.desktop.DMR
 
 /**
  * SY's "Tag sorting tags" (Settings > Library > Sorting): the ordered tags the library's "Tag
@@ -62,13 +67,13 @@ object SortTagScreen : Screen {
         var adding by remember { mutableStateOf(false) }
         var deleting by remember { mutableStateOf<String?>(null) }
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Edit tags", subtitle = "Sort the library by these tags, in this order, with Sort > Tag sorting") {
-                TooltipIconButton(Icons.Outlined.Add, "Add a tag", onClick = { adding = true })
+            ScreenHeader(localized(SYMR.strings.action_edit_tags), subtitle = localized(DMR.strings.sort_the_library_by_these_tags)) {
+                TooltipIconButton(Icons.Outlined.Add, localized(DMR.strings.add_a_tag), onClick = { adding = true })
             }
             if (tags.isEmpty()) {
                 EmptyScreen(
-                    "You have no tags. Add one to sort your library by tags.",
-                    actionLabel = "Add a tag",
+                    localized(DMR.strings.you_have_no_tags_add_one),
+                    actionLabel = localized(DMR.strings.add_a_tag),
                     onAction = { adding = true },
                 )
             } else {
@@ -93,15 +98,15 @@ object SortTagScreen : Screen {
         deleting?.let { tag ->
             AlertDialog(
                 onDismissRequest = { deleting = null },
-                title = { Text("Delete tag") },
-                text = { Text("Do you wish to delete the tag \"$tag\"?") },
+                title = { Text(localized(SYMR.strings.delete_tag)) },
+                text = { Text(localized(DMR.strings.do_you_wish_to_delete_the_2, tag)) },
                 confirmButton = {
                     TextButton(onClick = {
                         Injekt.get<DeleteSortTag>().await(tag)
                         deleting = null
                     }) { Text("OK") }
                 },
-                dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { deleting = null }) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
     }
@@ -114,9 +119,9 @@ private fun SortTagRow(tag: String, canMoveUp: Boolean, canMoveDown: Boolean, on
             Icon(Icons.AutoMirrored.Outlined.Label, null)
             Spacer(Modifier.width(16.dp))
             Text(tag, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            TooltipIconButton(Icons.Outlined.ArrowDropUp, "Move up", onClick = { onMove(-1) }, enabled = canMoveUp)
-            TooltipIconButton(Icons.Outlined.ArrowDropDown, "Move down", onClick = { onMove(1) }, enabled = canMoveDown)
-            TooltipIconButton(Icons.Outlined.Delete, "Delete", onClick = onDelete)
+            TooltipIconButton(Icons.Outlined.ArrowDropUp, localized(KMR.strings.action_move_up), onClick = { onMove(-1) }, enabled = canMoveUp)
+            TooltipIconButton(Icons.Outlined.ArrowDropDown, localized(KMR.strings.action_move_down), onClick = { onMove(1) }, enabled = canMoveDown)
+            TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_delete), onClick = onDelete)
         }
     }
 }
@@ -126,17 +131,16 @@ private fun AddTagDialog(onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add tag") },
+        title = { Text(localized(DMR.strings.add_tag)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // SY's warning: matches are exact, namespaced tags as E-Hentai writes them
                 Text(
-                    "Tags must match exactly, with no partial matches. Write namespaced tags as \"female: sole female\". " +
-                        "Add one variant per source, for example \"tag: netorare\" for NHentai and \"female: netorare\" for E-Hentai.",
+                    localized(DMR.strings.tags_must_match_exactly_with_no),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Tag") }, singleLine = true)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(localized(DMR.strings.tag)) }, singleLine = true)
             }
         },
         confirmButton = {
@@ -144,12 +148,12 @@ private fun AddTagDialog(onDismiss: () -> Unit) {
                 enabled = name.isNotBlank(),
                 onClick = {
                     when (Injekt.get<CreateSortTag>().await(name)) {
-                        CreateSortTag.Result.TagExists -> Toasts.show("This tag exists!")
+                        CreateSortTag.Result.TagExists -> Toasts.show(localized(SYMR.strings.error_tag_exists))
                         CreateSortTag.Result.Success -> onDismiss()
                     }
                 },
-            ) { Text("Add") }
+            ) { Text(localized(MR.strings.action_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }

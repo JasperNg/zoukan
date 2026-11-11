@@ -31,7 +31,10 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
 fun LazyListScope.settingsGroup(title: String) {
@@ -124,7 +127,7 @@ fun <T> ChoiceSetting(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
@@ -174,7 +177,7 @@ fun MultiSelectPreference(
 ) {
     val value by preference.changes().collectAsState(preference.get())
     var open by remember { mutableStateOf(false) }
-    val summary = subtitle ?: choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { "None" }
+    val summary = subtitle ?: choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { localized(MR.strings.none) }
     SettingRow(title, summary, enabled, onClick = { open = true })
     if (open) {
         var chosen by remember { mutableStateOf(value) }
@@ -201,7 +204,7 @@ fun MultiSelectPreference(
                     open = false
                 }) { Text("OK") }
             },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
@@ -257,7 +260,7 @@ fun CategoriesIncludeExcludePreference(
                             Spacer(Modifier.width(12.dp))
                             Text(categoryName(category))
                             if (state == ToggleableState.Indeterminate) {
-                                Text("  excluded", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                Text("  " + localized(DMR.strings.excluded), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -270,13 +273,13 @@ fun CategoriesIncludeExcludePreference(
                     open = false
                 }) { Text("OK") }
             },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
 
 /** A category's name, with the system category shown as "Default", as Android's visualName. */
-fun categoryName(category: Category): String = if (category.isSystemCategory) "Default" else category.name
+fun categoryName(category: Category): String = if (category.isSystemCategory) localized(MR.strings.label_default) else category.name
 
 /** "Include: All\nExclude: None" and so on, as Android's getCategoriesLabel. */
 fun categoriesLabel(categories: List<Category>, included: Set<String>, excluded: Set<String>): String {
@@ -285,14 +288,14 @@ fun categoriesLabel(categories: List<Category>, included: Set<String>, excluded:
     val allExcluded = exc.size == categories.size
     val includedText = when {
         inc.isNotEmpty() && inc.size != categories.size -> inc.joinToString(transform = ::categoryName)
-        inc.size == categories.size -> "All"
-        allExcluded -> "None"
-        else -> "All"
+        inc.size == categories.size -> localized(MR.strings.all)
+        allExcluded -> localized(MR.strings.none)
+        else -> localized(MR.strings.all)
     }
     val excludedText = when {
-        exc.isEmpty() -> "None"
-        allExcluded -> "All"
+        exc.isEmpty() -> localized(MR.strings.none)
+        allExcluded -> localized(MR.strings.all)
         else -> exc.joinToString(transform = ::categoryName)
     }
-    return "Include: $includedText\nExclude: $excludedText"
+    return localized(DMR.strings.include_exclude, includedText, excludedText)
 }

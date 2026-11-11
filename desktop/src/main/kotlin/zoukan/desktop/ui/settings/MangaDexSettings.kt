@@ -38,6 +38,7 @@ import zoukan.desktop.exh.MangaDexSync
 import zoukan.desktop.track.TrackerLogin
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 
 /**
  * Settings > MangaDex, as the Android app's SettingsMangadexScreen: sign in to MangaDex (MDList),
@@ -78,7 +79,7 @@ private fun MangaDexSettings() {
     var syncDialog by remember { mutableStateOf(false) }
 
     Column {
-        SettingRow("${mdex.name} Login", if (loggedIn) "Signed in" else "Not signed in") {
+        SettingRow(localized(DMR.strings.login, mdex.name), if (loggedIn) localized(DMR.strings.signed_in) else localized(DMR.strings.not_signed_in)) {
             when {
                 busy -> CircularProgressIndicator(Modifier.size(24.dp))
                 loggedIn -> TextButton(onClick = { logoutDialog = true }) { Text(localized(MR.strings.logout)) }
@@ -86,11 +87,11 @@ private fun MangaDexSettings() {
                     busy = true
                     scope.launch {
                         runCatching { login.loginWithBrowser(mdList) }
-                            .onSuccess { if (it) Toasts.show("Signed in to MangaDex") }
-                            .onFailure { Toasts.error("Signing in to MangaDex failed", it) }
+                            .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to_mangadex)) }
+                            .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_mangadex_failed), it) }
                         busy = false
                     }
-                }) { Text("Sign in") }
+                }) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             }
         }
         val preferredId by sourcePreferences.preferredMangaDexId().changes()
@@ -115,8 +116,8 @@ private fun MangaDexSettings() {
             onClick = {
                 AppScope.launch {
                     runCatching { sync.pushFavorites() }
-                        .onSuccess { Toasts.show("Followed $it library entries on MangaDex") }
-                        .onFailure { Toasts.error("Following the library on MangaDex failed", it) }
+                        .onSuccess { Toasts.show(localized(DMR.strings.followed_library_entries_on_mangadex, it)) }
+                        .onFailure { Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), it) }
                 }
             },
         )
@@ -147,8 +148,8 @@ private fun MangaDexSettings() {
                 sourcePreferences.mangadexSyncToLibraryIndexes().set(statuses)
                 AppScope.launch {
                     runCatching { sync.syncFollows() }
-                        .onSuccess { Toasts.show("Added $it MangaDex follows to the library") }
-                        .onFailure { Toasts.error("Syncing MangaDex follows failed", it) }
+                        .onSuccess { Toasts.show(localized(DMR.strings.added_mangadex_follows_to_the_library, it)) }
+                        .onFailure { Toasts.error(localized(DMR.strings.syncing_mangadex_follows_failed), it) }
                 }
             },
         )

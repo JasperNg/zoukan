@@ -34,8 +34,10 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.download.DownloadManager
@@ -45,6 +47,7 @@ import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.util.Date
 
 /** One page of the open chapter, with its own loading state. */
@@ -148,7 +151,7 @@ class ReaderScreenModel(
         screenModelScope.launch {
             val manga = getManga.await(mangaId)
             if (manga == null) {
-                mutableState.update { it.copy(loading = false, error = "This entry no longer exists") }
+                mutableState.update { it.copy(loading = false, error = localized(DMR.strings.this_entry_no_longer_exists)) }
                 return@launch
             }
             // ZOUKAN -->
@@ -169,7 +172,7 @@ class ReaderScreenModel(
             mutableState.update { it.copy(manga = manga, chapters = chapters, readingMode = mode) }
             val chapter = chapters.firstOrNull { it.id == initialChapterId }
             if (chapter == null) {
-                mutableState.update { it.copy(loading = false, error = "Chapter not found") }
+                mutableState.update { it.copy(loading = false, error = localized(MR.strings.chapter_not_found)) }
             } else {
                 loadChapter(chapter, fromStart = false)
             }
@@ -216,7 +219,7 @@ class ReaderScreenModel(
                 // ZOUKAN -->
                 // A merged entry's chapter is read from the entry and source it comes from
                 val manga = if (readerManga.source == MERGED_SOURCE_ID && chapter.mangaId != readerManga.id) {
-                    getManga.await(chapter.mangaId) ?: error("The merged entry of this chapter no longer exists")
+                    getManga.await(chapter.mangaId) ?: error(localized(DMR.strings.the_merged_entry_of_this_chapter))
                 } else {
                     readerManga
                 }
@@ -238,12 +241,12 @@ class ReaderScreenModel(
                     format = opened
                     List(opened.pageCount) { ReaderPage(it, Page(it)) }
                 } else {
-                    if (source !is HttpSource) error("The source of this entry is not installed")
+                    if (source !is HttpSource) error(localized(DMR.strings.the_source_of_this_entry_is))
                     withContext(Dispatchers.IO) { source.getPageList(chapter.toSChapter()) }
                         .mapIndexed { i, page -> ReaderPage(i, page) }
                 }
                 mutableState.update { it.copy(fromDisk = file != null) }
-                if (pages.isEmpty()) error("The source returned no pages")
+                if (pages.isEmpty()) error(localized(DMR.strings.the_source_returned_no_pages))
                 // ZOUKAN -->
                 val requested = initialPage?.takeIf { chapter.id == initialChapterId }
                 initialPage = null
@@ -490,7 +493,7 @@ class ReaderScreenModel(
     fun retryAllPages() {
         val failed = state.value.pages.filter { it.state.value is ReaderPage.State.Error }
         if (failed.isEmpty()) {
-            Toasts.show("No pages failed")
+            Toasts.show(localized(DMR.strings.no_pages_failed))
             return
         }
         val current = state.value.currentPage
@@ -594,34 +597,34 @@ class ReaderScreenModel(
     }
 
     /** Saves the page into the Pictures folder, in a folder per entry when that setting is on. */
-    fun savePage(index: Int) = pageAction("Could not save the picture") {
+    fun savePage(index: Int) = pageAction(localized(DMR.strings.could_not_save_the_picture)) {
         val bytes = pageBytes(index)
         val file = PageImages.save(bytes, picturesFolder(), "${pageFileName()} - ${index + 1}")
-        Toasts.show("Picture saved to ${file.parent}")
+        Toasts.show(localized(DMR.strings.picture_saved_to, file.parent))
     }
 
-    fun copyPage(index: Int) = pageAction("Could not copy the picture") {
+    fun copyPage(index: Int) = pageAction(localized(DMR.strings.could_not_copy_the_picture)) {
         PageImages.copy(pageBytes(index))
-        Toasts.show("Copied to clipboard")
+        Toasts.show(localized(MR.strings.copied_to_clipboard_plain))
     }
 
-    fun saveCombined(target: PageActionsTarget) = pageAction("Could not save the picture") {
+    fun saveCombined(target: PageActionsTarget) = pageAction(localized(DMR.strings.could_not_save_the_picture)) {
         val bytes = combined(target)
         val file = PageImages.save(bytes, picturesFolder(), "${pageFileName()} - ${target.page + 1}-${target.extra!! + 1}")
-        Toasts.show("Picture saved to ${file.parent}")
+        Toasts.show(localized(DMR.strings.picture_saved_to, file.parent))
     }
 
-    fun copyCombined(target: PageActionsTarget) = pageAction("Could not copy the picture") {
+    fun copyCombined(target: PageActionsTarget) = pageAction(localized(DMR.strings.could_not_copy_the_picture)) {
         PageImages.copy(combined(target))
-        Toasts.show("Copied to clipboard")
+        Toasts.show(localized(MR.strings.copied_to_clipboard_plain))
     }
 
     /** Sets the page as the entry's cover: a library entry's custom cover, or a local entry's cover file, as Android. */
-    fun setPageAsCover(index: Int) = pageAction("Failed to update cover") {
+    fun setPageAsCover(index: Int) = pageAction(localized(MR.strings.notification_cover_update_failed)) {
         val manga = getManga.await(mangaId) ?: return@pageAction
         val edit = Injekt.get<zoukan.desktop.manga.EditManga>()
         if (!edit.canEditCover(manga)) {
-            Toasts.show("Please add the entry to your library before doing this")
+            Toasts.show(localized(MR.strings.notification_first_add_to_library))
             return@pageAction
         }
         val bytes = pageBytes(index)
@@ -633,7 +636,7 @@ class ReaderScreenModel(
         } finally {
             dir.deleteRecursively()
         }
-        Toasts.show("Cover updated")
+        Toasts.show(localized(MR.strings.cover_updated))
     }
 
     /** Runs a page action to the end even when the reader closes, as Android's launchNonCancellable. */
@@ -652,15 +655,15 @@ class ReaderScreenModel(
 
     /** The page's image as the source or file has it, read again when it was let go. */
     private suspend fun pageBytes(index: Int): ByteArray {
-        val page = state.value.pages.getOrNull(index) ?: error("The page is gone")
+        val page = state.value.pages.getOrNull(index) ?: error(localized(DMR.strings.the_page_is_gone))
         page.bytes?.let { return it }
         format?.let { return it.page(index) }
-        val source = source as? HttpSource ?: error("The source of this entry is not installed")
+        val source = source as? HttpSource ?: error(localized(DMR.strings.the_source_of_this_entry_is))
         return downloads.withPermit { fetch(source, page.page) }
     }
 
     private suspend fun combined(target: PageActionsTarget): ByteArray {
-        if (target.extra == null) error("Not a double page")
+        if (target.extra == null) error(localized(DMR.strings.not_a_double_page))
         val background = readerBackground(preferences.readerTheme().get())
         return PageImages.combine(pageBytes(target.page), pageBytes(target.extra), target.leftFirst, background.toArgb())
     }
@@ -778,20 +781,20 @@ class ReaderScreenModel(
 
     /** Opens the chapter's page in the built-in browser, which shares cookies with the app */
     fun openChapterInWebView() {
-        val url = chapterUrl() ?: return Toasts.show("This source has no web page")
+        val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         zoukan.desktop.ui.AppScope.launch {
             val userAgent = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
-            if (!zoukan.desktop.browser.BrowserWindow(url, userAgent).open()) Toasts.show("The built-in browser could not start")
+            if (!zoukan.desktop.browser.BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
     }
 
     /** Opens the chapter's page in the system browser */
     fun openChapterInBrowser() {
-        val url = chapterUrl() ?: return Toasts.show("This source has no web page")
+        val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         zoukan.desktop.ui.AppScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }
-                    .onFailure { Toasts.error("Could not open the browser", it) }
+                    .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_browser), it) }
             }
         }
     }

@@ -47,8 +47,11 @@ import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
@@ -62,6 +65,7 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.migration.MigrationConfigScreen
+import zoukan.i18n.desktop.DMR
 
 /** A source with library entries, for Browse > Migrate */
 data class MigrateSourceItem(val id: Long, val name: String, val lang: String, val installed: Boolean, val count: Int)
@@ -86,23 +90,23 @@ fun MigrateSourcesList() {
 
     Column(Modifier.fillMaxSize().testTag("migrate-sources")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            SearchField(query, { query = it }, "Search sources", Modifier.weight(1f))
+            SearchField(query, { query = it }, localized(DMR.strings.search_sources), Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = mode == MigrateSortingMode.ALPHABETICAL,
                 onClick = { preferences.migrationSortingMode().set(MigrateSortingMode.ALPHABETICAL) },
-                label = { Text("Name") },
+                label = { Text(localized(MR.strings.name)) },
             )
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = mode == MigrateSortingMode.TOTAL,
                 onClick = { preferences.migrationSortingMode().set(MigrateSortingMode.TOTAL) },
-                label = { Text("Entries") },
+                label = { Text(localized(MR.strings.label_titles_section)) },
             )
             val ascending = direction == MigrateSortingDirection.ASCENDING
             TooltipIconButton(
                 if (ascending) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
-                if (ascending) "Ascending" else "Descending",
+                if (ascending) localized(MR.strings.action_asc) else localized(MR.strings.action_desc),
                 onClick = {
                     preferences.migrationSortingDirection().set(if (ascending) MigrateSortingDirection.DESCENDING else MigrateSortingDirection.ASCENDING)
                 },
@@ -123,7 +127,7 @@ fun MigrateSourcesList() {
             }
             .sortedWith(migrateComparator(mode, direction))
         if (items.isEmpty()) {
-            EmptyScreen(if (map.isEmpty()) "No entries in the library to migrate." else "No source matches.")
+            EmptyScreen(if (map.isEmpty()) localized(DMR.strings.no_entries_in_the_library_to) else localized(DMR.strings.no_source_matches))
             return@Column
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -135,7 +139,7 @@ fun MigrateSourcesList() {
                     Column(Modifier.weight(1f)) {
                         Text(item.name, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            if (item.installed) languageName(item.lang) else "Not installed",
+                            if (item.installed) languageName(item.lang) else localized(MR.strings.not_installed),
                             style = MaterialTheme.typography.bodySmall,
                             color = if (item.installed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                         )
@@ -174,22 +178,22 @@ data class MigrateMangaScreen(val sourceId: Long) : Screen {
         var selected by remember { mutableStateOf(emptySet<Long>()) }
 
         Column(Modifier.fillMaxSize().testTag("migrate-manga")) {
-            ScreenHeader(sourceName, subtitle = "Pick the entries to migrate") {
+            ScreenHeader(sourceName, subtitle = localized(DMR.strings.pick_the_entries_to_migrate)) {
                 val list = entries.orEmpty()
-                TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = { selected = list.mapTo(HashSet()) { it.id } })
-                TooltipIconButton(Icons.Outlined.FlipToBack, "Invert the selection", onClick = {
+                TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = { selected = list.mapTo(HashSet()) { it.id } })
+                TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_the_selection), onClick = {
                     selected = list.map { it.id }.filterNot { it in selected }.toSet()
                 })
                 Spacer(Modifier.width(8.dp))
                 Button(
                     enabled = selected.isNotEmpty(),
                     onClick = { navigator.push(MigrationConfigScreen(list.filter { it.id in selected }.map { it.id })) },
-                ) { Text(if (selected.isEmpty()) "Migrate" else "Migrate ${selected.size}") }
+                ) { Text(if (selected.isEmpty()) localized(MR.strings.action_migrate) else localized(DMR.strings.migrate, selected.size)) }
                 Spacer(Modifier.width(8.dp))
             }
             val list = entries ?: return@Column LoadingScreen()
             if (list.isEmpty()) {
-                EmptyScreen("No library entries from this source.")
+                EmptyScreen(localized(DMR.strings.no_library_entries_from_this_source))
                 return@Column
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -217,6 +221,6 @@ private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Uni
         CoverImage(Cover.of(manga), Modifier.size(width = 40.dp, height = 56.dp).clip(Corners.Medium).coverOutline(Corners.Medium))
         Spacer(Modifier.width(12.dp))
         Text(manga.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.AutoMirrored.Outlined.OpenInNew, "Open", onClick = onOpen)
+        TooltipIconButton(Icons.AutoMirrored.Outlined.OpenInNew, localized(KMR.strings.open), onClick = onOpen)
     }
 }

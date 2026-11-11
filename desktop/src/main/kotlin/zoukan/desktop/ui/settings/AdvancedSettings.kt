@@ -39,16 +39,21 @@ import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.ResetViewerFlags
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Toasts
 import zoukan.extension.ExtensionTrust
+import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
 import java.net.CookieHandler
@@ -60,44 +65,44 @@ import java.net.CookieManager
  * installer and the debug screens; see PARITY.md).
  */
 fun LazyListScope.advancedSettings() {
-    settingsGroup("Advanced")
+    settingsGroup(localized(MR.strings.pref_category_advanced))
     item(key = "advanced-crash-logs") { CrashLogsPreference() }
     // Android's "Onboarding guide": the first-run setup again
     item(key = "advanced-onboarding") {
-        SettingRow("Onboarding guide", onClick = { zoukan.desktop.ui.onboarding.Onboarding.reopen.value = true })
+        SettingRow(localized(MR.strings.pref_onboarding_guide), onClick = { zoukan.desktop.ui.onboarding.Onboarding.reopen.value = true })
     }
 
-    settingsGroup("Data")
+    settingsGroup(localized(MR.strings.label_data))
     item(key = "advanced-reindex") {
-        SettingRow("Reindex downloads", "Force app to recheck downloaded chapters", onClick = {
+        SettingRow(localized(MR.strings.pref_invalidate_download_cache), localized(MR.strings.pref_invalidate_download_cache_summary), onClick = {
             Injekt.get<DownloadManager>().invalidateCache()
-            Toasts.show("Recreating download index")
+            Toasts.show(localized(MR.strings.download_cache_invalidated))
         })
     }
     item(key = "advanced-clear-database") {
         val navigator = LocalNavigator.currentOrThrow
         SettingRow(
-            "Clear database",
-            "Delete history for entries that are not saved in your library",
+            localized(MR.strings.pref_clear_database),
+            localized(MR.strings.pref_clear_database_summary),
             onClick = { navigator.push(ClearDatabaseScreen) },
         )
     }
 
-    settingsGroup("Networking")
+    settingsGroup(localized(MR.strings.label_network))
     item(key = "advanced-cookies") {
-        SettingRow("Clear cookies", "Signs you out of sites and forgets passed Cloudflare checks", onClick = {
+        SettingRow(localized(MR.strings.pref_clear_cookies), localized(DMR.strings.signs_you_out_of_sites_and), onClick = {
             clearCookies()
-            Toasts.show("Cookies cleared")
+            Toasts.show(localized(MR.strings.cookies_cleared))
         })
     }
     item(key = "advanced-webview") {
-        SettingRow("Clear WebView data", "The built-in browser's cookies and cache", onClick = {
+        SettingRow(localized(MR.strings.pref_clear_webview_data), localized(DMR.strings.the_built_in_browsers_cookies_and), onClick = {
             AppScope.launch {
                 try {
                     withContext(Dispatchers.IO) { clearBrowserData() }
-                    Toasts.show("WebView data cleared")
+                    Toasts.show(localized(MR.strings.webview_data_deleted))
                 } catch (e: Exception) {
-                    Toasts.error("Error occurred while clearing", e)
+                    Toasts.error(localized(MR.strings.cache_delete_error), e)
                 }
             }
         })
@@ -106,11 +111,11 @@ fun LazyListScope.advancedSettings() {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
         val value by preferences.dohProvider().changes().collectAsState(preferences.dohProvider().get())
         ChoiceSetting(
-            "DNS over HTTPS (DoH)",
+            localized(MR.strings.pref_dns_over_https),
             value,
             listOf(
-                -1 to "Disabled",
-                PREF_DOH_CLOUDFLARE to "Cloudflare",
+                -1 to localized(MR.strings.disabled),
+                PREF_DOH_CLOUDFLARE to localized(KMR.strings.theme_cloudflare),
                 PREF_DOH_GOOGLE to "Google",
                 PREF_DOH_ADGUARD to "AdGuard",
                 PREF_DOH_QUAD9 to "Quad9",
@@ -126,7 +131,7 @@ fun LazyListScope.advancedSettings() {
         ) {
             if (it != value) {
                 preferences.dohProvider().set(it)
-                Toasts.show("Requires app restart to take effect")
+                Toasts.show(localized(MR.strings.requires_app_restart))
             }
         }
     }
@@ -135,88 +140,85 @@ fun LazyListScope.advancedSettings() {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
         val userAgent by preferences.defaultUserAgent().changes().collectAsState(preferences.defaultUserAgent().get())
         SettingRow(
-            "Reset default user agent string",
+            localized(MR.strings.pref_reset_user_agent_string),
             enabled = userAgent != preferences.defaultUserAgent().defaultValue(),
             onClick = {
                 preferences.defaultUserAgent().delete()
-                Toasts.show("Requires app restart to take effect")
+                Toasts.show(localized(MR.strings.requires_app_restart))
             },
         )
     }
 
-    settingsGroup("Library ")
+    settingsGroup(localized(MR.strings.label_library) + " ")
     item(key = "advanced-refresh-covers") {
         val running by refreshingCovers.collectAsState()
         SettingRow(
-            "Refresh library covers",
+            localized(MR.strings.pref_refresh_library_covers),
             running,
             enabled = running == null,
             onClick = ::refreshLibraryCovers,
         )
     }
     item(key = "advanced-reset-viewer") {
-        SettingRow("Reset per-series reader settings", "Resets reading mode and orientation of all series", onClick = {
+        SettingRow(localized(MR.strings.pref_reset_viewer_flags), localized(MR.strings.pref_reset_viewer_flags_summary), onClick = {
             AppScope.launch {
                 val success = runCatching { Injekt.get<ResetViewerFlags>().await() }.getOrDefault(false)
-                Toasts.show(if (success) "All reader settings reset" else "Couldn't reset reader settings")
+                Toasts.show(if (success) localized(MR.strings.pref_reset_viewer_flags_success) else localized(MR.strings.pref_reset_viewer_flags_error))
             }
         })
     }
     item(key = "advanced-update-titles") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         SwitchPreference(
-            "Update library manga titles to match source",
+            localized(MR.strings.pref_update_library_manga_titles),
             preferences.updateMangaTitles(),
-            "Warning: if a manga is renamed, it will be removed from the download queue (if present).",
+            localized(MR.strings.pref_update_library_manga_titles_summary),
         )
     }
     item(key = "advanced-non-ascii") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
         SwitchPreference(
-            "Disallow non-ASCII filenames",
+            localized(MR.strings.pref_disallow_non_ascii_filenames),
             preferences.disallowNonAsciiFilenames(),
-            "Ensures compatibility with certain storage media that don't support Unicode. When this is enabled, you'll need " +
-                "to manually rename source and manga folders by replacing non-ASCII characters with their lowercase UTF-8 " +
-                "hexadecimal representations. Chapter files don't need to be renamed.",
+            localized(MR.strings.pref_disallow_non_ascii_filenames_details),
         )
     }
 
-    settingsGroup("Downloads ")
+    settingsGroup(localized(MR.strings.pref_category_downloads) + " ")
     item(key = "advanced-url-hash") {
         val preferences = remember { Injekt.get<DownloadPreferences>() }
         SwitchPreference(
-            "Include chapter URL hash",
+            localized(SYMR.strings.pref_include_chapter_url_hash),
             preferences.includeChapterUrlHash(),
-            "Append the first six characters of the chapter URL's MD5 hash to the chapter file or folder name.",
+            localized(SYMR.strings.pref_include_chapter_url_hash_desc),
         )
     }
     item(key = "advanced-cleanup-downloads") { CleanupDownloadsPreference() }
 
-    settingsGroup("Extensions")
+    settingsGroup(localized(MR.strings.label_extensions))
     item(key = "advanced-revoke-trust") {
-        SettingRow("Revoke trusted unknown extensions", "Extensions trusted on this computer must be trusted again", onClick = {
+        SettingRow(localized(MR.strings.ext_revoke_trust), localized(DMR.strings.extensions_trusted_on_this_computer_must), onClick = {
             Injekt.get<ExtensionTrust>().revokeAll()
-            Toasts.show("Revoked trust for all unknown extensions")
+            Toasts.show(localized(DMR.strings.revoked_trust_for_all_unknown_extensions))
         })
     }
 
-    settingsGroup("Developer tools")
+    settingsGroup(localized(SYMR.strings.developer_tools))
     item(key = "advanced-delegated") {
         val preferences = remember { Injekt.get<DelegateSourcePreferences>() }
         SwitchPreference(
-            "Enable delegated sources",
+            localized(SYMR.strings.toggle_delegated_sources),
             preferences.delegateSources(),
-            "Apply Komikku enhancements to the following sources if they are installed: MangaDex, NHentai, Pururin, " +
-                "8Muses, LANraragi. Requires app restart to take effect",
+            localized(DMR.strings.apply_komikku_enhancements_to_the_following),
         )
     }
     // ZOUKAN -->
     item(key = "advanced-source-blacklist") {
         val preferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
         SwitchPreference(
-            "Enable source blacklist",
+            localized(SYMR.strings.enable_source_blacklist),
             preferences.enableSourceBlacklist(),
-            "Hide extensions/sources that are incompatible with Zoukan. Force-restart app after changing.",
+            localized(DMR.strings.hide_extensions_sources_that_are_incompatible),
         )
     }
     // ZOUKAN <--
@@ -224,19 +226,21 @@ fun LazyListScope.advancedSettings() {
         val preferences = remember { Injekt.get<ExhPreferences>() }
         val level by preferences.logLevel(false).changes().collectAsState(preferences.logLevel(false).get())
         ChoiceSetting(
-            "Log level",
+            localized(SYMR.strings.log_level),
             level,
             listOf(
-                EHLogLevel.MINIMAL.ordinal to "Minimal (Critical errors only)",
-                EHLogLevel.EXTRA.ordinal to "Extra (Log everything)",
-                EHLogLevel.EXTREME.ordinal to "Extreme (Network inspection mode)",
+                EHLogLevel.MINIMAL.ordinal to localized(DMR.strings.minimal_critical_errors_only),
+                EHLogLevel.EXTRA.ordinal to localized(DMR.strings.extra_log_everything),
+                EHLogLevel.EXTREME.ordinal to localized(DMR.strings.extreme_network_inspection_mode),
             ),
-            subtitle = "Changing this can impact app performance. Force-restart app after changing. Current value: " +
-                listOf("Minimal", "Extra", "Extreme").getOrElse(level) { "Minimal" },
+            subtitle = localized(
+                DMR.strings.log_level_summary,
+                listOf(localized(SYMR.strings.log_minimal), localized(SYMR.strings.log_extra), localized(SYMR.strings.log_extreme)).getOrElse(level) { localized(SYMR.strings.log_minimal) },
+            ),
         ) {
             if (it != level) {
                 preferences.logLevel(false).set(it)
-                Toasts.show("Requires app restart to take effect")
+                Toasts.show(localized(MR.strings.requires_app_restart))
             }
         }
     }
@@ -248,12 +252,12 @@ private fun UserAgentPreference() {
     val preferences = remember { Injekt.get<NetworkPreferences>() }
     val userAgent by preferences.defaultUserAgent().changes().collectAsState(preferences.defaultUserAgent().get())
     var editing by remember { mutableStateOf(false) }
-    SettingRow("Default user agent string", userAgent, onClick = { editing = true })
+    SettingRow(localized(MR.strings.pref_user_agent_string), userAgent, onClick = { editing = true })
     if (!editing) return
     var value by remember { mutableStateOf(userAgent) }
     AlertDialog(
         onDismissRequest = { editing = false },
-        title = { Text("Default user agent string") },
+        title = { Text(localized(MR.strings.pref_user_agent_string)) },
         text = { OutlinedTextField(value, { value = it }, singleLine = false) },
         confirmButton = {
             TextButton(onClick = {
@@ -262,15 +266,15 @@ private fun UserAgentPreference() {
                     Headers.Builder().add("User-Agent", value)
                     if (value != userAgent) {
                         preferences.defaultUserAgent().set(value)
-                        Toasts.show("Requires app restart to take effect")
+                        Toasts.show(localized(MR.strings.requires_app_restart))
                     }
                     editing = false
                 } catch (_: IllegalArgumentException) {
-                    Toasts.show("Invalid user agent string")
+                    Toasts.show(localized(MR.strings.error_user_agent_string_invalid))
                 }
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = { editing = false }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { editing = false }) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -278,8 +282,8 @@ private fun UserAgentPreference() {
 @Composable
 private fun CrashLogsPreference() {
     val window = LocalWindow.current?.window
-    SettingRow("Share crash logs", "Saves error logs to a file for sharing with the developers", onClick = {
-        val dialog = FileDialog(window as java.awt.Frame?, "Share crash logs", FileDialog.SAVE).apply {
+    SettingRow(localized(MR.strings.pref_dump_crash_logs), localized(MR.strings.pref_dump_crash_logs_summary), onClick = {
+        val dialog = FileDialog(window as java.awt.Frame?, localized(MR.strings.pref_dump_crash_logs), FileDialog.SAVE).apply {
             file = "komikku_crash_logs.txt"
             isVisible = true
         }
@@ -288,9 +292,9 @@ private fun CrashLogsPreference() {
         AppScope.launch {
             try {
                 withContext(Dispatchers.IO) { target.writeText(crashLogs(Injekt.get())) }
-                Toasts.show("Saved crash logs to ${target.name}")
+                Toasts.show(localized(DMR.strings.saved_crash_logs_to, target.name))
             } catch (e: Exception) {
-                Toasts.error("Could not save the crash logs", e)
+                Toasts.error(localized(DMR.strings.could_not_save_the_crash_logs), e)
             }
         }
     })
@@ -342,14 +346,14 @@ private val refreshingCovers = MutableStateFlow<String?>(null)
 
 private fun refreshLibraryCovers() {
     if (refreshingCovers.value != null) return
-    refreshingCovers.value = "Refreshing covers…"
+    refreshingCovers.value = localized(DMR.strings.refreshing_covers)
     AppScope.launch {
         try {
             val favorites = Injekt.get<GetFavorites>().await()
             val refresh = Injekt.get<RefreshManga>()
             var failed = 0
             favorites.forEachIndexed { index, manga ->
-                refreshingCovers.value = "Refreshing covers: ${index + 1} of ${favorites.size}"
+                refreshingCovers.value = localized(DMR.strings.refreshing_covers_of, index + 1, favorites.size)
                 runCatching {
                     zoukan.desktop.ui.common.Images.forget(manga)
                     val updated = refresh(manga, fetchDetails = true, fetchChapters = false).manga
@@ -357,7 +361,7 @@ private fun refreshLibraryCovers() {
                 }.onFailure { failed++ }
             }
             zoukan.desktop.ui.common.Images.loader.memoryCache?.clear()
-            Toasts.show(if (failed == 0) "Library covers refreshed" else "Library covers refreshed, $failed failed")
+            Toasts.show(if (failed == 0) localized(DMR.strings.library_covers_refreshed) else localized(DMR.strings.library_covers_refreshed_failed, failed))
         } finally {
             refreshingCovers.value = null
         }

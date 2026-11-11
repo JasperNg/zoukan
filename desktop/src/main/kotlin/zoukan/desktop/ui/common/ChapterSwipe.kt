@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -137,8 +140,8 @@ private fun ChapterSwipeAction.icon(state: ChapterSwipeState): ImageVector = whe
 
 /** The names Android's Settings > Library > Chapter swipe lists. */
 val CHAPTER_SWIPE_ACTIONS: List<Pair<ChapterSwipeAction, String>> = listOf(
-    ChapterSwipeAction.Disabled to "Disabled",
-    ChapterSwipeAction.ToggleBookmark to "Toggle bookmark",
-    ChapterSwipeAction.ToggleRead to "Toggle read",
-    ChapterSwipeAction.Download to "Download",
+    ChapterSwipeAction.Disabled to localized(MR.strings.disabled),
+    ChapterSwipeAction.ToggleBookmark to localized(DMR.strings.toggle_bookmark),
+    ChapterSwipeAction.ToggleRead to localized(DMR.strings.toggle_read),
+    ChapterSwipeAction.Download to localized(MR.strings.action_download),
 )

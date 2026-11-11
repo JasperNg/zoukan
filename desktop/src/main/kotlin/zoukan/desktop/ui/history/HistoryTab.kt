@@ -71,8 +71,11 @@ import tachiyomi.domain.history.interactor.RemoveHistory
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.domain.history.service.HistoryPreferences
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.browse.QuickLibraryToggleDialogs
@@ -94,6 +97,7 @@ import zoukan.desktop.ui.library.TriStateRow
 import zoukan.desktop.ui.library.selectableClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
+import zoukan.i18n.desktop.DMR
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -230,7 +234,7 @@ class HistoryScreenModel(
     fun clearAll() {
         screenModelScope.launch {
             removeHistory.awaitAll()
-            Toasts.show("History cleared")
+            Toasts.show(localized(DMR.strings.history_cleared))
         }
         clearSelection()
     }
@@ -292,30 +296,31 @@ fun HistoryTab(model: HistoryScreenModel) {
                 onRemove = { remove = state.selectedItems },
             )
         } else {
-            ScreenHeader("History", showBack = false) {
-                SearchField(state.query, model::search, "Search history", Modifier.width(280.dp).padding(end = 8.dp))
+            ScreenHeader(localized(MR.strings.history), showBack = false) {
+                SearchField(state.query, model::search, localized(DMR.strings.search_history), Modifier.width(280.dp).padding(end = 8.dp))
                 HistoryFilterButton(model.preferences, state.filters)
                 // Komikku's toolbar selects rows; removing them all clears the history
-                TooltipIconButton(Icons.Outlined.Checklist, "Select", onClick = model::startSelection, enabled = state.items.isNotEmpty())
-                TooltipIconButton(Icons.Outlined.DeleteSweep, "Clear history", onClick = { confirmClear = true }, enabled = state.items.isNotEmpty())
+                TooltipIconButton(Icons.Outlined.Checklist, localized(DMR.strings.select), onClick = model::startSelection, enabled = state.items.isNotEmpty())
+                TooltipIconButton(Icons.Outlined.DeleteSweep, localized(MR.strings.pref_clear_history), onClick = { confirmClear = true }, enabled = state.items.isNotEmpty())
             }
         }
         when {
             state.loading -> LoadingScreen()
-            state.items.isEmpty() && state.query.isNotBlank() -> EmptyScreen("Nothing matches \"${state.query}\"")
-            state.items.isEmpty() && state.filters.active -> EmptyScreen("No history matches the filters")
-            state.items.isEmpty() -> EmptyScreen("Nothing read yet")
+            state.items.isEmpty() && state.query.isNotBlank() -> EmptyScreen(localized(DMR.strings.nothing_matches, state.query))
+            state.items.isEmpty() && state.filters.active -> EmptyScreen(localized(DMR.strings.no_history_matches_the_filters))
+            state.items.isEmpty() -> EmptyScreen(localized(DMR.strings.nothing_read_yet))
             else -> LazyColumn(Modifier.fillMaxSize()) {
-                state.items.groupBy { it.readAt?.time?.let(zoukan.desktop.ui.common.Dates::relative) ?: "Unknown" }.forEach { (date, items) ->
+                state.items.groupBy { it.readAt?.time?.let(zoukan.desktop.ui.common.Dates::relative) ?: localized(MR.strings.unknown) }.forEach { (date, items) ->
                     sectionHeader(date)
                     items(items, key = { it.id }) { item ->
                         val chapter = state.chapterNames[item.chapterId]?.takeIf { it.isNotBlank() }
-                            ?: if (item.chapterNumber > -1) "Chapter ${formatNumber(item.chapterNumber)}" else "Chapter"
+                            ?: if (item.chapterNumber > -1) localized(MR.strings.display_mode_chapter, formatNumber(item.chapterNumber)) else localized(DMR.strings.chapter)
                         val time = item.readAt?.toInstant()?.atZone(java.time.ZoneId.systemDefault())?.let(timeFormat::format)
                         HistoryRow(
                             item = item,
-                            subtitle = listOfNotNull(chapter, time).joinToString(" · ") +
-                                if (!item.read && item.lastPageRead > 0) " · Page ${item.lastPageRead + 1}" else "",
+                            subtitle = listOfNotNull(chapter, time).joinToString(" · ").let {
+                                if (!item.read && item.lastPageRead > 0) localized(DMR.strings.chapter_subtitle_page, it, item.lastPageRead + 1) else it
+                            },
                             selected = item.chapterId in state.selected,
                             panorama = panorama,
                             onClick = { kind ->
@@ -327,7 +332,7 @@ fun HistoryTab(model: HistoryScreenModel) {
                                         if (chapterId != null) {
                                             navigator.push(ReaderScreen(item.mangaId, chapterId))
                                         } else {
-                                            Toasts.show("No unread chapters left")
+                                            Toasts.show(localized(DMR.strings.no_unread_chapters_left))
                                         }
                                     }
                                 }
@@ -346,15 +351,15 @@ fun HistoryTab(model: HistoryScreenModel) {
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Clear history?") },
-            text = { Text("This removes all reading history. Read chapters stay marked as read.") },
+            title = { Text(localized(DMR.strings.clear_history)) },
+            text = { Text(localized(DMR.strings.this_removes_all_reading_history_read)) },
             confirmButton = {
                 TextButton(onClick = {
                     model.clearAll()
                     confirmClear = false
-                }) { Text("Clear") }
+                }) { Text(localized(DMR.strings.clear)) }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
     remove?.let { items ->
@@ -377,11 +382,11 @@ private fun SelectionHeader(state: HistoryScreenModel.State, model: HistoryScree
             .testTag("history-selection"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
-        Text("${state.selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
-        TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
-        TooltipIconButton(Icons.Outlined.DeleteSweep, "Remove from history", onClick = onRemove, enabled = state.selected.isNotEmpty())
+        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
+        Text(localized(DMR.strings.selected, state.selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
+        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
+        TooltipIconButton(Icons.Outlined.DeleteSweep, localized(DMR.strings.remove_from_history), onClick = onRemove, enabled = state.selected.isNotEmpty())
     }
 }
 
@@ -441,9 +446,9 @@ private fun HistoryRow(
             }
         }
         if (!item.coverData.isMangaFavorite) {
-            TooltipIconButton(Icons.Outlined.FavoriteBorder, "Add to library", onClick = onAddToLibrary)
+            TooltipIconButton(Icons.Outlined.FavoriteBorder, localized(MR.strings.add_to_library), onClick = onAddToLibrary)
         }
-        TooltipIconButton(Icons.Outlined.Delete, "Remove from history", onClick = onRemove)
+        TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.remove_from_history), onClick = onRemove)
     }
 }
 
@@ -454,24 +459,24 @@ private fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntr
     val one = items.size == 1
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (one) "Remove from history" else "Remove ${items.size} from history") },
+        title = { Text(if (one) localized(DMR.strings.remove_from_history) else localized(DMR.strings.remove_from_history_2, items.size)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (one) Text(items.first().title, style = MaterialTheme.typography.titleSmall)
                 Text(
-                    if (one) "This removes the read date of this chapter." else "This removes the read date of these chapters.",
+                    if (one) localized(DMR.strings.this_removes_the_read_date_of) else localized(DMR.strings.this_removes_the_read_date_of_2),
                 )
                 Row(
                     Modifier.fillMaxWidth().clickable { wholeEntry = !wholeEntry },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(checked = wholeEntry, onCheckedChange = { wholeEntry = it })
-                    Text(if (one) "Remove every chapter of this entry" else "Remove every chapter of these entries")
+                    Text(if (one) localized(DMR.strings.remove_every_chapter_of_this_entry) else localized(DMR.strings.remove_every_chapter_of_these_entries))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onRemove(wholeEntry) }) { Text("Remove") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onRemove(wholeEntry) }) { Text(localized(MR.strings.action_remove)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -482,7 +487,7 @@ private fun HistoryFilterButton(preferences: HistoryPreferences, filters: Histor
     BadgedBox(badge = { if (filters.active) Badge() }) {
         TooltipIconButton(
             Icons.Outlined.FilterList,
-            if (filters.active) "Filter (filtered)" else "Filter",
+            if (filters.active) localized(DMR.strings.filter_filtered) else localized(MR.strings.action_filter),
             onClick = { open = true },
         )
     }
@@ -493,13 +498,13 @@ private fun HistoryFilterButton(preferences: HistoryPreferences, filters: Histor
 private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Filter") },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(localized(MR.strings.action_filter)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
         text = {
             Column(Modifier.width(320.dp)) {
-                TriStateRow("Unfinished entries", preferences.filterUnfinishedManga(), notLabel = "Finished entries")
-                TriStateRow("Unfinished chapters", preferences.filterUnfinishedChapter(), notLabel = "Finished chapters")
-                TriStateRow("Not in library", preferences.filterNonLibraryManga(), notLabel = "In library")
+                TriStateRow(localized(DMR.strings.unfinished_entries), preferences.filterUnfinishedManga(), notLabel = localized(DMR.strings.finished_entries))
+                TriStateRow(localized(DMR.strings.unfinished_chapters), preferences.filterUnfinishedChapter(), notLabel = localized(DMR.strings.finished_chapters))
+                TriStateRow(localized(DMR.strings.not_in_library), preferences.filterNonLibraryManga(), notLabel = localized(MR.strings.in_library))
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 val panorama = preferences.usePanoramaCover()
                 val on by panorama.changes().collectAsState(panorama.get())
@@ -507,7 +512,7 @@ private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -
                     Modifier.fillMaxWidth().clickable { panorama.set(!on) }.padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Panorama cover", modifier = Modifier.weight(1f))
+                    Text(localized(KMR.strings.action_panorama_cover), modifier = Modifier.weight(1f))
                     Switch(checked = on, onCheckedChange = { panorama.set(it) })
                 }
             }

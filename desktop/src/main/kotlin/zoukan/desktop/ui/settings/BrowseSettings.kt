@@ -20,12 +20,17 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import mihon.domain.extension.interactor.GetExtensionStores
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.SourceCategoryScreen
 import zoukan.desktop.ui.browse.StoresList
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.i18n.desktop.DMR
 
 /**
  * Settings > Browse, as the Android app's SettingsBrowseScreen: sources (suggestions, source
@@ -37,19 +42,19 @@ import zoukan.desktop.ui.common.ScreenHeader
  * titles from the entry's More > Similar titles, so they are not shown (see PARITY.md).
  */
 fun LazyListScope.browseSettings() {
-    settingsGroup("Sources")
+    settingsGroup(localized(MR.strings.label_sources))
     item(key = "browse-suggestions") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        SwitchPreference("Suggestions", preferences.relatedMangas(), "Show source-website's Suggestions while viewing entry")
+        SwitchPreference(localized(KMR.strings.pref_source_related_mangas), preferences.relatedMangas(), localized(KMR.strings.pref_source_related_mangas_summary))
     }
     // ZOUKAN -->
     item(key = "browse-related-expand") {
         val preferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
-        SwitchPreference("Expand related titles", preferences.expandRelatedMangas(), "Show the related titles row open on the entry page")
+        SwitchPreference(localized(DMR.strings.expand_related_titles), preferences.expandRelatedMangas(), localized(DMR.strings.show_the_related_titles_row_open))
     }
     item(key = "browse-related-overflow") {
         val preferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
-        SwitchPreference("Related titles in overflow menu", preferences.relatedMangasInOverflow(), "Only show related titles from the entry's More menu")
+        SwitchPreference(localized(DMR.strings.related_titles_in_overflow_menu), preferences.relatedMangasInOverflow(), localized(DMR.strings.only_show_related_titles_from_the))
     }
     // ZOUKAN <--
     item(key = "browse-categories") {
@@ -57,82 +62,81 @@ fun LazyListScope.browseSettings() {
         val navigator = LocalNavigator.currentOrThrow
         val categories by preferences.sourcesTabCategories().changes().collectAsState(preferences.sourcesTabCategories().get())
         SettingRow(
-            "Edit categories",
-            if (categories.size == 1) "1 category" else "${categories.size} categories",
+            localized(MR.strings.action_edit_categories),
+            if (categories.size == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, categories.size),
             onClick = { navigator.push(SourceCategoryScreen) },
         )
     }
     item(key = "browse-categories-filter") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         SwitchPreference(
-            "Filter sources in categories",
+            localized(SYMR.strings.pref_source_source_filtering),
             preferences.sourcesTabCategoriesFilter(),
-            "Filter the sources that are in categories, making the sources not get put under the language if they are in a category",
+            localized(SYMR.strings.pref_source_source_filtering_summery),
         )
     }
     item(key = "browse-navigation") {
         val preferences = remember { Injekt.get<UiPreferences>() }
         SwitchPreference(
-            "Replace latest button",
+            localized(SYMR.strings.pref_source_navigation),
             preferences.useNewSourceNavigation(),
-            "Replace latest button with a custom browse view that includes both latest and browse",
+            localized(SYMR.strings.pref_source_navigation_summery),
         )
     }
     item(key = "browse-local-hidden") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         SwitchPreference(
-            "Local source hidden folders",
+            localized(SYMR.strings.pref_local_source_hidden_folders),
             preferences.allowLocalSourceHiddenFolders(),
-            "Allow local source to read hidden folders",
+            localized(SYMR.strings.pref_local_source_hidden_folders_summery),
         )
     }
 
-    settingsGroup("Feed")
+    settingsGroup(localized(SYMR.strings.feed))
     item(key = "browse-hide-feed") {
         val preferences = remember { Injekt.get<UiPreferences>() }
-        SwitchPreference("Hide Feed tab", preferences.hideFeedTab())
+        SwitchPreference(localized(SYMR.strings.pref_hide_feed), preferences.hideFeedTab())
     }
     item(key = "browse-feed-position") {
         val preferences = remember { Injekt.get<UiPreferences>() }
         val hidden by preferences.hideFeedTab().changes().collectAsState(preferences.hideFeedTab().get())
         val value by preferences.feedTabInFront().changes().collectAsState(preferences.feedTabInFront().get())
         SwitchSetting(
-            "Feed tab position",
-            "Do you want the feed tab to be the first tab in browse? This will make it the default tab when opening browse, " +
-                "not recommended if you're on data or a metered network",
+            localized(SYMR.strings.pref_feed_position),
+            localized(SYMR.strings.pref_feed_position_summery),
             checked = value,
             enabled = !hidden,
         ) { preferences.feedTabInFront().set(it) }
     }
     item(key = "browse-feed-hide-library") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        SwitchPreference("Hide entries already in library", preferences.hideInLibraryFeedItems())
+        SwitchPreference(localized(MR.strings.pref_hide_in_library_items), preferences.hideInLibraryFeedItems())
     }
 
     // Android has a second "Sources" group here; the space keeps the list keys apart
-    settingsGroup("Sources ")
+    settingsGroup(localized(MR.strings.label_sources) + " ")
     item(key = "browse-hide-library") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        SwitchPreference("Hide entries already in library", preferences.hideInLibraryItems())
+        SwitchPreference(localized(MR.strings.pref_hide_in_library_items), preferences.hideInLibraryItems())
     }
     item(key = "browse-stores") {
         val navigator = LocalNavigator.currentOrThrow
         val stores by remember { Injekt.get<GetExtensionStores>().subscribe() }.collectAsState(emptyList())
         SettingRow(
-            "Extension stores",
-            if (stores.size == 1) "1 store" else "${stores.size} stores",
+            localized(MR.strings.extensionStores),
+            if (stores.size == 1) localized(DMR.strings.n_1_store) else localized(DMR.strings.stores_2, stores.size),
             onClick = { navigator.push(ExtensionStoresScreen) },
         )
     }
 
-    settingsGroup("NSFW (18+) sources")
+    settingsGroup(localized(MR.strings.pref_category_nsfw_content))
     item(key = "browse-nsfw") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        SwitchPreference("Show in sources and extensions lists", preferences.showNsfwSource())
+        SwitchPreference(localized(MR.strings.pref_show_nsfw_source), preferences.showNsfwSource())
     }
     item(key = "browse-nsfw-info") {
         InfoText(
-            "This does not prevent unofficial or potentially incorrectly flagged extensions from surfacing NSFW (18+) content within the app.",
+            localized(MR.strings.parental_controls_info),
         )
     }
 }
@@ -161,7 +165,7 @@ object ExtensionStoresScreen : Screen {
         val model = rememberScreenModel { BrowseScreenModel() }
         val state by model.state.collectAsState()
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Extension stores")
+            ScreenHeader(localized(MR.strings.extensionStores))
             StoresList(state, model)
         }
     }

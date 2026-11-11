@@ -37,13 +37,16 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.sourcePreferences
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 
 /**
  * A source's own settings: the androidx.preference screen the extension builds, drawn in Compose.
@@ -64,7 +67,7 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
                     screen.sharedPreferences = it.sourcePreferences()
                     it.setupPreferenceScreen(screen)
                     screen.preferences.toList()
-                }.onFailure { e -> Toasts.error("The source's settings failed to load", e) }.getOrNull()
+                }.onFailure { e -> Toasts.error(localized(DMR.strings.the_sources_settings_failed_to_load), e) }.getOrNull()
             }
         }
         // Preference values are not Compose state; this redraws the list after a change
@@ -72,10 +75,10 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
         var dialog by remember { mutableStateOf<Preference?>(null) }
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader(source?.let { "${it.name} settings" } ?: "Source settings")
+            ScreenHeader(source?.let { localized(DMR.strings.settings, it.name) } ?: localized(MR.strings.source_settings))
             when {
-                source == null -> EmptyScreen("This source is not installed or has no settings.")
-                preferences.isNullOrEmpty() -> EmptyScreen("This source has no settings.")
+                source == null -> EmptyScreen(localized(DMR.strings.this_source_is_not_installed_or))
+                preferences.isNullOrEmpty() -> EmptyScreen(localized(DMR.strings.this_source_has_no_settings))
                 else -> LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp)) {
                     itemsIndexed(preferences.filter { it.visible }, key = { i, p -> p.key ?: "pref-$i" }) { _, pref ->
                         PreferenceItem(pref, version, onChanged = { version++ }, onOpen = { dialog = pref })
@@ -168,7 +171,7 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+                confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
         is MultiSelectListPreference -> {
@@ -197,8 +200,8 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { onSave(chosen) }) { Text("Save") } },
-                dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+                confirmButton = { TextButton(onClick = { onSave(chosen) }) { Text(localized(MR.strings.action_save)) } },
+                dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
         is EditTextPreference -> {
@@ -212,8 +215,8 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                         OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
                     }
                 },
-                confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Save") } },
-                dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+                confirmButton = { TextButton(onClick = { onSave(text) }) { Text(localized(MR.strings.action_save)) } },
+                dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
         else -> onDismiss()

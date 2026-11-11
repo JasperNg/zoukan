@@ -38,6 +38,7 @@ import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -45,6 +46,7 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.text.Collator
 import java.util.Locale
 import kotlin.random.Random
@@ -146,14 +148,14 @@ class LibraryScreenModel(
                 return when (settings.group) {
                     LibraryGroup.BY_SOURCE -> items.groupBy { it.manga.source }
                         .map { (source, list) ->
-                            val name = if (source == LocalSource.ID) "Local source" else sources[source]?.first?.ifBlank { null } ?: source.toString()
+                            val name = if (source == LocalSource.ID) localized(MR.strings.action_display_local_badge) else sources[source]?.first?.ifBlank { null } ?: source.toString()
                             name to (source to list)
                         }
                         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.first })
                         .mapIndexed { i, (name, pair) -> tab(pair.first, name, i.toLong()) to pair.second.mapTo(HashSet()) { it.id } }
                     LibraryGroup.BY_STATUS -> items.groupBy { it.manga.status }
                         .map { (status, list) ->
-                            val (name, order) = STATUS_GROUPS[status] ?: ("Unknown" to 7L)
+                            val (name, order) = STATUS_GROUPS[status] ?: (localized(MR.strings.unknown) to 7L)
                             tab(status + 1, name, order) to list.mapTo(HashSet()) { it.id }
                         }
                         .sortedBy { it.first.order }
@@ -412,7 +414,7 @@ class LibraryScreenModel(
             Injekt.get<LibraryUpdater>().start(categoryId = category)
         }
         // ZOUKAN <--
-        if (!started) Toasts.show("A library update is already running")
+        if (!started) Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
     }
 
     // Selection ---------------------------------------------------------------------------------
@@ -526,7 +528,7 @@ class LibraryScreenModel(
                 }
                 mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
             }
-            Toasts.show(if (mangas.size == 1) "Removed from library" else "Removed ${mangas.size} entries from library")
+            Toasts.show(if (mangas.size == 1) localized(MR.strings.manga_removed_library) else localized(DMR.strings.removed_entries_from_library, mangas.size))
             done(ids)
         }
     }
@@ -546,11 +548,11 @@ class LibraryScreenModel(
 // ZOUKAN -->
 /** Status tabs' names and order, as Komikku's statusMap */
 private val STATUS_GROUPS: Map<Long, Pair<String, Long>> = mapOf(
-    SManga.ONGOING.toLong() to ("Ongoing" to 1L),
-    SManga.COMPLETED.toLong() to ("Completed" to 2L),
-    SManga.PUBLISHING_FINISHED.toLong() to ("Publishing finished" to 3L),
-    SManga.LICENSED.toLong() to ("Licensed" to 4L),
-    SManga.ON_HIATUS.toLong() to ("On hiatus" to 5L),
-    SManga.CANCELLED.toLong() to ("Cancelled" to 6L),
+    SManga.ONGOING.toLong() to (localized(MR.strings.ongoing) to 1L),
+    SManga.COMPLETED.toLong() to (localized(MR.strings.completed) to 2L),
+    SManga.PUBLISHING_FINISHED.toLong() to (localized(MR.strings.publishing_finished) to 3L),
+    SManga.LICENSED.toLong() to (localized(MR.strings.licensed) to 4L),
+    SManga.ON_HIATUS.toLong() to (localized(MR.strings.on_hiatus) to 5L),
+    SManga.CANCELLED.toLong() to (localized(MR.strings.cancelled) to 6L),
 )
 // ZOUKAN <--

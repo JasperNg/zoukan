@@ -37,8 +37,10 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.EmptyScreen
@@ -46,6 +48,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's Browse > Sources > filter (SourcesFilterScreen): a switch per language, and under each
@@ -65,9 +68,9 @@ object SourcesFilterScreen : Screen {
         val byLanguage = state.allSources.filterNot { it is LocalSource }.groupBy { it.lang }.toSortedMap()
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Filter")
+            ScreenHeader(localized(MR.strings.action_filter))
             if (byLanguage.isEmpty()) {
-                EmptyScreen("No sources yet. Install an extension to add its sources.")
+                EmptyScreen(localized(DMR.strings.no_sources_yet_install_an_extension))
                 return@Column
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -122,22 +125,22 @@ object SourceCategoryScreen : Screen {
         var deleting by remember { mutableStateOf<String?>(null) }
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Edit categories") {
+            ScreenHeader(localized(MR.strings.action_edit_categories)) {
                 FilledTonalButton(onClick = { creating = true }) {
                     Icon(Icons.Outlined.Add, null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Add")
+                    Text(localized(MR.strings.action_add))
                 }
             }
             if (categories.isEmpty()) {
-                EmptyScreen("You have no categories. Add one to organize your sources.")
+                EmptyScreen(localized(DMR.strings.you_have_no_categories_add_one))
             } else {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(categories.sortedWith(String.CASE_INSENSITIVE_ORDER), key = { it }) { category ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(category, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            TooltipIconButton(Icons.Outlined.Edit, "Rename", onClick = { editing = category })
-                            TooltipIconButton(Icons.Outlined.Delete, "Delete", onClick = { deleting = category })
+                            TooltipIconButton(Icons.Outlined.Edit, localized(DMR.strings.rename), onClick = { editing = category })
+                            TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_delete), onClick = { deleting = category })
                         }
                     }
                 }
@@ -150,8 +153,8 @@ object SourceCategoryScreen : Screen {
             val trimmed = name.trim()
             // Android forbids "|", which separates a source from its category
             val error = when {
-                '|' in trimmed -> "Category names can't contain |"
-                trimmed != original && categories.any { it.equals(trimmed, ignoreCase = true) } -> "A category with this name already exists!"
+                '|' in trimmed -> localized(DMR.strings.category_names_cant_contain)
+                trimmed != original && categories.any { it.equals(trimmed, ignoreCase = true) } -> localized(MR.strings.error_category_exists)
                 else -> null
             }
             AlertDialog(
@@ -159,13 +162,13 @@ object SourceCategoryScreen : Screen {
                     creating = false
                     editing = null
                 },
-                title = { Text(if (original == null) "Add category" else "Rename category") },
+                title = { Text(if (original == null) localized(MR.strings.action_add_category) else localized(MR.strings.action_rename_category)) },
                 text = {
                     OutlinedTextField(
                         name,
                         { name = it },
                         singleLine = true,
-                        label = { Text("Name") },
+                        label = { Text(localized(MR.strings.name)) },
                         isError = error != null,
                         supportingText = error?.let { { Text(it) } },
                     )
@@ -179,28 +182,28 @@ object SourceCategoryScreen : Screen {
                         }
                         creating = false
                         editing = null
-                    }) { Text(if (original == null) "Add" else "OK") }
+                    }) { Text(if (original == null) localized(MR.strings.action_add) else "OK") }
                 },
                 dismissButton = {
                     TextButton(onClick = {
                         creating = false
                         editing = null
-                    }) { Text("Cancel") }
+                    }) { Text(localized(MR.strings.action_cancel)) }
                 },
             )
         }
         deleting?.let { category ->
             AlertDialog(
                 onDismissRequest = { deleting = null },
-                title = { Text("Delete category") },
-                text = { Text("Do you wish to delete the category $category?") },
+                title = { Text(localized(MR.strings.delete_category)) },
+                text = { Text(localized(DMR.strings.do_you_wish_to_delete_the, category)) },
                 confirmButton = {
                     TextButton(onClick = {
                         deleteSourceCategory(preferences, category)
                         deleting = null
                     }) { Text("OK") }
                 },
-                dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { deleting = null }) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
     }
@@ -238,7 +241,7 @@ internal fun SourceCategoriesDialog(
         title = { Text(source.name) },
         text = {
             if (categories.isEmpty()) {
-                Text("You have no categories. Add one to organize your sources.")
+                Text(localized(DMR.strings.you_have_no_categories_add_one))
             } else {
                 Column(Modifier.verticalScrollWithBar()) {
                     categories.forEach { category ->
@@ -256,7 +259,7 @@ internal fun SourceCategoriesDialog(
         },
         confirmButton = {
             if (categories.isEmpty()) {
-                TextButton(onClick = onEditCategories) { Text("Edit categories") }
+                TextButton(onClick = onEditCategories) { Text(localized(MR.strings.action_edit_categories)) }
             } else {
                 TextButton(onClick = {
                     onConfirm(chosen)
@@ -266,8 +269,8 @@ internal fun SourceCategoriesDialog(
         },
         dismissButton = {
             Row {
-                if (categories.isNotEmpty()) TextButton(onClick = onEditCategories) { Text("Edit") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                if (categories.isNotEmpty()) TextButton(onClick = onEditCategories) { Text(localized(MR.strings.action_edit)) }
+                TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) }
             }
         },
     )
