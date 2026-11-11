@@ -163,7 +163,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                 }
             }
             if (available.isNotEmpty()) {
-                settingsGroup(localized(MR.strings.migrationConfigScreen.availableHeader))
+                settingsGroup(localized(MR.strings.migrationConfigScreen_availableHeader))
                 itemsIndexed(available, key = { _, s -> "available-${s.id}" }) { _, source -> SourceRow(source, model) {} }
             }
         }
@@ -199,7 +199,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
         val flagsPreference = remember { migrate.flags() }
         val flags by flagsPreference.changes().collectAsState(flagsPreference.get())
         LazyColumn(Modifier.width(420.dp).fillMaxHeight(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            settingsGroup(localized(MR.strings.migrationConfigScreen.dataToMigrateHeader))
+            settingsGroup(localized(MR.strings.migrationConfigScreen_dataToMigrateHeader))
             item(key = "flags") {
                 FlowRow(
                     Modifier.padding(horizontal = 24.dp),
@@ -216,7 +216,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             }
             item(key = "remove-download") {
                 SwitchSetting(
-                    localized(MR.strings.migrationConfigScreen.removeDownloadsTitle),
+                    localized(MR.strings.migrationConfigScreen_removeDownloadsTitle),
                     checked = MigrationFlag.REMOVE_DOWNLOAD in flags,
                 ) {
                     flagsPreference.set(if (it) flags + MigrationFlag.REMOVE_DOWNLOAD else flags - MigrationFlag.REMOVE_DOWNLOAD)
@@ -227,17 +227,17 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                     extraQuery,
                     onExtraQuery,
                     singleLine = true,
-                    label = { Text(localized(MR.strings.migrationConfigScreen.additionalSearchQueryLabel)) },
-                    supportingText = { Text(localized(MR.strings.migrationConfigScreen.additionalSearchQuerySupportingText)) },
+                    label = { Text(localized(MR.strings.migrationConfigScreen_additionalSearchQueryLabel)) },
+                    supportingText = { Text(localized(MR.strings.migrationConfigScreen_additionalSearchQuerySupportingText)) },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
-            item(key = "hide-unmatched") { SwitchPreference(localized(MR.strings.migrationConfigScreen.hideUnmatchedTitle), preferences.migrationHideUnmatched()) }
+            item(key = "hide-unmatched") { SwitchPreference(localized(MR.strings.migrationConfigScreen_hideUnmatchedTitle), preferences.migrationHideUnmatched()) }
             item(key = "hide-without-updates") {
                 SwitchPreference(
-                    localized(MR.strings.migrationConfigScreen.hideWithoutUpdatesTitle),
+                    localized(MR.strings.migrationConfigScreen_hideWithoutUpdatesTitle),
                     preferences.migrationHideWithoutUpdates(),
-                    subtitle = localized(MR.strings.migrationConfigScreen.hideWithoutUpdatesSubtitle),
+                    subtitle = localized(MR.strings.migrationConfigScreen_hideWithoutUpdatesSubtitle),
                 )
             }
             item(key = "smart-search") {
@@ -249,7 +249,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             }
             item(key = "warning") {
                 Text(
-                    localized(MR.strings.migrationConfigScreen.enhancedOptionsWarning),
+                    localized(MR.strings.migrationConfigScreen_enhancedOptionsWarning),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -257,16 +257,16 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             }
             item(key = "deep-search") {
                 SwitchPreference(
-                    localized(MR.strings.migrationConfigScreen.deepSearchModeTitle),
+                    localized(MR.strings.migrationConfigScreen_deepSearchModeTitle),
                     preferences.migrationDeepSearchMode(),
-                    subtitle = localized(MR.strings.migrationConfigScreen.deepSearchModeSubtitle),
+                    subtitle = localized(MR.strings.migrationConfigScreen_deepSearchModeSubtitle),
                 )
             }
             item(key = "prioritize") {
                 SwitchPreference(
-                    localized(MR.strings.migrationConfigScreen.prioritizeByChaptersTitle),
+                    localized(MR.strings.migrationConfigScreen_prioritizeByChaptersTitle),
                     preferences.migrationPrioritizeByChapters(),
-                    subtitle = localized(MR.strings.migrationConfigScreen.prioritizeByChaptersSubtitle),
+                    subtitle = localized(MR.strings.migrationConfigScreen_prioritizeByChaptersSubtitle),
                 )
             }
         }
@@ -284,9 +284,9 @@ class MigrationConfigScreenModel(
     data class State(val loading: Boolean = true, val sources: List<MigrationSource> = emptyList())
 
     enum class Selection(val label: String) {
-        Pinned(localized(MR.strings.migrationConfigScreen.selectPinnedLabel)),
-        None(localized(MR.strings.migrationConfigScreen.selectNoneLabel)),
-        Enabled(localized(MR.strings.migrationConfigScreen.selectEnabledLabel)),
+        Pinned(localized(MR.strings.migrationConfigScreen_selectPinnedLabel)),
+        None(localized(MR.strings.migrationConfigScreen_selectNoneLabel)),
+        Enabled(localized(MR.strings.migrationConfigScreen_selectEnabledLabel)),
         All(localized(MR.strings.action_select_all)),
     }
 

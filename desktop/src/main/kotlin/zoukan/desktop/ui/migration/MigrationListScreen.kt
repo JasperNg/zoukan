@@ -169,12 +169,12 @@ data class MigrationListScreen(
             )
             MigrationListScreenModel.Dialog.Exit -> AlertDialog(
                 onDismissRequest = model::dismissDialog,
-                title = { Text(localized(MR.strings.migrationListScreen.exitDialogTitle)) },
+                title = { Text(localized(MR.strings.migrationListScreen_exitDialogTitle)) },
                 confirmButton = {
                     TextButton(onClick = {
                         model.dismissDialog()
                         navigator.pop()
-                    }) { Text(localized(MR.strings.migrationListScreen.exitDialog.stopLabel)) }
+                    }) { Text(localized(MR.strings.migrationListScreen_exitDialog_stopLabel)) }
                 },
                 dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )
@@ -225,7 +225,7 @@ data class MigrationListScreen(
                         TextButton(onClick = onCancel) { Text(localized(DMR.strings.stop_searching)) }
                     }
                     SearchResult.NotFound -> Text(
-                        localized(MR.strings.migrationListScreen.noMatchFoundText),
+                        localized(MR.strings.migrationListScreen_noMatchFoundText),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.clickable(onClick = onSearchManually).padding(vertical = 24.dp),
                     )
@@ -241,20 +241,20 @@ data class MigrationListScreen(
             Box {
                 TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.pref_reader_actions), onClick = { menu = true })
                 DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.searchManuallyActionLabel)) }, onClick = {
+                    DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen_searchManuallyActionLabel)) }, onClick = {
                         menu = false
                         onSearchManually()
                     })
-                    DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.skipActionLabel)) }, onClick = {
+                    DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen_skipActionLabel)) }, onClick = {
                         menu = false
                         onSkip()
                     })
                     if (item.result is SearchResult.Success) {
-                        DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.migrateNowActionLabel)) }, onClick = {
+                        DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen_migrateNowActionLabel)) }, onClick = {
                             menu = false
                             onMigrateNow(true)
                         })
-                        DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.copyNowActionLabel)) }, onClick = {
+                        DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen_copyNowActionLabel)) }, onClick = {
                             menu = false
                             onMigrateNow(false)
                         })

@@ -125,7 +125,7 @@ class MigrationListScreenModel(
         screenModelScope.launch {
             MigrationPicks.picks.collect { pick ->
                 useMangaForMigration(pick.current, pick.target) {
-                    Toasts.show(localized(MR.strings.migrationListScreen.matchWithoutChapterToast))
+                    Toasts.show(localized(MR.strings.migrationListScreen_matchWithoutChapterToast))
                 }
             }
         }
