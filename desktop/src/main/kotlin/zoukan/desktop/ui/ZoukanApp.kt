@@ -285,7 +285,7 @@ fun startUi(dirs: ZoukanDirs) {
  * the What's new dialog after an update; tests leave it off.
  */
 @Composable
-fun ZoukanContent(preferences: DesktopPreferences, onNavigator: (Navigator) -> Unit = {}, firstRun: Boolean = false) {
+fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, onNavigator: (Navigator) -> Unit = {}) {
     var navigatorRef by remember { mutableStateOf<Navigator?>(null) }
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(

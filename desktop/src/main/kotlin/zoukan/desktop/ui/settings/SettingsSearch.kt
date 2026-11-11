@@ -15,11 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -87,6 +87,10 @@ internal class SearchScope(
             return
         }
         val shownGroup = group
+        // Locals: the item lambda's DSL marker hides this scope's properties
+        val page = page
+        val query = query
+        val onOpen = onOpen
         delegate.item(key = "${page.name}/$id", contentType = contentType) {
             SearchResult(page, shownGroup, query, onOpen = { onOpen(page, id) }) { content() }
         }
@@ -102,6 +106,9 @@ internal class SearchScope(
         index += count
         val shownGroup = group
         val id = { i: Int -> SettingsSearch.itemId(key?.invoke(i), first + i) }
+        val page = page
+        val query = query
+        val onOpen = onOpen
         delegate.items(count, key = { i -> "${page.name}/${id(i)}" }, contentType = contentType) { i ->
             SearchResult(page, shownGroup, query, onOpen = { onOpen(page, id(i)) }) { itemContent(i) }
         }
@@ -135,6 +142,8 @@ internal class HighlightScope(
     ) {
         val first = ids.size
         repeat(count) { ids += SettingsSearch.itemId(key?.invoke(it), first + it) }
+        val ids = ids
+        val highlight = highlight
         delegate.items(count, key, contentType) { i ->
             if (ids.getOrNull(first + i) == highlight) Highlighted { itemContent(i) } else itemContent(i)
         }
