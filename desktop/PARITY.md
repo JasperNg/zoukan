@@ -129,7 +129,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 
 | Feature | Notes |
 |---|---|
-| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Escape back; listed in Settings |
+| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Ctrl/Cmd + F search, Ctrl/Cmd + A select all, Escape back; listed in Settings |
+| Desktop conventions | Scrollbars on lists and grids, the window opens where it was closed (minimum 800 x 560), tooltips on icon buttons |
 | Tray icon and notifications | Phase 5 |
 
 ## Not on desktop (by design)

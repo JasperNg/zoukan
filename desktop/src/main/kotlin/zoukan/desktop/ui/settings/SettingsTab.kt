@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,6 +78,7 @@ import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts

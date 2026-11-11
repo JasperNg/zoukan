@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +46,6 @@ import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
@@ -57,7 +57,6 @@ import androidx.compose.ui.window.WindowExceptionHandlerFactory
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
-import androidx.compose.ui.window.rememberWindowState
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.FadeTransition
@@ -68,6 +67,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import logcat.LogPriority
@@ -90,6 +91,7 @@ import zoukan.desktop.ui.browse.BrowseTab
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.WindowBounds
 import zoukan.desktop.ui.common.ZoukanTheme
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
@@ -135,7 +137,19 @@ fun runZoukanApp() {
     // ZOUKAN <--
 
     application {
-        val windowState = rememberWindowState(size = DpSize(1280.dp, 860.dp))
+        // The window opens where it was closed, at the size it had
+        val windowState = remember { WindowBounds.initialState(preferences.windowBounds().get()) }
+        LaunchedEffect(windowState) {
+            var floating = WindowBounds.decode(preferences.windowBounds().get())?.copy(maximized = false)
+            snapshotFlow { WindowBounds.of(windowState, floating) }
+                .filterNotNull()
+                .collectLatest { bounds ->
+                    if (!bounds.maximized) floating = bounds
+                    // Dragging and resizing change the bounds many times a second: save once they rest
+                    delay(500)
+                    preferences.windowBounds().set(bounds.encode())
+                }
+        }
         var navigatorRef by remember { mutableStateOf<Navigator?>(null) }
         var visible by remember { mutableStateOf(true) }
         val trayState = rememberTrayState()
@@ -226,6 +240,10 @@ fun runZoukanApp() {
                 state = windowState,
                 onKeyEvent = { event -> Shortcuts.handle(event, navigatorRef) },
             ) {
+                // Below this size the two-pane screens and the toolbars no longer fit
+                LaunchedEffect(Unit) {
+                    window.minimumSize = java.awt.Dimension(WindowBounds.MIN_WIDTH, WindowBounds.MIN_HEIGHT)
+                }
                 CompositionLocalProvider(LocalWindow provides this, LocalWindowState provides windowState) {
                     ZoukanContent(preferences) { navigatorRef = it }
                 }

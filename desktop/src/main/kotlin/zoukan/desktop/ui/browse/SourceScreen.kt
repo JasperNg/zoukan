@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -59,9 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
@@ -76,9 +72,11 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.MangaGrid
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
@@ -107,21 +105,12 @@ data class SourceScreen(
 
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(source?.name ?: "Source not installed", subtitle = source?.let { languageName(it.lang) }) {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    placeholder = { Text("Search ${source?.name.orEmpty()}") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.width(300.dp).onKeyEvent {
-                        if (it.key == Key.Enter) {
-                            model.search(searchText)
-                            true
-                        } else {
-                            false
-                        }
-                    },
+                SearchField(
+                    searchText,
+                    { searchText = it },
+                    "Search ${source?.name.orEmpty()}",
+                    Modifier.width(300.dp),
+                    onSearch = { model.search(searchText) },
                 )
                 if (source != null && source.getFilterList().isNotEmpty()) {
                     TooltipIconButton(Icons.Default.FilterList, "Filters", onClick = { showFilters = !showFilters })

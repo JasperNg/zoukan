@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +31,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import kotlin.math.roundToInt
 
 fun LazyListScope.settingsGroup(title: String) {
@@ -106,7 +105,7 @@ fun <T> ChoiceSetting(
             onDismissRequest = { open = false },
             title = { Text(title) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.verticalScrollWithBar()) {
                     choices.forEach { (choice, label) ->
                         Row(
                             Modifier.fillMaxWidth().clickable {
@@ -178,7 +177,7 @@ fun MultiSelectPreference(
             onDismissRequest = { open = false },
             title = { Text(title) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.verticalScrollWithBar()) {
                     choices.forEach { (key, label) ->
                         Row(
                             Modifier.fillMaxWidth().clickable { chosen = if (key in chosen) chosen - key else chosen + key }.padding(vertical = 4.dp),
@@ -226,7 +225,7 @@ fun CategoriesIncludeExcludePreference(
             onDismissRequest = { open = false },
             title = { Text(title) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.verticalScrollWithBar()) {
                     Text(message, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     categories.forEach { category ->

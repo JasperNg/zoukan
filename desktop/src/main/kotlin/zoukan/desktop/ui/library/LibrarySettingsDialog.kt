@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -38,6 +36,7 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibrarySort
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import kotlin.math.roundToInt
 
 private val SORTS = listOf(
@@ -76,7 +75,7 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
-                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar().padding(top = 8.dp)) {
                     when (tab) {
                         0 -> FilterPage(model)
                         1 -> SortPage(model, state.sort)
