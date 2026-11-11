@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -23,6 +22,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.round
+import zoukan.desktop.ui.OnShortcut
+import zoukan.desktop.ui.Shortcuts
 
 /** A right-click menu: open while [position] is set, at that point of the item that was clicked. */
 @Stable
@@ -64,6 +65,30 @@ fun BoxScope.ContextMenu(state: ContextMenuState, onDismiss: () -> Unit = {}, co
                 onDismiss()
             },
         ) { content() }
+    }
+}
+
+/**
+ * Material's DropdownMenu, except that Escape only closes the menu. The menu's popup closes on
+ * Escape but passes the key on, so without this the window's Escape also went back a screen.
+ */
+@Composable
+fun DropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest, modifier = modifier) {
+        OnShortcut { action ->
+            if (action == Shortcuts.Action.Back) {
+                onDismissRequest()
+                true
+            } else {
+                false
+            }
+        }
+        content()
     }
 }
 

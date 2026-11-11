@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +65,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen

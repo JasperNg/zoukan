@@ -239,13 +239,16 @@ fun TooltipIf(show: Boolean, label: String, content: @Composable () -> Unit) {
 /** Shows [label] when the mouse rests on [content], for controls that are an icon without words. */
 @Composable
 fun Tooltip(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-        tooltip = { PlainTooltip { Text(label) } },
-        state = rememberTooltipState(),
-        modifier = modifier,
-        content = content,
-    )
+    // On desktop TooltipBox puts its modifier on an inner anchor, so a parent's Modifier.align
+    // never reaches the parent Box; this Box takes [modifier] where the parent sees it
+    Box(modifier, propagateMinConstraints = true) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+            tooltip = { PlainTooltip { Text(label) } },
+            state = rememberTooltipState(),
+            content = content,
+        )
+    }
 }
 
 /**

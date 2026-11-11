@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -69,6 +68,7 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen

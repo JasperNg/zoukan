@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VerticalAlignTop
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,6 +46,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
