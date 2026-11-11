@@ -145,8 +145,12 @@ private fun MergeDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
     )
 }
 
+/**
+ * Migrates or copies the entry [mangaId] to [picked]. [onMigrated] replaces the default ending
+ * (opening [picked] in place of the entry's screen), for callers already showing [picked].
+ */
 @Composable
-private fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
+internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, onMigrated: (() -> Unit)? = null) {
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
     val migrate = remember { Injekt.get<MigrateManga>() }
@@ -165,6 +169,7 @@ private fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
             }.onSuccess {
                 onDismiss()
                 Toasts.show(if (replace) "Migrated to ${picked.title}" else "Copied to ${picked.title}")
+                if (onMigrated != null) return@onSuccess onMigrated()
                 navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
                 navigator.replace(MangaScreen(picked.id))
             }.onFailure {

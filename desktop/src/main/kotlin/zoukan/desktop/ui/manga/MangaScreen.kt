@@ -110,6 +110,14 @@ data class MangaScreen(val mangaId: Long) : Screen {
         // ZOUKAN -->
         var editDialog by remember { mutableStateOf(false) }
         if (editDialog) EditMangaDialog(manga, onDismiss = { editDialog = false })
+        var coverDialog by remember { mutableStateOf(false) }
+        if (coverDialog) CoverDialog(manga, onDismiss = { coverDialog = false })
+        var intervalDialog by remember { mutableStateOf(false) }
+        if (intervalDialog) FetchIntervalDialog(manga, onDismiss = { intervalDialog = false })
+        var migrateDuplicate by remember { mutableStateOf<tachiyomi.domain.manga.model.Manga?>(null) }
+        migrateDuplicate?.let { duplicate ->
+            MigrateDialog(duplicate.id, manga, onDismiss = { migrateDuplicate = null }, onMigrated = {})
+        }
         // ZOUKAN <--
 
         Column(Modifier.fillMaxSize()) {
@@ -120,7 +128,14 @@ data class MangaScreen(val mangaId: Long) : Screen {
                     TooltipIconButton(Icons.Outlined.OpenInBrowser, "Open in your browser", onClick = model::openInBrowser)
                 }
                 // ZOUKAN -->
-                MoreMenu(manga, onEditMerged = { mergedDialog = true }, onEdit = { editDialog = true })
+                MoreMenu(
+                    manga,
+                    onEditMerged = { mergedDialog = true },
+                    onEdit = { editDialog = true },
+                    onCover = { coverDialog = true },
+                    onFetchInterval = { intervalDialog = true },
+                    onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
+                )
                 // ZOUKAN <--
             }
             if (state.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -132,7 +147,10 @@ data class MangaScreen(val mangaId: Long) : Screen {
                 ) {
                     CoverImage(
                         Cover.of(manga),
-                        Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)),
+                        Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp))
+                            // ZOUKAN -->
+                            .clickable { coverDialog = true },
+                        // ZOUKAN <--
                     )
                     Text(manga.title, style = MaterialTheme.typography.headlineSmall)
                     val people = listOfNotNull(manga.author, manga.artist?.takeIf { it != manga.author })
@@ -215,8 +233,17 @@ data class MangaScreen(val mangaId: Long) : Screen {
                             )
                         }
                     } else {
+                        // ZOUKAN -->
+                        val showMissing = showMissingChapters()
+                        val missing = remember(state.sortedChapters, state.descending, showMissing) {
+                            if (showMissing) MissingChapters.of(state.sortedChapters, state.descending) else MissingChapters.NONE
+                        }
+                        // ZOUKAN <--
                         LazyColumn(Modifier.fillMaxSize()) {
                             items(state.sortedChapters, key = { it.id }) { chapter ->
+                                // ZOUKAN -->
+                                missing.before[chapter.id]?.let { MissingChaptersRow(it) }
+                                // ZOUKAN <--
                                 ChapterRow(
                                     chapter = chapter,
                                     selected = chapter.id in state.selected,
@@ -234,6 +261,9 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                     onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
                                 )
                             }
+                            // ZOUKAN -->
+                            if (missing.end > 0) item(key = "missing-end") { MissingChaptersRow(missing.end) }
+                            // ZOUKAN <--
                         }
                     }
                 }
@@ -257,6 +287,25 @@ data class MangaScreen(val mangaId: Long) : Screen {
         }
         // ZOUKAN <--
 
+        // ZOUKAN -->
+        state.duplicates?.let { duplicates ->
+            DuplicateDialog(
+                target = manga,
+                duplicates = duplicates,
+                onAddAnyway = model::addAnyway,
+                onOpen = {
+                    model.dismissDuplicates()
+                    navigator.push(MangaScreen(it.id))
+                },
+                onMigrate = {
+                    model.dismissDuplicates()
+                    migrateDuplicate = it
+                },
+                onDismiss = model::dismissDuplicates,
+            )
+        }
+        // ZOUKAN <--
+
         state.categoryChoice?.let { categories ->
             CategoryDialog(
                 categories = categories,
@@ -269,7 +318,14 @@ data class MangaScreen(val mangaId: Long) : Screen {
 
 // ZOUKAN -->
 @Composable
-private fun MoreMenu(manga: tachiyomi.domain.manga.model.Manga, onEditMerged: () -> Unit, onEdit: () -> Unit) {
+private fun MoreMenu(
+    manga: tachiyomi.domain.manga.model.Manga,
+    onEditMerged: () -> Unit,
+    onEdit: () -> Unit,
+    onCover: () -> Unit,
+    onFetchInterval: () -> Unit,
+    onCopyLink: (() -> Unit)?,
+) {
     val navigator = LocalNavigator.currentOrThrow
     var open by remember { mutableStateOf(false) }
     val merged = manga.source == exh.source.MERGED_SOURCE_ID
@@ -280,6 +336,22 @@ private fun MoreMenu(manga: tachiyomi.domain.manga.model.Manga, onEditMerged: ()
                 open = false
                 onEdit()
             })
+            DropdownMenuItem(text = { Text("Cover") }, onClick = {
+                open = false
+                onCover()
+            })
+            if (manga.favorite) {
+                DropdownMenuItem(text = { Text("Update frequency") }, onClick = {
+                    open = false
+                    onFetchInterval()
+                })
+            }
+            if (onCopyLink != null) {
+                DropdownMenuItem(text = { Text("Copy link") }, onClick = {
+                    open = false
+                    onCopyLink()
+                })
+            }
             DropdownMenuItem(text = { Text("Similar titles and recommendations") }, onClick = {
                 open = false
                 navigator.push(zoukan.desktop.ui.recs.RecommendsScreen(manga.id))
@@ -450,6 +522,10 @@ private fun ChapterRow(
 @Composable
 private fun DownloadMenu(model: MangaScreenModel) {
     var open by remember { mutableStateOf(false) }
+    // ZOUKAN -->
+    var custom by remember { mutableStateOf(false) }
+    if (custom) CustomDownloadDialog(onConfirm = { model.downloadUnread(it) }, onDismiss = { custom = false })
+    // ZOUKAN <--
     Box {
         TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }) {
@@ -459,10 +535,22 @@ private fun DownloadMenu(model: MangaScreenModel) {
                     model.downloadUnread(count)
                 })
             }
+            // ZOUKAN -->
+            DropdownMenuItem(text = { Text("Custom…") }, onClick = {
+                open = false
+                custom = true
+            })
+            // ZOUKAN <--
             DropdownMenuItem(text = { Text("Unread chapters") }, onClick = {
                 open = false
                 model.downloadUnread(null)
             })
+            // ZOUKAN -->
+            DropdownMenuItem(text = { Text("Bookmarked chapters") }, onClick = {
+                open = false
+                model.downloadBookmarked()
+            })
+            // ZOUKAN <--
         }
     }
 }
@@ -486,7 +574,7 @@ private fun Description(text: String) {
 }
 
 @Composable
-private fun CategoryDialog(
+internal fun CategoryDialog(
     categories: List<tachiyomi.domain.category.model.Category>,
     onConfirm: (List<Long>) -> Unit,
     onDismiss: () -> Unit,
