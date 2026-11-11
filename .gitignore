@@ -21,3 +21,14 @@ local.properties
 /app/google-services.json
 *.jks
 app/standard/preview/*
+
+# Editor, OS and scratch files
+.vscode/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+*.log
+*.tmp
+*.orig
+*.rej

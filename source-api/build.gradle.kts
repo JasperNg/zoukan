@@ -9,6 +9,9 @@ plugins {
 
 kotlin {
     androidTarget()
+    // ZOUKAN -->
+    jvm("desktop")
+    // ZOUKAN <--
     sourceSets {
         val commonMain by getting {
             dependencies {
@@ -25,6 +28,13 @@ kotlin {
 
                 implementation(project.dependencies.platform(compose.bom))
                 implementation(compose.runtime)
+
+                // ZOUKAN -->
+                // The extension API exposes a few Android types (Application, Context,
+                // SharedPreferences, Uri, PreferenceScreen); see android-stubs.
+                compileOnly(projects.androidStubs)
+                implementation(projects.core.common)
+                // ZOUKAN <--
             }
         }
         val androidMain by getting {

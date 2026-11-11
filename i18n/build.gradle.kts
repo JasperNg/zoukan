@@ -11,6 +11,9 @@ plugins {
 
 kotlin {
     androidTarget()
+    // ZOUKAN -->
+    jvm("desktop")
+    // ZOUKAN <--
 
     applyDefaultHierarchyTemplate()
 

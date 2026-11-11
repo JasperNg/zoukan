@@ -1,6 +1,7 @@
 plugins {
-    id("mihon.library")
-    kotlin("android")
+    // ZOUKAN -->
+    id("mihon.library.kmp")
+    // ZOUKAN <--
     kotlin("plugin.serialization")
 }
 
@@ -8,12 +9,24 @@ android {
     namespace = "mihon.core.archive"
 }
 
-dependencies {
-    implementation(libs.jsoup)
-    implementation(libs.libarchive)
-    implementation(libs.unifile)
-    // KMK -->
-    implementation(projects.core.common)
-    implementation(libs.injekt)
-    // KMK <--
+// ZOUKAN -->
+kotlin {
+    sourceSets {
+        commonMain {
+            dependencies {
+                implementation(libs.jsoup)
+                // KMK -->
+                implementation(projects.core.common)
+                implementation(libs.injekt)
+                // KMK <--
+            }
+        }
+        androidMain {
+            dependencies {
+                implementation(libs.libarchive)
+                implementation(libs.unifile)
+            }
+        }
+    }
 }
+// ZOUKAN <--

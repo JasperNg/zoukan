@@ -1,0 +1,85 @@
+# Android app sources compiled into the desktop app (see build.gradle.kts). Relative to
+# app/src/main/java; a leading ! excludes.
+
+# Trackers
+eu/kanade/tachiyomi/data/track/**
+
+eu/kanade/tachiyomi/data/database/models/Track.kt
+eu/kanade/tachiyomi/data/database/models/TrackImpl.kt
+eu/kanade/tachiyomi/util/PkceUtil.kt
+eu/kanade/domain/track/model/**
+eu/kanade/domain/track/service/TrackPreferences.kt
+eu/kanade/domain/track/interactor/AddTracks.kt
+eu/kanade/domain/track/interactor/RefreshTracks.kt
+eu/kanade/domain/track/interactor/SyncChapterProgressWithTrack.kt
+exh/md/utils/FollowStatus.kt
+eu/kanade/domain/track/store/DelayedTrackingStore.kt
+
+# E-Hentai, ExHentai and merged manga
+eu/kanade/tachiyomi/source/online/all/EHentai.kt
+eu/kanade/tachiyomi/source/online/all/MergedSource.kt
+exh/debug/DebugToggles.kt
+exh/eh/EHTags.kt
+exh/eh/tags/**
+exh/eh/EHentaiUpdateHelper.kt
+exh/eh/MemAutoFlushingLookupTable.kt
+eu/kanade/core/preference/PreferenceMutableState.kt
+exh/util/UriFilter.kt
+exh/util/UriGroup.kt
+exh/util/ExceptionUtil.kt
+exh/util/OkHttpExtensions.kt
+eu/kanade/domain/manga/interactor/UpdateManga.kt
+mihon/domain/source/models/RemoteMangaUpdate.kt
+eu/kanade/domain/manga/interactor/SmartSearchMerge.kt
+mihon/domain/migration/models/MigrationFlag.kt
+eu/kanade/domain/source/interactor/GetExhSavedSearch.kt
+
+# Delegated sources (MangaDex, NHentai, LANraragi, Pururin, 8Muses) and MDList
+eu/kanade/tachiyomi/source/online/all/MangaDex.kt
+eu/kanade/tachiyomi/source/online/all/NHentai.kt
+eu/kanade/tachiyomi/source/online/all/Lanraragi.kt
+eu/kanade/tachiyomi/source/online/all/Pururin.kt
+eu/kanade/tachiyomi/source/online/english/EightMuses.kt
+exh/md/**
+!exh/md/MangaDexLoginActivity.kt
+!exh/md/follows/MangaDexFollowsScreen.kt
+!exh/md/follows/MangaDexFollowsScreenModel.kt
+eu/kanade/tachiyomi/data/track/mdlist/**
+
+# Data saver (Bandwidth Hero, wsrv.nl)
+exh/util/DataSaver.kt
+
+# Recommendations
+exh/recs/sources/**
+!exh/recs/sources/StaticResultPagingSource.kt
+exh/util/Math.kt
+exh/util/Boolean.kt
+
+# E-Hentai site settings and favorites sync
+exh/uconfig/**
+exh/favorites/**
+exh/GalleryAdder.kt
+exh/util/ThrottleManager.kt
+exh/eh/EHentaiUpdaterStats.kt
+exh/eh/GalleryNotUpdatedException.kt
+exh/util/CoroutineUtil.kt
+
+# Sync (WebDAV and SyncYomi)
+eu/kanade/domain/sync/**
+eu/kanade/tachiyomi/data/sync/models/**
+eu/kanade/tachiyomi/data/sync/service/SyncService.kt
+eu/kanade/tachiyomi/data/sync/service/WebDavSyncService.kt
+eu/kanade/tachiyomi/data/sync/service/SyncYomiSyncService.kt
+
+# Appearance: the Android themes and their settings
+eu/kanade/domain/ui/UiPreferences.kt
+eu/kanade/domain/ui/model/AppTheme.kt
+eu/kanade/domain/ui/model/TabletUiMode.kt
+eu/kanade/presentation/theme/colorscheme/**
+!eu/kanade/presentation/theme/colorscheme/MonetColorScheme.kt
+!eu/kanade/presentation/theme/colorscheme/CustomColorScheme.kt
+
+# Bulk migration's smart search and batch add
+mihon/feature/migration/list/search/BaseSmartSearchEngine.kt
+mihon/feature/migration/list/search/SmartSourceSearchEngine.kt
+exh/ui/batchadd/BatchAddScreenModel.kt

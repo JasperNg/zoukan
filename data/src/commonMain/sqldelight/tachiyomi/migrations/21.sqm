@@ -1,0 +1,5 @@
+UPDATE mangas
+SET filtered_scanlators = NULL
+-- ZOUKAN --> single-quoted strings: SQLCipher on desktop is built without double-quoted string literals
+WHERE filtered_scanlators = '';
+-- ZOUKAN <--

@@ -1,53 +1,55 @@
-Looking to report an issue/bug or make a feature request? Please refer to the [README file](https://github.com/komikku-app/komikku#issues-feature-requests-and-contributing).
+Looking to report an issue/bug or make a feature request? Please use the [issue forms](https://github.com/JasperNg/zoukan/issues/new/choose).
 
 ---
 
-Thanks for your interest in contributing to Komikku!
+Thanks for your interest in contributing to Zoukan!
 
 
 # Code contributions
 
 Pull requests are welcome!
 
-If you're interested in taking on [an open issue](https://github.com/komikku-app/komikku/issues), please comment on it so others are aware.
+If you're interested in taking on [an open issue](https://github.com/JasperNg/zoukan/issues), please comment on it so others are aware.
 You do not need to ask for permission nor an assignment.
 
 ## Prerequisites
 
 Before you start, please note that the ability to use following technologies is **required** and that existing contributors will not actively teach them to you.
 
-- Basic [Android development](https://developer.android.com/)
-- [Kotlin](https://kotlinlang.org/)
+- [Kotlin](https://kotlinlang.org/) and [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/) for the desktop app
+- Basic [Android development](https://developer.android.com/), since much of the code is shared with the Android app
 
 ### Tools
 
-- [Android Studio](https://developer.android.com/studio)
-- Emulator or phone with developer options enabled to test changes.
+- JDK 21 and [IntelliJ IDEA](https://www.jetbrains.com/idea/) or [Android Studio](https://developer.android.com/studio)
+- Windows x64 or an Apple Silicon Mac to run and test the desktop app
+
+Before opening a pull request, run `./gradlew spotlessCheck :desktop:build` (see [desktop/README.md](desktop/README.md)).
 
 ## Getting help
 
-- Join [the Discord server](https://discord.gg/85jB7V5AJR) for online help and to ask questions while developing.
+- Open an [issue](https://github.com/JasperNg/zoukan/issues) or a draft pull request with your question.
 
 # Translations
 
-Translations are done externally via [Weblate](https://hosted.weblate.org/engage/komikku-app/). See [our website](https://komikku-app.github.io/docs/contribute#translation) for more details.
+The shared strings come from Komikku, which translates them on [Weblate](https://hosted.weblate.org/engage/komikku-app/). See [Komikku's guide](https://komikku-app.github.io/docs/contribute#translation).
 
 
 # Forks
 
-Forks are allowed so long as they abide by [the project's LICENSE](https://github.com/komikku-app/komikku/blob/master/LICENSE).
+Forks are allowed so long as they abide by [the project's LICENSE](https://github.com/JasperNg/zoukan/blob/master/LICENSE).
 
 When creating a fork, remember to:
 
 - To avoid confusion with the main app:
     - Change the app name
     - Change the app icon
-    - Change or disable the [app update checker](https://github.com/komikku-app/komikku/blob/master/app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt)
+    - Change or disable the [app update checker](https://github.com/JasperNg/zoukan/blob/master/app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt)
 - To avoid installation conflicts:
-    - Change the `applicationId` in [`build.gradle.kts`](https://github.com/komikku-app/komikku/blob/master/app/build.gradle.kts)
+    - Change the `applicationId` in [`build.gradle.kts`](https://github.com/JasperNg/zoukan/blob/master/app/build.gradle.kts)
 - To avoid having your data polluting the main app's analytics and crash report services:
-    - If you want to use Firebase analytics, replace [`google-services.json`](https://github.com/komikku-app/komikku/blob/master/app/src/standard/google-services.json) with your own
-    - If you want to use ACRA crash reporting, replace the `ACRA_URI` endpoint in [`build.gradle.kts`](https://github.com/komikku-app/komikku/blob/master/app/build.gradle.kts) with your own
+    - If you want to use Firebase analytics, replace [`google-services.json`](https://github.com/JasperNg/zoukan/blob/master/app/src/standard/google-services.json) with your own
+    - If you want to use ACRA crash reporting, replace the `ACRA_URI` endpoint in [`build.gradle.kts`](https://github.com/JasperNg/zoukan/blob/master/app/build.gradle.kts) with your own
 
 
 ### Supporting Cloud Sync - Google Drive Implementation
