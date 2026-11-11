@@ -9,7 +9,10 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -468,6 +471,57 @@ class EndToEndParityTest {
                 onAllNodesWithText("OK").onFirst().performClick()
                 waitFor(hasText("Nothing to clear"))
                 runBlocking { Injekt.get<GetManga>().await("Delta", LocalSource.ID) } shouldBe null
+                runOnUiThread { navigator?.pop() }
+            }
+
+            step("Backup and restore choices") {
+                // Create backup: what goes in the backup, as Android's CreateBackupScreen
+                runOnUiThread { navigator?.push(zoukan.desktop.ui.settings.CreateBackupScreen) }
+                waitFor(hasTestTag("create-backup-action"))
+                shot("p27a-create-backup")
+                onNodeWithTag("create-backup-action").assertIsEnabled()
+                listOf("Library entries", "Categories", "Saved Searches & Feeds", "App settings", "Extension stores", "Source settings")
+                    .forEach { label ->
+                        val list = onAllNodes(hasScrollAction()).onLast()
+                        list.performScrollToNode(hasTestTag("backup-option:$label"))
+                        onNodeWithTag("backup-option:$label").performClick()
+                    }
+                // Nothing chosen: nothing to create
+                onNodeWithTag("create-backup-action").assertIsNotEnabled()
+                runOnUiThread { navigator?.pop() }
+
+                // Restore backup: a backup that needs a source that is not installed and a tracker
+                // that is not signed in shows both, as Android's RestoreBackupScreen
+                val file = File(dirs.root, "needs-more.tachibk")
+                val backup = eu.kanade.tachiyomi.data.backup.models.Backup(
+                    backupManga = listOf(
+                        eu.kanade.tachiyomi.data.backup.models.BackupManga(
+                            source = 4242L,
+                            url = "/ghost",
+                            title = "Ghost",
+                            tracking = listOf(eu.kanade.tachiyomi.data.backup.models.BackupTracking(syncId = 2, libraryId = 0L)),
+                        ),
+                    ),
+                    backupSources = listOf(eu.kanade.tachiyomi.data.backup.models.BackupSource("Ghost Source", 4242L)),
+                )
+                okio.buffer(okio.sink(file)).use { eu.kanade.tachiyomi.data.backup.BackupCodec.write(backup, it) }
+                runOnUiThread { navigator?.push(zoukan.desktop.ui.settings.RestoreBackupScreen(file.path)) }
+                waitFor(hasText("Missing sources:", substring = true))
+                waitFor(hasText("Ghost Source", substring = true))
+                waitFor(hasText("Trackers not logged into:", substring = true))
+                waitFor(hasText("AniList", substring = true))
+                shot("p27b-restore-backup")
+                onNodeWithTag("restore-backup-action").assertIsEnabled()
+                listOf("Library", "Categories", "App settings", "Extension stores", "Source settings", "Saved Searches & Feeds")
+                    .forEach { label -> onNodeWithTag("backup-option:$label").performClick() }
+                onNodeWithTag("restore-backup-action").assertIsNotEnabled()
+                runOnUiThread { navigator?.pop() }
+
+                // A file that is not a backup cannot be restored
+                val broken = File(dirs.root, "broken.tachibk").apply { writeText("not a backup") }
+                runOnUiThread { navigator?.push(zoukan.desktop.ui.settings.RestoreBackupScreen(broken.path)) }
+                waitFor(hasText("Invalid backup file:", substring = true))
+                onNodeWithTag("restore-backup-action").assertIsNotEnabled()
                 runOnUiThread { navigator?.pop() }
             }
 

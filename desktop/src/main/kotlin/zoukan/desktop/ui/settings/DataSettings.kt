@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -177,14 +179,15 @@ private fun BackupButtons() {
     val dirs = remember { Injekt.get<ZoukanDirs>() }
     val window = LocalWindow.current?.window
     val status by backupStatusFlow.collectAsState()
+    val navigator = LocalNavigator.currentOrThrow
     SearchTerms(localized(MR.strings.pref_create_backup), localized(MR.strings.pref_restore_backup))
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { createBackup(dirs.backups) }, enabled = status == null, modifier = Modifier.weight(1f)) {
+            OutlinedButton(onClick = { navigator.push(CreateBackupScreen) }, enabled = status == null, modifier = Modifier.weight(1f)) {
                 Text(localized(MR.strings.pref_create_backup))
             }
             OutlinedButton(
-                onClick = { pickAndRestoreBackup(window, dirs) },
+                onClick = { pickBackupFile(window, dirs)?.let { navigator.push(RestoreBackupScreen(it.path)) } },
                 enabled = status == null,
                 modifier = Modifier.weight(1f),
             ) { Text(localized(MR.strings.pref_restore_backup)) }
@@ -204,16 +207,18 @@ private fun BackupButtons() {
     }
 }
 
-/** Asks for a backup file and restores it; returns whether one was chosen. The first-run setup uses it too. */
-internal fun pickAndRestoreBackup(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): Boolean {
+/**
+ * Asks for a backup file to restore, as Android's restore picker; null when none was chosen. The
+ * file then opens in [RestoreBackupScreen]. The first-run setup uses it too.
+ */
+internal fun pickBackupFile(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): File? {
     val dialog = FileDialog(window as java.awt.Frame?, localized(MR.strings.file_select_backup), FileDialog.LOAD).apply {
         directory = dirs.backups.absolutePath
         setFilenameFilter { _, name -> name.endsWith(".tachibk") || name.endsWith(".proto.gz") }
         isVisible = true
     }
-    val name = dialog.file ?: return false
-    restoreBackup(File(dialog.directory, name))
-    return true
+    val name = dialog.file ?: return null
+    return File(dialog.directory, name)
 }
 
 /** Android's StorageInfo: the storage location's disk, used and free. */
