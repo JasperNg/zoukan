@@ -10,13 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkRemove
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.RemoveDone
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FileDownloadOff
+import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -129,8 +129,8 @@ private fun ChapterSwipeAction.isAvailable(state: ChapterSwipeState): Boolean = 
 }
 
 private fun ChapterSwipeAction.icon(state: ChapterSwipeState): ImageVector = when (this) {
-    ChapterSwipeAction.ToggleRead -> if (state.read) Icons.Default.RemoveDone else Icons.Default.Done
-    ChapterSwipeAction.ToggleBookmark -> if (state.bookmark) Icons.Default.BookmarkRemove else Icons.Default.Bookmark
+    ChapterSwipeAction.ToggleRead -> if (state.read) Icons.Outlined.RemoveDone else Icons.Outlined.Done
+    ChapterSwipeAction.ToggleBookmark -> if (state.bookmark) Icons.Outlined.BookmarkRemove else Icons.Outlined.BookmarkAdd
     ChapterSwipeAction.Download -> if (state.downloaded == true) Icons.Outlined.Delete else Icons.Outlined.Download
     ChapterSwipeAction.Disabled -> Icons.Outlined.FileDownloadOff
 }

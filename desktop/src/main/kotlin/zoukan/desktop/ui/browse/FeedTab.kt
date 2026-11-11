@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -274,12 +274,12 @@ fun FeedTab(model: FeedScreenModel) {
             BulkSelectButton(bulk)
             // Komikku's feed order: drag the saved feeds into place
             if (rows.count { !it.fixed } > 1) {
-                TooltipIconButton(Icons.AutoMirrored.Filled.Sort, "Reorder the feed", onClick = { ordering = true })
+                TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, "Reorder the feed", onClick = { ordering = true })
             }
             // ZOUKAN <--
-            TooltipIconButton(Icons.Default.Refresh, "Refresh", onClick = model::refresh)
+            TooltipIconButton(Icons.Outlined.Refresh, "Refresh", onClick = model::refresh)
             FilledTonalButton(onClick = { adding = true }) {
-                Icon(Icons.Default.Add, null)
+                Icon(Icons.Outlined.Add, null)
                 Text("Add")
             }
         }
@@ -309,7 +309,7 @@ fun FeedTab(model: FeedScreenModel) {
                         ) {
                             Text(row.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                             if (!row.fixed) TooltipIconButton(Icons.Outlined.Delete, "Remove from the feed", onClick = { model.remove(row) })
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+                            Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
                         }
                         when (val result = state.results[row.feed.id]) {
                             // ZOUKAN -->

@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -228,14 +228,14 @@ data class GlobalSearchScreen(
                         selected = sourceFilter == GlobalSearchSourceFilter.PinnedOnly,
                         onClick = { model.setSourceFilter(GlobalSearchSourceFilter.PinnedOnly) },
                         label = { Text("Pinned only") },
-                        leadingIcon = { Icon(Icons.Default.PushPin, null, Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Outlined.PushPin, null, Modifier.size(16.dp)) },
                         modifier = Modifier.testTag("global-search-pinned"),
                     )
                     FilterChip(
                         selected = sourceFilter == GlobalSearchSourceFilter.All,
                         onClick = { model.setSourceFilter(GlobalSearchSourceFilter.All) },
                         label = { Text("All sources") },
-                        leadingIcon = { Icon(Icons.Default.DoneAll, null, Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Outlined.DoneAll, null, Modifier.size(16.dp)) },
                         modifier = Modifier.testTag("global-search-all"),
                     )
                 }
@@ -243,7 +243,7 @@ data class GlobalSearchScreen(
                     selected = onlyWithResults,
                     onClick = model::toggleOnlyWithResults,
                     label = { Text("Has results") },
-                    leadingIcon = { Icon(Icons.Default.FilterList, null, Modifier.size(16.dp)) },
+                    leadingIcon = { Icon(Icons.Outlined.FilterList, null, Modifier.size(16.dp)) },
                     modifier = Modifier.testTag("global-search-has-results"),
                 )
             }
@@ -264,7 +264,7 @@ data class GlobalSearchScreen(
                                 Text(source.name, style = MaterialTheme.typography.titleMedium)
                                 Text(languageName(source.lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+                            Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
                         }
                         when (val result = results[source.id]) {
                             is GlobalSearchScreenModel.Result.Success -> if (result.manga.isEmpty()) {
