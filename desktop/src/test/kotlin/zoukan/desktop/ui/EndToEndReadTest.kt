@@ -123,7 +123,14 @@ class EndToEndReadTest {
                 // Right to left is the default: Left turns to the next page
                 onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
                 // A wide window shows double pages by default, as Android in landscape: the cover, then 2-3
-                waitFor(hasText("2 / ", substring = true) or hasText("2-3 / ", substring = true), timeout = 60_000)
+                runCatching {
+                    waitFor(hasText("2 / ", substring = true) or hasText("2-3 / ", substring = true), timeout = 60_000)
+                }.onFailure {
+                    // The reader's state (reading mode, current and wide pages) says why the page did not turn
+                    shot("5-reader-page-2-failed")
+                    E2EDiagnostics.dump()
+                    throw it
+                }
                 waitUntil(timeoutMillis = 60_000) { pageOnScreen() }
                 shot("5-reader-page-2")
             }

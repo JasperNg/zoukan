@@ -207,11 +207,28 @@ fun PagedViewer(
     actions.zoomReset = { current().reset() }
     actions.smoothScroll = null
 
+    // ZOUKAN -->
+    // The spreads the pager was last laid out with, to read its position through them
+    val laidOut = remember { arrayOfNulls<List<Spread>>(1) }
+    // ZOUKAN <--
     LaunchedEffect(pagerState, spreads) {
-        // When the layout changes (a setting, or the window turning wide), first move to the spread
-        // that holds the current page, so the old pager index is never read through the new spreads
-        val target = spreadOf(state.currentPage) + 1
-        if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+        // When the layout changes (a setting, the window turning wide, or a page decoding as a
+        // wide one), first move to the spread that holds the page the pager shows or is turning
+        // to, so the old pager index is never read through the new spreads. The model's current
+        // page lags behind a turn until it settles, so a page that decodes mid-turn would
+        // otherwise send the pager back.
+        // ZOUKAN -->
+        val old = laidOut[0]
+        laidOut[0] = spreads
+        val heading = pagerState.targetPage
+        val target = when {
+            old == null -> spreadOf(state.currentPage) + 1
+            heading <= 0 -> 0
+            heading > old.size -> spreads.size + 1
+            else -> spreadOf(old[heading - 1].first) + 1
+        }
+        if (pagerState.currentPage != target || pagerState.targetPage != target) pagerState.scrollToPage(target)
+        // ZOUKAN <--
         snapshotFlow { pagerState.settledPage }.distinctUntilChanged().collect { index ->
             // Leaving a page resets its zoom, as on Android
             zooms.keys.filter { it != index }.forEach { zooms.remove(it) }
