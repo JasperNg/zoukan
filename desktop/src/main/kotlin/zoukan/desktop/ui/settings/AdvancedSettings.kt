@@ -190,6 +190,7 @@ fun LazyListScope.advancedSettings() {
             "Append the first six characters of the chapter URL's MD5 hash to the chapter file or folder name.",
         )
     }
+    item(key = "advanced-cleanup-downloads") { CleanupDownloadsPreference() }
 
     settingsGroup("Extensions")
     item(key = "advanced-revoke-trust") {

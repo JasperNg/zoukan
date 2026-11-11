@@ -104,6 +104,7 @@ class DownloadManagerTest {
             every { parallelSourceLimit() } returns pref(5)
             every { parallelPageLimit() } returns pref(5)
             every { splitTallImages() } returns pref(false)
+            every { downloadCacheRenewInterval() } returns pref(1)
         }
         val protect = mockk<Preference<Boolean>> { every { get() } returns false }
         val securityPreferences = mockk<SecurityPreferences> {

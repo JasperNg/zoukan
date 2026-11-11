@@ -21,6 +21,7 @@ import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.InsertFlatMetadata
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.library.PowerStatus
 import zoukan.desktop.tray.Notifications
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.days
@@ -56,7 +57,11 @@ class EhGalleryUpdater(
     fun isDue(now: Long = System.currentTimeMillis()): Boolean {
         val hours = exhPreferences.exhAutoUpdateFrequency().get()
         if (hours <= 0 || paused || !exhPreferences.isHentaiEnabled().get()) return false
-        return now - (stats()?.startTime ?: 0L) >= hours * 60L * 60 * 1000
+        if (now - (stats()?.startTime ?: 0L) < hours * 60L * 60 * 1000) return false
+        // "Auto update restrictions": Charging waits for mains power, as the library update does.
+        // Wi-Fi and unmetered network are Android's, which a desktop cannot tell
+        val restrictions = exhPreferences.exhAutoUpdateRequirements().get()
+        return LibraryPreferences.DEVICE_CHARGING !in restrictions || PowerStatus.onMainsPower()
     }
 
     suspend fun runIfDue() {
