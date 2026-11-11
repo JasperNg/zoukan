@@ -65,6 +65,10 @@ class ReaderPage(val index: Int, val page: Page) {
 class ReaderScreenModel(
     private val mangaId: Long,
     private val initialChapterId: Long,
+    // ZOUKAN -->
+    /** A page to open the first chapter at (a page preview), instead of where reading stopped */
+    private var initialPage: Int? = null,
+    // ZOUKAN <--
     private val getManga: GetManga = Injekt.get(),
     private val getChapters: GetChaptersByMangaId = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
@@ -240,7 +244,14 @@ class ReaderScreenModel(
                 }
                 mutableState.update { it.copy(fromDisk = file != null) }
                 if (pages.isEmpty()) error("The source returned no pages")
+                // ZOUKAN -->
+                val requested = initialPage?.takeIf { chapter.id == initialChapterId }
+                initialPage = null
+                // ZOUKAN <--
                 val start = when {
+                    // ZOUKAN -->
+                    requested != null -> requested.coerceIn(0, pages.lastIndex)
+                    // ZOUKAN <--
                     atEnd -> pages.lastIndex
                     // ZOUKAN -->
                     fromStart -> 0

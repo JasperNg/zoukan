@@ -66,10 +66,16 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.browse.SourceScreen
+import zoukan.desktop.ui.common.ChapterSwipeBox
+import zoukan.desktop.ui.common.ChapterSwipeState
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
@@ -173,27 +179,61 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                             if (showMissing) MissingChapters.of(state.sortedChapters, manga.sortDescending()) else MissingChapters.NONE
                                         }
                                         // ZOUKAN <--
+                                        // ZOUKAN -->
+                                        val libraryPrefs = remember { Injekt.get<LibraryPreferences>() }
+                                        val swipeToStart by libraryPrefs.swipeToStartAction().changes()
+                                            .collectAsState(libraryPrefs.swipeToStartAction().get())
+                                        val swipeToEnd by libraryPrefs.swipeToEndAction().changes()
+                                            .collectAsState(libraryPrefs.swipeToEndAction().get())
+                                        // ZOUKAN <--
                                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                                             items(state.sortedChapters, key = { it.id }) { chapter ->
                                                 // ZOUKAN -->
                                                 missing.before[chapter.id]?.let { MissingChaptersRow(it) }
                                                 // ZOUKAN <--
-                                                ChapterRow(
-                                                    chapter = chapter,
-                                                    selected = chapter.id in state.selected,
-                                                    selecting = state.selected.isNotEmpty(),
-                                                    onOpen = { navigator.push(ReaderScreen(manga.id, chapter.id)) },
-                                                    onToggleSelect = { model.toggleSelection(chapter) },
-                                                    onMarkRead = { model.markRead(listOf(chapter), !chapter.read) },
-                                                    onBookmark = { model.setBookmark(listOf(chapter), !chapter.bookmark) },
-                                                    onMarkPreviousRead = { model.markPreviousRead(chapter) },
-                                                    showDownload = !state.isLocal,
-                                                    downloaded = chapter.id in state.downloaded,
-                                                    download = state.queued[chapter.id],
-                                                    onDownload = { model.download(listOf(chapter)) },
-                                                    onCancelDownload = { model.cancelDownload(chapter) },
-                                                    onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
-                                                )
+                                                // ZOUKAN -->
+                                                // Android's chapter swipe actions (Settings > Library > Chapter swipe)
+                                                ChapterSwipeBox(
+                                                    toStart = swipeToStart,
+                                                    toEnd = swipeToEnd,
+                                                    state = ChapterSwipeState(
+                                                        read = chapter.read,
+                                                        bookmark = chapter.bookmark,
+                                                        downloaded = if (state.isLocal) null else chapter.id in state.downloaded || chapter.id in state.queued,
+                                                    ),
+                                                    onAction = { action ->
+                                                        when (action) {
+                                                            ChapterSwipeAction.ToggleRead -> model.markRead(listOf(chapter), !chapter.read)
+                                                            ChapterSwipeAction.ToggleBookmark -> model.setBookmark(listOf(chapter), !chapter.bookmark)
+                                                            ChapterSwipeAction.Download -> when {
+                                                                chapter.id in state.queued -> model.cancelDownload(chapter)
+                                                                chapter.id in state.downloaded -> model.deleteDownloads(listOf(chapter))
+                                                                else -> model.download(listOf(chapter))
+                                                            }
+                                                            ChapterSwipeAction.Disabled -> Unit
+                                                        }
+                                                    },
+                                                ) {
+                                                    // ZOUKAN <--
+                                                    ChapterRow(
+                                                        chapter = chapter,
+                                                        selected = chapter.id in state.selected,
+                                                        selecting = state.selected.isNotEmpty(),
+                                                        onOpen = { navigator.push(ReaderScreen(manga.id, chapter.id)) },
+                                                        onToggleSelect = { model.toggleSelection(chapter) },
+                                                        onMarkRead = { model.markRead(listOf(chapter), !chapter.read) },
+                                                        onBookmark = { model.setBookmark(listOf(chapter), !chapter.bookmark) },
+                                                        onMarkPreviousRead = { model.markPreviousRead(chapter) },
+                                                        showDownload = !state.isLocal,
+                                                        downloaded = chapter.id in state.downloaded,
+                                                        download = state.queued[chapter.id],
+                                                        onDownload = { model.download(listOf(chapter)) },
+                                                        onCancelDownload = { model.cancelDownload(chapter) },
+                                                        onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
+                                                    )
+                                                    // ZOUKAN -->
+                                                }
+                                                // ZOUKAN <--
                                             }
                                             // ZOUKAN -->
                                             if (missing.end > 0) item(key = "missing-end") { MissingChaptersRow(missing.end) }
