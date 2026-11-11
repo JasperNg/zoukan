@@ -22,7 +22,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +51,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.formatDate

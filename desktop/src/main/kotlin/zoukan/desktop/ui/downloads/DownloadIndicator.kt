@@ -7,7 +7,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.i18n.desktop.DMR
 

@@ -147,7 +147,10 @@ class EndToEndParityTest {
             step("Select an entry and mark it read") {
                 library.filterUnread().set(TriState.DISABLED)
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 3 }
+                // A right click opens the entry's menu; Select there starts the selection
                 onAllNodesWithText("Bravo").onFirst().performMouseInput { rightClick() }
+                waitFor(hasText("Select"))
+                onAllNodesWithText("Select").onFirst().performClick()
                 waitFor(hasText("1 selected"))
                 shot("p6-selection")
                 byDescription("Mark as read").performClick()
