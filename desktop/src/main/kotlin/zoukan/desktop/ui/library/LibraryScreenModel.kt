@@ -264,6 +264,10 @@ class LibraryScreenModel(
             p.unreadBadge().changes(), p.downloadBadge().changes(), p.localBadge().changes(),
             p.languageBadge().changes(), p.sourceBadge().changes(), p.showContinueReadingButton().changes(),
             p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
+            // ZOUKAN -->
+            // More > Downloaded only shows only downloaded entries, as Android's library
+            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes(),
+            // ZOUKAN <--
         ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
         return combine(flows) { v ->
             Settings(
@@ -272,7 +276,7 @@ class LibraryScreenModel(
                 sort = v[2] as LibrarySort,
                 randomSeed = v[3] as Int,
                 categorized = v[4] as Boolean,
-                downloaded = v[5] as TriState,
+                downloaded = if (v[18] as Boolean) TriState.ENABLED_IS else v[5] as TriState,
                 unread = v[6] as TriState,
                 started = v[7] as TriState,
                 bookmarked = v[8] as TriState,
@@ -285,7 +289,7 @@ class LibraryScreenModel(
                 continueReading = v[15] as Boolean,
                 categoryTabs = v[16] as Boolean,
                 itemCounts = v[17] as Boolean,
-                tracking = trackerIds.mapIndexed { i, id -> id to v[18 + i] as TriState }.toMap(),
+                tracking = trackerIds.mapIndexed { i, id -> id to v[19 + i] as TriState }.toMap(),
             )
         }
     }
