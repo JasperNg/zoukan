@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.updates
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,10 +14,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,25 +35,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.interactor.UpdateChapter
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.manga.interactor.GetFavorites
+import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.download.Download
+import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
+import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.browse.sectionHeader
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
@@ -56,8 +77,11 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.downloads.DownloadsButton
+import zoukan.desktop.ui.library.ClickKind
 import zoukan.desktop.ui.library.LibraryUpdateProgress
+import zoukan.desktop.ui.library.selectableClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.upcoming.UpcomingScreen
@@ -68,13 +92,27 @@ class UpdatesScreenModel(
     getUpdates: GetUpdates = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
     private val getFavorites: GetFavorites = Injekt.get(),
+    private val getManga: GetManga = Injekt.get(),
+    private val getChapter: GetChapter = Injekt.get(),
+    private val downloadManager: DownloadManager = Injekt.get(),
 ) : StateScreenModel<UpdatesScreenModel.State>(State()) {
 
     data class State(
         val loading: Boolean = true,
         val items: List<UpdatesWithRelations> = emptyList(),
         val unreadOnly: Boolean = false,
-    )
+        // ZOUKAN -->
+        /** Chapter ids picked for a bulk action, as Android's Updates selection */
+        val selected: Set<Long> = emptySet(),
+        /** Chapters downloaded to disk */
+        val downloaded: Set<Long> = emptySet(),
+        /** Chapters in the download queue, by chapter id */
+        val queued: Map<Long, Download> = emptyMap(),
+        // ZOUKAN <--
+    ) {
+        val selecting: Boolean get() = selected.isNotEmpty()
+        val selectedItems: List<UpdatesWithRelations> get() = items.filter { it.chapterId in selected }
+    }
 
     private val unreadOnly = MutableStateFlow(false)
 
@@ -94,15 +132,39 @@ class UpdatesScreenModel(
                 // More > Downloaded only shows only downloaded chapters, as Android's Updates
                 .let { updates ->
                     val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
-                    val downloads = Injekt.get<zoukan.desktop.download.DownloadManager>()
-                    kotlinx.coroutines.flow.combine(updates, downloadedOnly, downloads.changes) { items, only, _ ->
-                        if (only) items.filter { isDownloaded(downloads, it) } else items
+                    combine(updates, downloadedOnly, downloadManager.changes) { items, only, _ ->
+                        if (only) items.filter { isDownloaded(downloadManager, it) } else items
                     }
                 }
                 // ZOUKAN <--
-                .collect { items -> mutableState.update { it.copy(loading = false, items = items) } }
+                .collectLatest { items ->
+                    val ids = items.mapTo(HashSet()) { it.chapterId }
+                    mutableState.update {
+                        it.copy(
+                            loading = false,
+                            items = items,
+                            // Chapters that left the list leave the selection too
+                            selected = it.selected.filterTo(HashSet()) { id -> id in ids },
+                        )
+                    }
+                    val downloaded = withContext(Dispatchers.IO) { downloadedIds(items) }
+                    mutableState.update { it.copy(downloaded = downloaded) }
+                }
+        }
+        screenModelScope.launch {
+            downloadManager.queue
+                .map { q -> q.associateBy { it.chapter.id } }
+                .distinctUntilChanged()
+                .collect { queued -> mutableState.update { it.copy(queued = queued) } }
         }
     }
+
+    private suspend fun downloadedIds(items: List<UpdatesWithRelations>): Set<Long> =
+        items.filter { it.sourceId != LocalSource.ID }.groupBy { it.mangaId }.flatMapTo(HashSet()) { (mangaId, list) ->
+            val manga = getManga.await(mangaId) ?: return@flatMapTo emptyList()
+            val chapters = list.mapNotNull { getChapter.await(it.chapterId) }
+            downloadManager.downloadedIds(manga, chapters)
+        }
 
     // ZOUKAN -->
     private fun isDownloaded(downloads: zoukan.desktop.download.DownloadManager, item: UpdatesWithRelations): Boolean {
@@ -119,18 +181,76 @@ class UpdatesScreenModel(
         mutableState.update { it.copy(unreadOnly = unreadOnly.value) }
     }
 
-    fun setRead(item: UpdatesWithRelations, read: Boolean) {
+    fun setRead(item: UpdatesWithRelations, read: Boolean) = setRead(listOf(item), read)
+
+    // ZOUKAN -->
+    fun setRead(items: List<UpdatesWithRelations>, read: Boolean) {
         screenModelScope.launch {
-            updateChapter.await(ChapterUpdate(id = item.chapterId, read = read, lastPageRead = if (read) null else 0L))
-            // ZOUKAN -->
-            if (read && !item.read) {
-                Injekt.get<tachiyomi.domain.chapter.interactor.GetChapter>().await(item.chapterId)?.let {
-                    Injekt.get<zoukan.desktop.download.DownloadManager>().afterMarkedRead(listOf(it))
-                }
+            items.forEach { item ->
+                updateChapter.await(ChapterUpdate(id = item.chapterId, read = read, lastPageRead = if (read) null else 0L))
             }
-            // ZOUKAN <--
+            if (read) {
+                val newlyRead = items.filter { !it.read }.mapNotNull { getChapter.await(it.chapterId) }
+                if (newlyRead.isNotEmpty()) downloadManager.afterMarkedRead(newlyRead)
+            }
         }
+        clearSelection()
     }
+
+    fun setBookmark(items: List<UpdatesWithRelations>, bookmark: Boolean) {
+        screenModelScope.launch {
+            items.forEach { updateChapter.await(ChapterUpdate(id = it.chapterId, bookmark = bookmark)) }
+        }
+        clearSelection()
+    }
+
+    /** Chapters of [items] with their entry, grouped by entry; local chapters are left out. */
+    private suspend fun byEntry(items: List<UpdatesWithRelations>): List<Pair<Manga, List<Chapter>>> =
+        items.filter { it.sourceId != LocalSource.ID }.groupBy { it.mangaId }.mapNotNull { (mangaId, list) ->
+            val manga = getManga.await(mangaId) ?: return@mapNotNull null
+            manga to list.mapNotNull { getChapter.await(it.chapterId) }
+        }
+
+    fun download(items: List<UpdatesWithRelations>) {
+        screenModelScope.launch {
+            byEntry(items).forEach { (manga, chapters) -> downloadManager.enqueue(manga, chapters) }
+        }
+        clearSelection()
+    }
+
+    fun deleteDownloads(items: List<UpdatesWithRelations>) {
+        screenModelScope.launch {
+            byEntry(items).forEach { (manga, chapters) -> downloadManager.delete(manga, chapters) }
+        }
+        clearSelection()
+    }
+
+    fun cancelDownload(item: UpdatesWithRelations) = downloadManager.cancel(setOf(item.chapterId))
+
+    fun toggleSelection(item: UpdatesWithRelations) = mutableState.update {
+        it.copy(selected = if (item.chapterId in it.selected) it.selected - item.chapterId else it.selected + item.chapterId)
+    }
+
+    /**
+     * Shift-click: selects every chapter between the last selected one and [item], as Android's
+     * long-press range selection.
+     */
+    fun selectRange(item: UpdatesWithRelations) = mutableState.update { state ->
+        val ids = state.items.map { it.chapterId }
+        val to = ids.indexOf(item.chapterId)
+        val from = ids.indexOfLast { it in state.selected }.takeIf { it >= 0 } ?: to
+        val range = if (from <= to) from..to else to..from
+        state.copy(selected = state.selected + range.map { ids[it] })
+    }
+
+    fun selectAll() = mutableState.update { s -> s.copy(selected = s.items.mapTo(HashSet()) { it.chapterId }) }
+
+    fun invertSelection() = mutableState.update { s ->
+        s.copy(selected = s.items.map { it.chapterId }.filterTo(HashSet()) { it !in s.selected })
+    }
+
+    fun clearSelection() = mutableState.update { it.copy(selected = emptySet()) }
+    // ZOUKAN <--
 
     fun refresh() {
         if (!Injekt.get<LibraryUpdater>().start()) Toasts.show("A library update is already running")
@@ -143,12 +263,16 @@ fun UpdatesTab(model: UpdatesScreenModel) {
     val refresh by Injekt.get<LibraryUpdater>().progress.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Updates", subtitle = "New chapters in your library from the last 90 days", showBack = false) {
-            FilterChip(selected = state.unreadOnly, onClick = model::toggleUnreadOnly, label = { Text("Unread only") })
-            // Android's Updates toolbar opens Upcoming from its calendar button
-            TooltipIconButton(Icons.Outlined.CalendarMonth, "View Upcoming Updates", onClick = { navigator.push(UpcomingScreen) })
-            DownloadsButton()
-            TooltipIconButton(Icons.Default.Refresh, "Update library", onClick = model::refresh, enabled = refresh == null)
+        if (state.selecting) {
+            SelectionHeader(state, model)
+        } else {
+            ScreenHeader("Updates", subtitle = "New chapters in your library from the last 90 days", showBack = false) {
+                FilterChip(selected = state.unreadOnly, onClick = model::toggleUnreadOnly, label = { Text("Unread only") })
+                // Android's Updates toolbar opens Upcoming from its calendar button
+                TooltipIconButton(Icons.Outlined.CalendarMonth, "View Upcoming Updates", onClick = { navigator.push(UpcomingScreen) })
+                DownloadsButton()
+                TooltipIconButton(Icons.Default.Refresh, "Update library", onClick = model::refresh, enabled = refresh == null)
+            }
         }
         LibraryUpdateProgress()
         when {
@@ -158,41 +282,121 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                 state.items.groupBy { zoukan.desktop.ui.common.Dates.relative(it.dateFetch) }.forEach { (date, items) ->
                     sectionHeader(date)
                     items(items, key = { it.chapterId }) { item ->
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable { navigator.push(ReaderScreen(item.mangaId, item.chapterId)) }
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CoverImage(
-                                Cover.of(item.coverData),
-                                Modifier.size(44.dp, 60.dp).clip(RoundedCornerShape(6.dp)).clickable { navigator.push(MangaScreen(item.mangaId)) },
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f).alpha(if (item.read) 0.5f else 1f)) {
-                                Text(item.mangaTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (item.bookmark) {
-                                        Icon(Icons.Default.Bookmark, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                                    }
-                                    Text(
-                                        item.chapterName + if (!item.read && item.lastPageRead > 0) " · Page ${item.lastPageRead + 1}" else "",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                        UpdateRow(
+                            item = item,
+                            selected = item.chapterId in state.selected,
+                            downloaded = item.chapterId in state.downloaded,
+                            download = state.queued[item.chapterId],
+                            onClick = { kind ->
+                                when {
+                                    kind == ClickKind.Range -> model.selectRange(item)
+                                    kind == ClickKind.Toggle || state.selecting -> model.toggleSelection(item)
+                                    else -> navigator.push(ReaderScreen(item.mangaId, item.chapterId))
                                 }
-                            }
-                            if (item.read) {
-                                TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = { model.setRead(item, false) })
-                            } else {
-                                TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = { model.setRead(item, true) })
-                            }
-                        }
+                            },
+                            onOpenManga = { navigator.push(MangaScreen(item.mangaId)) },
+                            onRead = { model.setRead(item, !item.read) },
+                            onDownload = { model.download(listOf(item)) },
+                            onCancelDownload = { model.cancelDownload(item) },
+                            onDeleteDownload = { model.deleteDownloads(listOf(item)) },
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+/** The toolbar while chapters are selected: the count and the bulk actions, as on Android. */
+@Composable
+private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel) {
+    val selected = state.selectedItems
+    Row(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TooltipIconButton(Icons.Default.Close, "Clear selection", onClick = model::clearSelection)
+        Text("${selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
+        TooltipIconButton(Icons.Default.FlipToBack, "Invert selection", onClick = model::invertSelection)
+        if (selected.any { !it.read }) {
+            TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = { model.setRead(selected, true) })
+        }
+        if (selected.any { it.read || it.lastPageRead > 0 }) {
+            TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = { model.setRead(selected, false) })
+        }
+        if (selected.any { !it.bookmark }) {
+            TooltipIconButton(Icons.Default.Bookmark, "Bookmark", onClick = { model.setBookmark(selected, true) })
+        }
+        if (selected.any { it.bookmark }) {
+            TooltipIconButton(Icons.Default.BookmarkBorder, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
+        }
+        val remote = selected.filter { it.sourceId != LocalSource.ID }
+        if (remote.any { it.chapterId !in state.downloaded && it.chapterId !in state.queued }) {
+            TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { model.download(remote) })
+        }
+        if (remote.any { it.chapterId in state.downloaded }) {
+            TooltipIconButton(Icons.Outlined.Delete, "Delete downloads", onClick = { model.deleteDownloads(remote) })
+        }
+    }
+}
+
+@Composable
+private fun UpdateRow(
+    item: UpdatesWithRelations,
+    selected: Boolean,
+    downloaded: Boolean,
+    download: Download?,
+    onClick: (ClickKind) -> Unit,
+    onOpenManga: () -> Unit,
+    onRead: () -> Unit,
+    onDownload: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onDeleteDownload: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth()
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .selectableClick(onClick)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CoverImage(
+            Cover.of(item.coverData),
+            Modifier.size(44.dp, 60.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenManga),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).alpha(if (item.read) 0.5f else 1f)) {
+            Text(item.mangaTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (item.bookmark) {
+                    Icon(Icons.Default.Bookmark, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    item.chapterName + if (!item.read && item.lastPageRead > 0) " · Page ${item.lastPageRead + 1}" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (item.read) {
+            TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = onRead)
+        } else {
+            TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = onRead)
+        }
+        // ZOUKAN -->
+        // Android's Updates rows end with the chapter's download button
+        if (item.sourceId != LocalSource.ID) {
+            DownloadIndicator(
+                downloaded = downloaded,
+                download = download,
+                onDownload = onDownload,
+                onCancel = onCancelDownload,
+                onDelete = onDeleteDownload,
+            )
+        }
+        // ZOUKAN <--
     }
 }

@@ -245,7 +245,7 @@ fun runZoukanApp() {
                     window.minimumSize = java.awt.Dimension(WindowBounds.MIN_WIDTH, WindowBounds.MIN_HEIGHT)
                 }
                 CompositionLocalProvider(LocalWindow provides this, LocalWindowState provides windowState) {
-                    ZoukanContent(preferences) { navigatorRef = it }
+                    ZoukanContent(preferences, onNavigator = { navigatorRef = it }, firstRun = true)
                 }
                 LaunchedEffect(Unit) {
                     // Zoukan was opened again: bring this window back
@@ -304,9 +304,12 @@ fun startUi(dirs: ZoukanDirs) {
     Updates.start(AppScope)
 }
 
-/** The window's content: theme, navigation and messages. */
+/**
+ * The window's content: theme, navigation and messages. [firstRun] shows the first-run setup and
+ * the What's new dialog after an update; tests leave it off.
+ */
 @Composable
-fun ZoukanContent(preferences: DesktopPreferences, onNavigator: (Navigator) -> Unit = {}) {
+fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, onNavigator: (Navigator) -> Unit = {}) {
     var navigatorRef by remember { mutableStateOf<Navigator?>(null) }
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(
@@ -338,6 +341,9 @@ fun ZoukanContent(preferences: DesktopPreferences, onNavigator: (Navigator) -> U
                     }
                 }
                 // ZOUKAN <--
+                // The first-run setup covers the app, but not its messages
+                if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
+                zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 // ZOUKAN -->
                 zoukan.desktop.ui.security.LockOverlay()

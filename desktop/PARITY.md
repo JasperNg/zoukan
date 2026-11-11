@@ -10,6 +10,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 |---|---|---|
 | Library grid, categories, search, sort, unread badges | Yes | Phase 3 |
 | Library display modes, badges, continue reading button | Yes | Compact, comfortable, panorama, cover-only and list; columns; per-badge toggles |
+| Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
 | Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
 | Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download, delete downloads, remove |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
@@ -30,6 +31,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
+| Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
 | More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
@@ -78,8 +80,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: enable delegated sources, log level | Yes | Read at start, as on Android |
 | Advanced: hentai features toggle | Yes | Settings > E-Hentai |
 | Advanced: encrypt database | Yes, changed | The desktop database is always encrypted (SQLCipher), so there is no switch |
-| Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, onboarding, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
+| Settings search | Yes, changed | A field over the settings list matches every setting's title and summary. The results are the settings themselves, so they can be changed there; each one's page and group opens the page at it, highlighted, as on Android |
+| Advanced: onboarding guide | Yes | Opens the first-run setup again |
+| Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |
+| First-run setup (onboarding): theme, storage location, getting started guide, restore a backup | Yes, changed | Shown over the app until finished, as on Android. Android's permissions step has nothing to ask on a desktop. Someone who used Zoukan before it existed, with a library already, does not see it |
+| What's new: "Updated to" dialog after an update, release notes screen, About > What's new | Yes | The notes of the running version's GitHub release (desktop-v tag), in Markdown |
 | Advanced: data saver, source blacklist, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
 
 ## Browse

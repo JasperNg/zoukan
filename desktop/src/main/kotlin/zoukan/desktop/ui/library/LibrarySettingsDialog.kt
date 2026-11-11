@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import kotlin.math.roundToInt
@@ -71,7 +72,7 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
         text = {
             Column(Modifier.width(420.dp)) {
                 PrimaryTabRow(selectedTabIndex = tab) {
-                    listOf("Filter", "Sort", "Display").forEachIndexed { i, label ->
+                    listOf("Filter", "Sort", "Display", "Group").forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
@@ -79,7 +80,8 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
                     when (tab) {
                         0 -> FilterPage(model)
                         1 -> SortPage(model, state.sort)
-                        else -> DisplayPage(model)
+                        2 -> DisplayPage(model)
+                        else -> GroupPage(model)
                     }
                 }
             }
@@ -202,3 +204,29 @@ private fun DisplayPage(model: LibraryScreenModel) {
     Text("Other", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
     CheckRow("Continue reading button", p.showContinueReadingButton())
 }
+
+// ZOUKAN -->
+private val GROUPS = listOf(
+    LibraryGroup.BY_DEFAULT to "Categories",
+    LibraryGroup.BY_SOURCE to "Sources",
+    LibraryGroup.BY_STATUS to "Status",
+    LibraryGroup.BY_TRACK_STATUS to "Tracking status",
+    LibraryGroup.UNGROUPED to "Ungrouped",
+)
+
+/** SY's Group tab: what the library's tabs split it by. */
+@Composable
+private fun GroupPage(model: LibraryScreenModel) {
+    val p = model.preferences.groupLibraryBy()
+    val group by p.changes().collectAsState(p.get())
+    GROUPS.forEach { (value, label) ->
+        Row(
+            Modifier.fillMaxWidth().clickable { p.set(value) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(group == value, onClick = { p.set(value) })
+            Text(label)
+        }
+    }
+}
+// ZOUKAN <--
