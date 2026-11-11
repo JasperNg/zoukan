@@ -12,13 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.StarHalf
+import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SdCard
 import androidx.compose.material3.Icon
@@ -57,6 +56,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.SourceTags
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.onRightClick
 import java.awt.Toolkit
@@ -109,7 +109,7 @@ private fun EHentaiDescription(meta: EHentaiSearchMetadata, search: (String) -> 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             GenreChip(meta.genre)
             val length = meta.length ?: 0
-            Value(pages(length), Icons.AutoMirrored.Filled.MenuBook)
+            Value(pages(length), Icons.AutoMirrored.Outlined.MenuBook)
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val rating = meta.averageRating?.toFloat()
@@ -117,7 +117,7 @@ private fun EHentaiDescription(meta: EHentaiSearchMetadata, search: (String) -> 
             val language = (meta.language ?: unknown).let { "${SourceTags.languageFlag(it)} $it" }
             Value(if (meta.translated == true) localized(SYMR.strings.language_translated, language) else language)
             Value(MetadataUtil.humanReadableByteCount(meta.size ?: 0, true), Icons.Outlined.SdCard)
-            Value((meta.favorites ?: 0).toString(), Icons.Default.Book)
+            Value((meta.favorites ?: 0).toString(), Icons.Outlined.Book)
             Value(localized(SYMR.strings.is_visible, meta.visible ?: unknown))
             Value(meta.uploader ?: unknown, onClick = meta.uploader?.let { { search("uploader:\"$it\"") } })
         }
@@ -139,11 +139,11 @@ private fun NHentaiDescription(meta: NHentaiSearchMetadata) {
                 ?.joinToString { it.name }
             GenreChip(categories)
             val pages = meta.pageImagePreviewUrls.size
-            Value(pages(pages), Icons.AutoMirrored.Filled.MenuBook)
+            Value(pages(pages), Icons.AutoMirrored.Outlined.MenuBook)
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Value("#" + (meta.nhId ?: 0))
-            meta.favoritesCount?.takeIf { it != 0L }?.let { Value(it.toString(), Icons.Default.Book) }
+            meta.favoritesCount?.takeIf { it != 0L }?.let { Value(it.toString(), Icons.Outlined.Book) }
             Value(
                 MetadataUtil.EX_DATE_FORMAT.format(
                     ZonedDateTime.ofInstant(Instant.ofEpochSecond(meta.uploadDate ?: 0), ZoneId.systemDefault()),
@@ -158,7 +158,7 @@ private fun PururinDescription(meta: PururinSearchMetadata) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             GenreChip(meta.tags.find { it.namespace == PururinSearchMetadata.TAG_NAMESPACE_CATEGORY }?.name)
-            Value(pages(meta.pages ?: 0), Icons.AutoMirrored.Filled.MenuBook)
+            Value(pages(meta.pages ?: 0), Icons.AutoMirrored.Outlined.MenuBook)
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val rating = meta.averageRating?.toFloat()
@@ -175,7 +175,7 @@ private fun PururinDescription(meta: PururinSearchMetadata) {
 @Composable
 private fun LanraragiDescription(meta: LanraragiSearchMetadata) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Value(pages(meta.pageCount ?: 1), Icons.AutoMirrored.Filled.MenuBook)
+        Value(pages(meta.pageCount ?: 1), Icons.AutoMirrored.Outlined.MenuBook)
         Value(meta.extension?.uppercase().orEmpty())
     }
 }
@@ -193,7 +193,7 @@ private fun GenreChip(genre: String?) {
         style = MaterialTheme.typography.labelLarge,
         color = known?.first?.textColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(Corners.Small)
             .then(if (known != null) Modifier.background(known.first.color) else Modifier)
             .copyOnRightClick(text)
             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -255,7 +255,7 @@ fun NamespaceTags(meta: RaisedSearchMetadata, sourceId: Long, onClick: (String) 
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier
                             .padding(top = 6.dp, end = 8.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(Corners.Medium)
                             .background(MaterialTheme.colorScheme.secondaryContainer)
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     )

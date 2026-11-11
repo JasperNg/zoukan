@@ -27,11 +27,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
@@ -82,6 +81,7 @@ import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSI
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -89,6 +89,8 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.reducedMotion
 import zoukan.desktop.ui.manga.MangaScreen
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -333,7 +335,7 @@ private fun UpcomingItem(manga: Manga, onClick: () -> Unit) {
     ) {
         CoverImage(
             Cover.of(manga),
-            Modifier.fillMaxHeight().aspectRatio(2f / 3f).clip(RoundedCornerShape(4.dp)),
+            Modifier.fillMaxHeight().aspectRatio(2f / 3f).clip(Corners.Medium).coverOutline(Corners.Medium),
         )
         Text(
             modifier = Modifier.weight(1f),
@@ -370,14 +372,20 @@ private fun Calendar(
 
 @Composable
 private fun CalendarHeader(yearMonth: YearMonth, onPreviousClick: () -> Unit, onNextClick: () -> Unit, modifier: Modifier) {
+    val reduceMotion by reducedMotion()
     Row(modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         AnimatedContent(
             targetState = yearMonth,
             transitionSpec = {
-                val forward = targetState > initialState
-                val enter = slideInVertically(tween(200)) { if (forward) it else -it } + fadeIn(tween(200))
-                val exit = slideOutVertically(tween(200)) { if (forward) -it else it } + fadeOut(tween(200))
-                enter togetherWith exit
+                // Under the system's reduced motion setting the month only cross-fades
+                if (reduceMotion) {
+                    fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+                } else {
+                    val forward = targetState > initialState
+                    val enter = slideInVertically(tween(200)) { if (forward) it else -it } + fadeIn(tween(200))
+                    val exit = slideOutVertically(tween(200)) { if (forward) -it else it } + fadeOut(tween(200))
+                    enter togetherWith exit
+                }
             },
             label = "Change Month",
         ) { month ->
@@ -388,8 +396,8 @@ private fun CalendarHeader(yearMonth: YearMonth, onPreviousClick: () -> Unit, on
             )
         }
         Row {
-            TooltipIconButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous Month", onClick = onPreviousClick)
-            TooltipIconButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next Month", onClick = onNextClick)
+            TooltipIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Previous Month", onClick = onPreviousClick)
+            TooltipIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Next Month", onClick = onNextClick)
         }
     }
 }

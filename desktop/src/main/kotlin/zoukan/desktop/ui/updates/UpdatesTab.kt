@@ -13,18 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -34,7 +26,10 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Deselect
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -84,6 +79,7 @@ import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
 import zoukan.desktop.ui.common.ContextMenuState
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -92,6 +88,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.downloads.DownloadsButton
@@ -316,7 +313,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                 // Android's Updates toolbar opens Upcoming from its calendar button
                 TooltipIconButton(Icons.Outlined.CalendarMonth, "View Upcoming Updates", onClick = { navigator.push(UpcomingScreen) })
                 DownloadsButton()
-                TooltipIconButton(Icons.Default.Refresh, "Update library", onClick = model::refresh, enabled = refresh == null)
+                TooltipIconButton(Icons.Outlined.Refresh, "Update library", onClick = model::refresh, enabled = refresh == null)
             }
         }
         LibraryUpdateProgress()
@@ -375,21 +372,21 @@ private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScree
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TooltipIconButton(Icons.Default.Close, "Clear selection", onClick = model::clearSelection)
+        TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
         Text("${selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
-        TooltipIconButton(Icons.Default.FlipToBack, "Invert selection", onClick = model::invertSelection)
+        TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+        TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
         if (selected.any { !it.read }) {
-            TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = { model.setRead(selected, true) })
+            TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = { model.setRead(selected, true) })
         }
         if (selected.any { it.read || it.lastPageRead > 0 }) {
-            TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = { model.setRead(selected, false) })
+            TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = { model.setRead(selected, false) })
         }
         if (selected.any { !it.bookmark }) {
-            TooltipIconButton(Icons.Default.Bookmark, "Bookmark", onClick = { model.setBookmark(selected, true) })
+            TooltipIconButton(Icons.Outlined.BookmarkAdd, "Bookmark", onClick = { model.setBookmark(selected, true) })
         }
         if (selected.any { it.bookmark }) {
-            TooltipIconButton(Icons.Default.BookmarkBorder, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
+            TooltipIconButton(Icons.Outlined.BookmarkRemove, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
         }
         val remote = selected.filter { it.sourceId != LocalSource.ID }
         if (remote.any { it.chapterId !in state.downloaded && it.chapterId !in state.queued }) {
@@ -472,7 +469,7 @@ private fun UpdateRow(
         ) {
             CoverImage(
                 Cover.of(item.coverData),
-                Modifier.size(44.dp, 60.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenManga),
+                Modifier.size(44.dp, 60.dp).clip(Corners.Medium).coverOutline(Corners.Medium).clickable(onClick = onOpenManga),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f).alpha(if (item.read) 0.5f else 1f)) {
@@ -491,9 +488,9 @@ private fun UpdateRow(
                 }
             }
             if (item.read) {
-                TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = onRead)
+                TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = onRead)
             } else {
-                TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = onRead)
+                TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = onRead)
             }
             // ZOUKAN -->
             // Android's Updates rows end with the chapter's download button

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Photo
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.Surface
+import zoukan.desktop.ui.common.Corners
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
@@ -136,7 +136,7 @@ private val ACTION_WIDTH = 132.dp
 private fun Action(title: String, icon: ImageVector, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = Corners.Large,
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         modifier = Modifier.widthIn(min = ACTION_WIDTH, max = ACTION_WIDTH).height(96.dp),
     ) {

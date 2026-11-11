@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -71,8 +71,8 @@ fun FeedOrderDialog(model: FeedScreenModel, rows: List<FeedScreenModel.Row>, onD
                             Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.DragHandle, "Reorder", Modifier.padding(12.dp).draggableHandle())
                                 Text(row.title, modifier = Modifier.weight(1f))
-                                TooltipIconButton(Icons.Default.KeyboardArrowUp, "Move up", onClick = { moveBy(row, -1) }, enabled = items.firstOrNull() != row)
-                                TooltipIconButton(Icons.Default.KeyboardArrowDown, "Move down", onClick = { moveBy(row, 1) }, enabled = items.lastOrNull() != row)
+                                TooltipIconButton(Icons.Outlined.KeyboardArrowUp, "Move up", onClick = { moveBy(row, -1) }, enabled = items.firstOrNull() != row)
+                                TooltipIconButton(Icons.Outlined.KeyboardArrowDown, "Move down", onClick = { moveBy(row, 1) }, enabled = items.lastOrNull() != row)
                             }
                         }
                     }
