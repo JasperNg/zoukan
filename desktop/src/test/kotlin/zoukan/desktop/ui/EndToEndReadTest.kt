@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -123,15 +124,25 @@ class EndToEndReadTest {
                 // Right to left is the default: Left turns to the next page
                 onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
                 // A wide window shows double pages by default, as Android in landscape: the cover, then 2-3
-                waitFor(hasText("2 / ", substring = true) or hasText("2-3 / ", substring = true), timeout = 60_000)
+                runCatching {
+                    waitFor(hasText("2 / ", substring = true) or hasText("2-3 / ", substring = true), timeout = 60_000)
+                }.onFailure {
+                    // The reader's state (reading mode, current and wide pages) says why the page did not turn
+                    shot("5-reader-page-2-failed")
+                    E2EDiagnostics.dump()
+                    throw it
+                }
                 waitUntil(timeoutMillis = 60_000) { pageOnScreen() }
                 shot("5-reader-page-2")
             }
 
             step("Read in the webtoon mode") {
                 onRoot().performKeyInput { pressKey(Key.M) }
-                waitFor(hasText("Paged (right to left)"))
-                onAllNodesWithText("Paged (right to left)").onFirst().performClick()
+                // The bottom bar's reading mode button names the mode in its icon and tooltip, and
+                // opens the list of modes
+                val modeButton = hasContentDescription("Reading mode: Paged (right to left)")
+                waitFor(modeButton)
+                onAllNodes(modeButton).onFirst().performClick()
                 waitFor(hasText("Webtoon"))
                 onAllNodesWithText("Webtoon").onFirst().performClick()
                 onRoot().performKeyInput { pressKey(Key.M) }
