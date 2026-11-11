@@ -13,13 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.OpenInBrowser
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +49,7 @@ import eu.kanade.tachiyomi.data.track.DeletableTracker
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
 import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackingModel
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -96,15 +96,15 @@ fun TrackingDialog(model: TrackingModel, onDismiss: () -> Unit) {
 private fun TrackerRow(item: TrackingModel.Item, model: TrackingModel) {
     val tracker = item.tracker
     val track = item.track
-    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(shape = Corners.Large, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(tracker.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (track == null) {
                     FilledTonalButton(onClick = { model.startSearch(tracker) }) { Text("Add tracking") }
                 } else {
-                    TooltipIconButton(Icons.Default.Refresh, "Refresh from ${tracker.name}", onClick = { model.refresh(item) })
-                    TooltipIconButton(Icons.Default.Search, "Track a different entry", onClick = { model.startSearch(tracker) })
+                    TooltipIconButton(Icons.Outlined.Refresh, "Refresh from ${tracker.name}", onClick = { model.refresh(item) })
+                    TooltipIconButton(Icons.Outlined.Search, "Track a different entry", onClick = { model.startSearch(tracker) })
                     if (track.remoteUrl.isNotBlank()) {
                         TooltipIconButton(Icons.Outlined.OpenInBrowser, "Open on ${tracker.name}", onClick = { browse(track.remoteUrl) })
                     }
@@ -266,8 +266,8 @@ private fun SearchPane(state: TrackingModel.State, model: TrackingModel) {
                     false
                 }
             },
-            leadingIcon = { TooltipIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onClick = model::closeSearch) },
-            trailingIcon = { TooltipIconButton(Icons.Default.Search, "Search", onClick = model::search) },
+            leadingIcon = { TooltipIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onClick = model::closeSearch) },
+            trailingIcon = { TooltipIconButton(Icons.Outlined.Search, "Search", onClick = model::search) },
         )
         when {
             state.loading -> Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {

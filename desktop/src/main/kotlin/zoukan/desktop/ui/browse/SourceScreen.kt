@@ -19,18 +19,18 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.DisabledByDefault
-import androidx.compose.material.icons.filled.DynamicFeed
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.DynamicFeed
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -120,19 +120,19 @@ data class SourceScreen(
                     onSearch = { model.search(searchText) },
                 )
                 if (source != null && source.getFilterList().isNotEmpty()) {
-                    TooltipIconButton(Icons.Default.FilterList, "Filters", onClick = { showFilters = !showFilters })
+                    TooltipIconButton(Icons.Outlined.FilterList, "Filters", onClick = { showFilters = !showFilters })
                 }
                 // ZOUKAN -->
                 if (source != null) BulkSelectButton(bulk)
                 // ZOUKAN <--
                 if (source != null) {
-                    TooltipIconButton(Icons.Default.DynamicFeed, "This source's feed", onClick = { navigator.push(SourceFeedScreen(source.id)) })
+                    TooltipIconButton(Icons.Outlined.DynamicFeed, "This source's feed", onClick = { navigator.push(SourceFeedScreen(source.id)) })
                 }
                 if (source is HttpSource) {
-                    TooltipIconButton(Icons.Default.Public, "Open the site (sign in, Cloudflare)", onClick = { model.openWebsite() })
+                    TooltipIconButton(Icons.Outlined.Public, "Open the site (sign in, Cloudflare)", onClick = { model.openWebsite() })
                 }
                 if (source is ConfigurableSource) {
-                    TooltipIconButton(Icons.Default.Settings, "Source settings", onClick = { navigator.push(SourceSettingsScreen(source.id)) })
+                    TooltipIconButton(Icons.Outlined.Settings, "Source settings", onClick = { navigator.push(SourceSettingsScreen(source.id)) })
                 }
             }
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,7 +159,7 @@ data class SourceScreen(
                         selected = state.savedSearch == saved.id,
                         onClick = { model.applySavedSearch(saved) },
                         label = { Text(saved.name) },
-                        leadingIcon = { Icon(Icons.Default.Bookmark, null, Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Outlined.Bookmark, null, Modifier.size(16.dp)) },
                         modifier = Modifier.onRightClick { confirm = true },
                     )
                     if (confirm) {
@@ -332,7 +332,7 @@ private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit) {
             Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
                     Text("${filter.name}: ${filter.values.getOrNull(filter.state)}", modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.ExpandMore, null)
+                    Icon(Icons.Outlined.ExpandMore, null)
                 }
                 DropdownMenu(open, onDismissRequest = { open = false }) {
                     filter.values.forEachIndexed { i, value ->
@@ -361,7 +361,7 @@ private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit) {
                         Box(Modifier.width(32.dp)) {
                             if (selection?.index == i) {
                                 Icon(
-                                    if (selection.ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                    if (selection.ascending) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
                                     null,
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
@@ -401,6 +401,6 @@ private fun GroupHeader(name: String, expanded: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
+        Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
     }
 }

@@ -13,10 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -61,6 +60,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.security.Incognito
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
@@ -172,7 +172,7 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
             ScreenHeader("Extension info", subtitle = extension?.name) {
                 if (extension != null) {
                     Box {
-                        TooltipIconButton(Icons.Default.MoreVert, "More", onClick = { menu = true })
+                        TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { menu = true })
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Enable all") }, onClick = {
                                 menu = false
@@ -197,7 +197,7 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                 item(key = "header") {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CoverImage(state.iconUrl, Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)))
+                        CoverImage(state.iconUrl, Modifier.size(64.dp).clip(Corners.Large))
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(extension.name, style = MaterialTheme.typography.headlineSmall)
@@ -248,7 +248,7 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
                             }
                         }
                         if (item.configurable) {
-                            TooltipIconButton(Icons.Default.Settings, "Source settings", onClick = { navigator.push(SourceSettingsScreen(item.source.id)) })
+                            TooltipIconButton(Icons.Outlined.Settings, "Source settings", onClick = { navigator.push(SourceSettingsScreen(item.source.id)) })
                         }
                         Switch(item.enabled, onCheckedChange = { model.toggleSource(item.source.id) })
                     }

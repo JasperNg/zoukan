@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,7 +57,7 @@ fun DownloadIndicator(
                     Icon(Icons.Default.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
                 }
                 state == Download.State.ERROR -> IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Default.ErrorOutline, "Download failed: ${download.error.orEmpty()}", tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Outlined.ErrorOutline, "Download failed: ${download.error.orEmpty()}", tint = MaterialTheme.colorScheme.error)
                 }
                 download != null -> IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chapter-downloading")) {
                     Box(contentAlignment = Alignment.Center) {
