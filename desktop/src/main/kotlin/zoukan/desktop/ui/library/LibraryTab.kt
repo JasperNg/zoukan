@@ -60,6 +60,7 @@ import tachiyomi.domain.category.model.Category
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.library.LibraryUpdater
+import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.OnShortcut
@@ -305,7 +306,7 @@ private fun ColumnScope.EntryContextMenu(
     ContextMenuItem(menu, "Change categories", Icons.AutoMirrored.Outlined.Label, onClick = onCategories)
     ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.markRead(true, ids) }
     ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.markRead(false, ids) }
-    if (ids.any { id -> model.state.value.items.any { it.id == id && !it.isLocal } }) {
+    if (ids.any { id -> model.state.value.items.any { it.id == id && it.manga.source != LocalSource.ID } }) {
         DropdownMenuItem(
             text = { Text("Download") },
             leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
