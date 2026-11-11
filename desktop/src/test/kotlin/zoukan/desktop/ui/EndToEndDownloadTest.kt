@@ -139,7 +139,7 @@ class EndToEndDownloadTest {
             val manga = runBlocking { Injekt.get<GetFavorites>().await().first() }
             step("Download the next two chapters of ${manga.title}") {
                 runOnUiThread { navigator?.push(MangaScreen(manga.id)) }
-                waitFor(hasText("Start reading") and isEnabled(), timeout = 120_000)
+                waitFor(hasText("Start") and isEnabled(), timeout = 120_000)
                 onAllNodes(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription, listOf("Download")))
                     .onFirst().performClick()
                 waitFor(hasText("Next chapter"))
@@ -210,8 +210,8 @@ class EndToEndDownloadTest {
                 // Background work after the downloads can keep the database busy for a while; this once took over 30 s on Windows
                 waitOrDump("d5-local-source-failed", timeout = 120_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().isNotEmpty() }
                 onAllNodesWithTag("manga-item").onFirst().performClick()
-                waitFor(hasText("Start reading") and isEnabled(), timeout = 30_000)
-                onAllNodesWithText("Start reading").onFirst().performClick()
+                waitFor(hasText("Start") and isEnabled(), timeout = 30_000)
+                onAllNodesWithText("Start").onFirst().performClick()
                 waitUntil(timeoutMillis = 30_000) { pageOnScreen() }
                 shot("d5-local-reader")
                 runOnUiThread { navigator?.popUntilRoot() }
