@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Crop
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.FastForward
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
@@ -165,6 +167,10 @@ class ReaderMenuActions(
     val onPreviousChapter: () -> Unit,
     val onNextChapter: () -> Unit,
     val onPage: (Int) -> Unit,
+    // ZOUKAN -->
+    val onRetryAll: () -> Unit = {},
+    val onBoostPage: () -> Unit = {},
+    // ZOUKAN <--
 )
 
 /** Everything a menu draws, read from the reader's state and settings */
@@ -349,6 +355,14 @@ private fun ReaderBottomBar(menu: ReaderMenuState, actions: ReaderMenuActions, m
                 onSelect = actions.onPageLayout,
             )
         }
+        // ZOUKAN -->
+        if (ReaderBottomButtons.RETRY_ALL in buttons) {
+            MenuButton(Icons.Outlined.Refresh, "Retry failed pages (R)", actions.onRetryAll)
+        }
+        if (ReaderBottomButtons.BOOST_PAGE in buttons) {
+            MenuButton(Icons.Outlined.FastForward, "Load this page first (Shift+R)", actions.onBoostPage)
+        }
+        // ZOUKAN <--
         MenuButton(Icons.Outlined.Settings, "Settings (S)", actions.onSettings)
     }
 }
