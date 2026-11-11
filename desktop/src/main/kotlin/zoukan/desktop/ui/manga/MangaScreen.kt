@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,12 +23,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkRemove
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Deselect
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
@@ -77,12 +81,17 @@ import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.common.ChapterSwipeBox
 import zoukan.desktop.ui.common.ChapterSwipeState
+import zoukan.desktop.ui.common.ContextMenu
+import zoukan.desktop.ui.common.ContextMenuDivider
+import zoukan.desktop.ui.common.ContextMenuItem
+import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
-import zoukan.desktop.ui.common.onRightClick
+import zoukan.desktop.ui.common.onRightClickAt
+import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.reader.ReaderScreen
@@ -231,6 +240,12 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                                         onDownload = { model.download(listOf(chapter)) },
                                                         onCancelDownload = { model.cancelDownload(chapter) },
                                                         onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
+                                                        // A right click on a selected chapter acts on the whole selection
+                                                        selectionMenu = if (chapter.id in state.selected && state.selected.size > 1) {
+                                                            { menu -> ChapterSelectionMenu(menu, state, model) }
+                                                        } else {
+                                                            null
+                                                        },
                                                     )
                                                     // ZOUKAN -->
                                                 }
@@ -426,6 +441,22 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
     }
 }
 
+/** A selected chapter's right-click menu: the selection toolbar's actions. */
+@Composable
+private fun ColumnScope.ChapterSelectionMenu(menu: ContextMenuState, state: MangaScreenModel.State, model: MangaScreenModel) {
+    val selected = state.chapters.filter { it.id in state.selected }
+    ContextMenuItem(menu, "Clear selection", Icons.Outlined.Close, onClick = model::clearSelection)
+    ContextMenuDivider()
+    ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.markRead(selected, true) }
+    ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.markRead(selected, false) }
+    ContextMenuItem(menu, "Bookmark", Icons.Outlined.BookmarkAdd) { model.setBookmark(selected, true) }
+    ContextMenuItem(menu, "Remove bookmark", Icons.Outlined.BookmarkRemove) { model.setBookmark(selected, false) }
+    if (!state.isLocal) {
+        ContextMenuItem(menu, "Download", Icons.Outlined.Download) { model.download(selected) }
+        ContextMenuItem(menu, "Delete downloads", Icons.Outlined.Delete) { model.deleteDownloads(selected) }
+    }
+}
+
 @Composable
 private fun ChapterRow(
     chapter: Chapter,
@@ -442,15 +473,16 @@ private fun ChapterRow(
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onDeleteDownload: () -> Unit,
+    selectionMenu: (@Composable ColumnScope.(ContextMenuState) -> Unit)?,
 ) {
-    var menu by remember { mutableStateOf(false) }
+    val menu = rememberContextMenuState()
     Box {
         Row(
             Modifier
                 .fillMaxWidth()
                 .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
                 .clickable { if (selecting) onToggleSelect() else onOpen() }
-                .onRightClick { menu = true }
+                .onRightClickAt(menu::open)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -491,49 +523,36 @@ private fun ChapterRow(
                 )
             }
         }
-        DropdownMenu(menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Read") }, onClick = {
-                menu = false
-                onOpen()
-            })
-            DropdownMenuItem(
-                text = { Text(if (chapter.read) "Mark as unread" else "Mark as read") },
-                onClick = {
-                    menu = false
-                    onMarkRead()
-                },
-            )
-            DropdownMenuItem(text = { Text("Mark previous as read") }, onClick = {
-                menu = false
-                onMarkPreviousRead()
-            })
-            DropdownMenuItem(
-                text = { Text(if (chapter.bookmark) "Remove bookmark" else "Bookmark") },
-                onClick = {
-                    menu = false
-                    onBookmark()
-                },
-            )
+        ContextMenu(menu) {
+            if (selectionMenu != null) {
+                selectionMenu(menu)
+                return@ContextMenu
+            }
+            ContextMenuItem(menu, "Read", Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
+            if (selected) {
+                ContextMenuItem(menu, "Deselect", Icons.Outlined.Deselect, onClick = onToggleSelect)
+            } else {
+                ContextMenuItem(menu, "Select", Icons.Outlined.CheckCircle, onClick = onToggleSelect)
+            }
+            ContextMenuDivider()
+            if (chapter.read) {
+                ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone, onClick = onMarkRead)
+            } else {
+                ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll, onClick = onMarkRead)
+            }
+            ContextMenuItem(menu, "Mark previous as read", Icons.Outlined.DoneAll, onClick = onMarkPreviousRead)
+            if (chapter.bookmark) {
+                ContextMenuItem(menu, "Remove bookmark", Icons.Outlined.BookmarkRemove, onClick = onBookmark)
+            } else {
+                ContextMenuItem(menu, "Bookmark", Icons.Outlined.BookmarkAdd, onClick = onBookmark)
+            }
             if (showDownload) {
                 when {
-                    download != null -> DropdownMenuItem(text = { Text("Cancel download") }, onClick = {
-                        menu = false
-                        onCancelDownload()
-                    })
-                    downloaded -> DropdownMenuItem(text = { Text("Delete download") }, onClick = {
-                        menu = false
-                        onDeleteDownload()
-                    })
-                    else -> DropdownMenuItem(text = { Text("Download") }, onClick = {
-                        menu = false
-                        onDownload()
-                    })
+                    download != null -> ContextMenuItem(menu, "Cancel download", Icons.Outlined.Close, onClick = onCancelDownload)
+                    downloaded -> ContextMenuItem(menu, "Delete download", Icons.Outlined.Delete, onClick = onDeleteDownload)
+                    else -> ContextMenuItem(menu, "Download", Icons.Outlined.Download, onClick = onDownload)
                 }
             }
-            DropdownMenuItem(text = { Text("Select") }, onClick = {
-                menu = false
-                onToggleSelect()
-            })
         }
     }
 }
