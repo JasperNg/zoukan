@@ -17,7 +17,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -37,6 +42,8 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.source.service.SourcePreferences.GlobalSearchSourceFilter
 import eu.kanade.tachiyomi.source.CatalogueSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +59,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.MangaGridItem
@@ -67,10 +75,15 @@ class GlobalSearchScreenModel(
     // ZOUKAN -->
     /** A source to leave out: the one an entry migrates away from */
     excludeSource: Long? = null,
+    /** Only the enabled sources (languages, not disabled), as Android's global search */
+    enabledOnly: Boolean = false,
     // ZOUKAN <--
     sourceManager: SourceManager = Injekt.get(),
     preferences: DesktopPreferences = Injekt.get(),
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
+    // ZOUKAN -->
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
+    // ZOUKAN <--
 ) : StateScreenModel<Map<Long, GlobalSearchScreenModel.Result>>(emptyMap()) {
 
     sealed interface Result {
@@ -79,19 +92,54 @@ class GlobalSearchScreenModel(
         data class Error(val message: String) : Result
     }
 
-    val sources: List<CatalogueSource> = run {
-        val pinned = preferences.pinnedSources().get()
+    // ZOUKAN -->
+    private val pinned = preferences.pinnedSources().get()
+
+    /** Every source the search can use; [sources] is the part the pinned filter keeps */
+    val allSources: List<CatalogueSource> = run {
+        val languages = preferences.enabledLanguages().get()
+        val disabled = sourcePreferences.disabledSources().get()
         sourceManager.getAll().filterIsInstance<CatalogueSource>()
-            // ZOUKAN -->
             .filter { it.id != MERGED_SOURCE_ID && it.id != excludeSource }
-            // ZOUKAN <--
+            .filter { !enabledOnly || ((it.lang in languages || it is LocalSource) && it.id.toString() !in disabled) }
             .sortedWith(compareBy({ it.id.toString() !in pinned }, { it.name.lowercase() }))
     }
 
+    /** KMK's "Pinned only" chip shows only when there are pinned sources to search */
+    val hasPinned: Boolean = allSources.any { it.id.toString() in pinned }
+
+    val sourceFilter = sourcePreferences.globalSearchPinnedState()
+    val onlyWithResults = sourcePreferences.globalSearchFilterState()
+
+    /** The sources the search uses with the [filter] chip as it is */
+    fun sources(filter: GlobalSearchSourceFilter): List<CatalogueSource> =
+        if (filter == GlobalSearchSourceFilter.PinnedOnly && hasPinned) {
+            allSources.filter { it.id.toString() in pinned }
+        } else {
+            allSources
+        }
+
+    val sources: List<CatalogueSource> get() = sources(sourceFilter.get())
+
+    private val permits = Semaphore(5)
+
     init {
-        mutableState.value = sources.associate { it.id to Result.Loading }
-        val permits = Semaphore(5)
-        sources.forEach { source ->
+        search()
+    }
+
+    fun setSourceFilter(filter: GlobalSearchSourceFilter) {
+        sourceFilter.set(filter)
+        search()
+    }
+
+    fun toggleOnlyWithResults() = onlyWithResults.set(!onlyWithResults.get())
+
+    /** Searches the sources the filter adds; results already in stay, as on Android */
+    private fun search() {
+        val missing = sources.filter { it.id !in state.value }
+        mutableState.update { it + missing.associate { source -> source.id to Result.Loading } }
+        missing.forEach { source ->
+            // ZOUKAN <--
             screenModelScope.launch {
                 val result = permits.withPermit {
                     try {
@@ -127,21 +175,33 @@ data class GlobalSearchScreen(
 
     @Composable
     override fun Content() {
-        val model = rememberScreenModel { GlobalSearchScreenModel(query, excludeSource = purpose.excludedSource()) }
+        // ZOUKAN -->
+        val model = rememberScreenModel {
+            GlobalSearchScreenModel(query, excludeSource = purpose.excludedSource(), enabledOnly = purpose == SearchPurpose.Browse)
+        }
+        // ZOUKAN <--
         val results by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         // ZOUKAN -->
         var picked by remember { mutableStateOf<Manga?>(null) }
         picked?.let { manga -> PickDialog(purpose, manga, onDismiss = { picked = null }) }
+        val sourceFilter by model.sourceFilter.changes().collectAsState(model.sourceFilter.get())
+        val onlyWithResults by model.onlyWithResults.changes().collectAsState(model.onlyWithResults.get())
+        val bulk = remember { BulkFavorite() }
+        val sources = remember(sourceFilter) { model.sources(sourceFilter) }
         // ZOUKAN <--
         // Sources with results first, then the ones still searching, then empty and failed ones
-        val ordered = model.sources.sortedBy {
+        val ordered = sources.sortedBy {
             when (val r = results[it.id]) {
                 is GlobalSearchScreenModel.Result.Success -> if (r.manga.isNotEmpty()) 0 else 2
                 GlobalSearchScreenModel.Result.Loading, null -> 1
                 is GlobalSearchScreenModel.Result.Error -> 3
             }
         }
+            // ZOUKAN -->
+            .filter { !onlyWithResults || (results[it.id] as? GlobalSearchScreenModel.Result.Success)?.manga?.isNotEmpty() == true }
+        val done = sources.count { results[it.id] != null && results[it.id] != GlobalSearchScreenModel.Result.Loading }
+        // ZOUKAN <--
         Column(Modifier.fillMaxSize()) {
             // ZOUKAN -->
             ScreenHeader(
@@ -151,13 +211,44 @@ data class GlobalSearchScreen(
                     is SearchPurpose.Migrate, is SearchPurpose.MigrateInList -> "Migrate to: $query"
                 },
                 subtitle = when (purpose) {
-                    SearchPurpose.Browse -> "${model.sources.size} sources"
-                    else -> "Pick an entry in one of ${model.sources.size} sources"
+                    SearchPurpose.Browse -> "$done of ${sources.size} sources"
+                    else -> "Pick an entry in one of ${sources.size} sources"
                 },
             ) {
                 if (purpose != SearchPurpose.Browse) {
                     SearchAgainField(query) { navigator.replace(GlobalSearchScreen(it, purpose)) }
+                } else {
+                    BulkSelectButton(bulk)
                 }
+            }
+            // KMK's filter chips: pinned sources only or all, and only sources with results
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (model.hasPinned) {
+                    FilterChip(
+                        selected = sourceFilter == GlobalSearchSourceFilter.PinnedOnly,
+                        onClick = { model.setSourceFilter(GlobalSearchSourceFilter.PinnedOnly) },
+                        label = { Text("Pinned only") },
+                        leadingIcon = { Icon(Icons.Default.PushPin, null, Modifier.size(16.dp)) },
+                        modifier = Modifier.testTag("global-search-pinned"),
+                    )
+                    FilterChip(
+                        selected = sourceFilter == GlobalSearchSourceFilter.All,
+                        onClick = { model.setSourceFilter(GlobalSearchSourceFilter.All) },
+                        label = { Text("All sources") },
+                        leadingIcon = { Icon(Icons.Default.DoneAll, null, Modifier.size(16.dp)) },
+                        modifier = Modifier.testTag("global-search-all"),
+                    )
+                }
+                FilterChip(
+                    selected = onlyWithResults,
+                    onClick = model::toggleOnlyWithResults,
+                    label = { Text("Has results") },
+                    leadingIcon = { Icon(Icons.Default.FilterList, null, Modifier.size(16.dp)) },
+                    modifier = Modifier.testTag("global-search-has-results"),
+                )
+            }
+            if (purpose == SearchPurpose.Browse) {
+                BulkFavoriteBar(bulk, ordered.flatMap { (results[it.id] as? GlobalSearchScreenModel.Result.Success)?.manga.orEmpty() })
             }
             // ZOUKAN <--
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -189,9 +280,10 @@ data class GlobalSearchScreen(
                                             cover = Cover.of(manga),
                                             onClick = {
                                                 // ZOUKAN -->
-                                                when (purpose) {
-                                                    SearchPurpose.Browse -> navigator.push(MangaScreen(manga.id))
-                                                    is SearchPurpose.MigrateInList -> {
+                                                when {
+                                                    purpose == SearchPurpose.Browse && bulk.active -> bulk.toggle(manga)
+                                                    purpose == SearchPurpose.Browse -> navigator.push(MangaScreen(manga.id))
+                                                    purpose is SearchPurpose.MigrateInList -> {
                                                         MigrationPicks.pick(purpose.mangaId, manga.id)
                                                         navigator.pop()
                                                     }
@@ -200,7 +292,10 @@ data class GlobalSearchScreen(
                                                 // ZOUKAN <--
                                             },
                                             badge = if (manga.favorite) "In library" else null,
-                                            modifier = Modifier.width(140.dp),
+                                            // ZOUKAN -->
+                                            onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
+                                            modifier = Modifier.width(140.dp).bulkSelected(bulk.isSelected(manga)),
+                                            // ZOUKAN <--
                                         )
                                     }
                                 }

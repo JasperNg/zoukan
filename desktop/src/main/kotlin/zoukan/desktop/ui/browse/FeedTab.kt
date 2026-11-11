@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Delete
@@ -66,6 +67,7 @@ import tachiyomi.domain.source.interactor.GetSavedSearchBySourceId
 import tachiyomi.domain.source.interactor.GetSavedSearchBySourceIdFeed
 import tachiyomi.domain.source.interactor.GetSavedSearchGlobalFeed
 import tachiyomi.domain.source.interactor.InsertFeedSavedSearch
+import tachiyomi.domain.source.interactor.ReorderFeed
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.service.SourceManager
@@ -203,6 +205,16 @@ class FeedScreenModel(
         }
     }
 
+    // ZOUKAN -->
+    /** ReorderFeed, global or within this source's feed, as Komikku's feed order screen */
+    fun move(row: Row, newIndex: Int) {
+        if (row.fixed) return
+        screenModelScope.launch(Dispatchers.IO) {
+            Injekt.get<ReorderFeed>().changeOrder(row.feed, newIndex, global = sourceId == null)
+        }
+    }
+    // ZOUKAN <--
+
     fun remove(row: Row) {
         screenModelScope.launch(Dispatchers.IO) { deleteFeed.await(row.feed.id) }
     }
@@ -240,6 +252,10 @@ fun FeedTab(model: FeedScreenModel) {
     val navigator = LocalNavigator.currentOrThrow
     var adding by remember { mutableStateOf(false) }
     // ZOUKAN -->
+    val bulk = remember { BulkFavorite() }
+    var ordering by remember { mutableStateOf(false) }
+    // ZOUKAN <--
+    // ZOUKAN -->
     val sourcePreferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
     val hideInLibrary by sourcePreferences.hideInLibraryFeedItems().changes().collectAsState(sourcePreferences.hideInLibraryFeedItems().get())
     // ZOUKAN <--
@@ -254,12 +270,22 @@ fun FeedTab(model: FeedScreenModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
+            // ZOUKAN -->
+            BulkSelectButton(bulk)
+            // Komikku's feed order: drag the saved feeds into place
+            if (rows.count { !it.fixed } > 1) {
+                TooltipIconButton(Icons.AutoMirrored.Filled.Sort, "Reorder the feed", onClick = { ordering = true })
+            }
+            // ZOUKAN <--
             TooltipIconButton(Icons.Default.Refresh, "Refresh", onClick = model::refresh)
             FilledTonalButton(onClick = { adding = true }) {
                 Icon(Icons.Default.Add, null)
                 Text("Add")
             }
         }
+        // ZOUKAN -->
+        BulkFavoriteBar(bulk, rows.flatMap { (state.results[it.feed.id] as? FeedScreenModel.Result.Success)?.manga.orEmpty() })
+        // ZOUKAN <--
         if (rows.isEmpty()) {
             EmptyScreen("No feeds yet. Add a source's latest updates or one of its saved searches.", actionLabel = "Add", onAction = { adding = true })
         } else {
@@ -298,9 +324,12 @@ fun FeedTab(model: FeedScreenModel) {
                                         MangaGridItem(
                                             title = manga.title,
                                             cover = Cover.of(manga),
-                                            onClick = { navigator.push(MangaScreen(manga.id)) },
+                                            // ZOUKAN -->
+                                            onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
+                                            onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
                                             badge = if (manga.favorite) "In library" else null,
-                                            modifier = Modifier.width(140.dp),
+                                            modifier = Modifier.width(140.dp).bulkSelected(bulk.isSelected(manga)),
+                                            // ZOUKAN <--
                                         )
                                     }
                                 }
@@ -323,6 +352,9 @@ fun FeedTab(model: FeedScreenModel) {
     }
 
     if (adding) AddFeedDialog(model, onDismiss = { adding = false })
+    // ZOUKAN -->
+    if (ordering) FeedOrderDialog(model, rows.filterNot { it.fixed }, onDismiss = { ordering = false })
+    // ZOUKAN <--
 }
 
 @Composable
