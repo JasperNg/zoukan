@@ -193,6 +193,10 @@ object ReaderBottomButtons {
     /** Desktop only, in place of Android's rotation button */
     const val SCALE_TYPE = "zst"
 
+    /** Desktop only: SY's "Retry all" and "Boost page", from its E-Hentai utilities bar */
+    const val RETRY_ALL = "zra"
+    const val BOOST_PAGE = "zbp"
+
     val DEFAULTS = setOf(VIEW_CHAPTERS, WEB_VIEW, CROP_PAGER, CROP_CONTINUOUS_VERTICAL, PAGE_LAYOUT, READING_MODE, SCALE_TYPE)
 
     val all = listOf(
@@ -205,6 +209,8 @@ object ReaderBottomButtons {
         CROP_CONTINUOUS_VERTICAL to "Crop borders (continuous vertical)",
         CROP_WEBTOON to "Crop borders (webtoon)",
         PAGE_LAYOUT to "Page layout",
+        RETRY_ALL to "Retry failed pages",
+        BOOST_PAGE to "Load this page first",
     )
 }
 // ZOUKAN <--

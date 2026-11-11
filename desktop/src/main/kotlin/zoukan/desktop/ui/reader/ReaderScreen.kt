@@ -262,6 +262,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long) : Screen {
                     onPreviousChapter = { model.previousChapter() },
                     onNextChapter = { model.nextChapter() },
                     onPage = { actions.goTo(it) },
+                    onRetryAll = model::retryAllPages,
+                    onBoostPage = model::boostPage,
                 ),
             )
             // ZOUKAN <--
