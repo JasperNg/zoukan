@@ -1,6 +1,7 @@
 plugins {
-    id("mihon.library")
-    kotlin("android")
+    // ZOUKAN -->
+    id("mihon.library.kmp")
+    // ZOUKAN <--
     kotlin("plugin.serialization")
 }
 
@@ -17,23 +18,39 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.add("-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi")
     }
-}
 
-dependencies {
-    implementation(projects.sourceApi)
-    implementation(projects.core.common)
+    // ZOUKAN -->
+    sourceSets {
+        commonMain {
+            dependencies {
+                implementation(projects.sourceApi)
+                implementation(projects.core.common)
 
-    implementation(platform(kotlinx.coroutines.bom))
-    implementation(kotlinx.bundles.coroutines)
-    implementation(kotlinx.bundles.serialization)
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.bundles.coroutines)
+                implementation(kotlinx.bundles.serialization)
 
-    implementation(libs.unifile)
+                api(libs.sqldelight.android.paging)
 
-    api(libs.sqldelight.android.paging)
+                compileOnly(project.dependencies.platform(compose.bom))
+                compileOnly(compose.runtime.annotation)
 
-    compileOnly(compose.runtime.annotation)
-
-    testImplementation(libs.bundles.test)
-    testImplementation(kotlinx.coroutines.test)
-    testRuntimeOnly(libs.junit.platform.launcher)
+                // Android types in shared models (e.g. Extension icons); see android-stubs.
+                compileOnly(projects.androidStubs)
+            }
+        }
+        androidMain {
+            dependencies {
+                implementation(libs.unifile)
+            }
+        }
+        androidUnitTest {
+            dependencies {
+                implementation(libs.bundles.test)
+                implementation(kotlinx.coroutines.test)
+                runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+    }
+    // ZOUKAN <--
 }

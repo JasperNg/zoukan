@@ -1,0 +1,9 @@
+backup compare backup-fixtures\synthetic.tachibk backup-fixtures\komikku-from-synthetic.tachibk
+Synthetic full-field backup (backup synthetic) restored in Komikku 1.14.1 (Android 15 emulator, after pm clear; MangaDex and MangaPill installed and trusted), then backed up with every option.
+
+Compared {categories=7, entries=104, chapters=50, tracking=22, history=8, sources=3, app settings=10, extension stores=1, saved searches=2, feeds=3}
+- Source 3014735446227467298: name was MangaPill, is 
+- Source 6969: name was Merged, is MergedSource
+- Source settings source_2499283573021220255: the settings is missing
+- Source settings source_3014735446227467298: the settings is missing
+4 differences

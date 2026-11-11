@@ -1,0 +1,10 @@
+# SHA-256 of jcefmaven's Chromium packages (jcef-natives-<platform>-<tag>.jar), one line per
+# platform and JCEF build: <sha256> <platform> <tag>. The app installs a downloaded package only
+# when it matches (see ChromiumNatives). When the jcef version in gradle/zoukan.versions.toml
+# changes, download the new jars from Maven Central, check them against jcefmaven's GitHub
+# release, and replace these lines; ChromiumNativesTest fails until the supported platforms are here.
+0dc2ce28766d267f551398e24af7a9bec244b888e651bd97a14ac2d128550875 windows-amd64 jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83
+685b27b3dc7f6899a7d4a3a3d58978c95c36ebd1afd571c7027a66fe6f1252a0 macosx-arm64 jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83
+0a49f85ebc8f942fae81bc0120950ce83a629696352338f000856ee72580908a macosx-amd64 jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83
+83f427992cd783fb6f3d499fdf275675187818aa7ca9c4a2a4d43af534a8bdfc linux-amd64 jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83
+a653d2cbdac487663ac52957511c022a6c5dd7bf9c99f79c6d1d732ab4138a24 linux-arm64 jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83

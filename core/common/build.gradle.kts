@@ -1,6 +1,7 @@
 plugins {
-    id("mihon.library")
-    kotlin("android")
+    // ZOUKAN -->
+    id("mihon.library.kmp")
+    // ZOUKAN <--
     kotlin("plugin.serialization")
     id("com.github.ben-manes.versions")
 }
@@ -16,48 +17,63 @@ kotlin {
             "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
         )
     }
-}
 
-dependencies {
-    implementation(projects.i18n)
-    // SY -->
-    implementation(projects.i18nSy)
-    // SY <--
+    // ZOUKAN -->
+    sourceSets {
+        commonMain {
+            dependencies {
+                implementation(projects.i18n)
+                // SY -->
+                implementation(projects.i18nSy)
+                // SY <--
 
-    api(libs.logcat)
+                api(libs.logcat)
 
-    api(libs.rxjava)
+                api(libs.rxjava)
 
-    api(libs.okhttp.core)
-    api(libs.okhttp.logging)
-    api(libs.okhttp.brotli)
-    api(libs.okhttp.dnsoverhttps)
-    api(libs.okio)
+                api(libs.okhttp.core)
+                api(libs.okhttp.logging)
+                api(libs.okhttp.brotli)
+                api(libs.okhttp.dnsoverhttps)
+                api(libs.okio)
 
-    implementation(libs.image.decoder)
+                api(kotlinx.coroutines.core)
+                api(kotlinx.serialization.json)
+                api(kotlinx.serialization.json.okio)
 
-    implementation(libs.unifile)
-    implementation(libs.libarchive)
+                implementation(libs.jsoup)
 
-    api(kotlinx.coroutines.core)
-    api(kotlinx.serialization.json)
-    api(kotlinx.serialization.json.okio)
+                // Sort
+                implementation(libs.natural.comparator)
 
-    api(libs.preferencektx)
+                // Android types shared with desktop (Context, CookieManager); see android-stubs.
+                compileOnly(projects.androidStubs)
+            }
+        }
+        androidMain {
+            dependencies {
+                implementation(libs.image.decoder)
 
-    implementation(libs.jsoup)
+                implementation(libs.unifile)
+                implementation(libs.libarchive)
 
-    // Sort
-    implementation(libs.natural.comparator)
+                api(libs.preferencektx)
 
-    // JavaScript engine
-    implementation(libs.bundles.js.engine)
+                // JavaScript engine
+                implementation(libs.bundles.js.engine)
 
-    testImplementation(libs.bundles.test)
-    testRuntimeOnly(libs.junit.platform.launcher)
-
-    // SY -->
-    implementation(sylibs.xlog)
-    implementation(sylibs.exifinterface)
-    // SY <--
+                // SY -->
+                implementation(sylibs.xlog)
+                implementation(sylibs.exifinterface)
+                // SY <--
+            }
+        }
+        androidUnitTest {
+            dependencies {
+                implementation(libs.bundles.test)
+                runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+    }
+    // ZOUKAN <--
 }

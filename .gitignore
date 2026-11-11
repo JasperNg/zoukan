@@ -21,3 +21,26 @@ local.properties
 /app/google-services.json
 *.jks
 app/standard/preview/*
+
+# AI agent files (kept locally, not tracked)
+.claude/
+.gemini/
+.cursor/
+.aider*
+.codex/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+cherrypick_log.md
+
+# Editor, OS and scratch files
+.vscode/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+*.log
+*.tmp
+*.orig
+*.rej

@@ -1,0 +1,5 @@
+-- Add notes column
+ALTER TABLE mangas
+-- ZOUKAN --> single-quoted strings: SQLCipher on desktop is built without double-quoted string literals
+ADD notes TEXT NOT NULL DEFAULT '';
+-- ZOUKAN <--

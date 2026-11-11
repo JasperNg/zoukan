@@ -198,6 +198,9 @@ dependencies {
     implementation(projects.sourceLocal)
     implementation(projects.data)
     implementation(projects.domain)
+    // ZOUKAN -->
+    implementation(projects.backup)
+    // ZOUKAN <--
     implementation(projects.presentationCore)
     implementation(projects.presentationWidget)
     implementation(projects.telemetry)

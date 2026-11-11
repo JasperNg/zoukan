@@ -1,0 +1,12 @@
+-- Insert Default category
+-- ZOUKAN --> single-quoted strings: SQLCipher on desktop is built without double-quoted string literals
+INSERT OR IGNORE INTO categories(_id, name, sort, flags, manga_order) VALUES (0, '', -1, 0, '');
+-- ZOUKAN <--
+-- Disallow deletion of default category
+CREATE TRIGGER IF NOT EXISTS system_category_delete_trigger BEFORE DELETE
+ON categories
+BEGIN SELECT CASE
+    WHEN old._id <= 0 THEN
+        RAISE(ABORT, "System category can't be deleted")
+    END;
+END;

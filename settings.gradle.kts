@@ -29,12 +29,23 @@ dependencyResolutionManagement {
         create("sylibs") {
             from(files("gradle/sy.versions.toml"))
         }
+        // ZOUKAN -->
+        create("zoukanlibs") {
+            from(files("gradle/zoukan.versions.toml"))
+        }
+        // ZOUKAN <--
     }
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         mavenCentral()
         google()
         maven(url = "https://www.jitpack.io")
+        // ZOUKAN -->
+        // Suwayomi's android.jar for the desktop runtime (the artifact Suwayomi-Server builds against)
+        maven(url = "https://raw.githubusercontent.com/Suwayomi/Suwayomi-Server/android-jar/") {
+            content { includeModule("com.github.Suwayomi", "android-jar") }
+        }
+        // ZOUKAN <--
     }
 }
 
@@ -42,6 +53,13 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 rootProject.name = "Komikku"
 include(":app")
+// ZOUKAN -->
+include(":android-compat")
+include(":android-stubs")
+include(":backup")
+include(":desktop")
+include(":extension-jvm")
+// ZOUKAN <--
 include(":core-metadata")
 include(":core:archive")
 include(":core:common")
