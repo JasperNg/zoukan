@@ -23,6 +23,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
+| More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
+| Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |

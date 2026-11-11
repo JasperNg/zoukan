@@ -90,9 +90,30 @@ class UpdatesScreenModel(
                     bookmarked = null,
                     hideExcludedScanlators = false,
                 )
-            }.collect { items -> mutableState.update { it.copy(loading = false, items = items) } }
+            }
+                // ZOUKAN -->
+                // More > Downloaded only shows only downloaded chapters, as Android's Updates
+                .let { updates ->
+                    val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
+                    val downloads = Injekt.get<zoukan.desktop.download.DownloadManager>()
+                    kotlinx.coroutines.flow.combine(updates, downloadedOnly, downloads.changes) { items, only, _ ->
+                        if (only) items.filter { isDownloaded(downloads, it) } else items
+                    }
+                }
+                // ZOUKAN <--
+                .collect { items -> mutableState.update { it.copy(loading = false, items = items) } }
         }
     }
+
+    // ZOUKAN -->
+    private fun isDownloaded(downloads: zoukan.desktop.download.DownloadManager, item: UpdatesWithRelations): Boolean {
+        if (item.sourceId == zoukan.desktop.local.LocalSource.ID) return true
+        val manga = tachiyomi.domain.manga.model.Manga.create().copy(id = item.mangaId, source = item.sourceId, ogTitle = item.ogMangaTitle)
+        val chapter = tachiyomi.domain.chapter.model.Chapter.create()
+            .copy(id = item.chapterId, mangaId = item.mangaId, name = item.chapterName, scanlator = item.scanlator, url = item.chapterUrl)
+        return downloads.isDownloaded(manga, chapter)
+    }
+    // ZOUKAN <--
 
     fun toggleUnreadOnly() {
         unreadOnly.value = !unreadOnly.value
