@@ -92,6 +92,9 @@ class LibraryScreenModel(
         val continueReading: Boolean = false,
         val categoryTabs: Boolean = true,
         val itemCounts: Boolean = false,
+        /** The "Tag sorting" tags (SY), in their order */
+        val sortTags: List<String> = emptyList(),
+        val showEmptyCategoriesSearch: Boolean = false,
         // ZOUKAN -->
         /** How the tabs split the library: by category, source, status or tracking status (SY) */
         val group: Int = LibraryGroup.BY_DEFAULT,
@@ -168,14 +171,21 @@ class LibraryScreenModel(
             }
         // ZOUKAN <--
 
-        /** Category tabs: the user's categories, plus Default when entries have no category. */
+        /**
+         * Category tabs: the user's categories, plus Default when entries have no category. While
+         * searching or filtering, categories with no match are left out unless "Show empty
+         * categories during search/filtering" is on, as Android's (KMK).
+         */
         val tabs: List<Category>
             get() {
                 // ZOUKAN -->
                 if (grouped) return groups.map { it.first }
                 // ZOUKAN <--
                 val hasUncategorized = items.any { it.categories.isEmpty() || Category.UNCATEGORIZED_ID in it.categories }
-                return categories.filter { !it.hidden && (!it.isSystemCategory || hasUncategorized) }
+                val shown = categories.filter { !it.hidden && (!it.isSystemCategory || hasUncategorized) }
+                val searching = query.isNotBlank() || settings.hasFilter
+                if (!searching || settings.showEmptyCategoriesSearch) return shown
+                return shown.filter { countIn(it.id) > 0 }
             }
 
         val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }.takeIf { !grouped }
@@ -246,6 +256,11 @@ class LibraryScreenModel(
                 LibrarySort.Type.ChapterFetchDate -> compareBy { it.chapterFetchedAt }
                 LibrarySort.Type.DateAdded -> compareBy { it.manga.dateAdded }
                 LibrarySort.Type.TrackerMean -> compareBy { meanScore(it.id) }
+                // SY's tag sorting: by the first sort tag the entry has; entries without one first
+                LibrarySort.Type.TagList -> compareBy { item ->
+                    val genres = item.manga.genre.orEmpty()
+                    settings.sortTags.indexOfFirst { it in genres }
+                }
                 else -> byTitle
             }
             return list.sortedWith((if (sort.isAscending) comparator else comparator.reversed()).thenComparing(byTitle))
@@ -339,6 +354,7 @@ class LibraryScreenModel(
             Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes(),
             p.groupLibraryBy().changes(),
             // ZOUKAN <--
+            p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
         ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
         return combine(flows) { v ->
             Settings(
@@ -361,7 +377,9 @@ class LibraryScreenModel(
                 categoryTabs = v[16] as Boolean,
                 itemCounts = v[17] as Boolean,
                 group = v[19] as Int,
-                tracking = trackerIds.mapIndexed { i, id -> id to v[20 + i] as TriState }.toMap(),
+                sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[20] as Set<*>).filterIsInstance<String>().toSet()),
+                showEmptyCategoriesSearch = v[21] as Boolean,
+                tracking = trackerIds.mapIndexed { i, id -> id to v[22 + i] as TriState }.toMap(),
             )
         }
     }

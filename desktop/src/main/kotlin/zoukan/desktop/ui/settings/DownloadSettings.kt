@@ -85,4 +85,22 @@ fun LazyListScope.downloadBehaviorSettings(categories: List<Category>) {
     item(key = "downloads-ahead-info") {
         SettingRow("", "Only works if the current chapter + the next one are already downloaded.")
     }
+
+    // KMK's download cache renew interval
+    settingsGroup("Download cache renew interval")
+    item(key = "downloads-cache-renew") {
+        val preferences = remember { Injekt.get<DownloadPreferences>() }
+        ChoicePreference(
+            "Download cache renew interval",
+            preferences.downloadCacheRenewInterval(),
+            listOf(-1 to "Manual", 1 to "1 hour", 2 to "2 hours", 6 to "6 hours", 12 to "12 hours", 24 to "24 hours"),
+        )
+    }
+    item(key = "downloads-cache-renew-info") {
+        SettingRow(
+            "",
+            "How often the app reads the download folders again to notice chapters added or removed outside the app. " +
+                "With Manual, use Settings > Advanced > Reindex downloads.",
+        )
+    }
 }

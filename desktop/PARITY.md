@@ -12,6 +12,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library display modes, badges, continue reading button | Yes | Compact, comfortable, panorama, cover-only and list; columns; per-badge toggles |
 | Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
 | Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
+| Tag sorting (SY) | Yes | Settings > Library > Sorting > Tag sorting tags: add, order and delete tags; then Sort > Tag sorting, offered once there are tags, as on Android |
 | Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download, delete downloads, remove |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
 | Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule |
@@ -31,11 +32,13 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
+| Updates filters: downloaded, unread, started, bookmarked, hide excluded scanlators | Yes | Updates > filter button; the Android preferences, so they move with backups |
 | Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
 | More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
+| Download queue: sort by upload date or chapter number, move to top or bottom, move or cancel a series | Yes | Downloads > sort button sorts within each source, as Android; each download's More menu has the moves and cancels |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
 | Backups (.tachibk) create, restore, automatic | Yes | Phase 5; round trip checked by tests |
 | Statistics | Yes | Library > Statistics: entries, chapters, reading time, tracking |
@@ -66,11 +69,13 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library: update only on Wi-Fi or an unmetered network | No | Desktops give apps no reliable way to tell; the setting is kept for Android |
 | Library: unread count on the Updates icon | Yes | Cleared when Updates opens |
 | Library: mark duplicate read chapters as read | Yes | After reading a chapter, and after fetching new chapters |
+| Library: show empty categories during search/filtering | Yes | Off, as Android: categories with no match leave the tabs while searching or filtering |
 | Library: chapter swipe actions | No | No swipe on desktop; the chapter list has right-click and selection actions |
 | Downloads: delete after reading (nth to last), after marking read, bookmarked, excluded categories | Yes | As Android's: deleted when the reader closes |
 | Downloads: download new chapters, with categories to include and exclude | Yes | |
 | Downloads: download ahead while reading | Yes | When the open and the next chapter are downloaded |
 | Downloads: only on Wi-Fi | No | As for library updates |
+| Downloads: download cache renew interval | Yes | How often the download folders are read again; Manual waits for Advanced > Reindex downloads |
 | Browse: suggestions, source categories, filter sources in categories, replace latest button, local source hidden folders | Yes | Settings > Browse. Source categories are made in Edit categories and set from a source's More menu (Android's long press) |
 | Browse: hide Feed tab, Feed tab position, hide library entries in the feed and in sources | Yes | |
 | Browse: expand related titles, related titles in the overflow menu, show home on related titles | No | They lay out the related-titles row inside the entry screen; the desktop shows related titles from the entry's More > Similar titles |
@@ -94,7 +99,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |
 | First-run setup (onboarding): theme, storage location, getting started guide, restore a backup | Yes, changed | Shown over the app until finished, as on Android. Android's permissions step has nothing to ask on a desktop. Someone who used Zoukan before it existed, with a library already, does not see it |
 | What's new: "Updated to" dialog after an update, release notes screen, About > What's new | Yes | The notes of the running version's GitHub release (desktop-v tag), in Markdown |
-| Advanced: data saver, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
+| Advanced: clean up downloaded chapters | Yes | Orphaned and unfinished downloads always; read chapters and entries no longer in the library when ticked. Entries with queued chapters are skipped |
 | Advanced: source blacklist (SY) | Yes | Advanced > Developer tools. With E-Hentai on, hides the E-Hentai extension and its sources, which the built-in ones replace; read at start, as on Android |
 
 ## Browse
@@ -117,6 +122,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | E-Hentai and ExHentai built-in sources | Yes | Settings > E-Hentai; sign in through the built-in browser or cookies |
 | MangaDex and other delegated sources, MDList | Yes | MangaDex, NHentai, LANraragi, Pururin and 8Muses extensions run through the Android delegates; MDList signs in with OAuth |
 | E-Hentai site settings (uconfig), favorites sync, gallery update worker | Yes | Settings > E-Hentai; gallery updates run in the background while the app is open |
+| E-Hentai gallery update restrictions | Yes, changed | Charging waits for mains power, as the library update does. Wi-Fi and unmetered network stay in the setting for Android |
 | Metadata viewer and details block (E-Hentai, MangaDex, NHentai, Pururin, 8Muses, LANraragi) | Yes | Manga screen: rating, category, pages, uploader and tags by namespace (each searches the source); More info lists every field. Right-click copies a value, as a long press on Android |
 | MangaDex settings: sign-in, preferred source, sync follows to the library, follow the library on MangaDex | Yes | Settings > MangaDex, shown when a MangaDex source is enabled, as on Android |
 | Data saver (Bandwidth Hero, wsrv.nl) | Yes, changed | Settings > Data saver, for the reader and (optionally) downloads. Excluded sources are picked there, not from a long press in Browse |

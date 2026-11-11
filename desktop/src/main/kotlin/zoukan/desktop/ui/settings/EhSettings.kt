@@ -33,6 +33,7 @@ import exh.uconfig.EHConfigurator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.DeleteFavoriteEntries
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -280,6 +281,14 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
             "Time between update batches",
             preferences.exhAutoUpdateFrequency(),
             listOf(0 to "Never update galleries", 1 to "1 hour", 2 to "2 hours", 3 to "3 hours", 6 to "6 hours", 12 to "12 hours", 24 to "24 hours", 48 to "48 hours"),
+        )
+        // Android also offers Wi-Fi and unmetered network, which a desktop cannot tell; they stay in the setting
+        val frequency by preferences.exhAutoUpdateFrequency().changes().collectAsState(preferences.exhAutoUpdateFrequency().get())
+        MultiSelectPreference(
+            "Auto update restrictions",
+            preferences.exhAutoUpdateRequirements(),
+            listOf(LibraryPreferences.DEVICE_CHARGING to "Charging (on mains power)"),
+            enabled = frequency > 0,
         )
         val stats = updater.stats()
         SettingRow(

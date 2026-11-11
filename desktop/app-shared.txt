@@ -34,6 +34,12 @@ eu/kanade/domain/manga/interactor/SmartSearchMerge.kt
 mihon/domain/migration/models/MigrationFlag.kt
 eu/kanade/domain/source/interactor/GetExhSavedSearch.kt
 
+# Library tag sorting (SY)
+eu/kanade/domain/manga/interactor/GetSortTag.kt
+eu/kanade/domain/manga/interactor/CreateSortTag.kt
+eu/kanade/domain/manga/interactor/DeleteSortTag.kt
+eu/kanade/domain/manga/interactor/ReorderSortTag.kt
+
 # Delegated sources (MangaDex, NHentai, LANraragi, Pururin, 8Muses) and MDList
 eu/kanade/tachiyomi/source/online/all/MangaDex.kt
 eu/kanade/tachiyomi/source/online/all/NHentai.kt
