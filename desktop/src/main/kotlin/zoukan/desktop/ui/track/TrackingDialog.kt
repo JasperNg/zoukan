@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +51,7 @@ import eu.kanade.tachiyomi.data.track.model.TrackSearch
 import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.common.CoverImage
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.formatDate
 import java.time.LocalDate

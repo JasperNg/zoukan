@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,6 +41,7 @@ import zoukan.desktop.exh.EhGalleryUpdater
 import zoukan.desktop.exh.EhLogin
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.manga.formatDateTime
 
 /** Settings > E-Hentai: the built-in E-Hentai and ExHentai sources, as the Android app's E-Hentai settings. */
@@ -208,7 +207,7 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
         onDismissRequest = onDismiss,
         title = { Text("Language filtering") },
         text = {
-            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar()) {
                 Row {
                     Text("Language", Modifier.width(120.dp))
                     listOf("Original", "Translated", "Rewrite").forEach { Text(it, Modifier.width(90.dp)) }

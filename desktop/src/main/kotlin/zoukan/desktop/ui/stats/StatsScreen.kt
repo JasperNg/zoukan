@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +36,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import java.io.File
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
@@ -136,7 +135,7 @@ object StatsScreen : Screen {
             ScreenHeader("Statistics")
             val s = stats ?: return LoadingScreen()
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+                Modifier.fillMaxSize().verticalScrollWithBar().padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
                 Section("Overview") {
