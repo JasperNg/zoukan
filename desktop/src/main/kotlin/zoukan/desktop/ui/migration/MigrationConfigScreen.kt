@@ -55,8 +55,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import mihon.domain.migration.models.MigrationFlag
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.languageName
 import zoukan.desktop.ui.common.EmptyScreen
@@ -68,6 +72,7 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.SwitchPreference
 import zoukan.desktop.ui.settings.SwitchSetting
 import zoukan.desktop.ui.settings.settingsGroup
+import zoukan.i18n.desktop.DMR
 
 /**
  * The Android app's MigrationConfigScreen and its options sheet: which sources to search, in
@@ -87,13 +92,16 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
 
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(
-                "Select sources",
-                subtitle = "${mangaIds.size} ${if (mangaIds.size == 1) "entry" else "entries"} · " +
-                    state.sources.count { it.selected }.let { if (it == 1) "1 source" else "$it sources" } + " selected, searched from the top",
+                localized(SYMR.strings.select_sources),
+                subtitle = localized(
+                    DMR.strings.migration_config_subtitle,
+                    if (mangaIds.size == 1) localized(DMR.strings.n_1_entry) else localized(DMR.strings.entries, mangaIds.size),
+                    state.sources.count { it.selected }.let { if (it == 1) localized(DMR.strings.n_1_source) else localized(DMR.strings.sources, it) },
+                ),
             ) {
-                SearchField(query, { query = it }, "Search for a source", Modifier.width(260.dp).padding(end = 8.dp))
+                SearchField(query, { query = it }, localized(DMR.strings.search_for_a_source), Modifier.width(260.dp).padding(end = 8.dp))
                 Box {
-                    TooltipIconButton(Icons.Outlined.MoreVert, "Select", onClick = { selectMenu = true })
+                    TooltipIconButton(Icons.Outlined.MoreVert, localized(DMR.strings.select), onClick = { selectMenu = true })
                     DropdownMenu(selectMenu, onDismissRequest = { selectMenu = false }) {
                         MigrationConfigScreenModel.Selection.entries.forEach { selection ->
                             DropdownMenuItem(
@@ -113,7 +121,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                         navigator.replace(MigrationListScreen(mangaIds, extraQuery.trim().ifBlank { null }, runManually))
                     },
                     modifier = Modifier.padding(horizontal = 8.dp),
-                ) { Text("Start") }
+                ) { Text(localized(MR.strings.action_start)) }
             }
             if (state.loading) {
                 LoadingScreen()
@@ -132,7 +140,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
     @Composable
     private fun SourceList(sources: List<MigrationConfigScreenModel.MigrationSource>, query: String, model: MigrationConfigScreenModel) {
         if (sources.isEmpty()) {
-            EmptyScreen("No sources to search. Install an extension in Browse first.")
+            EmptyScreen(localized(DMR.strings.no_sources_to_search_install_an))
             return
         }
         // As Android, a comma separates several names or ids
@@ -141,13 +149,13 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
         val (selected, available) = shown.partition { it.selected }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
             if (selected.isNotEmpty()) {
-                settingsGroup("Selected")
+                settingsGroup(localized(MR.strings.selected))
                 itemsIndexed(selected, key = { _, s -> "selected-${s.id}" }) { index, source ->
                     SourceRow(source, model) {
-                        TooltipIconButton(Icons.Outlined.ArrowUpward, "Move up", enabled = index > 0 && terms.isEmpty(), onClick = { model.move(source.id, -1) })
+                        TooltipIconButton(Icons.Outlined.ArrowUpward, localized(KMR.strings.action_move_up), enabled = index > 0 && terms.isEmpty(), onClick = { model.move(source.id, -1) })
                         TooltipIconButton(
                             Icons.Outlined.ArrowDownward,
-                            "Move down",
+                            localized(KMR.strings.action_move_down),
                             enabled = index < selected.lastIndex && terms.isEmpty(),
                             onClick = { model.move(source.id, 1) },
                         )
@@ -155,7 +163,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                 }
             }
             if (available.isNotEmpty()) {
-                settingsGroup("Available")
+                settingsGroup(localized(MR.strings.migrationConfigScreen.availableHeader))
                 itemsIndexed(available, key = { _, s -> "available-${s.id}" }) { _, source -> SourceRow(source, model) {} }
             }
         }
@@ -191,7 +199,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
         val flagsPreference = remember { migrate.flags() }
         val flags by flagsPreference.changes().collectAsState(flagsPreference.get())
         LazyColumn(Modifier.width(420.dp).fillMaxHeight(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            settingsGroup("Data to migrate")
+            settingsGroup(localized(MR.strings.migrationConfigScreen.dataToMigrateHeader))
             item(key = "flags") {
                 FlowRow(
                     Modifier.padding(horizontal = 24.dp),
@@ -208,7 +216,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             }
             item(key = "remove-download") {
                 SwitchSetting(
-                    "Delete downloads of current entry after migration",
+                    localized(MR.strings.migrationConfigScreen.removeDownloadsTitle),
                     checked = MigrationFlag.REMOVE_DOWNLOAD in flags,
                 ) {
                     flagsPreference.set(if (it) flags + MigrationFlag.REMOVE_DOWNLOAD else flags - MigrationFlag.REMOVE_DOWNLOAD)
@@ -219,30 +227,29 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                     extraQuery,
                     onExtraQuery,
                     singleLine = true,
-                    label = { Text("Additional keywords (optional)") },
-                    supportingText = { Text("Helps narrow down search results by adding additional keywords") },
+                    label = { Text(localized(MR.strings.migrationConfigScreen.additionalSearchQueryLabel)) },
+                    supportingText = { Text(localized(MR.strings.migrationConfigScreen.additionalSearchQuerySupportingText)) },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
-            item(key = "hide-unmatched") { SwitchPreference("Hide entries without a match", preferences.migrationHideUnmatched()) }
+            item(key = "hide-unmatched") { SwitchPreference(localized(MR.strings.migrationConfigScreen.hideUnmatchedTitle), preferences.migrationHideUnmatched()) }
             item(key = "hide-without-updates") {
                 SwitchPreference(
-                    "Hide entries without newer chapters",
+                    localized(MR.strings.migrationConfigScreen.hideWithoutUpdatesTitle),
                     preferences.migrationHideWithoutUpdates(),
-                    subtitle = "Only show entry if the match has additional chapters",
+                    subtitle = localized(MR.strings.migrationConfigScreen.hideWithoutUpdatesSubtitle),
                 )
             }
             item(key = "smart-search") {
                 SwitchPreference(
-                    "Use smart search",
+                    localized(KMR.strings.migrationConfigScreen_smartSearchSingleEntryTitle),
                     preferences.migrationSmartSearchSingleEntry(),
-                    subtitle = "For a single entry. If enabled, automatically picks the best match result. " +
-                        "Otherwise, shows all search results for manual selection.",
+                    subtitle = localized(DMR.strings.for_a_single_entry_if_enabled),
                 )
             }
             item(key = "warning") {
                 Text(
-                    "These options are slow and dangerous and may lead to restrictions from sources",
+                    localized(MR.strings.migrationConfigScreen.enhancedOptionsWarning),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -250,16 +257,16 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             }
             item(key = "deep-search") {
                 SwitchPreference(
-                    "Advanced search mode",
+                    localized(MR.strings.migrationConfigScreen.deepSearchModeTitle),
                     preferences.migrationDeepSearchMode(),
-                    subtitle = "Breaks down the title into keywords for a wider search",
+                    subtitle = localized(MR.strings.migrationConfigScreen.deepSearchModeSubtitle),
                 )
             }
             item(key = "prioritize") {
                 SwitchPreference(
-                    "Match based on chapter number",
+                    localized(MR.strings.migrationConfigScreen.prioritizeByChaptersTitle),
                     preferences.migrationPrioritizeByChapters(),
-                    subtitle = "If enabled, chooses the match furthest ahead. Otherwise, picks the first match by source priority.",
+                    subtitle = localized(MR.strings.migrationConfigScreen.prioritizeByChaptersSubtitle),
                 )
             }
         }
@@ -277,10 +284,10 @@ class MigrationConfigScreenModel(
     data class State(val loading: Boolean = true, val sources: List<MigrationSource> = emptyList())
 
     enum class Selection(val label: String) {
-        Pinned("Select pinned sources"),
-        None("Select none"),
-        Enabled("Select enabled sources"),
-        All("Select all"),
+        Pinned(localized(MR.strings.migrationConfigScreen.selectPinnedLabel)),
+        None(localized(MR.strings.migrationConfigScreen.selectNoneLabel)),
+        Enabled(localized(MR.strings.migrationConfigScreen.selectEnabledLabel)),
+        All(localized(MR.strings.action_select_all)),
     }
 
     private val pinned by lazy { preferences.pinnedSources().get().mapNotNull { it.toLongOrNull() }.toSet() }

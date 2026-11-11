@@ -50,6 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Corners
@@ -60,6 +62,7 @@ import zoukan.desktop.ui.common.LazyVerticalGrid
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.rememberContextMenuState
+import zoukan.i18n.desktop.DMR
 
 /** How a click on an entry was made: a plain click, Ctrl/Cmd + click or Shift + click. */
 enum class ClickKind { Plain, Toggle, Range }
@@ -98,7 +101,7 @@ fun Modifier.selectableClick(onContextMenu: ((Offset) -> Unit)? = null, onClick:
 private fun badges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.Settings): List<Pair<String, Boolean>> = buildList {
     if (settings.downloadBadge && item.downloadCount > 0) add(item.downloadCount.toString() to false)
     if (settings.unreadBadge && item.library.unreadCount > 0) add(item.library.unreadCount.toString() to true)
-    if (settings.localBadge && item.isLocal) add("Local" to false)
+    if (settings.localBadge && item.isLocal) add(localized(MR.strings.label_local) to false)
     if (settings.languageBadge && item.language.isNotBlank() && item.language != "all" && !item.isLocal) add(item.language.uppercase() to false)
     if (settings.sourceBadge && item.sourceName.isNotBlank() && !item.isLocal) add(item.sourceName to false)
 }
@@ -127,13 +130,13 @@ private fun Badges(list: List<Pair<String, Boolean>>, modifier: Modifier = Modif
 
 @Composable
 private fun ContinueButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Tooltip("Continue reading", modifier) {
+    Tooltip(localized(DMR.strings.continue_reading), modifier) {
         FilledIconButton(
             onClick = onClick,
             modifier = Modifier.size(32.dp),
             colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)),
         ) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = "Continue reading", modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.PlayArrow, contentDescription = localized(DMR.strings.continue_reading), modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -142,7 +145,7 @@ private fun ContinueButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 private fun SelectedMark(modifier: Modifier = Modifier) {
     Icon(
         Icons.Filled.CheckCircle,
-        contentDescription = "Selected",
+        contentDescription = localized(MR.strings.selected),
         tint = MaterialTheme.colorScheme.primary,
         modifier = modifier.padding(Corners.CoverInset).background(MaterialTheme.colorScheme.surface, CircleShape),
     )

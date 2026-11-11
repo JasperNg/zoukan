@@ -43,12 +43,15 @@ import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.recs.RecommendsScreen
+import zoukan.i18n.desktop.DMR
 
 /**
  * Komikku's related titles on the entry page: the source's related titles in a row under the
@@ -83,9 +86,9 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
             Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Related titles", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TextButton(onClick = { navigator.push(RecommendsScreen(manga.id)) }) { Text("See all") }
-            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (expanded) "Collapse" else "Expand")
+            Text(localized(DMR.strings.related_titles), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { navigator.push(RecommendsScreen(manga.id)) }) { Text(localized(DMR.strings.see_all)) }
+            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (expanded) localized(DMR.strings.collapse) else localized(DMR.strings.expand))
         }
         if (!expanded) return@Column
         if (list == null) {
@@ -102,7 +105,7 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
                         title = item.title,
                         cover = Cover.of(item),
                         onClick = { navigator.push(MangaScreen(item.id)) },
-                        badge = if (item.favorite) "In library" else null,
+                        badge = if (item.favorite) localized(MR.strings.in_library) else null,
                         modifier = Modifier.width(120.dp),
                     )
                 }

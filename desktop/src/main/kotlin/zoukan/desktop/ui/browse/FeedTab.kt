@@ -70,14 +70,18 @@ import tachiyomi.domain.source.interactor.ReorderFeed
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.i18n.desktop.DMR
 
 /**
  * Browse > Feed: Komikku's global feed. Each row is a source's latest updates (popular when it has
@@ -110,13 +114,13 @@ class FeedScreenModel(
 
         val title: String
             get() = when {
-                source == null -> "Source not installed (${feed.source})"
-                popular == true -> "Popular"
-                popular == false -> "Latest"
+                source == null -> localized(DMR.strings.source_not_installed, feed.source)
+                popular == true -> localized(MR.strings.popular)
+                popular == false -> localized(MR.strings.latest)
                 savedSearch != null && feed.global -> "${source.name} · ${savedSearch.name}"
                 savedSearch != null -> savedSearch.name
-                source.supportsLatest -> "${source.name} · Latest"
-                else -> "${source.name} · Popular"
+                source.supportsLatest -> localized(DMR.strings.latest, source.name)
+                else -> localized(DMR.strings.popular, source.name)
             }
     }
 
@@ -168,7 +172,7 @@ class FeedScreenModel(
 
     private fun load(row: Row) {
         val source = row.source ?: return mutableState.update {
-            it.copy(results = it.results + (row.feed.id to Result.Error("Install the source's extension to see this feed")))
+            it.copy(results = it.results + (row.feed.id to Result.Error(localized(DMR.strings.install_the_sources_extension_to_see))))
         }
         mutableState.update { it.copy(results = it.results + (row.feed.id to Result.Loading)) }
         // A refresh replaces the row's load still running, so an older result never lands last
@@ -240,7 +244,7 @@ data class SourceFeedScreen(val sourceId: Long) : cafe.adriel.voyager.core.scree
         val model = rememberScreenModel { FeedScreenModel(sourceId) }
         val source = remember { Injekt.get<SourceManager>().get(sourceId) }
         Column(Modifier.fillMaxSize()) {
-            zoukan.desktop.ui.common.ScreenHeader(source?.name ?: "Source not installed", subtitle = "Feed") {}
+            zoukan.desktop.ui.common.ScreenHeader(source?.name ?: localized(DMR.strings.source_not_installed_2), subtitle = localized(SYMR.strings.feed)) {}
             FeedTab(model)
         }
     }
@@ -265,7 +269,7 @@ fun FeedTab(model: FeedScreenModel) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (model.sourceId == null) "Latest updates and saved searches of the sources you pick" else "This source's latest, popular and saved searches",
+                if (model.sourceId == null) localized(DMR.strings.latest_updates_and_saved_searches_of) else localized(DMR.strings.this_sources_latest_popular_and_saved),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
@@ -274,20 +278,20 @@ fun FeedTab(model: FeedScreenModel) {
             BulkSelectButton(bulk)
             // Komikku's feed order: drag the saved feeds into place
             if (rows.count { !it.fixed } > 1) {
-                TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, "Reorder the feed", onClick = { ordering = true })
+                TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, localized(DMR.strings.reorder_the_feed), onClick = { ordering = true })
             }
             // ZOUKAN <--
-            TooltipIconButton(Icons.Outlined.Refresh, "Refresh", onClick = model::refresh)
+            TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_webview_refresh), onClick = model::refresh)
             FilledTonalButton(onClick = { adding = true }) {
                 Icon(Icons.Outlined.Add, null)
-                Text("Add")
+                Text(localized(MR.strings.action_add))
             }
         }
         // ZOUKAN -->
         BulkFavoriteBar(bulk, rows.flatMap { (state.results[it.feed.id] as? FeedScreenModel.Result.Success)?.manga.orEmpty() })
         // ZOUKAN <--
         if (rows.isEmpty()) {
-            EmptyScreen("No feeds yet. Add a source's latest updates or one of its saved searches.", actionLabel = "Add", onAction = { adding = true })
+            EmptyScreen(localized(DMR.strings.no_feeds_yet_add_a_sources), actionLabel = localized(MR.strings.action_add), onAction = { adding = true })
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(rows, key = { it.feed.id }) { row ->
@@ -308,14 +312,14 @@ fun FeedTab(model: FeedScreenModel) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(row.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                            if (!row.fixed) TooltipIconButton(Icons.Outlined.Delete, "Remove from the feed", onClick = { model.remove(row) })
+                            if (!row.fixed) TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.remove_from_the_feed), onClick = { model.remove(row) })
                             Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
                         }
                         when (val result = state.results[row.feed.id]) {
                             // ZOUKAN -->
                             is FeedScreenModel.Result.Success -> if (result.manga.none { !hideInLibrary || !it.favorite }) {
                                 // ZOUKAN <--
-                                Text("Nothing here", modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(localized(DMR.strings.nothing_here), modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } else {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     // ZOUKAN -->
@@ -327,7 +331,7 @@ fun FeedTab(model: FeedScreenModel) {
                                             // ZOUKAN -->
                                             onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
                                             onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
-                                            badge = if (manga.favorite) "In library" else null,
+                                            badge = if (manga.favorite) localized(MR.strings.in_library) else null,
                                             modifier = Modifier.width(140.dp).bulkSelected(bulk.isSelected(manga)),
                                             // ZOUKAN <--
                                         )
@@ -365,12 +369,12 @@ private fun AddFeedDialog(model: FeedScreenModel, onDismiss: () -> Unit) {
     var source by remember { mutableStateOf(fixedSource) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(source?.let { "Add ${it.name}" } ?: "Add a feed") },
+        title = { Text(source?.let { localized(DMR.strings.add, it.name) } ?: localized(DMR.strings.add_a_feed)) },
         text = {
             val picked = source
             if (picked == null) {
                 Column {
-                    OutlinedTextField(filter, { filter = it }, singleLine = true, label = { Text("Source") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(filter, { filter = it }, singleLine = true, label = { Text(localized(DMR.strings.source)) }, modifier = Modifier.fillMaxWidth())
                     LazyColumn(Modifier.heightIn(max = 400.dp)) {
                         items(sources.filter { it.name.contains(filter.trim(), ignoreCase = true) }, key = { it.id }) {
                             Text(
@@ -387,7 +391,7 @@ private fun AddFeedDialog(model: FeedScreenModel, onDismiss: () -> Unit) {
                 Column {
                     if (fixedSource == null) {
                         Text(
-                            if (picked.supportsLatest) "Latest updates" else "Popular",
+                            if (picked.supportsLatest) localized(DMR.strings.latest_updates) else localized(MR.strings.popular),
                             modifier = Modifier.fillMaxWidth().clickable {
                                 model.add(picked.id, null)
                                 onDismiss()
@@ -396,7 +400,7 @@ private fun AddFeedDialog(model: FeedScreenModel, onDismiss: () -> Unit) {
                     }
                     saved.forEach { search ->
                         Text(
-                            "Saved search: ${search.name}",
+                            localized(DMR.strings.saved_search, search.name),
                             modifier = Modifier.fillMaxWidth().clickable {
                                 model.add(picked.id, search.id)
                                 onDismiss()
@@ -405,7 +409,7 @@ private fun AddFeedDialog(model: FeedScreenModel, onDismiss: () -> Unit) {
                     }
                     if (saved.isEmpty()) {
                         Text(
-                            "Save a search in the source (filters, Save) to add it here.",
+                            localized(DMR.strings.save_a_search_in_the_source),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -413,7 +417,7 @@ private fun AddFeedDialog(model: FeedScreenModel, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        dismissButton = if (source != null && fixedSource == null) ({ TextButton(onClick = { source = null }) { Text("Back") } }) else null,
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+        dismissButton = if (source != null && fixedSource == null) ({ TextButton(onClick = { source = null }) { Text(localized(MR.strings.action_webview_back)) } }) else null,
     )
 }

@@ -33,7 +33,12 @@ import androidx.compose.ui.unit.dp
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.Surface
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
+import zoukan.i18n.desktop.DMR
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
@@ -71,39 +76,39 @@ fun PageActionsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("page-actions"),
-        title = { Text(if (double) "Pages ${target.page + 1} and ${target.extra!! + 1}" else "Page ${target.page + 1}") },
+        title = { Text(if (double) localized(DMR.strings.pages_and, target.page + 1, target.extra!! + 1) else localized(DMR.strings.page, target.page + 1)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action(if (double) "Set first page as cover" else "Set as cover", Icons.Outlined.Photo) { coverOf = target.page }
-                    Action(if (double) "Copy first page to clipboard" else "Copy to clipboard", Icons.Outlined.ContentCopy) {
+                    Action(if (double) localized(SYMR.strings.action_set_first_page_cover) else localized(MR.strings.set_as_cover), Icons.Outlined.Photo) { coverOf = target.page }
+                    Action(if (double) localized(KMR.strings.action_copy_to_clipboard_first_page) else localized(MR.strings.action_copy_to_clipboard), Icons.Outlined.ContentCopy) {
                         onCopy(target.page)
                         onDismiss()
                     }
-                    Action(if (double) "Save first page" else "Save", Icons.Outlined.Save) {
+                    Action(if (double) localized(SYMR.strings.action_save_first_page) else localized(MR.strings.action_save), Icons.Outlined.Save) {
                         onSave(target.page)
                         onDismiss()
                     }
                 }
                 if (target.extra != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Action("Set second page as cover", Icons.Outlined.Photo) { coverOf = target.extra }
-                        Action("Copy second page to clipboard", Icons.Outlined.ContentCopy) {
+                        Action(localized(SYMR.strings.action_set_second_page_cover), Icons.Outlined.Photo) { coverOf = target.extra }
+                        Action(localized(KMR.strings.action_copy_to_clipboard_second_page), Icons.Outlined.ContentCopy) {
                             onCopy(target.extra)
                             onDismiss()
                         }
-                        Action("Save second page", Icons.Outlined.Save) {
+                        Action(localized(SYMR.strings.action_save_second_page), Icons.Outlined.Save) {
                             onSave(target.extra)
                             onDismiss()
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Spacer(Modifier.widthIn(min = ACTION_WIDTH))
-                        Action("Copy combined page to clipboard", Icons.Outlined.ContentCopy) {
+                        Action(localized(KMR.strings.action_copy_to_clipboard_combined_page), Icons.Outlined.ContentCopy) {
                             onCopyCombined()
                             onDismiss()
                         }
-                        Action("Save combined page", Icons.Outlined.Save) {
+                        Action(localized(SYMR.strings.action_save_combined_page), Icons.Outlined.Save) {
                             onSaveCombined()
                             onDismiss()
                         }
@@ -111,13 +116,13 @@ fun PageActionsDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
     )
 
     coverOf?.let { index ->
         AlertDialog(
             onDismissRequest = { coverOf = null },
-            text = { Text("Use this image as cover art?") },
+            text = { Text(localized(MR.strings.confirm_set_image_as_cover)) },
             confirmButton = {
                 TextButton(onClick = {
                     onSetAsCover(index)
@@ -125,7 +130,7 @@ fun PageActionsDialog(
                     onDismiss()
                 }) { Text("OK") }
             },
-            dismissButton = { TextButton(onClick = { coverOf = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { coverOf = null }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
@@ -170,7 +175,7 @@ object PageImages {
             file.delete()
             if (!tmp.renameTo(file)) {
                 tmp.delete()
-                error("Could not write ${file.name}")
+                error(localized(DMR.strings.could_not_write, file.name))
             }
         }
         return file
@@ -199,7 +204,7 @@ object PageImages {
                 canvas.drawImage(left, 0f, ((height - left.height) / 2).toFloat())
                 canvas.drawImage(right, left.width.toFloat(), ((height - right.height) / 2).toFloat())
                 surface.makeImageSnapshot().use { snapshot ->
-                    return snapshot.encodeToData(EncodedImageFormat.JPEG, 100)?.bytes ?: error("Could not encode the combined page")
+                    return snapshot.encodeToData(EncodedImageFormat.JPEG, 100)?.bytes ?: error(localized(DMR.strings.could_not_encode_the_combined_page))
                 }
             } finally {
                 surface.close()
@@ -247,17 +252,17 @@ object PageImages {
         Image.makeFromEncoded(bytes)
     } catch (e: Exception) {
         // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys covers a few more
-        val image = ImageIO.read(ByteArrayInputStream(bytes)) ?: throw IllegalArgumentException("Not an image", e)
+        val image = ImageIO.read(ByteArrayInputStream(bytes)) ?: throw IllegalArgumentException(localized(DMR.strings.not_an_image), e)
         Image.makeFromEncoded(ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray())
     }
 
     private fun toPng(bytes: ByteArray): ByteArray = decode(bytes).use { image ->
-        image.encodeToData(EncodedImageFormat.PNG)?.bytes ?: error("Could not encode the page")
+        image.encodeToData(EncodedImageFormat.PNG)?.bytes ?: error(localized(DMR.strings.could_not_encode_the_page))
     }
 
     /** An opaque AWT image: Windows pastes transparent parts of a clipboard image as black. */
     private fun toAwt(bytes: ByteArray): BufferedImage {
-        val decoded = ImageIO.read(ByteArrayInputStream(toPng(bytes))) ?: error("Not an image")
+        val decoded = ImageIO.read(ByteArrayInputStream(toPng(bytes))) ?: error(localized(DMR.strings.not_an_image))
         val image = BufferedImage(decoded.width, decoded.height, BufferedImage.TYPE_INT_RGB)
         val g = image.createGraphics()
         g.color = java.awt.Color.WHITE

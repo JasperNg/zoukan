@@ -43,12 +43,16 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
+import zoukan.i18n.desktop.DMR
 
 /** Browse's "Open from a URL": paste an entry's or a chapter's address. */
 @Composable
@@ -63,12 +67,11 @@ fun OpenUrlDialog(onDismiss: () -> Unit) {
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Open from a URL") },
+        title = { Text(localized(DMR.strings.open_from_a_url)) },
         text = {
             Column {
                 Text(
-                    "Paste the address of an entry or a chapter. The source that knows the address opens it; " +
-                        "if none does, every source is searched for it.",
+                    localized(DMR.strings.paste_the_address_of_an_entry),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -88,8 +91,8 @@ fun OpenUrlDialog(onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton(onClick = open, enabled = url.isNotBlank()) { Text("Open") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = open, enabled = url.isNotBlank()) { Text(localized(KMR.strings.open)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -162,7 +165,7 @@ data class OpenUrlScreen(val url: String) : Screen {
             }
         }
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Opening", subtitle = url)
+            ScreenHeader(localized(DMR.strings.opening), subtitle = url)
             LoadingScreen()
         }
     }

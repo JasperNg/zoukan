@@ -22,6 +22,8 @@ import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -94,7 +96,7 @@ object Images {
         // Custom covers and the local source's covers are files
         if (cover.url.startsWith("file:")) {
             val local = File(java.net.URI(cover.url))
-            if (!local.isFile) throw IOException("${local.name} is missing")
+            if (!local.isFile) throw IOException(localized(DMR.strings.is_missing, local.name))
             return local
         }
         val file = File(dir, hash("${cover.sourceId}:${cover.url}"))

@@ -20,8 +20,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
+import zoukan.i18n.desktop.DMR
 
 /**
  * A screen's search box. Ctrl/Cmd + F puts the cursor in it, the X button or Escape empties it,
@@ -53,7 +55,7 @@ fun SearchField(
         } else {
             {
                 IconButton(onClick = { onValueChange("") }) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Clear search", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Close, contentDescription = localized(DMR.strings.clear_search), modifier = Modifier.size(18.dp))
                 }
             }
         },

@@ -59,6 +59,7 @@ include(":android-stubs")
 include(":backup")
 include(":desktop")
 include(":extension-jvm")
+include(":i18n-desktop")
 // ZOUKAN <--
 include(":core-metadata")
 include(":core:archive")

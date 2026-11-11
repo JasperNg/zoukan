@@ -75,14 +75,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 import java.util.concurrent.ConcurrentHashMap
 import androidx.compose.ui.graphics.Brush as GradientBrush
 
@@ -165,7 +168,7 @@ fun MangaInfoPane(
     Column(modifier.verticalScrollWithBar()) {
         InfoHeader(
             manga,
-            sourceName = state.source?.name ?: "Source not installed",
+            sourceName = state.source?.name ?: localized(DMR.strings.source_not_installed_2),
             missingSource = state.source == null,
             onCoverClick = onCoverClick,
         )
@@ -189,7 +192,7 @@ fun MangaInfoPane(
             }
             manga.description?.takeIf { it.isNotBlank() }?.let { Description(it) }
             manga.notes.takeIf { it.isNotBlank() }?.let { notes ->
-                Text("Notes", style = MaterialTheme.typography.titleSmall)
+                Text(localized(MR.strings.action_notes), style = MaterialTheme.typography.titleSmall)
                 Text(notes, style = MaterialTheme.typography.bodyMedium)
             }
             // Metadata sources show their tags by namespace, each searching the source
@@ -255,19 +258,19 @@ private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean,
                 // Selectable, so the title can be copied
                 SelectionContainer {
                     Text(
-                        manga.title.ifBlank { "Unknown title" },
+                        manga.title.ifBlank { localized(MR.strings.unknown_title) },
                         style = MaterialTheme.typography.titleLarge,
                         textAlign = TextAlign.Center,
                     )
                 }
                 Spacer(Modifier.height(2.dp))
-                IconLine(Icons.Outlined.PersonOutline, manga.author?.takeIf { it.isNotBlank() } ?: "Unknown author")
+                IconLine(Icons.Outlined.PersonOutline, manga.author?.takeIf { it.isNotBlank() } ?: localized(MR.strings.unknown_author))
                 manga.artist?.takeIf { it.isNotBlank() && it != manga.author }?.let { IconLine(Icons.Outlined.Brush, it) }
                 Spacer(Modifier.height(2.dp))
                 Row(Modifier.alpha(SECONDARY_ALPHA), verticalAlignment = Alignment.CenterVertically) {
                     Icon(statusIcon(manga.status), null, Modifier.padding(end = 4.dp).size(16.dp))
                     Text(
-                        statusLabel(manga.status) ?: "Unknown",
+                        statusLabel(manga.status) ?: localized(MR.strings.unknown),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -323,16 +326,16 @@ private fun ActionRow(
     val active = MaterialTheme.colorScheme.primary
     Row(Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)) {
         ActionButton(
-            if (favorite) "In library" else "Add to library",
+            if (favorite) localized(MR.strings.in_library) else localized(MR.strings.add_to_library),
             if (favorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
             if (favorite) active else inactive,
             onFavorite,
         )
         ActionButton(
             when (trackCount) {
-                0 -> "Tracking"
-                1 -> "1 tracker"
-                else -> "$trackCount trackers"
+                0 -> localized(MR.strings.track)
+                1 -> localized(DMR.strings.n_1_tracker)
+                else -> localized(DMR.strings.trackers, trackCount)
             },
             if (trackCount == 0) Icons.Outlined.Sync else Icons.Outlined.Done,
             if (trackCount == 0) inactive else active,
@@ -378,7 +381,7 @@ private fun Description(text: String) {
             }
             if (expanded || overflows) {
                 TextButton(onClick = { expanded = !expanded }, modifier = Modifier.align(Alignment.End)) {
-                    Text(if (expanded) "Show less" else "Show more")
+                    Text(if (expanded) localized(DMR.strings.show_less) else localized(DMR.strings.show_more))
                 }
             }
         }

@@ -27,8 +27,10 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.common.Toasts
@@ -123,7 +125,7 @@ class MigrationListScreenModel(
         screenModelScope.launch {
             MigrationPicks.picks.collect { pick ->
                 useMangaForMigration(pick.current, pick.target) {
-                    Toasts.show("No chapters found, this entry cannot be used for migration")
+                    Toasts.show(localized(MR.strings.migrationListScreen.matchWithoutChapterToast))
                 }
             }
         }

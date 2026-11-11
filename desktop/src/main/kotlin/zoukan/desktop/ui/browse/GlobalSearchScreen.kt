@@ -56,8 +56,10 @@ import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.DesktopPreferences
@@ -69,6 +71,7 @@ import zoukan.desktop.ui.manga.PickDialog
 import zoukan.desktop.ui.manga.SearchAgainField
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.desktop.ui.migration.MigrationPicks
+import zoukan.i18n.desktop.DMR
 
 class GlobalSearchScreenModel(
     val query: String,
@@ -206,13 +209,13 @@ data class GlobalSearchScreen(
             // ZOUKAN -->
             ScreenHeader(
                 when (purpose) {
-                    SearchPurpose.Browse -> "Search: $query"
-                    is SearchPurpose.Merge -> "Merge with: $query"
-                    is SearchPurpose.Migrate, is SearchPurpose.MigrateInList -> "Migrate to: $query"
+                    SearchPurpose.Browse -> localized(DMR.strings.search, query)
+                    is SearchPurpose.Merge -> localized(DMR.strings.merge_with, query)
+                    is SearchPurpose.Migrate, is SearchPurpose.MigrateInList -> localized(DMR.strings.migrate_to, query)
                 },
                 subtitle = when (purpose) {
-                    SearchPurpose.Browse -> "$done of ${sources.size} sources"
-                    else -> "Pick an entry in one of ${sources.size} sources"
+                    SearchPurpose.Browse -> localized(DMR.strings.of_sources, done, sources.size)
+                    else -> localized(DMR.strings.pick_an_entry_in_one_of, sources.size)
                 },
             ) {
                 if (purpose != SearchPurpose.Browse) {
@@ -227,14 +230,14 @@ data class GlobalSearchScreen(
                     FilterChip(
                         selected = sourceFilter == GlobalSearchSourceFilter.PinnedOnly,
                         onClick = { model.setSourceFilter(GlobalSearchSourceFilter.PinnedOnly) },
-                        label = { Text("Pinned only") },
+                        label = { Text(localized(DMR.strings.pinned_only)) },
                         leadingIcon = { Icon(Icons.Outlined.PushPin, null, Modifier.size(16.dp)) },
                         modifier = Modifier.testTag("global-search-pinned"),
                     )
                     FilterChip(
                         selected = sourceFilter == GlobalSearchSourceFilter.All,
                         onClick = { model.setSourceFilter(GlobalSearchSourceFilter.All) },
-                        label = { Text("All sources") },
+                        label = { Text(localized(DMR.strings.all_sources)) },
                         leadingIcon = { Icon(Icons.Outlined.DoneAll, null, Modifier.size(16.dp)) },
                         modifier = Modifier.testTag("global-search-all"),
                     )
@@ -242,7 +245,7 @@ data class GlobalSearchScreen(
                 FilterChip(
                     selected = onlyWithResults,
                     onClick = model::toggleOnlyWithResults,
-                    label = { Text("Has results") },
+                    label = { Text(localized(MR.strings.has_results)) },
                     leadingIcon = { Icon(Icons.Outlined.FilterList, null, Modifier.size(16.dp)) },
                     modifier = Modifier.testTag("global-search-has-results"),
                 )
@@ -268,7 +271,7 @@ data class GlobalSearchScreen(
                         }
                         when (val result = results[source.id]) {
                             is GlobalSearchScreenModel.Result.Success -> if (result.manga.isEmpty()) {
-                                Text("No results", modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(localized(DMR.strings.no_results), modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } else {
                                 LazyRow(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -291,7 +294,7 @@ data class GlobalSearchScreen(
                                                 }
                                                 // ZOUKAN <--
                                             },
-                                            badge = if (manga.favorite) "In library" else null,
+                                            badge = if (manga.favorite) localized(MR.strings.in_library) else null,
                                             // ZOUKAN -->
                                             onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
                                             modifier = Modifier.width(140.dp).bulkSelected(bulk.isSelected(manga)),

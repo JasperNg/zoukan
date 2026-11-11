@@ -16,11 +16,15 @@ import eu.kanade.tachiyomi.data.sync.SyncManager
 import exh.favorites.FavoritesSyncHelper
 import exh.source.ExhPreferences
 import kotlinx.coroutines.launch
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 
 /**
  * SY's library overflow entries: "Sync EH favorites" while signed in to ExHentai, and "Sync library"
@@ -48,10 +52,10 @@ object LibrarySync {
     fun syncLibrary() {
         val manager = Injekt.get<SyncManager>()
         if (manager.running.value) {
-            Toasts.show("Sync is already in progress")
+            Toasts.show(localized(SYMR.strings.sync_in_progress))
             return
         }
-        AppScope.launch { runCatching { manager.syncData() }.onFailure { Toasts.error("Sync failed", it) } }
+        AppScope.launch { runCatching { manager.syncData() }.onFailure { Toasts.error(localized(DMR.strings.sync_failed), it) } }
     }
 
     /** Whether "Sync EH favorites" first shows the sync notes, which it does once. */
@@ -63,7 +67,7 @@ object LibrarySync {
 fun SyncFavoritesNotesDialog(onDismiss: () -> Unit, onAccept: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Important favorites sync notes") },
+        title = { Text(localized(DMR.strings.important_favorites_sync_notes)) },
         text = {
             Column(Modifier.heightIn(max = 400.dp).verticalScrollWithBar()) {
                 Text(FAVORITES_SYNC_NOTES)
@@ -83,30 +87,21 @@ fun SyncFavoritesNotesDialog(onDismiss: () -> Unit, onAccept: () -> Unit) {
 fun SyncFavoritesConfirmDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sync EH favorites") },
-        text = { Text("Are you sure you wish to sync your favorites with E-Hentai?") },
+        title = { Text(localized(SYMR.strings.sync_favorites)) },
+        text = { Text(localized(SYMR.strings.favorites_sync_conformation_message)) },
         confirmButton = {
             TextButton(onClick = {
                 onDismiss()
                 Injekt.get<FavoritesSyncHelper>().runSync(AppScope)
-                Toasts.show("Syncing favorites. Settings > E-Hentai shows its progress.")
+                Toasts.show(localized(DMR.strings.syncing_favorites_settings_e_hentai_shows))
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
-private const val FAVORITES_SYNC_NOTES =
-    "1. Changes to category names in the app are not synced. Change the category names on ExHentai instead; " +
-        "they are copied from ExHentai on every sync.\n\n" +
-        "2. The favorite categories on ExHentai correspond to the first 10 categories in the app (excluding Default). " +
-        "Galleries in other categories are not synced.\n\n" +
-        "3. Make sure you have a stable internet connection while sync runs. If it disconnects, your favorites may be " +
-        "left partially synced.\n\n" +
-        "4. Keep the app open while favorites sync.\n\n" +
-        "5. Do not put favorites in more than one category. ExHentai allows each favorite in only one category, so " +
-        "this confuses the sync.\n\n" +
-        "This dialog only shows once."
+private val FAVORITES_SYNC_NOTES get() =
+    localized(DMR.strings.favorites_sync_notes)
 
 /** Which favorites sync dialog shows: the one-time notes, as Android, or the confirmation. */
 enum class FavoritesSyncDialog { Notes, Confirm }

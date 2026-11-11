@@ -51,6 +51,8 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
@@ -63,6 +65,7 @@ import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.desktop.ui.migration.MigrationListScreenModel.Item
 import zoukan.desktop.ui.migration.MigrationListScreenModel.SearchResult
+import zoukan.i18n.desktop.DMR
 
 /**
  * The Android app's MigrationListScreen: each entry beside the match found for it, with a manual
@@ -98,7 +101,7 @@ data class MigrationListScreen(
 
         Column(Modifier.fillMaxSize()) {
             Header(
-                title = if (state.loading) "Migration" else "Migration (${state.finishedCount}/${state.items.size})",
+                title = if (state.loading) localized(MR.strings.migrationListScreenTitle) else localized(DMR.strings.migration, state.finishedCount, state.items.size),
                 complete = state.migrationComplete,
                 onBack = { if (state.items.isEmpty()) navigator.pop() else model.showExitDialog() },
                 onCopy = { model.showMigrateDialog(copy = true) },
@@ -117,7 +120,7 @@ data class MigrationListScreen(
                         onSkip = { model.removeManga(item.manga.id) },
                         onCancel = { model.cancelSearch(item.manga.id) },
                         onMigrateNow = { replace ->
-                            model.migrateNow(item.manga.id, replace) { Toasts.error("Migration failed", it) }
+                            model.migrateNow(item.manga.id, replace) { Toasts.error(localized(DMR.strings.migration_failed), it) }
                         },
                     )
                     HorizontalDivider()
@@ -128,14 +131,14 @@ data class MigrationListScreen(
         when (val dialog = state.dialog) {
             is MigrationListScreenModel.Dialog.Migrate -> AlertDialog(
                 onDismissRequest = model::dismissDialog,
-                title = { Text(if (dialog.copy) "Copy entries?" else "Migrate entries?") },
+                title = { Text(if (dialog.copy) localized(DMR.strings.copy_entries) else localized(DMR.strings.migrate_entries)) },
                 text = {
                     val count = dialog.totalCount - dialog.skippedCount
                     Text(
                         buildString {
-                            append(if (dialog.copy) "Copy" else "Migrate")
-                            append(" $count of ${entries(dialog.totalCount)}?")
-                            if (dialog.skippedCount > 0) append("\n\n${entries(dialog.skippedCount)} without a match ${if (dialog.skippedCount == 1) "is" else "are"} skipped.")
+                            append(localized(if (dialog.copy) DMR.strings.copy_count_of_entries else DMR.strings.migrate_count_of_entries, count, entries(dialog.totalCount)))
+                            if (dialog.skippedCount == 1) append("\n\n").append(localized(DMR.strings.one_skipped_without_match))
+                            if (dialog.skippedCount > 1) append("\n\n").append(localized(DMR.strings.skipped_without_match, dialog.skippedCount))
                         },
                     )
                 },
@@ -143,35 +146,37 @@ data class MigrationListScreen(
                     TextButton(onClick = {
                         model.migrateAll(replace = !dialog.copy) { migrated, failed ->
                             Toasts.show(
-                                (if (dialog.copy) "Copied " else "Migrated ") + entries(migrated) +
-                                    if (failed > 0) ", $failed failed" else "",
+                                when {
+                                    failed > 0 -> localized(if (dialog.copy) DMR.strings.copied_entries_failed else DMR.strings.migrated_entries_failed, entries(migrated), failed)
+                                    else -> localized(if (dialog.copy) DMR.strings.copied_entries else DMR.strings.migrated_entries, entries(migrated))
+                                },
                             )
                         }
-                    }) { Text(if (dialog.copy) "Copy" else "Migrate") }
+                    }) { Text(if (dialog.copy) localized(MR.strings.copy) else localized(MR.strings.action_migrate)) }
                 },
-                dismissButton = { TextButton(onClick = model::dismissDialog) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )
             is MigrationListScreenModel.Dialog.Progress -> AlertDialog(
                 onDismissRequest = {},
-                title = { Text("Migrating ${dialog.done} of ${dialog.total}") },
+                title = { Text(localized(DMR.strings.migrating_of, dialog.done, dialog.total)) },
                 text = {
                     LinearProgressIndicator(
                         progress = { if (dialog.total == 0) 0f else dialog.done.toFloat() / dialog.total },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 },
-                confirmButton = { TextButton(onClick = model::cancelMigrate) { Text("Cancel") } },
+                confirmButton = { TextButton(onClick = model::cancelMigrate) { Text(localized(MR.strings.action_cancel)) } },
             )
             MigrationListScreenModel.Dialog.Exit -> AlertDialog(
                 onDismissRequest = model::dismissDialog,
-                title = { Text("Stop migrating?") },
+                title = { Text(localized(MR.strings.migrationListScreen.exitDialogTitle)) },
                 confirmButton = {
                     TextButton(onClick = {
                         model.dismissDialog()
                         navigator.pop()
-                    }) { Text("Stop") }
+                    }) { Text(localized(MR.strings.migrationListScreen.exitDialog.stopLabel)) }
                 },
-                dismissButton = { TextButton(onClick = model::dismissDialog) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )
             null -> Unit
         }
@@ -181,10 +186,10 @@ data class MigrationListScreen(
     private fun Header(title: String, complete: Boolean, onBack: () -> Unit, onCopy: () -> Unit, onMigrate: () -> Unit) {
         Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                TooltipIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onClick = onBack)
+                TooltipIconButton(Icons.AutoMirrored.Outlined.ArrowBack, localized(MR.strings.action_webview_back), onClick = onBack)
                 Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                TooltipIconButton(Icons.Outlined.ContentCopy, "Copy", onClick = onCopy, enabled = complete)
-                TooltipIconButton(Icons.Outlined.SwapHoriz, "Migrate", onClick = onMigrate, enabled = complete)
+                TooltipIconButton(Icons.Outlined.ContentCopy, localized(MR.strings.copy), onClick = onCopy, enabled = complete)
+                TooltipIconButton(Icons.Outlined.SwapHoriz, localized(MR.strings.action_migrate), onClick = onMigrate, enabled = complete)
             }
         }
     }
@@ -216,11 +221,11 @@ data class MigrationListScreen(
                     SearchResult.Searching -> Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Searching…", modifier = Modifier.weight(1f))
-                        TextButton(onClick = onCancel) { Text("Stop searching") }
+                        Text(localized(DMR.strings.searching), modifier = Modifier.weight(1f))
+                        TextButton(onClick = onCancel) { Text(localized(DMR.strings.stop_searching)) }
                     }
                     SearchResult.NotFound -> Text(
-                        "No alternatives found",
+                        localized(MR.strings.migrationListScreen.noMatchFoundText),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.clickable(onClick = onSearchManually).padding(vertical = 24.dp),
                     )
@@ -234,22 +239,22 @@ data class MigrationListScreen(
                 }
             }
             Box {
-                TooltipIconButton(Icons.Outlined.MoreVert, "Actions", onClick = { menu = true })
+                TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.pref_reader_actions), onClick = { menu = true })
                 DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Search manually") }, onClick = {
+                    DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.searchManuallyActionLabel)) }, onClick = {
                         menu = false
                         onSearchManually()
                     })
-                    DropdownMenuItem(text = { Text("Don't migrate") }, onClick = {
+                    DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.skipActionLabel)) }, onClick = {
                         menu = false
                         onSkip()
                     })
                     if (item.result is SearchResult.Success) {
-                        DropdownMenuItem(text = { Text("Migrate now") }, onClick = {
+                        DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.migrateNowActionLabel)) }, onClick = {
                             menu = false
                             onMigrateNow(true)
                         })
-                        DropdownMenuItem(text = { Text("Copy now") }, onClick = {
+                        DropdownMenuItem(text = { Text(localized(MR.strings.migrationListScreen.copyNowActionLabel)) }, onClick = {
                             menu = false
                             onMigrateNow(false)
                         })
@@ -277,7 +282,7 @@ data class MigrationListScreen(
                 Text(source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 val latest = chapters.latestChapter?.takeIf { it >= 0 }?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }
                 Text(
-                    "${chapters.chapterCount} chapters · Latest: ${latest ?: "Unknown"}",
+                    localized(DMR.strings.chapters_latest, chapters.chapterCount, latest ?: localized(MR.strings.unknown)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -286,4 +291,4 @@ data class MigrationListScreen(
     }
 }
 
-private fun entries(count: Int) = if (count == 1) "1 entry" else "$count entries"
+private fun entries(count: Int) = if (count == 1) localized(DMR.strings.n_1_entry) else localized(DMR.strings.entries, count)

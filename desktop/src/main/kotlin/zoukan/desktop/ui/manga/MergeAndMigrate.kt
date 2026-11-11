@@ -51,12 +51,16 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MergeMangaSettingsUpdate
 import tachiyomi.domain.manga.model.MergedMangaReference
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.i18n.desktop.DMR
 import java.io.Serializable
 
 /** Why a global search was opened: to browse, or to pick an entry for a merge or a migration. */
@@ -83,7 +87,7 @@ fun SearchAgainField(query: String, onSearch: (String) -> Unit) {
         text,
         { text = it },
         singleLine = true,
-        placeholder = { Text("Title") },
+        placeholder = { Text(localized(MR.strings.title)) },
         modifier = Modifier.width(320.dp).onPreviewKeyEvent {
             if (it.key == Key.Enter && text.isNotBlank()) {
                 onSearch(text.trim())
@@ -92,7 +96,7 @@ fun SearchAgainField(query: String, onSearch: (String) -> Unit) {
                 false
             }
         },
-        trailingIcon = { TooltipIconButton(Icons.Outlined.Search, "Search", onClick = { if (text.isNotBlank()) onSearch(text.trim()) }) },
+        trailingIcon = { TooltipIconButton(Icons.Outlined.Search, localized(MR.strings.action_search), onClick = { if (text.isNotBlank()) onSearch(text.trim()) }) },
     )
 }
 
@@ -115,11 +119,10 @@ private fun MergeDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Merge with ${picked.title}?") },
+        title = { Text(localized(DMR.strings.merge_with_2, picked.title)) },
         text = {
             Text(
-                "Both entries' chapters show in one merged entry, which takes the library's place of the first one. " +
-                    "You can remove an entry from the merge later.",
+                localized(DMR.strings.both_entries_chapters_show_in_one),
             )
         },
         confirmButton = {
@@ -129,19 +132,19 @@ private fun MergeDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
                     runCatching { withContext(Dispatchers.IO) { SmartSearchMerge().smartSearchMerge(picked, mangaId) } }
                         .onSuccess { merged ->
                             onDismiss()
-                            Toasts.show("Merged")
+                            Toasts.show(localized(DMR.strings.merged))
                             // Back to where the merge started, showing the merged entry
                             navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
                             navigator.replace(MangaScreen(merged.id))
                         }
                         .onFailure {
                             busy = false
-                            Toasts.error("Merging failed", it)
+                            Toasts.error(localized(DMR.strings.merging_failed), it)
                         }
                 }
-            }) { Text(if (busy) "Merging…" else "Merge") }
+            }) { Text(if (busy) localized(DMR.strings.merging) else localized(SYMR.strings.merge)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -163,27 +166,27 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val current = Injekt.get<GetManga>().await(mangaId) ?: error("The entry no longer exists")
+                    val current = Injekt.get<GetManga>().await(mangaId) ?: error(localized(DMR.strings.the_entry_no_longer_exists))
                     migrate(current, picked, replace, flags)
                 }
             }.onSuccess {
                 onDismiss()
-                Toasts.show(if (replace) "Migrated to ${picked.title}" else "Copied to ${picked.title}")
+                Toasts.show(if (replace) localized(DMR.strings.migrated_to, picked.title) else localized(DMR.strings.copied_to, picked.title))
                 if (onMigrated != null) return@onSuccess onMigrated()
                 navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
                 navigator.replace(MangaScreen(picked.id))
             }.onFailure {
                 busy = false
-                Toasts.error("Migration failed", it)
+                Toasts.error(localized(DMR.strings.migration_failed), it)
             }
         }
     }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Migrate to ${picked.title}?") },
+        title = { Text(localized(DMR.strings.migrate_to_2, picked.title)) },
         text = {
             Column {
-                Text("Take along:", style = MaterialTheme.typography.bodyMedium)
+                Text(localized(DMR.strings.take_along), style = MaterialTheme.typography.bodyMedium)
                 MigrationFlag.entries.filter { it != MigrationFlag.CUSTOM_COVER }.forEach { flag ->
                     Row(
                         Modifier.fillMaxWidth().clickable { flags = if (flag in flags) flags - flag else flags + flag },
@@ -198,18 +201,18 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Fetching chapters…")
+                        Text(localized(DMR.strings.fetching_chapters))
                     }
                 }
             }
         },
         confirmButton = {
             Row {
-                TextButton(enabled = !busy, onClick = { run(false) }) { Text("Copy") }
-                TextButton(enabled = !busy, onClick = { run(true) }) { Text("Migrate") }
+                TextButton(enabled = !busy, onClick = { run(false) }) { Text(localized(MR.strings.copy)) }
+                TextButton(enabled = !busy, onClick = { run(true) }) { Text(localized(MR.strings.action_migrate)) }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -234,7 +237,7 @@ fun MergedEntriesDialog(mangaId: Long, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.widthIn(min = 560.dp),
-        title = { Text("Merged entries") },
+        title = { Text(localized(DMR.strings.merged_entries)) },
         text = {
             val list = references
             if (list == null) {
@@ -265,13 +268,13 @@ fun MergedEntriesDialog(mangaId: Long, onDismiss: () -> Unit) {
                         }
                         Row(Modifier.clickable { update(MergeMangaSettingsUpdate(ref.id, null, !ref.getChapterUpdates, null, null, null)) }, verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(ref.getChapterUpdates, onCheckedChange = null)
-                            Text("Updates", style = MaterialTheme.typography.bodySmall)
+                            Text(localized(MR.strings.label_recent_updates), style = MaterialTheme.typography.bodySmall)
                         }
                         Row(Modifier.clickable { update(MergeMangaSettingsUpdate(ref.id, null, null, null, !ref.downloadChapters, null)) }, verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(ref.downloadChapters, onCheckedChange = null)
-                            Text("Downloads", style = MaterialTheme.typography.bodySmall)
+                            Text(localized(MR.strings.pref_category_downloads), style = MaterialTheme.typography.bodySmall)
                         }
-                        TooltipIconButton(Icons.Outlined.Delete, "Remove from the merge", enabled = list.size > 1, onClick = {
+                        TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.remove_from_the_merge), enabled = list.size > 1, onClick = {
                             scope.launch {
                                 withContext(Dispatchers.IO) { Injekt.get<DeleteMergeById>().await(ref.id) }
                                 load()
@@ -281,14 +284,13 @@ fun MergedEntriesDialog(mangaId: Long, onDismiss: () -> Unit) {
                     HorizontalDivider()
                 }
                 Text(
-                    "The selected entry gives the merged entry its details. Updates: check it for new chapters. " +
-                        "Downloads: download its new chapters after an update.",
+                    localized(DMR.strings.the_selected_entry_gives_the_merged),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
     )
 }
 
