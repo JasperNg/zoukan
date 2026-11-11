@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -137,8 +138,11 @@ class EndToEndReadTest {
 
             step("Read in the webtoon mode") {
                 onRoot().performKeyInput { pressKey(Key.M) }
-                waitFor(hasText("Paged (right to left)"))
-                onAllNodesWithText("Paged (right to left)").onFirst().performClick()
+                // The bottom bar's reading mode button names the mode in its icon and tooltip, and
+                // opens the list of modes
+                val modeButton = hasContentDescription("Reading mode: Paged (right to left)")
+                waitFor(modeButton)
+                onAllNodes(modeButton).onFirst().performClick()
                 waitFor(hasText("Webtoon"))
                 onAllNodesWithText("Webtoon").onFirst().performClick()
                 onRoot().performKeyInput { pressKey(Key.M) }
