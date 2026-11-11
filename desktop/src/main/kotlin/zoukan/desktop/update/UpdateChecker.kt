@@ -79,6 +79,34 @@ class UpdateChecker(
         }
     }
 
+    /** A release's notes, for the What's new screen. */
+    data class Notes(val name: String, val body: String, val pageUrl: String)
+
+    /**
+     * The notes of the desktop release tagged for [version] (by default the running one), as
+     * Android's "What's new" reads the app's release on GitHub.
+     */
+    suspend fun releaseNotes(version: Version = current): kotlin.Result<Notes> = withContext(Dispatchers.IO) {
+        val tag = AppVersion.TAG_PREFIX + version
+        val request = request("$apiUrl/repos/$repo/releases/tags/$tag")
+            .header("Accept", "application/vnd.github+json")
+            .build()
+        try {
+            client.newCall(request).execute().use { response ->
+                when {
+                    response.code == 404 && token == null ->
+                        kotlin.Result.failure(IOException("No release notes for $version. If the repository is private, add a GitHub token in Settings > About."))
+                    response.code == 404 -> kotlin.Result.failure(IOException("No release notes for $version on GitHub"))
+                    response.code == 401 -> kotlin.Result.failure(IOException("GitHub refused the token (401)"))
+                    !response.isSuccessful -> kotlin.Result.failure(IOException("GitHub answered ${response.code}"))
+                    else -> kotlin.Result.success(parseNotes(response.body.string(), version))
+                }
+            }
+        } catch (e: IOException) {
+            kotlin.Result.failure(IOException("Could not reach GitHub: ${e.message ?: e::class.simpleName}", e))
+        }
+    }
+
     /**
      * Downloads the installer to [dir], checking its SHA-256 when GitHub lists one, and returns the
      * file. [progress] gets bytes read and the total.
@@ -168,6 +196,16 @@ class UpdateChecker(
         const val TOKEN_KEY = "github-token"
 
         private val json = Json { ignoreUnknownKeys = true }
+
+        /** One release's JSON [body] as [Notes]. */
+        fun parseNotes(body: String, version: Version): Notes {
+            val release = json.decodeFromString<GithubRelease>(body)
+            return Notes(
+                name = release.name?.takeIf { it.isNotBlank() } ?: "Zoukan $version",
+                body = release.body.orEmpty(),
+                pageUrl = release.htmlUrl,
+            )
+        }
 
         /** The newest desktop release newer than [current] in the releases list [body], if any. */
         fun select(body: String, current: Version, platform: Platform, includePrereleases: Boolean = false): Release? =

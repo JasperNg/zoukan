@@ -39,6 +39,12 @@ class DesktopPreferences(private val store: PreferenceStore) {
     /** Desktop only: set once the user has been told that closing keeps Zoukan in the tray */
     fun toldAboutTray() = store.getBoolean(Preference.appStateKey("zoukan_told_about_tray"), false)
 
+    /** Set when the first-run setup is finished or skipped; Android's BasePreferences.shownOnboardingFlow */
+    fun shownOnboardingFlow() = store.getBoolean(Preference.appStateKey("onboarding_complete"), false)
+
+    /** Desktop only: the version that last ran, so the first launch after an update can say what's new */
+    fun lastVersion() = store.getString(Preference.appStateKey("zoukan_last_version"), "")
+
     // Reader filters, as Android's ReaderPreferences
     fun customBrightness() = store.getBoolean("pref_custom_brightness_key", false)
 
