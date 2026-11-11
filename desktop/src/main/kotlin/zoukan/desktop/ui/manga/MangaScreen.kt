@@ -16,12 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
@@ -82,10 +79,12 @@ import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.onRightClick
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.track.TrackingDialog
@@ -142,7 +141,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
             Row(Modifier.fillMaxSize()) {
                 // Details
                 Column(
-                    Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(16.dp),
+                    Modifier.width(380.dp).fillMaxHeight().verticalScrollWithBar().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     CoverImage(
@@ -384,6 +383,17 @@ private fun MoreMenu(
 
 @Composable
 private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenModel) {
+    // Ctrl/Cmd + A selects every chapter; Escape clears the selection before it means "back"
+    zoukan.desktop.ui.OnShortcut { action ->
+        when (action) {
+            zoukan.desktop.ui.Shortcuts.Action.SelectAll -> {
+                model.selectAll()
+                true
+            }
+            zoukan.desktop.ui.Shortcuts.Action.Back -> state.selected.isNotEmpty().also { if (it) model.clearSelection() }
+            else -> false
+        }
+    }
     Row(
         Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

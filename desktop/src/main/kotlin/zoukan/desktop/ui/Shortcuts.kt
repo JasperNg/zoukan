@@ -1,5 +1,9 @@
 package zoukan.desktop.ui
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -26,14 +30,36 @@ object Shortcuts {
         data object OpenSettings : Action
         data object UpdateLibrary : Action
         data object Back : Action
+
+        /** Ctrl/Cmd + F: the cursor goes to the screen's search box */
+        data object Find : Action
+
+        /** Ctrl/Cmd + A where the screen has a selection */
+        data object SelectAll : Action
     }
+
+    /** The shown screen's own handlers for [Action.Find], [Action.SelectAll] and [Action.Back]; the newest is asked first. */
+    private val screenHandlers = mutableListOf<(Action) -> Boolean>()
+
+    fun addScreenHandler(handler: (Action) -> Boolean) {
+        screenHandlers += handler
+    }
+
+    fun removeScreenHandler(handler: (Action) -> Boolean) {
+        screenHandlers -= handler
+    }
+
+    private fun screenHandled(action: Action): Boolean = screenHandlers.toList().asReversed().any { it(action) }
 
     /** Shortcut list for the README and the help in Settings. */
     val list = listOf(
         "Ctrl/Cmd + 1 to 5" to "Library, Updates, History, Browse, More",
         "Ctrl/Cmd + ," to "Settings",
         "Ctrl/Cmd + Shift + U" to "Update the library",
-        "Escape, Alt + Left, mouse back button" to "Back",
+        "Ctrl/Cmd + F" to "Search the screen",
+        "Ctrl/Cmd + A" to "Select everything in the library, or every chapter of an entry",
+        "Escape" to "Empty the search box, clear the selection or go back",
+        "Alt + Left, mouse back button" to "Back",
     )
 
     fun actionFor(key: Key, ctrl: Boolean, shift: Boolean, alt: Boolean): Action? {
@@ -50,6 +76,8 @@ object Shortcuts {
             if (tab != null) return Action.OpenTab(tab)
         }
         if (ctrl && shift && !alt && key == Key.U) return Action.UpdateLibrary
+        if (ctrl && !shift && !alt && key == Key.F) return Action.Find
+        if (ctrl && !shift && !alt && key == Key.A) return Action.SelectAll
         if (!ctrl && !shift && (key == Key.Escape || (alt && key == Key.DirectionLeft))) return Action.Back
         return null
     }
@@ -78,7 +106,11 @@ object Shortcuts {
                 }
                 true
             }
-            Action.Back -> if (navigator != null && navigator.canPop) {
+            Action.Find, Action.SelectAll -> screenHandled(action)
+            // Escape clears a screen's selection before it goes back; Alt + Left only goes back
+            Action.Back -> if (event.key == Key.Escape && screenHandled(action)) {
+                true
+            } else if (navigator != null && navigator.canPop) {
                 navigator.pop()
                 true
             } else {
@@ -86,5 +118,16 @@ object Shortcuts {
             }
             null -> false
         }
+    }
+}
+
+/** Lets the screen that shows this answer a shortcut; [handler] returns whether it used it. */
+@Composable
+fun OnShortcut(handler: (Shortcuts.Action) -> Boolean) {
+    val current by rememberUpdatedState(handler)
+    DisposableEffect(Unit) {
+        val registered: (Shortcuts.Action) -> Boolean = { current(it) }
+        Shortcuts.addScreenHandler(registered)
+        onDispose { Shortcuts.removeScreenHandler(registered) }
     }
 }

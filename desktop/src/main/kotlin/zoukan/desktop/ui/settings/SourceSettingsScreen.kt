@@ -9,11 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
@@ -43,8 +40,10 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.verticalScrollWithBar
 
 /**
  * A source's own settings: the androidx.preference screen the extension builds, drawn in Compose.
@@ -155,7 +154,7 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                 onDismissRequest = onDismiss,
                 title = { Text(title) },
                 text = {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Column(Modifier.verticalScrollWithBar()) {
                         entries.forEachIndexed { i, entry ->
                             val value = values.getOrNull(i)?.toString() ?: return@forEachIndexed
                             Row(
@@ -182,7 +181,7 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                 onDismissRequest = onDismiss,
                 title = { Text(title) },
                 text = {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Column(Modifier.verticalScrollWithBar()) {
                         entries.forEachIndexed { i, entry ->
                             val value = values.getOrNull(i)?.toString() ?: return@forEachIndexed
                             Row(

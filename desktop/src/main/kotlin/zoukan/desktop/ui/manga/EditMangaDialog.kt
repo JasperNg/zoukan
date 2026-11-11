@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +35,7 @@ import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice
 import java.awt.FileDialog
 import java.io.File
@@ -100,7 +99,7 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     }
                 }
                 Column(
-                    Modifier.width(420.dp).heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                    Modifier.width(420.dp).heightIn(max = 520.dp).verticalScrollWithBar(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (!isLocal && !manga.favorite) {
