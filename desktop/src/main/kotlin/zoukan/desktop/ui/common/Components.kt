@@ -56,12 +56,18 @@ import coil3.compose.SubcomposeAsyncImage
 
 /** A cover with Coil, a placeholder while loading and an icon when it fails. */
 @Composable
-fun CoverImage(cover: Any?, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
+fun CoverImage(
+    cover: Any?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    onLoaded: ((width: Int, height: Int) -> Unit)? = null,
+) {
     SubcomposeAsyncImage(
         model = cover,
         imageLoader = Images.loader,
         contentDescription = null,
         contentScale = contentScale,
+        onSuccess = onLoaded?.let { { state -> it(state.result.image.width, state.result.image.height) } },
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         loading = { Box(Modifier.fillMaxSize()) },
         error = {
