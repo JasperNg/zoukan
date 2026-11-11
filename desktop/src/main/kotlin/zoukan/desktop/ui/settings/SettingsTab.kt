@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -93,6 +92,7 @@ import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.category.CategoryScreen
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
@@ -335,7 +335,7 @@ private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: Settin
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp)
-                            .clip(RoundedCornerShape(24.dp))
+                            .clip(Corners.ExtraLarge)
                             .then(if (isSelected) Modifier.background(MaterialTheme.colorScheme.surfaceVariant) else Modifier)
                             .clickable { onSelect(page) }
                             .padding(horizontal = 16.dp, vertical = 16.dp),
@@ -586,7 +586,7 @@ private fun SearchField() {
                 IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Outlined.Close, contentDescription = "Clear search") }
             }
         },
-        shape = RoundedCornerShape(28.dp),
+        shape = Corners.ExtraLarge,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)

@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -93,7 +93,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             ) {
                 SearchField(query, { query = it }, "Search for a source", Modifier.width(260.dp).padding(end = 8.dp))
                 Box {
-                    TooltipIconButton(Icons.Default.MoreVert, "Select", onClick = { selectMenu = true })
+                    TooltipIconButton(Icons.Outlined.MoreVert, "Select", onClick = { selectMenu = true })
                     DropdownMenu(selectMenu, onDismissRequest = { selectMenu = false }) {
                         MigrationConfigScreenModel.Selection.entries.forEach { selection ->
                             DropdownMenuItem(
@@ -144,9 +144,9 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                 settingsGroup("Selected")
                 itemsIndexed(selected, key = { _, s -> "selected-${s.id}" }) { index, source ->
                     SourceRow(source, model) {
-                        TooltipIconButton(Icons.Default.ArrowUpward, "Move up", enabled = index > 0 && terms.isEmpty(), onClick = { model.move(source.id, -1) })
+                        TooltipIconButton(Icons.Outlined.ArrowUpward, "Move up", enabled = index > 0 && terms.isEmpty(), onClick = { model.move(source.id, -1) })
                         TooltipIconButton(
-                            Icons.Default.ArrowDownward,
+                            Icons.Outlined.ArrowDownward,
                             "Move down",
                             enabled = index < selected.lastIndex && terms.isEmpty(),
                             onClick = { model.move(source.id, 1) },

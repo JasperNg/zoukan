@@ -91,6 +91,7 @@ import zoukan.desktop.ui.browse.BrowseTab
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.TooltipIf
 import zoukan.desktop.ui.common.WindowBounds
 import zoukan.desktop.ui.common.ZoukanTheme
 import zoukan.desktop.ui.history.HistoryScreenModel
@@ -433,26 +434,33 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                             item == HomeTab.Browse && extensionUpdates > 0 -> extensionUpdates
                             else -> 0
                         }
-                        NavigationRailItem(
-                            selected = tab == item,
-                            onClick = { tab = item },
-                            icon = {
-                                androidx.compose.material3.BadgedBox(
-                                    badge = { if (badge > 0) androidx.compose.material3.Badge { Text(badge.toString()) } },
-                                ) {
-                                    Icon(if (tab == item) item.selectedIcon else item.icon, contentDescription = null)
-                                }
-                            },
-                            label = {
-                                Text(
-                                    item.label,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            alwaysShowLabel = showLabels,
-                        )
+                        // With labels turned off, a tooltip names the tab under the mouse
+                        TooltipIf(!showLabels, item.label) {
+                            NavigationRailItem(
+                                selected = tab == item,
+                                onClick = { tab = item },
+                                icon = {
+                                    androidx.compose.material3.BadgedBox(
+                                        badge = { if (badge > 0) androidx.compose.material3.Badge { Text(badge.toString()) } },
+                                    ) {
+                                        // Without labels the icon is all there is, so it carries the tab's name
+                                        Icon(
+                                            if (tab == item) item.selectedIcon else item.icon,
+                                            contentDescription = if (showLabels) null else item.label,
+                                        )
+                                    }
+                                },
+                                label = {
+                                    Text(
+                                        item.label,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                                alwaysShowLabel = showLabels,
+                            )
+                        }
                     }
                 }
             }

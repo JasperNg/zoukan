@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -68,9 +68,9 @@ object ClearDatabaseScreen : Screen {
         Column(Modifier.fillMaxSize()) {
             ScreenHeader("Clear database") {
                 if (!items.isNullOrEmpty()) {
-                    TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
-                    TooltipIconButton(Icons.Default.FlipToBack, "Select inverse", onClick = model::invertSelection)
-                    TooltipIconButton(Icons.Default.Delete, "Delete", enabled = state.selection.isNotEmpty(), onClick = { model.confirm(true) })
+                    TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+                    TooltipIconButton(Icons.Outlined.FlipToBack, "Select inverse", onClick = model::invertSelection)
+                    TooltipIconButton(Icons.Outlined.Delete, "Delete", enabled = state.selection.isNotEmpty(), onClick = { model.confirm(true) })
                 }
             }
             when {

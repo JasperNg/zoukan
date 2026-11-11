@@ -9,15 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.ClearAll
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.ClearAll
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.VerticalAlignTop
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -67,14 +67,14 @@ object DownloadsScreen : Screen {
             ScreenHeader("Downloads", subtitle = if (queue.isEmpty()) storage.downloads.path else "${queue.size} in the queue") {
                 if (queue.isNotEmpty()) {
                     if (running) {
-                        TooltipIconButton(Icons.Default.Pause, "Pause", onClick = manager::pause)
+                        TooltipIconButton(Icons.Outlined.Pause, "Pause", onClick = manager::pause)
                     } else {
-                        TooltipIconButton(Icons.Default.PlayArrow, "Start", onClick = manager::start)
+                        TooltipIconButton(Icons.Outlined.PlayArrow, "Start", onClick = manager::start)
                     }
                     QueueSortButton(manager)
-                    TooltipIconButton(Icons.Default.ClearAll, "Cancel all", onClick = manager::clearQueue)
+                    TooltipIconButton(Icons.Outlined.ClearAll, "Cancel all", onClick = manager::clearQueue)
                 }
-                TooltipIconButton(Icons.Default.FolderOpen, "Open the downloads folder", onClick = { openFolder(storage.downloads) })
+                TooltipIconButton(Icons.Outlined.FolderOpen, "Open the downloads folder", onClick = { openFolder(storage.downloads) })
             }
             if (queue.isEmpty()) {
                 EmptyScreen("No downloads queued. Download chapters from an entry's chapter list.")
@@ -127,9 +127,9 @@ private fun DownloadRow(download: Download, manager: DownloadManager) {
             Text("${progress.first} / ${progress.second}", style = MaterialTheme.typography.labelMedium)
         }
         if (state == Download.State.QUEUED) {
-            TooltipIconButton(Icons.Default.VerticalAlignTop, "Download first", onClick = { manager.moveToTop(download) })
+            TooltipIconButton(Icons.Outlined.VerticalAlignTop, "Download first", onClick = { manager.moveToTop(download) })
         }
-        TooltipIconButton(Icons.Default.Close, "Cancel", onClick = { manager.cancel(setOf(download.chapter.id)) })
+        TooltipIconButton(Icons.Outlined.Close, "Cancel", onClick = { manager.cancel(setOf(download.chapter.id)) })
         DownloadMenu(download, manager)
     }
 }
@@ -139,7 +139,7 @@ private fun DownloadRow(download: Download, manager: DownloadManager) {
 private fun DownloadMenu(download: Download, manager: DownloadManager) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TooltipIconButton(Icons.Default.MoreVert, "More", onClick = { open = true })
+        TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Move to top") }, onClick = {
                 open = false
@@ -175,7 +175,7 @@ private fun DownloadMenu(download: Download, manager: DownloadManager) {
 private fun QueueSortButton(manager: DownloadManager) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TooltipIconButton(Icons.AutoMirrored.Filled.Sort, "Sort", onClick = { open = true })
+        TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, "Sort", onClick = { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val sorts: List<Pair<String, () -> Unit>> = listOf(
                 "Upload date, newest" to { manager.sortQueue(descending = true) { it.chapter.dateUpload } },

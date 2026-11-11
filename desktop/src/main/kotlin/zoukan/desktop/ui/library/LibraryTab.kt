@@ -9,20 +9,20 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QueryStats
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.BookmarkRemove
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -119,22 +119,22 @@ fun LibraryTab(model: LibraryScreenModel) {
             ) {
                 SearchField(state.query, model::search, "Search library", Modifier.width(280.dp).padding(end = 8.dp))
                 TooltipIconButton(
-                    Icons.Default.FilterList,
+                    Icons.Outlined.FilterList,
                     if (settings.hasFilter) "Filter, sort and display (filtered)" else "Filter, sort and display",
                     onClick = { settingsDialog = true },
                 )
                 DownloadsButton()
                 // ZOUKAN -->
-                TooltipIconButton(Icons.Default.QueryStats, "Statistics", onClick = { navigator.push(StatsScreen) })
+                TooltipIconButton(Icons.Outlined.QueryStats, "Statistics", onClick = { navigator.push(StatsScreen) })
                 // ZOUKAN <--
                 TooltipIconButton(
-                    Icons.Default.Refresh,
+                    Icons.Outlined.Refresh,
                     if (state.selectedCategory == null) "Update library" else "Update category",
                     onClick = model::refresh,
                     enabled = refresh == null,
                 )
                 Row {
-                    TooltipIconButton(Icons.Default.MoreVert, "More", onClick = { moreMenu = true })
+                    TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { moreMenu = true })
                     DropdownMenu(moreMenu, onDismissRequest = { moreMenu = false }) {
                         DropdownMenuItem(
                             text = { Text("Open a random entry") },
@@ -233,15 +233,15 @@ private fun SelectionBar(
     var downloadMenu by remember { mutableStateOf(false) }
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(Icons.Default.Close, "Clear selection", onClick = model::clearSelection)
+            TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
             Text("$count selected", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
-            TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
-            TooltipIconButton(Icons.Default.FlipToBack, "Invert selection", onClick = model::invertSelection)
-            TooltipIconButton(Icons.AutoMirrored.Filled.Label, "Change categories", onClick = onCategories)
-            TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = { model.markRead(true) })
-            TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = { model.markRead(false) })
+            TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
+            TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
+            TooltipIconButton(Icons.AutoMirrored.Outlined.Label, "Change categories", onClick = onCategories)
+            TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = { model.markRead(true) })
+            TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = { model.markRead(false) })
             Row {
-                TooltipIconButton(Icons.Default.Download, "Download", onClick = { downloadMenu = true })
+                TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { downloadMenu = true })
                 DropdownMenu(downloadMenu, onDismissRequest = { downloadMenu = false }) {
                     listOf(1 to "Next chapter", 5 to "Next 5 chapters", 10 to "Next 10 chapters", 25 to "Next 25 chapters", null to "Unread chapters")
                         .forEach { (n, label) ->
@@ -257,9 +257,9 @@ private fun SelectionBar(
             }
             TooltipIconButton(Icons.Outlined.BookmarkRemove, "Delete downloads", onClick = model::deleteDownloads)
             // ZOUKAN -->
-            TooltipIconButton(Icons.Default.SwapHoriz, "Migrate", onClick = onMigrate)
+            TooltipIconButton(Icons.Outlined.SwapHoriz, "Migrate", onClick = onMigrate)
             // ZOUKAN <--
-            TooltipIconButton(Icons.Default.Delete, "Remove from library", onClick = onRemove)
+            TooltipIconButton(Icons.Outlined.Delete, "Remove from library", onClick = onRemove)
         }
     }
 }

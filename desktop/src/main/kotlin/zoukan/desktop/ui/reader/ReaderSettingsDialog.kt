@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.ReaderBottomButtons
@@ -238,7 +238,7 @@ private fun FilterPage(prefs: DesktopPreferences) {
     if (colorOn) {
         val argb by prefs.colorFilterValue().changes().collectAsState(prefs.colorFilterValue().get())
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(28.dp).background(Color(argb), RoundedCornerShape(6.dp)))
+            Box(Modifier.size(28.dp).background(Color(argb), Corners.Medium))
             Text("  The color laid over pages", style = MaterialTheme.typography.bodySmall)
         }
         listOf("Red" to 16, "Green" to 8, "Blue" to 0, "Alpha" to 24).forEach { (name, shift) ->

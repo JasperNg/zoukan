@@ -23,18 +23,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.BookmarkRemove
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.OpenInBrowser
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -121,7 +122,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.fillMaxSize()) {
                     ScreenHeader(title = manga.title, subtitle = state.source?.toString() ?: "Source not installed") {
-                        TooltipIconButton(Icons.Default.Refresh, "Refresh", onClick = { model.refresh() }, enabled = !state.refreshing)
+                        TooltipIconButton(Icons.Outlined.Refresh, "Refresh", onClick = { model.refresh() }, enabled = !state.refreshing)
                         if (state.source is eu.kanade.tachiyomi.source.online.HttpSource) {
                             TooltipIconButton(Icons.Outlined.OpenInBrowser, "Open in your browser", onClick = model::openInBrowser)
                         }
@@ -324,7 +325,7 @@ private fun MoreMenu(
     var open by remember { mutableStateOf(false) }
     val merged = manga.source == exh.source.MERGED_SOURCE_ID
     Box {
-        TooltipIconButton(Icons.Default.MoreVert, "More", onClick = { open = true })
+        TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Edit details, notes and cover") }, onClick = {
                 open = false
@@ -400,7 +401,7 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             val tint = if (state.filterActive) MaterialTheme.colorScheme.primary else androidx.compose.material3.LocalContentColor.current
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides tint) {
                 TooltipIconButton(
-                    Icons.Default.FilterList,
+                    Icons.Outlined.FilterList,
                     if (state.filterActive) "Filter and sort (filters on)" else "Filter and sort",
                     onClick = { settings = true },
                 )
@@ -408,15 +409,15 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             if (settings) ChapterSettingsDialog(state, model, onDismiss = { settings = false })
             // ZOUKAN <--
             if (!state.isLocal) DownloadMenu(model)
-            TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
+            TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
         } else {
             val selected = state.chapters.filter { it.id in state.selected }
-            TooltipIconButton(Icons.Default.Close, "Clear selection", onClick = model::clearSelection)
+            TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
             Text("${selected.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TooltipIconButton(Icons.Default.DoneAll, "Mark as read", onClick = { model.markRead(selected, true) })
-            TooltipIconButton(Icons.Default.RemoveDone, "Mark as unread", onClick = { model.markRead(selected, false) })
-            TooltipIconButton(Icons.Default.Bookmark, "Bookmark", onClick = { model.setBookmark(selected, true) })
-            TooltipIconButton(Icons.Default.BookmarkBorder, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
+            TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = { model.markRead(selected, true) })
+            TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = { model.markRead(selected, false) })
+            TooltipIconButton(Icons.Outlined.BookmarkAdd, "Bookmark", onClick = { model.setBookmark(selected, true) })
+            TooltipIconButton(Icons.Outlined.BookmarkRemove, "Remove bookmark", onClick = { model.setBookmark(selected, false) })
             if (!state.isLocal) {
                 TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { model.download(selected) })
                 TooltipIconButton(Icons.Outlined.Delete, "Delete downloads", onClick = { model.deleteDownloads(selected) })

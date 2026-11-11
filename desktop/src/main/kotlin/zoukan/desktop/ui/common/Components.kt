@@ -20,9 +20,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -88,8 +87,8 @@ fun MangaGridItem(
         modifier
             .testTag("manga-item")
             .aspectRatio(2f / 3f)
-            .clip(RoundedCornerShape(8.dp))
-            .coverOutline(RoundedCornerShape(8.dp))
+            .clip(Corners.Medium)
+            .coverOutline(Corners.Medium)
             .clickable(onClick = onClick)
             .then(if (onSecondaryClick != null) Modifier.onRightClick(onSecondaryClick) else Modifier),
     ) {
@@ -114,8 +113,8 @@ fun MangaGridItem(
         if (badge != null) {
             Surface(
                 color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.padding(6.dp).align(Alignment.TopStart),
+                shape = Corners.OnCover,
+                modifier = Modifier.padding(Corners.CoverInset).align(Alignment.TopStart),
             ) {
                 Text(
                     badge,
@@ -193,7 +192,7 @@ fun ScreenHeader(
         ) {
             if (showBack && navigator.canPop) {
                 IconButton(onClick = { navigator.pop() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                 }
             } else {
                 Spacer(Modifier.size(8.dp))
@@ -221,6 +220,12 @@ fun TooltipIconButton(icon: ImageVector, label: String, onClick: () -> Unit, ena
     Tooltip(label) {
         IconButton(onClick = onClick, enabled = enabled) { Icon(icon, contentDescription = label) }
     }
+}
+
+/** [Tooltip] only while [show], for a control whose words can be turned off. */
+@Composable
+fun TooltipIf(show: Boolean, label: String, content: @Composable () -> Unit) {
+    if (show) Tooltip(label, content = content) else content()
 }
 
 /** Shows [label] when the mouse rests on [content], for controls that are an icon without words. */

@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
@@ -36,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.LazyColumn
@@ -89,9 +90,9 @@ private fun badges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.S
 }
 
 @Composable
-private fun Badges(list: List<Pair<String, Boolean>>, modifier: Modifier = Modifier) {
+private fun Badges(list: List<Pair<String, Boolean>>, modifier: Modifier = Modifier, shape: Shape = Corners.Small) {
     if (list.isEmpty()) return
-    Row(modifier.clip(RoundedCornerShape(4.dp))) {
+    Row(modifier.clip(shape)) {
         list.forEach { (text, primary) ->
             Box(
                 Modifier.background(if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary)
@@ -129,7 +130,7 @@ private fun SelectedMark(modifier: Modifier = Modifier) {
         Icons.Filled.CheckCircle,
         contentDescription = "Selected",
         tint = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(6.dp).background(MaterialTheme.colorScheme.surface, CircleShape),
+        modifier = modifier.padding(Corners.CoverInset).background(MaterialTheme.colorScheme.surface, CircleShape),
     )
 }
 
@@ -179,12 +180,12 @@ private fun GridItem(
     val titleOver = display == LibraryDisplayMode.CompactGrid
     val ratio = if (display == LibraryDisplayMode.ComfortableGridPanorama) 16f / 9f else 2f / 3f
     val border = if (selected) {
-        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, Corners.Medium)
     } else {
-        Modifier.coverOutline(RoundedCornerShape(8.dp))
+        Modifier.coverOutline(Corners.Medium)
     }
-    Column(Modifier.testTag("manga-item").clip(RoundedCornerShape(8.dp)).selectableClick(onClick)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp)).then(border)) {
+    Column(Modifier.testTag("manga-item").clip(Corners.Medium).selectableClick(onClick)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(Corners.Medium).then(border)) {
             CoverImage(Cover.of(item.manga), Modifier.fillMaxSize())
             if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)))
             if (titleOver) {
@@ -203,10 +204,10 @@ private fun GridItem(
                     )
                 }
             }
-            Badges(badges(item, settings), Modifier.align(Alignment.TopStart).padding(6.dp))
+            Badges(badges(item, settings), Modifier.align(Alignment.TopStart).padding(Corners.CoverInset), Corners.OnCover)
             if (selected) SelectedMark(Modifier.align(Alignment.TopEnd))
             if (settings.continueReading && item.library.unreadCount > 0) {
-                ContinueButton(onContinue, Modifier.align(Alignment.BottomEnd).padding(6.dp))
+                ContinueButton(onContinue, Modifier.align(Alignment.BottomEnd).padding(Corners.CoverInset))
             }
         }
         if (titleBelow) {
@@ -234,7 +235,7 @@ private fun ListItem(
             Modifier.testTag("manga-item").fillMaxWidth().selectableClick(onClick).padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CoverImage(Cover.of(item.manga), Modifier.height(56.dp).aspectRatio(1f).clip(RoundedCornerShape(6.dp)))
+            CoverImage(Cover.of(item.manga), Modifier.height(56.dp).aspectRatio(1f).clip(Corners.Medium).coverOutline(Corners.Medium))
             Text(
                 item.manga.title,
                 style = MaterialTheme.typography.bodyLarge,

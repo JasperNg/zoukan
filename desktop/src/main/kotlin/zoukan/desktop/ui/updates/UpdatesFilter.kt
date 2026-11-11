@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -68,7 +68,7 @@ fun UpdatesFilterButton(model: UpdatesScreenModel, filters: UpdatesFilters) {
     Box {
         BadgedBox(badge = { if (filters.active) Badge() }) {
             TooltipIconButton(
-                Icons.Default.FilterList,
+                Icons.Outlined.FilterList,
                 if (filters.active) "Filter (filtered)" else "Filter",
                 onClick = { open = true },
             )

@@ -10,10 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -48,6 +47,7 @@ import tachiyomi.domain.history.model.HistoryWithRelations
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.browse.sectionHeader
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -57,6 +57,7 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
 import java.time.format.DateTimeFormatter
@@ -135,7 +136,7 @@ fun HistoryTab(model: HistoryScreenModel) {
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("History", showBack = false) {
             SearchField(state.query, model::search, "Search history", Modifier.width(280.dp).padding(end = 8.dp))
-            TooltipIconButton(Icons.Default.DeleteSweep, "Clear history", onClick = { confirmClear = true }, enabled = state.items.isNotEmpty())
+            TooltipIconButton(Icons.Outlined.DeleteSweep, "Clear history", onClick = { confirmClear = true }, enabled = state.items.isNotEmpty())
         }
         when {
             state.loading -> LoadingScreen()
@@ -161,7 +162,7 @@ fun HistoryTab(model: HistoryScreenModel) {
                         ) {
                             CoverImage(
                                 Cover.of(item.coverData),
-                                Modifier.size(44.dp, 60.dp).clip(RoundedCornerShape(6.dp)).clickable { navigator.push(MangaScreen(item.mangaId)) },
+                                Modifier.size(44.dp, 60.dp).clip(Corners.Medium).coverOutline(Corners.Medium).clickable { navigator.push(MangaScreen(item.mangaId)) },
                             )
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
@@ -178,7 +179,7 @@ fun HistoryTab(model: HistoryScreenModel) {
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            TooltipIconButton(Icons.Default.Delete, "Remove", onClick = { remove = item })
+                            TooltipIconButton(Icons.Outlined.Delete, "Remove", onClick = { remove = item })
                         }
                     }
                 }

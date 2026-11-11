@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -143,7 +143,7 @@ private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
             Text(label, Modifier.weight(1f))
             if (sort.type == type && type != LibrarySort.Type.Random) {
                 Icon(
-                    if (sort.isAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                    if (sort.isAscending) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
                     contentDescription = if (sort.isAscending) "Ascending" else "Descending",
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.primary,
