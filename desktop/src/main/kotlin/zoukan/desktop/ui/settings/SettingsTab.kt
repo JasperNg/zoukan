@@ -58,6 +58,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -569,6 +570,11 @@ fun openFolder(folder: File) {
 /** The search field over the settings list, as the search button of the Android app's settings. */
 @Composable
 private fun SearchField() {
+    // Ctrl/Cmd + F puts the cursor here, as in the other screens' search boxes
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    zoukan.desktop.ui.OnShortcut { action ->
+        action == zoukan.desktop.ui.Shortcuts.Action.Find && runCatching { focus.requestFocus() }.isSuccess
+    }
     OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
@@ -585,6 +591,7 @@ private fun SearchField() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .testTag("settings-search")
+            .focusRequester(focus)
             // Escape clears the search before it goes back
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && searchQuery.isNotEmpty()) {
