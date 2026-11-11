@@ -210,6 +210,7 @@ fun PagedViewer(
     // ZOUKAN -->
     // The spreads the pager was last laid out with, to read its position through them
     val laidOut = remember { arrayOfNulls<List<Spread>>(1) }
+    val laidOutDouble = remember { booleanArrayOf(double) }
     // ZOUKAN <--
     LaunchedEffect(pagerState, spreads) {
         // When the layout changes (a setting, the window turning wide, or a page decoding as a
@@ -220,11 +221,17 @@ fun PagedViewer(
         // ZOUKAN -->
         val old = laidOut[0]
         laidOut[0] = spreads
+        // Switching between single and double pages keeps the reading position, the last page
+        // of the spread, as reopening the chapter would. A spread that changes because a page
+        // decoded as wide keeps its first page, so no page is skipped.
+        val layoutSwitched = laidOutDouble[0] != double
+        laidOutDouble[0] = double
         val heading = pagerState.targetPage
         val target = when {
             old == null -> spreadOf(state.currentPage) + 1
             heading <= 0 -> 0
             heading > old.size -> spreads.size + 1
+            layoutSwitched -> spreadOf(old[heading - 1].last) + 1
             else -> spreadOf(old[heading - 1].first) + 1
         }
         if (pagerState.currentPage != target || pagerState.targetPage != target) pagerState.scrollToPage(target)
