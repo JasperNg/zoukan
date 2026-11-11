@@ -18,6 +18,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Manga details, chapters, mark read, bookmark, download, delete | Yes | Phase 3, Phase 5 |
 | Reader: paged, right to left, vertical, webtoon, continuous | Yes | Phase 4; keyboard, mouse and wheel |
 | Reader settings sheet | Yes | Reading mode, General and Filter tabs (S) |
+| Settings > Reader: tap zones and inverting, zoom start, double tap zoom, disable zoom in or out, page transitions | Yes | Android's layouts (L shaped, Kindle-ish, Edge, Right and left, Disabled) and smaller tap zones; also in the reader's settings sheet |
+| Split or rotate wide pages, center margin, shift double pages | Yes | Paged and webtoon, with invert; wide pages stand alone in double page mode, as SY. Shift with D or the settings sheet |
+| Auto webtoon mode, preserve reading position | Yes | SY's tag and source rules |
+| Page loading: preload size, reader threads, aggressive loading, instant retry, retry all, boost page | Yes | Retry all is R, boost page Shift+R |
+| Show reading mode, keep screen on, flash on page change, smooth auto scroll, show actions on long tap | Yes, changed | Keep screen on uses SetThreadExecutionState on Windows and `caffeinate` on macOS. Long tap gates the long press only; a right-click always opens page actions |
+| Reader: volume keys, display cutout, orientation, landscape zoom, pinch to zoom, fullscreen (system bars) | No | Phone hardware and gestures; the desktop has F11 for full screen and Ctrl + wheel to zoom |
 | Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
