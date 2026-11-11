@@ -130,6 +130,8 @@ fun LazyListScope.browseSettings() {
 /** Android's InfoPreference: a note under a group's settings. */
 @Composable
 fun InfoText(text: String) {
+    // Notes are left out of settings search results
+    if (LocalSearchQuery.current != null) return
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,

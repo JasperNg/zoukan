@@ -142,7 +142,7 @@ fun LazyListScope.dataSettings() {
 
 /** Android's "Storage location": the folder for downloads, the local source and automatic backups. */
 @Composable
-private fun StorageLocationPreference() {
+internal fun StorageLocationPreference() {
     val storage = remember { Injekt.get<ZoukanStorage>() }
     val window = LocalWindow.current?.window
     val folder by storage.folderPreference.changes().collectAsState(storage.folderPreference.get())
@@ -172,21 +172,14 @@ private fun BackupButtons() {
     val dirs = remember { Injekt.get<ZoukanDirs>() }
     val window = LocalWindow.current?.window
     val status by backupStatusFlow.collectAsState()
+    SearchTerms("Create backup", "Restore backup")
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { createBackup(dirs.backups) }, enabled = status == null, modifier = Modifier.weight(1f)) {
                 Text("Create backup")
             }
             OutlinedButton(
-                onClick = {
-                    val dialog = FileDialog(window as java.awt.Frame?, "Select backup file", FileDialog.LOAD).apply {
-                        directory = dirs.backups.absolutePath
-                        setFilenameFilter { _, name -> name.endsWith(".tachibk") || name.endsWith(".proto.gz") }
-                        isVisible = true
-                    }
-                    val name = dialog.file
-                    if (name != null) restoreBackup(File(dialog.directory, name))
-                },
+                onClick = { pickAndRestoreBackup(window, dirs) },
                 enabled = status == null,
                 modifier = Modifier.weight(1f),
             ) { Text("Restore backup") }
@@ -207,6 +200,18 @@ private fun BackupButtons() {
     }
 }
 
+/** Asks for a backup file and restores it; returns whether one was chosen. The first-run setup uses it too. */
+internal fun pickAndRestoreBackup(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): Boolean {
+    val dialog = FileDialog(window as java.awt.Frame?, "Select backup file", FileDialog.LOAD).apply {
+        directory = dirs.backups.absolutePath
+        setFilenameFilter { _, name -> name.endsWith(".tachibk") || name.endsWith(".proto.gz") }
+        isVisible = true
+    }
+    val name = dialog.file ?: return false
+    restoreBackup(File(dialog.directory, name))
+    return true
+}
+
 /** Android's StorageInfo: the storage location's disk, used and free. */
 @Composable
 private fun StorageUsage() {
@@ -215,6 +220,7 @@ private fun StorageUsage() {
     val root = remember(folder) { storage.root.also { it.mkdirs() } }
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }
+    SearchTerms("Storage usage", "Disk space")
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(root.absolutePath, style = MaterialTheme.typography.bodyMedium)
         LinearProgressIndicator(

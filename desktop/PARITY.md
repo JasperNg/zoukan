@@ -78,8 +78,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: enable delegated sources, log level | Yes | Read at start, as on Android |
 | Advanced: hentai features toggle | Yes | Settings > E-Hentai |
 | Advanced: encrypt database | Yes, changed | The desktop database is always encrypted (SQLCipher), so there is no switch |
-| Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, onboarding, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
+| Settings search | Yes, changed | A field over the settings list matches every setting's title and summary. The results are the settings themselves, so they can be changed there; each one's page and group opens the page at it, highlighted, as on Android |
+| Advanced: onboarding guide | Yes | Opens the first-run setup again |
+| Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |
+| First-run setup (onboarding): theme, storage location, getting started guide, restore a backup | Yes, changed | Shown over the app until finished, as on Android. Android's permissions step has nothing to ask on a desktop. Someone who used Zoukan before it existed, with a library already, does not see it |
+| What's new: "Updated to" dialog after an update, release notes screen, About > What's new | Yes | The notes of the running version's GitHub release (desktop-v tag), in Markdown |
 | Advanced: data saver, source blacklist, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
 
 ## Browse

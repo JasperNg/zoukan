@@ -57,11 +57,15 @@ import java.net.CookieManager
 /**
  * Settings > Advanced, as the Android app's SettingsAdvancedScreen, without its Android-only parts
  * (notifications, battery optimization, the reader's hardware bitmap and display profile, the APK
- * installer, onboarding and the debug screens; see PARITY.md).
+ * installer and the debug screens; see PARITY.md).
  */
 fun LazyListScope.advancedSettings() {
     settingsGroup("Advanced")
     item(key = "advanced-crash-logs") { CrashLogsPreference() }
+    // Android's "Onboarding guide": the first-run setup again
+    item(key = "advanced-onboarding") {
+        SettingRow("Onboarding guide", onClick = { zoukan.desktop.ui.onboarding.Onboarding.reopen.value = true })
+    }
 
     settingsGroup("Data")
     item(key = "advanced-reindex") {
