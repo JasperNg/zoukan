@@ -1,14 +1,17 @@
 package zoukan.desktop.ui.manga
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,38 +21,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,7 +57,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -78,7 +71,6 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.common.Cover
-import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
@@ -119,156 +111,113 @@ data class MangaScreen(val mangaId: Long) : Screen {
         }
         // ZOUKAN <--
 
-        Column(Modifier.fillMaxSize()) {
-            ScreenHeader(title = manga.title, subtitle = state.source?.toString() ?: "Source not installed") {
-                TooltipIconButton(Icons.Default.Refresh, "Refresh", onClick = { model.refresh() }, enabled = !state.refreshing)
-                if (state.source is eu.kanade.tachiyomi.source.online.HttpSource) {
-                    TooltipIconButton(Icons.Default.Public, "Open in the built-in browser", onClick = model::openInWebView)
-                    TooltipIconButton(Icons.Outlined.OpenInBrowser, "Open in your browser", onClick = model::openInBrowser)
-                }
-                // ZOUKAN -->
-                MoreMenu(
-                    manga,
-                    onEditMerged = { mergedDialog = true },
-                    onEdit = { editDialog = true },
-                    onCover = { coverDialog = true },
-                    onFetchInterval = { intervalDialog = true },
-                    onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
-                )
-                // ZOUKAN <--
-            }
-            if (state.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Row(Modifier.fillMaxSize()) {
-                // Details
-                Column(
-                    Modifier.width(380.dp).fillMaxHeight().verticalScrollWithBar().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CoverImage(
-                        Cover.of(manga),
-                        Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp))
-                            // ZOUKAN -->
-                            .clickable { coverDialog = true },
-                        // ZOUKAN <--
-                    )
-                    Text(manga.title, style = MaterialTheme.typography.headlineSmall)
-                    val people = listOfNotNull(manga.author, manga.artist?.takeIf { it != manga.author })
-                        .filter { it.isNotBlank() }
-                    if (people.isNotEmpty()) {
-                        Text(people.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Text(
-                        listOfNotNull(statusLabel(manga.status), state.source?.name).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val next = state.nextChapter
-                        Button(
-                            onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } },
-                            enabled = next != null,
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.MenuBook, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (state.hasStarted) "Continue" else "Start reading")
-                        }
-                        FilledTonalButton(onClick = model::toggleFavorite) {
-                            Icon(if (manga.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (manga.favorite) "In library" else "Add to library")
-                        }
-                    }
-                    // ZOUKAN -->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { model.setTrackingVisible(true) }) {
-                            Icon(if (state.trackCount > 0) Icons.Default.Done else Icons.Default.Sync, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (state.trackCount > 0) "Tracking (${state.trackCount})" else "Tracking")
-                        }
-                    }
-                    // ZOUKAN <--
-                    state.error?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    // ZOUKAN -->
-                    val meta = state.meta
-                    val search: (String) -> Unit = { query -> navigator.push(SourceScreen(manga.source, query = query)) }
-                    if (meta != null && hasMetadataDescription(state.source)) {
-                        MetadataDescription(meta, openMetadataViewer = { navigator.push(MetadataViewScreen(manga.id, manga.source)) }, search = search)
-                    }
-                    // ZOUKAN <--
-                    manga.description?.takeIf { it.isNotBlank() }?.let { Description(it) }
-                    // ZOUKAN -->
-                    manga.notes.takeIf { it.isNotBlank() }?.let { notes ->
-                        Text("Notes", style = MaterialTheme.typography.titleSmall)
-                        Text(notes, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    // ZOUKAN <--
-                    // ZOUKAN -->
-                    // Metadata sources show their tags by namespace, each searching the source
-                    if (meta != null && meta.tags.isNotEmpty()) {
-                        NamespaceTags(meta, manga.source, onClick = search)
-                    } else {
-                        // ZOUKAN <--
-                        manga.genre?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }?.let { genres ->
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                genres.forEach { AssistChip(onClick = {}, label = { Text(it) }) }
-                            }
+        CoverBasedTheme(manga) {
+            Surface(color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    ScreenHeader(title = manga.title, subtitle = state.source?.toString() ?: "Source not installed") {
+                        TooltipIconButton(Icons.Default.Refresh, "Refresh", onClick = { model.refresh() }, enabled = !state.refreshing)
+                        if (state.source is eu.kanade.tachiyomi.source.online.HttpSource) {
+                            TooltipIconButton(Icons.Outlined.OpenInBrowser, "Open in your browser", onClick = model::openInBrowser)
                         }
                         // ZOUKAN -->
+                        MoreMenu(
+                            manga,
+                            onEditMerged = { mergedDialog = true },
+                            onEdit = { editDialog = true },
+                            onCover = { coverDialog = true },
+                            onFetchInterval = { intervalDialog = true },
+                            onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
+                        )
+                        // ZOUKAN <--
                     }
-                    // ZOUKAN <--
-                }
-                VerticalDivider()
-                // Chapters
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    ChapterToolbar(state, model)
-                    HorizontalDivider()
-                    if (state.sortedChapters.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                when {
-                                    state.refreshing -> "Loading chapters…"
-                                    // ZOUKAN -->
-                                    state.chapters.isNotEmpty() -> "No chapters match the filters"
-                                    // ZOUKAN <--
-                                    else -> "No chapters"
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (state.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    // ZOUKAN -->
+                    // Komikku's tablet layout: details take half the width, at most 450dp
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val infoWidth = (maxWidth / 2).coerceAtMost(450.dp)
+                        Row(Modifier.fillMaxSize()) {
+                            MangaInfoPane(
+                                manga = manga,
+                                state = state,
+                                model = model,
+                                onWebView = model::openInWebView.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
+                                onSearch = { query -> navigator.push(SourceScreen(manga.source, query = query)) },
+                                onOpenMetadata = { navigator.push(MetadataViewScreen(manga.id, manga.source)) },
+                                modifier = Modifier.width(infoWidth).fillMaxHeight(),
+                                onCoverClick = { coverDialog = true },
                             )
-                        }
-                    } else {
-                        // ZOUKAN -->
-                        val showMissing = showMissingChapters()
-                        val missing = remember(state.sortedChapters, manga.sortDescending(), showMissing) {
-                            if (showMissing) MissingChapters.of(state.sortedChapters, manga.sortDescending()) else MissingChapters.NONE
-                        }
-                        // ZOUKAN <--
-                        LazyColumn(Modifier.fillMaxSize()) {
-                            items(state.sortedChapters, key = { it.id }) { chapter ->
-                                // ZOUKAN -->
-                                missing.before[chapter.id]?.let { MissingChaptersRow(it) }
-                                // ZOUKAN <--
-                                ChapterRow(
-                                    chapter = chapter,
-                                    selected = chapter.id in state.selected,
-                                    selecting = state.selected.isNotEmpty(),
-                                    onOpen = { navigator.push(ReaderScreen(manga.id, chapter.id)) },
-                                    onToggleSelect = { model.toggleSelection(chapter) },
-                                    onMarkRead = { model.markRead(listOf(chapter), !chapter.read) },
-                                    onBookmark = { model.setBookmark(listOf(chapter), !chapter.bookmark) },
-                                    onMarkPreviousRead = { model.markPreviousRead(chapter) },
-                                    showDownload = !state.isLocal,
-                                    downloaded = chapter.id in state.downloaded,
-                                    download = state.queued[chapter.id],
-                                    onDownload = { model.download(listOf(chapter)) },
-                                    onCancelDownload = { model.cancelDownload(chapter) },
-                                    onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
-                                )
-                            }
-                            // ZOUKAN -->
-                            if (missing.end > 0) item(key = "missing-end") { MissingChaptersRow(missing.end) }
                             // ZOUKAN <--
+                            VerticalDivider()
+                            // Chapters
+                            Box(Modifier.weight(1f).fillMaxHeight()) {
+                                Column(Modifier.fillMaxSize()) {
+                                    ChapterToolbar(state, model)
+                                    HorizontalDivider()
+                                    if (state.sortedChapters.isEmpty()) {
+                                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text(
+                                                when {
+                                                    state.refreshing -> "Loading chapters…"
+                                                    // ZOUKAN -->
+                                                    state.chapters.isNotEmpty() -> "No chapters match the filters"
+                                                    // ZOUKAN <--
+                                                    else -> "No chapters"
+                                                },
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    } else {
+                                        // ZOUKAN -->
+                                        val showMissing = showMissingChapters()
+                                        val missing = remember(state.sortedChapters, manga.sortDescending(), showMissing) {
+                                            if (showMissing) MissingChapters.of(state.sortedChapters, manga.sortDescending()) else MissingChapters.NONE
+                                        }
+                                        // ZOUKAN <--
+                                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
+                                            items(state.sortedChapters, key = { it.id }) { chapter ->
+                                                // ZOUKAN -->
+                                                missing.before[chapter.id]?.let { MissingChaptersRow(it) }
+                                                // ZOUKAN <--
+                                                ChapterRow(
+                                                    chapter = chapter,
+                                                    selected = chapter.id in state.selected,
+                                                    selecting = state.selected.isNotEmpty(),
+                                                    onOpen = { navigator.push(ReaderScreen(manga.id, chapter.id)) },
+                                                    onToggleSelect = { model.toggleSelection(chapter) },
+                                                    onMarkRead = { model.markRead(listOf(chapter), !chapter.read) },
+                                                    onBookmark = { model.setBookmark(listOf(chapter), !chapter.bookmark) },
+                                                    onMarkPreviousRead = { model.markPreviousRead(chapter) },
+                                                    showDownload = !state.isLocal,
+                                                    downloaded = chapter.id in state.downloaded,
+                                                    download = state.queued[chapter.id],
+                                                    onDownload = { model.download(listOf(chapter)) },
+                                                    onCancelDownload = { model.cancelDownload(chapter) },
+                                                    onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
+                                                )
+                                            }
+                                            // ZOUKAN -->
+                                            if (missing.end > 0) item(key = "missing-end") { MissingChaptersRow(missing.end) }
+                                            // ZOUKAN <--
+                                        }
+                                    }
+                                }
+                                // ZOUKAN -->
+                                // Komikku's Start / Resume button, while there is an unread chapter
+                                val next = state.nextChapter
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = next != null && state.selected.isEmpty(),
+                                    enter = fadeIn() + scaleIn(),
+                                    exit = fadeOut() + scaleOut(),
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                                ) {
+                                    ExtendedFloatingActionButton(onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } }) {
+                                        Icon(Icons.Filled.PlayArrow, null)
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(if (state.hasStarted) "Resume" else "Start")
+                                    }
+                                }
+                                // ZOUKAN <--
+                            }
                         }
                     }
                 }
@@ -581,24 +530,6 @@ private fun DownloadMenu(model: MangaScreenModel) {
             })
             // ZOUKAN <--
         }
-    }
-}
-
-@Composable
-private fun Description(text: String) {
-    var expanded by remember { mutableStateOf(false) }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = if (expanded) Int.MAX_VALUE else 6,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(12.dp),
-        )
     }
 }
 
