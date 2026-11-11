@@ -98,6 +98,12 @@ class ReaderScreenModel(
         val navigable: List<Chapter> = emptyList(),
         /** The first page shown: below [currentPage] when double pages show two */
         val firstShownPage: Int = 0,
+        // ZOUKAN -->
+        /** Pages decoded so far that are wider than tall, for splitting, turning and double pages */
+        val widePages: Set<Int> = emptySet(),
+        /** SY's "Shift double pages": pairs from the first page, for this chapter */
+        val shiftDoublePages: Boolean = false,
+        // ZOUKAN <--
     ) {
         /** "3 / 92", or "2-3 / 92" for two pages side by side, as Android's page number */
         val pageNumber: String
@@ -117,7 +123,10 @@ class ReaderScreenModel(
     @Volatile
     private var format: LocalFormat? = null
     private var loadJob: Job? = null
-    private val downloads = Semaphore(4)
+    // ZOUKAN -->
+    // Android's "Reader threads": how many pages download at once
+    private val downloads = Semaphore(preferences.readerThreads().get().coerceIn(1, 8))
+    // ZOUKAN <--
     private val pageJobs = mutableMapOf<Int, Job>()
     private var chapterOpenedAt = System.currentTimeMillis()
 
@@ -145,10 +154,14 @@ class ReaderScreenModel(
                 getChapters.await(mangaId)
             }.sortedByDescending { it.sourceOrder }
             // ZOUKAN <--
+            // ZOUKAN -->
+            source = sourceManager.get(manga.source)
+            // An entry without its own reading mode reads as webtoon when it looks like one, as SY's auto webtoon mode
             val mode = (manga.viewerFlags.toInt() and ReadingModes.MASK).takeIf { it != ReadingModes.DEFAULT }
+                ?: ReadingModes.WEBTOON.takeIf { preferences.useAutoWebtoon().get() && AutoWebtoon.isWebtoon(manga, source?.name) }
                 ?: preferences.defaultReadingMode().get().takeIf { it in ReadingModes.all }
                 ?: ReadingModes.RIGHT_TO_LEFT
-            source = sourceManager.get(manga.source)
+            // ZOUKAN <--
             mutableState.update { it.copy(manga = manga, chapters = chapters, readingMode = mode) }
             val chapter = chapters.firstOrNull { it.id == initialChapterId }
             if (chapter == null) {
@@ -174,9 +187,22 @@ class ReaderScreenModel(
         closeFormat()
         // ZOUKAN -->
         _pageActions.value = null
+        prefetchJob?.cancel()
+        keepAllBytes = false
         // ZOUKAN <--
         mutableState.update {
-            it.copy(chapter = chapter, pages = emptyList(), loading = true, error = null, currentPage = 0, navigable = navigable(it.chapters, chapter))
+            it.copy(
+                chapter = chapter,
+                pages = emptyList(),
+                loading = true,
+                error = null,
+                currentPage = 0,
+                navigable = navigable(it.chapters, chapter),
+                // ZOUKAN -->
+                widePages = emptySet(),
+                shiftDoublePages = false,
+                // ZOUKAN <--
+            )
         }
         // ZOUKAN -->
         if (!incognito) Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterOpen }
@@ -216,7 +242,10 @@ class ReaderScreenModel(
                 if (pages.isEmpty()) error("The source returned no pages")
                 val start = when {
                     atEnd -> pages.lastIndex
-                    fromStart || chapter.read -> 0
+                    // ZOUKAN -->
+                    fromStart -> 0
+                    chapter.read && !preferences.preserveReadingPosition().get() -> 0
+                    // ZOUKAN <--
                     else -> chapter.lastPageRead.toInt().coerceIn(0, pages.lastIndex)
                 }
                 chapterOpenedAt = System.currentTimeMillis()
@@ -231,6 +260,9 @@ class ReaderScreenModel(
                     )
                 }
                 onPageChanged(start)
+                // ZOUKAN -->
+                if (preferences.aggressivePageLoading().get() && file == null) prefetchAll(pages)
+                // ZOUKAN <--
                 // ZOUKAN -->
                 Injekt.get<zoukan.desktop.discord.DiscordPresence>().setReading(
                     zoukan.desktop.discord.DiscordPresence.Reading(
@@ -365,19 +397,26 @@ class ReaderScreenModel(
     /** Loads the pages around [center] and releases decoded images far from it. */
     private fun requestPages(center: Int) {
         val pages = state.value.pages
-        val wanted = (center - 2..center + 6).filter { it in pages.indices }
+        // ZOUKAN -->
+        val ahead = preferences.preloadSize().get().coerceIn(1, 50)
+        val keepAhead = maxOf(KEEP_AHEAD, ahead + 2)
+        val wanted = (center - 2..center + ahead).filter { it in pages.indices }
+        // ZOUKAN <--
             .sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
         wanted.forEach(::loadPage)
         pages.forEach { page ->
-            if (page.index !in center - KEEP_BEHIND..center + KEEP_AHEAD) {
+            if (page.index !in center - KEEP_BEHIND..center + keepAhead) {
                 if (page.state.value is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
             }
             // The downloaded bytes are kept longer, so going back a few pages needs no network
-            if (page.index !in center - 3 * KEEP_BEHIND..center + 3 * KEEP_AHEAD) page.bytes = null
+            // ZOUKAN -->
+            // Aggressive page loading keeps every page's bytes
+            if (page.index !in center - 3 * KEEP_BEHIND..center + 3 * keepAhead && !keepAllBytes) page.bytes = null
+            // ZOUKAN <--
         }
     }
 
-    fun loadPage(index: Int, retry: Boolean = false) {
+    fun loadPage(index: Int, retry: Boolean = false, attempt: Int = 0) {
         val page = state.value.pages.getOrNull(index) ?: return
         val current = page.state.value
         if (current is ReaderPage.State.Ready || current is ReaderPage.State.Loading) return
@@ -391,7 +430,13 @@ class ReaderScreenModel(
             try {
                 val bytes = page.bytes
                     ?: (format?.page(index) ?: downloads.withPermit { fetch(source!!, page.page) }).also { page.bytes = it }
-                page.state.value = ReaderPage.State.Ready(PageImage.decode(bytes, cropBorders()))
+                val image = PageImage.decode(bytes, cropBorders())
+                // ZOUKAN -->
+                if (image.width > image.height) {
+                    mutableState.update { if (index in it.widePages || it.pages.getOrNull(index) !== page) it else it.copy(widePages = it.widePages + index) }
+                }
+                // ZOUKAN <--
+                page.state.value = ReaderPage.State.Ready(image)
             } catch (e: CancellationException) {
                 page.state.value = ReaderPage.State.Queued
                 throw e
@@ -399,9 +444,68 @@ class ReaderScreenModel(
                 logcat(LogPriority.WARN, e) { "Page ${index + 1} failed" }
                 page.bytes = null
                 page.state.value = ReaderPage.State.Error(e.message ?: e::class.simpleName.orEmpty())
+                // ZOUKAN -->
+                // SY's "Instant retry": a failed page is tried once more at once
+                if (attempt == 0 && preferences.readerInstantRetry().get()) {
+                    pageJobs.remove(index)
+                    withContext(Dispatchers.Main) { loadPage(index, retry = true, attempt = 1) }
+                }
+                // ZOUKAN <--
             }
         }
     }
+
+    // ZOUKAN -->
+    @Volatile
+    private var keepAllBytes = false
+
+    /** SY's "Aggressive page loading": downloads every page of an online chapter in the background. */
+    private fun prefetchAll(pages: List<ReaderPage>) {
+        val source = source as? HttpSource ?: return
+        keepAllBytes = true
+        val job = screenModelScope.launch(Dispatchers.IO) {
+            pages.forEach { page ->
+                if (page.bytes != null) return@forEach
+                runCatching { downloads.withPermit { if (page.bytes == null) page.bytes = fetch(source, page.page) } }
+            }
+        }
+        prefetchJob?.cancel()
+        prefetchJob = job
+    }
+
+    private var prefetchJob: Job? = null
+
+    /** SY's "Retry all": loads every failed page again. */
+    fun retryAllPages() {
+        val failed = state.value.pages.filter { it.state.value is ReaderPage.State.Error }
+        if (failed.isEmpty()) {
+            Toasts.show("No pages failed")
+            return
+        }
+        val current = state.value.currentPage
+        failed.sortedBy { kotlin.math.abs(it.index - current) }.forEach { loadPage(it.index, retry = true) }
+    }
+
+    /** SY's "Boost page": the shown page jumps the queue; other pages in flight start again after it. */
+    fun boostPage() {
+        val index = state.value.currentPage
+        val page = state.value.pages.getOrNull(index) ?: return
+        if (page.state.value is ReaderPage.State.Ready) return
+        pageJobs.filterKeys { it != index }.forEach { (i, job) ->
+            job.cancel()
+            pageJobs.remove(i)
+        }
+        pageJobs.remove(index)?.cancel()
+        page.state.value = ReaderPage.State.Queued
+        loadPage(index, retry = true)
+        requestPages(index)
+    }
+
+    /** SY's "Shift double pages", for this chapter */
+    fun toggleShiftDoublePages() {
+        mutableState.update { it.copy(shiftDoublePages = !it.shiftDoublePages) }
+    }
+    // ZOUKAN <--
 
     private suspend fun fetch(source: HttpSource, page: Page): ByteArray {
         if (page.imageUrl.isNullOrEmpty()) page.imageUrl = source.getImageUrl(page)

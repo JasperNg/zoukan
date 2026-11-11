@@ -83,6 +83,87 @@ class DesktopPreferences(private val store: PreferenceStore) {
 
     /** Desktop only: the reader's zoom in paged modes is kept per window, not per manga */
     fun readerFitMode() = store.getInt("zoukan_reader_fit_mode", FitModes.FIT_SCREEN)
+
+    // ZOUKAN -->
+    // Settings > Reader: Android's ReaderPreferences keys and defaults
+
+    /** Tap zones of the paged modes: 0 default, 1 L shaped, 2 Kindle-ish, 3 Edge, 4 Right and left, 5 Disabled */
+    fun navigationModePager() = store.getInt("reader_navigation_mode_pager", 0)
+
+    fun navigationModeWebtoon() = store.getInt("reader_navigation_mode_webtoon", 0)
+
+    /** A TappingInvertMode name: NONE, HORIZONTAL, VERTICAL or BOTH */
+    fun pagerNavInverted() = store.getString("reader_tapping_inverted", "NONE")
+
+    fun webtoonNavInverted() = store.getString("reader_tapping_inverted_webtoon", "NONE")
+
+    fun smallerTapZone() = store.getBoolean("reader_navigation_smaller_tap_zone", false)
+
+    fun navigateToPan() = store.getBoolean("navigate_pan", true)
+
+    fun readWithLongTap() = store.getBoolean("reader_long_tap", true)
+
+    fun pageTransitionsPager() = store.getBoolean("pref_enable_transitions_pager_key", true)
+
+    fun pageTransitionsWebtoon() = store.getBoolean("pref_enable_transitions_webtoon_key", true)
+
+    fun pagedDoubleTapZoomEnabled() = store.getBoolean("pref_enable_double_tap_zoom_paged", true)
+
+    fun webtoonDoubleTapZoomEnabled() = store.getBoolean("pref_enable_double_tap_zoom_webtoon", true)
+
+    fun pagedDisableZoomIn() = store.getBoolean("paged_disable_zoom_in", false)
+
+    fun webtoonDisableZoomOut() = store.getBoolean("webtoon_disable_zoom_out", false)
+
+    /** Where a page wider than the window starts: 1 automatic, 2 left, 3 right, 4 center */
+    fun zoomStart() = store.getInt("pref_zoom_start_key", 1)
+
+    fun dualPageSplitPaged() = store.getBoolean("pref_dual_page_split", false)
+
+    fun dualPageInvertPaged() = store.getBoolean("pref_dual_page_invert", false)
+
+    fun dualPageSplitWebtoon() = store.getBoolean("pref_dual_page_split_webtoon", false)
+
+    fun dualPageInvertWebtoon() = store.getBoolean("pref_dual_page_invert_webtoon", false)
+
+    fun dualPageRotateToFit() = store.getBoolean("pref_dual_page_rotate", false)
+
+    fun dualPageRotateToFitInvert() = store.getBoolean("pref_dual_page_rotate_invert", false)
+
+    fun dualPageRotateToFitWebtoon() = store.getBoolean("pref_dual_page_rotate_webtoon", false)
+
+    fun dualPageRotateToFitInvertWebtoon() = store.getBoolean("pref_dual_page_rotate_invert_webtoon", false)
+
+    /** 0 none, 1 between double pages, 2 in wide pages, 3 both */
+    fun centerMarginType() = store.getInt("center_margin_type", 0)
+
+    fun useAutoWebtoon() = store.getBoolean("eh_use_auto_webtoon", true)
+
+    fun preloadSize() = store.getInt("eh_preload_size", 10)
+
+    fun readerThreads() = store.getInt("eh_reader_threads", 2)
+
+    fun aggressivePageLoading() = store.getBoolean("eh_aggressive_page_loading", false)
+
+    fun readerInstantRetry() = store.getBoolean("eh_reader_instant_retry", true)
+
+    fun preserveReadingPosition() = store.getBoolean("eh_preserve_reading_position", false)
+
+    fun keepScreenOn() = store.getBoolean("pref_keep_screen_on_key", false)
+
+    fun showReadingMode() = store.getBoolean("pref_show_reading_mode", true)
+
+    fun smoothAutoScroll() = store.getBoolean("smooth_auto_scroll", true)
+
+    fun flashOnPageChange() = store.getBoolean("pref_reader_flash", false)
+
+    fun flashDurationMillis() = store.getInt("pref_reader_flash_duration", 100)
+
+    fun flashPageInterval() = store.getInt("pref_reader_flash_interval", 1)
+
+    /** A FlashColor name: BLACK, WHITE or WHITE_BLACK */
+    fun flashColor() = store.getString("pref_reader_flash_mode", "BLACK")
+    // ZOUKAN <--
 }
 
 object ReadingModes {

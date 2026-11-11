@@ -2,6 +2,7 @@ package zoukan.desktop.ui.reader
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -63,14 +64,46 @@ fun WebtoonViewer(
     var zoom by remember { mutableFloatStateOf(1f) }
     val gap = if (state.readingMode == ReadingModes.CONTINUOUS_VERTICAL) 16.dp else 0.dp
     val hScroll = rememberScrollState()
+    // ZOUKAN -->
+    val prefs = model.preferences
+    val navLayout by prefs.navigationModeWebtoon().changes().collectAsState(prefs.navigationModeWebtoon().get())
+    val navInvert by prefs.webtoonNavInverted().changes().collectAsState(prefs.webtoonNavInverted().get())
+    val smallerZones by prefs.smallerTapZone().changes().collectAsState(prefs.smallerTapZone().get())
+    val transitions by prefs.pageTransitionsWebtoon().changes().collectAsState(prefs.pageTransitionsWebtoon().get())
+    val doubleTapZoom by prefs.webtoonDoubleTapZoomEnabled().changes().collectAsState(prefs.webtoonDoubleTapZoomEnabled().get())
+    val noZoomOut by prefs.webtoonDisableZoomOut().changes().collectAsState(prefs.webtoonDisableZoomOut().get())
+    val longTap by prefs.readWithLongTap().changes().collectAsState(prefs.readWithLongTap().get())
+    val split by prefs.dualPageSplitWebtoon().changes().collectAsState(prefs.dualPageSplitWebtoon().get())
+    val splitInvert by prefs.dualPageInvertWebtoon().changes().collectAsState(prefs.dualPageInvertWebtoon().get())
+    val rotateWide by prefs.dualPageRotateToFitWebtoon().changes().collectAsState(prefs.dualPageRotateToFitWebtoon().get())
+    val rotateInvert by prefs.dualPageRotateToFitInvertWebtoon().changes().collectAsState(prefs.dualPageRotateToFitInvertWebtoon().get())
+    val minZoom = if (noZoomOut) 1f else 0.3f
+    LaunchedEffect(minZoom) { if (zoom < minZoom) zoom = minZoom }
+    // ZOUKAN <--
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewportHeight = constraints.maxHeight.toFloat()
         val viewportWidth = maxWidth
         val stripWidth = viewportWidth * (1f - 2f * sidePadding.coerceIn(0, 25) / 100f) * zoom
 
-        actions.down = { scope.launch { listState.animateScrollBy(viewportHeight * 0.8f, tween(200)) } }
-        actions.up = { scope.launch { listState.animateScrollBy(-viewportHeight * 0.8f, tween(200)) } }
+        // ZOUKAN -->
+        // Android's "Animate page transitions" (webtoon)
+        fun scroll(by: Float) {
+            scope.launch { if (transitions) listState.animateScrollBy(by, tween(200)) else listState.scrollBy(by) }
+        }
+        actions.down = { scroll(viewportHeight * 0.8f) }
+        actions.up = { scroll(-viewportHeight * 0.8f) }
+        // SY's smooth auto scroll: a window's height over each interval
+        actions.smoothScroll = { millis ->
+            scope.launch {
+                if (listState.canScrollForward) {
+                    listState.animateScrollBy(viewportHeight, tween(millis.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+                } else {
+                    model.nextChapter()
+                }
+            }
+        }
+        // ZOUKAN <--
         actions.next = {
             if (listState.canScrollForward) actions.down() else model.nextChapter()
         }
@@ -81,11 +114,13 @@ fun WebtoonViewer(
         actions.last = { scope.launch { listState.scrollToItem(pages.size) } }
         actions.goTo = { index -> scope.launch { listState.scrollToItem(index + 1) } }
         actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
-        actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(0.3f) }
+        actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
         actions.zoomReset = { zoom = 1f }
 
         // ZOUKAN -->
         var secondaryAt by remember { mutableStateOf(0L) }
+        val latestNav by androidx.compose.runtime.rememberUpdatedState(Triple(navLayout, navInvert, smallerZones))
+        val latestLongTap by androidx.compose.runtime.rememberUpdatedState(longTap)
 
         /** The page at [y] pixels from the top of the strip's window, or null over a chapter transition */
         fun pageAt(y: Float): Int? = listState.layoutInfo.visibleItemsInfo
@@ -113,7 +148,7 @@ fun WebtoonViewer(
                     val modifiers = event.keyboardModifiers
                     if (modifiers.isCtrlPressed || modifiers.isMetaPressed) {
                         val change = event.changes.firstOrNull() ?: return@onPointerEvent
-                        zoom = (zoom * if (change.scrollDelta.y < 0) 1.1f else 1 / 1.1f).coerceIn(0.3f, 3f)
+                        zoom = (zoom * if (change.scrollDelta.y < 0) 1.1f else 1 / 1.1f).coerceIn(minZoom, 3f)
                         change.consume()
                     }
                 }
@@ -127,10 +162,27 @@ fun WebtoonViewer(
                         pageAt(change.position.y)?.let { model.openPageActions(it) }
                     }
                 }
-                .pointerInput(Unit) {
+                .pointerInput(doubleTapZoom) {
                     detectTapGestures(
-                        onTap = { if (System.currentTimeMillis() - secondaryAt >= 1000) model.toggleMenu() },
-                        onLongPress = { position -> pageAt(position.y)?.let { model.openPageActions(it) } },
+                        onTap = { position ->
+                            if (System.currentTimeMillis() - secondaryAt < 1000) return@detectTapGestures
+                            // Android's tap zones; the webtoon default is L shaped
+                            val (layout, invert, smaller) = latestNav
+                            val zones = ReaderNavigation.zones(layout, verticalViewer = true, ReaderNavigation.Invert.of(invert), smaller)
+                            val x = position.x / size.width.coerceAtLeast(1)
+                            val y = position.y / size.height.coerceAtLeast(1)
+                            when (ReaderNavigation.regionAt(x, y, zones)) {
+                                ReaderNavigation.Region.NEXT, ReaderNavigation.Region.RIGHT -> actions.next()
+                                ReaderNavigation.Region.PREV, ReaderNavigation.Region.LEFT -> actions.previous()
+                                ReaderNavigation.Region.MENU -> model.toggleMenu()
+                            }
+                        },
+                        onDoubleTap = if (doubleTapZoom) {
+                            { zoom = if (zoom > 1.01f) 1f else 2f }
+                        } else {
+                            null
+                        },
+                        onLongPress = { position -> if (latestLongTap) pageAt(position.y)?.let { model.openPageActions(it) } },
                     )
                 }
                 // ZOUKAN <--
@@ -158,7 +210,29 @@ fun WebtoonViewer(
                         val page = pages[index]
                         val pageState by page.state.collectAsState()
                         when (val s = pageState) {
-                            is ReaderPage.State.Ready -> PageSlices(s.image, Modifier.fillMaxWidth())
+                            // ZOUKAN -->
+                            is ReaderPage.State.Ready -> {
+                                val image = s.image
+                                val wide = image.width > image.height
+                                val leftFirst = ReaderSpreads.leftHalfFirst(rtl = false, invert = splitInvert)
+                                when {
+                                    // Android's "Split wide pages": the two halves one under the other
+                                    wide && split -> androidx.compose.foundation.layout.Column {
+                                        listOf(PagePart.FIRST_HALF, PagePart.SECOND_HALF).forEach { part ->
+                                            val shown = ReaderSpreads.shownSize(image, part, 0)
+                                            PageContent(image, part, leftFirst, 0, Modifier.fillMaxWidth().aspectRatio(shown.width / shown.height.coerceAtLeast(1).toFloat()))
+                                        }
+                                    }
+                                    // "Rotate wide pages to fit"
+                                    wide && rotateWide -> {
+                                        val rotation = if (rotateInvert) -90 else 90
+                                        val shown = ReaderSpreads.shownSize(image, PagePart.WHOLE, rotation)
+                                        PageContent(image, PagePart.WHOLE, true, rotation, Modifier.fillMaxWidth().aspectRatio(shown.width / shown.height.coerceAtLeast(1).toFloat()))
+                                    }
+                                    else -> PageSlices(image, Modifier.fillMaxWidth())
+                                }
+                            }
+                            // ZOUKAN <--
                             is ReaderPage.State.Error -> PageError(
                                 index + 1,
                                 s.message,
