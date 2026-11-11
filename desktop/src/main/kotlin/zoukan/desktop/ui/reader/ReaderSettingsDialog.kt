@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RadioButton
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
+import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
 import kotlin.math.roundToInt
 
@@ -56,7 +58,7 @@ fun ReaderSettingsDialog(model: ReaderScreenModel, onDismiss: () -> Unit) {
                 }
                 Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
                     when (tab) {
-                        0 -> ReadingPage(model, state.readingMode, prefs)
+                        0 -> ReadingPage(model, state.readingMode, prefs, state.shiftDoublePages)
                         1 -> GeneralPage(prefs)
                         else -> FilterPage(prefs)
                     }
@@ -114,7 +116,7 @@ private fun IntSlider(label: String, preference: Preference<Int>, range: IntRang
 }
 
 @Composable
-private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPreferences) {
+private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPreferences, shifted: Boolean) {
     Heading("Reading mode for this entry")
     Choices(mode, ReadingModes.all.map { it to ReadingModes.label(it) }) { model.setReadingMode(it) }
     val webtoon = mode == ReadingModes.WEBTOON || mode == ReadingModes.CONTINUOUS_VERTICAL
@@ -122,13 +124,53 @@ private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPrefe
         Heading("Webtoon")
         IntSlider("Side padding", prefs.webtoonSidePadding(), 0..25) { "$it%" }
         SwitchRow("Crop borders", prefs.cropBordersWebtoon())
+        // ZOUKAN -->
+        Heading("Tap zones")
+        PrefChoices(prefs.navigationModeWebtoon(), ReaderNavigation.layouts)
+        Heading("Invert tap zones")
+        PrefChoices(prefs.webtoonNavInverted(), ReaderNavigation.inverts.map { it.first.name to it.second })
+        SwitchRow("Split wide pages", prefs.dualPageSplitWebtoon())
+        SwitchRow("Invert split page placement", prefs.dualPageInvertWebtoon())
+        SwitchRow("Rotate wide pages to fit", prefs.dualPageRotateToFitWebtoon())
+        SwitchRow("Flip orientation of rotated wide pages", prefs.dualPageRotateToFitInvertWebtoon())
+        SwitchRow("Double tap to zoom", prefs.webtoonDoubleTapZoomEnabled())
+        SwitchRow("Disable zoom out", prefs.webtoonDisableZoomOut())
+        SwitchRow("Animate page transitions", prefs.pageTransitionsWebtoon())
+        // ZOUKAN <--
     } else {
         Heading("Scale type")
         PrefChoices(prefs.readerFitMode(), FitModes.all.map { it to FitModes.label(it) })
         Heading("Page layout")
         PrefChoices(prefs.pageLayout(), listOf(0 to "Single page", 1 to "Double pages", 2 to "Automatic (double in a wide window)"))
         SwitchRow("Invert double pages", prefs.invertDoublePages())
+        // ZOUKAN -->
+        Row(Modifier.fillMaxWidth().clickable { model.toggleShiftDoublePages() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Shift double pages", style = MaterialTheme.typography.bodyMedium)
+                Text("Pairs from the first page, for this chapter (D)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(shifted, onCheckedChange = { model.toggleShiftDoublePages() })
+        }
+        Heading("Center margin")
+        PrefChoices(prefs.centerMarginType(), ReaderSettingChoices.centerMargins)
+        // ZOUKAN <--
         SwitchRow("Crop borders", prefs.cropBorders())
+        // ZOUKAN -->
+        Heading("Tap zones")
+        PrefChoices(prefs.navigationModePager(), ReaderNavigation.layouts)
+        Heading("Invert tap zones")
+        PrefChoices(prefs.pagerNavInverted(), ReaderNavigation.inverts.map { it.first.name to it.second })
+        Heading("Zoom start position")
+        PrefChoices(prefs.zoomStart(), ReaderSettingChoices.zoomStarts)
+        SwitchRow("Split wide pages", prefs.dualPageSplitPaged())
+        SwitchRow("Invert split page placement", prefs.dualPageInvertPaged())
+        SwitchRow("Rotate wide pages to fit", prefs.dualPageRotateToFit())
+        SwitchRow("Flip orientation of rotated wide pages", prefs.dualPageRotateToFitInvert())
+        SwitchRow("Pan wide images when tapping", prefs.navigateToPan())
+        SwitchRow("Disable zoom in", prefs.pagedDisableZoomIn())
+        SwitchRow("Double tap to zoom", prefs.pagedDoubleTapZoomEnabled())
+        SwitchRow("Animate page transitions", prefs.pageTransitionsPager())
+        // ZOUKAN <--
     }
 }
 
@@ -145,6 +187,26 @@ private fun GeneralPage(prefs: DesktopPreferences) {
     // ZOUKAN -->
     SwitchRow("Save pages into separate folders", prefs.folderPerManga(), "Creates folders according to entries' title")
     // ZOUKAN <--
+    // ZOUKAN -->
+    Heading("Menu")
+    SwitchRow("Force horizontal page slider", prefs.forceHorizontalSeekbar(), "Vertical modes keep the slider at the bottom")
+    SwitchRow("Vertical page slider in a wide window", prefs.landscapeVerticalSeekbar(), "In vertical modes, also when the window is wider than tall")
+    SwitchRow("Left-handed vertical page slider", prefs.leftVerticalSeekbar())
+    Text("Bottom bar buttons", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+    val buttons by prefs.readerBottomButtons().changes().collectAsState(prefs.readerBottomButtons().get())
+    ReaderBottomButtons.all.forEach { (value, label) ->
+        val on = value in buttons
+        val toggle = { prefs.readerBottomButtons().set(if (on) buttons - value else buttons + value) }
+        Row(Modifier.fillMaxWidth().clickable(onClick = toggle), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(on, onCheckedChange = { toggle() })
+            Text(label)
+        }
+    }
+    SwitchRow("Show reading mode", prefs.showReadingMode(), "Briefly shows the current mode when the reader opens")
+    SwitchRow("Keep screen on", prefs.keepScreenOn())
+    SwitchRow("Show actions on long tap", prefs.readWithLongTap())
+    SwitchRow("Smaller tap zones", prefs.smallerTapZone())
+    // ZOUKAN <--
     Heading("Auto scroll")
     val interval by prefs.autoscrollInterval().changes().collectAsState(prefs.autoscrollInterval().get())
     Text("Every ${"%.1f".format(interval)} seconds (A starts and stops it)", style = MaterialTheme.typography.bodyMedium)
@@ -153,7 +215,19 @@ private fun GeneralPage(prefs: DesktopPreferences) {
         onValueChange = { prefs.autoscrollInterval().set((it * 2).roundToInt() / 2f) },
         valueRange = 0.5f..30f,
     )
+    // ZOUKAN -->
+    SwitchRow("Smooth auto scroll", prefs.smoothAutoScroll(), "Webtoon modes glide instead of jumping")
+    // ZOUKAN <--
 }
+
+// ZOUKAN -->
+/** Choice labels shared by the reader's settings sheet and Settings > Reader */
+object ReaderSettingChoices {
+    val zoomStarts = listOf(1 to "Automatic", 2 to "Left", 3 to "Right", 4 to "Center")
+    val centerMargins = listOf(0 to "None", 1 to "Double pages", 2 to "Wide pages", 3 to "Double and wide pages")
+    val flashColors = listOf("BLACK" to "Black", "WHITE" to "White", "WHITE_BLACK" to "White and black")
+}
+// ZOUKAN <--
 
 @Composable
 private fun FilterPage(prefs: DesktopPreferences) {

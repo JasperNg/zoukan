@@ -10,6 +10,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 |---|---|---|
 | Library grid, categories, search, sort, unread badges | Yes | Phase 3 |
 | Library display modes, badges, continue reading button | Yes | Compact, comfortable, panorama, cover-only and list; columns; per-badge toggles |
+| Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
 | Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
 | Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download, delete downloads, remove |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
@@ -18,11 +19,21 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Manga details, chapters, mark read, bookmark, download, delete | Yes | Phase 3, Phase 5 |
 | Reader: paged, right to left, vertical, webtoon, continuous | Yes | Phase 4; keyboard, mouse and wheel |
 | Reader settings sheet | Yes | Reading mode, General and Filter tabs (S) |
+| Reader menu: chapter navigator, bottom buttons, bookmark, chapter list | Yes, changed | As Komikku's: previous and next chapter either side of a floating page slider, standing on the side in vertical modes when the window is taller than wide (or always, with that setting). Bottom row: chapters (C), WebView, browser, reading mode, scale type (in place of rotation), crop borders, page layout and settings; the choice dialogs are menus. Bookmark from the top bar or B |
+| Settings > Reader: tap zones and inverting, zoom start, double tap zoom, disable zoom in or out, page transitions | Yes | Android's layouts (L shaped, Kindle-ish, Edge, Right and left, Disabled) and smaller tap zones; also in the reader's settings sheet |
+| Split or rotate wide pages, center margin, shift double pages | Yes | Paged and webtoon, with invert; wide pages stand alone in double page mode, as SY. Shift with D or the settings sheet |
+| Auto webtoon mode, preserve reading position | Yes | SY's tag and source rules |
+| Page loading: preload size, reader threads, aggressive loading, instant retry, retry all, boost page | Yes | Retry all is R, boost page Shift+R |
+| Show reading mode, keep screen on, flash on page change, smooth auto scroll, show actions on long tap | Yes, changed | Keep screen on uses SetThreadExecutionState on Windows and `caffeinate` on macOS. Long tap gates the long press only; a right-click always opens page actions |
+| Reader: volume keys, display cutout, orientation, landscape zoom, pinch to zoom, fullscreen (system bars) | No | Phone hardware and gestures; the desktop has F11 for full screen and Ctrl + wheel to zoom |
 | Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
+| Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
+| More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
+| Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
@@ -32,6 +43,14 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |
 | Bulk migration (source priority, smart search, progress, manual pick) | Yes | Library selection > Migrate: sources in priority order, the Android options (data to migrate, extra keywords, hide unmatched or without newer chapters, advanced search, match by chapter number, smart search), then per-entry search, Don't migrate, Migrate now, and Migrate or Copy all with progress |
 | Edit entry info, notes, custom cover | Yes | Manga > More > Edit; local entries write ComicInfo.xml and cover files, as on Android |
+| Entry update frequency (smart update interval) | Yes | Manga > More > Update frequency, for library entries: the predicted next update and, with "Predict next release time" on, a custom interval or none, as Android's dialog |
+| Cover actions: save, share, change, delete custom cover | Yes, changed | Click the cover or Manga > More > Cover. Save goes to Pictures/Zoukan; Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
+| Duplicate check on adding to the library | Yes | Same-title library entries, each to open or migrate, or add anyway; on the manga screen and on a right-click in Browse |
+| Add or remove from Browse (long press) | Yes, changed | Right-click a browse result, as Android's long press: removing asks first, adding checks duplicates and categories |
+| Fetch metadata and chapters when adding to library (KMK) | Yes | Settings > Library; applies to entries added from Browse, as on Android |
+| Missing chapter indicators, hide setting | Yes | "Missing N chapters" between chapter rows; Settings > Library > Hide missing chapter indicators |
+| Share entry link | Yes, changed | Manga > More > Copy link, as there is no desktop share sheet |
+| Download next chapters: 1, 5, 10, 25, custom, unread, bookmarked | Yes | Custom asks for a number of unread chapters |
 | Recommendations and related entries | Yes | Manga > More > Similar titles: the source's related titles, then AniList, MyAnimeList, MangaUpdates and the other recommendation sources |
 
 ## Settings
@@ -69,8 +88,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: enable delegated sources, log level | Yes | Read at start, as on Android |
 | Advanced: hentai features toggle | Yes | Settings > E-Hentai |
 | Advanced: encrypt database | Yes, changed | The desktop database is always encrypted (SQLCipher), so there is no switch |
-| Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, onboarding, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
+| Settings search | Yes, changed | A field over the settings list matches every setting's title and summary. The results are the settings themselves, so they can be changed there; each one's page and group opens the page at it, highlighted, as on Android |
+| Advanced: onboarding guide | Yes | Opens the first-run setup again |
+| Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |
+| First-run setup (onboarding): theme, storage location, getting started guide, restore a backup | Yes, changed | Shown over the app until finished, as on Android. Android's permissions step has nothing to ask on a desktop. Someone who used Zoukan before it existed, with a library already, does not see it |
+| What's new: "Updated to" dialog after an update, release notes screen, About > What's new | Yes | The notes of the running version's GitHub release (desktop-v tag), in Markdown |
 | Advanced: data saver, source blacklist, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
 
 ## Browse

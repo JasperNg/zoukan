@@ -73,7 +73,7 @@ fun LazyListScope.appearanceSettings() {
 }
 
 @Composable
-private fun ThemeSection() {
+internal fun ThemeSection() {
     val ui = remember { Injekt.get<UiPreferences>() }
     val mode by ui.themeMode().changes().collectAsState(ui.themeMode().get())
     val theme by ui.appTheme().changes().collectAsState(ui.appTheme().get())

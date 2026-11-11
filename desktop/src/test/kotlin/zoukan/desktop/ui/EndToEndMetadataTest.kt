@@ -5,7 +5,6 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
@@ -36,6 +35,7 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.settings.SettingsCategory
 import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
@@ -127,9 +127,9 @@ class EndToEndMetadataTest {
             }
 
             step("Data saver settings") {
-                runOnUiThread { HomeScreen.selectTab(HomeTab.Settings) }
+                runOnUiThread { navigator?.let { HomeScreen.openSettings(it) } }
                 waitFor(hasText("Settings"))
-                onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Excluded sources"))
+                settingsPage(SettingsCategory.Data).performScrollToNode(hasText("Excluded sources"))
                 shot("m3-data-saver")
                 onAllNodesWithText("Compress images before downloading or loading in reader").onFirst().performClick()
                 waitFor(hasText("wsrv.nl"))
