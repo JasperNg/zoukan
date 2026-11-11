@@ -41,6 +41,13 @@ fun LazyListScope.aboutSettings() {
         )
     }
     item(key = "about-update") { UpdateRow() }
+    // Android's "What's new": this version's release notes
+    item(key = "about-whats-new") {
+        val navigator = cafe.adriel.voyager.navigator.LocalNavigator.current
+        SettingRow("What's new", "Release notes for Zoukan ${AppVersion.name}", onClick = {
+            navigator?.push(zoukan.desktop.ui.whatsnew.WhatsNewScreen())
+        })
+    }
     item(key = "about-auto-update") {
         SwitchPreference("Check for updates automatically", Updates.autoCheck(), "Once a day while Zoukan runs")
     }
