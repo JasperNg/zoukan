@@ -2,7 +2,6 @@ package zoukan.desktop.ui.manga
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
@@ -19,8 +18,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import tachiyomi.domain.category.interactor.GetCategories
-import tachiyomi.domain.category.interactor.SetMangaCategories
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.GetMergedChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
@@ -29,8 +27,6 @@ import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaUpdate
-import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import uy.kohesive.injekt.Injekt
@@ -44,27 +40,24 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
-import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
 class MangaScreenModel(
     private val mangaId: Long,
     private val getMangaWithChapters: GetMangaWithChapters = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
-    private val mangaRepository: MangaRepository = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
-    private val getCategories: GetCategories = Injekt.get(),
-    private val setMangaCategories: SetMangaCategories = Injekt.get(),
     private val refreshManga: RefreshManga = Injekt.get(),
     private val downloadManager: DownloadManager = Injekt.get(),
     private val getTracks: GetTracks = Injekt.get(),
     private val trackPreferences: TrackPreferences = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
-    private val addTracks: AddTracks = Injekt.get(),
     private val trackChapters: TrackChapters = Injekt.get(),
     private val getMergedChaptersByMangaId: GetMergedChaptersByMangaId = Injekt.get(),
     // ZOUKAN -->
     private val getFlatMetadataById: tachiyomi.domain.manga.interactor.GetFlatMetadataById = Injekt.get(),
+    private val addToLibraryFlow: zoukan.desktop.library.AddToLibrary = Injekt.get(),
+    private val chapterSettings: ChapterSettings = ChapterSettings(),
     // ZOUKAN <--
 ) : StateScreenModel<MangaScreenModel.State>(State()) {
 
@@ -77,7 +70,6 @@ class MangaScreenModel(
         /** Set while the user picks categories for a new library entry */
         val categoryChoice: List<Category>? = null,
         val selected: Set<Long> = emptySet(),
-        val descending: Boolean = true,
         /** Chapters downloaded to disk */
         val downloaded: Set<Long> = emptySet(),
         /** Chapters in the download queue */
@@ -90,17 +82,44 @@ class MangaScreenModel(
         val askTrackChapter: Double? = null,
         /** The source's metadata of the entry (E-Hentai, MangaDex and the other metadata sources) */
         val meta: exh.metadata.metadata.RaisedSearchMetadata? = null,
+        /** Library entries with the same title, while the duplicate check asks */
+        val duplicates: List<tachiyomi.domain.manga.model.MangaWithChapterCount>? = null,
+        /** Scanlators whose chapters the entry hides, as on Android */
+        val excludedScanlators: Set<String> = emptySet(),
+        /** More > Downloaded only, which shows only downloaded chapters, as on Android */
+        val downloadedOnly: Boolean = false,
         // ZOUKAN <--
     ) {
         val isLocal: Boolean get() = manga?.source == LocalSource.ID
 
-        /** Newest first by default, the order sources list chapters in */
-        val sortedChapters: List<Chapter>
-            get() = if (descending) chapters.sortedBy { it.sourceOrder } else chapters.sortedByDescending { it.sourceOrder }
+        // ZOUKAN -->
+        /** The scanlators of the entry's chapters, which the scanlator filter offers */
+        val availableScanlators: Set<String>
+            get() = chapters.mapNotNullTo(sortedSetOf()) { it.scanlator?.takeIf(String::isNotBlank) }
 
-        /** The chapter "Continue" or "Start" opens: the oldest unread one */
+        val scanlatorFilterActive: Boolean
+            get() = excludedScanlators.any { it in availableScanlators }
+
+        /** Whether a filter of the chapter settings hides chapters, which tints its button */
+        val filterActive: Boolean
+            get() = scanlatorFilterActive || manga?.let { ChapterSettings.filtered(it, downloadedOnly) } == true
+
+        /** The chapters the list shows: filtered and sorted by the entry's chapter settings */
+        val sortedChapters: List<Chapter> by lazy {
+            manga?.let { ChapterSettings.apply(it, chapters, excludedScanlators, downloaded, isLocal, downloadedOnly) } ?: chapters
+        }
+
+        /**
+         * The chapter "Continue" or "Start" opens: the first unread one in reading order among
+         * the chapters the filters show, as on Android
+         */
         val nextChapter: Chapter?
-            get() = chapters.sortedByDescending { it.sourceOrder }.firstOrNull { !it.read }
+            get() {
+                val manga = manga ?: return null
+                val shown = sortedChapters
+                return if (manga.sortDescending()) shown.findLast { !it.read } else shown.find { !it.read }
+            }
+        // ZOUKAN <--
 
         val hasStarted: Boolean
             get() = chapters.any { it.read || it.lastPageRead > 0 }
@@ -127,6 +146,10 @@ class MangaScreenModel(
                 updateDownloaded()
                 if (firstLoad) {
                     firstLoad = false
+                    // ZOUKAN -->
+                    // An entry outside the library takes the default chapter settings, as on Android
+                    if (!manga.favorite) chapterSettings.reset(manga)
+                    // ZOUKAN <--
                     if (!manga.initialized || chapters.isEmpty()) {
                         refresh(fetchDetails = !manga.initialized || manga.thumbnailUrl.isNullOrBlank())
                     }
@@ -140,6 +163,16 @@ class MangaScreenModel(
             downloadManager.changes.collect { updateDownloaded() }
         }
         // ZOUKAN -->
+        screenModelScope.launch {
+            chapterSettings.excludedScanlators(mangaId).collect { excluded ->
+                mutableState.update { it.copy(excludedScanlators = excluded) }
+            }
+        }
+        screenModelScope.launch {
+            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes().collect { on ->
+                mutableState.update { it.copy(downloadedOnly = on) }
+            }
+        }
         // The metadata block and namespace tags, as Android's MangaScreenModel raises them
         screenModelScope.launch {
             getFlatMetadataById.subscribe(mangaId).collect { flat ->
@@ -202,6 +235,13 @@ class MangaScreenModel(
         download(if (count == null) unread else unread.take(count))
     }
 
+    // ZOUKAN -->
+    /** Downloads the bookmarked chapters not downloaded yet, as Android's download menu. */
+    fun downloadBookmarked() {
+        download(state.value.chapters.sortedByDescending { it.sourceOrder }.filter { it.bookmark && it.id !in state.value.downloaded })
+    }
+    // ZOUKAN <--
+
     fun deleteDownloads(chapters: List<Chapter>) {
         val manga = state.value.manga ?: return
         screenModelScope.launch {
@@ -253,39 +293,50 @@ class MangaScreenModel(
         val manga = state.value.manga ?: return
         screenModelScope.launch {
             if (manga.favorite) {
-                mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
+                // ZOUKAN -->
+                addToLibraryFlow.remove(manga)
+                // ZOUKAN <--
                 Toasts.show("Removed from library")
             } else {
-                val categories = getCategories.await().filterNot { it.isSystemCategory }
                 // ZOUKAN -->
-                // Settings > Library > Default category, as on Android: a category, the default
-                // one (0), or ask (-1)
-                val defaultId = Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>().defaultCategory().get().toLong()
-                val defaultCategory = categories.find { it.id == defaultId }
-                when {
-                    defaultCategory != null -> addToLibrary(listOf(defaultCategory.id))
-                    defaultId == 0L || categories.isEmpty() -> addToLibrary(emptyList())
-                    else -> mutableState.update { it.copy(categoryChoice = categories) }
+                // Android's duplicate check, then the default category or a choice
+                val duplicates = addToLibraryFlow.duplicates(manga)
+                if (duplicates.isNotEmpty()) {
+                    mutableState.update { it.copy(duplicates = duplicates) }
+                } else {
+                    addAnyway()
                 }
                 // ZOUKAN <--
             }
         }
     }
 
+    // ZOUKAN -->
+    /** Adds the entry after the duplicate check: to the default category, or asks for categories. */
+    fun addAnyway() {
+        mutableState.update { it.copy(duplicates = null) }
+        screenModelScope.launch {
+            val plan = addToLibraryFlow.plan()
+            if (plan.ask != null) {
+                mutableState.update { it.copy(categoryChoice = plan.ask) }
+            } else {
+                addToLibrary(plan.categoryIds)
+            }
+        }
+    }
+
+    fun dismissDuplicates() = mutableState.update { it.copy(duplicates = null) }
+    // ZOUKAN <--
+
     fun addToLibrary(categoryIds: List<Long>) {
         val manga = state.value.manga ?: return
         mutableState.update { it.copy(categoryChoice = null) }
         screenModelScope.launch {
-            mangaRepository.update(MangaUpdate(id = manga.id, favorite = true, dateAdded = Instant.now().toEpochMilli()))
-            setMangaCategories.await(manga.id, categoryIds)
-            Toasts.show("Added to library")
+            // ZOUKAN -->
             // As on Android: bind the enhanced trackers, then offer tracking
-            state.value.source?.let { source ->
-                launch(Dispatchers.IO) {
-                    runCatching { addTracks.bindEnhancedTrackers(manga, source) }
-                        .onFailure { Toasts.error("Tracking failed", it) }
-                }
-            }
+            addToLibraryFlow.add(manga, categoryIds)
+            // ZOUKAN <--
+            Toasts.show("Added to library")
             if (trackPreferences.trackOnAddingToLibrary().get() && trackerManager.loggedInTrackers().isNotEmpty()) {
                 setTrackingVisible(true)
             }
@@ -296,13 +347,42 @@ class MangaScreenModel(
 
     fun dismissCategoryChoice() = mutableState.update { it.copy(categoryChoice = null) }
 
-    fun toggleSort() = mutableState.update { it.copy(descending = !it.descending) }
+    // ZOUKAN -->
+    /** The chapter settings sheet's filters and sort, saved on the entry as on Android */
+    fun setUnreadFilter(filter: TriState) = updateFlags { chapterSettings.setUnreadFilter(it, filter) }
+
+    fun setDownloadedFilter(filter: TriState) = updateFlags { chapterSettings.setDownloadedFilter(it, filter) }
+
+    fun setBookmarkedFilter(filter: TriState) = updateFlags { chapterSettings.setBookmarkedFilter(it, filter) }
+
+    /** Sorts by [sorting], or flips the order when the chapters are already sorted by it */
+    fun setSorting(sorting: Long) = updateFlags { chapterSettings.setSortingOrFlip(it, sorting) }
+
+    fun resetChapterSettings() = updateFlags { chapterSettings.reset(it) }
+
+    fun setChapterSettingsAsDefault(toLibrary: Boolean) = updateFlags {
+        chapterSettings.setAsDefault(it, toLibrary)
+        Toasts.show("Default chapter settings updated")
+    }
+
+    fun setExcludedScanlators(excluded: Set<String>) {
+        screenModelScope.launch { chapterSettings.setExcludedScanlators(mangaId, excluded) }
+    }
+
+    private fun updateFlags(update: suspend (Manga) -> Unit) {
+        val manga = state.value.manga ?: return
+        screenModelScope.launch { update(manga) }
+    }
+    // ZOUKAN <--
 
     fun toggleSelection(chapter: Chapter) = mutableState.update {
         it.copy(selected = if (chapter.id in it.selected) it.selected - chapter.id else it.selected + chapter.id)
     }
 
-    fun selectAll() = mutableState.update { it.copy(selected = it.chapters.mapTo(HashSet()) { c -> c.id }) }
+    // ZOUKAN -->
+    // The chapters the filters show, as on Android
+    fun selectAll() = mutableState.update { it.copy(selected = it.sortedChapters.mapTo(HashSet()) { c -> c.id }) }
+    // ZOUKAN <--
 
     fun clearSelection() = mutableState.update { it.copy(selected = emptySet()) }
 
