@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,18 +35,28 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.chapter.interactor.UpdateChapter
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.manga.interactor.GetFavorites
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
+import tachiyomi.domain.updates.service.UpdatesPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.ui.browse.sectionHeader
 import zoukan.desktop.ui.common.Cover
@@ -69,35 +78,63 @@ class UpdatesScreenModel(
     getUpdates: GetUpdates = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
     private val getFavorites: GetFavorites = Injekt.get(),
+    val preferences: UpdatesPreferences = Injekt.get(),
+    private val downloadManager: DownloadManager = Injekt.get(),
 ) : StateScreenModel<UpdatesScreenModel.State>(State()) {
 
     data class State(
         val loading: Boolean = true,
         val items: List<UpdatesWithRelations> = emptyList(),
-        val unreadOnly: Boolean = false,
+        val filters: UpdatesFilters = UpdatesFilters(),
     )
-
-    private val unreadOnly = MutableStateFlow(false)
 
     init {
         screenModelScope.launch {
+            // As Android's UpdatesScreenModel: unread, started, bookmarked and excluded scanlators
+            // filter in the query, downloaded on the result
+            val filters = updatesFilters(preferences).distinctUntilChanged()
+
             @OptIn(ExperimentalCoroutinesApi::class)
-            unreadOnly.flatMapLatest { unread ->
-                getUpdates.subscribe(
-                    Instant.now().minus(90, ChronoUnit.DAYS),
-                    unread = if (unread) true else null,
-                    started = null,
-                    bookmarked = null,
-                    hideExcludedScanlators = false,
-                )
-            }.collect { items -> mutableState.update { it.copy(loading = false, items = items) } }
+            val updates = filters
+                .map { it.copy(downloaded = TriState.DISABLED) }
+                .distinctUntilChanged()
+                .flatMapLatest { f ->
+                    getUpdates.subscribe(
+                        Instant.now().minus(90, ChronoUnit.DAYS),
+                        unread = f.unread.toBooleanOrNull(),
+                        started = f.started.toBooleanOrNull(),
+                        bookmarked = f.bookmarked.toBooleanOrNull(),
+                        hideExcludedScanlators = f.hideExcludedScanlators,
+                    )
+                }
+            combine(updates, filters, downloadManager.changes) { items, f, _ -> items to f }
+                .collectLatest { (items, f) ->
+                    val shown = if (f.downloaded == TriState.DISABLED) {
+                        items
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            items.filter { item ->
+                                val downloaded = isDownloaded(item)
+                                if (f.downloaded == TriState.ENABLED_IS) downloaded else !downloaded
+                            }
+                        }
+                    }
+                    mutableState.update { it.copy(loading = false, items = shown, filters = f) }
+                }
         }
     }
 
-    fun toggleUnreadOnly() {
-        unreadOnly.value = !unreadOnly.value
-        mutableState.update { it.copy(unreadOnly = unreadOnly.value) }
-    }
+    private fun isDownloaded(item: UpdatesWithRelations): Boolean = runCatching {
+        val manga = Manga.create().copy(id = item.mangaId, ogTitle = item.ogMangaTitle, source = item.sourceId)
+        val chapter = Chapter.create().copy(
+            id = item.chapterId,
+            mangaId = item.mangaId,
+            name = item.chapterName,
+            scanlator = item.scanlator,
+            url = item.chapterUrl,
+        )
+        downloadManager.isDownloaded(manga, chapter)
+    }.getOrDefault(false)
 
     fun setRead(item: UpdatesWithRelations, read: Boolean) {
         screenModelScope.launch {
@@ -105,7 +142,7 @@ class UpdatesScreenModel(
             // ZOUKAN -->
             if (read && !item.read) {
                 Injekt.get<tachiyomi.domain.chapter.interactor.GetChapter>().await(item.chapterId)?.let {
-                    Injekt.get<zoukan.desktop.download.DownloadManager>().afterMarkedRead(listOf(it))
+                    downloadManager.afterMarkedRead(listOf(it))
                 }
             }
             // ZOUKAN <--
@@ -124,7 +161,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
     val navigator = LocalNavigator.currentOrThrow
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Updates", subtitle = "New chapters in your library from the last 90 days", showBack = false) {
-            FilterChip(selected = state.unreadOnly, onClick = model::toggleUnreadOnly, label = { Text("Unread only") })
+            UpdatesFilterButton(model, state.filters)
             // Android's Updates toolbar opens Upcoming from its calendar button
             TooltipIconButton(Icons.Outlined.CalendarMonth, "View Upcoming Updates", onClick = { navigator.push(UpcomingScreen) })
             DownloadsButton()
@@ -133,6 +170,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
         LibraryUpdateProgress()
         when {
             state.loading -> LoadingScreen()
+            state.items.isEmpty() && state.filters.active -> EmptyScreen("No updates match the filters")
             state.items.isEmpty() -> EmptyScreen("No recent updates. Press refresh to check your library for new chapters.")
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 state.items.groupBy { zoukan.desktop.ui.common.Dates.relative(it.dateFetch) }.forEach { (date, items) ->

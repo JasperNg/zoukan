@@ -88,6 +88,9 @@ class LibraryScreenModel(
         val continueReading: Boolean = false,
         val categoryTabs: Boolean = true,
         val itemCounts: Boolean = false,
+        /** The "Tag sorting" tags (SY), in their order */
+        val sortTags: List<String> = emptyList(),
+        val showEmptyCategoriesSearch: Boolean = false,
     ) {
         val hasFilter: Boolean
             get() = listOf(downloaded, unread, started, bookmarked, completed).any { it != TriState.DISABLED } ||
@@ -118,11 +121,18 @@ class LibraryScreenModel(
         val selection: Set<Long> = emptySet(),
         val sources: Map<Long, Pair<String, String>> = emptyMap(),
     ) {
-        /** Category tabs: the user's categories, plus Default when entries have no category. */
+        /**
+         * Category tabs: the user's categories, plus Default when entries have no category. While
+         * searching or filtering, categories with no match are left out unless "Show empty
+         * categories during search/filtering" is on, as Android's (KMK).
+         */
         val tabs: List<Category>
             get() {
                 val hasUncategorized = items.any { it.categories.isEmpty() || Category.UNCATEGORIZED_ID in it.categories }
-                return categories.filter { !it.hidden && (!it.isSystemCategory || hasUncategorized) }
+                val shown = categories.filter { !it.hidden && (!it.isSystemCategory || hasUncategorized) }
+                val searching = query.isNotBlank() || settings.hasFilter
+                if (!searching || settings.showEmptyCategoriesSearch) return shown
+                return shown.filter { countIn(it.id) > 0 }
             }
 
         val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }
@@ -189,6 +199,11 @@ class LibraryScreenModel(
                 LibrarySort.Type.ChapterFetchDate -> compareBy { it.chapterFetchedAt }
                 LibrarySort.Type.DateAdded -> compareBy { it.manga.dateAdded }
                 LibrarySort.Type.TrackerMean -> compareBy { meanScore(it.id) }
+                // SY's tag sorting: by the first sort tag the entry has; entries without one first
+                LibrarySort.Type.TagList -> compareBy { item ->
+                    val genres = item.manga.genre.orEmpty()
+                    settings.sortTags.indexOfFirst { it in genres }
+                }
                 else -> byTitle
             }
             return list.sortedWith((if (sort.isAscending) comparator else comparator.reversed()).thenComparing(byTitle))
@@ -264,6 +279,7 @@ class LibraryScreenModel(
             p.unreadBadge().changes(), p.downloadBadge().changes(), p.localBadge().changes(),
             p.languageBadge().changes(), p.sourceBadge().changes(), p.showContinueReadingButton().changes(),
             p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
+            p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
         ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
         return combine(flows) { v ->
             Settings(
@@ -285,7 +301,9 @@ class LibraryScreenModel(
                 continueReading = v[15] as Boolean,
                 categoryTabs = v[16] as Boolean,
                 itemCounts = v[17] as Boolean,
-                tracking = trackerIds.mapIndexed { i, id -> id to v[18 + i] as TriState }.toMap(),
+                sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[18] as Set<*>).filterIsInstance<String>().toSet()),
+                showEmptyCategoriesSearch = v[19] as Boolean,
+                tracking = trackerIds.mapIndexed { i, id -> id to v[20 + i] as TriState }.toMap(),
             )
         }
     }

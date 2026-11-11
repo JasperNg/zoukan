@@ -149,10 +149,15 @@ class DesktopDomainModule : InjektModule {
         addSingletonFactory<CustomMangaRepository> { CustomMangaRepositoryImpl(get<Application>()) }
         addFactory { GetCustomMangaInfo(get()) }
         addFactory { SetCustomMangaInfo(get()) }
+        addFactory { eu.kanade.domain.manga.interactor.GetSortTag(get()) }
+        addFactory { eu.kanade.domain.manga.interactor.CreateSortTag(get(), get()) }
+        addFactory { eu.kanade.domain.manga.interactor.DeleteSortTag(get(), get()) }
+        addFactory { eu.kanade.domain.manga.interactor.ReorderSortTag(get(), get()) }
 
         // UI (Phase 4)
         addSingletonFactory { DesktopPreferences(get()) }
         addSingletonFactory { eu.kanade.domain.ui.UiPreferences(get()) }
+        addSingletonFactory { tachiyomi.domain.updates.service.UpdatesPreferences(get()) }
         addFactory { tachiyomi.domain.category.interactor.ResetCategoryFlags(get(), get()) }
         addFactory { GetLibraryManga(get()) }
         addFactory { GetManga(get()) }
