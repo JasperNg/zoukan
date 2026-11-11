@@ -85,6 +85,18 @@ class DesktopPreferences(private val store: PreferenceStore) {
     fun readerFitMode() = store.getInt("zoukan_reader_fit_mode", FitModes.FIT_SCREEN)
 
     // ZOUKAN -->
+    /** The reader menu's page slider stays horizontal, as Android's "Force horizontal seekbar" */
+    fun forceHorizontalSeekbar() = store.getBoolean("pref_force_horz_seekbar", false)
+
+    /** A vertical page slider in vertical modes even when the window is wider than tall */
+    fun landscapeVerticalSeekbar() = store.getBoolean("pref_show_vert_seekbar_landscape", false)
+
+    /** The vertical page slider on the left */
+    fun leftVerticalSeekbar() = store.getBoolean("pref_left_handed_vertical_seekbar", false)
+
+    /** The buttons of the reader menu's bottom row, as Android's reader_bottom_buttons */
+    fun readerBottomButtons() = store.getStringSet("reader_bottom_buttons", ReaderBottomButtons.DEFAULTS)
+
     // Settings > Reader: Android's ReaderPreferences keys and defaults
 
     /** Tap zones of the paged modes: 0 default, 1 L shaped, 2 Kindle-ish, 3 Edge, 4 Right and left, 5 Disabled */
@@ -165,6 +177,37 @@ class DesktopPreferences(private val store: PreferenceStore) {
     fun flashColor() = store.getString("pref_reader_flash_mode", "BLACK")
     // ZOUKAN <--
 }
+
+// ZOUKAN -->
+/** The reader menu's bottom row buttons, by Android's ReaderBottomButton values */
+object ReaderBottomButtons {
+    const val VIEW_CHAPTERS = "vc"
+    const val WEB_VIEW = "wb"
+    const val BROWSER = "br"
+    const val READING_MODE = "rm"
+    const val CROP_PAGER = "cbp"
+    const val CROP_CONTINUOUS_VERTICAL = "cbc"
+    const val CROP_WEBTOON = "cbw"
+    const val PAGE_LAYOUT = "pl"
+
+    /** Desktop only, in place of Android's rotation button */
+    const val SCALE_TYPE = "zst"
+
+    val DEFAULTS = setOf(VIEW_CHAPTERS, WEB_VIEW, CROP_PAGER, CROP_CONTINUOUS_VERTICAL, PAGE_LAYOUT, READING_MODE, SCALE_TYPE)
+
+    val all = listOf(
+        VIEW_CHAPTERS to "Chapters",
+        WEB_VIEW to "Open in WebView",
+        BROWSER to "Open in browser",
+        READING_MODE to "Reading mode",
+        SCALE_TYPE to "Scale type",
+        CROP_PAGER to "Crop borders (paged)",
+        CROP_CONTINUOUS_VERTICAL to "Crop borders (continuous vertical)",
+        CROP_WEBTOON to "Crop borders (webtoon)",
+        PAGE_LAYOUT to "Page layout",
+    )
+}
+// ZOUKAN <--
 
 object ReadingModes {
     const val DEFAULT = 0

@@ -731,6 +731,61 @@ class ReaderScreenModel(
         super.onDispose()
     }
 
+    // ZOUKAN -->
+    /** Bookmarks [chapter] (the open one by default) or removes its bookmark, as the reader's top bar */
+    fun toggleBookmark(chapter: Chapter? = state.value.chapter) {
+        chapter ?: return
+        val bookmark = !(state.value.chapters.find { it.id == chapter.id } ?: chapter).bookmark
+        fun Chapter.updated() = if (id == chapter.id) copy(bookmark = bookmark) else this
+        mutableState.update { s ->
+            s.copy(
+                chapter = s.chapter?.updated(),
+                chapters = s.chapters.map { it.updated() },
+                navigable = s.navigable.map { it.updated() },
+            )
+        }
+        zoukan.desktop.ui.AppScope.launch {
+            updateChapter.await(ChapterUpdate(id = chapter.id, bookmark = bookmark))
+        }
+    }
+
+    /** Opens [chapter] from the chapter list, where it was left off, as Android's reader chapter list */
+    fun openChapter(chapter: Chapter) {
+        if (chapter.id == state.value.chapter?.id) return
+        screenModelScope.launch {
+            val fresh = runCatching { Injekt.get<tachiyomi.domain.chapter.interactor.GetChapter>().await(chapter.id) }
+                .getOrNull() ?: chapter
+            loadChapter(fresh, fromStart = false)
+        }
+    }
+
+    private fun chapterUrl(): String? {
+        val chapter = state.value.chapter ?: return null
+        val source = source as? HttpSource ?: return null
+        return runCatching { source.getChapterUrl(chapter.toSChapter()) }.getOrNull()
+    }
+
+    /** Opens the chapter's page in the built-in browser, which shares cookies with the app */
+    fun openChapterInWebView() {
+        val url = chapterUrl() ?: return Toasts.show("This source has no web page")
+        zoukan.desktop.ui.AppScope.launch {
+            val userAgent = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
+            if (!zoukan.desktop.browser.BrowserWindow(url, userAgent).open()) Toasts.show("The built-in browser could not start")
+        }
+    }
+
+    /** Opens the chapter's page in the system browser */
+    fun openChapterInBrowser() {
+        val url = chapterUrl() ?: return Toasts.show("This source has no web page")
+        zoukan.desktop.ui.AppScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }
+                    .onFailure { Toasts.error("Could not open the browser", it) }
+            }
+        }
+    }
+    // ZOUKAN <--
+
     companion object {
         private const val KEEP_BEHIND = 4
         private const val KEEP_AHEAD = 10

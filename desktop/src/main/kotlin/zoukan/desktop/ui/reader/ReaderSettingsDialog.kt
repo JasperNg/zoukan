@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RadioButton
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
+import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
 import kotlin.math.roundToInt
 
@@ -186,6 +188,20 @@ private fun GeneralPage(prefs: DesktopPreferences) {
     SwitchRow("Save pages into separate folders", prefs.folderPerManga(), "Creates folders according to entries' title")
     // ZOUKAN <--
     // ZOUKAN -->
+    Heading("Menu")
+    SwitchRow("Force horizontal page slider", prefs.forceHorizontalSeekbar(), "Vertical modes keep the slider at the bottom")
+    SwitchRow("Vertical page slider in a wide window", prefs.landscapeVerticalSeekbar(), "In vertical modes, also when the window is wider than tall")
+    SwitchRow("Left-handed vertical page slider", prefs.leftVerticalSeekbar())
+    Text("Bottom bar buttons", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+    val buttons by prefs.readerBottomButtons().changes().collectAsState(prefs.readerBottomButtons().get())
+    ReaderBottomButtons.all.forEach { (value, label) ->
+        val on = value in buttons
+        val toggle = { prefs.readerBottomButtons().set(if (on) buttons - value else buttons + value) }
+        Row(Modifier.fillMaxWidth().clickable(onClick = toggle), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(on, onCheckedChange = { toggle() })
+            Text(label)
+        }
+    }
     SwitchRow("Show reading mode", prefs.showReadingMode(), "Briefly shows the current mode when the reader opens")
     SwitchRow("Keep screen on", prefs.keepScreenOn())
     SwitchRow("Show actions on long tap", prefs.readWithLongTap())
