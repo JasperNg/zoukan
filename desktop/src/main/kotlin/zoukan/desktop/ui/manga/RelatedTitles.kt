@@ -39,12 +39,12 @@ import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import mihon.domain.manga.model.toDomainManga
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.MangaGridItem

@@ -51,8 +51,6 @@ import coil3.fetch.Fetcher
 import coil3.fetch.SourceFetchResult
 import coil3.key.Keyer
 import coil3.request.Options
-import zoukan.desktop.domain.toSChapter
-import zoukan.desktop.domain.toSManga
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.source.PagePreviewInfo
 import eu.kanade.tachiyomi.source.PagePreviewSource
@@ -69,6 +67,8 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.domain.toSChapter
+import zoukan.desktop.domain.toSManga
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.LoadingScreen
