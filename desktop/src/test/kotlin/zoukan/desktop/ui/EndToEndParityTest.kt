@@ -9,8 +9,8 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -64,6 +64,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.reader.ReaderScreen
+import zoukan.desktop.ui.settings.SettingsCategory
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -379,7 +380,8 @@ class EndToEndParityTest {
                 shot("p17-settings-custom-color")
                 onAllNodesWithText("Cancel").onFirst().performClick()
 
-                val list = onAllNodes(hasScrollAction()).onFirst()
+                // Two-pane Settings: the page list on the left, the open page in "settings-page"
+                var list = settingsPage(SettingsCategory.Library)
                 list.performScrollToNode(hasText("Default category"))
                 onAllNodesWithText("Default category").onFirst().performClick()
                 waitFor(hasText("Always ask"))
@@ -392,6 +394,7 @@ class EndToEndParityTest {
                 shot("p19-settings-smart-update")
                 onAllNodesWithText("Cancel").onFirst().performClick()
 
+                list = settingsPage(SettingsCategory.Downloads)
                 list.performScrollToNode(hasText("After reading automatically delete"))
                 shot("p20-settings-downloads")
                 list.performScrollToNode(hasText("Excluded categories"))
@@ -408,7 +411,7 @@ class EndToEndParityTest {
                 ui.themeMode().set(ThemeMode.SYSTEM)
 
                 // Edit categories opens the same screen as Library > More, as on Android
-                onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Edit categories"))
+                settingsPage(SettingsCategory.Library).performScrollToNode(hasText("Edit categories"))
                 // The title, not the row's center: a toast can cover the middle of the bottom row
                 onAllNodesWithText("Edit categories", useUnmergedTree = true).onFirst().performClick()
                 waitFor(hasTestTag("category-add"))
@@ -418,7 +421,7 @@ class EndToEndParityTest {
 
             step("Settings: browse, data and storage, and advanced") {
                 val sources = Injekt.get<eu.kanade.domain.source.service.SourcePreferences>()
-                val list = onAllNodes(hasScrollAction()).onFirst()
+                var list = settingsPage(SettingsCategory.Browse)
                 list.performScrollToNode(hasText("Replace latest button"))
                 shot("p22-settings-browse")
                 // A source category with the local source in it, as Android stores them
@@ -429,6 +432,7 @@ class EndToEndParityTest {
                 shot("p23-source-categories")
                 runOnUiThread { navigator?.pop() }
 
+                list = settingsPage(SettingsCategory.Data)
                 list.performScrollToNode(hasText("Clear chapter cache"))
                 waitFor(hasText("Available: ", substring = true))
                 shot("p24-settings-data")
@@ -438,6 +442,7 @@ class EndToEndParityTest {
                 shot("p25-settings-export")
                 onAllNodesWithText("Cancel").onFirst().performClick()
 
+                list = settingsPage(SettingsCategory.Advanced)
                 list.performScrollToNode(hasText("DNS over HTTPS (DoH)"))
                 onAllNodesWithText("DNS over HTTPS (DoH)").onFirst().performClick()
                 waitFor(hasText("Cloudflare"))
@@ -519,6 +524,14 @@ class EndToEndParityTest {
                 writer.write("%03d.png".format(i), ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray())
             }
         }
+    }
+
+    /** Opens a page of the two-pane Settings from the list on the left; returns the page's list. */
+    private fun ComposeUiTest.settingsPage(category: SettingsCategory): SemanticsNodeInteraction {
+        onNodeWithTag("settings-list").performScrollToNode(hasText(category.subtitle))
+        onAllNodesWithText(category.subtitle).onFirst().performClick()
+        waitForIdle()
+        return onNodeWithTag("settings-page")
     }
 
     private fun step(name: String, block: () -> Unit) {

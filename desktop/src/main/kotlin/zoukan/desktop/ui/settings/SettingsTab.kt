@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -149,7 +150,7 @@ fun SettingsTab() {
                 ScreenHeader(selected.title, showBack = false)
                 // A new list for each page, so each page opens at its top
                 key(selected) {
-                    LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp)) {
+                    LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp).testTag("settings-page")) {
                         when (selected) {
                             SettingsCategory.Appearance -> appearanceSettings()
                             SettingsCategory.Library -> {
@@ -247,7 +248,7 @@ private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: Settin
     Column(Modifier.fillMaxSize()) {
         // A back button when More opened Settings as its own screen
         ScreenHeader("Settings", color = Color.Transparent)
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().testTag("settings-list")) {
             items(pages, key = { it.name }) { page ->
                 val isSelected = page == selected
                 val contentColor = if (isSelected) MaterialTheme.colorScheme.onSurfaceVariant else LocalContentColor.current
