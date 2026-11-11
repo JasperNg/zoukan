@@ -106,6 +106,9 @@ data class SourceScreen(
         val source = model.source
         var searchText by rememberSaveable { mutableStateOf(query.orEmpty()) }
         var showFilters by rememberSaveable { mutableStateOf(false) }
+        // ZOUKAN -->
+        val bulk = remember { BulkFavorite() }
+        // ZOUKAN <--
 
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(source?.name ?: "Source not installed", subtitle = source?.let { languageName(it.lang) }) {
@@ -119,6 +122,9 @@ data class SourceScreen(
                 if (source != null && source.getFilterList().isNotEmpty()) {
                     TooltipIconButton(Icons.Default.FilterList, "Filters", onClick = { showFilters = !showFilters })
                 }
+                // ZOUKAN -->
+                if (source != null) BulkSelectButton(bulk)
+                // ZOUKAN <--
                 if (source != null) {
                     TooltipIconButton(Icons.Default.DynamicFeed, "This source's feed", onClick = { navigator.push(SourceFeedScreen(source.id)) })
                 }
@@ -172,6 +178,9 @@ data class SourceScreen(
                 }
                 // ZOUKAN <--
             }
+            // ZOUKAN -->
+            BulkFavoriteBar(bulk, state.items)
+            // ZOUKAN <--
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     if (source == null) {
@@ -202,9 +211,11 @@ data class SourceScreen(
                                     cover = Cover.of(manga),
                                     badge = if (manga.id in state.favorites) "In library" else null,
                                     dimmed = manga.id in state.favorites,
-                                    onClick = { navigator.push(MangaScreen(manga.id)) },
                                     // ZOUKAN -->
-                                    onSecondaryClick = { libraryToggle.toggle(manga) },
+                                    onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
+                                    // While selecting, right-click selects; otherwise it adds or removes (Android's long press)
+                                    onSecondaryClick = { if (bulk.active) bulk.toggle(manga) else libraryToggle.toggle(manga) },
+                                    modifier = Modifier.bulkSelected(bulk.isSelected(manga)),
                                     // ZOUKAN <--
                                 )
                             }

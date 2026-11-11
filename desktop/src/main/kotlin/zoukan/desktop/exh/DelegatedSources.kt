@@ -34,6 +34,8 @@ class DelegatedSources(
     // ZOUKAN -->
     /** Advanced > Developer tools > Enable delegated sources, read when the sources load (restart to apply) */
     private val delegateSourcePreferences: exh.pref.DelegateSourcePreferences? = null,
+    /** Advanced > Developer tools > Enable source blacklist, read when the sources load (restart to apply) */
+    private val sourcePreferences: eu.kanade.domain.source.service.SourcePreferences? = null,
     // ZOUKAN <--
 ) {
 
@@ -52,7 +54,11 @@ class DelegatedSources(
 
     /** Swaps in the enhanced source, or drops a source that a built-in one replaces. */
     fun transform(source: Source): Source? {
-        if (exhPreferences.isHentaiEnabled().get() && source.id in EHENTAI_EXT_SOURCES.keys) return null
+        // ZOUKAN -->
+        // As AndroidSourceManager with the source blacklist on: the built-in E-Hentai replaces the extension's sources
+        val blacklist = sourcePreferences?.enableSourceBlacklist()?.get() != false
+        if (blacklist && exhPreferences.isHentaiEnabled().get() && source.id in EHENTAI_EXT_SOURCES.keys) return null
+        // ZOUKAN <--
         val delegate = delegates.firstOrNull { it.className == source::class.qualifiedName }
         if (source !is HttpSource || delegate == null) return source
         // ZOUKAN -->

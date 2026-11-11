@@ -72,7 +72,7 @@ class DesktopAppModule(
         addSingletonFactory { CbzPassword(get(), get()) }
         // Read by HttpSource and EnhancedHttpSource. Delegated sources are not wired on desktop yet.
         addSingletonFactory { DelegateSourcePreferences(get()) }
-        addSingletonFactory { zoukan.desktop.exh.DelegatedSources(get(), get(), get()) }
+        addSingletonFactory { zoukan.desktop.exh.DelegatedSources(get(), get(), get(), /* ZOUKAN --> */get()/* ZOUKAN <-- */) }
         addSingletonFactory { zoukan.desktop.security.AppLock(get(), get()) }
         addSingletonFactory { zoukan.desktop.security.Incognito(get(), get(), get()) }
         addSingletonFactory { eu.kanade.domain.sync.SyncPreferences(get()) }
