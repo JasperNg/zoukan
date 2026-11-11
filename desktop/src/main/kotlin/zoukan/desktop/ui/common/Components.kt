@@ -1,7 +1,7 @@
 package zoukan.desktop.ui.common
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -88,6 +89,7 @@ fun MangaGridItem(
             .testTag("manga-item")
             .aspectRatio(2f / 3f)
             .clip(RoundedCornerShape(8.dp))
+            .coverOutline(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .then(if (onSecondaryClick != null) Modifier.onRightClick(onSecondaryClick) else Modifier),
     ) {
@@ -216,11 +218,29 @@ fun ScreenHeader(
 /** An icon button with a tooltip, the desktop way to name an icon. */
 @Composable
 fun TooltipIconButton(icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+    Tooltip(label) {
+        IconButton(onClick = onClick, enabled = enabled) { Icon(icon, contentDescription = label) }
+    }
+}
+
+/** Shows [label] when the mouse rests on [content], for controls that are an icon without words. */
+@Composable
+fun Tooltip(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState(),
-    ) {
-        IconButton(onClick = onClick, enabled = enabled) { Icon(icon, contentDescription = label) }
-    }
+        modifier = modifier,
+        content = content,
+    )
+}
+
+/**
+ * A hairline around a cover, so a cover whose edge has the window's color still has an edge:
+ * black on light themes and white on dark ones, never a theme color, which would tint the picture.
+ */
+@Composable
+fun Modifier.coverOutline(shape: Shape): Modifier {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return border(1.dp, (if (dark) Color.White else Color.Black).copy(alpha = 0.1f), shape)
 }

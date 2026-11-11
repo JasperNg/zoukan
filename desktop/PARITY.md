@@ -94,7 +94,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |
 | First-run setup (onboarding): theme, storage location, getting started guide, restore a backup | Yes, changed | Shown over the app until finished, as on Android. Android's permissions step has nothing to ask on a desktop. Someone who used Zoukan before it existed, with a library already, does not see it |
 | What's new: "Updated to" dialog after an update, release notes screen, About > What's new | Yes | The notes of the running version's GitHub release (desktop-v tag), in Markdown |
-| Advanced: data saver, source blacklist, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
+| Advanced: data saver, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
+| Advanced: source blacklist (SY) | Yes | Advanced > Developer tools. With E-Hentai on, hides the E-Hentai extension and its sources, which the built-in ones replace; read at start, as on Android |
 
 ## Browse
 
@@ -107,6 +108,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Saved searches | Yes | Chips above the listing; save from the filter panel; right-click deletes |
 | Batch add (MangaDex, E-H, ExH, nH, 8Muses addresses, E-H Visited export) | Yes | Browse > Batch add button, instead of the More tab; the Android screen model and GalleryAdder, shared |
 | Feed (global, latest/popular or a saved search) | Yes | Browse > Feed, and a per-source feed from the source's feed button |
+| Feed order (global and per source, KMK) | Yes | The feed's reorder button: drag the saved feeds, or move them with the arrows |
+| Extension details | Yes | Click an installed extension: version, language, age rating, store, uninstall, incognito, clear cookies, and each source with its on/off switch and settings |
+| Browse > Migrate (migrate by source) | Yes | The sources of the library's entries with their counts, sorted by name or count; pick a source's entries and migrate them with the bulk migration |
+| Bulk add to library (KMK) | Yes | The select button in a source, the global search or the feed, then click or right-click results and Add to library; asks about titles already in the library, then uses the default category or asks |
+| Open an entry from its address (deep link) | Yes, changed | Browse > link button, or paste the address into Search all sources: the source that knows it opens the entry or the chapter, else a global search for it. The desktop has no system link handler, so the address is pasted |
+| Global search filters: pinned sources only, has results (KMK) | Yes | Chips above the results. The global search uses the enabled sources, as on Android |
 | E-Hentai and ExHentai built-in sources | Yes | Settings > E-Hentai; sign in through the built-in browser or cookies |
 | MangaDex and other delegated sources, MDList | Yes | MangaDex, NHentai, LANraragi, Pururin and 8Muses extensions run through the Android delegates; MDList signs in with OAuth |
 | E-Hentai site settings (uconfig), favorites sync, gallery update worker | Yes | Settings > E-Hentai; gallery updates run in the background while the app is open |
@@ -143,10 +150,11 @@ between the two. "Exception" rows are the proposed differences; each says why.
 
 | Feature | Notes |
 |---|---|
-| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Escape back; listed in Settings |
+| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Ctrl/Cmd + F search, Ctrl/Cmd + A select all, Escape back; listed in Settings |
+| Desktop conventions | Scrollbars on lists and grids, the window opens where it was closed (minimum 800 x 560), tooltips on icon buttons |
 | Tray icon and notifications | Phase 5 |
 
 ## Not on desktop (by design)
 
-Home-screen widget, Android share sheet and deep links, biometrics, secure screen and Google Drive
+Home-screen widget, Android share sheet and system link handling (paste the address in Browse instead), biometrics, secure screen and Google Drive
 sync. Backups keep their preferences, so nothing is lost moving back.

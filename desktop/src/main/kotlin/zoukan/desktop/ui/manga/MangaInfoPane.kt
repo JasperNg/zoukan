@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Favorite
@@ -82,6 +80,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import java.util.concurrent.ConcurrentHashMap
 import androidx.compose.ui.graphics.Brush as GradientBrush
 
@@ -161,7 +160,7 @@ fun MangaInfoPane(
     modifier: Modifier = Modifier,
     onCoverClick: (() -> Unit)? = null,
 ) {
-    Column(modifier.verticalScroll(rememberScrollState())) {
+    Column(modifier.verticalScrollWithBar()) {
         InfoHeader(
             manga,
             sourceName = state.source?.name ?: "Source not installed",

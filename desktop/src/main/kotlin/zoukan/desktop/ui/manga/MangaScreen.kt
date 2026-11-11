@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
@@ -72,10 +71,12 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.common.Cover
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.onRightClick
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.track.TrackingDialog
@@ -331,6 +332,17 @@ private fun MoreMenu(
 
 @Composable
 private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenModel) {
+    // Ctrl/Cmd + A selects every chapter; Escape clears the selection before it means "back"
+    zoukan.desktop.ui.OnShortcut { action ->
+        when (action) {
+            zoukan.desktop.ui.Shortcuts.Action.SelectAll -> {
+                model.selectAll()
+                true
+            }
+            zoukan.desktop.ui.Shortcuts.Action.Back -> state.selected.isNotEmpty().also { if (it) model.clearSelection() }
+            else -> false
+        }
+    }
     Row(
         Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -12,10 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,7 +33,9 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import exh.ui.batchadd.BatchAddScreenModel
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.verticalScrollWithBar
 
 /**
  * The Android app's Batch add (More > Batch add): paste entry addresses, one per line (or E-H
@@ -58,7 +57,7 @@ object BatchAddScreen : Screen {
             ScreenHeader("Batch add")
             when (state.state) {
                 BatchAddScreenModel.State.INPUT -> Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp).widthIn(max = 900.dp),
+                    Modifier.fillMaxSize().verticalScrollWithBar().padding(24.dp).widthIn(max = 900.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text("Enter the galleries to add (separated by a new line):", style = MaterialTheme.typography.titleLarge)

@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -38,6 +36,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.manga.model.Manga
+import zoukan.desktop.ui.common.verticalScrollWithBar
 
 private val SORTS = listOf(
     Manga.CHAPTER_SORTING_SOURCE to "By source",
@@ -72,7 +71,7 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
-                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar().padding(top = 8.dp)) {
                     when (tab) {
                         0 -> {
                             // A local entry's chapters are all on disk
@@ -190,7 +189,7 @@ private fun ScanlatorFilterDialog(
         onDismissRequest = onDismiss,
         title = { Text("Scanlators") },
         text = {
-            Column(Modifier.width(360.dp).heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.width(360.dp).heightIn(max = 420.dp).verticalScrollWithBar()) {
                 available.forEach { scanlator ->
                     val shown = scanlator !in hidden
                     Row(
