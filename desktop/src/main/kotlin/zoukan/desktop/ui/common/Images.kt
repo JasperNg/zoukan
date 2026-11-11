@@ -84,6 +84,34 @@ object Images {
     private fun md5(text: String): String =
         MessageDigest.getInstance("MD5").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 
+    /**
+     * The cover's image file: a custom or local cover as it is, a source cover from the disk
+     * cache, downloaded first when it is not there yet.
+     */
+    suspend fun coverFile(cover: Cover): File = coverFile(cover, coverDir)
+
+    internal suspend fun coverFile(cover: Cover, dir: File): File {
+        // Custom covers and the local source's covers are files
+        if (cover.url.startsWith("file:")) {
+            val local = File(java.net.URI(cover.url))
+            if (!local.isFile) throw IOException("${local.name} is missing")
+            return local
+        }
+        val file = File(dir, hash("${cover.sourceId}:${cover.url}"))
+        if (!file.exists() || file.length() == 0L) {
+            val source = Injekt.get<SourceManager>().get(cover.sourceId) as? HttpSource
+            val client = source?.client ?: Injekt.get<NetworkHelper>().client
+            val request = if (source != null) GET(cover.url, source.headers) else GET(cover.url)
+            client.newCall(request).await().use { response ->
+                if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${cover.url}")
+                val tmp = File(dir, "${file.name}.tmp")
+                tmp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+                tmp.renameTo(file)
+            }
+        }
+        return file
+    }
+
     internal fun hash(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 }
@@ -96,35 +124,11 @@ private class CoverFetcher(
     private val cover: Cover,
     private val dir: File,
 ) : Fetcher {
-    override suspend fun fetch(): FetchResult {
-        // The local source's covers are files
-        if (cover.url.startsWith("file:")) {
-            val local = File(java.net.URI(cover.url))
-            if (!local.isFile) throw IOException("${local.name} is missing")
-            return SourceFetchResult(
-                source = ImageSource(local.toOkioPath(), FileSystem.SYSTEM),
-                mimeType = null,
-                dataSource = DataSource.DISK,
-            )
-        }
-        val file = File(dir, Images.hash("${cover.sourceId}:${cover.url}"))
-        if (!file.exists() || file.length() == 0L) {
-            val source = Injekt.get<SourceManager>().get(cover.sourceId) as? HttpSource
-            val client = source?.client ?: Injekt.get<NetworkHelper>().client
-            val request = if (source != null) GET(cover.url, source.headers) else GET(cover.url)
-            client.newCall(request).await().use { response ->
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${cover.url}")
-                val tmp = File(dir, "${file.name}.tmp")
-                tmp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
-                tmp.renameTo(file)
-            }
-        }
-        return SourceFetchResult(
-            source = ImageSource(file.toOkioPath(), FileSystem.SYSTEM),
-            mimeType = null,
-            dataSource = DataSource.DISK,
-        )
-    }
+    override suspend fun fetch(): FetchResult = SourceFetchResult(
+        source = ImageSource(Images.coverFile(cover, dir).toOkioPath(), FileSystem.SYSTEM),
+        mimeType = null,
+        dataSource = DataSource.DISK,
+    )
 
     class Factory(private val dir: File) : Fetcher.Factory<Cover> {
         override fun create(data: Cover, options: Options, imageLoader: ImageLoader): Fetcher = CoverFetcher(data, dir)

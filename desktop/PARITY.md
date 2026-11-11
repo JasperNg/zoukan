@@ -12,6 +12,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library display modes, badges, continue reading button | Yes | Compact, comfortable, panorama, cover-only and list; columns; per-badge toggles |
 | Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
 | Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
+| Tag sorting (SY) | Yes | Settings > Library > Sorting > Tag sorting tags: add, order and delete tags; then Sort > Tag sorting, offered once there are tags, as on Android |
 | Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download, delete downloads, remove |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
 | Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule |
@@ -31,11 +32,13 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
+| Updates filters: downloaded, unread, started, bookmarked, hide excluded scanlators | Yes | Updates > filter button; the Android preferences, so they move with backups |
 | Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
 | More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
+| Download queue: sort by upload date or chapter number, move to top or bottom, move or cancel a series | Yes | Downloads > sort button sorts within each source, as Android; each download's More menu has the moves and cancels |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
 | Backups (.tachibk) create, restore, automatic | Yes | Phase 5; round trip checked by tests |
 | Statistics | Yes | Library > Statistics: entries, chapters, reading time, tracking |
@@ -43,6 +46,14 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |
 | Bulk migration (source priority, smart search, progress, manual pick) | Yes | Library selection > Migrate: sources in priority order, the Android options (data to migrate, extra keywords, hide unmatched or without newer chapters, advanced search, match by chapter number, smart search), then per-entry search, Don't migrate, Migrate now, and Migrate or Copy all with progress |
 | Edit entry info, notes, custom cover | Yes | Manga > More > Edit; local entries write ComicInfo.xml and cover files, as on Android |
+| Entry update frequency (smart update interval) | Yes | Manga > More > Update frequency, for library entries: the predicted next update and, with "Predict next release time" on, a custom interval or none, as Android's dialog |
+| Cover actions: save, share, change, delete custom cover | Yes, changed | Click the cover or Manga > More > Cover. Save goes to Pictures/Zoukan; Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
+| Duplicate check on adding to the library | Yes | Same-title library entries, each to open or migrate, or add anyway; on the manga screen and on a right-click in Browse |
+| Add or remove from Browse (long press) | Yes, changed | Right-click a browse result, as Android's long press: removing asks first, adding checks duplicates and categories |
+| Fetch metadata and chapters when adding to library (KMK) | Yes | Settings > Library; applies to entries added from Browse, as on Android |
+| Missing chapter indicators, hide setting | Yes | "Missing N chapters" between chapter rows; Settings > Library > Hide missing chapter indicators |
+| Share entry link | Yes, changed | Manga > More > Copy link, as there is no desktop share sheet |
+| Download next chapters: 1, 5, 10, 25, custom, unread, bookmarked | Yes | Custom asks for a number of unread chapters |
 | Recommendations and related entries | Yes | Manga > More > Similar titles: the source's related titles, then AniList, MyAnimeList, MangaUpdates and the other recommendation sources |
 
 ## Settings
@@ -58,11 +69,13 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library: update only on Wi-Fi or an unmetered network | No | Desktops give apps no reliable way to tell; the setting is kept for Android |
 | Library: unread count on the Updates icon | Yes | Cleared when Updates opens |
 | Library: mark duplicate read chapters as read | Yes | After reading a chapter, and after fetching new chapters |
+| Library: show empty categories during search/filtering | Yes | Off, as Android: categories with no match leave the tabs while searching or filtering |
 | Library: chapter swipe actions | Yes | Settings > Library > Chapter swipe; drag a chapter row sideways with the mouse or a touch screen |
 | Downloads: delete after reading (nth to last), after marking read, bookmarked, excluded categories | Yes | As Android's: deleted when the reader closes |
 | Downloads: download new chapters, with categories to include and exclude | Yes | |
 | Downloads: download ahead while reading | Yes | When the open and the next chapter are downloaded |
 | Downloads: only on Wi-Fi | No | As for library updates |
+| Downloads: download cache renew interval | Yes | How often the download folders are read again; Manual waits for Advanced > Reindex downloads |
 | Browse: suggestions, source categories, filter sources in categories, replace latest button, local source hidden folders | Yes | Settings > Browse. Source categories are made in Edit categories and set from a source's More menu (Android's long press) |
 | Browse: hide Feed tab, Feed tab position, hide library entries in the feed and in sources | Yes | |
 | Browse: expand related titles, related titles in the overflow menu | Yes | The related titles row under the entry's description, with See all opening Similar titles. Show home on related titles is Android's and not shown |
@@ -86,7 +99,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |
 | First-run setup (onboarding): theme, storage location, getting started guide, restore a backup | Yes, changed | Shown over the app until finished, as on Android. Android's permissions step has nothing to ask on a desktop. Someone who used Zoukan before it existed, with a library already, does not see it |
 | What's new: "Updated to" dialog after an update, release notes screen, About > What's new | Yes | The notes of the running version's GitHub release (desktop-v tag), in Markdown |
-| Advanced: data saver, source blacklist, clean up downloaded chapters | No | Not ported yet: data saver needs a compression server in the reader and downloader, and SY keeps the clean-up hidden |
+| Advanced: clean up downloaded chapters | Yes | Orphaned and unfinished downloads always; read chapters and entries no longer in the library when ticked. Entries with queued chapters are skipped |
+| Advanced: source blacklist (SY) | Yes | Advanced > Developer tools. With E-Hentai on, hides the E-Hentai extension and its sources, which the built-in ones replace; read at start, as on Android |
 
 ## Browse
 
@@ -99,9 +113,16 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Saved searches | Yes | Chips above the listing; save from the filter panel; right-click deletes |
 | Batch add (MangaDex, E-H, ExH, nH, 8Muses addresses, E-H Visited export) | Yes | Browse > Batch add button, instead of the More tab; the Android screen model and GalleryAdder, shared |
 | Feed (global, latest/popular or a saved search) | Yes | Browse > Feed, and a per-source feed from the source's feed button |
+| Feed order (global and per source, KMK) | Yes | The feed's reorder button: drag the saved feeds, or move them with the arrows |
+| Extension details | Yes | Click an installed extension: version, language, age rating, store, uninstall, incognito, clear cookies, and each source with its on/off switch and settings |
+| Browse > Migrate (migrate by source) | Yes | The sources of the library's entries with their counts, sorted by name or count; pick a source's entries and migrate them with the bulk migration |
+| Bulk add to library (KMK) | Yes | The select button in a source, the global search or the feed, then click or right-click results and Add to library; asks about titles already in the library, then uses the default category or asks |
+| Open an entry from its address (deep link) | Yes, changed | Browse > link button, or paste the address into Search all sources: the source that knows it opens the entry or the chapter, else a global search for it. The desktop has no system link handler, so the address is pasted |
+| Global search filters: pinned sources only, has results (KMK) | Yes | Chips above the results. The global search uses the enabled sources, as on Android |
 | E-Hentai and ExHentai built-in sources | Yes | Settings > E-Hentai; sign in through the built-in browser or cookies |
 | MangaDex and other delegated sources, MDList | Yes | MangaDex, NHentai, LANraragi, Pururin and 8Muses extensions run through the Android delegates; MDList signs in with OAuth |
 | E-Hentai site settings (uconfig), favorites sync, gallery update worker | Yes | Settings > E-Hentai; gallery updates run in the background while the app is open |
+| E-Hentai gallery update restrictions | Yes, changed | Charging waits for mains power, as the library update does. Wi-Fi and unmetered network stay in the setting for Android |
 | Metadata viewer and details block (E-Hentai, MangaDex, NHentai, Pururin, 8Muses, LANraragi) | Yes | Manga screen: rating, category, pages, uploader and tags by namespace (each searches the source); More info lists every field. Right-click copies a value, as a long press on Android |
 | MangaDex settings: sign-in, preferred source, sync follows to the library, follow the library on MangaDex | Yes | Settings > MangaDex, shown when a MangaDex source is enabled, as on Android |
 | Data saver (Bandwidth Hero, wsrv.nl) | Yes, changed | Settings > Data saver, for the reader and (optionally) downloads. Excluded sources are picked there, not from a long press in Browse |
@@ -135,10 +156,11 @@ between the two. "Exception" rows are the proposed differences; each says why.
 
 | Feature | Notes |
 |---|---|
-| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Escape back; listed in Settings |
+| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Ctrl/Cmd + F search, Ctrl/Cmd + A select all, Escape back; listed in Settings |
+| Desktop conventions | Scrollbars on lists and grids, the window opens where it was closed (minimum 800 x 560), tooltips on icon buttons |
 | Tray icon and notifications | Phase 5 |
 
 ## Not on desktop (by design)
 
-Home-screen widget, Android share sheet and deep links, biometrics, secure screen and Google Drive
+Home-screen widget, Android share sheet and system link handling (paste the address in Browse instead), biometrics, secure screen and Google Drive
 sync. Backups keep their preferences, so nothing is lost moving back.

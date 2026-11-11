@@ -129,6 +129,7 @@ class DesktopDomainModule : InjektModule {
         addFactory { GetFavorites(get()) }
         addFactory { GetMangaByUrlAndSourceId(get()) }
         addFactory { FetchInterval(get()) }
+        addFactory { tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga(get()) }
 
         addSingletonFactory<ChapterRepository> { ChapterRepositoryImpl(get()) }
         addFactory { GetChaptersByMangaId(get()) }
@@ -149,10 +150,15 @@ class DesktopDomainModule : InjektModule {
         addSingletonFactory<CustomMangaRepository> { CustomMangaRepositoryImpl(get<Application>()) }
         addFactory { GetCustomMangaInfo(get()) }
         addFactory { SetCustomMangaInfo(get()) }
+        addFactory { eu.kanade.domain.manga.interactor.GetSortTag(get()) }
+        addFactory { eu.kanade.domain.manga.interactor.CreateSortTag(get(), get()) }
+        addFactory { eu.kanade.domain.manga.interactor.DeleteSortTag(get(), get()) }
+        addFactory { eu.kanade.domain.manga.interactor.ReorderSortTag(get(), get()) }
 
         // UI (Phase 4)
         addSingletonFactory { DesktopPreferences(get()) }
         addSingletonFactory { eu.kanade.domain.ui.UiPreferences(get()) }
+        addSingletonFactory { tachiyomi.domain.updates.service.UpdatesPreferences(get()) }
         addFactory { tachiyomi.domain.category.interactor.ResetCategoryFlags(get(), get()) }
         addFactory { GetLibraryManga(get()) }
         addFactory { GetManga(get()) }
@@ -241,6 +247,9 @@ class DesktopDomainModule : InjektModule {
         addFactory { tachiyomi.domain.source.interactor.GetSavedSearchBySourceIdFeed(get()) }
         addFactory { InsertFeedSavedSearch(get()) }
         addFactory { DeleteFeedSavedSearchById(get()) }
+        // ZOUKAN -->
+        addFactory { tachiyomi.domain.source.interactor.ReorderFeed(get()) }
+        // ZOUKAN <--
 
         addFactory { GetTotalReadDuration(get()) }
 
@@ -260,6 +269,7 @@ class DesktopDomainModule : InjektModule {
         addFactory { tachiyomi.domain.libraryUpdateError.interactor.DeleteLibraryUpdateErrors(get()) }
         addFactory { tachiyomi.domain.libraryUpdateError.interactor.InsertLibraryUpdateErrors(get()) }
         addFactory { zoukan.desktop.library.LibraryUpdateErrors(get(), get(), get()) }
+        addFactory { zoukan.desktop.library.AddToLibrary(get(), get(), get(), get(), get(), get(), get(), get()) }
 
         // Migration (Phase 6)
         addFactory { MigrateManga(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }

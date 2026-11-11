@@ -87,7 +87,7 @@ class EndToEndLocalTest {
                 waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().isNotEmpty() }
                 shot("l1-local-source")
                 onAllNodesWithTag("manga-item").onFirst().performClick()
-                waitFor(hasText("Start reading") and isEnabled())
+                waitFor(hasText("Start") and isEnabled())
                 waitFor(hasText("Made by the end-to-end test"))
                 onAllNodesWithText("Add to library").onFirst().performClick()
                 waitFor(hasText("In library"))

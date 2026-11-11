@@ -125,6 +125,7 @@ class DownloadQueueStatesTest {
             every { parallelSourceLimit() } returns pref(1)
             every { parallelPageLimit() } returns pref(1)
             every { splitTallImages() } returns pref(false)
+            every { downloadCacheRenewInterval() } returns pref(1)
         }
         val securityPreferences = mockk<SecurityPreferences> {
             every { passwordProtectDownloads() } returns pref(false)

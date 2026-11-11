@@ -6,6 +6,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -101,6 +103,43 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
                 LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING to "After reading a chapter",
                 LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_NEW to "After fetching new chapter",
             ),
+        )
+    }
+    item(key = "library-missing-chapters") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference("Hide missing chapter indicators", preferences.hideMissingChapters())
+    }
+    item(key = "library-show-empty-categories-search") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference("Show empty categories during search/filtering", preferences.showEmptyCategoriesSearch())
+    }
+    item(key = "library-fetch-metadata-on-add") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference(
+            "Fetch metadata when adding to library",
+            preferences.fetchMetadataOnAdd(),
+            "Automatically fetches the metadata of a new entry when adding it to the library",
+        )
+    }
+    item(key = "library-fetch-chapters-on-add") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        SwitchPreference(
+            "Fetch chapters when adding to library",
+            preferences.fetchChaptersOnAdd(),
+            "Automatically fetches the chapter list of a new entry when adding it to the library",
+        )
+    }
+
+    // SY's sorting settings
+    settingsGroup("Sorting")
+    item(key = "library-sort-tags") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        val tags by preferences.sortTagsForLibrary().changes().collectAsState(preferences.sortTagsForLibrary().get())
+        val navigator = LocalNavigator.currentOrThrow
+        SettingRow(
+            "Tag sorting tags",
+            if (tags.size == 1) "1 tag" else "${tags.size} tags",
+            onClick = { navigator.push(zoukan.desktop.ui.library.SortTagScreen) },
         )
     }
 

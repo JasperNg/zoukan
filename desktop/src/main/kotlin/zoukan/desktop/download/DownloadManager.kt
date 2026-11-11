@@ -102,8 +102,28 @@ class DownloadManager(
 
     // Downloaded chapters --------------------------------------------------------------------
 
-    private fun namesIn(mangaDir: File): Set<String> =
-        cache.getOrPut(mangaDir) { mangaDir.list()?.toHashSet().orEmpty() }
+    /** When [cache] was last emptied, for the download cache renew interval. */
+    @Volatile
+    private var lastRenew = System.currentTimeMillis()
+
+    private fun namesIn(mangaDir: File): Set<String> {
+        renewIfDue()
+        return cache.getOrPut(mangaDir) { mangaDir.list()?.toHashSet().orEmpty() }
+    }
+
+    /**
+     * Reads the download folders again once "Download cache renew interval" (KMK) has passed, so
+     * files changed outside the app show up. "Manual" (-1) only renews from Reindex downloads.
+     */
+    private fun renewIfDue() {
+        val hours = preferences.downloadCacheRenewInterval().get()
+        if (hours <= 0) return
+        val now = System.currentTimeMillis()
+        if (now - lastRenew < hours * 60L * 60 * 1000) return
+        lastRenew = now
+        cache.clear()
+        _changes.update { it + 1 }
+    }
 
     fun isDownloaded(manga: Manga, chapter: Chapter): Boolean {
         val names = namesIn(paths.mangaDir(manga))
@@ -128,6 +148,7 @@ class DownloadManager(
 
     /** Forgets what was read from disk, for example after the storage folder moved. */
     fun invalidateCache() {
+        lastRenew = System.currentTimeMillis()
         cache.clear()
         _changes.update { it + 1 }
     }
@@ -187,6 +208,84 @@ class DownloadManager(
     }
 
     private fun queuedIds(): Set<Long> = _queue.value.mapTo(HashSet()) { it.chapter.id }
+
+    /**
+     * SY's "Clean up downloaded chapters" (Settings > Advanced). In each installed source's
+     * folder it deletes entry folders that belong to no entry, then, per entry: everything when
+     * [removeNonFavorite] and the entry left the library, files that are no chapter of the entry
+     * and unfinished downloads, the read chapters when [removeRead], and the folder once no
+     * chapter is left. Entries with chapters in the queue are left alone.
+     *
+     * @return how many files and folders it deleted, as Android counts them
+     */
+    suspend fun cleanup(
+        removeRead: Boolean,
+        removeNonFavorite: Boolean,
+        allManga: suspend () -> List<Manga>,
+        chaptersOf: suspend (Long) -> List<Chapter>,
+    ): Int = withContext(Dispatchers.IO) {
+        val mangas = allManga()
+        val busy = _queue.value.mapTo(HashSet()) { it.manga.id }
+        var cleared = 0
+        sourceManager.getOnlineSources().forEach { source ->
+            val sourceDir = paths.sourceDir(source.id)
+            val folders = sourceDir.listFiles()?.filter { it.isDirectory }.orEmpty()
+            if (folders.isEmpty()) return@forEach
+            val byFolder = mangas.filter { it.source == source.id }.associateBy { paths.mangaDirName(it.ogTitle) }
+            folders.forEach folder@{ folder ->
+                val manga = byFolder[folder.name]
+                if (manga == null) {
+                    // Orphaned: no entry of this source has this folder
+                    cleared += 1 + (folder.list()?.size ?: 0)
+                    folder.deleteRecursively()
+                    invalidate(folder)
+                    return@folder
+                }
+                if (manga.id in busy) return@folder
+                cleared += cleanupEntry(folder, manga, chaptersOf(manga.id), removeRead, removeNonFavorite)
+            }
+        }
+        cleared
+    }
+
+    private fun cleanupEntry(
+        folder: File,
+        manga: Manga,
+        chapters: List<Chapter>,
+        removeRead: Boolean,
+        removeNonFavorite: Boolean,
+    ): Int {
+        if (removeNonFavorite && !manga.favorite) {
+            val count = 1 + (folder.list()?.size ?: 0)
+            folder.deleteRecursively()
+            invalidate(folder)
+            return count
+        }
+        val names = folder.list()?.toList().orEmpty()
+        val chapterNames = chapters.associateWith { paths.validChapterNames(it) }
+        val known = chapterNames.values.flatten().toHashSet()
+        val readNames = if (removeRead) chapters.filter { it.read }.flatMap { chapterNames.getValue(it) }.toHashSet() else emptySet()
+        val delete = names.filter { name ->
+            when {
+                name.endsWith(DownloadPaths.TMP_SUFFIX) -> true
+                // Covers, ComicInfo and such stay with the chapters
+                name.startsWith(".") || NOT_CHAPTER.any { name.endsWith(it, ignoreCase = true) } -> false
+                name !in known -> true
+                else -> name in readNames
+            }
+        }
+        delete.forEach { File(folder, it).deleteRecursively() }
+        var count = delete.size
+        val left = folder.list().orEmpty().filterNot { name ->
+            name.startsWith(".") || NOT_CHAPTER.any { name.endsWith(it, ignoreCase = true) }
+        }
+        if (left.isEmpty() && folder.exists()) {
+            folder.deleteRecursively()
+            count++
+        }
+        if (count > 0) invalidate(folder)
+        return count
+    }
 
     // Queue -----------------------------------------------------------------------------------
 
@@ -278,6 +377,39 @@ class DownloadManager(
     fun moveToTop(download: Download) {
         // A download that finished meanwhile is not put back
         _queue.update { q -> if (download in q) listOf(download) + (q - download) else q }
+        save()
+    }
+
+    /** Moves a queued download to the end. */
+    fun moveToBottom(download: Download) {
+        _queue.update { q -> if (download in q) (q - download) + download else q }
+        save()
+    }
+
+    /** Moves every queued chapter of [mangaId] to the front or the end, in their order, as Android's "Move series to top". */
+    fun moveSeries(mangaId: Long, toTop: Boolean) {
+        _queue.update { q ->
+            val (series, others) = q.partition { it.manga.id == mangaId }
+            if (toTop) series + others else others + series
+        }
+        save()
+    }
+
+    /** Cancels every queued chapter of [mangaId], as Android's "Cancel all for this series". */
+    fun cancelSeries(mangaId: Long) {
+        cancel(_queue.value.filter { it.manga.id == mangaId }.mapTo(HashSet()) { it.chapter.id })
+    }
+
+    /**
+     * Sorts the queue, as Android's queue sort: within each source, which keep their order, by
+     * [selector], descending when [descending].
+     */
+    fun <R : Comparable<R>> sortQueue(descending: Boolean, selector: (Download) -> R) {
+        _queue.update { q ->
+            q.groupBy { it.manga.source }.values.flatMap { downloads ->
+                downloads.sortedBy(selector).let { if (descending) it.reversed() else it }
+            }
+        }
         save()
     }
 

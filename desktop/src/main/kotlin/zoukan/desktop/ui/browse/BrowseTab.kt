@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,10 +19,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.PushPin
@@ -33,7 +32,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -52,9 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,8 +64,10 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.settings.SourceSettingsScreen
@@ -82,14 +80,17 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
     val navigator = LocalNavigator.currentOrThrow
     var globalQuery by rememberSaveable { mutableStateOf("") }
     // ZOUKAN -->
+    var openUrl by remember { mutableStateOf(false) }
+    // ZOUKAN <--
+    // ZOUKAN -->
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
     val hideFeed by uiPreferences.hideFeedTab().changes().collectAsState(uiPreferences.hideFeedTab().get())
     val feedInFront by uiPreferences.feedTabInFront().changes().collectAsState(uiPreferences.feedTabInFront().get())
     // Android's order: Feed first when "Feed tab position" is on, else after Sources; none when hidden
     val pages = when {
-        hideFeed -> listOf(BrowsePage.SOURCES, BrowsePage.EXTENSIONS, BrowsePage.STORES)
-        feedInFront -> listOf(BrowsePage.FEED, BrowsePage.SOURCES, BrowsePage.EXTENSIONS, BrowsePage.STORES)
-        else -> listOf(BrowsePage.SOURCES, BrowsePage.FEED, BrowsePage.EXTENSIONS, BrowsePage.STORES)
+        hideFeed -> listOf(BrowsePage.SOURCES, BrowsePage.EXTENSIONS, BrowsePage.MIGRATE, BrowsePage.STORES)
+        feedInFront -> listOf(BrowsePage.FEED, BrowsePage.SOURCES, BrowsePage.EXTENSIONS, BrowsePage.MIGRATE, BrowsePage.STORES)
+        else -> listOf(BrowsePage.SOURCES, BrowsePage.FEED, BrowsePage.EXTENSIONS, BrowsePage.MIGRATE, BrowsePage.STORES)
     }
     // The first tab opens first, as on Android, when the feed settings change it; coming back to
     // Browse keeps the tab that was open
@@ -103,19 +104,18 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Browse", showBack = false) {
-            OutlinedTextField(
-                value = globalQuery,
-                onValueChange = { globalQuery = it },
-                placeholder = { Text("Search all sources") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.width(320.dp).onKeyEvent {
-                    if (it.key == Key.Enter && globalQuery.isNotBlank()) {
-                        navigator.push(GlobalSearchScreen(globalQuery.trim()))
-                        true
-                    } else {
-                        false
+            SearchField(
+                globalQuery,
+                { globalQuery = it },
+                "Search all sources",
+                Modifier.width(320.dp),
+                onSearch = {
+                    if (globalQuery.isNotBlank()) {
+                        // ZOUKAN -->
+                        // An entry's address opens the entry, as a shared link does on Android
+                        val query = globalQuery.trim()
+                        navigator.push(if (OpenUrlScreen.isUrl(query)) OpenUrlScreen(query) else GlobalSearchScreen(query))
+                        // ZOUKAN <--
                     }
                 },
             )
@@ -124,9 +124,13 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
                 TooltipIconButton(Icons.Default.FilterList, "Filter sources", onClick = { navigator.push(SourcesFilterScreen) })
             }
             TooltipIconButton(Icons.AutoMirrored.Filled.PlaylistAdd, "Batch add", onClick = { navigator.push(BatchAddScreen) })
+            TooltipIconButton(Icons.Default.Link, "Open from a URL", onClick = { openUrl = true })
             // ZOUKAN <--
         }
         val updates = state.installed.count { it.hasUpdate }
+        // ZOUKAN -->
+        if (openUrl) OpenUrlDialog(onDismiss = { openUrl = false })
+        // ZOUKAN <--
         PrimaryTabRow(selectedTabIndex = pages.indexOf(current)) {
             pages.forEach { page ->
                 Tab(
@@ -138,6 +142,9 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
                                 BrowsePage.SOURCES -> "Sources"
                                 BrowsePage.EXTENSIONS -> if (updates > 0) "Extensions ($updates)" else "Extensions"
                                 BrowsePage.STORES -> "Stores"
+                                // ZOUKAN -->
+                                BrowsePage.MIGRATE -> "Migrate"
+                                // ZOUKAN <--
                                 BrowsePage.FEED -> "Feed"
                             },
                         )
@@ -150,12 +157,15 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
             BrowsePage.EXTENSIONS -> ExtensionsList(state, model, onStores = { tab = BrowsePage.STORES })
             BrowsePage.STORES -> StoresList(state, model)
             BrowsePage.FEED -> FeedTab(feed)
+            // ZOUKAN -->
+            BrowsePage.MIGRATE -> MigrateSourcesList()
+            // ZOUKAN <--
         }
     }
 }
 
 // ZOUKAN -->
-enum class BrowsePage { SOURCES, FEED, EXTENSIONS, STORES }
+enum class BrowsePage { SOURCES, FEED, EXTENSIONS, MIGRATE, STORES }
 // ZOUKAN <--
 
 @Composable
@@ -271,17 +281,17 @@ private fun SourceRow(
 
 @Composable
 private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenModel, onStores: () -> Unit) {
+    // ZOUKAN -->
+    val navigator = LocalNavigator.currentOrThrow
+    // ZOUKAN <--
     var languageMenu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = state.extensionQuery,
-                onValueChange = model::searchExtensions,
-                placeholder = { Text("Search extensions") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f).testTag("extension-search"),
+            SearchField(
+                state.extensionQuery,
+                model::searchExtensions,
+                "Search extensions",
+                Modifier.weight(1f).testTag("extension-search"),
             )
             Spacer(Modifier.width(8.dp))
             Box {
@@ -330,7 +340,9 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 sectionHeader("Installed")
                 items(state.visibleInstalled, key = { "i-${it.pkgName}" }) { ext ->
                     val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
-                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy) {
+                    // ZOUKAN -->
+                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }) {
+                        // ZOUKAN <--
                         if (ext.hasUpdate) {
                             Button(onClick = { model.update(ext) }) { Text("Update") }
                             Spacer(Modifier.width(8.dp))
@@ -356,10 +368,17 @@ private fun ExtensionRow(
     iconUrl: String?,
     subtitle: String? = null,
     busy: Boolean,
+    // ZOUKAN -->
+    onClick: (() -> Unit)? = null,
+    // ZOUKAN <--
     actions: @Composable () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth()
+            // ZOUKAN -->
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            // ZOUKAN <--
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CoverImage(iconUrl, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))

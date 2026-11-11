@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import zoukan.desktop.download.Download
+import zoukan.desktop.ui.common.Tooltip
 
 /**
  * A chapter's download button: download, queued or downloading (with progress; click to cancel),
@@ -42,25 +43,35 @@ fun DownloadIndicator(
     Box(modifier) {
         val state = download?.state?.collectAsState()?.value
         val progress = download?.progress?.collectAsState()?.value
-        when {
-            downloaded && download == null -> IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chapter-downloaded")) {
-                Icon(Icons.Default.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
-            }
-            state == Download.State.ERROR -> IconButton(onClick = { menu = true }) {
-                Icon(Icons.Default.ErrorOutline, "Download failed: ${download.error.orEmpty()}", tint = MaterialTheme.colorScheme.error)
-            }
-            download != null -> IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chapter-downloading")) {
-                Box(contentAlignment = Alignment.Center) {
-                    val (done, total) = progress ?: (0 to 0)
-                    if (state == Download.State.DOWNLOADING && total > 0) {
-                        CircularProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                    } else {
-                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+        // What a click does, since the icon alone only shows the state
+        val label = when {
+            downloaded && download == null -> "Downloaded"
+            state == Download.State.ERROR -> "Download failed"
+            state == Download.State.DOWNLOADING -> "Downloading"
+            download != null -> "Queued"
+            else -> "Download"
+        }
+        Tooltip(label) {
+            when {
+                downloaded && download == null -> IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chapter-downloaded")) {
+                    Icon(Icons.Default.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
+                }
+                state == Download.State.ERROR -> IconButton(onClick = { menu = true }) {
+                    Icon(Icons.Default.ErrorOutline, "Download failed: ${download.error.orEmpty()}", tint = MaterialTheme.colorScheme.error)
+                }
+                download != null -> IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chapter-downloading")) {
+                    Box(contentAlignment = Alignment.Center) {
+                        val (done, total) = progress ?: (0 to 0)
+                        if (state == Download.State.DOWNLOADING && total > 0) {
+                            CircularProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        } else {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        }
                     }
                 }
-            }
-            else -> IconButton(onClick = onDownload, modifier = Modifier.testTag("chapter-download")) {
-                Icon(Icons.Outlined.ArrowDownward, "Download", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                else -> IconButton(onClick = onDownload, modifier = Modifier.testTag("chapter-download")) {
+                    Icon(Icons.Outlined.ArrowDownward, "Download", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         DropdownMenu(menu, onDismissRequest = { menu = false }) {

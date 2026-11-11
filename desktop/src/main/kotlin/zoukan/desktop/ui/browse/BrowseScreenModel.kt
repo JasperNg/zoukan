@@ -33,6 +33,7 @@ class BrowseScreenModel(
     // ZOUKAN -->
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val uiPreferences: UiPreferences = Injekt.get(),
+    private val exhPreferences: exh.source.ExhPreferences = Injekt.get(),
     // ZOUKAN <--
 ) : StateScreenModel<BrowseScreenModel.State>(State()) {
 
@@ -161,10 +162,18 @@ class BrowseScreenModel(
                 extensionManager.availableExtensionsFlow,
                 extensionManager.loadErrorsFlow,
             ) { installed, untrusted, available, errors ->
+                // ZOUKAN -->
+                // SY's source blacklist: the built-in E-Hentai replaces the E-Hentai extension
+                val hidden = if (sourcePreferences.enableSourceBlacklist().get() && exhPreferences.isHentaiEnabled().get()) {
+                    BLACKLISTED_EXTENSIONS
+                } else {
+                    emptySet()
+                }
+                // ZOUKAN <--
                 State(
-                    installed = installed.values.toList(),
-                    untrusted = untrusted.values.toList(),
-                    available = available.values.toList(),
+                    installed = installed.values.filterNot { it.pkgName in hidden },
+                    untrusted = untrusted.values.filterNot { it.pkgName in hidden },
+                    available = available.values.filterNot { it.pkgName in hidden },
                     loadErrors = errors.mapValues { (_, e) -> e.message ?: e::class.simpleName.orEmpty() },
                 )
             }.collect { new ->
@@ -290,5 +299,10 @@ class BrowseScreenModel(
 
     companion object {
         const val KEIYOUSHI = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json"
+
+        // ZOUKAN -->
+        /** BlacklistedSources.BLACKLISTED_EXTENSIONS on Android */
+        val BLACKLISTED_EXTENSIONS = setOf("eu.kanade.tachiyomi.extension.all.ehentai")
+        // ZOUKAN <--
     }
 }

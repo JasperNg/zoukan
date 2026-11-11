@@ -64,6 +64,10 @@ fun LazyListScope.appearanceSettings() {
     settingsGroup("Appearance")
     item(key = "appearance-theme") { ThemeSection() }
     item(key = "appearance-display") { DisplaySection() }
+    // ZOUKAN -->
+    settingsGroup("Entry page")
+    item(key = "appearance-manga-info") { MangaInfoSection() }
+    // ZOUKAN <--
     settingsGroup("Navigation")
     item(key = "appearance-navigation") { NavigationSection() }
     // ZOUKAN -->
@@ -143,6 +147,25 @@ internal fun ThemeSection() {
         )
     }
 }
+
+// ZOUKAN -->
+/** Android's "Manga info" group: the entry page in its cover's colors, and their style. */
+@Composable
+private fun MangaInfoSection() {
+    val ui = remember { Injekt.get<UiPreferences>() }
+    val coverBased by ui.themeCoverBased().changes().collectAsState(ui.themeCoverBased().get())
+    val style by ui.themeCoverBasedStyle().changes().collectAsState(ui.themeCoverBasedStyle().get())
+    Column {
+        SwitchSetting("Theme based on cover", checked = coverBased) { ui.themeCoverBased().set(it) }
+        ChoiceSetting(
+            "Cover based theme style",
+            style,
+            PaletteStyle.entries.map { it to paletteStyleLabel(it) },
+            enabled = coverBased,
+        ) { ui.themeCoverBasedStyle().set(it) }
+    }
+}
+// ZOUKAN <--
 
 @Composable
 private fun ThemePreview(

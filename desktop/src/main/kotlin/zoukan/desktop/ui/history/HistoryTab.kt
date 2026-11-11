@@ -9,17 +9,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,8 +51,10 @@ import zoukan.desktop.ui.browse.sectionHeader
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.MangaScreen
@@ -136,15 +134,7 @@ fun HistoryTab(model: HistoryScreenModel) {
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("History", showBack = false) {
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = model::search,
-                placeholder = { Text("Search history") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.width(280.dp).padding(end = 8.dp),
-            )
+            SearchField(state.query, model::search, "Search history", Modifier.width(280.dp).padding(end = 8.dp))
             TooltipIconButton(Icons.Default.DeleteSweep, "Clear history", onClick = { confirmClear = true }, enabled = state.items.isNotEmpty())
         }
         when {

@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -39,6 +37,7 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import kotlin.math.roundToInt
 
 private val SORTS = listOf(
@@ -77,7 +76,7 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
-                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScrollWithBar().padding(top = 8.dp)) {
                     when (tab) {
                         0 -> FilterPage(model)
                         1 -> SortPage(model, state.sort)
@@ -90,8 +89,9 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
     )
 }
 
+/** A tri-state filter: off, only, or not; shared with the Updates filter. */
 @Composable
-private fun TriStateRow(label: String, preference: Preference<TriState>) {
+internal fun TriStateRow(label: String, preference: Preference<TriState>) {
     val value by preference.changes().collectAsState(preference.get())
     Row(
         Modifier.fillMaxWidth().clickable { preference.set(value.next()) }.padding(vertical = 2.dp),
@@ -132,7 +132,10 @@ private fun FilterPage(model: LibraryScreenModel) {
 
 @Composable
 private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
-    SORTS.forEach { (type, label) ->
+    val tags = model.state.collectAsState().value.settings.sortTags
+    // SY's "Tag sorting", offered once there are tags to sort by (Settings > Library > Sorting)
+    val sorts = if (tags.isNotEmpty() || sort.type == LibrarySort.Type.TagList) SORTS + (LibrarySort.Type.TagList to "Tag sorting") else SORTS
+    sorts.forEach { (type, label) ->
         Row(
             Modifier.fillMaxWidth().clickable { model.setSort(type) }.padding(vertical = 8.dp, horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
