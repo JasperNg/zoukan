@@ -23,26 +23,28 @@ object Shortcuts {
     /** What a shortcut does, independent of Compose, so it can be tested. */
     sealed interface Action {
         data class OpenTab(val tab: HomeTab) : Action
+        data object OpenSettings : Action
         data object UpdateLibrary : Action
         data object Back : Action
     }
 
     /** Shortcut list for the README and the help in Settings. */
     val list = listOf(
-        "Ctrl/Cmd + 1 to 5" to "Library, Updates, History, Browse, Settings",
+        "Ctrl/Cmd + 1 to 5" to "Library, Updates, History, Browse, More",
         "Ctrl/Cmd + ," to "Settings",
         "Ctrl/Cmd + Shift + U" to "Update the library",
         "Escape, Alt + Left, mouse back button" to "Back",
     )
 
     fun actionFor(key: Key, ctrl: Boolean, shift: Boolean, alt: Boolean): Action? {
+        if (ctrl && !alt && !shift && key == Key.Comma) return Action.OpenSettings
         if (ctrl && !alt && !shift) {
             val tab = when (key) {
                 Key.One, Key.NumPad1 -> HomeTab.Library
                 Key.Two, Key.NumPad2 -> HomeTab.Updates
                 Key.Three, Key.NumPad3 -> HomeTab.History
                 Key.Four, Key.NumPad4 -> HomeTab.Browse
-                Key.Five, Key.NumPad5, Key.Comma -> HomeTab.Settings
+                Key.Five, Key.NumPad5 -> HomeTab.More
                 else -> null
             }
             if (tab != null) return Action.OpenTab(tab)
@@ -63,6 +65,10 @@ object Shortcuts {
                 navigator?.popUntilRoot()
                 HomeScreen.selectTab(action.tab)
                 true
+            }
+            Action.OpenSettings -> {
+                navigator?.let { HomeScreen.openSettings(it) }
+                navigator != null
             }
             Action.UpdateLibrary -> {
                 if (!Injekt.get<LibraryUpdater>().start()) {

@@ -127,7 +127,7 @@ class EndToEndMetadataTest {
             }
 
             step("Data saver settings") {
-                runOnUiThread { HomeScreen.selectTab(HomeTab.Settings) }
+                runOnUiThread { navigator?.let { HomeScreen.openSettings(it) } }
                 waitFor(hasText("Settings"))
                 onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Excluded sources"))
                 shot("m3-data-saver")

@@ -33,6 +33,9 @@ class DesktopPreferences(private val store: PreferenceStore) {
 
     fun libraryShowUnreadBadge() = store.getBoolean("display_unread_badge", true)
 
+    /** BasePreferences.downloadedOnly() on Android: the library and Updates show only downloaded entries */
+    fun downloadedOnly() = store.getBoolean(Preference.appStateKey("pref_downloaded_only"), false)
+
     /** Desktop only: closing the window keeps Zoukan running in the tray, so background work goes on */
     fun closeToTray() = store.getBoolean("zoukan_close_to_tray", true)
 

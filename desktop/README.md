@@ -60,7 +60,7 @@ left to right, paged right to left, vertical, webtoon and continuous vertical.
 
 | Keys | Action |
 |---|---|
-| Ctrl/Cmd + 1 to 5 | Library, Updates, History, Browse, Settings |
+| Ctrl/Cmd + 1 to 5 | Library, Updates, History, Browse, More |
 | Ctrl/Cmd + `,` | Settings |
 | Ctrl/Cmd + Shift + U | Update the library |
 | Escape, Alt + Left, mouse back button | Back |

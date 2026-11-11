@@ -130,6 +130,9 @@ class EndToEndLocalTest {
                 waitFor(hasText("No downloads queued", substring = true))
                 shot("l6-downloads")
                 runOnUiThread { navigator?.popUntilRoot() }
+                // Settings is in the More tab, as on Android
+                onAllNodesWithText("More").onFirst().performClick()
+                waitFor(hasText("Downloaded only"))
                 onAllNodesWithText("Settings").onFirst().performClick()
                 waitFor(hasText("App theme"))
                 shot("l7-settings")
