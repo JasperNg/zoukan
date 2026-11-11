@@ -209,6 +209,16 @@ fun LazyListScope.advancedSettings() {
                 "8Muses, LANraragi. Requires app restart to take effect",
         )
     }
+    // ZOUKAN -->
+    item(key = "advanced-source-blacklist") {
+        val preferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
+        SwitchPreference(
+            "Enable source blacklist",
+            preferences.enableSourceBlacklist(),
+            "Hide extensions/sources that are incompatible with Zoukan. Force-restart app after changing.",
+        )
+    }
+    // ZOUKAN <--
     item(key = "advanced-log-level") {
         val preferences = remember { Injekt.get<ExhPreferences>() }
         val level by preferences.logLevel(false).changes().collectAsState(preferences.logLevel(false).get())

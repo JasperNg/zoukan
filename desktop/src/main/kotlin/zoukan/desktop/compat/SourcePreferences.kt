@@ -77,5 +77,31 @@ class SourcePreferences(private val preferenceStore: PreferenceStore) {
     fun migrationHideWithoutUpdates() = preferenceStore.getBoolean("migration_hide_without_updates", false)
 
     fun migrationSmartSearchSingleEntry() = preferenceStore.getBoolean("migration_smart_search_single_entry", false)
+
+    // Browse > Migrate: how the sources with library entries are sorted (SetMigrateSorting's values)
+    fun migrationSortingMode() = preferenceStore.getEnum("pref_migration_sorting", MigrateSortingMode.ALPHABETICAL)
+
+    fun migrationSortingDirection() = preferenceStore.getEnum("pref_migration_direction", MigrateSortingDirection.ASCENDING)
+
+    enum class MigrateSortingMode { ALPHABETICAL, TOTAL }
+
+    enum class MigrateSortingDirection { ASCENDING, DESCENDING }
+
+    // Global search: only sources with results, and pinned sources only or all (KMK)
+    fun globalSearchFilterState() = preferenceStore.getBoolean(
+        tachiyomi.core.common.preference.Preference.appStateKey("has_filters_toggle_state"),
+        false,
+    )
+
+    fun globalSearchPinnedState() = preferenceStore.getEnum(
+        tachiyomi.core.common.preference.Preference.appStateKey("global_search_pinned_toggle_state"),
+        GlobalSearchSourceFilter.PinnedOnly,
+    )
+
+    /** Android's SourceFilter, with the same value names */
+    enum class GlobalSearchSourceFilter { All, PinnedOnly }
+
+    // Advanced: hide extensions and sources that the built-in ones replace (SY), read at start
+    fun enableSourceBlacklist() = preferenceStore.getBoolean("eh_enable_source_blacklist", true)
 }
 // ZOUKAN <--
