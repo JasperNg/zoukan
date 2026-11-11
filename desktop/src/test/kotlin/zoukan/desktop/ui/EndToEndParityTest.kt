@@ -3,7 +3,9 @@ package zoukan.desktop.ui
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
@@ -43,6 +45,7 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetManga
@@ -156,6 +159,36 @@ class EndToEndParityTest {
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
                 shot("p7-filtered-unread")
                 library.filterUnread().set(TriState.DISABLED)
+            }
+
+            step("Tag sorting and the Updates filters") {
+                // Charlie has the sort tag, so a descending tag sort puts it first
+                val charlie = favorites.first { it.title == "Charlie" }
+                runBlocking {
+                    Injekt.get<MangaRepository>().update(MangaUpdate(id = charlie.id, genre = listOf("female: sole female")))
+                }
+                Injekt.get<eu.kanade.domain.manga.interactor.CreateSortTag>().await("female: sole female")
+                library.sortingMode().set(LibrarySort(LibrarySort.Type.TagList, LibrarySort.Direction.Descending))
+                fun SemanticsNode.hasTextDeep(text: String): Boolean =
+                    config.getOrNull(SemanticsProperties.Text).orEmpty().any { text in it.text } || children.any { it.hasTextDeep(text) }
+                waitUntil(timeoutMillis = 10_000) {
+                    onAllNodesWithTag("manga-item", useUnmergedTree = true).onFirst().fetchSemanticsNode().hasTextDeep("Charlie")
+                }
+                byDescription("Filter, sort and display").performClick()
+                onAllNodesWithText("Sort").onFirst().performClick()
+                waitFor(hasText("Tag sorting"))
+                shot("d1-tag-sorting")
+                onAllNodesWithText("Close").onFirst().performClick()
+                library.sortingMode().set(LibrarySort.default)
+                Injekt.get<eu.kanade.domain.manga.interactor.DeleteSortTag>().await("female: sole female")
+
+                runOnUiThread { HomeScreen.selectTab(HomeTab.Updates) }
+                byDescription("Filter").performClick()
+                waitFor(hasText("Bookmarked"))
+                shot("d2-updates-filter")
+                onAllNodesWithText("Close").onFirst().performClick()
+                runOnUiThread { HomeScreen.selectTab(HomeTab.Library) }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 3 }
             }
 
             step("Edit categories: add, rename, reorder, hide, default and delete") {

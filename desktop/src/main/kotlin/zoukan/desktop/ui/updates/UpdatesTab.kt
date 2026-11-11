@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,7 +43,6 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -53,6 +51,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
@@ -62,6 +61,7 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
+import tachiyomi.domain.updates.service.UpdatesPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.download.Download
@@ -95,12 +95,13 @@ class UpdatesScreenModel(
     private val getManga: GetManga = Injekt.get(),
     private val getChapter: GetChapter = Injekt.get(),
     private val downloadManager: DownloadManager = Injekt.get(),
+    val preferences: UpdatesPreferences = Injekt.get(),
 ) : StateScreenModel<UpdatesScreenModel.State>(State()) {
 
     data class State(
         val loading: Boolean = true,
         val items: List<UpdatesWithRelations> = emptyList(),
-        val unreadOnly: Boolean = false,
+        val filters: UpdatesFilters = UpdatesFilters(),
         // ZOUKAN -->
         /** Chapter ids picked for a bulk action, as Android's Updates selection */
         val selected: Set<Long> = emptySet(),
@@ -114,35 +115,49 @@ class UpdatesScreenModel(
         val selectedItems: List<UpdatesWithRelations> get() = items.filter { it.chapterId in selected }
     }
 
-    private val unreadOnly = MutableStateFlow(false)
-
     init {
         screenModelScope.launch {
+            // As Android's UpdatesScreenModel: unread, started, bookmarked and excluded scanlators
+            // filter in the query, downloaded on the result
+            val filters = updatesFilters(preferences).distinctUntilChanged()
+
             @OptIn(ExperimentalCoroutinesApi::class)
-            unreadOnly.flatMapLatest { unread ->
-                getUpdates.subscribe(
-                    Instant.now().minus(90, ChronoUnit.DAYS),
-                    unread = if (unread) true else null,
-                    started = null,
-                    bookmarked = null,
-                    hideExcludedScanlators = false,
-                )
-            }
-                // ZOUKAN -->
-                // More > Downloaded only shows only downloaded chapters, as Android's Updates
-                .let { updates ->
-                    val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
-                    combine(updates, downloadedOnly, downloadManager.changes) { items, only, _ ->
-                        if (only) items.filter { isDownloaded(downloadManager, it) } else items
-                    }
+            val updates = filters
+                .map { it.copy(downloaded = TriState.DISABLED) }
+                .distinctUntilChanged()
+                .flatMapLatest { f ->
+                    getUpdates.subscribe(
+                        Instant.now().minus(90, ChronoUnit.DAYS),
+                        unread = f.unread.toBooleanOrNull(),
+                        started = f.started.toBooleanOrNull(),
+                        bookmarked = f.bookmarked.toBooleanOrNull(),
+                        hideExcludedScanlators = f.hideExcludedScanlators,
+                    )
                 }
-                // ZOUKAN <--
-                .collectLatest { items ->
+            // ZOUKAN -->
+            // More > Downloaded only shows only downloaded chapters, as Android's Updates
+            val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
+            // ZOUKAN <--
+            combine(updates, filters, downloadedOnly, downloadManager.changes) { items, f, only, _ ->
+                items to if (only) f.copy(downloaded = TriState.ENABLED_IS) else f
+            }
+                .collectLatest { (all, f) ->
+                    val items = if (f.downloaded == TriState.DISABLED) {
+                        all
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            all.filter { item ->
+                                val downloaded = runCatching { isDownloaded(downloadManager, item) }.getOrDefault(false)
+                                if (f.downloaded == TriState.ENABLED_IS) downloaded else !downloaded
+                            }
+                        }
+                    }
                     val ids = items.mapTo(HashSet()) { it.chapterId }
                     mutableState.update {
                         it.copy(
                             loading = false,
                             items = items,
+                            filters = f,
                             // Chapters that left the list leave the selection too
                             selected = it.selected.filterTo(HashSet()) { id -> id in ids },
                         )
@@ -175,11 +190,6 @@ class UpdatesScreenModel(
         return downloads.isDownloaded(manga, chapter)
     }
     // ZOUKAN <--
-
-    fun toggleUnreadOnly() {
-        unreadOnly.value = !unreadOnly.value
-        mutableState.update { it.copy(unreadOnly = unreadOnly.value) }
-    }
 
     fun setRead(item: UpdatesWithRelations, read: Boolean) = setRead(listOf(item), read)
 
@@ -267,7 +277,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
             SelectionHeader(state, model)
         } else {
             ScreenHeader("Updates", subtitle = "New chapters in your library from the last 90 days", showBack = false) {
-                FilterChip(selected = state.unreadOnly, onClick = model::toggleUnreadOnly, label = { Text("Unread only") })
+                UpdatesFilterButton(model, state.filters)
                 // Android's Updates toolbar opens Upcoming from its calendar button
                 TooltipIconButton(Icons.Outlined.CalendarMonth, "View Upcoming Updates", onClick = { navigator.push(UpcomingScreen) })
                 DownloadsButton()
@@ -277,6 +287,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
         LibraryUpdateProgress()
         when {
             state.loading -> LoadingScreen()
+            state.items.isEmpty() && state.filters.active -> EmptyScreen("No updates match the filters")
             state.items.isEmpty() -> EmptyScreen("No recent updates. Press refresh to check your library for new chapters.")
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 state.items.groupBy { zoukan.desktop.ui.common.Dates.relative(it.dateFetch) }.forEach { (date, items) ->

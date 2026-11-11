@@ -89,8 +89,9 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
     )
 }
 
+/** A tri-state filter: off, only, or not; shared with the Updates filter. */
 @Composable
-private fun TriStateRow(label: String, preference: Preference<TriState>) {
+internal fun TriStateRow(label: String, preference: Preference<TriState>) {
     val value by preference.changes().collectAsState(preference.get())
     Row(
         Modifier.fillMaxWidth().clickable { preference.set(value.next()) }.padding(vertical = 2.dp),
@@ -131,7 +132,10 @@ private fun FilterPage(model: LibraryScreenModel) {
 
 @Composable
 private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
-    SORTS.forEach { (type, label) ->
+    val tags = model.state.collectAsState().value.settings.sortTags
+    // SY's "Tag sorting", offered once there are tags to sort by (Settings > Library > Sorting)
+    val sorts = if (tags.isNotEmpty() || sort.type == LibrarySort.Type.TagList) SORTS + (LibrarySort.Type.TagList to "Tag sorting") else SORTS
+    sorts.forEach { (type, label) ->
         Row(
             Modifier.fillMaxWidth().clickable { model.setSort(type) }.padding(vertical = 8.dp, horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
