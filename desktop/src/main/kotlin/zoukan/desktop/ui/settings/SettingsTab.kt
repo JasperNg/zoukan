@@ -2,6 +2,7 @@ package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,10 +18,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Explore
@@ -29,11 +32,13 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,17 +47,26 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,7 +78,9 @@ import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import exh.md.utils.MdUtil
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.category.interactor.GetCategories
@@ -113,6 +129,12 @@ enum class SettingsCategory(val title: String, val subtitle: String, val icon: I
 /** The open settings page, kept while other tabs are open, as the Android app's settings navigator. */
 private var selectedCategory by mutableStateOf(SettingsCategory.Appearance)
 
+/** What settings search looks for; blank when the pages show. Kept while other tabs are open. */
+private var searchQuery by mutableStateOf("")
+
+/** The setting a search result opened, flashed on its page. */
+private var highlightedItem by mutableStateOf<Pair<SettingsCategory, Any>?>(null)
+
 /** Opens Settings on [category] the next time the Settings tab shows. */
 fun openSettingsCategory(category: SettingsCategory) {
     selectedCategory = category
@@ -139,63 +161,118 @@ fun SettingsTab() {
     }
     val selected = selectedCategory.takeIf { it in pages } ?: SettingsCategory.Appearance
 
+    // One page's settings; search lists every page's through it
+    fun LazyListScope.settingsPage(page: SettingsCategory) {
+        when (page) {
+            SettingsCategory.Appearance -> appearanceSettings()
+            SettingsCategory.Library -> {
+                settingsGroup("Library")
+                // Android's "Edit categories": the number of categories, and the screen that edits them
+                item {
+                    val count = categories.count { !it.isSystemCategory }
+                    SettingRow(
+                        "Edit categories",
+                        if (count == 1) "1 category" else "$count categories",
+                        onClick = { navigator.push(CategoryScreen) },
+                    )
+                }
+                librarySettings(categories)
+            }
+            SettingsCategory.Reader -> readerSettings(preferences)
+            SettingsCategory.Downloads -> {
+                downloadSettings(downloadPreferences, securityPreferences, hasPassword) { passwordDialog = true }
+                downloadBehaviorSettings(categories)
+            }
+            SettingsCategory.Tracking -> trackingSettings()
+            SettingsCategory.Connections -> discordSettings()
+            SettingsCategory.Browse -> browseSettings()
+            SettingsCategory.Data -> {
+                dataSettings()
+                syncSettings()
+                dataSaverSettings()
+            }
+            SettingsCategory.Security -> securitySettings()
+            SettingsCategory.EHentai -> ehSettings()
+            SettingsCategory.MangaDex -> mangaDexSettings()
+            SettingsCategory.Advanced -> {
+                settingsGroup("General")
+                item {
+                    SwitchPreference(
+                        "Keep running in the tray",
+                        preferences.closeToTray(),
+                        "Closing the window keeps Zoukan in the system tray, so library updates, downloads and backups go on",
+                    )
+                }
+                shortcutSettings()
+                advancedSettings()
+            }
+            SettingsCategory.About -> aboutSettings()
+        }
+    }
+
+    val query = searchQuery
+    val searching = query.isNotBlank()
+
+    @Composable
+    fun SearchResults(pages: List<SettingsCategory>, query: String, onOpen: (SettingsCategory, Any) -> Unit) {
+        val state = rememberLazyListState()
+        // Every item but the end spacer has no height when nothing matches
+        val nothing by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.none { it.size > 0 && it.key != "search-end" } } }
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+                pages.forEach { SearchScope(this, it, query, onOpen).settingsPage(it) }
+                item(key = "search-end") { Spacer(Modifier.height(24.dp)) }
+            }
+            if (nothing) {
+                Text(
+                    "No settings match \u201c${query.trim()}\u201d",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(32.dp),
+                )
+            }
+        }
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val listWidth = (maxWidth / 2).coerceAtMost(450.dp)
         Row(Modifier.fillMaxSize()) {
             Surface(color = palerSurface(), modifier = Modifier.width(listWidth).fillMaxHeight()) {
-                SettingsCategoryList(pages, selected) { selectedCategory = it }
+                SettingsCategoryList(pages, if (searching) null else selected) {
+                    searchQuery = ""
+                    selectedCategory = it
+                }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                ScreenHeader(selected.title, showBack = false)
-                // A new list for each page, so each page opens at its top
-                key(selected) {
-                    LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp)) {
-                        when (selected) {
-                            SettingsCategory.Appearance -> appearanceSettings()
-                            SettingsCategory.Library -> {
-                                settingsGroup("Library")
-                                // Android's "Edit categories": the number of categories, and the screen that edits them
-                                item {
-                                    val count = categories.count { !it.isSystemCategory }
-                                    SettingRow(
-                                        "Edit categories",
-                                        if (count == 1) "1 category" else "$count categories",
-                                        onClick = { navigator.push(CategoryScreen) },
-                                    )
-                                }
-                                librarySettings(categories)
-                            }
-                            SettingsCategory.Reader -> readerSettings(preferences)
-                            SettingsCategory.Downloads -> {
-                                downloadSettings(downloadPreferences, securityPreferences, hasPassword) { passwordDialog = true }
-                                downloadBehaviorSettings(categories)
-                            }
-                            SettingsCategory.Tracking -> trackingSettings()
-                            SettingsCategory.Connections -> discordSettings()
-                            SettingsCategory.Browse -> browseSettings()
-                            SettingsCategory.Data -> {
-                                dataSettings()
-                                syncSettings()
-                                dataSaverSettings()
-                            }
-                            SettingsCategory.Security -> securitySettings()
-                            SettingsCategory.EHentai -> ehSettings()
-                            SettingsCategory.MangaDex -> mangaDexSettings()
-                            SettingsCategory.Advanced -> {
-                                settingsGroup("General")
-                                item {
-                                    SwitchPreference(
-                                        "Keep running in the tray",
-                                        preferences.closeToTray(),
-                                        "Closing the window keeps Zoukan in the system tray, so library updates, downloads and backups go on",
-                                    )
-                                }
-                                shortcutSettings()
-                                advancedSettings()
-                            }
-                            SettingsCategory.About -> aboutSettings()
+                if (searching) {
+                    ScreenHeader("Search results", subtitle = "Change a setting here, or open its page from the line above it", showBack = false)
+                    SearchResults(pages, query) { page, id ->
+                        searchQuery = ""
+                        selectedCategory = page
+                        highlightedItem = page to id
+                    }
+                } else {
+                    ScreenHeader(selected.title, showBack = false)
+                    // A new list for each page, so each page opens at its top
+                    key(selected) {
+                        val state = rememberLazyListState()
+                        val ids = remember { mutableListOf<Any>() }
+                        val highlight = highlightedItem?.takeIf { it.first == selected }?.second
+                        LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+                            ids.clear()
+                            HighlightScope(this, highlight, ids).settingsPage(selected)
+                            item { Spacer(Modifier.height(24.dp)) }
                         }
-                        item { Spacer(Modifier.height(24.dp)) }
+                        // Opened from search: scroll to the setting, which flashes
+                        LaunchedEffect(highlight) {
+                            if (highlight != null) {
+                                // The list's items are known once it has been laid out
+                                snapshotFlow { state.layoutInfo.totalItemsCount }.first { it > 0 }
+                                ids.indexOf(highlight).takeIf { it >= 0 }?.let { state.scrollToItem(it) }
+                                delay(2000)
+                                highlightedItem = null
+                            }
+                        }
                     }
                 }
             }
@@ -243,10 +320,11 @@ fun SettingsTab() {
 
 /** The settings list on the left: one row per page, the open page highlighted, as on Android. */
 @Composable
-private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: SettingsCategory, onSelect: (SettingsCategory) -> Unit) {
+private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: SettingsCategory?, onSelect: (SettingsCategory) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         // A back button when More opened Settings as its own screen
         ScreenHeader("Settings", color = Color.Transparent)
+        SearchField()
         LazyColumn(Modifier.fillMaxSize()) {
             items(pages, key = { it.name }) { page ->
                 val isSelected = page == selected
@@ -334,6 +412,9 @@ private fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
     }
     item { SliderPreference("Webtoon side padding", preferences.webtoonSidePadding(), 0..25) { "$it%" } }
     item { SwitchPreference("Show page number", preferences.showPageNumber()) }
+    // ZOUKAN -->
+    readerBehaviourSettings(preferences)
+    // ZOUKAN <--
 }
 
 /** Settings > Downloads: the format, concurrency and download password. */
@@ -483,4 +564,35 @@ fun openFolder(folder: File) {
             runCatching { Desktop.getDesktop().open(folder) }.onFailure { Toasts.error("Could not open the folder", it) }
         }
     }
+}
+
+/** The search field over the settings list, as the search button of the Android app's settings. */
+@Composable
+private fun SearchField() {
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = { searchQuery = it },
+        singleLine = true,
+        placeholder = { Text("Search settings") },
+        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+        trailingIcon = {
+            if (searchQuery.isNotEmpty()) {
+                IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Outlined.Close, contentDescription = "Clear search") }
+            }
+        },
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("settings-search")
+            // Escape clears the search before it goes back
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && searchQuery.isNotEmpty()) {
+                    searchQuery = ""
+                    true
+                } else {
+                    false
+                }
+            },
+    )
 }

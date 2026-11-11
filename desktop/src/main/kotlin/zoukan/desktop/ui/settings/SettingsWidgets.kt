@@ -36,7 +36,7 @@ import tachiyomi.domain.category.model.Category
 import kotlin.math.roundToInt
 
 fun LazyListScope.settingsGroup(title: String) {
-    item(key = "group-$title") {
+    item(key = "$GROUP_KEY_PREFIX$title") {
         Text(
             title,
             style = MaterialTheme.typography.titleSmall,
@@ -54,6 +54,9 @@ fun SettingRow(
     onClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
 ) {
+    // Settings search matches the title and the summary; in its results only matching rows show
+    LocalSearchTexts.current?.add(title, subtitle)
+    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOfNotNull(title, subtitle))) return }
     Row(
         Modifier
             .fillMaxWidth()
@@ -135,6 +138,8 @@ fun <T> ChoicePreference(title: String, preference: Preference<T>, choices: List
 
 @Composable
 fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange, label: (Int) -> String) {
+    LocalSearchTexts.current?.add(title)
+    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOf(title))) return }
     val saved by preference.changes().collectAsState(preference.get())
     var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
