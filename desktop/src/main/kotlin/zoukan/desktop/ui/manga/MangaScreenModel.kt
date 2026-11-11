@@ -225,7 +225,7 @@ class MangaScreenModel(
             byEntry(manga, chapters).forEach { (entry, list) -> downloadManager.enqueue(entry, list) }
         }
         // ZOUKAN <--
-        clearSelection()
+        done(chapters)
     }
 
     /** Downloads the next [count] unread chapters, or all unread ones when null. */
@@ -246,7 +246,7 @@ class MangaScreenModel(
         val manga = state.value.manga ?: return
         screenModelScope.launch {
             byEntry(manga, chapters).forEach { (entry, list) -> downloadManager.delete(entry, list) }
-            clearSelection()
+            done(chapters)
         }
     }
 
@@ -386,12 +386,20 @@ class MangaScreenModel(
 
     fun clearSelection() = mutableState.update { it.copy(selected = emptySet()) }
 
+    /**
+     * Ends an action on [chapters]: an action on the selection clears it, and one on a chapter
+     * outside the selection (its row's buttons or context menu) leaves the selection as it was.
+     */
+    private fun done(chapters: List<Chapter>) {
+        if (chapters.mapTo(HashSet()) { it.id } == state.value.selected) clearSelection()
+    }
+
     fun markRead(chapters: List<Chapter>, read: Boolean) {
         screenModelScope.launch {
             updateChapter.awaitAll(
                 chapters.map { ChapterUpdate(id = it.id, read = read, lastPageRead = if (read) null else 0L) },
             )
-            clearSelection()
+            done(chapters)
             // ZOUKAN -->
             if (read) AppScope.launch { downloadManager.afterMarkedRead(chapters.filter { !it.read }) }
             // ZOUKAN <--
@@ -421,7 +429,7 @@ class MangaScreenModel(
     fun setBookmark(chapters: List<Chapter>, bookmark: Boolean) {
         screenModelScope.launch {
             updateChapter.awaitAll(chapters.map { ChapterUpdate(id = it.id, bookmark = bookmark) })
-            clearSelection()
+            done(chapters)
         }
     }
 
