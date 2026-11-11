@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 
 /** A decoded page drawn at its own aspect ratio: the slices stacked, filling the width it gets. */
 @Composable
@@ -56,10 +59,10 @@ fun PageLoading(number: Int, color: Color, modifier: Modifier = Modifier) {
 fun PageError(number: Int, message: String, color: Color, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 420.dp).padding(16.dp)) {
-            Text("Page $number could not load", color = color, style = MaterialTheme.typography.titleMedium)
+            Text(localized(DMR.strings.page_could_not_load, number), color = color, style = MaterialTheme.typography.titleMedium)
             Text(message, color = color.copy(alpha = 0.7f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(12.dp))
-            FilledTonalButton(onClick = onRetry) { Text("Retry") }
+            FilledTonalButton(onClick = onRetry) { Text(localized(MR.strings.action_retry)) }
         }
     }
 }
@@ -77,21 +80,21 @@ fun ChapterTransition(
     Box(modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (current != null) {
-                Text(if (next) "Finished" else "Current", color = color.copy(alpha = 0.7f), style = MaterialTheme.typography.labelLarge)
+                Text(if (next) localized(DMR.strings.finished) else localized(DMR.strings.current), color = color.copy(alpha = 0.7f), style = MaterialTheme.typography.labelLarge)
                 Text(current.name, color = color, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
             }
             Spacer(Modifier.height(16.dp))
             if (other == null) {
                 Text(
-                    if (next) "There is no next chapter" else "There is no previous chapter",
+                    if (next) localized(DMR.strings.there_is_no_next_chapter) else localized(DMR.strings.there_is_no_previous_chapter),
                     color = color,
                     style = MaterialTheme.typography.titleMedium,
                 )
             } else {
-                Text(if (next) "Next" else "Previous", color = color.copy(alpha = 0.7f), style = MaterialTheme.typography.labelLarge)
+                Text(if (next) localized(MR.strings.nav_zone_next) else localized(DMR.strings.previous), color = color.copy(alpha = 0.7f), style = MaterialTheme.typography.labelLarge)
                 Text(other.name, color = color, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
-                FilledTonalButton(onClick = onGo) { Text(if (next) "Read next chapter" else "Read previous chapter") }
+                FilledTonalButton(onClick = onGo) { Text(if (next) localized(DMR.strings.read_next_chapter) else localized(DMR.strings.read_previous_chapter)) }
             }
         }
     }

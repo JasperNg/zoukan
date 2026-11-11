@@ -46,6 +46,8 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -55,6 +57,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.i18n.desktop.DMR
 
 /**
  * Related titles from the entry's own source (Komikku's related titles) and recommendations from
@@ -106,7 +109,7 @@ class RecommendsScreenModel(
                                 page.mangas.map { it.toDomainManga(RECOMMENDS_SOURCE) }
                             }
                             Result.Success(titles.distinctBy { it.url })
-                        }.getOrElse { Result.Error(it.message?.takeIf { m -> m.isNotBlank() } ?: "No results") }
+                        }.getOrElse { Result.Error(it.message?.takeIf { m -> m.isNotBlank() } ?: localized(DMR.strings.no_results)) }
                     }
                     put(Group(key, title, source.associatedSourceId != null, result))
                 }
@@ -117,7 +120,7 @@ class RecommendsScreenModel(
     private suspend fun loadRelated(manga: Manga) {
         if (!sourcePreferences.relatedMangas().get() || manga.source == MERGED_SOURCE_ID) return
         val source = sourceManager.get(manga.source) ?: return
-        val loading = Group("related", "Related titles", true, Result.Loading)
+        val loading = Group("related", localized(DMR.strings.related_titles), true, Result.Loading)
         put(loading)
         val found = mutableListOf<Manga>()
         runCatching {
@@ -129,7 +132,7 @@ class RecommendsScreenModel(
                 }
             }
         }
-        if (found.isEmpty()) put(loading.copy(result = Result.Error("No related titles")))
+        if (found.isEmpty()) put(loading.copy(result = Result.Error(localized(DMR.strings.no_related_titles))))
     }
 
     private fun put(group: Group) = mutableState.update { state ->
@@ -154,7 +157,7 @@ data class RecommendsScreen(val mangaId: Long) : Screen {
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Similar titles", subtitle = state.title) {}
+            ScreenHeader(localized(SYMR.strings.similar_titles), subtitle = state.title) {}
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(state.groups, key = { it.key }) { group ->
                     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -173,7 +176,7 @@ data class RecommendsScreen(val mangaId: Long) : Screen {
                                                 if (group.opensEntry) MangaScreen(manga.id) else GlobalSearchScreen(manga.ogTitle),
                                             )
                                         },
-                                        badge = if (manga.favorite) "In library" else null,
+                                        badge = if (manga.favorite) localized(MR.strings.in_library) else null,
                                         modifier = Modifier.width(140.dp),
                                     )
                                 }

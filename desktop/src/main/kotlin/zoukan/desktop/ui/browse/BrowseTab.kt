@@ -59,8 +59,11 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
@@ -71,6 +74,7 @@ import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.settings.SourceSettingsScreen
+import zoukan.i18n.desktop.DMR
 import java.util.Locale
 
 @Composable
@@ -103,11 +107,11 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
     // ZOUKAN <--
 
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Browse", showBack = false) {
+        ScreenHeader(localized(MR.strings.browse), showBack = false) {
             SearchField(
                 globalQuery,
                 { globalQuery = it },
-                "Search all sources",
+                localized(DMR.strings.search_all_sources),
                 Modifier.width(320.dp),
                 onSearch = {
                     if (globalQuery.isNotBlank()) {
@@ -121,10 +125,10 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
             )
             // ZOUKAN -->
             if (current == BrowsePage.SOURCES) {
-                TooltipIconButton(Icons.Outlined.FilterList, "Filter sources", onClick = { navigator.push(SourcesFilterScreen) })
+                TooltipIconButton(Icons.Outlined.FilterList, localized(DMR.strings.filter_sources), onClick = { navigator.push(SourcesFilterScreen) })
             }
-            TooltipIconButton(Icons.AutoMirrored.Outlined.PlaylistAdd, "Batch add", onClick = { navigator.push(BatchAddScreen) })
-            TooltipIconButton(Icons.Outlined.Link, "Open from a URL", onClick = { openUrl = true })
+            TooltipIconButton(Icons.AutoMirrored.Outlined.PlaylistAdd, localized(SYMR.strings.batch_add), onClick = { navigator.push(BatchAddScreen) })
+            TooltipIconButton(Icons.Outlined.Link, localized(DMR.strings.open_from_a_url), onClick = { openUrl = true })
             // ZOUKAN <--
         }
         val updates = state.installed.count { it.hasUpdate }
@@ -139,13 +143,13 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
                     text = {
                         Text(
                             when (page) {
-                                BrowsePage.SOURCES -> "Sources"
-                                BrowsePage.EXTENSIONS -> if (updates > 0) "Extensions ($updates)" else "Extensions"
-                                BrowsePage.STORES -> "Stores"
+                                BrowsePage.SOURCES -> localized(MR.strings.label_sources)
+                                BrowsePage.EXTENSIONS -> if (updates > 0) localized(DMR.strings.extensions, updates) else localized(MR.strings.label_extensions)
+                                BrowsePage.STORES -> localized(DMR.strings.stores)
                                 // ZOUKAN -->
-                                BrowsePage.MIGRATE -> "Migrate"
+                                BrowsePage.MIGRATE -> localized(MR.strings.action_migrate)
                                 // ZOUKAN <--
-                                BrowsePage.FEED -> "Feed"
+                                BrowsePage.FEED -> localized(SYMR.strings.feed)
                             },
                         )
                     },
@@ -174,8 +178,8 @@ private fun SourcesList(state: BrowseScreenModel.State, model: BrowseScreenModel
     when {
         !state.sourcesLoaded && state.sources.isEmpty() -> LoadingScreen()
         state.sources.isEmpty() -> EmptyScreen(
-            if (state.allSources.isEmpty()) "No sources yet. Install an extension to add its sources." else "No sources. Turn some on in the sources filter.",
-            actionLabel = if (state.allSources.isEmpty()) "Extensions" else "Filter",
+            if (state.allSources.isEmpty()) localized(DMR.strings.no_sources_yet_install_an_extension) else localized(DMR.strings.no_sources_turn_some_on_in),
+            actionLabel = if (state.allSources.isEmpty()) localized(MR.strings.label_extensions) else localized(MR.strings.action_filter),
             onAction = if (state.allSources.isEmpty()) onExtensions else ({ navigator.push(SourcesFilterScreen) }),
         )
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -229,32 +233,32 @@ private fun SourceRow(
         // ZOUKAN -->
         if (source.supportsLatest && state.showLatest) {
             // ZOUKAN <--
-            TextButton(onClick = { push(SourceScreen(source.id, latest = true)) }) { Text("Latest") }
+            TextButton(onClick = { push(SourceScreen(source.id, latest = true)) }) { Text(localized(MR.strings.latest)) }
         }
         if (source is ConfigurableSource) {
-            TooltipIconButton(Icons.Outlined.Settings, "Source settings", onClick = { push(SourceSettingsScreen(source.id)) })
+            TooltipIconButton(Icons.Outlined.Settings, localized(MR.strings.source_settings), onClick = { push(SourceSettingsScreen(source.id)) })
         }
         TooltipIconButton(
             if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-            if (pinned) "Unpin" else "Pin",
+            if (pinned) localized(MR.strings.action_unpin) else localized(MR.strings.action_pin),
             onClick = { model.togglePin(source) },
         )
         // ZOUKAN -->
         // Android's long-press dialog: pin, disable and set categories
         Box {
-            TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { menu = true })
+            TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { menu = true })
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text(if (pinned) "Unpin" else "Pin") }, onClick = {
+                DropdownMenuItem(text = { Text(if (pinned) localized(MR.strings.action_unpin) else localized(MR.strings.action_pin)) }, onClick = {
                     menu = false
                     model.togglePin(source)
                 })
                 if (source !is zoukan.desktop.local.LocalSource) {
-                    DropdownMenuItem(text = { Text("Disable") }, onClick = {
+                    DropdownMenuItem(text = { Text(localized(MR.strings.action_disable)) }, onClick = {
                         menu = false
                         model.toggleHidden(source)
                     })
                 }
-                DropdownMenuItem(text = { Text("Set categories") }, onClick = {
+                DropdownMenuItem(text = { Text(localized(MR.strings.action_move_category)) }, onClick = {
                     menu = false
                     categoriesDialog = true
                 })
@@ -290,12 +294,12 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             SearchField(
                 state.extensionQuery,
                 model::searchExtensions,
-                "Search extensions",
+                localized(DMR.strings.search_extensions),
                 Modifier.weight(1f).testTag("extension-search"),
             )
             Spacer(Modifier.width(8.dp))
             Box {
-                TooltipIconButton(Icons.Outlined.Translate, "Languages", onClick = { languageMenu = true })
+                TooltipIconButton(Icons.Outlined.Translate, localized(DMR.strings.languages), onClick = { languageMenu = true })
                 DropdownMenu(languageMenu, onDismissRequest = { languageMenu = false }) {
                     state.allLanguages.forEach { lang ->
                         DropdownMenuItem(
@@ -309,26 +313,26 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             if (state.refreshing) {
                 CircularProgressIndicator(Modifier.size(24.dp).padding(2.dp))
             } else {
-                TooltipIconButton(Icons.Outlined.Refresh, "Check the stores again", onClick = model::refreshAvailable)
+                TooltipIconButton(Icons.Outlined.Refresh, localized(DMR.strings.check_the_stores_again), onClick = model::refreshAvailable)
             }
         }
         if (state.stores.isEmpty()) {
-            EmptyScreen("Add an extension store to find extensions.", actionLabel = "Stores", onAction = onStores)
+            EmptyScreen(localized(DMR.strings.add_an_extension_store_to_find), actionLabel = localized(DMR.strings.stores), onAction = onStores)
             return
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
             if (state.visibleUntrusted.isNotEmpty()) {
-                sectionHeader("Untrusted")
+                sectionHeader(localized(MR.strings.ext_untrusted))
                 items(state.visibleUntrusted, key = { "u-${it.pkgName}" }) { ext ->
-                    ExtensionRow(ext, null, subtitle = "Signed with an unknown key. Trust it only if you know where it comes from.", busy = ext.pkgName in state.busy) {
-                        OutlinedButton(onClick = { model.uninstall(ext) }) { Text("Uninstall") }
+                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy) {
+                        OutlinedButton(onClick = { model.uninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
                         Spacer(Modifier.width(8.dp))
-                        Button(onClick = { model.trust(ext) }) { Text("Trust") }
+                        Button(onClick = { model.trust(ext) }) { Text(localized(MR.strings.ext_trust)) }
                     }
                 }
             }
             if (state.loadErrors.isNotEmpty()) {
-                sectionHeader("Failed to load")
+                sectionHeader(localized(DMR.strings.failed_to_load_2))
                 items(state.loadErrors.entries.toList(), key = { "e-${it.key}" }) { (pkg, error) ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Text(pkg, style = MaterialTheme.typography.bodyLarge)
@@ -337,25 +341,25 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 }
             }
             if (state.visibleInstalled.isNotEmpty()) {
-                sectionHeader("Installed")
+                sectionHeader(localized(MR.strings.ext_installed))
                 items(state.visibleInstalled, key = { "i-${it.pkgName}" }) { ext ->
                     val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
                     // ZOUKAN -->
                     ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }) {
                         // ZOUKAN <--
                         if (ext.hasUpdate) {
-                            Button(onClick = { model.update(ext) }) { Text("Update") }
+                            Button(onClick = { model.update(ext) }) { Text(localized(MR.strings.ext_update)) }
                             Spacer(Modifier.width(8.dp))
                         }
-                        TooltipIconButton(Icons.Outlined.Delete, "Uninstall", onClick = { model.uninstall(ext) })
+                        TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.ext_uninstall), onClick = { model.uninstall(ext) })
                     }
                 }
             }
             val available = state.visibleAvailable
-            sectionHeader(if (state.available.isEmpty() && state.refreshing) "Available (loading…)" else "Available (${available.size})")
+            sectionHeader(if (state.available.isEmpty() && state.refreshing) localized(DMR.strings.available_loading) else localized(DMR.strings.available, available.size))
             items(available, key = { "a-${it.pkgName}" }) { ext ->
                 ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy) {
-                    FilledTonalButton(onClick = { model.install(ext) }) { Text("Install") }
+                    FilledTonalButton(onClick = { model.install(ext) }) { Text(localized(MR.strings.action_install)) }
                 }
             }
         }
@@ -411,7 +415,7 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text(
-                "Extension stores list the extensions you can install. Zoukan installs the store's signed jars and only loads extensions signed with the store's key.",
+                localized(DMR.strings.extension_stores_list_the_extensions_you),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -429,12 +433,12 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                 Button(onClick = {
                     model.addStore(url)
                     url = ""
-                }, enabled = url.isNotBlank()) { Text("Add") }
+                }, enabled = url.isNotBlank()) { Text(localized(MR.strings.action_add)) }
             }
         }
         if (state.stores.none { it.indexUrl == BrowseScreenModel.KEIYOUSHI }) {
             item {
-                TextButton(onClick = { model.addStore(BrowseScreenModel.KEIYOUSHI) }) { Text("Add Keiyoushi") }
+                TextButton(onClick = { model.addStore(BrowseScreenModel.KEIYOUSHI) }) { Text(localized(DMR.strings.add_keiyoushi)) }
             }
         }
         items(state.stores, key = { it.indexUrl }) { store ->
@@ -444,12 +448,12 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                         Text(store.name, style = MaterialTheme.typography.titleMedium)
                         Text(store.indexUrl, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
-                            "Signing key ${store.signingKey.take(16)}…",
+                            localized(DMR.strings.signing_key, store.signingKey.take(16)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    TooltipIconButton(Icons.Outlined.Delete, "Remove", onClick = { model.removeStore(store) })
+                    TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_remove), onClick = { model.removeStore(store) })
                 }
             }
         }
@@ -468,9 +472,9 @@ fun LazyListScope.sectionHeader(title: String) {
 }
 
 fun languageName(lang: String): String = when (lang) {
-    "all" -> "Multi"
-    "other" -> "Other"
-    "" -> "Unknown"
+    "all" -> localized(MR.strings.multi_lang)
+    "other" -> localized(MR.strings.other_source)
+    "" -> localized(MR.strings.unknown)
     else -> Locale.forLanguageTag(lang).let { locale ->
         locale.getDisplayName(locale).replaceFirstChar { it.titlecase(locale) }.ifBlank { lang }
     }

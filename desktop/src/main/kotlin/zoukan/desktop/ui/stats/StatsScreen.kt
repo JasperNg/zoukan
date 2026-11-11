@@ -29,14 +29,17 @@ import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
@@ -132,31 +135,31 @@ object StatsScreen : Screen {
         val model = rememberScreenModel { StatsScreenModel() }
         val stats by model.state.collectAsState()
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Statistics")
+            ScreenHeader(localized(MR.strings.label_stats))
             val s = stats ?: return LoadingScreen()
             Column(
                 Modifier.fillMaxSize().verticalScrollWithBar().padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                Section("Overview") {
-                    Stat("${s.libraryCount}", "In library")
-                    Stat("${s.completedCount}", "Completed")
-                    Stat(formatDuration(s.readDurationMs), "Read time")
+                Section(localized(MR.strings.label_overview_section)) {
+                    Stat("${s.libraryCount}", localized(MR.strings.in_library))
+                    Stat("${s.completedCount}", localized(MR.strings.completed))
+                    Stat(formatDuration(s.readDurationMs), localized(DMR.strings.read_time))
                 }
-                Section("Entries") {
-                    Stat("${s.globalUpdateCount}", "In global update")
-                    Stat("${s.startedCount}", "Started")
-                    Stat("${s.localCount}", "Local")
+                Section(localized(MR.strings.label_titles_section)) {
+                    Stat("${s.globalUpdateCount}", localized(MR.strings.label_titles_in_global_update))
+                    Stat("${s.startedCount}", localized(MR.strings.label_started))
+                    Stat("${s.localCount}", localized(MR.strings.label_local))
                 }
-                Section("Chapters") {
-                    Stat("${s.totalChapters}", "Total")
-                    Stat("${s.readChapters}", "Read")
-                    Stat("${s.downloadedChapters}", "Downloaded")
+                Section(localized(MR.strings.chapters)) {
+                    Stat("${s.totalChapters}", localized(MR.strings.label_total_chapters))
+                    Stat("${s.readChapters}", localized(MR.strings.label_read_chapters))
+                    Stat("${s.downloadedChapters}", localized(MR.strings.label_downloaded))
                 }
-                Section("Trackers") {
-                    Stat("${s.trackedCount}", "Tracked entries")
-                    Stat(if (s.meanScore.isNaN()) "—" else String.format(Locale.getDefault(), "%.2f ★", s.meanScore), "Mean score")
-                    Stat("${s.trackerCount}", "Trackers used")
+                Section(localized(MR.strings.services)) {
+                    Stat("${s.trackedCount}", localized(MR.strings.label_tracked_titles))
+                    Stat(if (s.meanScore.isNaN()) "—" else String.format(Locale.getDefault(), "%.2f ★", s.meanScore), localized(MR.strings.label_mean_score))
+                    Stat("${s.trackerCount}", localized(DMR.strings.trackers_used))
                 }
             }
         }

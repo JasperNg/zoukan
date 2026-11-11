@@ -2,6 +2,10 @@ package zoukan.desktop.ui.common
 
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 
 /**
  * The settings the desktop UI reads. Keys are the Android app's where the setting exists there
@@ -212,17 +216,17 @@ object ReaderBottomButtons {
     val DEFAULTS = setOf(VIEW_CHAPTERS, WEB_VIEW, CROP_PAGER, CROP_CONTINUOUS_VERTICAL, PAGE_LAYOUT, READING_MODE, SCALE_TYPE)
 
     val all = listOf(
-        VIEW_CHAPTERS to "Chapters",
-        WEB_VIEW to "Open in WebView",
-        BROWSER to "Open in browser",
-        READING_MODE to "Reading mode",
-        SCALE_TYPE to "Scale type",
-        CROP_PAGER to "Crop borders (paged)",
-        CROP_CONTINUOUS_VERTICAL to "Crop borders (continuous vertical)",
-        CROP_WEBTOON to "Crop borders (webtoon)",
-        PAGE_LAYOUT to "Page layout",
-        RETRY_ALL to "Retry failed pages",
-        BOOST_PAGE to "Load this page first",
+        VIEW_CHAPTERS to localized(MR.strings.chapters),
+        WEB_VIEW to localized(MR.strings.action_open_in_web_view),
+        BROWSER to localized(MR.strings.action_open_in_browser),
+        READING_MODE to localized(MR.strings.viewer),
+        SCALE_TYPE to localized(MR.strings.pref_image_scale_type),
+        CROP_PAGER to localized(DMR.strings.crop_borders_paged),
+        CROP_CONTINUOUS_VERTICAL to localized(DMR.strings.crop_borders_continuous_vertical),
+        CROP_WEBTOON to localized(DMR.strings.crop_borders_webtoon),
+        PAGE_LAYOUT to localized(SYMR.strings.page_layout),
+        RETRY_ALL to localized(DMR.strings.retry_failed_pages),
+        BOOST_PAGE to localized(DMR.strings.load_this_page_first),
     )
 }
 // ZOUKAN <--
@@ -239,12 +243,12 @@ object ReadingModes {
     val all = listOf(LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON, CONTINUOUS_VERTICAL)
 
     fun label(mode: Int) = when (mode) {
-        LEFT_TO_RIGHT -> "Paged (left to right)"
-        RIGHT_TO_LEFT -> "Paged (right to left)"
-        VERTICAL -> "Paged (vertical)"
-        WEBTOON -> "Webtoon"
-        CONTINUOUS_VERTICAL -> "Continuous vertical"
-        else -> "Default"
+        LEFT_TO_RIGHT -> localized(MR.strings.left_to_right_viewer)
+        RIGHT_TO_LEFT -> localized(MR.strings.right_to_left_viewer)
+        VERTICAL -> localized(MR.strings.vertical_viewer)
+        WEBTOON -> localized(SYMR.strings.entry_type_webtoon)
+        CONTINUOUS_VERTICAL -> localized(DMR.strings.continuous_vertical)
+        else -> localized(MR.strings.label_default)
     }
 }
 
@@ -257,9 +261,9 @@ object FitModes {
     val all = listOf(FIT_SCREEN, FIT_WIDTH, FIT_HEIGHT, ORIGINAL)
 
     fun label(mode: Int) = when (mode) {
-        FIT_WIDTH -> "Fit width"
-        FIT_HEIGHT -> "Fit height"
-        ORIGINAL -> "Original size"
-        else -> "Fit screen"
+        FIT_WIDTH -> localized(MR.strings.scale_type_fit_width)
+        FIT_HEIGHT -> localized(MR.strings.scale_type_fit_height)
+        ORIGINAL -> localized(MR.strings.scale_type_original_size)
+        else -> localized(MR.strings.scale_type_fit_screen)
     }
 }

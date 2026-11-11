@@ -79,8 +79,11 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSIDE_RELEASE_PERIOD
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
@@ -92,6 +95,7 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.reducedMotion
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.i18n.desktop.DMR
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -225,23 +229,23 @@ object UpcomingScreen : Screen {
         val loading = if (updating) state.isLoadingUpdating else state.isLoadingUpcoming
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader(if (updating) "To be updated" else "Upcoming") {
+            ScreenHeader(if (updating) localized(KMR.strings.label_to_be_updated) else localized(MR.strings.label_upcoming)) {
                 if (model.isPredictReleaseDate) {
                     TooltipBox(
                         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                        tooltip = { PlainTooltip { Text("Smart update") } },
+                        tooltip = { PlainTooltip { Text(localized(MR.strings.pref_library_update_smart_update)) } },
                         state = rememberTooltipState(),
                     ) {
                         IconButton(onClick = model::toggleUpdatingMangas) {
                             Icon(
                                 Icons.Outlined.NewReleases,
-                                contentDescription = "Smart update",
+                                contentDescription = localized(MR.strings.pref_library_update_smart_update),
                                 tint = if (updating) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                             )
                         }
                     }
                 }
-                TooltipIconButton(Icons.AutoMirrored.Outlined.HelpOutline, "Upcoming guide", onClick = {
+                TooltipIconButton(Icons.AutoMirrored.Outlined.HelpOutline, localized(DMR.strings.upcoming_guide), onClick = {
                     runCatching { uriHandler.openUri(Constants.URL_HELP_UPCOMING) }
                 })
             }
@@ -265,9 +269,9 @@ object UpcomingScreen : Screen {
                     if (items.isEmpty()) {
                         EmptyScreen(
                             if (updating) {
-                                "No entries match the library update settings."
+                                localized(DMR.strings.no_entries_match_the_library_update)
                             } else {
-                                "No upcoming releases. Release dates are predicted from each entry's chapter history after a library update."
+                                localized(DMR.strings.no_upcoming_releases_release_dates_are)
                             },
                         )
                     } else {
@@ -297,11 +301,11 @@ fun relativeDateText(date: LocalDate, today: LocalDate = LocalDate.now()): Strin
     val difference = ChronoUnit.DAYS.between(date, today)
     return when {
         difference < -7 -> shortDate.format(date)
-        difference == -1L -> "Tomorrow"
-        difference < 0 -> "In ${-difference} days"
-        difference < 1 -> "Today"
-        difference == 1L -> "Yesterday"
-        difference < 7 -> "$difference days ago"
+        difference == -1L -> localized(DMR.strings.tomorrow)
+        difference < 0 -> localized(DMR.strings.in_days, -difference)
+        difference < 1 -> localized(MR.strings.relative_time_today)
+        difference == 1L -> localized(DMR.strings.yesterday)
+        difference < 7 -> localized(DMR.strings.days_ago, difference)
         else -> shortDate.format(date)
     }
 }
@@ -387,7 +391,7 @@ private fun CalendarHeader(yearMonth: YearMonth, onPreviousClick: () -> Unit, on
                     enter togetherWith exit
                 }
             },
-            label = "Change Month",
+            label = localized(DMR.strings.change_month),
         ) { month ->
             Text(
                 DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(month),
@@ -396,8 +400,8 @@ private fun CalendarHeader(yearMonth: YearMonth, onPreviousClick: () -> Unit, on
             )
         }
         Row {
-            TooltipIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Previous Month", onClick = onPreviousClick)
-            TooltipIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Next Month", onClick = onNextClick)
+            TooltipIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, localized(MR.strings.upcoming_calendar_prev), onClick = onPreviousClick)
+            TooltipIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowRight, localized(MR.strings.upcoming_calendar_next), onClick = onNextClick)
         }
     }
 }

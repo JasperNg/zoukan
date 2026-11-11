@@ -84,11 +84,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.category.CategoryScreen
@@ -99,6 +102,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.awt.Desktop
 import java.awt.FileDialog
 import java.io.File
@@ -112,19 +116,19 @@ internal val backupStatusFlow = MutableStateFlow<String?>(null)
  * Connections, data sync and data saver in Data and storage.
  */
 enum class SettingsCategory(val title: String, val subtitle: String, val icon: ImageVector) {
-    Appearance("Appearance", "Theme, date & time format", Icons.Outlined.Palette),
-    Library("Library", "Categories, global update", Icons.Outlined.CollectionsBookmark),
-    Reader("Reader", "Reading mode, display, navigation", Icons.AutoMirrored.Outlined.ChromeReaderMode),
-    Downloads("Downloads", "Automatic download, download ahead", Icons.Outlined.GetApp),
-    Tracking("Tracking", "One-way progress sync, enhanced sync", Icons.Outlined.Sync),
-    Connections("Connections", "Discord", Icons.Outlined.Link),
-    Browse("Browse", "Sources, extensions, global search", Icons.Outlined.Explore),
-    Data("Data and storage", "Manual & automatic backups, storage space", Icons.Outlined.Storage),
-    Security("Security and privacy", "App lock, secure screen", Icons.Outlined.Security),
-    EHentai("E-Hentai", "E-Hentai settings", Icons.Outlined.PhotoLibrary),
-    MangaDex("MangaDex", "MangaDex settings", Icons.AutoMirrored.Outlined.MenuBook),
-    Advanced("Advanced", "Tray, keyboard shortcuts, crash logs", Icons.Outlined.Code),
-    About("About", "Zoukan ${AppVersion.name}", Icons.Outlined.Info),
+    Appearance(localized(MR.strings.pref_category_appearance), localized(MR.strings.pref_appearance_summary), Icons.Outlined.Palette),
+    Library(localized(MR.strings.label_library), localized(DMR.strings.categories_global_update), Icons.Outlined.CollectionsBookmark),
+    Reader(localized(MR.strings.pref_category_reader), localized(MR.strings.pref_reader_summary), Icons.AutoMirrored.Outlined.ChromeReaderMode),
+    Downloads(localized(MR.strings.pref_category_downloads), localized(MR.strings.pref_downloads_summary), Icons.Outlined.GetApp),
+    Tracking(localized(MR.strings.track), localized(MR.strings.pref_tracking_summary), Icons.Outlined.Sync),
+    Connections(localized(KMR.strings.pref_category_connections), "Discord", Icons.Outlined.Link),
+    Browse(localized(MR.strings.browse), localized(MR.strings.pref_browse_summary), Icons.Outlined.Explore),
+    Data(localized(MR.strings.label_data_storage), localized(MR.strings.pref_backup_summary), Icons.Outlined.Storage),
+    Security(localized(MR.strings.pref_category_security), localized(MR.strings.pref_security_summary), Icons.Outlined.Security),
+    EHentai("E-Hentai", localized(DMR.strings.e_hentai_settings), Icons.Outlined.PhotoLibrary),
+    MangaDex("MangaDex", localized(DMR.strings.mangadex_settings), Icons.AutoMirrored.Outlined.MenuBook),
+    Advanced(localized(MR.strings.pref_category_advanced), localized(DMR.strings.tray_keyboard_shortcuts_crash_logs), Icons.Outlined.Code),
+    About(localized(MR.strings.pref_category_about), localized(DMR.strings.zoukan, AppVersion.name), Icons.Outlined.Info),
 }
 
 /** The open settings page, kept while other tabs are open, as the Android app's settings navigator. */
@@ -167,13 +171,13 @@ fun SettingsTab() {
         when (page) {
             SettingsCategory.Appearance -> appearanceSettings()
             SettingsCategory.Library -> {
-                settingsGroup("Library")
+                settingsGroup(localized(MR.strings.label_library))
                 // Android's "Edit categories": the number of categories, and the screen that edits them
                 item {
                     val count = categories.count { !it.isSystemCategory }
                     SettingRow(
-                        "Edit categories",
-                        if (count == 1) "1 category" else "$count categories",
+                        localized(MR.strings.action_edit_categories),
+                        if (count == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, count),
                         onClick = { navigator.push(CategoryScreen) },
                     )
                 }
@@ -196,12 +200,12 @@ fun SettingsTab() {
             SettingsCategory.EHentai -> ehSettings()
             SettingsCategory.MangaDex -> mangaDexSettings()
             SettingsCategory.Advanced -> {
-                settingsGroup("General")
+                settingsGroup(localized(MR.strings.pref_category_general))
                 item {
                     SwitchPreference(
-                        "Keep running in the tray",
+                        localized(DMR.strings.keep_running_in_the_tray),
                         preferences.closeToTray(),
-                        "Closing the window keeps Zoukan in the system tray, so library updates, downloads and backups go on",
+                        localized(DMR.strings.closing_the_window_keeps_zoukan_in),
                     )
                 }
                 shortcutSettings()
@@ -226,7 +230,7 @@ fun SettingsTab() {
             }
             if (nothing) {
                 Text(
-                    "No settings match \u201c${query.trim()}\u201d",
+                    localized(DMR.strings.no_settings_match, query.trim()),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.TopCenter).padding(32.dp),
@@ -246,7 +250,7 @@ fun SettingsTab() {
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 if (searching) {
-                    ScreenHeader("Search results", subtitle = "Change a setting here, or open its page from the line above it", showBack = false)
+                    ScreenHeader(localized(DMR.strings.search_results), subtitle = localized(DMR.strings.change_a_setting_here_or_open), showBack = false)
                     SearchResults(pages, query) { page, id ->
                         searchQuery = ""
                         selectedCategory = page
@@ -284,13 +288,13 @@ fun SettingsTab() {
         var password by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { passwordDialog = false },
-            title = { Text("Download password") },
+            title = { Text(localized(DMR.strings.download_password)) },
             text = {
                 OutlinedTextField(
                     password,
                     { password = it },
                     singleLine = true,
-                    label = { Text("Password") },
+                    label = { Text(localized(MR.strings.password)) },
                     visualTransformation = PasswordVisualTransformation(),
                 )
             },
@@ -299,8 +303,8 @@ fun SettingsTab() {
                     cbzPassword.set(password)
                     hasPassword = true
                     passwordDialog = false
-                    Toasts.show("Download password saved")
-                }) { Text("Save") }
+                    Toasts.show(localized(DMR.strings.download_password_saved))
+                }) { Text(localized(MR.strings.action_save)) }
             },
             dismissButton = {
                 Row {
@@ -310,9 +314,9 @@ fun SettingsTab() {
                             securityPreferences.passwordProtectDownloads().set(false)
                             hasPassword = false
                             passwordDialog = false
-                        }) { Text("Remove") }
+                        }) { Text(localized(MR.strings.action_remove)) }
                     }
-                    TextButton(onClick = { passwordDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { passwordDialog = false }) { Text(localized(MR.strings.action_cancel)) }
                 }
             },
         )
@@ -324,7 +328,7 @@ fun SettingsTab() {
 private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: SettingsCategory?, onSelect: (SettingsCategory) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         // A back button when More opened Settings as its own screen
-        ScreenHeader("Settings", color = Color.Transparent)
+        ScreenHeader(localized(MR.strings.action_settings), color = Color.Transparent)
         SearchField()
         LazyColumn(Modifier.fillMaxSize()) {
             items(pages, key = { it.name }) { page ->
@@ -399,20 +403,20 @@ internal fun palerSurface(surface: Color): Color {
 
 /** Settings > Reader. */
 private fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
-    settingsGroup("Reader")
+    settingsGroup(localized(MR.strings.pref_category_reader))
     item {
         ChoicePreference(
-            "Default reading mode",
+            localized(MR.strings.pref_viewer_type),
             preferences.defaultReadingMode(),
             ReadingModes.all.map { it to ReadingModes.label(it) },
         )
     }
-    item { ChoicePreference("Page scaling (paged modes)", preferences.readerFitMode(), FitModes.all.map { it to FitModes.label(it) }) }
+    item { ChoicePreference(localized(DMR.strings.page_scaling_paged_modes), preferences.readerFitMode(), FitModes.all.map { it to FitModes.label(it) }) }
     item {
-        ChoicePreference("Background", preferences.readerTheme(), listOf(0 to "White", 1 to "Black", 2 to "Gray"))
+        ChoicePreference(localized(DMR.strings.background), preferences.readerTheme(), listOf(0 to localized(MR.strings.white_background), 1 to localized(MR.strings.black_background), 2 to localized(MR.strings.gray_background)))
     }
-    item { SliderPreference("Webtoon side padding", preferences.webtoonSidePadding(), 0..25) { "$it%" } }
-    item { SwitchPreference("Show page number", preferences.showPageNumber()) }
+    item { SliderPreference(localized(DMR.strings.webtoon_side_padding), preferences.webtoonSidePadding(), 0..25) { "$it%" } }
+    item { SwitchPreference(localized(MR.strings.pref_show_page_number), preferences.showPageNumber()) }
     // ZOUKAN -->
     readerBehaviourSettings(preferences)
     // ZOUKAN <--
@@ -425,35 +429,35 @@ private fun LazyListScope.downloadSettings(
     hasPassword: Boolean,
     onEditPassword: () -> Unit,
 ) {
-    settingsGroup("Downloads")
+    settingsGroup(localized(MR.strings.pref_category_downloads))
     // ZOUKAN: the storage location and its folders are in Data and storage, as on Android
-    item { SwitchPreference("Save as CBZ archive", downloadPreferences.saveChaptersAsCBZ()) }
-    item { SwitchPreference("Split tall images", downloadPreferences.splitTallImages(), "Improves reader performance") }
-    item { SliderPreference("Concurrent source downloads", downloadPreferences.parallelSourceLimit(), 1..10) { "$it" } }
-    item { SliderPreference("Concurrent page downloads", downloadPreferences.parallelPageLimit(), 1..15) { "$it" } }
+    item { SwitchPreference(localized(MR.strings.save_chapter_as_cbz), downloadPreferences.saveChaptersAsCBZ()) }
+    item { SwitchPreference(localized(MR.strings.split_tall_images), downloadPreferences.splitTallImages(), localized(MR.strings.split_tall_images_summary)) }
+    item { SliderPreference(localized(MR.strings.pref_download_concurrent_sources), downloadPreferences.parallelSourceLimit(), 1..10) { "$it" } }
+    item { SliderPreference(localized(MR.strings.pref_download_concurrent_pages), downloadPreferences.parallelPageLimit(), 1..15) { "$it" } }
     // ZOUKAN: "Include chapter URL hash" is in Advanced, as on Android
     item {
         SwitchPreference(
-            "Password-protect downloads",
+            localized(DMR.strings.password_protect_downloads),
             securityPreferences.passwordProtectDownloads(),
-            if (hasPassword) "New CBZ downloads are encrypted with your password" else "Set a password first",
+            if (hasPassword) localized(DMR.strings.new_cbz_downloads_are_encrypted_with) else localized(DMR.strings.set_a_password_first),
         )
     }
     item {
         SettingRow(
-            if (hasPassword) "Change the download password" else "Set the download password",
-            "Kept in ${Injekt.get<zoukan.desktop.secrets.SecretStore>().name}. Use the same password as on Android to read the same archives.",
+            if (hasPassword) localized(DMR.strings.change_the_download_password) else localized(DMR.strings.set_the_download_password),
+            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name),
             onClick = onEditPassword,
         )
     }
     item {
         ChoicePreference(
-            "Encryption",
+            localized(DMR.strings.encryption),
             securityPreferences.encryptionType(),
             listOf(
                 SecurityPreferences.EncryptionType.AES_256 to "AES-256",
                 SecurityPreferences.EncryptionType.AES_128 to "AES-128",
-                SecurityPreferences.EncryptionType.ZIP_STANDARD to "Standard zip encryption",
+                SecurityPreferences.EncryptionType.ZIP_STANDARD to localized(DMR.strings.standard_zip_encryption),
             ),
         )
     }
@@ -461,14 +465,14 @@ private fun LazyListScope.downloadSettings(
 
 internal fun createBackup(folder: File) {
     if (backupStatusFlow.value != null) return
-    backupStatusFlow.value = "Backing up…"
+    backupStatusFlow.value = localized(DMR.strings.backing_up)
     AppScope.launch {
         try {
             val file = File(folder.apply { mkdirs() }, DesktopBackups.defaultFileName())
             val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, BackupOptions())
-            Toasts.show("Backed up ${backup.backupManga.size} entries to ${file.name}")
+            Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
         } catch (e: Exception) {
-            Toasts.error("Backup failed", e)
+            Toasts.error(localized(MR.strings.creating_backup_error), e)
         } finally {
             backupStatusFlow.value = null
         }
@@ -477,7 +481,7 @@ internal fun createBackup(folder: File) {
 
 internal fun restoreBackup(file: File) {
     if (backupStatusFlow.value != null) return
-    backupStatusFlow.value = "Restoring ${file.name}…"
+    backupStatusFlow.value = localized(DMR.strings.restoring, file.name)
     AppScope.launch {
         try {
             val backups = DesktopBackups(ZoukanRuntime.dirs.android)
@@ -494,13 +498,17 @@ internal fun restoreBackup(file: File) {
                 }
             }
             val errors = backups.restore(backup, options) { _, progress, total ->
-                backupStatusFlow.value = "Restoring ${file.name}: $progress of $total"
+                backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
             }
             Toasts.show(
-                "Restored ${backup.backupManga.size} entries" + if (errors.isNotEmpty()) " with ${errors.size} errors" else "",
+                if (errors.isEmpty()) {
+                    localized(DMR.strings.restored_entries, backup.backupManga.size)
+                } else {
+                    localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
+                },
             )
         } catch (e: Exception) {
-            Toasts.error("Restore failed", e)
+            Toasts.error(localized(DMR.strings.restore_failed), e)
         } finally {
             backupStatusFlow.value = null
         }
@@ -512,21 +520,23 @@ internal fun restoreBackup(file: File) {
  * restores without them, null cancels the restore.
  */
 private fun confirmStores(stores: List<String>): Boolean? {
-    val shown = stores.take(8).map { it.take(140) } + listOfNotNull("and ${stores.size - 8} more".takeIf { stores.size > 8 })
-    val message = "This backup adds ${if (stores.size == 1) "an extension store" else "${stores.size} extension stores"}:\n\n" +
-        shown.joinToString("\n") + "\n\nExtensions run with full access to this computer. " +
-        "Add only stores you trust.\n\nAdd ${if (stores.size == 1) "it" else "them"}?"
+    val shown = stores.take(8).map { it.take(140) } + listOfNotNull(localized(DMR.strings.and_more, stores.size - 8).takeIf { stores.size > 8 })
+    val message = if (stores.size == 1) {
+        localized(DMR.strings.backup_adds_one_store, shown.joinToString("\n"))
+    } else {
+        localized(DMR.strings.backup_adds_stores, stores.size, shown.joinToString("\n"))
+    }
     var choice = javax.swing.JOptionPane.CANCEL_OPTION
     val ask = Runnable {
         choice = javax.swing.JOptionPane.showOptionDialog(
             null,
             message,
-            "Restore backup",
+            localized(MR.strings.pref_restore_backup),
             javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
             javax.swing.JOptionPane.WARNING_MESSAGE,
             null,
-            arrayOf("Add", "Restore without", "Cancel"),
-            "Restore without",
+            arrayOf(localized(MR.strings.action_add), localized(DMR.strings.restore_without), localized(MR.strings.action_cancel)),
+            localized(DMR.strings.restore_without),
         )
     }
     if (javax.swing.SwingUtilities.isEventDispatchThread()) ask.run() else javax.swing.SwingUtilities.invokeAndWait(ask)
@@ -542,7 +552,7 @@ internal fun chooseFolder(window: java.awt.Window?, start: File): File? {
     if (zoukan.desktop.Platform.current == zoukan.desktop.Platform.MACOS) {
         System.setProperty("apple.awt.fileDialogForDirectories", "true")
         try {
-            val dialog = FileDialog(window as java.awt.Frame?, "Choose the storage folder", FileDialog.LOAD).apply {
+            val dialog = FileDialog(window as java.awt.Frame?, localized(DMR.strings.choose_the_storage_folder), FileDialog.LOAD).apply {
                 directory = start.absolutePath
                 isVisible = true
             }
@@ -553,7 +563,7 @@ internal fun chooseFolder(window: java.awt.Window?, start: File): File? {
     }
     val chooser = javax.swing.JFileChooser(start).apply {
         fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = "Choose the storage folder"
+        dialogTitle = localized(DMR.strings.choose_the_storage_folder)
     }
     return if (chooser.showOpenDialog(window) == javax.swing.JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
 }
@@ -562,7 +572,7 @@ fun openFolder(folder: File) {
     AppScope.launch {
         withContext(Dispatchers.IO) {
             folder.mkdirs()
-            runCatching { Desktop.getDesktop().open(folder) }.onFailure { Toasts.error("Could not open the folder", it) }
+            runCatching { Desktop.getDesktop().open(folder) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_folder), it) }
         }
     }
 }
@@ -579,11 +589,11 @@ private fun SearchField() {
         value = searchQuery,
         onValueChange = { searchQuery = it },
         singleLine = true,
-        placeholder = { Text("Search settings") },
+        placeholder = { Text(localized(MR.strings.action_search_settings)) },
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
         trailingIcon = {
             if (searchQuery.isNotEmpty()) {
-                IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Outlined.Close, contentDescription = "Clear search") }
+                IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Outlined.Close, contentDescription = localized(DMR.strings.clear_search)) }
             }
         },
         shape = Corners.ExtraLarge,

@@ -68,8 +68,10 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.flow.distinctUntilChanged
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
@@ -81,6 +83,7 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.settings.SourceSettingsScreen
+import zoukan.i18n.desktop.DMR
 
 data class SourceScreen(
     val sourceId: Long,
@@ -111,45 +114,45 @@ data class SourceScreen(
         // ZOUKAN <--
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader(source?.name ?: "Source not installed", subtitle = source?.let { languageName(it.lang) }) {
+            ScreenHeader(source?.name ?: localized(DMR.strings.source_not_installed_2), subtitle = source?.let { languageName(it.lang) }) {
                 SearchField(
                     searchText,
                     { searchText = it },
-                    "Search ${source?.name.orEmpty()}",
+                    localized(DMR.strings.search_2, source?.name.orEmpty()),
                     Modifier.width(300.dp),
                     onSearch = { model.search(searchText) },
                 )
                 if (source != null && source.getFilterList().isNotEmpty()) {
-                    TooltipIconButton(Icons.Outlined.FilterList, "Filters", onClick = { showFilters = !showFilters })
+                    TooltipIconButton(Icons.Outlined.FilterList, localized(DMR.strings.filters), onClick = { showFilters = !showFilters })
                 }
                 // ZOUKAN -->
                 if (source != null) BulkSelectButton(bulk)
                 // ZOUKAN <--
                 if (source != null) {
-                    TooltipIconButton(Icons.Outlined.DynamicFeed, "This source's feed", onClick = { navigator.push(SourceFeedScreen(source.id)) })
+                    TooltipIconButton(Icons.Outlined.DynamicFeed, localized(DMR.strings.this_sources_feed), onClick = { navigator.push(SourceFeedScreen(source.id)) })
                 }
                 if (source is HttpSource) {
-                    TooltipIconButton(Icons.Outlined.Public, "Open the site (sign in, Cloudflare)", onClick = { model.openWebsite() })
+                    TooltipIconButton(Icons.Outlined.Public, localized(DMR.strings.open_the_site_sign_in_cloudflare), onClick = { model.openWebsite() })
                 }
                 if (source is ConfigurableSource) {
-                    TooltipIconButton(Icons.Outlined.Settings, "Source settings", onClick = { navigator.push(SourceSettingsScreen(source.id)) })
+                    TooltipIconButton(Icons.Outlined.Settings, localized(MR.strings.source_settings), onClick = { navigator.push(SourceSettingsScreen(source.id)) })
                 }
             }
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = state.listing == SourceScreenModel.Listing.Popular,
                     onClick = { model.setListing(SourceScreenModel.Listing.Popular) },
-                    label = { Text("Popular") },
+                    label = { Text(localized(MR.strings.popular)) },
                 )
                 if (source?.supportsLatest == true) {
                     FilterChip(
                         selected = state.listing == SourceScreenModel.Listing.Latest,
                         onClick = { model.setListing(SourceScreenModel.Listing.Latest) },
-                        label = { Text("Latest") },
+                        label = { Text(localized(MR.strings.latest)) },
                     )
                 }
                 (state.listing as? SourceScreenModel.Listing.Search)?.takeIf { state.savedSearch == null }?.let {
-                    FilterChip(selected = true, onClick = {}, label = { Text(if (it.query.isBlank()) "Filtered" else "\"${it.query}\"") })
+                    FilterChip(selected = true, onClick = {}, label = { Text(if (it.query.isBlank()) localized(DMR.strings.filtered) else "\"${it.query}\"") })
                 }
                 // ZOUKAN -->
                 // Saved searches; right-click one to delete it
@@ -165,14 +168,14 @@ data class SourceScreen(
                     if (confirm) {
                         AlertDialog(
                             onDismissRequest = { confirm = false },
-                            title = { Text("Delete the saved search ${saved.name}?") },
+                            title = { Text(localized(DMR.strings.delete_the_saved_search, saved.name)) },
                             confirmButton = {
                                 TextButton(onClick = {
                                     confirm = false
                                     model.deleteSavedSearch(saved.id)
-                                }) { Text("Delete") }
+                                }) { Text(localized(MR.strings.action_delete)) }
                             },
-                            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+                            dismissButton = { TextButton(onClick = { confirm = false }) { Text(localized(MR.strings.action_cancel)) } },
                         )
                     }
                 }
@@ -184,11 +187,11 @@ data class SourceScreen(
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     if (source == null) {
-                        EmptyScreen("This source's extension is not installed.")
+                        EmptyScreen(localized(DMR.strings.this_sources_extension_is_not_installed))
                     } else if (state.items.isEmpty() && !state.loading && state.error == null && !state.hasNextPage) {
-                        EmptyScreen("Nothing found")
+                        EmptyScreen(localized(DMR.strings.nothing_found))
                     } else if (state.items.isEmpty() && state.error != null) {
-                        EmptyScreen(state.error!!, actionLabel = "Retry", onAction = model::retry)
+                        EmptyScreen(state.error!!, actionLabel = localized(MR.strings.action_retry), onAction = model::retry)
                     } else {
                         val gridState = rememberLazyGridState()
                         LaunchedEffect(gridState, state.listing) {
@@ -209,7 +212,7 @@ data class SourceScreen(
                                 MangaGridItem(
                                     title = manga.title,
                                     cover = Cover.of(manga),
-                                    badge = if (manga.id in state.favorites) "In library" else null,
+                                    badge = if (manga.id in state.favorites) localized(MR.strings.in_library) else null,
                                     dimmed = manga.id in state.favorites,
                                     // ZOUKAN -->
                                     onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
@@ -225,9 +228,9 @@ data class SourceScreen(
                                         state.loading -> CircularProgressIndicator()
                                         state.error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                                            TextButton(onClick = model::retry) { Text("Retry") }
+                                            TextButton(onClick = model::retry) { Text(localized(MR.strings.action_retry)) }
                                         }
-                                        state.hasNextPage -> TextButton(onClick = model::loadNextPage) { Text("Load more") }
+                                        state.hasNextPage -> TextButton(onClick = model::loadNextPage) { Text(localized(DMR.strings.load_more)) }
                                     }
                                 }
                             }
@@ -247,28 +250,28 @@ data class SourceScreen(
 private fun FilterPanel(model: SourceScreenModel, version: Int) {
     Column(Modifier.width(340.dp).fillMaxHeight()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = model::resetFilters) { Text("Reset") }
+            OutlinedButton(onClick = model::resetFilters) { Text(localized(MR.strings.action_reset)) }
             // ZOUKAN -->
             var saving by remember { mutableStateOf(false) }
-            TextButton(onClick = { saving = true }) { Text("Save") }
+            TextButton(onClick = { saving = true }) { Text(localized(MR.strings.action_save)) }
             if (saving) {
                 var name by remember { mutableStateOf("") }
                 AlertDialog(
                     onDismissRequest = { saving = false },
-                    title = { Text("Save this search") },
-                    text = { OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("Name") }) },
+                    title = { Text(localized(DMR.strings.save_this_search)) },
+                    text = { OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(localized(MR.strings.name)) }) },
                     confirmButton = {
                         TextButton(enabled = name.isNotBlank(), onClick = {
                             saving = false
                             model.saveSearch(name)
-                        }) { Text("Save") }
+                        }) { Text(localized(MR.strings.action_save)) }
                     },
-                    dismissButton = { TextButton(onClick = { saving = false }) { Text("Cancel") } },
+                    dismissButton = { TextButton(onClick = { saving = false }) { Text(localized(MR.strings.action_cancel)) } },
                 )
             }
             // ZOUKAN <--
             Spacer(Modifier.weight(1f))
-            Button(onClick = model::applyFilters) { Text("Filter") }
+            Button(onClick = model::applyFilters) { Text(localized(MR.strings.action_filter)) }
         }
         HorizontalDivider()
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {

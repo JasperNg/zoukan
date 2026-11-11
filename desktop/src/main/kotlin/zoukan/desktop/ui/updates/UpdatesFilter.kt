@@ -28,8 +28,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.updates.service.UpdatesPreferences
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.library.TriStateRow
+import zoukan.i18n.desktop.DMR
 
 /** The Updates filters, from Android's UpdatesPreferences, so they carry over in backups. */
 data class UpdatesFilters(
@@ -69,7 +72,7 @@ fun UpdatesFilterButton(model: UpdatesScreenModel, filters: UpdatesFilters) {
         BadgedBox(badge = { if (filters.active) Badge() }) {
             TooltipIconButton(
                 Icons.Outlined.FilterList,
-                if (filters.active) "Filter (filtered)" else "Filter",
+                if (filters.active) localized(DMR.strings.filter_filtered) else localized(MR.strings.action_filter),
                 onClick = { open = true },
             )
         }
@@ -81,14 +84,14 @@ fun UpdatesFilterButton(model: UpdatesScreenModel, filters: UpdatesFilters) {
 private fun UpdatesFilterDialog(preferences: UpdatesPreferences, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Filter") },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(localized(MR.strings.action_filter)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
         text = {
             Column(Modifier.width(320.dp)) {
-                TriStateRow("Downloaded", preferences.filterDownloaded())
-                TriStateRow("Unread", preferences.filterUnread())
-                TriStateRow("Started", preferences.filterStarted())
-                TriStateRow("Bookmarked", preferences.filterBookmarked())
+                TriStateRow(localized(MR.strings.label_downloaded), preferences.filterDownloaded())
+                TriStateRow(localized(MR.strings.action_filter_unread), preferences.filterUnread())
+                TriStateRow(localized(MR.strings.label_started), preferences.filterStarted())
+                TriStateRow(localized(MR.strings.action_filter_bookmarked), preferences.filterBookmarked())
                 val excluded = preferences.filterExcludedScanlators()
                 val hide by excluded.changes().collectAsState(excluded.get())
                 Row(
@@ -96,7 +99,7 @@ private fun UpdatesFilterDialog(preferences: UpdatesPreferences, onDismiss: () -
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(checked = hide, onCheckedChange = { excluded.set(it) })
-                    Text("Hide excluded scanlators")
+                    Text(localized(DMR.strings.hide_excluded_scanlators))
                 }
             }
         },

@@ -39,14 +39,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's Advanced > Clear database: each source with entries outside the library, and deleting
@@ -66,16 +69,16 @@ object ClearDatabaseScreen : Screen {
         val items = state.items
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Clear database") {
+            ScreenHeader(localized(MR.strings.pref_clear_database)) {
                 if (!items.isNullOrEmpty()) {
-                    TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
-                    TooltipIconButton(Icons.Outlined.FlipToBack, "Select inverse", onClick = model::invertSelection)
-                    TooltipIconButton(Icons.Outlined.Delete, "Delete", enabled = state.selection.isNotEmpty(), onClick = { model.confirm(true) })
+                    TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
+                    TooltipIconButton(Icons.Outlined.FlipToBack, localized(MR.strings.action_select_inverse), onClick = model::invertSelection)
+                    TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_delete), enabled = state.selection.isNotEmpty(), onClick = { model.confirm(true) })
                 }
             }
             when {
                 items == null -> LoadingScreen()
-                items.isEmpty() -> EmptyScreen("Nothing to clear")
+                items.isEmpty() -> EmptyScreen(localized(MR.strings.database_clean))
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     items(items, key = { it.id }) { item ->
                         Row(
@@ -85,7 +88,7 @@ object ClearDatabaseScreen : Screen {
                             Column(Modifier.weight(1f)) {
                                 Text(item.name, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "${item.count} non-library entries in database",
+                                    localized(DMR.strings.non_library_entries_in_database, item.count),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -101,17 +104,17 @@ object ClearDatabaseScreen : Screen {
             var keepRead by remember { mutableStateOf(true) }
             AlertDialog(
                 onDismissRequest = { model.confirm(false) },
-                title = { Text("Are you sure?") },
+                title = { Text(localized(MR.strings.are_you_sure)) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("You're about to remove entries from the database")
+                        Text(localized(DMR.strings.youre_about_to_remove_entries_from))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Keep entries with read chapters", modifier = Modifier.weight(1f))
+                            Text(localized(MR.strings.clear_db_exclude_read), modifier = Modifier.weight(1f))
                             Switch(checked = keepRead, onCheckedChange = { keepRead = it })
                         }
                         if (!keepRead) {
                             Text(
-                                "Read chapters and progress of non-library entries will be lost",
+                                localized(MR.strings.clear_database_history_warning),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -123,11 +126,11 @@ object ClearDatabaseScreen : Screen {
                         model.confirm(false)
                         scope.launch {
                             model.delete(keepRead)
-                            Toasts.show("Entries deleted")
+                            Toasts.show(localized(MR.strings.clear_database_completed))
                         }
                     }) { Text("OK") }
                 },
-                dismissButton = { TextButton(onClick = { model.confirm(false) }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { model.confirm(false) }) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
     }

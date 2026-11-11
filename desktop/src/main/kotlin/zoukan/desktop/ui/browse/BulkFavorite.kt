@@ -47,13 +47,16 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 import java.time.Instant
 
 /**
@@ -205,14 +208,14 @@ class BulkFavorite {
             }
         }
         withContext(Dispatchers.Main) { clear() }
-        Toasts.show(if (added == 1) "Added 1 entry to the library" else "Added $added entries to the library")
+        Toasts.show(if (added == 1) localized(DMR.strings.added_1_entry_to_the_library) else localized(DMR.strings.added_entries_to_the_library, added))
     }
 }
 
 /** The button that starts selecting, for a screen's header */
 @Composable
 fun BulkSelectButton(bulk: BulkFavorite) {
-    TooltipIconButton(Icons.Outlined.Checklist, "Select entries", onClick = { if (bulk.active) bulk.clear() else bulk.start() })
+    TooltipIconButton(Icons.Outlined.Checklist, localized(DMR.strings.select_entries), onClick = { if (bulk.active) bulk.clear() else bulk.start() })
 }
 
 /** A grid item's border while it is selected. */
@@ -226,15 +229,15 @@ fun BulkFavoriteBar(bulk: BulkFavorite, visible: List<Manga>) {
     if (!bulk.active) return
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().testTag("bulk-favorite-bar")) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(Icons.Outlined.Close, "Clear the selection", onClick = bulk::clear)
-            Text("${bulk.selection.size} selected", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = { bulk.selectAll(visible) })
-            TooltipIconButton(Icons.Outlined.FlipToBack, "Invert the selection", onClick = { bulk.invert(visible) })
+            TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_the_selection), onClick = bulk::clear)
+            Text(localized(DMR.strings.selected, bulk.selection.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = { bulk.selectAll(visible) })
+            TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_the_selection), onClick = { bulk.invert(visible) })
             Spacer(Modifier.width(8.dp))
             if (bulk.running) {
                 CircularProgressIndicator(Modifier.size(24.dp))
             } else {
-                Button(onClick = bulk::addToLibrary) { Text("Add to library") }
+                Button(onClick = bulk::addToLibrary) { Text(localized(MR.strings.add_to_library)) }
             }
         }
     }
@@ -246,22 +249,22 @@ private fun BulkFavoriteDialogs(bulk: BulkFavorite) {
     bulk.duplicates?.let { dupes ->
         AlertDialog(
             onDismissRequest = { bulk.resolveDuplicates(skip = true) },
-            title = { Text("Already in your library?") },
+            title = { Text(localized(DMR.strings.already_in_your_library)) },
             text = {
                 Column(Modifier.heightIn(max = 360.dp).verticalScrollWithBar()) {
-                    Text("The library has entries with the same title as these:")
+                    Text(localized(DMR.strings.the_library_has_entries_with_the))
                     dupes.forEach { Text("• ${it.title}", modifier = Modifier.padding(top = 4.dp)) }
                 }
             },
-            confirmButton = { TextButton(onClick = { bulk.resolveDuplicates(skip = false) }) { Text("Add all") } },
-            dismissButton = { TextButton(onClick = { bulk.resolveDuplicates(skip = true) }) { Text("Skip these") } },
+            confirmButton = { TextButton(onClick = { bulk.resolveDuplicates(skip = false) }) { Text(localized(DMR.strings.add_all)) } },
+            dismissButton = { TextButton(onClick = { bulk.resolveDuplicates(skip = true) }) { Text(localized(DMR.strings.skip_these)) } },
         )
     }
     bulk.categoryChoice?.let { categories ->
         var chosen by remember(categories) { mutableStateOf(emptySet<Long>()) }
         AlertDialog(
             onDismissRequest = bulk::dismissCategories,
-            title = { Text("Add to categories") },
+            title = { Text(localized(DMR.strings.add_to_categories)) },
             text = {
                 Column(Modifier.heightIn(max = 400.dp).verticalScrollWithBar()) {
                     categories.forEach { category ->
@@ -279,8 +282,8 @@ private fun BulkFavoriteDialogs(bulk: BulkFavorite) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { bulk.confirmCategories(chosen.toList()) }) { Text("Add") } },
-            dismissButton = { TextButton(onClick = bulk::dismissCategories) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { bulk.confirmCategories(chosen.toList()) }) { Text(localized(MR.strings.action_add)) } },
+            dismissButton = { TextButton(onClick = bulk::dismissCategories) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }

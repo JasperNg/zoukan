@@ -97,12 +97,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
 // The reader menu, as Komikku's ReaderAppBars: the top bar, the floating chapter navigator (previous
@@ -258,7 +262,7 @@ private fun ReaderTopBar(menu: ReaderMenuState, actions: ReaderMenuActions, modi
         modifier.fillMaxWidth().pointerInput(Unit) {}.padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MenuButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", actions.onBack, tint = LocalContentColor.current)
+        MenuButton(Icons.AutoMirrored.Outlined.ArrowBack, localized(MR.strings.action_webview_back), actions.onBack, tint = LocalContentColor.current)
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(menu.mangaTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (menu.chapterTitle.isNotEmpty()) {
@@ -274,20 +278,20 @@ private fun ReaderTopBar(menu: ReaderMenuState, actions: ReaderMenuActions, modi
         val tint = LocalContentColor.current
         MenuButton(
             if (menu.bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-            if (menu.bookmarked) "Remove bookmark (B)" else "Bookmark (B)",
+            if (menu.bookmarked) localized(DMR.strings.remove_bookmark_b) else localized(DMR.strings.bookmark_b),
             actions.onToggleBookmark,
             tint = tint,
         )
         MenuButton(
             if (menu.autoScroll) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-            if (menu.autoScroll) "Stop auto scroll (A)" else "Auto scroll (A)",
+            if (menu.autoScroll) localized(DMR.strings.stop_auto_scroll_a) else localized(DMR.strings.auto_scroll_a),
             actions.onAutoScroll,
             tint = tint,
         )
-        MenuButton(Icons.Outlined.Keyboard, "Keyboard shortcuts (/)", actions.onKeys, tint = tint)
+        MenuButton(Icons.Outlined.Keyboard, localized(DMR.strings.keyboard_shortcuts), actions.onKeys, tint = tint)
         MenuButton(
             if (menu.fullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-            if (menu.fullscreen) "Leave full screen (F)" else "Full screen (F)",
+            if (menu.fullscreen) localized(DMR.strings.leave_full_screen_f) else localized(DMR.strings.full_screen_f),
             actions.onFullscreen,
             tint = tint,
         )
@@ -305,18 +309,18 @@ private fun ReaderBottomBar(menu: ReaderMenuState, actions: ReaderMenuActions, m
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (ReaderBottomButtons.VIEW_CHAPTERS in buttons) {
-            MenuButton(Icons.Outlined.FormatListNumbered, "Chapters (C)", actions.onChapters)
+            MenuButton(Icons.Outlined.FormatListNumbered, localized(DMR.strings.chapters_c), actions.onChapters)
         }
         if (ReaderBottomButtons.WEB_VIEW in buttons) {
-            MenuButton(Icons.Outlined.Public, "Open in WebView", actions.onWebView)
+            MenuButton(Icons.Outlined.Public, localized(MR.strings.action_open_in_web_view), actions.onWebView)
         }
         if (ReaderBottomButtons.BROWSER in buttons) {
-            MenuButton(Icons.Outlined.Explore, "Open in browser", actions.onBrowser)
+            MenuButton(Icons.Outlined.Explore, localized(MR.strings.action_open_in_browser), actions.onBrowser)
         }
         if (ReaderBottomButtons.READING_MODE in buttons) {
             ChoiceButton(
                 icon = Icons.AutoMirrored.Outlined.ChromeReaderMode,
-                label = "Reading mode: ${ReadingModes.label(mode)}",
+                label = localized(DMR.strings.reading_mode, ReadingModes.label(mode)),
                 selected = mode,
                 choices = ReadingModes.all.map { it to ReadingModes.label(it) },
                 onSelect = actions.onReadingMode,
@@ -325,7 +329,7 @@ private fun ReaderBottomBar(menu: ReaderMenuState, actions: ReaderMenuActions, m
         if (!webtoon && ReaderBottomButtons.SCALE_TYPE in buttons) {
             ChoiceButton(
                 icon = Icons.Outlined.AspectRatio,
-                label = "Scale type: ${FitModes.label(menu.fitMode)}",
+                label = localized(DMR.strings.scale_type, FitModes.label(menu.fitMode)),
                 selected = menu.fitMode,
                 choices = FitModes.all.map { it to FitModes.label(it) },
                 onSelect = actions.onFitMode,
@@ -340,7 +344,7 @@ private fun ReaderBottomBar(menu: ReaderMenuState, actions: ReaderMenuActions, m
             Box(contentAlignment = Alignment.Center) {
                 MenuButton(
                     Icons.Outlined.Crop,
-                    if (menu.cropEnabled) "Crop borders: on" else "Crop borders: off",
+                    if (menu.cropEnabled) localized(DMR.strings.crop_borders_on) else localized(DMR.strings.crop_borders_off),
                     actions.onToggleCrop,
                     modifier = Modifier.alpha(if (menu.cropEnabled) 1f else 0.5f),
                 )
@@ -349,7 +353,7 @@ private fun ReaderBottomBar(menu: ReaderMenuState, actions: ReaderMenuActions, m
         if (!webtoon && mode != ReadingModes.VERTICAL && ReaderBottomButtons.PAGE_LAYOUT in buttons) {
             ChoiceButton(
                 icon = Icons.Outlined.AutoStories,
-                label = "Page layout",
+                label = localized(SYMR.strings.page_layout),
                 selected = menu.pageLayout,
                 choices = PAGE_LAYOUTS,
                 onSelect = actions.onPageLayout,
@@ -357,17 +361,17 @@ private fun ReaderBottomBar(menu: ReaderMenuState, actions: ReaderMenuActions, m
         }
         // ZOUKAN -->
         if (ReaderBottomButtons.RETRY_ALL in buttons) {
-            MenuButton(Icons.Outlined.Refresh, "Retry failed pages (R)", actions.onRetryAll)
+            MenuButton(Icons.Outlined.Refresh, localized(DMR.strings.retry_failed_pages_r), actions.onRetryAll)
         }
         if (ReaderBottomButtons.BOOST_PAGE in buttons) {
-            MenuButton(Icons.Outlined.FastForward, "Load this page first (Shift+R)", actions.onBoostPage)
+            MenuButton(Icons.Outlined.FastForward, localized(DMR.strings.load_this_page_first_shift_r), actions.onBoostPage)
         }
         // ZOUKAN <--
-        MenuButton(Icons.Outlined.Settings, "Settings (S)", actions.onSettings)
+        MenuButton(Icons.Outlined.Settings, localized(DMR.strings.settings_s), actions.onSettings)
     }
 }
 
-val PAGE_LAYOUTS = listOf(0 to "Single page", 1 to "Double pages", 2 to "Automatic (double in a wide window)")
+val PAGE_LAYOUTS = listOf(0 to localized(SYMR.strings.single_page), 1 to localized(SYMR.strings.double_pages), 2 to localized(DMR.strings.automatic_double_in_a_wide_window))
 
 /** An icon button with a tooltip, in the menu's accent color as Komikku's */
 @Composable
@@ -432,7 +436,7 @@ private fun ChapterNavigator(rtl: Boolean, vertical: Boolean, menu: ReaderMenuSt
     @Composable
     fun ChapterButton(next: Boolean) {
         val enabled = if (next) menu.hasNext else menu.hasPrevious
-        val label = if (next) "Next chapter (N)" else "Previous chapter (P)"
+        val label = if (next) localized(DMR.strings.next_chapter_n) else localized(DMR.strings.previous_chapter_p)
         TooltipBox(
             positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
             tooltip = { PlainTooltip { Text(label) } },
@@ -569,7 +573,7 @@ fun ReaderChapterListDialog(
     val listState = rememberLazyListState((shown.indexOfFirst { it.id == current } - 2).coerceAtLeast(0))
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chapters") },
+        title = { Text(localized(MR.strings.chapters)) },
         text = {
             LazyColumn(state = listState, modifier = Modifier.width(520.dp).heightIn(min = 200.dp, max = 520.dp)) {
                 items(shown, key = { it.id }) { chapter ->
@@ -583,7 +587,7 @@ fun ReaderChapterListDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
     )
 }
 
@@ -619,7 +623,7 @@ private fun ReaderChapterRow(chapter: Chapter, current: Boolean, onClick: () -> 
             val details = listOfNotNull(
                 chapter.dateUpload.takeIf { it > 0L }?.let(Dates::relative),
                 chapter.scanlator?.takeIf { it.isNotBlank() },
-                if (!chapter.read && chapter.lastPageRead > 0) "Page ${chapter.lastPageRead + 1}" else null,
+                if (!chapter.read && chapter.lastPageRead > 0) localized(DMR.strings.page, chapter.lastPageRead + 1) else null,
             )
             if (details.isNotEmpty()) {
                 Text(
@@ -633,7 +637,7 @@ private fun ReaderChapterRow(chapter: Chapter, current: Boolean, onClick: () -> 
         }
         MenuButton(
             if (chapter.bookmark) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-            if (chapter.bookmark) "Remove bookmark" else "Bookmark",
+            if (chapter.bookmark) localized(DMR.strings.remove_bookmark) else localized(DMR.strings.bookmark),
             onBookmark,
         )
     }

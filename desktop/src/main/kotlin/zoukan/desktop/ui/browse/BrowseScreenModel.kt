@@ -15,13 +15,16 @@ import mihon.domain.extension.interactor.GetExtensionStores
 import mihon.domain.extension.interactor.RemoveExtensionStore
 import mihon.domain.extension.model.ExtensionStore
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Toasts
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
+import zoukan.i18n.desktop.DMR
 
 class BrowseScreenModel(
     private val extensionManager: DesktopExtensionManager = Injekt.get(),
@@ -113,8 +116,8 @@ class BrowseScreenModel(
                     .filter { it.lang in languages || it is LocalSource }
                     .filterNot { it.id.toString() in disabled }
                 val sections = buildList {
-                    enabled.filter { it.id.toString() in pinned }.takeIf { it.isNotEmpty() }?.let { add("Pinned" to it) }
-                    enabled.filter { it.id == lastUsed }.takeIf { it.isNotEmpty() }?.let { add("Last used" to it) }
+                    enabled.filter { it.id.toString() in pinned }.takeIf { it.isNotEmpty() }?.let { add(localized(MR.strings.pinned_sources) to it) }
+                    enabled.filter { it.id == lastUsed }.takeIf { it.isNotEmpty() }?.let { add(localized(MR.strings.last_used_source) to it) }
                     categories.sortedWith(String.CASE_INSENSITIVE_ORDER).forEach { category ->
                         enabled.filter { category in sourceCategories[it.id].orEmpty() }.takeIf { it.isNotEmpty() }?.let { add(category to it) }
                     }
@@ -226,12 +229,12 @@ class BrowseScreenModel(
             try {
                 val results = extensionManager.findAvailableExtensions()
                 results.forEach { (store, result) ->
-                    result.onFailure { Toasts.error("Could not load ${store.name}", it) }
+                    result.onFailure { Toasts.error(localized(DMR.strings.could_not_load, store.name), it) }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                Toasts.error("Could not load the extension lists", e)
+                Toasts.error(localized(DMR.strings.could_not_load_the_extension_lists), e)
             } finally {
                 mutableState.update { it.copy(refreshing = false) }
             }
@@ -247,7 +250,7 @@ class BrowseScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                Toasts.error("Failed", e)
+                Toasts.error(localized(DMR.strings.failed), e)
             } finally {
                 mutableState.update { it.copy(busy = it.busy - pkg) }
             }
@@ -264,7 +267,7 @@ class BrowseScreenModel(
 
     fun uninstall(extension: Extension) = busy(extension.pkgName) {
         extensionManager.uninstallExtension(extension.pkgName)
-        Toasts.show("Uninstalled ${extension.name}")
+        Toasts.show(localized(DMR.strings.uninstalled, extension.name))
     }
 
     fun trust(extension: Extension.Untrusted) = busy(extension.pkgName) {
@@ -273,9 +276,9 @@ class BrowseScreenModel(
 
     private fun report(name: String, result: LoadResult) {
         when (result) {
-            is LoadResult.Success -> Toasts.show("Installed $name")
-            is LoadResult.Untrusted -> Toasts.show("$name is signed with an unknown key. Trust it in Extensions to use it.")
-            is LoadResult.Error -> Toasts.show("$name failed to load: ${result.error.message}")
+            is LoadResult.Success -> Toasts.show(localized(DMR.strings.installed, name))
+            is LoadResult.Untrusted -> Toasts.show(localized(DMR.strings.is_signed_with_an_unknown_key, name))
+            is LoadResult.Error -> Toasts.show(localized(DMR.strings.failed_to_load, name, result.error.message))
         }
     }
 
@@ -283,17 +286,17 @@ class BrowseScreenModel(
         screenModelScope.launch {
             addStore.invoke(url.trim())
                 .onSuccess {
-                    Toasts.show("Store added")
+                    Toasts.show(localized(DMR.strings.store_added))
                     refreshAvailable()
                 }
-                .onFailure { Toasts.error("Could not add the store", it) }
+                .onFailure { Toasts.error(localized(DMR.strings.could_not_add_the_store), it) }
         }
     }
 
     fun removeStore(store: ExtensionStore) {
         screenModelScope.launch {
             removeStore.invoke(store.indexUrl)
-            Toasts.show("Removed ${store.name}")
+            Toasts.show(localized(DMR.strings.removed, store.name))
         }
     }
 

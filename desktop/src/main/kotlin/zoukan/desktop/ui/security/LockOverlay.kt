@@ -37,9 +37,12 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.security.AppLock
+import zoukan.i18n.desktop.DMR
 
 /** Covers the app while it is locked, as Android's UnlockActivity, and asks for the password. */
 @Composable
@@ -73,23 +76,23 @@ fun LockOverlay() {
         Box(contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.primary)
-                Text("Zoukan is locked", style = MaterialTheme.typography.headlineSmall)
+                Text(localized(DMR.strings.zoukan_is_locked), style = MaterialTheme.typography.headlineSmall)
                 OutlinedTextField(
                     value = password,
                     onValueChange = {
                         password = it
                         wrong = false
                     },
-                    label = { Text("Password") },
+                    label = { Text(localized(MR.strings.password)) },
                     singleLine = true,
                     isError = wrong,
-                    supportingText = if (wrong) ({ Text("Wrong password") }) else null,
+                    supportingText = if (wrong) ({ Text(localized(DMR.strings.wrong_password)) }) else null,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { tryUnlock() }),
                     modifier = Modifier.width(320.dp).focusRequester(focus),
                 )
-                Button(onClick = ::tryUnlock) { Text("Unlock") }
+                Button(onClick = ::tryUnlock) { Text(localized(DMR.strings.unlock)) }
             }
         }
     }

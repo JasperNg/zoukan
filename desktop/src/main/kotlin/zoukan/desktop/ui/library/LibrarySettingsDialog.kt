@@ -37,28 +37,32 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
 private val SORTS = listOf(
-    LibrarySort.Type.Alphabetical to "Alphabetically",
-    LibrarySort.Type.TotalChapters to "Total chapters",
-    LibrarySort.Type.LastRead to "Last read",
-    LibrarySort.Type.LastUpdate to "Last update check",
-    LibrarySort.Type.UnreadCount to "Unread count",
-    LibrarySort.Type.LatestChapter to "Latest chapter",
-    LibrarySort.Type.ChapterFetchDate to "Chapter fetch date",
-    LibrarySort.Type.DateAdded to "Date added",
-    LibrarySort.Type.TrackerMean to "Tracker score",
-    LibrarySort.Type.Random to "Random",
+    LibrarySort.Type.Alphabetical to localized(MR.strings.action_sort_alpha),
+    LibrarySort.Type.TotalChapters to localized(MR.strings.action_sort_total),
+    LibrarySort.Type.LastRead to localized(MR.strings.action_sort_last_read),
+    LibrarySort.Type.LastUpdate to localized(MR.strings.action_sort_last_manga_update),
+    LibrarySort.Type.UnreadCount to localized(MR.strings.action_sort_unread_count),
+    LibrarySort.Type.LatestChapter to localized(MR.strings.action_sort_latest_chapter),
+    LibrarySort.Type.ChapterFetchDate to localized(MR.strings.action_sort_chapter_fetch_date),
+    LibrarySort.Type.DateAdded to localized(MR.strings.action_sort_date_added),
+    LibrarySort.Type.TrackerMean to localized(MR.strings.action_sort_tracker_score),
+    LibrarySort.Type.Random to localized(MR.strings.action_sort_random),
 )
 
 private val DISPLAY_MODES = listOf(
-    LibraryDisplayMode.CompactGrid to "Compact grid",
-    LibraryDisplayMode.ComfortableGrid to "Comfortable grid",
-    LibraryDisplayMode.ComfortableGridPanorama to "Panorama grid",
-    LibraryDisplayMode.CoverOnlyGrid to "Cover-only grid",
-    LibraryDisplayMode.List to "List",
+    LibraryDisplayMode.CompactGrid to localized(MR.strings.action_display_grid),
+    LibraryDisplayMode.ComfortableGrid to localized(MR.strings.action_display_comfortable_grid),
+    LibraryDisplayMode.ComfortableGridPanorama to localized(DMR.strings.panorama_grid),
+    LibraryDisplayMode.CoverOnlyGrid to localized(MR.strings.action_display_cover_only_grid),
+    LibraryDisplayMode.List to localized(MR.strings.action_display_list),
 )
 
 /** The library's Filter, Sort and Display sheet, as on Android. */
@@ -68,11 +72,11 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
         text = {
             Column(Modifier.width(420.dp)) {
                 PrimaryTabRow(selectedTabIndex = tab) {
-                    listOf("Filter", "Sort", "Display", "Group").forEachIndexed { i, label ->
+                    listOf(localized(MR.strings.action_filter), localized(MR.strings.action_sort), localized(MR.strings.action_display), localized(SYMR.strings.group)).forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
@@ -108,25 +112,25 @@ internal fun TriStateRow(label: String, preference: Preference<TriState>, notLab
             },
             onClick = { preference.set(value.next()) },
         )
-        Text(if (value == TriState.ENABLED_NOT) notLabel ?: "Not $label".replaceFirstChar { it.uppercase() } else label)
+        Text(if (value == TriState.ENABLED_NOT) notLabel ?: localized(DMR.strings.not, label).replaceFirstChar { it.uppercase() } else label)
     }
 }
 
 @Composable
 private fun FilterPage(model: LibraryScreenModel) {
     val p = model.preferences
-    TriStateRow("Downloaded", p.filterDownloaded())
-    TriStateRow("Unread", p.filterUnread())
-    TriStateRow("Started", p.filterStarted())
-    TriStateRow("Bookmarked", p.filterBookmarked())
-    TriStateRow("Completed", p.filterCompleted())
+    TriStateRow(localized(MR.strings.label_downloaded), p.filterDownloaded())
+    TriStateRow(localized(MR.strings.action_filter_unread), p.filterUnread())
+    TriStateRow(localized(MR.strings.label_started), p.filterStarted())
+    TriStateRow(localized(MR.strings.action_filter_bookmarked), p.filterBookmarked())
+    TriStateRow(localized(MR.strings.completed), p.filterCompleted())
     val trackers = remember { model.trackers() }
     if (trackers.isNotEmpty()) {
-        Text("Tracked on", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+        Text(localized(DMR.strings.tracked_on), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
         trackers.forEach { tracker -> TriStateRow(tracker.name, p.filterTracking(tracker.id.toInt())) }
     }
     Text(
-        "A box with a dash shows entries that are not.",
+        localized(DMR.strings.a_box_with_a_dash_shows),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
@@ -137,7 +141,7 @@ private fun FilterPage(model: LibraryScreenModel) {
 private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
     val tags = model.state.collectAsState().value.settings.sortTags
     // SY's "Tag sorting", offered once there are tags to sort by (Settings > Library > Sorting)
-    val sorts = if (tags.isNotEmpty() || sort.type == LibrarySort.Type.TagList) SORTS + (LibrarySort.Type.TagList to "Tag sorting") else SORTS
+    val sorts = if (tags.isNotEmpty() || sort.type == LibrarySort.Type.TagList) SORTS + (LibrarySort.Type.TagList to localized(SYMR.strings.tag_sorting)) else SORTS
     sorts.forEach { (type, label) ->
         Row(
             Modifier.fillMaxWidth().clickable { model.setSort(type) }.padding(vertical = 8.dp, horizontal = 8.dp),
@@ -147,16 +151,16 @@ private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
             if (sort.type == type && type != LibrarySort.Type.Random) {
                 Icon(
                     if (sort.isAscending) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
-                    contentDescription = if (sort.isAscending) "Ascending" else "Descending",
+                    contentDescription = if (sort.isAscending) localized(MR.strings.action_asc) else localized(MR.strings.action_desc),
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             } else if (sort.type == type) {
-                TextButton(onClick = model::reshuffle) { Text("Shuffle") }
+                TextButton(onClick = model::reshuffle) { Text(localized(DMR.strings.shuffle)) }
             }
         }
     }
-    CheckRow("Each category keeps its own sort", model.preferences.categorizedDisplaySettings())
+    CheckRow(localized(DMR.strings.each_category_keeps_its_own_sort), model.preferences.categorizedDisplaySettings())
 }
 
 @Composable
@@ -175,7 +179,7 @@ private fun CheckRow(label: String, preference: Preference<Boolean>) {
 private fun DisplayPage(model: LibraryScreenModel) {
     val p = model.preferences
     val mode by p.displayMode().changes().collectAsState(p.displayMode().get())
-    Text("Display mode", style = MaterialTheme.typography.labelLarge)
+    Text(localized(MR.strings.action_display_mode), style = MaterialTheme.typography.labelLarge)
     DISPLAY_MODES.forEach { (value, label) ->
         Row(
             Modifier.fillMaxWidth().clickable { p.displayMode().set(value) },
@@ -188,7 +192,7 @@ private fun DisplayPage(model: LibraryScreenModel) {
     if (mode != LibraryDisplayMode.List) {
         val columns by p.landscapeColumns().changes().collectAsState(p.landscapeColumns().get())
         Text(
-            "Columns: ${if (columns == 0) "fit the window" else columns}",
+            localized(DMR.strings.columns, if (columns == 0) localized(DMR.strings.fit_the_window) else columns),
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(top = 12.dp),
         )
@@ -199,26 +203,26 @@ private fun DisplayPage(model: LibraryScreenModel) {
             steps = 11,
         )
     }
-    Text("Badges", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
-    CheckRow("Downloaded chapters", p.downloadBadge())
-    CheckRow("Unread chapters", p.unreadBadge())
-    CheckRow("Local source", p.localBadge())
-    CheckRow("Language", p.languageBadge())
-    CheckRow("Source", p.sourceBadge())
-    Text("Tabs", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
-    CheckRow("Show category tabs", p.categoryTabs())
-    CheckRow("Show the number of entries", p.categoryNumberOfItems())
-    Text("Other", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
-    CheckRow("Continue reading button", p.showContinueReadingButton())
+    Text(localized(DMR.strings.badges), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+    CheckRow(localized(MR.strings.action_display_download_badge), p.downloadBadge())
+    CheckRow(localized(MR.strings.action_display_unread_badge), p.unreadBadge())
+    CheckRow(localized(MR.strings.action_display_local_badge), p.localBadge())
+    CheckRow(localized(MR.strings.action_display_language_badge), p.languageBadge())
+    CheckRow(localized(DMR.strings.source), p.sourceBadge())
+    Text(localized(MR.strings.tabs_header), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+    CheckRow(localized(MR.strings.action_display_show_tabs), p.categoryTabs())
+    CheckRow(localized(DMR.strings.show_the_number_of_entries), p.categoryNumberOfItems())
+    Text(localized(MR.strings.other_source), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+    CheckRow(localized(MR.strings.action_display_show_continue_reading_button), p.showContinueReadingButton())
 }
 
 // ZOUKAN -->
 private val GROUPS = listOf(
-    LibraryGroup.BY_DEFAULT to "Categories",
-    LibraryGroup.BY_SOURCE to "Sources",
-    LibraryGroup.BY_STATUS to "Status",
-    LibraryGroup.BY_TRACK_STATUS to "Tracking status",
-    LibraryGroup.UNGROUPED to "Ungrouped",
+    LibraryGroup.BY_DEFAULT to localized(MR.strings.categories),
+    LibraryGroup.BY_SOURCE to localized(MR.strings.label_sources),
+    LibraryGroup.BY_STATUS to localized(MR.strings.status),
+    LibraryGroup.BY_TRACK_STATUS to localized(SYMR.strings.tracking_status),
+    LibraryGroup.UNGROUPED to localized(SYMR.strings.ungrouped),
 )
 
 /** SY's Group tab: what the library's tabs split it by. */

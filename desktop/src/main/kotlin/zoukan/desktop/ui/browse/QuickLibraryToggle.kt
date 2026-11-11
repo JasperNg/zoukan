@@ -17,14 +17,17 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.manga.CategoryDialog
 import zoukan.desktop.ui.manga.DuplicateDialog
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.MigrateDialog
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's long press on a browse result, as a right-click: removes a library entry after asking,
@@ -63,8 +66,8 @@ class QuickLibraryToggle internal constructor(private val scope: CoroutineScope)
         categories = null
         scope.launch {
             runCatching { addToLibrary.add(manga, categoryIds, fetchOnAdd = true) }
-                .onSuccess { Toasts.show("Added to library") }
-                .onFailure { Toasts.error("Could not add to library", it) }
+                .onSuccess { Toasts.show(localized(MR.strings.manga_added_library)) }
+                .onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
         }
     }
 
@@ -72,7 +75,7 @@ class QuickLibraryToggle internal constructor(private val scope: CoroutineScope)
         removing = null
         scope.launch {
             addToLibrary.remove(manga)
-            Toasts.show("Removed from library")
+            Toasts.show(localized(MR.strings.manga_removed_library))
         }
     }
 }
@@ -91,9 +94,9 @@ fun QuickLibraryToggleDialogs(toggle: QuickLibraryToggle) {
         AlertDialog(
             onDismissRequest = { toggle.removing = null },
             title = { Text(manga.title) },
-            text = { Text("Remove from library?") },
-            confirmButton = { TextButton(onClick = { toggle.remove(manga) }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { toggle.removing = null }) { Text("Cancel") } },
+            text = { Text(localized(DMR.strings.remove_from_library)) },
+            confirmButton = { TextButton(onClick = { toggle.remove(manga) }) { Text(localized(MR.strings.action_remove)) } },
+            dismissButton = { TextButton(onClick = { toggle.removing = null }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
     toggle.duplicates?.let { (manga, found) ->

@@ -65,8 +65,10 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.ui.common.EmptyScreen
@@ -74,6 +76,7 @@ import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.reader.ReaderScreen
+import zoukan.i18n.desktop.DMR
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
@@ -124,7 +127,7 @@ internal class PagePreviewKeyer : Keyer<PagePreviewImage> {
 internal class PagePreviewFetcher(private val image: PagePreviewImage) : Fetcher {
     override suspend fun fetch(): FetchResult {
         val source = Injekt.get<SourceManager>().get(image.sourceId)?.getMainSource<PagePreviewSource>()
-            ?: throw IOException("The source of this preview is not installed")
+            ?: throw IOException(localized(DMR.strings.the_source_of_this_preview_is))
         val bytes = source.fetchPreviewImage(PagePreviewInfo(image.index, image.imageUrl)).use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${image.imageUrl}")
             response.body.bytes()
@@ -152,7 +155,7 @@ private fun PreviewThumbnail(preview: PagePreviewImage, onOpen: (PagePreviewImag
         AsyncImage(
             model = preview,
             imageLoader = Images.loader,
-            contentDescription = "Page ${preview.index}",
+            contentDescription = localized(DMR.strings.page, preview.index),
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).clip(MaterialTheme.shapes.small),
         )
@@ -193,7 +196,7 @@ fun PagePreviewSection(manga: Manga, modifier: Modifier = Modifier) {
                 CircularProgressIndicator(Modifier.size(32.dp))
             }
             result.isFailure -> Text(
-                "Couldn't load page previews: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                localized(DMR.strings.couldnt_load_page_previews, result.exceptionOrNull()?.message ?: localized(DMR.strings.unknown_error)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -210,7 +213,7 @@ fun PagePreviewSection(manga: Manga, modifier: Modifier = Modifier) {
                         }
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        TextButton(onClick = { navigator.push(PagePreviewScreen(manga.id)) }) { Text("More previews") }
+                        TextButton(onClick = { navigator.push(PagePreviewScreen(manga.id)) }) { Text(localized(SYMR.strings.more_previews)) }
                     }
                 }
             }
@@ -235,7 +238,7 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
         init {
             screenModelScope.launch {
                 val manga = Injekt.get<GetManga>().await(mangaId)
-                mutableState.update { it.copy(manga = manga, error = if (manga == null) "Entry not found" else null) }
+                mutableState.update { it.copy(manga = manga, error = if (manga == null) localized(DMR.strings.entry_not_found) else null) }
                 loadMore()
             }
         }
@@ -260,7 +263,7 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    mutableState.update { it.copy(loading = false, error = e.message ?: "Couldn't load page previews") }
+                    mutableState.update { it.copy(loading = false, error = e.message ?: localized(DMR.strings.couldnt_load_page_previews_2)) }
                 }
             }
         }
@@ -278,11 +281,11 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
             opening = null
         }
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Page previews", subtitle = state.manga?.title)
+            ScreenHeader(localized(SYMR.strings.page_previews), subtitle = state.manga?.title)
             when {
                 state.previews.isEmpty() && state.error != null -> EmptyScreen(state.error!!)
                 state.previews.isEmpty() && (state.loading || state.manga == null) -> LoadingScreen()
-                state.previews.isEmpty() -> EmptyScreen("This entry has no page previews")
+                state.previews.isEmpty() -> EmptyScreen(localized(DMR.strings.this_entry_has_no_page_previews))
                 else -> {
                     val grid = rememberLazyGridState()
                     val nearEnd by remember {
@@ -308,7 +311,7 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                                     if (state.loading) {
                                         CircularProgressIndicator(Modifier.size(32.dp))
                                     } else {
-                                        TextButton(onClick = model::loadMore) { Text("Retry: ${state.error}") }
+                                        TextButton(onClick = model::loadMore) { Text(localized(DMR.strings.retry, state.error)) }
                                     }
                                 }
                             }

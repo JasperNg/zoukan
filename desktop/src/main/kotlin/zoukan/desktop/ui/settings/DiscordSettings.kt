@@ -22,10 +22,14 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.discord.DiscordPresence
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.i18n.desktop.DMR
 
 /** Settings > Discord: Rich Presence, with the Android app's options. */
 fun LazyListScope.discordSettings() {
@@ -50,25 +54,25 @@ private fun DiscordSettingsSection() {
 
     Column {
         SwitchPreference(
-            "Discord Rich Presence",
+            localized(KMR.strings.pref_discord_rpc),
             presence.enabled(),
             when {
-                !enabled -> "Show what you read on your Discord profile. Needs the Discord app running on this computer."
-                connected -> "Connected to Discord"
-                else -> "Waiting for the Discord app"
+                !enabled -> localized(DMR.strings.show_what_you_read_on_your)
+                connected -> localized(DMR.strings.connected_to_discord)
+                else -> localized(DMR.strings.waiting_for_the_discord_app)
             },
         )
         if (enabled) {
-            SwitchPreference("Hide what I read", presence.hideReading(), "Show only that Zoukan is in use")
-            SettingRow("Hide these categories", "Entries in them are not shown", onClick = { categoriesDialog = true })
-            SwitchPreference("Show progress", presence.showProgress(), "The chapter being read")
-            SwitchPreference("Use chapter titles", presence.useChapterTitles(), "In place of the chapter number")
-            SwitchPreference("Show elapsed time", presence.showTimestamp())
-            SettingRow("Custom message", message.ifBlank { "None" }, onClick = { messageDialog = true })
-            SwitchPreference("Show buttons", presence.showButtons())
+            SwitchPreference(localized(DMR.strings.hide_what_i_read), presence.hideReading(), localized(DMR.strings.show_only_that_zoukan_is_in))
+            SettingRow(localized(DMR.strings.hide_these_categories), localized(DMR.strings.entries_in_them_are_not_shown), onClick = { categoriesDialog = true })
+            SwitchPreference(localized(DMR.strings.show_progress), presence.showProgress(), localized(DMR.strings.the_chapter_being_read))
+            SwitchPreference(localized(DMR.strings.use_chapter_titles), presence.useChapterTitles(), localized(DMR.strings.in_place_of_the_chapter_number))
+            SwitchPreference(localized(DMR.strings.show_elapsed_time), presence.showTimestamp())
+            SettingRow(localized(DMR.strings.custom_message), message.ifBlank { localized(MR.strings.none) }, onClick = { messageDialog = true })
+            SwitchPreference(localized(DMR.strings.show_buttons), presence.showButtons())
             if (buttons) {
-                SwitchPreference("Download button", presence.showDownloadButton())
-                SwitchPreference("Discord server button", presence.showDiscordButton())
+                SwitchPreference(localized(DMR.strings.download_button), presence.showDownloadButton())
+                SwitchPreference(localized(DMR.strings.discord_server_button), presence.showDiscordButton())
             }
         }
     }
@@ -77,15 +81,15 @@ private fun DiscordSettingsSection() {
         var text by remember { mutableStateOf(message) }
         AlertDialog(
             onDismissRequest = { messageDialog = false },
-            title = { Text("Custom message") },
-            text = { OutlinedTextField(text, { text = it.take(128) }, singleLine = true, placeholder = { Text("Shown in place of the title") }) },
+            title = { Text(localized(DMR.strings.custom_message)) },
+            text = { OutlinedTextField(text, { text = it.take(128) }, singleLine = true, placeholder = { Text(localized(DMR.strings.shown_in_place_of_the_title)) }) },
             confirmButton = {
                 TextButton(onClick = {
                     presence.customMessage().set(text.trim())
                     messageDialog = false
                 }) { Text("OK") }
             },
-            dismissButton = { TextButton(onClick = { messageDialog = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { messageDialog = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
     if (categoriesDialog) HiddenCategoriesDialog(presence) { categoriesDialog = false }
@@ -97,14 +101,14 @@ private fun HiddenCategoriesDialog(presence: DiscordPresence, onDismiss: () -> U
     var hidden by remember { mutableStateOf(presence.hiddenCategories().get()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Hide these categories") },
+        title = { Text(localized(DMR.strings.hide_these_categories)) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
                 categories.forEach { category ->
                     val id = category.id.toString()
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(id in hidden, onCheckedChange = { hidden = if (it) hidden + id else hidden - id })
-                        Text(if (category.isSystemCategory) "Default" else category.name)
+                        Text(if (category.isSystemCategory) localized(MR.strings.label_default) else category.name)
                     }
                 }
             }
@@ -115,6 +119,6 @@ private fun HiddenCategoriesDialog(presence: DiscordPresence, onDismiss: () -> U
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }

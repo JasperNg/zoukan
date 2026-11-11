@@ -42,9 +42,12 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import tachiyomi.i18n.MR
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.i18n.desktop.DMR
 
 data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? = null) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
@@ -172,8 +175,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(state.error!!, color = foreground)
                         Row {
-                            TextButton(onClick = model::retryChapter) { Text("Retry") }
-                            TextButton(onClick = { navigator.pop() }) { Text("Close") }
+                            TextButton(onClick = model::retryChapter) { Text(localized(MR.strings.action_retry)) }
+                            TextButton(onClick = { navigator.pop() }) { Text(localized(MR.strings.action_close)) }
                         }
                     }
                 }
@@ -219,10 +222,12 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 visible = menuVisible,
                 menu = ReaderMenuState(
                     mangaTitle = state.manga?.title.orEmpty(),
-                    chapterTitle = state.chapter?.name.orEmpty() + when {
-                        !state.fromDisk || state.loading -> ""
-                        state.manga?.source == zoukan.desktop.local.LocalSource.ID -> " · Local file"
-                        else -> " · Downloaded"
+                    chapterTitle = state.chapter?.name.orEmpty().let {
+                        when {
+                            !state.fromDisk || state.loading -> it
+                            state.manga?.source == zoukan.desktop.local.LocalSource.ID -> localized(DMR.strings.chapter_local_file, it)
+                            else -> localized(DMR.strings.chapter_downloaded, it)
+                        }
                     },
                     bookmarked = state.chapter?.bookmark == true,
                     autoScroll = autoScroll,
@@ -307,29 +312,29 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
 @Composable
 private fun KeyboardHelp(onDismiss: () -> Unit) {
     val keys = listOf(
-        "Right / Left" to "Next / previous page (flipped in right to left mode)",
-        "Space, Page Down / Shift+Space, Page Up" to "Next / previous page",
-        "Down / Up" to "Scroll a tall or zoomed page, then turn the page",
-        "Home / End" to "First / last page",
-        "N or ] / P or [" to "Next / previous chapter",
-        "Ctrl + mouse wheel, + / -" to "Zoom in / out",
-        "0" to "Reset zoom",
-        "Double-click" to "Zoom to 2x and back",
-        "Click left / right third" to "Previous / next page",
-        "Click the middle, M or Enter" to "Show or hide the menu",
-        "F or F11" to "Full screen",
-        "Escape" to "Close the menu, leave full screen, or close the reader",
-        "A" to "Start or stop auto scroll",
-        "S" to "Reader settings",
-        "B" to "Bookmark the chapter or remove its bookmark",
-        "C" to "Chapter list",
-        "R / Shift+R" to "Retry failed pages / load the shown page first",
-        "D" to "Shift double pages by one",
-        "Right-click or long-press a page" to "Set it as the cover, copy it or save it",
+        "Right / Left" to localized(DMR.strings.next_previous_page_flipped_in_right),
+        "Space, Page Down / Shift+Space, Page Up" to localized(DMR.strings.next_previous_page),
+        "Down / Up" to localized(DMR.strings.scroll_a_tall_or_zoomed_page),
+        "Home / End" to localized(DMR.strings.first_last_page),
+        "N or ] / P or [" to localized(DMR.strings.next_previous_chapter),
+        "Ctrl + mouse wheel, + / -" to localized(DMR.strings.zoom_in_out),
+        "0" to localized(DMR.strings.reset_zoom),
+        localized(DMR.strings.double_click) to localized(DMR.strings.zoom_to_2x_and_back),
+        localized(DMR.strings.click_left_right_third) to localized(DMR.strings.previous_next_page),
+        localized(DMR.strings.click_the_middle_m_or_enter) to localized(DMR.strings.show_or_hide_the_menu),
+        "F or F11" to localized(DMR.strings.full_screen),
+        localized(DMR.strings.escape) to localized(DMR.strings.close_the_menu_leave_full_screen),
+        "A" to localized(DMR.strings.start_or_stop_auto_scroll),
+        "S" to localized(DMR.strings.reader_settings),
+        "B" to localized(DMR.strings.bookmark_the_chapter_or_remove_its),
+        "C" to localized(DMR.strings.chapter_list),
+        "R / Shift+R" to localized(DMR.strings.retry_failed_pages_load_the_shown),
+        "D" to localized(DMR.strings.shift_double_pages_by_one),
+        localized(DMR.strings.right_click_or_long_press_a) to localized(DMR.strings.set_it_as_the_cover_copy),
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reader shortcuts") },
+        title = { Text(localized(DMR.strings.reader_shortcuts)) },
         text = {
             Column {
                 keys.forEach { (key, what) ->
@@ -340,6 +345,6 @@ private fun KeyboardHelp(onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
     )
 }

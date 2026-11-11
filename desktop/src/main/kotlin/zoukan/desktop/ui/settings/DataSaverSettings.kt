@@ -26,6 +26,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.i18n.desktop.DMR
 
 /**
  * Settings > Data saver, as the data saver group of the Android app's Advanced settings: pages
@@ -100,8 +101,8 @@ private fun DataSaverSettings() {
             enabled = dataSaver == DataSaver.BANDWIDTH_HERO,
         ) { preferences.dataSaverColorBW().set(it) }
         SettingRow(
-            "Excluded sources",
-            if (excluded.isEmpty()) "None" else "${excluded.size} excluded",
+            localized(DMR.strings.excluded_sources),
+            if (excluded.isEmpty()) localized(MR.strings.none) else localized(DMR.strings.excluded, excluded.size),
             enabled = on,
             onClick = { sourcesDialog = true },
         )
@@ -129,7 +130,7 @@ private fun DataSaverSettings() {
         }
         AlertDialog(
             onDismissRequest = { sourcesDialog = false },
-            title = { Text("Exclude from the data saver") },
+            title = { Text(localized(DMR.strings.exclude_from_the_data_saver)) },
             text = {
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 480.dp)) {
                     items(sources, key = { it.id }) { source ->

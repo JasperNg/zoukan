@@ -57,8 +57,12 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.HomeScreen
@@ -81,6 +85,7 @@ import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.migration.MigrationConfigScreen
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.stats.StatsScreen
+import zoukan.i18n.desktop.DMR
 
 @Composable
 fun LibraryTab(model: LibraryScreenModel) {
@@ -130,52 +135,52 @@ fun LibraryTab(model: LibraryScreenModel) {
             )
         } else {
             ScreenHeader(
-                title = "Library",
-                subtitle = if (state.loading) null else "${state.items.distinctBy { it.id }.size} entries",
+                title = localized(MR.strings.label_library),
+                subtitle = if (state.loading) null else localized(DMR.strings.entries, state.items.distinctBy { it.id }.size),
                 showBack = false,
             ) {
-                SearchField(state.query, model::search, "Search library", Modifier.width(280.dp).padding(end = 8.dp))
+                SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp))
                 TooltipIconButton(
                     Icons.Outlined.FilterList,
-                    if (settings.hasFilter) "Filter, sort and display (filtered)" else "Filter, sort and display",
+                    if (settings.hasFilter) localized(DMR.strings.filter_sort_and_display_filtered) else localized(DMR.strings.filter_sort_and_display),
                     onClick = { settingsDialog = true },
                 )
                 DownloadsButton()
                 // ZOUKAN -->
-                TooltipIconButton(Icons.Outlined.QueryStats, "Statistics", onClick = { navigator.push(StatsScreen) })
+                TooltipIconButton(Icons.Outlined.QueryStats, localized(MR.strings.label_stats), onClick = { navigator.push(StatsScreen) })
                 // ZOUKAN <--
                 TooltipIconButton(
                     Icons.Outlined.Refresh,
-                    if (state.selectedCategory == null) "Update library" else "Update category",
+                    if (state.selectedCategory == null) localized(MR.strings.action_update_library) else localized(MR.strings.action_update_category),
                     onClick = model::refresh,
                     enabled = refresh == null,
                 )
                 Row {
-                    TooltipIconButton(Icons.Outlined.MoreVert, "More", onClick = { moreMenu = true })
+                    TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { moreMenu = true })
                     DropdownMenu(moreMenu, onDismissRequest = { moreMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Open a random entry") },
+                            text = { Text(localized(DMR.strings.open_a_random_entry)) },
                             onClick = {
                                 moreMenu = false
                                 model.randomEntry()?.let { navigator.push(MangaScreen(it)) }
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Select all") },
+                            text = { Text(localized(MR.strings.action_select_all)) },
                             onClick = {
                                 moreMenu = false
                                 model.selectAll()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Edit categories") },
+                            text = { Text(localized(MR.strings.action_edit_categories)) },
                             onClick = {
                                 moreMenu = false
                                 navigator.push(CategoryScreen)
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Library update errors") },
+                            text = { Text(localized(KMR.strings.option_label_library_update_errors)) },
                             onClick = {
                                 moreMenu = false
                                 navigator.push(UpdateErrorsScreen)
@@ -185,7 +190,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                         // SY's sync entries, as Android's library overflow
                         if (showSyncFavorites) {
                             DropdownMenuItem(
-                                text = { Text("Sync EH favorites") },
+                                text = { Text(localized(SYMR.strings.sync_favorites)) },
                                 onClick = {
                                     moreMenu = false
                                     favoritesSyncDialog = if (LibrarySync.showsNotes()) FavoritesSyncDialog.Notes else FavoritesSyncDialog.Confirm
@@ -194,7 +199,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                         }
                         if (showSyncLibrary) {
                             DropdownMenuItem(
-                                text = { Text("Sync library") },
+                                text = { Text(localized(SYMR.strings.sync_library)) },
                                 onClick = {
                                     moreMenu = false
                                     LibrarySync.syncLibrary()
@@ -212,12 +217,12 @@ fun LibraryTab(model: LibraryScreenModel) {
             val selectedIndex = tabs.indexOfFirst { it.id == state.selectedCategory } + 1
             fun label(name: String, id: Long?) = if (settings.itemCounts) "$name (${state.countIn(id)})" else name
             PrimaryScrollableTabRow(selectedTabIndex = selectedIndex, edgePadding = 16.dp) {
-                Tab(selected = selectedIndex == 0, onClick = { model.selectCategory(null) }, text = { Text(label("All", null)) })
+                Tab(selected = selectedIndex == 0, onClick = { model.selectCategory(null) }, text = { Text(label(localized(MR.strings.all), null)) })
                 tabs.forEach { category ->
                     Tab(
                         selected = state.selectedCategory == category.id,
                         onClick = { model.selectCategory(category.id) },
-                        text = { Text(label(if (category.isSystemCategory && !state.grouped) "Default" else category.name, category.id)) },
+                        text = { Text(label(if (category.isSystemCategory && !state.grouped) localized(MR.strings.label_default) else category.name, category.id)) },
                     )
                 }
             }
@@ -225,12 +230,12 @@ fun LibraryTab(model: LibraryScreenModel) {
         when {
             state.loading -> LoadingScreen()
             state.items.isEmpty() -> EmptyScreen(
-                "Your library is empty. Find something to read in Browse and add it to your library.",
-                actionLabel = "Browse",
+                localized(DMR.strings.your_library_is_empty_find_something),
+                actionLabel = localized(MR.strings.browse),
                 onAction = { HomeScreen.selectTab(HomeTab.Browse) },
             )
             visible.isEmpty() -> EmptyScreen(
-                if (state.query.isNotBlank()) "Nothing matches \"${state.query}\"" else "No entries match the filters",
+                if (state.query.isNotBlank()) localized(DMR.strings.nothing_matches, state.query) else localized(DMR.strings.no_entries_match_the_filters),
             )
             else -> LibraryContent(
                 items = visible,
@@ -246,7 +251,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                 onContinue = { item ->
                     scope.launch {
                         val chapter = model.nextChapter(item.id)
-                        if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show("No unread chapters")
+                        if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show(localized(DMR.strings.no_unread_chapters))
                     }
                 },
                 contextMenu = { item, menu ->
@@ -263,7 +268,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                         onContinue = {
                             scope.launch {
                                 val chapter = model.nextChapter(item.id)
-                                if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show("No unread chapters")
+                                if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show(localized(DMR.strings.no_unread_chapters))
                             }
                         },
                         onCategories = { categoryDialog = ids },
@@ -300,11 +305,11 @@ fun LibraryTab(model: LibraryScreenModel) {
 
 /** How many unread chapters of each entry a download queues; null for all of them. */
 private val downloadChoices = listOf(
-    1 to "Next chapter",
-    5 to "Next 5 chapters",
-    10 to "Next 10 chapters",
-    25 to "Next 25 chapters",
-    null to "Unread chapters",
+    1 to localized(MR.strings.action_next_chapter),
+    5 to localized(DMR.strings.next_5_chapters),
+    10 to localized(DMR.strings.next_10_chapters),
+    25 to localized(DMR.strings.next_25_chapters),
+    null to localized(MR.strings.action_display_unread_badge),
 )
 
 /** An entry's right-click menu: the selection bar's actions, for [ids]. */
@@ -330,32 +335,32 @@ private fun ColumnScope.EntryContextMenu(
         return
     }
     if (ids.size == 1) {
-        ContextMenuItem(menu, "Open", Icons.AutoMirrored.Outlined.OpenInNew, onClick = onOpen)
-        if (item.library.unreadCount > 0) ContextMenuItem(menu, "Continue reading", Icons.Outlined.PlayArrow, onClick = onContinue)
+        ContextMenuItem(menu, localized(KMR.strings.open), Icons.AutoMirrored.Outlined.OpenInNew, onClick = onOpen)
+        if (item.library.unreadCount > 0) ContextMenuItem(menu, localized(DMR.strings.continue_reading), Icons.Outlined.PlayArrow, onClick = onContinue)
     }
     if (selected) {
-        ContextMenuItem(menu, "Deselect", Icons.Outlined.Deselect) { model.toggleSelection(item.id) }
+        ContextMenuItem(menu, localized(DMR.strings.deselect), Icons.Outlined.Deselect) { model.toggleSelection(item.id) }
     } else {
-        ContextMenuItem(menu, "Select", Icons.Outlined.CheckCircle) { model.toggleSelection(item.id) }
+        ContextMenuItem(menu, localized(DMR.strings.select), Icons.Outlined.CheckCircle) { model.toggleSelection(item.id) }
     }
     ContextMenuDivider()
-    ContextMenuItem(menu, "Change categories", Icons.AutoMirrored.Outlined.Label, onClick = onCategories)
-    ContextMenuItem(menu, "Mark as read", Icons.Outlined.DoneAll) { model.markRead(true, ids) }
-    ContextMenuItem(menu, "Mark as unread", Icons.Outlined.RemoveDone) { model.markRead(false, ids) }
+    ContextMenuItem(menu, localized(DMR.strings.change_categories), Icons.AutoMirrored.Outlined.Label, onClick = onCategories)
+    ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll) { model.markRead(true, ids) }
+    ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone) { model.markRead(false, ids) }
     if (ids.any { id -> model.state.value.items.any { it.id == id && it.manga.source != LocalSource.ID } }) {
         DropdownMenuItem(
-            text = { Text("Download") },
+            text = { Text(localized(MR.strings.action_download)) },
             leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
             trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
             onClick = { downloads = true },
         )
-        ContextMenuItem(menu, "Delete downloads", Icons.Outlined.BookmarkRemove) { model.deleteDownloads(ids) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.BookmarkRemove) { model.deleteDownloads(ids) }
     }
     // ZOUKAN -->
-    ContextMenuItem(menu, "Migrate", Icons.Outlined.SwapHoriz, onClick = onMigrate)
+    ContextMenuItem(menu, localized(MR.strings.action_migrate), Icons.Outlined.SwapHoriz, onClick = onMigrate)
     // ZOUKAN <--
     ContextMenuDivider()
-    ContextMenuItem(menu, "Remove from library", Icons.Outlined.Delete, onClick = onRemove)
+    ContextMenuItem(menu, localized(MR.strings.remove_from_library), Icons.Outlined.Delete, onClick = onRemove)
 }
 
 @Composable
@@ -371,15 +376,15 @@ private fun SelectionBar(
     var downloadMenu by remember { mutableStateOf(false) }
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(Icons.Outlined.Close, "Clear selection", onClick = model::clearSelection)
-            Text("$count selected", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
-            TooltipIconButton(Icons.Outlined.SelectAll, "Select all", onClick = model::selectAll)
-            TooltipIconButton(Icons.Outlined.FlipToBack, "Invert selection", onClick = model::invertSelection)
-            TooltipIconButton(Icons.AutoMirrored.Outlined.Label, "Change categories", onClick = onCategories)
-            TooltipIconButton(Icons.Outlined.DoneAll, "Mark as read", onClick = { model.markRead(true) })
-            TooltipIconButton(Icons.Outlined.RemoveDone, "Mark as unread", onClick = { model.markRead(false) })
+            TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
+            Text(localized(DMR.strings.selected, count), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
+            TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
+            TooltipIconButton(Icons.AutoMirrored.Outlined.Label, localized(DMR.strings.change_categories), onClick = onCategories)
+            TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.markRead(true) })
+            TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = { model.markRead(false) })
             Row {
-                TooltipIconButton(Icons.Outlined.Download, "Download", onClick = { downloadMenu = true })
+                TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { downloadMenu = true })
                 DropdownMenu(downloadMenu, onDismissRequest = { downloadMenu = false }) {
                     downloadChoices
                         .forEach { (n, label) ->
@@ -393,11 +398,11 @@ private fun SelectionBar(
                         }
                 }
             }
-            TooltipIconButton(Icons.Outlined.BookmarkRemove, "Delete downloads", onClick = model::deleteDownloads)
+            TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.delete_downloads), onClick = model::deleteDownloads)
             // ZOUKAN -->
-            TooltipIconButton(Icons.Outlined.SwapHoriz, "Migrate", onClick = onMigrate)
+            TooltipIconButton(Icons.Outlined.SwapHoriz, localized(MR.strings.action_migrate), onClick = onMigrate)
             // ZOUKAN <--
-            TooltipIconButton(Icons.Outlined.Delete, "Remove from library", onClick = onRemove)
+            TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.remove_from_library), onClick = onRemove)
         }
     }
 }
@@ -422,10 +427,10 @@ private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categori
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Set categories") },
+        title = { Text(localized(MR.strings.action_move_category)) },
         text = {
             if (categories.isEmpty()) {
-                Text("There are no categories yet. Add them from More > Edit categories.")
+                Text(localized(DMR.strings.there_are_no_categories_yet_add))
             } else {
                 Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
                     categories.forEach { c ->
@@ -449,7 +454,7 @@ private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categori
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -458,20 +463,20 @@ private fun RemoveDialog(count: Int, onConfirm: (Boolean) -> Unit, onDismiss: ()
     var deleteDownloads by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (count == 1) "Remove from library?" else "Remove $count entries from library?") },
+        title = { Text(if (count == 1) localized(DMR.strings.remove_from_library) else localized(DMR.strings.remove_entries_from_library, count)) },
         text = {
             Row(Modifier.clickable { deleteDownloads = !deleteDownloads }, verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(deleteDownloads, onCheckedChange = { deleteDownloads = it })
-                Text("Also delete downloaded chapters")
+                Text(localized(DMR.strings.also_delete_downloaded_chapters))
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 onConfirm(deleteDownloads)
                 onDismiss()
-            }) { Text("Remove") }
+            }) { Text(localized(MR.strings.action_remove)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -488,7 +493,7 @@ fun LibraryUpdateProgress() {
                 LinearProgressIndicator(progress = { p.done.toFloat() / p.total }, modifier = Modifier.fillMaxWidth())
             }
             Text(
-                if (p.total == 0) "Starting the library update…" else "Updating ${p.done} of ${p.total}: ${p.current.joinToString()}",
+                if (p.total == 0) localized(DMR.strings.starting_the_library_update) else localized(DMR.strings.updating_of, p.done, p.total, p.current.joinToString()),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 modifier = Modifier.padding(vertical = 4.dp),

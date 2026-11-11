@@ -52,8 +52,11 @@ import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.manga.EditManga
 import zoukan.desktop.ui.LocalWindow
@@ -66,6 +69,7 @@ import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.reader.PageImages
 import zoukan.desktop.ui.track.Choice
+import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
 import java.time.Instant
@@ -83,9 +87,9 @@ object EntryActions {
 
     /** Copies the entry's link: the desktop stand-in for Android's Share. */
     fun copyLink(manga: Manga, source: Source?) {
-        val url = mangaUrl(manga, source) ?: return Toasts.show("This source has no web page")
+        val url = mangaUrl(manga, source) ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         copyToClipboard(url)
-        Toasts.show("Link copied to clipboard")
+        Toasts.show(localized(DMR.strings.link_copied_to_clipboard))
     }
 
     /** Sets a custom update interval in days, as Android does: stored negative, 0 for automatic. */
@@ -101,7 +105,7 @@ object EntryActions {
     suspend fun copyCover(manga: Manga) = withContext(Dispatchers.IO) { PageImages.copy(coverBytes(manga)) }
 
     private suspend fun coverBytes(manga: Manga): ByteArray {
-        val cover = Cover.of(manga) ?: error("The entry has no cover")
+        val cover = Cover.of(manga) ?: error(localized(DMR.strings.the_entry_has_no_cover))
         return Images.coverFile(cover).readBytes()
     }
 }
@@ -121,30 +125,30 @@ fun FetchIntervalDialog(manga: Manga, onDismiss: () -> Unit) {
     val nextUpdateDays = remember(manga.expectedNextUpdate) {
         manga.expectedNextUpdate?.let { Instant.now().until(it, ChronoUnit.DAYS).toInt().coerceAtLeast(0) }
     }
-    val choices = listOf(FetchInterval.MANUAL_DISABLE to "Disabled", 0 to "Default") +
+    val choices = listOf(FetchInterval.MANUAL_DISABLE to localized(MR.strings.disabled), 0 to localized(MR.strings.label_default)) +
         (1..FetchInterval.MAX_INTERVAL).map { it to days(it) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Update frequency") },
+        title = { Text(localized(DMR.strings.update_frequency)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     if (nextUpdateDays != null && interval >= 0) {
-                        "New chapters predicted to be released in around ${days(nextUpdateDays)}, checking around every ${days(interval)}."
+                        localized(MR.strings.manga_interval_expected_update, days(nextUpdateDays), days(interval))
                     } else if (interval == -FetchInterval.MANUAL_DISABLE) {
-                        "Library updates skip this entry."
+                        localized(DMR.strings.library_updates_skip_this_entry)
                     } else if (nextUpdateDays != null) {
-                        "Next check in around ${days(nextUpdateDays)}, every ${days(-interval)} as set."
+                        localized(DMR.strings.next_check_in_around_every_as, days(nextUpdateDays), days(-interval))
                     } else {
-                        "This entry is either completed, or there is no predicted release date."
+                        localized(DMR.strings.this_entry_is_either_completed_or)
                     },
                 )
                 if (editable) {
-                    Text("Custom update frequency:")
-                    Choice("Every", choices.first { it.first == selected }.second, choices) { selected = it }
+                    Text(localized(MR.strings.manga_interval_custom_amount))
+                    Choice(localized(DMR.strings.every), choices.first { it.first == selected }.second, choices) { selected = it }
                 } else {
                     Text(
-                        "Turn on Settings > Library > Smart update > \"Predict next release time\" to set it.",
+                        localized(DMR.strings.turn_on_settings_library_smart_update),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -156,17 +160,17 @@ fun FetchIntervalDialog(manga: Manga, onDismiss: () -> Unit) {
                 if (editable) {
                     scope.launch {
                         runCatching { EntryActions.setFetchInterval(manga, selected) }
-                            .onFailure { Toasts.error("Could not set the update frequency", it) }
+                            .onFailure { Toasts.error(localized(DMR.strings.could_not_set_the_update_frequency), it) }
                     }
                 }
                 onDismiss()
             }) { Text("OK") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
-private fun days(count: Int) = if (count == 1) "1 day" else "$count days"
+private fun days(count: Int) = if (count == 1) localized(KMR.strings.download_cache_renew_interval_24hour) else localized(DMR.strings.days, count)
 
 /** Android's cover dialog: the cover large, with copy (for Share), save, change and delete. */
 @Composable
@@ -189,50 +193,50 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
                     Modifier.width(320.dp).aspectRatio(2f / 3f).clip(Corners.Large),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CoverAction("Copy", Icons.Outlined.ContentCopy) {
-                        run("Could not copy the cover") {
+                    CoverAction(localized(MR.strings.copy), Icons.Outlined.ContentCopy) {
+                        run(localized(DMR.strings.could_not_copy_the_cover)) {
                             EntryActions.copyCover(manga)
-                            Toasts.show("Copied to clipboard")
+                            Toasts.show(localized(MR.strings.copied_to_clipboard_plain))
                         }
                     }
-                    CoverAction("Save", Icons.Outlined.Save) {
-                        run("Could not save the cover") {
+                    CoverAction(localized(MR.strings.action_save), Icons.Outlined.Save) {
+                        run(localized(DMR.strings.could_not_save_the_cover)) {
                             val file = EntryActions.saveCover(manga)
-                            Toasts.show("Cover saved to ${file.parent}")
+                            Toasts.show(localized(DMR.strings.cover_saved_to, file.parent))
                         }
                     }
                     if (edit.canEditCover(manga)) {
-                        CoverAction("Change", Icons.Outlined.Edit) {
-                            val dialog = FileDialog(window, "Choose a cover", FileDialog.LOAD).apply {
+                        CoverAction(localized(DMR.strings.change), Icons.Outlined.Edit) {
+                            val dialog = FileDialog(window, localized(DMR.strings.choose_a_cover), FileDialog.LOAD).apply {
                                 setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in COVER_EXTENSIONS }
                                 isVisible = true
                             }
                             val name = dialog.file ?: return@CoverAction
-                            run("Failed to update cover") {
+                            run(localized(MR.strings.notification_cover_update_failed)) {
                                 edit.setCover(manga, File(dialog.directory, name))
-                                Toasts.show("Cover updated")
+                                Toasts.show(localized(MR.strings.cover_updated))
                             }
                         }
                     }
                     if (edit.hasCustomCover(manga)) {
-                        CoverAction("Delete", Icons.Outlined.Delete) {
-                            run("Could not delete the cover") {
+                        CoverAction(localized(MR.strings.action_delete), Icons.Outlined.Delete) {
+                            run(localized(DMR.strings.could_not_delete_the_cover)) {
                                 edit.deleteCustomCover(manga)
-                                Toasts.show("Custom cover deleted")
+                                Toasts.show(localized(DMR.strings.custom_cover_deleted))
                             }
                         }
                     }
                 }
                 if (!edit.canEditCover(manga)) {
                     Text(
-                        "Add the entry to the library to change its cover.",
+                        localized(DMR.strings.add_the_entry_to_the_library),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) } },
     )
 }
 
@@ -263,11 +267,11 @@ fun DuplicateDialog(
     val sourceManager = remember { Injekt.get<SourceManager>() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Possible duplicates") },
+        title = { Text(localized(MR.strings.possible_duplicates_title)) },
         text = {
             Column(Modifier.heightIn(max = 520.dp).verticalScrollWithBar(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(target.title, style = MaterialTheme.typography.titleMedium)
-                Text("You have entries in your library with a similar name. Select an entry to migrate or add anyway.")
+                Text(localized(DMR.strings.you_have_entries_in_your_library))
                 duplicates.forEach { (manga, chapterCount) ->
                     Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = Corners.Medium) {
                         Row(
@@ -281,22 +285,22 @@ fun DuplicateDialog(
                                 Text(
                                     listOfNotNull(
                                         sourceManager.getOrStub(manga.source).toString(),
-                                        if (chapterCount == 1L) "1 chapter" else "$chapterCount chapters",
+                                        if (chapterCount == 1L) localized(DMR.strings.n_1_chapter) else localized(DMR.strings.chapters, chapterCount),
                                         statusLabel(manga.status),
                                     ).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            TextButton(onClick = { onOpen(manga) }) { Text("Open") }
-                            TextButton(onClick = { onMigrate(manga) }) { Text("Migrate") }
+                            TextButton(onClick = { onOpen(manga) }) { Text(localized(KMR.strings.open)) }
+                            TextButton(onClick = { onMigrate(manga) }) { Text(localized(MR.strings.action_migrate)) }
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onAddAnyway) { Text("Add anyway") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onAddAnyway) { Text(localized(MR.strings.action_add_anyway)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -307,12 +311,12 @@ fun CustomDownloadDialog(onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
     val count = text.toIntOrNull()?.takeIf { it > 0 }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Download next chapters") },
+        title = { Text(localized(DMR.strings.download_next_chapters)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it.filter(Char::isDigit).take(4) },
-                label = { Text("Number of unread chapters") },
+                label = { Text(localized(DMR.strings.number_of_unread_chapters)) },
                 singleLine = true,
             )
         },
@@ -320,9 +324,9 @@ fun CustomDownloadDialog(onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
             TextButton(enabled = count != null, onClick = {
                 count?.let(onConfirm)
                 onDismiss()
-            }) { Text("Download") }
+            }) { Text(localized(MR.strings.action_download)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
@@ -365,7 +369,7 @@ fun MissingChaptersRow(count: Int) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         HorizontalDivider(Modifier.weight(1f))
-        Text(if (count == 1) "Missing 1 chapter" else "Missing $count chapters", style = MaterialTheme.typography.labelMedium)
+        Text(if (count == 1) localized(DMR.strings.missing_1_chapter) else localized(DMR.strings.missing_chapters, count), style = MaterialTheme.typography.labelMedium)
         HorizontalDivider(Modifier.weight(1f))
     }
 }

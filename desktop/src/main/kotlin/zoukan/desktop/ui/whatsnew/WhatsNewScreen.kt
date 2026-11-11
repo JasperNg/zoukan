@@ -25,14 +25,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import tachiyomi.i18n.MR
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.ExternalLinks
 import zoukan.desktop.app.Version
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.InfoScreen
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's What's new screen: the release notes of the running version, read from its GitHub
@@ -51,18 +54,18 @@ class WhatsNewScreen : cafe.adriel.voyager.core.screen.Screen {
         val loaded = notes?.getOrNull()
         InfoScreen(
             icon = Icons.Outlined.NewReleases,
-            headingText = "What's new",
-            subtitleText = loaded?.name?.takeIf { it != "Zoukan ${AppVersion.name}" }?.let { "$it, Zoukan ${AppVersion.name}" }
-                ?: "Zoukan ${AppVersion.name}",
+            headingText = localized(MR.strings.whats_new),
+            subtitleText = loaded?.name?.takeIf { it != "Zoukan ${AppVersion.name}" }?.let { localized(DMR.strings.zoukan_2, it, AppVersion.name) }
+                ?: localized(DMR.strings.zoukan, AppVersion.name),
             acceptText = "OK",
             onAcceptClick = { navigator.pop() },
             secondaryButton = {
                 val page = loaded?.pageUrl?.takeIf { it.isNotBlank() }
                     ?: "https://github.com/${AppVersion.releaseRepo}/releases"
                 TextButton(onClick = {
-                    runCatching { ExternalLinks.browse(page) }.onFailure { Toasts.error("Could not open the page", it) }
+                    runCatching { ExternalLinks.browse(page) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
                 }) {
-                    Text("Open on GitHub")
+                    Text(localized(MR.strings.update_check_open))
                     Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp).padding(start = 4.dp))
                 }
             },
@@ -71,13 +74,13 @@ class WhatsNewScreen : cafe.adriel.voyager.core.screen.Screen {
             when {
                 result == null -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text("Loading the release notes…")
+                    Text(localized(DMR.strings.loading_the_release_notes))
                 }
                 result.isFailure -> {
-                    Text(result.exceptionOrNull()?.message ?: "Could not load the release notes", color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { attempt++ }) { Text("Try again") }
+                    Text(result.exceptionOrNull()?.message ?: localized(DMR.strings.could_not_load_the_release_notes), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { attempt++ }) { Text(localized(DMR.strings.try_again)) }
                 }
-                loaded != null && loaded.body.isBlank() -> Text("This release has no notes.")
+                loaded != null && loaded.body.isBlank() -> Text(localized(DMR.strings.this_release_has_no_notes))
                 loaded != null -> ReleaseNotesText(loaded.body)
             }
         }
@@ -103,9 +106,9 @@ object WhatsNew {
 fun UpdatedDialog(onDismiss: () -> Unit, onOpenWhatsNew: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Updated to Zoukan ${AppVersion.name}") },
-        text = { Text("See what changed in this version.") },
+        title = { Text(localized(DMR.strings.updated_to_zoukan, AppVersion.name)) },
+        text = { Text(localized(DMR.strings.see_what_changed_in_this_version)) },
         confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onOpenWhatsNew) { Text("What's new") } },
+        dismissButton = { TextButton(onClick = onOpenWhatsNew) { Text(localized(MR.strings.whats_new)) } },
     )
 }
