@@ -177,7 +177,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                     Tab(
                         selected = state.selectedCategory == category.id,
                         onClick = { model.selectCategory(category.id) },
-                        text = { Text(label(if (category.isSystemCategory) "Default" else category.name, category.id)) },
+                        text = { Text(label(if (category.isSystemCategory && !state.grouped) "Default" else category.name, category.id)) },
                     )
                 }
             }
