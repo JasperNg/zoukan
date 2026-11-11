@@ -89,9 +89,12 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
     )
 }
 
-/** A tri-state filter: off, only, or not; shared with the Updates filter. */
+/**
+ * A tri-state filter: off, only, or not; shared with the Updates and History filters. [notLabel]
+ * names the "not" state where "Not [label]" reads badly.
+ */
 @Composable
-internal fun TriStateRow(label: String, preference: Preference<TriState>) {
+internal fun TriStateRow(label: String, preference: Preference<TriState>, notLabel: String? = null) {
     val value by preference.changes().collectAsState(preference.get())
     Row(
         Modifier.fillMaxWidth().clickable { preference.set(value.next()) }.padding(vertical = 2.dp),
@@ -105,7 +108,7 @@ internal fun TriStateRow(label: String, preference: Preference<TriState>) {
             },
             onClick = { preference.set(value.next()) },
         )
-        Text(if (value == TriState.ENABLED_NOT) "Not $label".replaceFirstChar { it.uppercase() } else label)
+        Text(if (value == TriState.ENABLED_NOT) notLabel ?: "Not $label".replaceFirstChar { it.uppercase() } else label)
     }
 }
 

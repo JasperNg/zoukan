@@ -159,6 +159,7 @@ class DesktopDomainModule : InjektModule {
         addSingletonFactory { DesktopPreferences(get()) }
         addSingletonFactory { eu.kanade.domain.ui.UiPreferences(get()) }
         addSingletonFactory { tachiyomi.domain.updates.service.UpdatesPreferences(get()) }
+        addSingletonFactory { tachiyomi.domain.history.service.HistoryPreferences(get()) }
         addFactory { tachiyomi.domain.category.interactor.ResetCategoryFlags(get(), get()) }
         addFactory { GetLibraryManga(get()) }
         addFactory { GetManga(get()) }

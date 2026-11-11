@@ -33,6 +33,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Updates and History tabs | Yes | Phase 3 |
 | Updates filters: downloaded, unread, started, bookmarked, hide excluded scanlators | Yes | Updates > filter button; the Android preferences, so they move with backups |
+| History filters: unfinished entries, unfinished chapters, not in library; panorama covers (KMK) | Yes | History > filter button; the Android preferences, so they move with backups |
+| History: selection, remove and add to library | Yes | The select button, Ctrl/Cmd + click or right click selects, Shift + click selects a range; remove the selected rows or every chapter of their entries. Rows not in the library have Add to library, with the duplicate check and categories |
 | Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
 | More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
