@@ -27,12 +27,12 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.OpenInBrowser
@@ -152,18 +152,24 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 Column(Modifier.fillMaxSize()) {
                                     ChapterToolbar(state, model)
                                     HorizontalDivider()
-                                    if (state.chapters.isEmpty()) {
+                                    if (state.sortedChapters.isEmpty()) {
                                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             Text(
-                                                if (state.refreshing) "Loading chapters…" else "No chapters",
+                                                when {
+                                                    state.refreshing -> "Loading chapters…"
+                                                    // ZOUKAN -->
+                                                    state.chapters.isNotEmpty() -> "No chapters match the filters"
+                                                    // ZOUKAN <--
+                                                    else -> "No chapters"
+                                                },
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     } else {
                                         // ZOUKAN -->
                                         val showMissing = showMissingChapters()
-                                        val missing = remember(state.sortedChapters, state.descending, showMissing) {
-                                            if (showMissing) MissingChapters.of(state.sortedChapters, state.descending) else MissingChapters.NONE
+                                        val missing = remember(state.sortedChapters, manga.sortDescending(), showMissing) {
+                                            if (showMissing) MissingChapters.of(state.sortedChapters, manga.sortDescending()) else MissingChapters.NONE
                                         }
                                         // ZOUKAN <--
                                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
@@ -330,12 +336,25 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (state.selected.isEmpty()) {
+            // ZOUKAN -->
+            val shown = state.sortedChapters.size
             Text(
-                "${state.chapters.size} chapters",
+                if (shown == state.chapters.size) "${state.chapters.size} chapters" else "$shown of ${state.chapters.size} chapters",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
-            TooltipIconButton(Icons.Default.SwapVert, if (state.descending) "Oldest first" else "Newest first", onClick = model::toggleSort)
+            var settings by remember { mutableStateOf(false) }
+            // Tinted while a filter hides chapters, as on Android
+            val tint = if (state.filterActive) MaterialTheme.colorScheme.primary else androidx.compose.material3.LocalContentColor.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides tint) {
+                TooltipIconButton(
+                    Icons.Default.FilterList,
+                    if (state.filterActive) "Filter and sort (filters on)" else "Filter and sort",
+                    onClick = { settings = true },
+                )
+            }
+            if (settings) ChapterSettingsDialog(state, model, onDismiss = { settings = false })
+            // ZOUKAN <--
             if (!state.isLocal) DownloadMenu(model)
             TooltipIconButton(Icons.Default.SelectAll, "Select all", onClick = model::selectAll)
         } else {
