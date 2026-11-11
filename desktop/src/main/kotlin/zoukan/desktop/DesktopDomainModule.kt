@@ -129,6 +129,7 @@ class DesktopDomainModule : InjektModule {
         addFactory { GetFavorites(get()) }
         addFactory { GetMangaByUrlAndSourceId(get()) }
         addFactory { FetchInterval(get()) }
+        addFactory { tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga(get()) }
 
         addSingletonFactory<ChapterRepository> { ChapterRepositoryImpl(get()) }
         addFactory { GetChaptersByMangaId(get()) }
@@ -263,6 +264,7 @@ class DesktopDomainModule : InjektModule {
         addFactory { tachiyomi.domain.libraryUpdateError.interactor.DeleteLibraryUpdateErrors(get()) }
         addFactory { tachiyomi.domain.libraryUpdateError.interactor.InsertLibraryUpdateErrors(get()) }
         addFactory { zoukan.desktop.library.LibraryUpdateErrors(get(), get(), get()) }
+        addFactory { zoukan.desktop.library.AddToLibrary(get(), get(), get(), get(), get(), get(), get(), get()) }
 
         // Migration (Phase 6)
         addFactory { MigrateManga(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }

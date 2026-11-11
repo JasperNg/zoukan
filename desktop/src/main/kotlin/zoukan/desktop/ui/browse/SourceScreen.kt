@@ -101,6 +101,10 @@ data class SourceScreen(
         val model = rememberScreenModel { SourceScreenModel(sourceId, latest, query, savedSearchId = savedSearch) }
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
+        // ZOUKAN -->
+        val libraryToggle = rememberQuickLibraryToggle()
+        QuickLibraryToggleDialogs(libraryToggle)
+        // ZOUKAN <--
         val source = model.source
         var searchText by rememberSaveable { mutableStateOf(query.orEmpty()) }
         var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -220,7 +224,8 @@ data class SourceScreen(
                                     dimmed = manga.id in state.favorites,
                                     // ZOUKAN -->
                                     onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
-                                    onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
+                                    // While selecting, right-click selects; otherwise it adds or removes (Android's long press)
+                                    onSecondaryClick = { if (bulk.active) bulk.toggle(manga) else libraryToggle.toggle(manga) },
                                     modifier = Modifier.bulkSelected(bulk.isSelected(manga)),
                                     // ZOUKAN <--
                                 )
