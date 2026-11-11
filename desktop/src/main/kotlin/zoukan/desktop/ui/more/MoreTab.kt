@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.CloudOff
@@ -52,6 +51,7 @@ import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab

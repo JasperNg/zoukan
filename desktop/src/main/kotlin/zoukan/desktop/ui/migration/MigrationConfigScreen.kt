@@ -13,19 +13,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -63,8 +60,10 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.languageName
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.SwitchPreference
 import zoukan.desktop.ui.settings.SwitchSetting
@@ -92,15 +91,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                 subtitle = "${mangaIds.size} ${if (mangaIds.size == 1) "entry" else "entries"} · " +
                     state.sources.count { it.selected }.let { if (it == 1) "1 source" else "$it sources" } + " selected, searched from the top",
             ) {
-                OutlinedTextField(
-                    query,
-                    { query = it },
-                    singleLine = true,
-                    placeholder = { Text("Search for a source") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.width(260.dp).padding(end = 8.dp),
-                )
+                SearchField(query, { query = it }, "Search for a source", Modifier.width(260.dp).padding(end = 8.dp))
                 Box {
                     TooltipIconButton(Icons.Default.MoreVert, "Select", onClick = { selectMenu = true })
                     DropdownMenu(selectMenu, onDismissRequest = { selectMenu = false }) {
