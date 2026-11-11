@@ -105,7 +105,7 @@ class EndToEndReadTest {
 
             step("Open the entry and add it to the library") {
                 // The button turns on once the chapter list has loaded
-                waitFor(hasText("Start reading") and isEnabled(), timeout = 120_000)
+                waitFor(hasText("Start") and isEnabled(), timeout = 120_000)
                 onAllNodesWithText("Add to library").onFirst().performClick()
                 waitFor(hasText("In library"))
                 Thread.sleep(2000)
@@ -113,7 +113,7 @@ class EndToEndReadTest {
             }
 
             step("Read in the paged mode") {
-                onAllNodesWithText("Start reading").onFirst().performClick()
+                onAllNodesWithText("Start").onFirst().performClick()
                 // The pager also composes the next page off screen, so wait for one on screen
                 runCatching { waitUntil(timeoutMillis = 120_000) { pageOnScreen() } }.onFailure {
                     E2EDiagnostics.dump()
