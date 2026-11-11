@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
@@ -55,6 +53,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import java.time.Instant
 
 /**
@@ -249,7 +248,7 @@ private fun BulkFavoriteDialogs(bulk: BulkFavorite) {
             onDismissRequest = { bulk.resolveDuplicates(skip = true) },
             title = { Text("Already in your library?") },
             text = {
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                Column(Modifier.heightIn(max = 360.dp).verticalScrollWithBar()) {
                     Text("The library has entries with the same title as these:")
                     dupes.forEach { Text("• ${it.title}", modifier = Modifier.padding(top = 4.dp)) }
                 }
@@ -264,7 +263,7 @@ private fun BulkFavoriteDialogs(bulk: BulkFavorite) {
             onDismissRequest = bulk::dismissCategories,
             title = { Text("Add to categories") },
             text = {
-                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                Column(Modifier.heightIn(max = 400.dp).verticalScrollWithBar()) {
                     categories.forEach { category ->
                         Row(
                             Modifier.fillMaxWidth().toggleable(

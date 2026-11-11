@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,14 +17,11 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.FlipToBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,8 +54,10 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
+import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.migration.MigrationConfigScreen
@@ -87,15 +85,7 @@ fun MigrateSourcesList() {
 
     Column(Modifier.fillMaxSize().testTag("migrate-sources")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text("Search sources") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
+            SearchField(query, { query = it }, "Search sources", Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = mode == MigrateSortingMode.ALPHABETICAL,
