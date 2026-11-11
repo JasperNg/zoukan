@@ -174,11 +174,11 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                     exit = fadeOut() + scaleOut(),
                                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
                                 ) {
-                                    ExtendedFloatingActionButton(
-                                        text = { Text(if (state.hasStarted) "Resume" else "Start") },
-                                        icon = { Icon(Icons.Filled.PlayArrow, null) },
-                                        onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } },
-                                    )
+                                    ExtendedFloatingActionButton(onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } }) {
+                                        Icon(Icons.Filled.PlayArrow, null)
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(if (state.hasStarted) "Resume" else "Start")
+                                    }
                                 }
                                 // ZOUKAN <--
                             }
