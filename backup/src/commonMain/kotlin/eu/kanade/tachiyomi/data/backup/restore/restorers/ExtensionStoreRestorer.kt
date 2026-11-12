@@ -17,15 +17,8 @@ class ExtensionStoreRestorer(
     suspend operator fun invoke(
         backupStore: BackupExtensionStore,
     ) {
-        // KMK -->
-        val indexUrl = if (backupStore.isLegacy == null) {
-            backupStore.indexUrl.removeSuffix("/index.min.json").removeSuffix("/index.json")
-                .removeSuffix("/repo.json") + "/repo.json"
-        } else {
-            backupStore.indexUrl
-        }
-        // KMK <--
         // ZOUKAN -->
+        val indexUrl = indexUrlOf(backupStore)
         handler.await {
             extension_storeQueries.upsert(
                 // ZOUKAN <--
@@ -40,4 +33,20 @@ class ExtensionStoreRestorer(
             )
         }
     }
+
+    // ZOUKAN -->
+    companion object {
+        /** The index address a restore writes for [backupStore] (the desktop compares stores by it). */
+        fun indexUrlOf(backupStore: BackupExtensionStore): String {
+            // KMK -->
+            return if (backupStore.isLegacy == null) {
+                backupStore.indexUrl.removeSuffix("/index.min.json").removeSuffix("/index.json")
+                    .removeSuffix("/repo.json") + "/repo.json"
+            } else {
+                backupStore.indexUrl
+            }
+            // KMK <--
+        }
+    }
+    // ZOUKAN <--
 }

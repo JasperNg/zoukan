@@ -35,7 +35,14 @@ object BackupCodec {
      * @throws InvalidBackupException if the data is not a backup.
      */
     fun decode(source: Source, parser: ProtoBuf = ProtoBuf): Backup {
-        val bytes = source.buffer().use { it.readBackupBytes() }
+        val bytes = try {
+            source.buffer().use { it.readBackupBytes() }
+        } catch (e: InvalidBackupException) {
+            throw e
+        } catch (e: IOException) {
+            // Empty, truncated or not gzip after all
+            throw InvalidBackupException(Error.UNKNOWN, e)
+        }
         return decode(bytes, parser)
     }
 
@@ -46,6 +53,8 @@ object BackupCodec {
         } catch (e: SerializationException) {
             throw InvalidBackupException(Error.UNKNOWN, e)
         } catch (e: IllegalArgumentException) {
+            throw InvalidBackupException(Error.UNKNOWN, e)
+        } catch (e: IndexOutOfBoundsException) {
             throw InvalidBackupException(Error.UNKNOWN, e)
         }
     }
