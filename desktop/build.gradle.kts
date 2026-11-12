@@ -104,6 +104,22 @@ sourceSets.main {
     resources.srcDir(zoukanBuildInfo)
 }
 
+// KMK's language flags (flagkit and the app's globe, UN and Esperanto icons), Android vector
+// drawables that Compose loads as they are, for the library's language badge and the flag pickers;
+// and the MangaDex DMCA list behind the library's "mangadex-dmca" search
+val syncAndroidResources by tasks.registering(Sync::class) {
+    from(rootProject.file("flagkit/src/main/res/drawable")) { into("flags") }
+    from(rootProject.file("app/src/main/res/drawable")) {
+        include("globe.xml", "ic_flag_un.xml", "ic_flag_esperanto.xml", "ic_flag_lfn.xml")
+        into("flags")
+    }
+    from(rootProject.file("app/src/main/res/raw/mangadex_dmca_uuids.txt"))
+    into(layout.buildDirectory.dir("generated/android-resources"))
+}
+sourceSets.main {
+    resources.srcDir(syncAndroidResources)
+}
+
 configurations.runtimeClasspath {
     // Its MainDispatcherFactory outranks Swing's and would make Dispatchers.Main the emulated
     // Android main looper; the UI needs the AWT event thread (see also Main.kt). AndroidCompat

@@ -13,11 +13,15 @@ import exh.source.MERGED_SOURCE_ID
 import exh.source.isEhBasedManga
 import exh.source.mangaDexSourceIds
 import exh.source.nHentaiSourceIds
+import exh.util.isLewd
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +49,7 @@ import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
@@ -57,10 +62,14 @@ import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.recs.RecommendationSearchHelper
+import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
 import java.text.Collator
 import java.util.Locale
 import kotlin.random.Random
+
+/** As Android's AppBar: the library search waits this long after the last key */
+private const val SEARCH_DEBOUNCE_MILLIS = 250L
 
 /**
  * The library, as the Android LibraryScreenModel shows it: the same filters, sorts, display modes
@@ -86,6 +95,8 @@ class LibraryScreenModel(
     private val setCustomMangaInfo: SetCustomMangaInfo = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     // SY <--
+    private val librarySearch: LibrarySearch = LibrarySearch(),
+    private val extensionManager: DesktopExtensionManager = Injekt.get(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     /** The library preferences that change what is shown. */
@@ -116,10 +127,27 @@ class LibraryScreenModel(
         /** How the tabs split the library: by category, source, status or tracking status (SY) */
         val group: Int = LibraryGroup.BY_DEFAULT,
         // ZOUKAN <--
+        // KMK -->
+        /** "Customized update frequency": entries with their own update interval */
+        val intervalCustom: TriState = TriState.DISABLED,
+        /** The interval filter applies only with the "outside the release period" update restriction */
+        val skipOutsideReleasePeriod: Boolean = false,
+        val lewd: TriState = TriState.DISABLED,
+        val filterCategories: Boolean = false,
+        val includedCategories: Set<Long> = emptySet(),
+        val excludedCategories: Set<Long> = emptySet(),
+        val showHiddenCategories: Boolean = false,
+        val useLangIcon: Boolean = true,
+        // KMK <--
     ) {
         val hasFilter: Boolean
-            get() = listOf(downloaded, unread, started, bookmarked, completed).any { it != TriState.DISABLED } ||
-                tracking.values.any { it != TriState.DISABLED }
+            get() = listOf(downloaded, unread, started, bookmarked, completed, intervalCustom, lewd).any { it != TriState.DISABLED } ||
+                tracking.values.any { it != TriState.DISABLED } ||
+                filterCategories
+
+        /** KMK: filtering by included categories shows the library ungrouped */
+        val effectiveGroup: Int
+            get() = if (filterCategories && includedCategories.isNotEmpty()) LibraryGroup.UNGROUPED else group
     }
 
     /** One library entry with what its badges show. */
@@ -129,6 +157,12 @@ class LibraryScreenModel(
         val sourceName: String,
         val language: String,
         val isLocal: Boolean,
+        // KMK -->
+        /** The source's extension icon, for the source badge */
+        val sourceIconUrl: String? = null,
+        /** The source is not installed */
+        val isStubSource: Boolean = false,
+        // KMK <--
     ) {
         val id: Long get() = library.id
         val manga: Manga get() = library.manga
@@ -149,8 +183,18 @@ class LibraryScreenModel(
         /** Each entry's tracking statuses, for grouping by tracking status */
         val trackStatuses: Map<Long, List<TrackStatus>> = emptyMap(),
         // ZOUKAN <--
+        // SY -->
+        /** The entries that match [query] (SY's library search), null before the first search */
+        val searchResults: Set<Long>? = null,
+        // SY <--
+        // KMK -->
+        /** Source id to its extension's icon */
+        val sourceIcons: Map<Long, String> = emptyMap(),
+        /** Sources that are not installed */
+        val stubSources: Set<Long> = emptySet(),
+        // KMK <--
     ) {
-        val grouped: Boolean get() = settings.group != LibraryGroup.BY_DEFAULT
+        val grouped: Boolean get() = settings.effectiveGroup != LibraryGroup.BY_DEFAULT
 
         // ZOUKAN -->
         /**
@@ -160,7 +204,7 @@ class LibraryScreenModel(
         val groups: List<Pair<Category, Set<Long>>>
             get() {
                 fun tab(id: Long, name: String, order: Long) = Category(id = id, name = name, order = order, flags = 0, hidden = false)
-                return when (settings.group) {
+                return when (settings.effectiveGroup) {
                     LibraryGroup.BY_SOURCE -> items.groupBy { it.manga.source }
                         .map { (source, list) ->
                             val name = if (source == LocalSource.ID) localized(MR.strings.action_display_local_badge) else sources[source]?.first?.ifBlank { null } ?: source.toString()
@@ -199,7 +243,8 @@ class LibraryScreenModel(
                 if (grouped) return groups.map { it.first }
                 // ZOUKAN <--
                 val hasUncategorized = items.any { it.categories.isEmpty() || Category.UNCATEGORIZED_ID in it.categories }
-                val shown = categories.filter { !it.hidden && (!it.isSystemCategory || hasUncategorized) }
+                // KMK: hidden categories show with "Show hidden categories"
+                val shown = categories.filter { (settings.showHiddenCategories || !it.hidden) && (!it.isSystemCategory || hasUncategorized) }
                 val searching = query.isNotBlank() || settings.hasFilter
                 if (!searching || settings.showEmptyCategoriesSearch) return shown
                 return shown.filter { countIn(it.id) > 0 }
@@ -231,23 +276,56 @@ class LibraryScreenModel(
 
         fun passes(item: LibraryManga): Boolean {
             val s = settings
-            if (query.isNotBlank() && !matches(item, query)) return false
+            // SY: the search runs in the background; until its first result, nothing is hidden
+            if (query.isNotBlank() && searchResults != null && item.id !in searchResults) return false
             val isLocal = item.manga.source == LocalSource.ID
             if (!s.downloaded.test(isLocal || (downloadCounts[item.id] ?: 0) > 0)) return false
             if (!s.unread.test(item.unreadCount > 0)) return false
             if (!s.started.test(item.hasStarted)) return false
             if (!s.bookmarked.test(item.hasBookmarks)) return false
             if (!s.completed.test(item.manga.status.toInt() == eu.kanade.tachiyomi.source.model.SManga.COMPLETED)) return false
-            val tracked = tracks[item.id].orEmpty().map { it.trackerId }.toSet()
-            return s.tracking.all { (tracker, state) -> state.test(tracker in tracked) }
+            // KMK -->
+            if (s.skipOutsideReleasePeriod && !s.intervalCustom.test(item.manga.fetchInterval < 0)) return false
+            if (s.lewd != TriState.DISABLED && !s.lewd.test(item.manga.isLewd())) return false
+            return passesTracking(item) && passesCategories(item)
         }
+
+        /** KMK's tracking filter: no excluded tracker, and one of the included ones if any */
+        private fun passesTracking(item: LibraryManga): Boolean {
+            val excludedTracks = settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_NOT) it.key else null }
+            val includedTracks = settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_IS) it.key else null }
+            if (includedTracks.isEmpty() && excludedTracks.isEmpty()) return true
+            val mangaTracks = tracks[item.id].orEmpty()
+            val isExcluded = excludedTracks.isNotEmpty() && mangaTracks.any { it.trackerId in excludedTracks }
+            val isIncluded = includedTracks.isEmpty() || mangaTracks.any { it.trackerId in includedTracks }
+            return !isExcluded && isIncluded
+        }
+
+        /** KMK's category filter: in every included category and in no excluded one */
+        private fun passesCategories(item: LibraryManga): Boolean {
+            if (!settings.filterCategories) return true
+            val mangaCategories = item.categories.filterNot { it == 0L }.toSet()
+            if (mangaCategories.isEmpty()) return settings.includedCategories.isEmpty()
+            val isExcluded = settings.excludedCategories.any { it in mangaCategories }
+            val isIncluded = settings.includedCategories.isEmpty() || settings.includedCategories.all { it in mangaCategories }
+            return !isExcluded && isIncluded
+        }
+        // KMK <--
 
         val visible: List<Item>
             get() {
                 val filtered = inCategory(selectedCategory).filter(::passes)
                 return sorted(filtered).map { lm ->
                     val (name, lang) = sources[lm.manga.source] ?: ("" to "")
-                    Item(lm, downloadCounts[lm.id] ?: 0, name, lang, lm.manga.source == LocalSource.ID)
+                    Item(
+                        lm,
+                        downloadCounts[lm.id] ?: 0,
+                        name,
+                        lang,
+                        lm.manga.source == LocalSource.ID,
+                        sourceIconUrl = sourceIcons[lm.manga.source],
+                        isStubSource = lm.manga.source in stubSources,
+                    )
                 }
             }
 
@@ -285,21 +363,6 @@ class LibraryScreenModel(
 
         private fun meanScore(id: Long): Double =
             tracks[id].orEmpty().filter { it.score > 0 }.map { it.score }.average().takeUnless { it.isNaN() } ?: -1.0
-
-        private fun matches(item: LibraryManga, query: String): Boolean {
-            val m = item.manga
-            return query.split(",").map { it.trim() }.filter { it.isNotEmpty() }.all { term ->
-                val exclude = term.startsWith("-")
-                val t = term.removePrefix("-")
-                val hit = m.title.contains(t, true) ||
-                    m.author?.contains(t, true) == true ||
-                    m.artist?.contains(t, true) == true ||
-                    m.description?.contains(t, true) == true ||
-                    m.genre.orEmpty().any { it.equals(t, true) } ||
-                    sources[m.source]?.first?.contains(t, true) == true
-                hit != exclude
-            }
-        }
     }
 
     init {
@@ -310,10 +373,8 @@ class LibraryScreenModel(
             }
                 .collectLatest { (items, categories) ->
                     val counts = withContext(Dispatchers.IO) { downloadCounts(items) }
-                    val sources = items.map { it.manga.source }.distinct().associateWith { id ->
-                        val source = sourceManager.getOrStub(id)
-                        source.name to source.lang
-                    }
+                    val sourceModels = items.map { it.manga.source }.distinct().associateWith { sourceManager.getOrStub(it) }
+                    val sources = sourceModels.mapValues { (_, source) -> source.name to source.lang }
                     val ids = items.mapTo(HashSet()) { it.id }
                     mutableState.update {
                         it.copy(
@@ -322,6 +383,7 @@ class LibraryScreenModel(
                             categories = categories,
                             downloadCounts = counts,
                             sources = sources,
+                            stubSources = sourceModels.filterValues { source -> source is StubSource }.keys,
                             // Entries that left the library leave the selection too
                             selection = it.selection.filterTo(HashSet()) { id -> id in ids },
                         )
@@ -342,11 +404,35 @@ class LibraryScreenModel(
             settingsFlow().collect { settings ->
                 mutableState.update {
                     // A new grouping has other tabs, so it starts from All
-                    val tab = if (settings.group != it.settings.group) null else it.selectedCategory
+                    val tab = if (settings.effectiveGroup != it.settings.effectiveGroup) null else it.selectedCategory
                     it.copy(settings = settings, selectedCategory = tab)
                 }
             }
         }
+        // SY -->
+        screenModelScope.launch {
+            combine(
+                state.map { it.query }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MILLIS),
+                state.map { it.items }.distinctUntilChanged(),
+                state.map { it.tracks }.distinctUntilChanged(),
+                ::Triple,
+            ).collectLatest { (query, items, tracks) ->
+                val results = if (query.isBlank()) null else withContext(Dispatchers.IO) { librarySearch.search(items, query, tracks) }
+                mutableState.update { it.copy(searchResults = results) }
+            }
+        }
+        // SY <--
+        // KMK -->
+        screenModelScope.launch {
+            // The source badge's icon: the icon of the installed extension the source comes from
+            combine(extensionManager.installedExtensionsFlow, extensionManager.availableExtensionsFlow) { installed, available ->
+                installed.values.flatMap { extension ->
+                    val icon = available[extension.pkgName]?.iconUrl ?: return@flatMap emptyList()
+                    extension.sources.map { it.id to icon }
+                }.toMap()
+            }.collect { icons -> mutableState.update { it.copy(sourceIcons = icons) } }
+        }
+        // KMK <--
     }
 
     private fun downloadCounts(items: List<LibraryManga>): Map<Long, Int> =
@@ -356,6 +442,38 @@ class LibraryScreenModel(
     fun trackers() = trackerManager.loggedInTrackers()
 
     private fun settingsFlow(): Flow<Settings> {
+        val p = preferences
+        // KMK -->
+        val extra = combine(
+            listOf<Flow<Any>>(
+                p.filterIntervalCustom().changes(),
+                p.autoUpdateMangaRestrictions().changes(),
+                p.filterLewd().changes(),
+                p.filterCategories().changes(),
+                p.filterCategoriesInclude().changes(),
+                p.filterCategoriesExclude().changes(),
+                p.showHiddenCategories().changes(),
+                p.useLangIcon().changes(),
+            ),
+        ) { v ->
+            { s: Settings ->
+                s.copy(
+                    intervalCustom = v[0] as TriState,
+                    skipOutsideReleasePeriod = LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in (v[1] as Set<*>),
+                    lewd = v[2] as TriState,
+                    filterCategories = v[3] as Boolean,
+                    includedCategories = (v[4] as Set<*>).mapNotNull { (it as String).toLongOrNull() }.toSet(),
+                    excludedCategories = (v[5] as Set<*>).mapNotNull { (it as String).toLongOrNull() }.toSet(),
+                    showHiddenCategories = v[6] as Boolean,
+                    useLangIcon = v[7] as Boolean,
+                )
+            }
+        }
+        return combine(baseSettingsFlow(), extra) { settings, apply -> apply(settings) }
+        // KMK <--
+    }
+
+    private fun baseSettingsFlow(): Flow<Settings> {
         val p = preferences
         val trackerIds = trackerManager.loggedInTrackers().map { it.id }
         val flows: List<Flow<Any>> = listOf(

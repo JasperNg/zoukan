@@ -92,3 +92,7 @@ eu/kanade/presentation/theme/colorscheme/**
 mihon/feature/migration/list/search/BaseSmartSearchEngine.kt
 mihon/feature/migration/list/search/SmartSourceSearchEngine.kt
 exh/ui/batchadd/BatchAddScreenModel.kt
+
+# Library search (SY's query syntax) and the Lewd filter
+exh/search/**
+exh/util/LewdMangaChecker.kt
