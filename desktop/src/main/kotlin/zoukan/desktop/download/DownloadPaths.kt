@@ -37,6 +37,10 @@ class DownloadPaths(
     fun chapterDirName(chapter: Chapter): String =
         chapterDirName(chapter.name, chapter.scanlator, chapter.url, disallowNonAscii, includeHash)
 
+    /** Whether a chapter's download would be named differently after the source changed it, as Android's DownloadProvider. */
+    fun isChapterDirNameChanged(oldChapter: Chapter, newChapter: Chapter): Boolean =
+        chapterDirName(oldChapter) != chapterDirName(newChapter)
+
     /** The names a downloaded chapter may have: the current one, then older ones, each as a folder or a CBZ. */
     fun validChapterNames(chapter: Chapter): List<String> {
         val current = chapterDirName(chapter)

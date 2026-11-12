@@ -39,7 +39,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
-| Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5 |
+| Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5. A download follows its chapter when the source renames it or changes its scanlator, as Android |
 | Download queue: sort by upload date or chapter number, move to top or bottom, move or cancel a series | Yes | Downloads > sort button sorts within each source, as Android; each download's More menu has the moves and cancels |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
 | Backups (.tachibk) create, restore, automatic | Yes | Phase 5; round trip checked by tests |

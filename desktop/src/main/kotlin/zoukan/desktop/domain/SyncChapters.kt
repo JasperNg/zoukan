@@ -1,8 +1,10 @@
 package zoukan.desktop.domain
 
+import eu.kanade.domain.manga.interactor.GetExcludedScanlators
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
+import exh.source.isEhBasedManga
 import tachiyomi.data.chapter.ChapterSanitizer
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.ShouldUpdateDbChapter
@@ -17,13 +19,16 @@ import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import zoukan.desktop.download.DownloadManager
+import zoukan.desktop.download.DownloadPaths
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.TreeSet
 
 /**
- * Saves a source's chapter list to the database: the Android app's SyncChaptersWithSource without
- * the download handling (downloads come in Phase 5).
+ * Saves a source's chapter list to the database, as the Android app's SyncChaptersWithSource:
+ * renames the downloads of chapters the source renamed, and leaves chapters of excluded
+ * scanlators out of the new chapters it returns.
  */
 class SyncChapters(
     private val chapterRepository: ChapterRepository,
@@ -33,6 +38,9 @@ class SyncChapters(
     private val getChaptersByMangaId: GetChaptersByMangaId,
     private val fetchInterval: FetchInterval,
     private val libraryPreferences: LibraryPreferences,
+    private val downloadManager: DownloadManager,
+    private val downloadPaths: DownloadPaths,
+    private val getExcludedScanlators: GetExcludedScanlators,
 ) {
     /** @return the new chapters */
     suspend fun await(rawSourceChapters: List<SChapter>, manga: Manga, source: Source): List<Chapter> {
@@ -79,6 +87,10 @@ class SyncChapters(
                     chapter
                 }
             } else if (shouldUpdateDbChapter.await(dbChapter, chapter)) {
+                val shouldRenameChapter = downloadPaths.isChapterDirNameChanged(dbChapter, chapter) &&
+                    downloadManager.isDownloaded(manga, dbChapter)
+                if (shouldRenameChapter) downloadManager.renameChapter(manga, dbChapter, chapter)
+
                 var changed = dbChapter.copy(
                     name = chapter.name,
                     chapterNumber = chapter.chapterNumber,
@@ -129,13 +141,24 @@ class SyncChapters(
             chapter
         }
 
+        // --> EXH (carry over reading progress)
+        if (manga.isEhBasedManga()) {
+            val hasNewChapters = toAdd.any { it.url !in duplicateOrRestoredUrls }
+            val max = dbChapters.maxOfOrNull { it.lastPageRead }
+            if (hasNewChapters && max != null && max > 0) {
+                toAdd = toAdd.map { if (it.url !in duplicateOrRestoredUrls) it.copy(lastPageRead = max) else it }
+            }
+        }
+        // <-- EXH
+
         if (removedChapters.isNotEmpty()) chapterRepository.removeChaptersWithIds(removedChapters.map { it.id })
         if (toAdd.isNotEmpty()) toAdd = chapterRepository.addAll(toAdd)
         if (updatedChapters.isNotEmpty()) updateChapter.awaitAll(updatedChapters.map { it.toChapterUpdate() })
         mangaRepository.update(fetchInterval.toMangaUpdate(manga, now, fetchInterval.getWindow(now)))
         mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = Instant.now().toEpochMilli()))
 
-        return toAdd.filterNot { it.url in duplicateOrRestoredUrls }
+        val excludedScanlators = getExcludedScanlators.await(manga.id).toHashSet()
+        return toAdd.filterNot { it.url in duplicateOrRestoredUrls || it.scanlator in excludedScanlators }
     }
 
     companion object {

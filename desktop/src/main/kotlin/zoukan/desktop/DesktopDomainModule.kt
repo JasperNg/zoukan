@@ -1,6 +1,7 @@
 package zoukan.desktop
 
 import android.app.Application
+import eu.kanade.domain.manga.interactor.GetExcludedScanlators
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.source.interactor.GetExhSavedSearch
 import eu.kanade.domain.track.interactor.AddTracks
@@ -185,7 +186,8 @@ class DesktopDomainModule : InjektModule {
         addFactory { GetUpdates(get()) }
         addFactory { GetUpcomingManga(get()) }
         addFactory { RemoveExtensionStore(get()) }
-        addFactory { SyncChapters(get(), get(), get(), get(), get(), get(), get()) }
+        addFactory { GetExcludedScanlators(get()) }
+        addFactory { SyncChapters(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         addFactory { RefreshManga(get(), get(), get(), get(), get()) }
 
         // Downloads, library updates and background work (Phase 5)
