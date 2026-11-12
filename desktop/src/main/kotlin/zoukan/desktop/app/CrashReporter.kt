@@ -13,6 +13,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.browser.BrowserWindow
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.io.File
@@ -81,6 +82,11 @@ object CrashReporter {
         logcat(LogPriority.ERROR, e) { "Zoukan crashed" }
         val report = runCatching { write(thread, e, fatal = true) }.getOrNull()
         showCrashDialog(e, report)
+        // The report is written and the dialog is gone: dispose the built-in browser windows like
+        // the quit paths do (a browser still open when the JVM's shutdown hook disposes Chromium
+        // at exit crashes), and never let that keep the app from exiting or come back here
+        runCatching { BrowserWindow.disposeAllForQuit() }
+            .onFailure { logcat(LogPriority.WARN, it) { "Could not dispose the browser windows while crashing" } }
         exitProcess(1)
     }
 

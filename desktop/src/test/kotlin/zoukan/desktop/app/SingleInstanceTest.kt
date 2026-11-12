@@ -1,5 +1,6 @@
 package zoukan.desktop.app
 
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Test
@@ -58,6 +59,33 @@ class SingleInstanceTest {
             // Windows cannot delete the temporary folder while the lock file is open
             SingleInstance.closeAll()
         }
+    }
+
+    @Test
+    fun `a command refuses while the app runs and frees the folder when it is done`() {
+        val app = SingleInstance.acquire(root) { error("the command must not show the app") }
+        app.shouldBeInstanceOf<SingleInstance.Result.Acquired>()
+        val appPort = File(root, "zoukan.port").readText()
+        try {
+            // The command only refuses: the app's port file stays the app's, so its "show"
+            // channel is untouched
+            SingleInstance.acquireForCommand(root) shouldBe null
+            File(root, "zoukan.port").readText() shouldBe appPort
+        } finally {
+            app.instance.close()
+        }
+        // Alone, the command holds the folder and writes no port file of its own (a command has
+        // no window to show), and the app starting beside it only refuses too
+        val command = SingleInstance.acquireForCommand(root).shouldNotBeNull()
+        try {
+            File(root, "zoukan.port").exists() shouldBe false
+            SingleInstance.acquire(root) { error("the command must not be shown") }
+                .shouldBeInstanceOf<SingleInstance.Result.AlreadyRunning>()
+        } finally {
+            // And closing it frees the folder again
+            command.close()
+        }
+        SingleInstance.acquireForCommand(root).shouldNotBeNull().close()
     }
 
     /** As runZoukanApp does: only checks that it got the lock and keeps no reference. */
