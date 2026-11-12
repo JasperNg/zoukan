@@ -121,7 +121,10 @@ object SourceTags {
      * The flag emoji before an E-Hentai language name, as SourceTagsUtil.getLocaleSourceUtil and
      * FlagEmoji.getEmojiLangFlag: the language's country, or a globe for other languages.
      */
-    fun languageFlag(language: String): String {
+    fun languageFlag(language: String): String = languageFlagOrNull(language) ?: "🌎"
+
+    /** [languageFlag], or null for a language SourceTagsUtil.getLocaleSourceUtil does not know. */
+    fun languageFlagOrNull(language: String): String? {
         val country = when (language.lowercase()) {
             "english", "eng" -> "US"
             "japanese" -> "JP"
@@ -138,7 +141,7 @@ object SourceTags {
             "polish" -> "PL"
             "hungarian" -> "HU"
             "dutch" -> "NL"
-            else -> return "\uD83C\uDF0E"
+            else -> return null
         }
         return country.map { Character.toChars(0x1F1E6 + (it - 'A')).concatToString() }.joinToString("")
     }
