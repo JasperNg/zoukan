@@ -24,6 +24,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
@@ -120,6 +121,24 @@ class EndToEndBrowseTest {
                     runBlocking { Injekt.get<GetFavorites>().await() }.count { it.source == LocalSource.ID } == 2
                 }
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("bulk-favorite-bar").fetchSemanticsNodes().isEmpty() }
+                runOnUiThread { navigator?.popUntilRoot() }
+            }
+
+            step("Source display modes: list, then the comfortable grid") {
+                val displayMode = Injekt.get<SourcePreferences>().sourceDisplayMode()
+                runOnUiThread { navigator?.push(SourceScreen(LocalSource.ID)) }
+                waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
+                byDescription("Display mode").performClick()
+                onAllNodesWithText("List").onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) { displayMode.get() == LibraryDisplayMode.List }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
+                shot("b3a-source-list")
+                byDescription("Display mode").performClick()
+                onAllNodesWithText("Comfortable grid").onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) { displayMode.get() == LibraryDisplayMode.ComfortableGrid }
+                waitFor(hasText("Kilo"))
+                shot("b3b-source-comfortable-grid")
+                displayMode.set(LibraryDisplayMode.default)
                 runOnUiThread { navigator?.popUntilRoot() }
             }
 

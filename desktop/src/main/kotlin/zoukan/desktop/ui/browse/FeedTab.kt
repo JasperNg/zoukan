@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -75,10 +74,8 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
-import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
@@ -325,14 +322,13 @@ fun FeedTab(model: FeedScreenModel) {
                                     // ZOUKAN -->
                                     items(result.manga.filter { !hideInLibrary || !it.favorite }, key = { it.id }) { manga ->
                                         // ZOUKAN <--
-                                        MangaGridItem(
-                                            title = manga.title,
-                                            cover = Cover.of(manga),
+                                        // Android's GlobalSearchCardRow item, with KMK's panorama covers
+                                        BrowseRowItem(
+                                            manga = manga,
                                             // ZOUKAN -->
                                             onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
                                             onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
-                                            badge = if (manga.favorite) localized(MR.strings.in_library) else null,
-                                            modifier = Modifier.width(140.dp).bulkSelected(bulk.isSelected(manga)),
+                                            modifier = Modifier.bulkSelected(bulk.isSelected(manga)),
                                             // ZOUKAN <--
                                         )
                                     }

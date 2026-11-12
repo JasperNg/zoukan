@@ -7,7 +7,11 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.MetadataMangasPage
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.online.MetadataSource
+import exh.metadata.metadata.RaisedSearchMetadata
+import exh.source.getMainSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
@@ -16,6 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.GetFavorites
+import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.interactor.DeleteSavedSearchById
@@ -42,6 +47,7 @@ class SourceScreenModel(
     private val insertSavedSearch: InsertSavedSearch = Injekt.get(),
     private val deleteSavedSearchById: DeleteSavedSearchById = Injekt.get(),
     private val filterSerializer: FilterSerializer = Injekt.get(),
+    private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
     // ZOUKAN <--
     sourceManager: SourceManager = Injekt.get(),
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
@@ -71,6 +77,8 @@ class SourceScreenModel(
         val savedSearches: List<EXHSavedSearch> = emptyList(),
         /** The saved search the listing shows, if any */
         val savedSearch: Long? = null,
+        /** The search metadata of each result (E-Hentai galleries, MangaDex follows), by entry id */
+        val metadata: Map<Long, RaisedSearchMetadata> = emptyMap(),
         // ZOUKAN <--
     )
 
@@ -114,7 +122,7 @@ class SourceScreenModel(
     fun setListing(listing: Listing, savedSearch: Long? = null) {
         job?.cancel()
         mutableState.update {
-            it.copy(listing = listing, items = emptyList(), page = 0, hasNextPage = true, error = null, loading = false, savedSearch = savedSearch)
+            it.copy(listing = listing, items = emptyList(), /* ZOUKAN --> */metadata = emptyMap(), /* ZOUKAN <-- */page = 0, hasNextPage = true, error = null, loading = false, savedSearch = savedSearch)
         }
         loadNextPage()
     }
@@ -182,6 +190,22 @@ class SourceScreenModel(
         }
     }
 
+    // ZOUKAN -->
+    /**
+     * The metadata of a page's results, as BrowseSourceScreenModel.combineMetadata and
+     * SourcePagingSource: an entry's stored metadata when it has some, else the metadata the page
+     * came with. Sources that are not metadata sources have none.
+     */
+    private suspend fun metadataOf(manga: List<Manga>, page: MangasPage): Map<Long, RaisedSearchMetadata> {
+        val metadataSource = source?.getMainSource<MetadataSource<*, *>>() ?: return emptyMap()
+        val pageMetadata = (page as? MetadataMangasPage)?.mangasMetadata.orEmpty()
+        return manga.mapIndexedNotNull { index, entry ->
+            val stored = runCatching { getFlatMetadataById.await(entry.id)?.raise(metadataSource.metaClass) }.getOrNull()
+            (stored ?: pageMetadata.getOrNull(index))?.let { entry.id to it }
+        }.toMap()
+    }
+    // ZOUKAN <--
+
     fun retry() {
         mutableState.update { it.copy(error = null) }
         loadNextPage()
@@ -205,9 +229,15 @@ class SourceScreenModel(
                 val manga = withContext(Dispatchers.IO) {
                     networkToLocalManga(result.mangas.map { it.toDomainManga(source.id) })
                 }
+                // ZOUKAN -->
+                val metadata = withContext(Dispatchers.IO) { metadataOf(manga, result) }
+                // ZOUKAN <--
                 mutableState.update { state ->
                     state.copy(
                         items = (state.items + manga).distinctBy { it.id },
+                        // ZOUKAN -->
+                        metadata = state.metadata + metadata,
+                        // ZOUKAN <--
                         page = page,
                         hasNextPage = result.hasNextPage && manga.isNotEmpty(),
                         loading = false,

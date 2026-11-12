@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
@@ -46,14 +43,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.key
@@ -66,17 +61,14 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.coroutines.flow.distinctUntilChanged
+import exh.source.isEhBasedSource
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
-import zoukan.desktop.ui.common.MangaGrid
-import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -111,6 +103,10 @@ data class SourceScreen(
         var showFilters by rememberSaveable { mutableStateOf(false) }
         // ZOUKAN -->
         val bulk = remember { BulkFavorite() }
+        val displayModePreference = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>().sourceDisplayMode() }
+        val displayMode by displayModePreference.changes().collectAsState(displayModePreference.get())
+        val ehentaiPreference = remember { Injekt.get<exh.source.ExhPreferences>().enhancedEHentaiView() }
+        val ehentaiBrowseDisplayMode by ehentaiPreference.changes().collectAsState(ehentaiPreference.get())
         // ZOUKAN <--
 
         Column(Modifier.fillMaxSize()) {
@@ -126,6 +122,10 @@ data class SourceScreen(
                     TooltipIconButton(Icons.Outlined.FilterList, localized(DMR.strings.filters), onClick = { showFilters = !showFilters })
                 }
                 // ZOUKAN -->
+                // E-Hentai's detailed list has no other display modes, as on Android
+                if (source != null && !(source.isEhBasedSource() && ehentaiBrowseDisplayMode)) {
+                    BrowseDisplayModeButton(displayMode) { displayModePreference.set(it) }
+                }
                 if (source != null) BulkSelectButton(bulk)
                 // ZOUKAN <--
                 if (source != null) {
@@ -193,45 +193,35 @@ data class SourceScreen(
                     } else if (state.items.isEmpty() && state.error != null) {
                         EmptyScreen(state.error!!, actionLabel = localized(MR.strings.action_retry), onAction = model::retry)
                     } else {
-                        val gridState = rememberLazyGridState()
-                        LaunchedEffect(gridState, state.listing) {
-                            snapshotFlow {
-                                val info = gridState.layoutInfo
-                                val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-                                last >= info.totalItemsCount - 8
-                            }.distinctUntilChanged().collect { nearEnd -> if (nearEnd) model.loadNextPage() }
-                        }
                         // ZOUKAN -->
                         val sourcePreferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
                         val hideInLibrary by sourcePreferences.hideInLibraryItems().changes()
                             .collectAsState(sourcePreferences.hideInLibraryItems().get())
                         val shown = if (hideInLibrary) state.items.filterNot { it.id in state.favorites } else state.items
-                        // ZOUKAN <--
-                        MangaGrid(state = gridState) {
-                            items(/* ZOUKAN --> */shown/* ZOUKAN <-- */, key = { it.id }) { manga ->
-                                MangaGridItem(
-                                    title = manga.title,
-                                    cover = Cover.of(manga),
-                                    badge = if (manga.id in state.favorites) localized(MR.strings.in_library) else null,
-                                    dimmed = manga.id in state.favorites,
-                                    // ZOUKAN -->
-                                    onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
-                                    // While selecting, right-click selects; otherwise it adds or removes (Android's long press)
-                                    onSecondaryClick = { if (bulk.active) bulk.toggle(manga) else libraryToggle.toggle(manga) },
-                                    modifier = Modifier.bulkSelected(bulk.isSelected(manga)),
-                                    // ZOUKAN <--
-                                )
-                            }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                    when {
-                                        state.loading -> CircularProgressIndicator()
-                                        state.error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                                            TextButton(onClick = model::retry) { Text(localized(MR.strings.action_retry)) }
-                                        }
-                                        state.hasNextPage -> TextButton(onClick = model::loadNextPage) { Text(localized(DMR.strings.load_more)) }
+                        // The display mode (compact, comfortable or panorama grid, or list), as Android's BrowseSourceContent
+                        BrowseSourceContent(
+                            source = source,
+                            items = shown,
+                            metadata = state.metadata,
+                            favorites = state.favorites,
+                            displayMode = displayMode,
+                            ehentaiBrowseDisplayMode = ehentaiBrowseDisplayMode,
+                            listingKey = state.listing,
+                            isSelected = bulk::isSelected,
+                            onMangaClick = { manga -> if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
+                            // While selecting, right-click selects; otherwise it adds or removes (Android's long press)
+                            onMangaSecondaryClick = { manga -> if (bulk.active) bulk.toggle(manga) else libraryToggle.toggle(manga) },
+                            onNearEnd = model::loadNextPage,
+                        ) {
+                            // ZOUKAN <--
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                when {
+                                    state.loading -> CircularProgressIndicator()
+                                    state.error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(state.error!!, color = MaterialTheme.colorScheme.error)
+                                        TextButton(onClick = model::retry) { Text(localized(MR.strings.action_retry)) }
                                     }
+                                    state.hasNextPage -> TextButton(onClick = model::loadNextPage) { Text(localized(DMR.strings.load_more)) }
                                 }
                             }
                         }
