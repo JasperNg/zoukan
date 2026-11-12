@@ -43,6 +43,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Download queue: sort by upload date or chapter number, move to top or bottom, move or cancel a series | Yes | Downloads > sort button sorts within each source, as Android; each download's More menu has the moves and cancels |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
 | Backups (.tachibk) create, restore, automatic | Yes | Phase 5; round trip checked by tests |
+| Create backup choices: entries, chapters, tracking, history, categories, non-library entries, custom info, saved searches and feeds, app, extension store, source and private settings | Yes | Settings > Data and storage > Create backup opens Android's screen, then asks where to save the file (the backup folder by default). Private settings (sign-ins and tokens) no longer need the `--private` command line flag |
+| Restore backup choices and the missing sources and trackers warning | Yes | Settings > Data and storage > Restore backup, after picking the file: Android's screen, with what to restore, the sources the backup needs that are not installed and the trackers it uses that are not signed in, or why the file is not a backup |
 | Statistics | Yes | Library > Statistics: entries, chapters, reading time, tracking |
 | Merged entries (merge, edit, priority dedupe, per-entry download) | Yes | The Android `MergedSource`, shared |
 | Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |

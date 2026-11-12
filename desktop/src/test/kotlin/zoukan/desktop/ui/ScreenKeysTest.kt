@@ -38,6 +38,9 @@ class ScreenKeysTest {
                 zoukan.desktop.ui.browse.SourceCategoryScreen,
                 zoukan.desktop.ui.settings.ExtensionStoresScreen,
                 zoukan.desktop.ui.settings.ClearDatabaseScreen,
+                zoukan.desktop.ui.settings.CreateBackupScreen,
+                zoukan.desktop.ui.settings.RestoreBackupScreen("/backups/a.tachibk"),
+                zoukan.desktop.ui.settings.RestoreBackupScreen("/backups/a.tachibk.old"),
             )
         // ZOUKAN <--
         val clashes = screens.flatMap { a ->
