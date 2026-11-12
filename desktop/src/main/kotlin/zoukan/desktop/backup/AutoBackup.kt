@@ -33,26 +33,33 @@ class AutoBackup(
     }
 
     /** Makes a backup now and removes the oldest ones over the limit. */
-    suspend fun run(): File? = try {
-        val folder = storage.autoBackups.apply { mkdirs() }
-        val file = File(folder, DesktopBackups.defaultFileName())
-        DesktopBackups(androidDir).create(file, BackupOptions())
-        preferences.lastAutoBackupTimestamp().set(System.currentTimeMillis())
-        folder.listFiles { f -> BACKUP_FILE.matches(f.name) }
-            .orEmpty()
-            .sortedByDescending { it.name }
-            .drop(MAX_AUTO_BACKUPS)
-            .forEach { it.delete() }
-        logcat { "Automatic backup saved to $file" }
-        lastFailure = 0L
-        file
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        lastFailure = System.currentTimeMillis()
-        logcat(LogPriority.ERROR, e) { "The automatic backup failed" }
-        Notifications.post(localized(DMR.strings.automatic_backup_failed), e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
-        null
+    suspend fun run(): File? {
+        // A backup would snapshot the half-restored library and rotate the good ones out
+        if (RestoreGate.isRestoring) {
+            logcat { "A backup restore is running; the automatic backup waits" }
+            return null
+        }
+        return try {
+            val folder = storage.autoBackups.apply { mkdirs() }
+            val file = File(folder, DesktopBackups.defaultFileName())
+            DesktopBackups(androidDir).create(file, BackupOptions())
+            preferences.lastAutoBackupTimestamp().set(System.currentTimeMillis())
+            folder.listFiles { f -> BACKUP_FILE.matches(f.name) }
+                .orEmpty()
+                .sortedByDescending { it.name }
+                .drop(MAX_AUTO_BACKUPS)
+                .forEach { it.delete() }
+            logcat { "Automatic backup saved to $file" }
+            lastFailure = 0L
+            file
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            lastFailure = System.currentTimeMillis()
+            logcat(LogPriority.ERROR, e) { "The automatic backup failed" }
+            Notifications.post(localized(DMR.strings.automatic_backup_failed), e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
+            null
+        }
     }
 
     /** The newest automatic backup, for recovery. */

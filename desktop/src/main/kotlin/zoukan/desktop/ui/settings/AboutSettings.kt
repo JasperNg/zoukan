@@ -26,6 +26,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.AppScope
@@ -136,7 +137,7 @@ private fun UpdateRow() {
                 }
             }
             is UpdateStates.State.Downloaded -> TextButton(onClick = {
-                runCatching { Updates.install(s.file) { exitProcess(0) } }
+                runCatching { Updates.install(s.file) { exitApp(0) } }
                     .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_installer), it) }
             }) { Text(localized(MR.strings.action_install)) }
             else -> Unit
@@ -191,4 +192,10 @@ private fun TokenRow() {
 
 private fun browse(url: String) {
     runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
+}
+
+/** Exits for the update install: the built-in browser windows are disposed like at any quit. */
+private fun exitApp(code: Int) {
+    runCatching { BrowserWindow.disposeAllForQuit() }
+    exitProcess(code)
 }

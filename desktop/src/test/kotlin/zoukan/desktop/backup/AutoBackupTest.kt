@@ -31,4 +31,29 @@ class AutoBackupTest {
         backup.isDue(now + 60_000) shouldBe false
         backup.isDue(now + AutoBackup.RETRY_AFTER + 1) shouldBe true
     }
+
+    @Test
+    fun `the automatic backup waits while a restore is in progress`() = runBlocking<Unit> {
+        // Strict mock: the skipped backup must not touch storage at all, let alone rotate backups out
+        val storage = mockk<ZoukanStorage>()
+        val preferences = mockk<BackupPreferences> {
+            every { backupInterval() } returns pref(12)
+            every { lastAutoBackupTimestamp() } returns pref(0L)
+        }
+        val backup = AutoBackup(storage, File("."), preferences)
+
+        RestoreGate.whileRestoring {
+            RestoreGate.isRestoring shouldBe true
+            backup.run() shouldBe null
+        }
+        RestoreGate.isRestoring shouldBe false
+        // The skip was not an attempt: the next check still finds the backup due
+        backup.isDue() shouldBe true
+    }
+
+    @Test
+    fun `the restore gate clears when a restore fails`() {
+        runCatching { RestoreGate.whileRestoring<Unit> { throw IOException("The restore failed") } }
+        RestoreGate.isRestoring shouldBe false
+    }
 }
