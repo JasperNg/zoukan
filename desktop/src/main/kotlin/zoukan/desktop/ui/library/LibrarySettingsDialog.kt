@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,10 +38,13 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.verticalScrollWithBar
+import zoukan.desktop.ui.settings.CategoriesIncludeExcludeDialog
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
@@ -124,6 +128,19 @@ private fun FilterPage(model: LibraryScreenModel) {
     TriStateRow(localized(MR.strings.label_started), p.filterStarted())
     TriStateRow(localized(MR.strings.action_filter_bookmarked), p.filterBookmarked())
     TriStateRow(localized(MR.strings.completed), p.filterCompleted())
+    // KMK -->
+    // Android shows this only in debug builds, with the "outside the release period" update restriction
+    val restrictions by p.autoUpdateMangaRestrictions().changes().collectAsState(p.autoUpdateMangaRestrictions().get())
+    if (LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in restrictions) {
+        TriStateRow(localized(MR.strings.action_filter_interval_custom), p.filterIntervalCustom())
+    }
+    // KMK <--
+    // SY -->
+    TriStateRow(localized(SYMR.strings.lewd), p.filterLewd())
+    // SY <--
+    // KMK -->
+    CategoriesFilter(model)
+    // KMK <--
     val trackers = remember { model.trackers() }
     if (trackers.isNotEmpty()) {
         Text(localized(DMR.strings.tracked_on), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
@@ -208,9 +225,16 @@ private fun DisplayPage(model: LibraryScreenModel) {
     CheckRow(localized(MR.strings.action_display_unread_badge), p.unreadBadge())
     CheckRow(localized(MR.strings.action_display_local_badge), p.localBadge())
     CheckRow(localized(MR.strings.action_display_language_badge), p.languageBadge())
-    CheckRow(localized(DMR.strings.source), p.sourceBadge())
+    // KMK -->
+    val showLang by p.languageBadge().changes().collectAsState(p.languageBadge().get())
+    if (showLang) CheckRow(localized(KMR.strings.action_display_language_icon), p.useLangIcon())
+    CheckRow(localized(KMR.strings.action_display_source_badge), p.sourceBadge())
+    // KMK <--
     Text(localized(MR.strings.tabs_header), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
     CheckRow(localized(MR.strings.action_display_show_tabs), p.categoryTabs())
+    // KMK -->
+    CheckRow(localized(KMR.strings.action_show_hidden_categories), p.showHiddenCategories())
+    // KMK <--
     CheckRow(localized(DMR.strings.show_the_number_of_entries), p.categoryNumberOfItems())
     Text(localized(MR.strings.other_source), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
     CheckRow(localized(MR.strings.action_display_show_continue_reading_button), p.showContinueReadingButton())
@@ -241,3 +265,43 @@ private fun GroupPage(model: LibraryScreenModel) {
     }
 }
 // ZOUKAN <--
+
+// KMK -->
+/**
+ * KMK's category filter: a checkbox that turns it on, and Edit for the categories to include and
+ * exclude (TriStateListDialog over the user's categories, Default left out).
+ */
+@Composable
+private fun CategoriesFilter(model: LibraryScreenModel) {
+    val p = model.preferences
+    val enabled by p.filterCategories().changes().collectAsState(p.filterCategories().get())
+    val included by p.filterCategoriesInclude().changes().collectAsState(p.filterCategoriesInclude().get())
+    val excluded by p.filterCategoriesExclude().changes().collectAsState(p.filterCategoriesExclude().get())
+    val categories = model.state.collectAsState().value.categories.filterNot { it.isSystemCategory }
+    var dialog by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clickable { p.filterCategories().set(!enabled) }.padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(enabled, onCheckedChange = { p.filterCategories().set(it) })
+        Text(localized(MR.strings.categories), Modifier.weight(1f))
+        TextButton(onClick = { dialog = true }) { Text(localized(MR.strings.action_edit)) }
+    }
+    if (dialog) {
+        CategoriesIncludeExcludeDialog(
+            title = localized(MR.strings.categories),
+            message = localized(KMR.strings.pref_library_filter_categories_details),
+            categories = categories,
+            // As TriStateListDialog's initialChecked: only categories that still exist
+            included = included.filterTo(HashSet()) { id -> categories.any { it.id.toString() == id } },
+            excluded = excluded.filterTo(HashSet()) { id -> categories.any { it.id.toString() == id } },
+            onDismiss = { dialog = false },
+            onConfirm = { inc, exc ->
+                p.filterCategoriesInclude().set(inc)
+                p.filterCategoriesExclude().set(exc)
+                dialog = false
+            },
+        )
+    }
+}
+// KMK <--
