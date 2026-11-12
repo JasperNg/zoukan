@@ -13,6 +13,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.backup.AutoBackup
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.track.TrackChapters
 
 /**
@@ -48,6 +49,12 @@ class BackgroundJobs(
     }
 
     private suspend fun tick(now: Long = System.currentTimeMillis()) {
+        // A restore is rewriting the library: none of this may run until it is done, and the next
+        // check retries
+        if (RestoreGate.isRestoring) {
+            logcat { "A backup restore is running; the background work waits" }
+            return
+        }
         if (libraryUpdateDue(now) && !libraryUpdater.isRunning && restrictionsMet()) {
             logcat { "Starting the scheduled library update" }
             libraryUpdater.start(manual = false)

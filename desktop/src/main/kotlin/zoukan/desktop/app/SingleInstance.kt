@@ -63,17 +63,8 @@ class SingleInstance private constructor(
 
         /** Takes the lock for [root], or asks the instance holding it to [onShow] its window. */
         fun acquire(root: File, onShow: () -> Unit): Result {
-            root.mkdirs()
-            val channel = RandomAccessFile(File(root, LOCK), "rw").channel
-            val lock = try {
-                channel.tryLock()
-            } catch (_: OverlappingFileLockException) {
-                null
-            }
-            if (lock == null) {
-                channel.close()
-                return Result.AlreadyRunning(shown = signal(File(root, PORT)))
-            }
+            val (channel, lock) = takeLock(root)
+                ?: return Result.AlreadyRunning(shown = signal(File(root, PORT)))
             val token = HexFormat.of().formatHex(ByteArray(16).also { SecureRandom().nextBytes(it) })
             val server = ServerSocket()
             server.bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 4)
@@ -83,6 +74,34 @@ class SingleInstance private constructor(
             val instance = SingleInstance(channel, lock, server, portFile)
             held += instance
             return Result.Acquired(instance)
+        }
+
+        /**
+         * Takes the lock for [root] for a CLI command that needs the folder to itself (it starts
+         * Chromium or writes the cookie store), or returns null when Zoukan already holds it —
+         * without showing its window, which a command has no use for. The command closes the
+         * returned instance when it ends, freeing the folder again.
+         */
+        fun acquireForCommand(root: File): SingleInstance? {
+            val (channel, lock) = takeLock(root) ?: return null
+            // No port file and no listener: Zoukan finding this lock later can only say that
+            // something is running, there is no window of ours to bring up
+            val instance = SingleInstance(channel, lock, ServerSocket(), File(root, PORT))
+            held += instance
+            return instance
+        }
+
+        /** Opens the folder's lock file and takes its lock; null (channel closed) when it is held. */
+        private fun takeLock(root: File): Pair<FileChannel, FileLock>? {
+            root.mkdirs()
+            val channel = RandomAccessFile(File(root, LOCK), "rw").channel
+            val lock = try {
+                channel.tryLock()
+            } catch (_: OverlappingFileLockException) {
+                channel.close()
+                return null
+            }
+            return channel to lock
         }
 
         private fun listen(server: ServerSocket, token: String, onShow: () -> Unit) {

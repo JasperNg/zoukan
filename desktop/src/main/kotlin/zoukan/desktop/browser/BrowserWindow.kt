@@ -22,6 +22,7 @@ import java.awt.GraphicsEnvironment
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.JButton
@@ -53,6 +54,10 @@ class BrowserWindow(
     private var frame: JFrame? = null
     private var client: CefClient? = null
     private var browser: CefBrowser? = null
+
+    // Tracked from birth, so a quit that happens while the window is opening still finds it
+    // (cleanUp takes it out again once it is gone)
+    private val registration = registry.register { disposeForQuit() }
 
     /** Opens the window. Returns false when there is no display or Chromium cannot start. */
     fun open(): Boolean {
@@ -188,6 +193,22 @@ class BrowserWindow(
         }
         client?.dispose()
         closed.countDown()
+        registry.unregister(registration)
+    }
+
+    /**
+     * Closes the window and disposes its browser for an app quit (see
+     * [Companion.disposeAllForQuit]). On the AWT event thread the cleanup runs here, not via the
+     * windowClosed event (which would only be queued for later on the very thread a quit exits
+     * from); off it, [close] runs it there with a bounded wait.
+     */
+    private fun disposeForQuit() {
+        if (SwingUtilities.isEventDispatchThread()) {
+            frame?.dispose()
+            cleanUp()
+        } else {
+            close()
+        }
     }
 
     private fun setUserAgent(browser: CefBrowser, userAgent: String): CompletableFuture<*> {
@@ -204,6 +225,20 @@ class BrowserWindow(
         private const val CHALLENGE_TIMEOUT_MS = 3 * 60 * 1000L
         private const val CLOSE_WAIT_SECONDS = 10L
 
+        /** Every built-in browser window opened and not cleaned up yet. */
+        private val registry = BrowserWindowRegistry()
+
+        /**
+         * Disposes every live browser window, for the app's quit paths: a browser still open when
+         * the JVM's shutdown hook disposes CefApp at exit crashes Chromium (hs_err noise, and a
+         * false "closed unexpectedly" warning at the next start). Safe to call from any thread
+         * and more than once, and it never throws; off the AWT event thread the wait for each
+         * window is bounded by [CLOSE_WAIT_SECONDS], so a wedged AWT thread cannot hang the quit.
+         */
+        fun disposeAllForQuit() {
+            registry.disposeAll()
+        }
+
         /** Lets shared network code show a Cloudflare challenge to the user. */
         fun installChallengeSolver() {
             DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { url, userAgent, isSolved ->
@@ -215,5 +250,37 @@ class BrowserWindow(
                 window.open() && window.await(CHALLENGE_TIMEOUT_MS, isSolved)
             }
         }
+    }
+}
+
+/**
+ * The live built-in browser windows, as the quit paths see them (see
+ * [BrowserWindow.disposeAllForQuit]). Kept free of Chromium types, so tests can drive it without
+ * JCEF on the classpath.
+ */
+class BrowserWindowRegistry {
+    /** One live window: [disposer] closes it, and is safe to run more than once. */
+    class Registration internal constructor(private val disposer: () -> Unit) {
+        internal fun dispose() = disposer()
+    }
+
+    private val registrations = ConcurrentHashMap.newKeySet<Registration>()
+
+    /** Puts a window in, to be disposed by [disposeAll]. */
+    fun register(disposer: () -> Unit): Registration {
+        val registration = Registration(disposer)
+        registrations += registration
+        return registration
+    }
+
+    /** Takes a window out again, because it closed by itself. */
+    fun unregister(registration: Registration) {
+        registrations -= registration
+    }
+
+    /** Disposes every window, one failing never stopping the others, and forgets them all. */
+    fun disposeAll() {
+        val snapshot = registrations.toList().also { registrations.clear() }
+        snapshot.forEach { runCatching { it.dispose() } }
     }
 }

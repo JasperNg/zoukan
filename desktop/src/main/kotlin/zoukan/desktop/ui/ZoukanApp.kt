@@ -82,6 +82,7 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.SingleInstance
+import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.BackgroundJobs
@@ -143,6 +144,13 @@ fun runZoukanApp() {
     // ZOUKAN <--
 
     application {
+        // Quitting (the tray, or the window's X without close-to-tray): the built-in browser
+        // windows (a Cloudflare challenge, a tracker login) must be gone before Chromium shuts
+        // down at exit, which happens once these Compose windows have closed and main() exits
+        fun quit() {
+            BrowserWindow.disposeAllForQuit()
+            exitApplication()
+        }
         // The window opens where it was closed, at the size it had
         val windowState = remember { WindowBounds.initialState(preferences.windowBounds().get()) }
         LaunchedEffect(windowState) {
@@ -199,7 +207,7 @@ fun runZoukanApp() {
                         Item(localized(DMR.strings.start_downloads), onClick = { downloads.start() })
                     }
                     Separator()
-                    Item(localized(DMR.strings.quit), onClick = ::exitApplication)
+                    Item(localized(DMR.strings.quit), onClick = ::quit)
                 },
             )
             LaunchedEffect(Unit) {
@@ -237,7 +245,7 @@ fun runZoukanApp() {
                             )
                         }
                     } else {
-                        exitApplication()
+                        quit()
                     }
                 },
                 visible = visible,

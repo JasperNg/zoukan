@@ -46,6 +46,7 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.i18n.MR
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.RefreshManga
@@ -133,6 +134,11 @@ class LibraryUpdater(
     ): Boolean {
         synchronized(this) {
             if (job?.isActive == true) return false
+            // A restore is rewriting the library; an update must not read a half-restored one
+            if (RestoreGate.isRestoring) {
+                logcat { "A backup restore is running; the library update waits" }
+                return false
+            }
             // ZOUKAN -->
             // Always sync the data before a manual library update when syncing is on; not while a
             // sync runs, as on Android

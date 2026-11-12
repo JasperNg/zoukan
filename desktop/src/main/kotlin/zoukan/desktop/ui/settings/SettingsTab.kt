@@ -91,6 +91,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.AppScope
@@ -485,34 +486,37 @@ internal fun restoreBackup(file: File, options: RestoreOptions) {
     if (backupStatusFlow.value != null) return
     backupStatusFlow.value = localized(DMR.strings.restoring, file.name)
     AppScope.launch {
-        try {
-            val backups = DesktopBackups(ZoukanRuntime.dirs.android)
-            val backup = backups.read(file)
-            // Extension stores decide whose code runs, so a backup adds them only when the user
-            // has seen which ones
-            val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
-            val chosen = when {
-                newStores.isEmpty() -> options
-                else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
-                    true -> options
-                    false -> options.copy(extensionStores = false)
-                    null -> return@launch
+        // The gate holds the background jobs off while the library is half-restored
+        RestoreGate.whileRestoring {
+            try {
+                val backups = DesktopBackups(ZoukanRuntime.dirs.android)
+                val backup = backups.read(file)
+                // Extension stores decide whose code runs, so a backup adds them only when the user
+                // has seen which ones
+                val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
+                val chosen = when {
+                    newStores.isEmpty() -> options
+                    else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
+                        true -> options
+                        false -> options.copy(extensionStores = false)
+                        null -> return@launch
+                    }
                 }
+                val errors = backups.restore(backup, chosen) { _, progress, total ->
+                    backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
+                }
+                Toasts.show(
+                    if (errors.isEmpty()) {
+                        localized(DMR.strings.restored_entries, backup.backupManga.size)
+                    } else {
+                        localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
+                    },
+                )
+            } catch (e: Exception) {
+                Toasts.error(localized(DMR.strings.restore_failed), e)
+            } finally {
+                backupStatusFlow.value = null
             }
-            val errors = backups.restore(backup, chosen) { _, progress, total ->
-                backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
-            }
-            Toasts.show(
-                if (errors.isEmpty()) {
-                    localized(DMR.strings.restored_entries, backup.backupManga.size)
-                } else {
-                    localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
-                },
-            )
-        } catch (e: Exception) {
-            Toasts.error(localized(DMR.strings.restore_failed), e)
-        } finally {
-            backupStatusFlow.value = null
         }
     }
 }

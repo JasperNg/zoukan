@@ -30,6 +30,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.ui.AppScope
 import java.util.Date
 
@@ -202,11 +203,14 @@ class SyncManager(
             backupSavedSearches = remoteBackup.backupSavedSearches,
             backupFeeds = remoteBackup.backupFeeds,
         )
-        val errors = backups.restore(
-            merged,
-            RestoreOptions(appSettings = true, sourceSettings = true, libraryEntries = true, extensionStores = true),
-            isSync = true,
-        )
+        // The gate holds the background jobs off while the library is half-restored
+        val errors = RestoreGate.whileRestoring {
+            backups.restore(
+                merged,
+                RestoreOptions(appSettings = true, sourceSettings = true, libraryEntries = true, extensionStores = true),
+                isSync = true,
+            )
+        }
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
             notifier.showSyncSuccess("Sync completed successfully")

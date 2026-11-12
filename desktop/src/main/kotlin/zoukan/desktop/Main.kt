@@ -17,6 +17,7 @@ import xyz.nulldev.androidcompat.webkit.KcefWebViewProvider
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.SelfTest
+import zoukan.desktop.app.SingleInstance
 import zoukan.desktop.backup.BackupCheck
 import zoukan.desktop.backup.BackupComparison
 import zoukan.desktop.backup.DesktopBackups
@@ -72,6 +73,9 @@ Commands:
   browser <url>           Open the built-in browser (for Cloudflare challenges and site logins)
   convert <apk> <jar>     Convert an extension APK to a jar with dex2jar, for debugging
 
+Only one Zoukan can use a data folder at a time: the commands that start the runtime on it
+(status, backup create and restore, library update, browser) refuse while the app is running.
+
 Data folder: -Dzoukan.dataDir=<path> or ZOUKAN_DATA_DIR overrides the default.
 """
 
@@ -113,7 +117,10 @@ fun main(args: Array<String>) {
             2
         }
     }
-    // Chromium crashes when it shuts down (at exit) with extension browsers still open
+    // Chromium crashes when it shuts down (at exit) with a browser still open: the quit paths
+    // have disposed the built-in browser windows, and this catches anything left over (a CLI
+    // command's window). disposePending then does the same for the extension WebView browsers.
+    BrowserWindow.disposeAllForQuit()
     runCatching {
         if (javax.swing.SwingUtilities.isEventDispatchThread()) {
             KcefWebViewProvider.disposePending()
@@ -153,18 +160,23 @@ private fun convert(args: List<String>): Int {
 }
 
 private fun status(): Int {
-    ZoukanRuntime.start()
-    val dirs = ZoukanRuntime.dirs
-    println("Data folder: ${dirs.root}")
-    println("Secret store: ${Injekt.get<SecretStore>().name}")
-    val db = Injekt.get<Database>()
-    val stores = runBlocking { db.extension_storeQueries.getAll().executeAsList() }
-    println("Encrypted database: open, key \"${DesktopDatabase.KEY_NAME}\" in the secret store, ${stores.size} extension stores")
-    val manager = Injekt.get<DesktopExtensionManager>()
-    runBlocking { manager.init() }
-    println("Extensions: ${manager.installedExtensionsFlow.value.size} loaded, ${manager.untrustedExtensionsFlow.value.size} untrusted, ${manager.loadErrorsFlow.value.size} failed")
-    println("Sources: ${Injekt.get<SourceManager>().getAll().size}")
-    return 0
+    val lock = lockForDataFolder("status") ?: return 1
+    try {
+        ZoukanRuntime.start()
+        val dirs = ZoukanRuntime.dirs
+        println("Data folder: ${dirs.root}")
+        println("Secret store: ${Injekt.get<SecretStore>().name}")
+        val db = Injekt.get<Database>()
+        val stores = runBlocking { db.extension_storeQueries.getAll().executeAsList() }
+        println("Encrypted database: open, key \"${DesktopDatabase.KEY_NAME}\" in the secret store, ${stores.size} extension stores")
+        val manager = Injekt.get<DesktopExtensionManager>()
+        runBlocking { manager.init() }
+        println("Extensions: ${manager.installedExtensionsFlow.value.size} loaded, ${manager.untrustedExtensionsFlow.value.size} untrusted, ${manager.loadErrorsFlow.value.size} failed")
+        println("Sources: ${Injekt.get<SourceManager>().getAll().size}")
+        return 0
+    } finally {
+        lock.close()
+    }
 }
 
 private fun harness(args: List<String>): Int {
@@ -215,15 +227,23 @@ private fun browser(args: List<String>): Int {
         System.err.println("Usage: zoukan browser <url>")
         return 2
     }
-    ZoukanRuntime.start()
-    val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
-    val window = BrowserWindow(url, userAgent)
-    if (!window.open()) {
-        System.err.println("The browser could not open (no display, or Chromium failed to start; see the log)")
-        return 1
+    val lock = lockForDataFolder(
+        "browser",
+        "Use the browser inside the running app, or quit Zoukan and try again.",
+    ) ?: return 1
+    try {
+        ZoukanRuntime.start()
+        val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
+        val window = BrowserWindow(url, userAgent)
+        if (!window.open()) {
+            System.err.println("The browser could not open (no display, or Chromium failed to start; see the log)")
+            return 1
+        }
+        window.await(Long.MAX_VALUE)
+        return 0
+    } finally {
+        lock.close()
     }
-    window.await(Long.MAX_VALUE)
-    return 0
 }
 
 private fun backup(args: List<String>): Int {
@@ -233,41 +253,51 @@ private fun backup(args: List<String>): Int {
     val positional = rest.filterIndexed { i, a -> !a.startsWith("--") && rest.getOrNull(i - 1) != "--report" }
     return when (sub) {
         "create" -> {
-            ZoukanRuntime.start()
-            val file = positional.firstOrNull()?.let(::File)
-                ?: File(ZoukanRuntime.dirs.backups, DesktopBackups.defaultFileName())
-            val backups = DesktopBackups(ZoukanRuntime.dirs.android)
-            val backup = runBlocking {
-                backups.create(file, BackupOptions(privateSettings = "--private" in flags))
+            val lock = lockForDataFolder("backup create") ?: return 1
+            try {
+                ZoukanRuntime.start()
+                val file = positional.firstOrNull()?.let(::File)
+                    ?: File(ZoukanRuntime.dirs.backups, DesktopBackups.defaultFileName())
+                val backups = DesktopBackups(ZoukanRuntime.dirs.android)
+                val backup = runBlocking {
+                    backups.create(file, BackupOptions(privateSettings = "--private" in flags))
+                }
+                println("Backed up ${backup.backupManga.size} entries to $file (${file.length()} bytes)")
+                0
+            } finally {
+                lock.close()
             }
-            println("Backed up ${backup.backupManga.size} entries to $file (${file.length()} bytes)")
-            0
         }
         "restore" -> {
             val file = positional.firstOrNull()?.let(::File) ?: return usage("backup restore <file>")
-            ZoukanRuntime.start()
-            val backups = DesktopBackups(ZoukanRuntime.dirs.android)
-            val backup = backups.read(file)
-            var last = 0L
-            val errors = runBlocking {
-                backups.restore(backup) { step, progress, total ->
-                    val now = System.currentTimeMillis()
-                    if (progress == total || now - last > 1000) {
-                        last = now
-                        val label = when (step) {
-                            is BackupContentRestorer.Step.Entry -> step.title
-                            is BackupContentRestorer.Step.Section -> Injekt.get<Application>().stringResource(step.label)
+            val lock = lockForDataFolder("backup restore") ?: return 1
+            try {
+                ZoukanRuntime.start()
+                val backups = DesktopBackups(ZoukanRuntime.dirs.android)
+                val backup = backups.read(file)
+                var last = 0L
+                val errors = runBlocking {
+                    backups.restore(backup) { step, progress, total ->
+                        val now = System.currentTimeMillis()
+                        if (progress == total || now - last > 1000) {
+                            last = now
+                            val label = when (step) {
+                                is BackupContentRestorer.Step.Entry -> step.title
+                                is BackupContentRestorer.Step.Section -> Injekt.get<Application>().stringResource(step.label)
+                            }
+                            println("[$progress/$total] $label")
                         }
-                        println("[$progress/$total] $label")
                     }
                 }
+                println("Restored ${backup.backupManga.size} entries from $file")
+                if (errors.isNotEmpty()) {
+                    println("${errors.size} errors:")
+                    errors.forEach { (_, message) -> println("  $message") }
+                }
+                if (errors.isEmpty()) 0 else 1
+            } finally {
+                lock.close()
             }
-            println("Restored ${backup.backupManga.size} entries from $file")
-            if (errors.isNotEmpty()) {
-                println("${errors.size} errors:")
-                errors.forEach { (_, message) -> println("  $message") }
-            }
-            if (errors.isEmpty()) 0 else 1
         }
         "check" -> {
             val file = positional.firstOrNull()?.let(::File) ?: return usage("backup check <file>")
@@ -315,10 +345,33 @@ private fun library(args: List<String>): Int {
             }
         }
     }
-    ZoukanRuntime.start(interactiveBrowser = false)
-    // NetworkHelper first, so the cookie store and Chromium hooks are in place
-    Injekt.get<NetworkHelper>()
-    return LibraryCommand.run(options)
+    val lock = lockForDataFolder(
+        "library update",
+        "The running app updates the library on its schedule; quit Zoukan to update from the command line.",
+    ) ?: return 1
+    try {
+        ZoukanRuntime.start(interactiveBrowser = false)
+        // NetworkHelper first, so the cookie store and Chromium hooks are in place
+        Injekt.get<NetworkHelper>()
+        return LibraryCommand.run(options)
+    } finally {
+        lock.close()
+    }
+}
+
+/**
+ * Takes the app's one-instance lock for [command], which starts the runtime on the user's data
+ * folder: a second Chromium on the same cache corrupts it, and both cookie stores would write
+ * cookies.json, the last one out overwriting the app's newer cookies. Returns null, having said
+ * why on stderr, when Zoukan already runs; the command closes the instance when it is done, so
+ * using the commands alone (no app running) still works and frees the folder again.
+ */
+private fun lockForDataFolder(command: String, hint: String = "Quit Zoukan and try again."): SingleInstance? {
+    val instance = SingleInstance.acquireForCommand(ZoukanDirs.default().root)
+    if (instance == null) {
+        System.err.println("Zoukan is already running; \"zoukan $command\" cannot use the same data folder beside it. $hint")
+    }
+    return instance
 }
 
 private fun usage(text: String): Int {
