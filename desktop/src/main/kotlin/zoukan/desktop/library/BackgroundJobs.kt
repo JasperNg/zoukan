@@ -50,7 +50,7 @@ class BackgroundJobs(
     private suspend fun tick(now: Long = System.currentTimeMillis()) {
         if (libraryUpdateDue(now) && !libraryUpdater.isRunning && restrictionsMet()) {
             logcat { "Starting the scheduled library update" }
-            libraryUpdater.start()
+            libraryUpdater.start(manual = false)
         }
         if (autoBackup.isDue(now)) autoBackup.run()
         // Data sync on its interval, in place of SyncDataJob

@@ -144,6 +144,7 @@ class DesktopDomainModule : InjektModule {
         // SY
         addSingletonFactory<MangaMergeRepository> { MangaMergeRepositoryImpl(get()) }
         addFactory { GetMergedManga(get()) }
+        addFactory { tachiyomi.domain.manga.interactor.GetMergedMangaForDownloading(get()) }
         addSingletonFactory<MangaMetadataRepository> { MangaMetadataRepositoryImpl(get()) }
         addFactory { GetFlatMetadataById(get()) }
         addFactory { InsertFlatMetadata(get()) }
@@ -191,7 +192,13 @@ class DesktopDomainModule : InjektModule {
         addFactory { FilterChaptersForDownload(get(), get(), get(), get()) }
         addSingletonFactory { DownloadPaths(get(), get(), get(), get()) }
         addSingletonFactory { DownloadManager(get(), get(), get(), get(), get(), get(), get(), get()) }
-        addSingletonFactory { LibraryUpdater(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        addSingletonFactory {
+            LibraryUpdater(
+                get(), get(), get(), get(), get(), get(), get(), get(), get(),
+                get(), get(), get(), get(), get(), get(),
+                { uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>() },
+            )
+        }
         addSingletonFactory { AutoBackup(get(), get<ZoukanDirs>().android, get()) }
         addSingletonFactory { BackgroundJobs(get(), get(), get(), get()) }
         addSingletonFactory { zoukan.desktop.discord.DiscordPresence(get(), get(), get()) }

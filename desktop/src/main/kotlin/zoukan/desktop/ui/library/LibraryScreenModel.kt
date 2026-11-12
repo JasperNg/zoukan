@@ -409,7 +409,7 @@ class LibraryScreenModel(
         // ZOUKAN -->
         // A source, status or tracking tab updates the entries in it
         val started = if (state.value.grouped && category != null) {
-            Injekt.get<LibraryUpdater>().start(mangaIds = state.value.inCategory(category).mapTo(HashSet()) { it.id })
+            Injekt.get<LibraryUpdater>().start(groupIds = state.value.inCategory(category).mapTo(HashSet()) { it.id })
         } else {
             Injekt.get<LibraryUpdater>().start(categoryId = category)
         }
