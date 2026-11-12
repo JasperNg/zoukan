@@ -20,7 +20,7 @@ Zoukan is a free and open source manga reader for the desktop. It is a port of
 to Windows and macOS. It runs the same extensions, reads the same backups and keeps the same
 settings, so a library moves between a phone and a computer.
 
-The name is the Japanese word for a magazine's special extra issue (増刊): the extra edition of
+The name is the Japanese word for a magazine's special extra issue (増刊) which makes this the extra edition of
 Komikku.
 
 ## Download
