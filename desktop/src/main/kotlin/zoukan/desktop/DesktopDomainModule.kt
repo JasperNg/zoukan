@@ -148,6 +148,13 @@ class DesktopDomainModule : InjektModule {
         addFactory { tachiyomi.domain.manga.interactor.GetMergedMangaForDownloading(get()) }
         addSingletonFactory<MangaMetadataRepository> { MangaMetadataRepositoryImpl(get()) }
         addFactory { GetFlatMetadataById(get()) }
+        // ZOUKAN -->
+        // The library search (SY)
+        addFactory { exh.search.SearchEngine() }
+        addFactory { tachiyomi.domain.manga.interactor.GetSearchTags(get()) }
+        addFactory { tachiyomi.domain.manga.interactor.GetSearchTitles(get()) }
+        addFactory { tachiyomi.domain.manga.interactor.GetIdsOfFavoriteMangaWithMetadata(get()) }
+        // ZOUKAN <--
         addFactory { InsertFlatMetadata(get()) }
         addSingletonFactory<CustomMangaRepository> { CustomMangaRepositoryImpl(get<Application>()) }
         addFactory { GetCustomMangaInfo(get()) }

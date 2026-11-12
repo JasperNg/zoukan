@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.library
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,29 +8,40 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.LocalLibrary
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -45,6 +57,7 @@ import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.browse.languageName
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Corners
@@ -61,6 +75,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LazyVerticalGrid
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.languageIconPainter
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.i18n.desktop.DMR
 
@@ -97,33 +112,89 @@ fun Modifier.selectableClick(onContextMenu: ((Offset) -> Unit)? = null, onClick:
         }
 }
 
-/** The badges an entry shows, by the library's badge settings. */
-private fun badges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.Settings): List<Pair<String, Boolean>> = buildList {
-    if (settings.downloadBadge && item.downloadCount > 0) add(item.downloadCount.toString() to false)
-    if (settings.unreadBadge && item.library.unreadCount > 0) add(item.library.unreadCount.toString() to true)
-    if (settings.localBadge && item.isLocal) add(localized(MR.strings.label_local) to false)
-    if (settings.languageBadge && item.language.isNotBlank() && item.language != "all" && !item.isLocal) add(item.language.uppercase() to false)
-    if (settings.sourceBadge && item.sourceName.isNotBlank() && !item.isLocal) add(item.sourceName to false)
+/** A badge on an entry: a count or label, or (KMK) a language flag or a source icon. */
+private sealed interface Badge {
+    data class Label(val text: String, val primary: Boolean = false) : Badge
+    data class Language(val lang: String) : Badge
+    data class Source(val name: String, val iconUrl: String?, val isStub: Boolean, val isLocal: Boolean) : Badge
+}
+
+/** The badges at the cover's start, as Android's coverBadgeStart: downloads and unread. */
+private fun startBadges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.Settings): List<Badge> = buildList {
+    if (settings.downloadBadge && item.downloadCount > 0) add(Badge.Label(item.downloadCount.toString()))
+    if (settings.unreadBadge && item.library.unreadCount > 0) add(Badge.Label(item.library.unreadCount.toString(), primary = true))
+}
+
+/**
+ * The badges at the cover's end, as Android's coverBadgeEnd (KMK): the language, as text or a flag
+ * ("Use language icon"), and the source's icon, a folder for local entries. As KMK, the local badge
+ * setting leaves the language out for local entries.
+ */
+private fun endBadges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.Settings): List<Badge> = buildList {
+    val isLocal = settings.localBadge && item.isLocal
+    if (settings.languageBadge && !isLocal && item.language.isNotEmpty()) {
+        add(if (settings.useLangIcon) Badge.Language(item.language) else Badge.Label(item.language.uppercase()))
+    }
+    if (settings.sourceBadge) add(Badge.Source(item.sourceName, item.sourceIconUrl, item.isStubSource, item.isLocal))
 }
 
 @Composable
-private fun Badges(list: List<Pair<String, Boolean>>, modifier: Modifier = Modifier, shape: Shape = Corners.Small) {
+private fun Badges(list: List<Badge>, modifier: Modifier = Modifier, shape: Shape = Corners.Small) {
     if (list.isEmpty()) return
-    Row(modifier.clip(shape)) {
-        list.forEach { (text, primary) ->
-            Box(
-                Modifier.background(if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary)
-                    .padding(horizontal = 5.dp, vertical = 1.dp),
-            ) {
-                Text(
-                    text,
-                    color = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 120.dp),
-                )
+    Row(modifier.clip(shape).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+        list.forEach { badge ->
+            when (badge) {
+                is Badge.Label -> Box(
+                    Modifier.fillMaxHeight()
+                        .background(if (badge.primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary)
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        badge.text,
+                        color = if (badge.primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 120.dp),
+                    )
+                }
+                is Badge.Language -> {
+                    val painter = languageIconPainter(badge.lang)
+                    Tooltip(languageName(badge.lang)) {
+                        if (painter != null) {
+                            Image(painter, contentDescription = languageName(badge.lang), modifier = Modifier.width(25.dp).height(18.dp))
+                        } else {
+                            Text(badge.lang.uppercase(), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                is Badge.Source -> Tooltip(badge.name) { SourceIconBadge(badge) }
             }
+        }
+    }
+}
+
+/** KMK's SourceIconBadge: the source's icon, a warning for a missing source, a folder for local. */
+@Composable
+private fun SourceIconBadge(badge: Badge.Source) {
+    val iconModifier = Modifier.height(18.dp).aspectRatio(1f)
+    when {
+        badge.isStub && badge.iconUrl == null -> Box(
+            Modifier.background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 3.dp, vertical = 1.dp),
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = badge.name, tint = MaterialTheme.colorScheme.error, modifier = iconModifier)
+        }
+        badge.iconUrl != null -> CoverImage(badge.iconUrl, Modifier.height(22.dp).aspectRatio(1f), contentScale = ContentScale.Fit)
+        else -> Box(
+            Modifier.background(MaterialTheme.colorScheme.tertiary).padding(horizontal = 3.dp, vertical = 1.dp),
+        ) {
+            Icon(
+                if (badge.isLocal) Icons.Outlined.Folder else Icons.Outlined.LocalLibrary,
+                contentDescription = badge.name,
+                tint = MaterialTheme.colorScheme.onTertiary,
+                modifier = iconModifier,
+            )
         }
     }
 }
@@ -160,10 +231,18 @@ fun LibraryContent(
     onClick: (LibraryScreenModel.Item, ClickKind) -> Unit,
     onContinue: (LibraryScreenModel.Item) -> Unit,
     contextMenu: @Composable ColumnScope.(LibraryScreenModel.Item, ContextMenuState) -> Unit,
+    searchQuery: String = "",
+    onGlobalSearch: () -> Unit = {},
 ) {
     val display = settings.display
     if (display == LibraryDisplayMode.List) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+        val listState = rememberLazyListState()
+        // A new search starts at the top, where the global search row is
+        LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
+            if (searchQuery.isNotEmpty()) {
+                item(key = "library-global-search") { GlobalSearchItem(searchQuery, onGlobalSearch, Modifier.fillMaxWidth()) }
+            }
             items(items, key = { it.id }) { item ->
                 ListItem(item, settings, item.id in selection, { onClick(item, it) }, { onContinue(item) }) { contextMenu(item, it) }
             }
@@ -172,13 +251,19 @@ fun LibraryContent(
     }
     val panorama = display == LibraryDisplayMode.ComfortableGridPanorama
     val columns = if (settings.columns > 0) GridCells.Fixed(settings.columns) else GridCells.Adaptive(if (panorama) 260.dp else 160.dp)
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(searchQuery) { gridState.scrollToItem(0) }
     LazyVerticalGrid(
         columns = columns,
         modifier = Modifier.fillMaxSize(),
+        state = gridState,
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (searchQuery.isNotEmpty()) {
+            item(key = "library-global-search", span = { GridItemSpan(maxLineSpan) }) { GlobalSearchItem(searchQuery, onGlobalSearch) }
+        }
         items(items, key = { it.id }) { item ->
             GridItem(item, settings, item.id in selection, { onClick(item, it) }, { onContinue(item) }) { contextMenu(item, it) }
         }
@@ -225,8 +310,11 @@ private fun GridItem(
                         )
                     }
                 }
-                Badges(badges(item, settings), Modifier.align(Alignment.TopStart).padding(Corners.CoverInset), Corners.OnCover)
-                if (selected) SelectedMark(Modifier.align(Alignment.TopEnd))
+                Badges(startBadges(item, settings), Modifier.align(Alignment.TopStart).padding(Corners.CoverInset), Corners.OnCover)
+                Row(Modifier.align(Alignment.TopEnd), verticalAlignment = Alignment.Top) {
+                    Badges(endBadges(item, settings), Modifier.padding(Corners.CoverInset), Corners.OnCover)
+                    if (selected) SelectedMark()
+                }
                 if (settings.continueReading && item.library.unreadCount > 0) {
                     ContinueButton(onContinue, Modifier.align(Alignment.BottomEnd).padding(Corners.CoverInset))
                 }
@@ -269,12 +357,20 @@ private fun ListItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                 )
-                Badges(badges(item, settings))
+                Badges(startBadges(item, settings) + endBadges(item, settings))
                 if (settings.continueReading && item.library.unreadCount > 0) {
                     ContinueButton(onContinue, Modifier.padding(start = 8.dp))
                 }
             }
         }
         ContextMenu(menu) { contextMenu(menu) }
+    }
+}
+
+/** Android's GlobalSearchItem: "Search for \"…\" globally", above the library's search results. */
+@Composable
+fun GlobalSearchItem(searchQuery: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    TextButton(modifier = modifier.testTag("library-global-search"), onClick = onClick) {
+        Text(localized(MR.strings.action_global_search_query, searchQuery))
     }
 }

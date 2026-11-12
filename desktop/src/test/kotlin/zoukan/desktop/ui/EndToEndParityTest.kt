@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -166,6 +167,28 @@ class EndToEndParityTest {
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
                 shot("p7-filtered-unread")
                 library.filterUnread().set(TriState.DISABLED)
+            }
+
+            step("Library search syntax, global search row and KMK display options") {
+                // SY's search, with src:local for local entries; the global search row sits above the
+                // results. (A "-word" exclusion never keeps a local entry, as Komikku's filterManga.)
+                onAllNodes(hasSetTextAction()).onFirst().performTextInput("src:local")
+                waitFor(hasTestTag("library-global-search"))
+                onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+                onAllNodes(hasSetTextAction()).onFirst().performTextInput("bravo")
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 1 }
+                shot("p8-library-search")
+                onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 3 }
+                byDescription("Filter, sort and display").performClick()
+                waitFor(hasText("Lewd"))
+                waitFor(hasText("Categories"))
+                onAllNodesWithText("Display").onFirst().performClick()
+                waitFor(hasText("Show hidden categories"))
+                waitFor(hasText("Source icon"))
+                waitFor(hasText("Use language icon"))
+                shot("p9-library-display-kmk")
+                onAllNodesWithText("Close").onFirst().performClick()
             }
 
             step("Tag sorting and the Updates filters") {
