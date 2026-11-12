@@ -238,11 +238,11 @@ private fun Value(text: String, icon: ImageVector? = null, onClick: (() -> Unit)
 }
 
 /**
- * The entry's tags grouped by namespace, each tag searching its source, as Android's NamespaceTags
- * (E-Hentai's weak tags have a thinner border).
+ * The entry's tags grouped by namespace, each opening the tag menu with its source's search of
+ * the tag, as Android's NamespaceTags (E-Hentai's weak tags have a thinner border).
  */
 @Composable
-fun NamespaceTags(meta: RaisedSearchMetadata, sourceId: Long, onClick: (String) -> Unit) {
+fun NamespaceTags(meta: RaisedSearchMetadata, sourceId: Long, search: EntryInfoSearch) {
     val groups = meta.tags
         .filterNot { it.type == RaisedSearchMetadata.TAG_TYPE_VIRTUAL }
         .groupBy { it.namespace.orEmpty() }
@@ -262,7 +262,7 @@ fun NamespaceTags(meta: RaisedSearchMetadata, sourceId: Long, onClick: (String) 
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     tags.forEach { tag ->
-                        val search = if (!tag.namespace.isNullOrEmpty()) {
+                        val query = if (!tag.namespace.isNullOrEmpty()) {
                             SourceTags.getWrappedTag(sourceId, namespace = tag.namespace, tag = tag.name)
                         } else {
                             SourceTags.getWrappedTag(sourceId, fullTag = tag.name)
@@ -276,13 +276,18 @@ fun NamespaceTags(meta: RaisedSearchMetadata, sourceId: Long, onClick: (String) 
                         } else {
                             null
                         }
-                        SuggestionChip(
-                            onClick = { onClick(search) },
-                            label = { Text(tag.name, style = MaterialTheme.typography.bodySmall) },
-                            border = BorderStroke(border ?: 1.dp, MaterialTheme.colorScheme.primary),
-                            colors = SuggestionChipDefaults.suggestionChipColors(),
-                            modifier = Modifier.copyOnRightClick(tag.name),
-                        )
+                        // ZOUKAN -->
+                        // A click opens Android's tag menu for the source's search of the tag
+                        TagMenuBox(query, search) { modifier, openMenu ->
+                            SuggestionChip(
+                                onClick = openMenu,
+                                label = { Text(tag.name, style = MaterialTheme.typography.bodySmall) },
+                                border = BorderStroke(border ?: 1.dp, MaterialTheme.colorScheme.primary),
+                                colors = SuggestionChipDefaults.suggestionChipColors(),
+                                modifier = modifier,
+                            )
+                        }
+                        // ZOUKAN <--
                     }
                 }
             }

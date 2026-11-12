@@ -202,6 +202,20 @@ class DownloadManager(
     }
 
     /**
+     * Deletes all of an entry's downloads and takes its chapters out of the queue, as Android's
+     * deleteManga(removeQueued = true), then the source's folder when it is left empty.
+     */
+    suspend fun deleteManga(manga: Manga) = withContext(Dispatchers.IO) {
+        cancelSeries(manga.id)
+        synchronized(lock) { stopping }?.join()
+        val dir = paths.mangaDir(manga)
+        dir.deleteRecursively()
+        val sourceDir = paths.sourceDir(manga.source)
+        if (sourceDir.list()?.isEmpty() == true) sourceDir.delete()
+        invalidate(dir)
+    }
+
+    /**
      * Which of [chapters] the automatic deletions may delete, as Android's getChaptersToDelete:
      * read chapters of an entry in an excluded category stay ("Exclude categories"), and so do
      * bookmarked chapters unless "Allow deleting bookmarked chapters" is on.

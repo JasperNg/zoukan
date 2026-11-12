@@ -18,8 +18,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * The chapter settings of an entry, as on Android: the unread, downloaded and bookmarked filters
- * and the sort, saved in the entry's chapter flags, and the scanlators it hides, saved in the
+ * The chapter settings of an entry, as on Android: the unread, downloaded and bookmarked filters,
+ * the sort and the display mode, saved in the entry's chapter flags, and the scanlators it hides, saved in the
  * excluded_scanlators table. Android's interactors for the scanlators live in the app module, so
  * the queries are here.
  */
@@ -68,6 +68,11 @@ class ChapterSettings(
     /** Sorts by [sorting] (oldest first, as on Android), or flips the order when already sorted by it */
     suspend fun setSortingOrFlip(manga: Manga, sorting: Long) {
         setFlags.awaitSetSortingModeOrFlipOrder(manga, sorting)
+    }
+
+    /** The Display tab: the source's chapter title or "Chapter <number>" */
+    suspend fun setDisplayMode(manga: Manga, mode: Long) {
+        setFlags.awaitSetDisplayMode(manga, mode)
     }
 
     /** Applies the default settings (Android's "Reset") */
