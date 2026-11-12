@@ -146,6 +146,15 @@ val winPassword = setting("zoukan.windows.signPassword", "ZOUKAN_WINDOWS_SIGN_PA
 val winThumbprint = setting("zoukan.windows.signThumbprint", "ZOUKAN_WINDOWS_SIGN_THUMBPRINT")
 val winTimestamp = setting("zoukan.windows.timestampUrl", "ZOUKAN_WINDOWS_TIMESTAMP_URL") ?: "http://timestamp.digicert.com"
 
+// Whether this build's app ships signed: zoukanBuildInfo records it in the app's jar, so an
+// installed build that has lost its signature can be told from one built without a certificate
+// (zoukan.desktop.update.InstallerSignature). An ad hoc signed Mac app (no identity) is unsigned.
+extra["zoukanSignedRelease"] = when {
+    isWindows -> winPfx != null || winThumbprint != null
+    isMac -> macIdentity != null
+    else -> false
+}
+
 fun signtool(): String {
     setting("zoukan.windows.signtool", "ZOUKAN_WINDOWS_SIGNTOOL")?.let { return it }
     // The newest x64 signtool of an installed Windows SDK, else the PATH

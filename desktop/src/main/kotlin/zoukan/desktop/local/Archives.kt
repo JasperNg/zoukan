@@ -11,10 +11,21 @@ import zoukan.desktop.download.FileNames
 import zoukan.desktop.download.ImageType
 import zoukan.desktop.outputWithin
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.stream.Collectors
+import kotlin.concurrent.thread
 
 /**
  * RAR, 7z and TAR chapters, which the Android app reads with libarchive.
@@ -32,6 +43,70 @@ object Archives {
 
     private const val KEEP = 8
     private const val DONE = ".done"
+
+    // What one chapter may unpack to. Far above any real chapter (a few hundred MB at most), and
+    // low enough that a small crafted archive cannot fill the disk.
+    private const val MAX_ENTRY_BYTES = 1L shl 30
+    private const val MAX_TOTAL_BYTES = 4L shl 30
+    private const val MAX_ENTRIES = 10_000
+
+    internal data class Limits(
+        val entryBytes: Long = MAX_ENTRY_BYTES,
+        val totalBytes: Long = MAX_TOTAL_BYTES,
+        val entries: Int = MAX_ENTRIES,
+    )
+
+    /** The caps on unpacking; only tests change them. */
+    @Volatile
+    internal var limits = Limits()
+
+    /** An archive that would unpack to more than [limits] allows. */
+    class TooLargeException(message: String) : IllegalStateException(message)
+
+    /** Counts what one archive unpacks to, and fails once it passes [limits]. */
+    private class Budget(private val archive: String, private val limits: Limits) {
+        private var entries = 0
+        private var total = 0L
+
+        /** The first failure, kept because a library may wrap what a stream throws. */
+        var failure: TooLargeException? = null
+            private set
+
+        private fun fail(what: String): Nothing =
+            throw TooLargeException("$archive unpacks to $what, which is more than a chapter may").also { failure = it }
+
+        /** Counts an entry about to be written; [declared] is the size its header claims, when known. */
+        fun entry(declared: Long = 0) {
+            if (++entries > limits.entries) fail("more than ${limits.entries} files")
+            if (declared > limits.entryBytes) fail("a file over ${limits.entryBytes} bytes")
+            if (declared > limits.totalBytes - total) fail("more than ${limits.totalBytes} bytes")
+        }
+
+        /** [out], counting the bytes written to it as one entry's. */
+        fun counting(out: OutputStream): OutputStream = object : OutputStream() {
+            private var written = 0L
+
+            private fun add(n: Int) {
+                written += n
+                total += n
+                if (written > limits.entryBytes) fail("a file over ${limits.entryBytes} bytes")
+                if (total > limits.totalBytes) fail("more than ${limits.totalBytes} bytes")
+            }
+
+            override fun write(b: Int) {
+                add(1)
+                out.write(b)
+            }
+
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                add(len)
+                out.write(b, off, len)
+            }
+
+            override fun flush() = out.flush()
+            override fun close() = out.close()
+        }
+    }
 
     @Volatile
     var cacheRoot: File = File(System.getProperty("java.io.tmpdir"), "zoukan-archives")
@@ -98,10 +173,10 @@ object Archives {
         cacheRoot.mkdirs()
         target.deleteRecursively()
         val raw = File(cacheRoot, "$key.raw")
-        raw.deleteRecursively()
+        deleteTree(raw)
         try {
             unpack(file, raw)
-            val files = raw.walkTopDown().filter { it.isFile }.toList()
+            val files = regularFiles(raw)
             val images = files.filter { ImageType.isImageName(it.name) && !it.name.startsWith('.') }
                 .map { it.relativeTo(raw).invariantSeparatorsPath to it }
                 .sortedWith(compareBy(FileNames.naturalOrder) { it.first })
@@ -119,9 +194,42 @@ object Archives {
             target.deleteRecursively()
             throw e
         } finally {
-            raw.deleteRecursively()
+            deleteTree(raw)
         }
         return target
+    }
+
+    /**
+     * The real files under [root]. A symbolic link is never one, nor is anything behind a linked
+     * folder: the system's tar creates the links an archive holds, and a page that is a link would
+     * hand the reader whatever file it points to.
+     */
+    internal fun regularFiles(root: File): List<File> =
+        Files.walk(root.toPath()).use { paths ->
+            paths.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }.map { it.toFile() }.collect(Collectors.toList())
+        }
+
+    /** Deletes [dir] without following links, so a linked folder loses the link and not its files. */
+    private fun deleteTree(dir: File) {
+        if (!Files.exists(dir.toPath(), LinkOption.NOFOLLOW_LINKS)) return
+        runCatching {
+            Files.walkFileTree(
+                dir.toPath(),
+                object : SimpleFileVisitor<Path>() {
+                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                        runCatching { Files.delete(file) }
+                        return FileVisitResult.CONTINUE
+                    }
+
+                    override fun visitFileFailed(file: Path, e: IOException) = FileVisitResult.CONTINUE
+
+                    override fun postVisitDirectory(d: Path, e: IOException?): FileVisitResult {
+                        runCatching { Files.delete(d) }
+                        return FileVisitResult.CONTINUE
+                    }
+                },
+            )
+        }
     }
 
     /**
@@ -135,20 +243,20 @@ object Archives {
                 Kind.RAR -> Archive(file).use { rar ->
                     rar.fileHeaders.filter { !it.isDirectory && it.entryName().isPage() }
                         .minWithOrNull(compareBy(FileNames.naturalOrder) { it.entryName() })
-                        ?.let { header -> rar.getInputStream(header).use { it.readBytes() } }
+                        ?.let { header -> rar.getInputStream(header).use { readCapped(file, it) } }
                 }
                 Kind.SEVEN_Z -> SevenZFile.builder().setFile(file).get().use { sz ->
                     sz.entries.filter { !it.isDirectory && it.hasStream() && it.name.isPage() }
                         .minWithOrNull(compareBy(FileNames.naturalOrder) { it.name })
-                        ?.let { entry -> sz.getInputStream(entry).use { it.readBytes() } }
+                        ?.let { entry -> sz.getInputStream(entry).use { readCapped(file, it) } }
                 }
                 // One pass, keeping the bytes of the first page so far
                 Kind.TAR -> TarArchiveInputStream(file.inputStream().buffered()).use { tar ->
                     var best: Pair<String, ByteArray>? = null
                     while (true) {
                         val entry = tar.nextEntry ?: break
-                        if (!entry.isFile || !entry.name.isPage()) continue
-                        if (best == null || FileNames.naturalOrder.compare(entry.name, best.first) < 0) best = entry.name to tar.readBytes()
+                        if (!entry.isFile || entry.isSymbolicLink || entry.isLink || !entry.name.isPage()) continue
+                        if (best == null || FileNames.naturalOrder.compare(entry.name, best.first) < 0) best = entry.name to readCapped(file, tar)
                     }
                     best?.second
                 }
@@ -193,35 +301,43 @@ object Archives {
 
     private fun unpack(file: File, into: File) {
         into.mkdirs()
+        val limits = limits
+        val budget = Budget(file.name, limits)
         try {
             when (kind(file)) {
                 Kind.RAR -> Archive(file).use { rar ->
                     if (rar.isEncrypted) error("${file.name} is password protected")
                     rar.fileHeaders.filter { !it.isDirectory }.forEach { header ->
-                        write(into, header.entryName()) { out -> rar.extractFile(header, out) }
+                        write(into, header.entryName(), budget, header.fullUnpackSize) { out -> rar.extractFile(header, out) }
                     }
                 }
                 Kind.SEVEN_Z -> SevenZFile.builder().setFile(file).get().use { sz ->
                     while (true) {
                         val entry = sz.nextEntry ?: break
                         if (entry.isDirectory || !entry.hasStream()) continue
-                        write(into, entry.name) { out -> copy(sz::read, out) }
+                        write(into, entry.name, budget, entry.size) { out -> copy(sz::read, out) }
                     }
                 }
                 Kind.TAR -> TarArchiveInputStream(file.inputStream().buffered()).use { tar ->
                     while (true) {
                         val entry = tar.nextEntry ?: break
-                        if (!entry.isFile) continue
-                        write(into, entry.name) { out -> tar.copyTo(out) }
+                        // A link's entry counts as a file to Commons Compress; it is not a page
+                        if (!entry.isFile || entry.isSymbolicLink || entry.isLink) continue
+                        write(into, entry.name, budget, entry.size) { out -> tar.copyTo(out) }
                     }
                 }
             }
         } catch (e: Throwable) {
+            // Too large for any reader: the system's tar would only fill the disk instead
+            (budget.failure ?: e as? TooLargeException)?.let { tooLarge ->
+                deleteTree(into)
+                throw tooLarge
+            }
             // RAR 5, or a method the Java libraries lack: the system's libarchive may read it
-            into.deleteRecursively()
+            deleteTree(into)
             into.mkdirs()
-            if (!systemTar(file, into)) {
-                into.deleteRecursively()
+            if (!systemTar(file, into, limits)) {
+                deleteTree(into)
                 val reason = if (e is UnsupportedRarV5Exception) "RAR 5 archives need the system's tar command, which could not read it" else e.message
                 throw IllegalStateException("Could not open ${file.name}: $reason. Converting it to CBZ works everywhere.", e)
             }
@@ -238,27 +354,94 @@ object Archives {
         }
     }
 
-    /** Writes an entry under [root], refusing names that would land outside it. */
-    private inline fun write(root: File, name: String, block: (java.io.OutputStream) -> Unit) {
-        val parts = name.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
-        if (parts.isEmpty() || parts.any { it == ".." } || name.startsWith("/") || parts.first().contains(':')) return
-        val out = File(root, parts.joinToString(File.separator))
-        out.parentFile.mkdirs()
-        out.outputStream().buffered().use(block)
+    /** One entry's bytes, for a cover: no more than a page may unpack to. */
+    private fun readCapped(file: File, input: InputStream): ByteArray {
+        val max = limits.entryBytes
+        val bytes = input.readNBytes((max + 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (bytes.size > max) throw TooLargeException("${file.name} has a page over $max bytes")
+        return bytes
     }
 
-    private fun systemTar(file: File, into: File): Boolean = try {
+    /**
+     * An entry's path under the folder it unpacks to, or null for a name that would land outside
+     * it: an absolute path, one with `..`, or one with a `:` (a drive, or an NTFS stream).
+     */
+    internal fun entryPath(name: String): String? {
+        val parts = name.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
+        if (parts.isEmpty() || name.startsWith("/") || parts.any { it == ".." || it.contains(':') }) return null
+        return parts.joinToString(File.separator)
+    }
+
+    /** Writes an entry under [root], refusing names that would land outside it. */
+    private inline fun write(root: File, name: String, budget: Budget, declared: Long, block: (OutputStream) -> Unit) {
+        val out = File(root, entryPath(name) ?: return)
+        budget.entry(declared)
+        out.parentFile.mkdirs()
+        budget.counting(out.outputStream().buffered()).use(block)
+    }
+
+    /** Whether what is under [dir] is past [limits], counting links as nothing. */
+    internal fun exceeds(dir: File, limits: Limits): Boolean {
+        var entries = 0
+        var total = 0L
+        var over = false
+        runCatching {
+            Files.walkFileTree(
+                dir.toPath(),
+                object : SimpleFileVisitor<Path>() {
+                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                        if (!attrs.isRegularFile) return FileVisitResult.CONTINUE
+                        entries++
+                        total += attrs.size()
+                        over = entries > limits.entries || attrs.size() > limits.entryBytes || total > limits.totalBytes
+                        return if (over) FileVisitResult.TERMINATE else FileVisitResult.CONTINUE
+                    }
+
+                    // tar is still writing: a file may be gone or locked for a moment
+                    override fun visitFileFailed(file: Path, e: IOException) = FileVisitResult.CONTINUE
+                },
+            )
+        }
+        return over
+    }
+
+    private fun systemTar(file: File, into: File, limits: Limits): Boolean = try {
         val process = ProcessBuilder("tar", "-xf", file.absolutePath, "-C", into.absolutePath)
             .redirectErrorStream(true)
             .start()
-        val output = process.outputWithin(5, TimeUnit.MINUTES)
+        // tar has no cap of its own, so the folder is measured while it runs
+        val tooLarge = AtomicBoolean(false)
+        val watch = thread(isDaemon = true, name = "archive-size-watch") {
+            try {
+                while (process.isAlive) {
+                    Thread.sleep(500)
+                    if (exceeds(into, limits)) {
+                        tooLarge.set(true)
+                        process.destroyForcibly()
+                        break
+                    }
+                }
+            } catch (_: InterruptedException) {
+            }
+        }
+        val output = try {
+            process.outputWithin(5, TimeUnit.MINUTES)
+        } finally {
+            watch.interrupt()
+            watch.join(5_000)
+        }
+        if (tooLarge.get() || exceeds(into, limits)) {
+            throw TooLargeException("${file.name} unpacks to more than a chapter may")
+        }
         if (output == null) {
             logcat(LogPriority.WARN) { "tar took too long to read ${file.name}" }
             false
         } else {
             if (output.exitCode != 0) logcat(LogPriority.WARN) { "tar could not read ${file.name}: ${output.text}" }
-            output.exitCode == 0 && into.walkTopDown().any { it.isFile }
+            output.exitCode == 0 && regularFiles(into).isNotEmpty()
         }
+    } catch (e: TooLargeException) {
+        throw e
     } catch (e: Exception) {
         logcat(LogPriority.WARN, e) { "No system tar to read ${file.name}" }
         false
@@ -279,8 +462,8 @@ object Archives {
         cacheRoot.listFiles().orEmpty()
             .filterNot { it.name in leases || it.name.removeSuffix(".raw") in leases }
             .forEach { entry ->
-                deleted += entry.walkBottomUp().count { it.isFile }
-                entry.deleteRecursively()
+                deleted += if (entry.isDirectory) regularFiles(entry).size else 1
+                deleteTree(entry)
             }
         deleted
     }

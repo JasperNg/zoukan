@@ -87,14 +87,26 @@ class LocalSource(
         SMangaUpdate(details, list)
     }
 
-    fun mangaDir(url: String): File? = File(folder(), url).takeIf { it.isDirectory && it.canonicalPath.startsWith(folder().canonicalPath) }
+    fun mangaDir(url: String): File? = File(folder(), url).takeIf { it.isDirectory && it.isInsideLocalFolder() }
 
     /** The chapter's file or folder; its URL is `<manga folder>/<chapter file>`. */
     fun chapterFile(chapterUrl: String): File {
         val (mangaDirName, chapterName) = chapterUrl.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
         val file = File(File(folder(), mangaDirName), chapterName)
+        // URLs come from the DB and are restored verbatim from backups, so a crafted one must not
+        // leave the local folder: `..` escapes it, and an absolute child makes File discard the parent
+        if (!file.isInsideLocalFolder()) error("Invalid chapter path: $chapterUrl")
         if (!file.exists()) error("Chapter not found: $chapterUrl")
         return file
+    }
+
+    /** True when the canonical [file] is strictly inside the local folder: the common prefix must end at a
+     * separator, so sibling folders sharing only the folder's name (e.g. `../<local>x`) are rejected too. */
+    private fun File.isInsideLocalFolder(): Boolean {
+        val root = folder().canonicalFile.path
+        val prefix = if (root.endsWith(File.separator)) root else root + File.separator
+        // A path Windows cannot canonicalize (an embedded drive, like `<folder>\C:\...`) is not inside
+        return runCatching { canonicalFile.path }.getOrNull()?.startsWith(prefix) == true
     }
 
     private fun getMangaDetails(manga: SManga): SManga {
