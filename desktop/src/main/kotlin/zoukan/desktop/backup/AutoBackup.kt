@@ -5,8 +5,10 @@ import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
+import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.tray.Notifications
+import zoukan.i18n.desktop.DMR
 import java.io.File
 
 /**
@@ -49,7 +51,7 @@ class AutoBackup(
     } catch (e: Exception) {
         lastFailure = System.currentTimeMillis()
         logcat(LogPriority.ERROR, e) { "The automatic backup failed" }
-        Notifications.post("Automatic backup failed", e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
+        Notifications.post(localized(DMR.strings.automatic_backup_failed), e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
         null
     }
 

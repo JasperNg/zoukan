@@ -131,8 +131,10 @@ fun runZoukanApp() {
         }
     }
     ZoukanRuntime.start(dirs)
-    startUi(ZoukanRuntime.dirs)
     val preferences = Injekt.get<DesktopPreferences>()
+    // Settings > Appearance > App language, before anything looks up a string
+    zoukan.desktop.ui.common.AppLanguage.apply(preferences.appLanguage().get())
+    startUi(ZoukanRuntime.dirs)
     // ZOUKAN -->
     // Data and storage > "Clear chapter cache on app launch", as Android's MainActivity on launch
     if (Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>().autoClearChapterCache().get()) {

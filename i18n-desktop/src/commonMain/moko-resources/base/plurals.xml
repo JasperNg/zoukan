@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chapters_downloaded">
+        <item quantity="one">%d chapter downloaded</item>
+        <item quantity="other">%d chapters downloaded</item>
+    </plurals>
+</resources>
