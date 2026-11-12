@@ -73,7 +73,8 @@ class RecommendsScreenModel(
 
     sealed interface Result {
         data object Loading : Result
-        data class Success(val manga: List<Manga>) : Result
+        /** [ranks]: how many of the searched entries recommend each result (by URL), for the common recommendations */
+        data class Success(val manga: List<Manga>, val ranks: Map<String, Int> = emptyMap()) : Result
         data class Error(val message: String) : Result
     }
 
@@ -155,45 +156,112 @@ data class RecommendsScreen(val mangaId: Long) : Screen {
     override fun Content() {
         val model = rememberScreenModel { RecommendsScreenModel(mangaId) }
         val state by model.state.collectAsState()
-        val navigator = LocalNavigator.currentOrThrow
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(localized(SYMR.strings.similar_titles), subtitle = state.title) {}
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-                items(state.groups, key = { it.key }) { group ->
-                    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                        Text(group.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                        when (val result = group.result) {
-                            is RecommendsScreenModel.Result.Success -> LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(result.manga, key = { "${it.source}-${it.url}" }) { manga ->
-                                    MangaGridItem(
-                                        title = manga.title,
-                                        cover = Cover.of(manga),
-                                        onClick = {
-                                            navigator.push(
-                                                if (group.opensEntry) MangaScreen(manga.id) else GlobalSearchScreen(manga.ogTitle),
-                                            )
-                                        },
-                                        badge = if (manga.favorite) localized(MR.strings.in_library) else null,
-                                        modifier = Modifier.width(140.dp),
+            RecommendsList(state.groups)
+        }
+    }
+}
+
+// SY -->
+/**
+ * SY's RecommendsScreen with Args.MergedSourceMangas: the common recommendations of a library
+ * selection, each service's results ranked by how many of the entries recommend them.
+ */
+class CommonRecommendsScreenModel(
+    results: List<RankedSearchResults>,
+    private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
+) : StateScreenModel<List<RecommendsScreenModel.Group>>(emptyList()) {
+    init {
+        screenModelScope.launch {
+            // StaticResultPagingSource: the results as the search ranked them
+            val groups = results.mapIndexed { index, data ->
+                val ranks = data.results.mapKeys { it.key.url }
+                val recSourceId = data.recAssociatedSourceId
+                val titles = runCatching {
+                    if (recSourceId != null) {
+                        // If the recommendation is associated with a source, resolve it
+                        withContext(Dispatchers.IO) { networkToLocalManga(data.results.keys.map { it.toDomainManga(recSourceId) }) }
+                    } else {
+                        // Otherwise the user picks a source through a global search
+                        data.results.keys.map { it.toDomainManga(RECOMMENDS_SOURCE) }
+                    }.distinctBy { it.url }
+                }
+                RecommendsScreenModel.Group(
+                    key = "common-$index",
+                    title = "${data.recSourceName} · ${localized(data.recSourceCategory)}",
+                    opensEntry = recSourceId != null,
+                    result = titles.fold(
+                        { RecommendsScreenModel.Result.Success(it, ranks) },
+                        { RecommendsScreenModel.Result.Error(it.message ?: localized(SYMR.strings.rec_no_results)) },
+                    ),
+                )
+            }
+            // RecommendsScreenModel.sortComparator: rows with results first, then by name and category
+            mutableState.value = groups.sortedWith(
+                compareBy({ (it.result as? RecommendsScreenModel.Result.Success)?.manga?.isEmpty() ?: true }, { it.title }),
+            )
+        }
+    }
+}
+
+class CommonRecommendsScreen(private val results: List<RankedSearchResults>) : Screen {
+    override val key: ScreenKey = "common-recommends-${results.hashCode()}/"
+
+    @Composable
+    override fun Content() {
+        val model = rememberScreenModel { CommonRecommendsScreenModel(results) }
+        val groups by model.state.collectAsState()
+        Column(Modifier.fillMaxSize()) {
+            ScreenHeader(localized(SYMR.strings.rec_common_recommendations)) {}
+            RecommendsList(groups)
+        }
+    }
+}
+// SY <--
+
+/** The rows of recommendations, one for each service and category. */
+@Composable
+private fun RecommendsList(groups: List<RecommendsScreenModel.Group>) {
+    val navigator = LocalNavigator.currentOrThrow
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        items(groups, key = { it.key }) { group ->
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text(group.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                when (val result = group.result) {
+                    is RecommendsScreenModel.Result.Success -> LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(result.manga, key = { "${it.source}-${it.url}" }) { manga ->
+                            MangaGridItem(
+                                title = manga.title,
+                                cover = Cover.of(manga),
+                                onClick = {
+                                    navigator.push(
+                                        if (group.opensEntry) MangaScreen(manga.id) else GlobalSearchScreen(manga.ogTitle),
                                     )
-                                }
-                            }
-                            is RecommendsScreenModel.Result.Error -> Text(
-                                result.message,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall,
+                                },
+                                // SY's RankedSearchMetadata badge: "+N" entries recommend it
+                                badge = listOfNotNull(
+                                    result.ranks[manga.url]?.let { "+$it" },
+                                    localized(MR.strings.in_library).takeIf { manga.favorite },
+                                ).joinToString(" · ").ifEmpty { null },
+                                modifier = Modifier.width(140.dp),
                             )
-                            RecommendsScreenModel.Result.Loading -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(Modifier.size(28.dp))
-                            }
                         }
-                        HorizontalDivider(Modifier.padding(top = 8.dp))
+                    }
+                    is RecommendsScreenModel.Result.Error -> Text(
+                        result.message,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    RecommendsScreenModel.Result.Loading -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(Modifier.size(28.dp))
                     }
                 }
+                HorizontalDivider(Modifier.padding(top = 8.dp))
             }
         }
     }
