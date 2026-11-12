@@ -34,8 +34,11 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.tray.Notifications
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -486,10 +489,10 @@ class DownloadManager(
         val errors = failed.get()
         if (done + errors > 0) {
             Notifications.post(
-                "Downloads finished",
+                localized(DMR.strings.downloads_finished),
                 buildString {
-                    append("$done chapters downloaded")
-                    if (errors > 0) append(", $errors failed")
+                    append(localizedPlural(DMR.plurals.chapters_downloaded, done, done))
+                    if (errors > 0) append(", ").append(localized(DMR.strings.n_failed, errors))
                 },
                 if (errors > 0) Notifications.Kind.WARNING else Notifications.Kind.INFO,
             )
@@ -553,7 +556,7 @@ class DownloadManager(
             logcat(LogPriority.ERROR, e) { "Downloading ${manga.title} / ${chapter.name} failed" }
             download.error = e.message ?: e::class.simpleName
             download.state.value = Download.State.ERROR
-            Notifications.post("Download failed", "${manga.title}: ${chapter.name}\n${download.error}", Notifications.Kind.ERROR)
+            Notifications.post(localized(DMR.strings.download_failed), "${manga.title}: ${chapter.name}\n${download.error}", Notifications.Kind.ERROR)
             false
         }
     }
