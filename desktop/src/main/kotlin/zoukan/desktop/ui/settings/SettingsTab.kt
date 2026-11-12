@@ -463,13 +463,13 @@ private fun LazyListScope.downloadSettings(
     }
 }
 
-internal fun createBackup(folder: File) {
+/** Writes a backup of what [options] picks (Create backup's choices) to [file]. */
+internal fun createBackup(file: File, options: BackupOptions) {
     if (backupStatusFlow.value != null) return
     backupStatusFlow.value = localized(DMR.strings.backing_up)
     AppScope.launch {
         try {
-            val file = File(folder.apply { mkdirs() }, DesktopBackups.defaultFileName())
-            val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, BackupOptions())
+            val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, options)
             Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
         } catch (e: Exception) {
             Toasts.error(localized(MR.strings.creating_backup_error), e)
@@ -479,7 +479,8 @@ internal fun createBackup(folder: File) {
     }
 }
 
-internal fun restoreBackup(file: File) {
+/** Restores what [options] picks (Restore backup's choices) from [file]. */
+internal fun restoreBackup(file: File, options: RestoreOptions) {
     if (backupStatusFlow.value != null) return
     backupStatusFlow.value = localized(DMR.strings.restoring, file.name)
     AppScope.launch {
@@ -488,16 +489,16 @@ internal fun restoreBackup(file: File) {
             val backup = backups.read(file)
             // Extension stores decide whose code runs, so a backup adds them only when the user
             // has seen which ones
-            val newStores = backups.newExtensionStores(backup)
-            val options = when {
-                newStores.isEmpty() -> RestoreOptions()
+            val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
+            val chosen = when {
+                newStores.isEmpty() -> options
                 else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
-                    true -> RestoreOptions()
-                    false -> RestoreOptions(extensionStores = false)
+                    true -> options
+                    false -> options.copy(extensionStores = false)
                     null -> return@launch
                 }
             }
-            val errors = backups.restore(backup, options) { _, progress, total ->
+            val errors = backups.restore(backup, chosen) { _, progress, total ->
                 backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
             }
             Toasts.show(

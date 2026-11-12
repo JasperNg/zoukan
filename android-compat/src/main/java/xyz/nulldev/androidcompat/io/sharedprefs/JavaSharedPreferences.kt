@@ -117,7 +117,12 @@ class JavaSharedPreferences(
     }
     // ZOUKAN <--
 
-    private val listeners = mutableMapOf<SharedPreferences.OnSharedPreferenceChangeListener, (String) -> Unit>()
+    // ZOUKAN -->
+    // Listeners come and go on the UI thread while changes notify them on the main looper, so the
+    // map must allow both at once
+    private val listeners =
+        java.util.concurrent.ConcurrentHashMap<SharedPreferences.OnSharedPreferenceChangeListener, (String) -> Unit>()
+    // ZOUKAN <--
 
     // TODO: 2021-05-29 Need to find a way to get this working with all pref types
     // ZOUKAN -->

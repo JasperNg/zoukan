@@ -51,7 +51,7 @@ import zoukan.desktop.ui.common.InfoScreen
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.settings.StorageLocationPreference
 import zoukan.desktop.ui.settings.ThemeSection
-import zoukan.desktop.ui.settings.pickAndRestoreBackup
+import zoukan.desktop.ui.settings.pickBackupFile
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.ui.whatsnew.WhatsNew
 import zoukan.desktop.ui.whatsnew.WhatsNewScreen
@@ -87,6 +87,7 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
         OnboardingScreen(
             onComplete = { preferences.shownOnboardingFlow().set(true) },
             onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
+            onOpenScreen = { navigator()?.push(it) },
         )
     } else if (updatedDialog) {
         UpdatedDialog(
@@ -105,7 +106,12 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
  * behind it cannot be used until it is finished; Settings > Advanced opens it again.
  */
 @Composable
-fun OnboardingScreen(onComplete: () -> Unit, onOpenSettings: () -> Unit, onClose: (() -> Unit)? = null) {
+fun OnboardingScreen(
+    onComplete: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onClose: (() -> Unit)? = null,
+    onOpenScreen: (cafe.adriel.voyager.core.screen.Screen) -> Unit = {},
+) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     val steps = remember { OnboardingStep.entries }
     val last = step == steps.lastIndex
@@ -148,11 +154,14 @@ fun OnboardingScreen(onComplete: () -> Unit, onOpenSettings: () -> Unit, onClose
                         OnboardingStep.Storage -> StorageStep()
                         OnboardingStep.Guides -> GuidesStep(
                             onRestoreBackup = {
-                                if (pickAndRestoreBackup(window)) {
+                                val file = pickBackupFile(window)
+                                if (file != null) {
                                     onComplete()
                                     // The restore's progress shows in Settings > Data and storage
                                     zoukan.desktop.ui.settings.openSettingsCategory(zoukan.desktop.ui.settings.SettingsCategory.Data)
                                     onOpenSettings()
+                                    // Android's Restore backup screen: what to restore, and what the backup needs
+                                    onOpenScreen(zoukan.desktop.ui.settings.RestoreBackupScreen(file.path))
                                 }
                             },
                         )
@@ -218,6 +227,7 @@ fun ReopenedOnboarding(navigator: () -> Navigator?) {
         OnboardingScreen(
             onComplete = { Onboarding.reopen.value = false },
             onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
+            onOpenScreen = { navigator()?.push(it) },
             onClose = { Onboarding.reopen.value = false },
         )
     }
