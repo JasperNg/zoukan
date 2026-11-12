@@ -52,9 +52,6 @@ class DesktopPreferences(private val store: PreferenceStore) {
     /** Set when the first-run setup is finished or skipped; Android's BasePreferences.shownOnboardingFlow */
     fun shownOnboardingFlow() = store.getBoolean(Preference.appStateKey("onboarding_complete"), false)
 
-    /** Settings > Appearance > App language (AppLanguage): a language tag, or "" for the system language */
-    fun appLanguage() = store.getString(Preference.appStateKey("zoukan_app_language"), "")
-
     /** Desktop only: the version that last ran, so the first launch after an update can say what's new */
     fun lastVersion() = store.getString(Preference.appStateKey("zoukan_last_version"), "")
 
