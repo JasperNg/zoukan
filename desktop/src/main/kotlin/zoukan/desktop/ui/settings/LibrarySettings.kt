@@ -10,6 +10,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
@@ -58,6 +59,19 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
             categories,
             preferences.updateCategories(),
             preferences.updateCategoriesExclude(),
+        )
+    }
+    // SY: what updating a source, status or tracking tab updates when the library is grouped
+    item(key = "library-group-updates") {
+        val preferences = remember { Injekt.get<LibraryPreferences>() }
+        ChoicePreference(
+            localized(SYMR.strings.library_group_updates),
+            preferences.groupLibraryUpdateType(),
+            listOf(
+                GroupLibraryMode.GLOBAL to localized(SYMR.strings.library_group_updates_global),
+                GroupLibraryMode.ALL_BUT_UNGROUPED to localized(SYMR.strings.library_group_updates_all_but_ungrouped),
+                GroupLibraryMode.ALL to localized(SYMR.strings.library_group_updates_all),
+            ),
         )
     }
     item(key = "library-update-metadata") {
