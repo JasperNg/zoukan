@@ -62,9 +62,11 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.isEhBasedSource
+import exh.source.isMdBasedSource
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -85,15 +87,17 @@ data class SourceScreen(
     val query: String? = null,
     // ZOUKAN -->
     val savedSearch: Long? = null,
+    /** The MangaDex follows, as Android's MangaDexFollowsScreen */
+    val follows: Boolean = false,
     // ZOUKAN <--
 ) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
     // disposed screen's key: without it, leaving manga-1 cancelled manga-12's work
-    override val key: ScreenKey = "source-$sourceId-$latest-$query-$savedSearch/"
+    override val key: ScreenKey = "source-$sourceId-$latest-$query-$savedSearch-$follows/"
 
     @Composable
     override fun Content() {
-        val model = rememberScreenModel { SourceScreenModel(sourceId, latest, query, savedSearchId = savedSearch) }
+        val model = rememberScreenModel { SourceScreenModel(sourceId, latest, query, savedSearchId = savedSearch, follows = follows) }
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         // ZOUKAN -->
@@ -127,78 +131,90 @@ data class SourceScreen(
         // ZOUKAN <--
 
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader(source?.name ?: localized(DMR.strings.source_not_installed_2), subtitle = source?.let { languageName(it.lang) }) {
-                SearchField(
-                    searchText,
-                    { searchText = it },
-                    localized(DMR.strings.search_2, source?.name.orEmpty()),
-                    Modifier.width(300.dp),
-                    onSearch = { model.search(searchText) },
-                )
-                if (source != null && source.getFilterList().isNotEmpty()) {
-                    TooltipIconButton(Icons.Outlined.FilterList, localized(DMR.strings.filters), onClick = { showFilters = !showFilters })
-                }
-                // ZOUKAN -->
-                // E-Hentai's detailed list has no other display modes, as on Android
-                if (source != null && !(source.isEhBasedSource() && ehentaiBrowseDisplayMode)) {
-                    BrowseDisplayModeButton(displayMode) { displayModePreference.set(it) }
-                }
-                if (source != null) BulkSelectButton(bulk)
-                // ZOUKAN <--
-                if (source != null) {
-                    TooltipIconButton(Icons.Outlined.DynamicFeed, localized(DMR.strings.this_sources_feed), onClick = { navigator.push(SourceFeedScreen(source.id)) })
-                }
-                if (source is HttpSource) {
-                    TooltipIconButton(Icons.Outlined.Public, localized(DMR.strings.open_the_site_sign_in_cloudflare), onClick = { model.openWebsite() })
-                }
-                if (source is ConfigurableSource) {
-                    TooltipIconButton(Icons.Outlined.Settings, localized(MR.strings.source_settings), onClick = { navigator.push(SourceSettingsScreen(source.id)) })
-                }
-            }
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = state.listing == SourceScreenModel.Listing.Popular,
-                    onClick = { model.setListing(SourceScreenModel.Listing.Popular) },
-                    label = { Text(localized(MR.strings.popular)) },
-                )
-                if (source?.supportsLatest == true) {
-                    FilterChip(
-                        selected = state.listing == SourceScreenModel.Listing.Latest,
-                        onClick = { model.setListing(SourceScreenModel.Listing.Latest) },
-                        label = { Text(localized(MR.strings.latest)) },
-                    )
-                }
-                (state.listing as? SourceScreenModel.Listing.Search)?.takeIf { state.savedSearch == null }?.let {
-                    FilterChip(selected = true, onClick = {}, label = { Text(if (it.query.isBlank()) localized(DMR.strings.filtered) else "\"${it.query}\"") })
-                }
-                // ZOUKAN -->
-                // Saved searches; right-click one to delete it
-                state.savedSearches.forEach { saved ->
-                    var confirm by remember { mutableStateOf(false) }
-                    FilterChip(
-                        selected = state.savedSearch == saved.id,
-                        onClick = { model.applySavedSearch(saved) },
-                        label = { Text(saved.name) },
-                        leadingIcon = { Icon(Icons.Outlined.Bookmark, null, Modifier.size(16.dp)) },
-                        modifier = Modifier.onRightClick { confirm = true },
-                    )
-                    if (confirm) {
-                        AlertDialog(
-                            onDismissRequest = { confirm = false },
-                            title = { Text(localized(DMR.strings.delete_the_saved_search, saved.name)) },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    confirm = false
-                                    model.deleteSavedSearch(saved.id)
-                                }) { Text(localized(MR.strings.action_delete)) }
-                            },
-                            dismissButton = { TextButton(onClick = { confirm = false }) { Text(localized(MR.strings.action_cancel)) } },
-                        )
+            // ZOUKAN -->
+            // The follows have only the display mode and selection, as BrowseSourceSimpleToolbar
+            if (follows) {
+                ScreenHeader(localized(SYMR.strings.mangadex_follows), subtitle = source?.name) {
+                    if (source != null) {
+                        BrowseDisplayModeButton(displayMode) { displayModePreference.set(it) }
+                        BulkSelectButton(bulk)
                     }
                 }
+            } else {
                 // ZOUKAN <--
+                ScreenHeader(source?.name ?: localized(DMR.strings.source_not_installed_2), subtitle = source?.let { languageName(it.lang) }) {
+                    SearchField(
+                        searchText,
+                        { searchText = it },
+                        localized(DMR.strings.search_2, source?.name.orEmpty()),
+                        Modifier.width(300.dp),
+                        onSearch = { model.search(searchText) },
+                    )
+                    if (source != null && source.getFilterList().isNotEmpty()) {
+                        TooltipIconButton(Icons.Outlined.FilterList, localized(DMR.strings.filters), onClick = { showFilters = !showFilters })
+                    }
+                    // ZOUKAN -->
+                    // E-Hentai's detailed list has no other display modes, as on Android
+                    if (source != null && !(source.isEhBasedSource() && ehentaiBrowseDisplayMode)) {
+                        BrowseDisplayModeButton(displayMode) { displayModePreference.set(it) }
+                    }
+                    if (source != null) BulkSelectButton(bulk)
+                    // ZOUKAN <--
+                    if (source != null) {
+                        TooltipIconButton(Icons.Outlined.DynamicFeed, localized(DMR.strings.this_sources_feed), onClick = { navigator.push(SourceFeedScreen(source.id)) })
+                    }
+                    if (source is HttpSource) {
+                        TooltipIconButton(Icons.Outlined.Public, localized(DMR.strings.open_the_site_sign_in_cloudflare), onClick = { model.openWebsite() })
+                    }
+                    if (source is ConfigurableSource) {
+                        TooltipIconButton(Icons.Outlined.Settings, localized(MR.strings.source_settings), onClick = { navigator.push(SourceSettingsScreen(source.id)) })
+                    }
+                }
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.listing == SourceScreenModel.Listing.Popular,
+                        onClick = { model.setListing(SourceScreenModel.Listing.Popular) },
+                        label = { Text(localized(MR.strings.popular)) },
+                    )
+                    if (source?.supportsLatest == true) {
+                        FilterChip(
+                            selected = state.listing == SourceScreenModel.Listing.Latest,
+                            onClick = { model.setListing(SourceScreenModel.Listing.Latest) },
+                            label = { Text(localized(MR.strings.latest)) },
+                        )
+                    }
+                    (state.listing as? SourceScreenModel.Listing.Search)?.takeIf { state.savedSearch == null }?.let {
+                        FilterChip(selected = true, onClick = {}, label = { Text(if (it.query.isBlank()) localized(DMR.strings.filtered) else "\"${it.query}\"") })
+                    }
+                    // ZOUKAN -->
+                    // Saved searches; right-click one to delete it
+                    state.savedSearches.forEach { saved ->
+                        var confirm by remember { mutableStateOf(false) }
+                        FilterChip(
+                            selected = state.savedSearch == saved.id,
+                            onClick = { model.applySavedSearch(saved) },
+                            label = { Text(saved.name) },
+                            leadingIcon = { Icon(Icons.Outlined.Bookmark, null, Modifier.size(16.dp)) },
+                            modifier = Modifier.onRightClick { confirm = true },
+                        )
+                        if (confirm) {
+                            AlertDialog(
+                                onDismissRequest = { confirm = false },
+                                title = { Text(localized(DMR.strings.delete_the_saved_search, saved.name)) },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        confirm = false
+                                        model.deleteSavedSearch(saved.id)
+                                    }) { Text(localized(MR.strings.action_delete)) }
+                                },
+                                dismissButton = { TextButton(onClick = { confirm = false }) { Text(localized(MR.strings.action_cancel)) } },
+                            )
+                        }
+                    }
+                    // ZOUKAN <--
+                }
+                // ZOUKAN -->
             }
-            // ZOUKAN -->
             BulkFavoriteBar(bulk, state.items)
             // ZOUKAN <--
             Row(Modifier.fillMaxSize()) {
@@ -246,7 +262,23 @@ data class SourceScreen(
                 }
                 if (showFilters && source != null) {
                     VerticalDivider()
-                    FilterPanel(model, state.filterVersion)
+                    FilterPanel(
+                        model,
+                        state.filterVersion,
+                        // ZOUKAN -->
+                        // MangaDex's Random and Follows, as Android's MangaDexFilterHeader
+                        openMangaDexRandom = if (source.isMdBasedSource()) {
+                            { model.mangaDexRandom { navigator.replace(SourceScreen(sourceId, query = "id:$it")) } }
+                        } else {
+                            null
+                        },
+                        openMangaDexFollows = if (source.isMdBasedSource()) {
+                            { navigator.push(SourceScreen(sourceId, follows = true)) }
+                        } else {
+                            null
+                        },
+                        // ZOUKAN <--
+                    )
                 }
             }
         }
@@ -270,7 +302,14 @@ data class SourceScreen(
 }
 
 @Composable
-private fun FilterPanel(model: SourceScreenModel, version: Int) {
+private fun FilterPanel(
+    model: SourceScreenModel,
+    version: Int,
+    // ZOUKAN -->
+    openMangaDexRandom: (() -> Unit)?,
+    openMangaDexFollows: (() -> Unit)?,
+    // ZOUKAN <--
+) {
     Column(Modifier.width(340.dp).fillMaxHeight()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = model::resetFilters) { Text(localized(MR.strings.action_reset)) }
@@ -298,6 +337,16 @@ private fun FilterPanel(model: SourceScreenModel, version: Int) {
         }
         HorizontalDivider()
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+            // ZOUKAN -->
+            if (openMangaDexRandom != null && openMangaDexFollows != null) {
+                item {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = openMangaDexRandom) { Text(localized(SYMR.strings.random)) }
+                        TextButton(onClick = openMangaDexFollows) { Text(localized(SYMR.strings.mangadex_follows)) }
+                    }
+                }
+            }
+            // ZOUKAN <--
             items(model.filters.toList()) { filter -> FilterItem(filter, version, model::filtersChanged) }
         }
     }
