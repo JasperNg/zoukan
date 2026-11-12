@@ -15,7 +15,15 @@ import javax.imageio.ImageIO
  * A decoded page. Tall pages (webtoon strips) are cut into slices no taller than [MAX_SLICE]
  * pixels, because a GPU texture has a size limit; the reader stacks the slices.
  */
-class PageImage(val width: Int, val height: Int, val slices: List<ImageBitmap>) {
+class PageImage(
+    val width: Int,
+    val height: Int,
+    val slices: List<ImageBitmap>,
+    // ZOUKAN -->
+    /** The page's own background for the Automatic reader theme, read when it decodes */
+    val background: PageBackground? = null,
+    // ZOUKAN <--
+) {
     val aspectRatio: Float get() = width.toFloat() / height.coerceAtLeast(1)
 
     companion object {
@@ -32,21 +40,25 @@ class PageImage(val width: Int, val height: Int, val slices: List<ImageBitmap>) 
                 val buffered = ImageIO.read(ByteArrayInputStream(bytes))
                     ?: throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
                 val bitmap = buffered.toComposeImageBitmap()
-                if (buffered.height <= MAX_SLICE) return PageImage(buffered.width, buffered.height, listOf(bitmap))
-                return slice(buffered.width, buffered.height) { y, h ->
+                // ZOUKAN -->
+                val background = background(buffered.width, buffered.height) { x, y -> buffered.getRGB(x, y) }
+                if (buffered.height <= MAX_SLICE) return PageImage(buffered.width, buffered.height, listOf(bitmap), background)
+                return slice(buffered.width, buffered.height, background) { y, h ->
                     buffered.getSubimage(0, y, buffered.width, h).toComposeImageBitmap()
                 }
+                // ZOUKAN <--
             }
             val width = image.width
             val height = image.height
-            if (height <= MAX_SLICE) {
-                val bitmap = Bitmap.makeFromImage(image)
-                image.close()
-                return PageImage(width, height, listOf(bitmap.asComposeImageBitmap()))
-            }
+            // ZOUKAN -->
             val bitmap = Bitmap.makeFromImage(image)
             image.close()
-            return slice(width, height) { y, h ->
+            val background = background(width, height) { x, y -> bitmap.getColor(x, y) }
+            if (height <= MAX_SLICE) {
+                return PageImage(width, height, listOf(bitmap.asComposeImageBitmap()), background)
+            }
+            return slice(width, height, background) { y, h ->
+                // ZOUKAN <--
                 val part = Bitmap()
                 bitmap.extractSubset(part, IRect.makeXYWH(0, y, width, h))
                 part.asComposeImageBitmap()
@@ -65,12 +77,15 @@ class PageImage(val width: Int, val height: Int, val slices: List<ImageBitmap>) 
             if (rect.width == bitmap.width && rect.height == bitmap.height) return null
             val width = rect.width
             val height = rect.height
+            // ZOUKAN -->
+            val background = background(bitmap.width, bitmap.height) { x, y -> bitmap.getColor(x, y) }
             return if (height <= MAX_SLICE) {
                 val part = Bitmap()
                 bitmap.extractSubset(part, rect)
-                PageImage(width, height, listOf(part.asComposeImageBitmap()))
+                PageImage(width, height, listOf(part.asComposeImageBitmap()), background)
             } else {
-                slice(width, height) { y, h ->
+                slice(width, height, background) { y, h ->
+                    // ZOUKAN <--
                     val part = Bitmap()
                     bitmap.extractSubset(part, IRect.makeXYWH(rect.left, rect.top + y, width, h))
                     part.asComposeImageBitmap()
@@ -121,10 +136,16 @@ class PageImage(val width: Int, val height: Int, val slices: List<ImageBitmap>) 
             return (0..2).all { kotlin.math.abs(x[it] - y[it]) < 26 }
         }
 
-        private fun slice(width: Int, height: Int, cut: (y: Int, h: Int) -> ImageBitmap): PageImage {
+        // ZOUKAN -->
+        private fun slice(width: Int, height: Int, background: PageBackground?, cut: (y: Int, h: Int) -> ImageBitmap): PageImage {
             val slices = (0 until height step MAX_SLICE).map { y -> cut(y, minOf(MAX_SLICE, height - y)) }
-            return PageImage(width, height, slices)
+            return PageImage(width, height, slices, background)
         }
+
+        /** A few hundred pixels are read, so every page gets one; only the Automatic theme shows it */
+        private fun background(width: Int, height: Int, pixel: (Int, Int) -> Int): PageBackground? =
+            runCatching { PageBackground.of(width, height, pixel) }.getOrNull()
+        // ZOUKAN <--
 
         private fun sniff(bytes: ByteArray): String {
             fun at(i: Int, text: String) = bytes.size >= i + text.length &&

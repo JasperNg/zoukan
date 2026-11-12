@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.WebtoonScaleTypes
 
 /**
  * Webtoon and continuous vertical modes: every page in one scrolling strip. Webtoon has no gaps
@@ -55,6 +56,9 @@ fun WebtoonViewer(
     sidePadding: Int,
     background: Color,
     foreground: Color,
+    // ZOUKAN -->
+    tapZones: TapZonesOverlayState? = null,
+    // ZOUKAN <--
 ) {
     val pages = state.pages
     val hasPrevious = state.previousChapter != null
@@ -77,6 +81,10 @@ fun WebtoonViewer(
     val splitInvert by prefs.dualPageInvertWebtoon().changes().collectAsState(prefs.dualPageInvertWebtoon().get())
     val rotateWide by prefs.dualPageRotateToFitWebtoon().changes().collectAsState(prefs.dualPageRotateToFitWebtoon().get())
     val rotateInvert by prefs.dualPageRotateToFitInvertWebtoon().changes().collectAsState(prefs.dualPageRotateToFitInvertWebtoon().get())
+    // KMK's "Smart scale on wide screen", for Long strip with gaps only when its own setting is on
+    val scaleType by prefs.webtoonScaleType().changes().collectAsState(prefs.webtoonScaleType().get())
+    val gapScale by prefs.longStripGapSmartScale().changes().collectAsState(prefs.longStripGapSmartScale().get())
+    val smartScaleOn = state.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
     val minZoom = if (noZoomOut) 1f else 0.3f
     LaunchedEffect(minZoom) { if (zoom < minZoom) zoom = minZoom }
     // ZOUKAN <--
@@ -84,7 +92,10 @@ fun WebtoonViewer(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewportHeight = constraints.maxHeight.toFloat()
         val viewportWidth = maxWidth
-        val stripWidth = viewportWidth * (1f - 2f * sidePadding.coerceIn(0, 25) / 100f) * zoom
+        // ZOUKAN -->
+        val smartScale = if (smartScaleOn) WebtoonScaleTypes.scale(scaleType, constraints.maxWidth.toFloat(), viewportHeight) else 1f
+        val stripWidth = viewportWidth * (1f - 2f * sidePadding.coerceIn(0, 25) / 100f) * zoom * smartScale
+        // ZOUKAN <--
 
         // ZOUKAN -->
         // Android's "Animate page transitions" (webtoon)
@@ -259,5 +270,10 @@ fun WebtoonViewer(
                 }
             }
         }
+        // ZOUKAN -->
+        if (tapZones != null) {
+            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, verticalViewer = true, ReaderNavigation.Invert.of(navInvert), smallerZones))
+        }
+        // ZOUKAN <--
     }
 }

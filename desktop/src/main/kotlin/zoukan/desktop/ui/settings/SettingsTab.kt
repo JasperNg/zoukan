@@ -102,6 +102,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
 import java.awt.Desktop
 import java.awt.FileDialog
@@ -411,9 +412,9 @@ private fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
             ReadingModes.all.map { it to ReadingModes.label(it) },
         )
     }
-    item { ChoicePreference(localized(DMR.strings.page_scaling_paged_modes), preferences.readerFitMode(), FitModes.all.map { it to FitModes.label(it) }) }
+    item { ChoicePreference(localized(DMR.strings.page_scaling_paged_modes), preferences.imageScaleType(), FitModes.all.map { it to FitModes.label(it) }) }
     item {
-        ChoicePreference(localized(DMR.strings.background), preferences.readerTheme(), listOf(0 to localized(MR.strings.white_background), 1 to localized(MR.strings.black_background), 2 to localized(MR.strings.gray_background)))
+        ChoicePreference(localized(DMR.strings.background), preferences.readerTheme(), ReaderSettingChoices.themes)
     }
     item { SliderPreference(localized(DMR.strings.webtoon_side_padding), preferences.webtoonSidePadding(), 0..25) { "$it%" } }
     item { SwitchPreference(localized(MR.strings.pref_show_page_number), preferences.showPageNumber()) }
