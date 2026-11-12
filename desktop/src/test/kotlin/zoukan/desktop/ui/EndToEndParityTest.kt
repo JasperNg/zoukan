@@ -378,6 +378,64 @@ class EndToEndParityTest {
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-item").fetchSemanticsNodes().isEmpty() }
             }
 
+            step("Updates selection: a folded group selects all its chapters, then bookmark them all") {
+                // KMK's group selection: the folded row stands for the entry's chapters of that day
+                onAllNodesWithTag("updates-leader").onFirst().performMouseInput { rightClick() }
+                waitFor(hasText("Select"))
+                onAllNodesWithText("Select").onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) {
+                    onAllNodes(textMatches(Regex("[234] selected"))).fetchSemanticsNodes().isNotEmpty()
+                }
+                shot("p17-updates-group-selected")
+                byDescription("Select all").performClick()
+                waitFor(hasText("9 selected"))
+                byDescription("Bookmark").performClick()
+                waitUntil(timeoutMillis = 10_000) {
+                    runBlocking { favorites.all { m -> Injekt.get<GetChaptersByMangaId>().await(m.id).all { it.bookmark } } }
+                }
+                // The selection ends with the action, as on Android
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(textMatches(Regex(".* selected"))).fetchSemanticsNodes().isEmpty() }
+            }
+
+            step("Library selection: Update and the More actions") {
+                onAllNodesWithText("Library").onFirst().performClick()
+                waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 3 }
+                // A right click opens the entry's menu; Select there starts the selection, then a click adds
+                onAllNodesWithText("Alpha").onFirst().performMouseInput { rightClick() }
+                waitFor(hasText("Select"))
+                onAllNodesWithText("Select").onFirst().performClick()
+                waitFor(hasText("1 selected"))
+                onAllNodesWithText("Charlie").onFirst().performClick()
+                waitFor(hasText("2 selected"))
+                byDescription("More").performClick()
+                // Merge always; Find recommendations with two or more; the source-specific ones only when they apply
+                waitFor(hasText("Merge"))
+                waitFor(hasText("Find recommendations"))
+                onAllNodesWithText("Clean titles").fetchSemanticsNodes().size shouldBe 0
+                onAllNodesWithText("Reset Info").fetchSemanticsNodes().size shouldBe 0
+                shot("p18-library-selection-more")
+                // The recommendation search dialog: its services and the library filter; Cancel keeps the selection
+                onAllNodesWithText("Find recommendations").onFirst().performClick()
+                waitFor(hasText("Recommendation services to search"))
+                waitFor(hasText("Hide results already in your library"))
+                shot("p19-recommendation-search")
+                onAllNodesWithText("Cancel").onLast().performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Recommendation services to search").fetchSemanticsNodes().isEmpty() }
+                waitFor(hasText("2 selected"))
+                // Every chapter is bookmarked since the Updates step; local entries have nothing to download
+                byDescription("Download").performClick()
+                onAllNodesWithText("Bookmarked").onLast().performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(textMatches(Regex(".* selected"))).fetchSemanticsNodes().isEmpty() }
+                onAllNodesWithText("Alpha").onFirst().performMouseInput { rightClick() }
+                waitFor(hasText("Select"))
+                onAllNodesWithText("Select").onFirst().performClick()
+                waitFor(hasText("1 selected"))
+                byDescription("Update").performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(textMatches(Regex(".* selected"))).fetchSemanticsNodes().isEmpty() }
+                runBlocking { while (updater.progress.value != null) Thread.sleep(200) }
+                updater.lastResult.value!!.failures.shouldBeEmpty()
+            }
+
             step("Settings: appearance, library and downloads") {
                 val ui = Injekt.get<UiPreferences>()
                 runOnUiThread {
@@ -603,6 +661,11 @@ class EndToEndParityTest {
 
     private fun ComposeUiTest.waitFor(matcher: SemanticsMatcher, timeout: Long = 30_000) {
         waitUntil(timeoutMillis = timeout) { onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    /** A node whose whole text matches [regex]. */
+    private fun textMatches(regex: Regex) = SemanticsMatcher("text matches $regex") { node ->
+        node.config.getOrNull(SemanticsProperties.Text)?.any { regex.matches(it.text) } == true
     }
 
     private fun ComposeUiTest.shot(name: String) {

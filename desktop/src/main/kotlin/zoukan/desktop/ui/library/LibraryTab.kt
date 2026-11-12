@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,8 +55,10 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -82,8 +85,13 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadsButton
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.manga.pickScreen
 import zoukan.desktop.ui.migration.MigrationConfigScreen
 import zoukan.desktop.ui.reader.ReaderScreen
+import zoukan.desktop.ui.recs.CommonRecommendsScreen
+import zoukan.desktop.ui.recs.RecommendationSearchDialog
+import zoukan.desktop.ui.recs.RecommendationSearchProgressDialog
+import zoukan.desktop.ui.recs.SearchStatus
 import zoukan.desktop.ui.stats.StatsScreen
 import zoukan.i18n.desktop.DMR
 
@@ -103,6 +111,12 @@ fun LibraryTab(model: LibraryScreenModel) {
     // The entries a categories or remove dialog is for: the selection, or one entry's context menu
     var categoryDialog by remember { mutableStateOf<Set<Long>?>(null) }
     var removeDialog by remember { mutableStateOf<Set<Long>?>(null) }
+    // SY -->
+    var recommendationDialog by remember { mutableStateOf<List<Manga>?>(null) }
+    // SY <--
+    // KMK -->
+    var removeMerged by remember { mutableStateOf<Pair<List<Manga>, Long>?>(null) }
+    // KMK <--
     val settings = state.settings
     val visible = state.visible
     // Ctrl/Cmd + A selects everything shown; Escape clears the selection before it means "back"
@@ -132,6 +146,46 @@ fun LibraryTab(model: LibraryScreenModel) {
                     navigator.push(MigrationConfigScreen(ids))
                 },
                 // ZOUKAN <--
+                // KMK -->
+                onMerge = {
+                    val selectedManga = model.selectedManga()
+                    if (selectedManga.size == 1) {
+                        // Invoke merging for this manga
+                        model.clearSelection()
+                        navigator.push(pickScreen(selectedManga.first(), merge = true))
+                    } else if (selectedManga.isNotEmpty()) {
+                        // Invoke multiple merge
+                        model.clearSelection()
+                        scope.launch {
+                            val mergingMangas = selectedManga.filterNot { it.source == MERGED_SOURCE_ID }
+                            val mergedMangaId = runCatching { model.smartSearchMerge(selectedManga) }
+                                .onFailure { Toasts.error(localized(DMR.strings.merging_failed), it) }
+                                .getOrElse { return@launch }
+                            if (mergedMangaId != null) {
+                                Toasts.show(localized(SYMR.strings.entry_merged))
+                                // Android's snackbar asks whether to remove the merged entries, then opens the merge
+                                removeMerged = mergingMangas to mergedMangaId
+                            } else {
+                                Toasts.show(localized(SYMR.strings.merged_references_invalid))
+                            }
+                        }
+                    } else {
+                        model.clearSelection()
+                        Toasts.show(localized(SYMR.strings.no_valid_entry))
+                    }
+                },
+                onSelectionUpdate = {
+                    val started = model.updateSelectedManga()
+                    if (started) model.clearSelection()
+                    Toasts.show(localized(if (started) KMR.strings.updating else MR.strings.update_already_running))
+                },
+                // KMK <--
+                // SY -->
+                onCleanTitles = model::cleanTitles.takeIf { model.showCleanTitles() },
+                onCollectRecommendations = { recommendationDialog = model.selectedManga() }.takeIf { state.selection.size > 1 },
+                onAddToMangaDex = model::syncMangaToDex.takeIf { model.showAddToMangadex() },
+                onResetInfo = model::resetInfo.takeIf { model.showResetInfo() },
+                // SY <--
             )
         } else {
             ScreenHeader(
@@ -301,6 +355,59 @@ fun LibraryTab(model: LibraryScreenModel) {
         null -> {}
     }
     // ZOUKAN <--
+
+    // KMK -->
+    removeMerged?.let { (mergingMangas, mergedMangaId) ->
+        val close = { remove: Boolean ->
+            if (remove) model.removeMangas(mergingMangas)
+            removeMerged = null
+            navigator.push(MangaScreen(mergedMangaId))
+        }
+        AlertDialog(
+            onDismissRequest = { close(false) },
+            text = { Text(localized(KMR.strings.action_remove_merged)) },
+            confirmButton = { TextButton(onClick = { close(true) }) { Text(localized(MR.strings.action_remove)) } },
+            dismissButton = { TextButton(onClick = { close(false) }) { Text(localized(MR.strings.action_cancel)) } },
+        )
+    }
+    // KMK <--
+
+    // SY -->
+    recommendationDialog?.let { manga ->
+        RecommendationSearchDialog(
+            onDismissRequest = { recommendationDialog = null },
+            onSearchRequest = {
+                recommendationDialog = null
+                model.clearSelection()
+                model.runRecommendationSearch(manga)
+            },
+        )
+    }
+
+    val recSearchState by model.recommendationSearch.status.collectAsState()
+    RecommendationSearchProgressDialog(
+        status = recSearchState,
+        setStatusIdle = { model.recommendationSearch.status.value = SearchStatus.Idle },
+        setStatusCancelling = { model.recommendationSearch.status.value = SearchStatus.Cancelling },
+    )
+    LaunchedEffect(recSearchState) {
+        when (val current = recSearchState) {
+            is SearchStatus.Finished.WithResults -> {
+                navigator.push(CommonRecommendsScreen(current.results))
+                model.recommendationSearch.status.value = SearchStatus.Idle
+            }
+            is SearchStatus.Finished.WithoutResults -> {
+                Toasts.show(localized(SYMR.strings.rec_no_results))
+                model.recommendationSearch.status.value = SearchStatus.Idle
+            }
+            is SearchStatus.Cancelling -> {
+                model.cancelRecommendationSearch()
+                model.recommendationSearch.status.value = SearchStatus.Idle
+            }
+            else -> {}
+        }
+    }
+    // SY <--
 }
 
 /** How many unread chapters of each entry a download queues; null for all of them. */
@@ -372,8 +479,19 @@ private fun SelectionBar(
     // ZOUKAN -->
     onMigrate: () -> Unit,
     // ZOUKAN <--
+    // KMK -->
+    onMerge: () -> Unit,
+    onSelectionUpdate: () -> Unit,
+    // KMK <--
+    // SY -->
+    onCleanTitles: (() -> Unit)?,
+    onCollectRecommendations: (() -> Unit)?,
+    onAddToMangaDex: (() -> Unit)?,
+    onResetInfo: (() -> Unit)?,
+    // SY <--
 ) {
     var downloadMenu by remember { mutableStateOf(false) }
+    var overflowMenu by remember { mutableStateOf(false) }
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
@@ -396,13 +514,47 @@ private fun SelectionBar(
                                 },
                             )
                         }
+                    DropdownMenuItem(
+                        text = { Text(localized(MR.strings.download_bookmarked)) },
+                        onClick = {
+                            downloadMenu = false
+                            model.downloadBookmarked()
+                        },
+                    )
                 }
             }
             TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.delete_downloads), onClick = model::deleteDownloads)
+            // KMK -->
+            TooltipIconButton(Icons.Outlined.Refresh, localized(KMR.strings.action_update), onClick = onSelectionUpdate)
+            // KMK <--
             // ZOUKAN -->
             TooltipIconButton(Icons.Outlined.SwapHoriz, localized(MR.strings.action_migrate), onClick = onMigrate)
             // ZOUKAN <--
             TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.remove_from_library), onClick = onRemove)
+            Row {
+                TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { overflowMenu = true })
+                DropdownMenu(overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                    val close = { action: () -> Unit ->
+                        overflowMenu = false
+                        action()
+                    }
+                    // KMK -->
+                    DropdownMenuItem(text = { Text(localized(SYMR.strings.merge)) }, onClick = { close(onMerge) })
+                    if (onCleanTitles != null) {
+                        DropdownMenuItem(text = { Text(localized(SYMR.strings.action_clean_titles)) }, onClick = { close(onCleanTitles) })
+                    }
+                    if (onCollectRecommendations != null) {
+                        DropdownMenuItem(text = { Text(localized(SYMR.strings.rec_search_short)) }, onClick = { close(onCollectRecommendations) })
+                    }
+                    if (onAddToMangaDex != null) {
+                        DropdownMenuItem(text = { Text(localized(SYMR.strings.mangadex_add_to_follows)) }, onClick = { close(onAddToMangaDex) })
+                    }
+                    if (onResetInfo != null) {
+                        DropdownMenuItem(text = { Text(localized(SYMR.strings.reset_info)) }, onClick = { close(onResetInfo) })
+                    }
+                    // KMK <--
+                }
+            }
         }
     }
 }

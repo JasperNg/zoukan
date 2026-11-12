@@ -13,7 +13,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
 | Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
 | Tag sorting (SY) | Yes | Settings > Library > Sorting > Tag sorting tags: add, order and delete tags; then Sort > Tag sorting, offered once there are tags, as on Android |
-| Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download, delete downloads, remove |
+| Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download (next chapters, unread or bookmarked), delete downloads, update the selected entries (KMK), migrate, remove; More holds Merge (KMK), Clean titles, Find recommendations, Add to MangaDex follows and Reset info (SY), each shown when it applies |
+| Find recommendations over a selection (SY) | Yes | Library selection > More > Find recommendations, with two or more entries: the services to search and Hide results already in your library, then a progress dialog, then Common recommendations ranked by how many of the entries recommend each result ("+N") |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
 | Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule |
 | Library update errors screen (KMK) | Yes | Library > More > Library update errors: failed entries grouped by error, in the Android tables; retry, open, migrate and delete, one or many |

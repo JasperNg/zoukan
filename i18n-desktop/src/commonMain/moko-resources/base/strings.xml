@@ -238,6 +238,7 @@
     <string name="make_these_the_default_chapter_settings">Make these the default chapter settings? Entries outside the library start with them, and Reset goes back to them.</string>
     <string name="also_apply_them_to_every_entry">Also apply them to every entry in the library</string>
     <string name="could_not_save">Could not save</string>
+    <string name="could_not_update_the_mangadex_follows">Could not update the MangaDex follows</string>
     <string name="choose_a_cover">Choose a cover</string>
     <string name="change_cover">Change cover</string>
     <string name="use_the_sources_cover">Use the source\'s cover</string>
