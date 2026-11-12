@@ -9,9 +9,11 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Android feature | Desktop | Notes |
 |---|---|---|
 | Library grid, categories, search, sort, unread badges | Yes | Phase 3 |
-| Library display modes, badges, continue reading button | Yes | Compact, comfortable, panorama, cover-only and list; columns; per-badge toggles |
+| Library search syntax (SY) and global search row | Yes | SY's query syntax: quotes, `-` to exclude, `namespace:tag` against E-Hentai and other gallery tags and titles, `id:`, `src:` (`src:local`), tracker names and statuses, and KMK's `mangadex-dmca`. "Search for … globally" above the results opens a global search |
+| Library display modes, badges, continue reading button | Yes | Compact, comfortable, panorama, cover-only and list; columns; per-badge toggles; language as a flag ("Use language icon", KMK) and the source icon badge (KMK) |
+| Library: show hidden categories (KMK) | Yes | Filter, sort and display > Display > Show hidden categories |
 | Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
-| Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
+| Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed, Lewd (SY), categories to include and exclude (KMK) and per-tracker (tri-state, any included tracker as KMK); ten sorts with direction; per-category sort. Customized update frequency shows with the "outside the release period" update restriction (Android shows it only in debug builds) |
 | Tag sorting (SY) | Yes | Settings > Library > Sorting > Tag sorting tags: add, order and delete tags; then Sort > Tag sorting, offered once there are tags, as on Android |
 | Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download (next chapters, unread or bookmarked), delete downloads, update the selected entries (KMK), migrate, remove; More holds Merge (KMK), Clean titles, Find recommendations, Add to MangaDex follows and Reset info (SY), each shown when it applies |
 | Find recommendations over a selection (SY) | Yes | Library selection > More > Find recommendations, with two or more entries: the services to search and Hide results already in your library, then a progress dialog, then Common recommendations ranked by how many of the entries recommend each result ("+N") |

@@ -71,6 +71,7 @@ import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
+import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
@@ -288,10 +289,22 @@ fun LibraryTab(model: LibraryScreenModel) {
                 actionLabel = localized(MR.strings.browse),
                 onAction = { HomeScreen.selectTab(HomeTab.Browse) },
             )
-            visible.isEmpty() -> EmptyScreen(
-                if (state.query.isNotBlank()) localized(DMR.strings.nothing_matches, state.query) else localized(DMR.strings.no_entries_match_the_filters),
-            )
+            // ZOUKAN -->
+            visible.isEmpty() -> Column(Modifier.fillMaxSize()) {
+                // As Android's LibraryPager: the global search above the empty results
+                if (state.query.isNotEmpty()) {
+                    GlobalSearchItem(state.query, { navigator.push(GlobalSearchScreen(state.query)) }, Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp))
+                }
+                EmptyScreen(
+                    if (state.query.isNotBlank()) localized(DMR.strings.nothing_matches, state.query) else localized(DMR.strings.no_entries_match_the_filters),
+                )
+            }
+            // ZOUKAN <--
             else -> LibraryContent(
+                // ZOUKAN -->
+                searchQuery = state.query,
+                onGlobalSearch = { navigator.push(GlobalSearchScreen(state.query)) },
+                // ZOUKAN <--
                 items = visible,
                 settings = settings,
                 selection = state.selection,

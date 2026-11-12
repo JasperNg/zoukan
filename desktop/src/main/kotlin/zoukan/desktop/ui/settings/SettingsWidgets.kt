@@ -227,55 +227,75 @@ fun CategoriesIncludeExcludePreference(
     var open by remember { mutableStateOf(false) }
     SettingRow(title, categoriesLabel(categories, included, excluded), enabled, onClick = { open = true })
     if (open) {
-        var inc by remember { mutableStateOf(included) }
-        var exc by remember { mutableStateOf(excluded) }
-        AlertDialog(
-            onDismissRequest = { open = false },
-            title = { Text(title) },
-            text = {
-                Column(Modifier.verticalScrollWithBar()) {
-                    Text(message, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(8.dp))
-                    categories.forEach { category ->
-                        val id = category.id.toString()
-                        val state = when (id) {
-                            in inc -> ToggleableState.On
-                            in exc -> ToggleableState.Indeterminate
-                            else -> ToggleableState.Off
-                        }
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                when (state) {
-                                    ToggleableState.Off -> inc = inc + id
-                                    ToggleableState.On -> {
-                                        inc = inc - id
-                                        exc = exc + id
-                                    }
-                                    ToggleableState.Indeterminate -> exc = exc - id
+        CategoriesIncludeExcludeDialog(
+            title = title,
+            message = message,
+            categories = categories,
+            included = included,
+            excluded = excluded,
+            onDismiss = { open = false },
+            onConfirm = { inc, exc ->
+                include.set(inc)
+                exclude.set(exc)
+                open = false
+            },
+        )
+    }
+}
+
+/** The dialog of [CategoriesIncludeExcludePreference], also the library's category filter (KMK). */
+@Composable
+fun CategoriesIncludeExcludeDialog(
+    title: String,
+    message: String,
+    categories: List<Category>,
+    included: Set<String>,
+    excluded: Set<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (included: Set<String>, excluded: Set<String>) -> Unit,
+) {
+    var inc by remember { mutableStateOf(included) }
+    var exc by remember { mutableStateOf(excluded) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(Modifier.verticalScrollWithBar()) {
+                Text(message, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                categories.forEach { category ->
+                    val id = category.id.toString()
+                    val state = when (id) {
+                        in inc -> ToggleableState.On
+                        in exc -> ToggleableState.Indeterminate
+                        else -> ToggleableState.Off
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            when (state) {
+                                ToggleableState.Off -> inc = inc + id
+                                ToggleableState.On -> {
+                                    inc = inc - id
+                                    exc = exc + id
                                 }
-                            }.padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TriStateCheckbox(state = state, onClick = null)
-                            Spacer(Modifier.width(12.dp))
-                            Text(categoryName(category))
-                            if (state == ToggleableState.Indeterminate) {
-                                Text("  " + localized(DMR.strings.excluded), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                ToggleableState.Indeterminate -> exc = exc - id
                             }
+                        }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TriStateCheckbox(state = state, onClick = null)
+                        Spacer(Modifier.width(12.dp))
+                        Text(categoryName(category))
+                        if (state == ToggleableState.Indeterminate) {
+                            Text("  " + localized(DMR.strings.excluded), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    include.set(inc)
-                    exclude.set(exc)
-                    open = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
-        )
-    }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(inc, exc) }) { Text("OK") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
 }
 
 /** A category's name, with the system category shown as "Default", as Android's visualName. */
