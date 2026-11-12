@@ -78,4 +78,18 @@ class DownloadRenameTest {
         File(paths.mangaDir(manga), "Chapter 2/001.png").readText() shouldBe "png"
         manager.isDownloaded(manga, new) shouldBe true
     }
+
+    @Test
+    fun `clearing an entry's downloaded data deletes its folder and the emptied source folder`() {
+        val (manager, paths) = setup()
+        val dir = File(paths.mangaDir(manga), "Ch. 3").apply { mkdirs() }
+        File(dir, "001.png").writeText("png")
+        manager.isDownloaded(manga, chapter("Ch. 3")) shouldBe true
+
+        kotlinx.coroutines.runBlocking { manager.deleteManga(manga) }
+
+        paths.mangaDir(manga).exists() shouldBe false
+        paths.sourceDir(7L).exists() shouldBe false
+        manager.isDownloaded(manga, chapter("Ch. 3")) shouldBe false
+    }
 }

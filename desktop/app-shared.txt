@@ -96,3 +96,6 @@ exh/ui/batchadd/BatchAddScreenModel.kt
 # Library search (SY's query syntax) and the Lewd filter
 exh/search/**
 exh/util/LewdMangaChecker.kt
+
+# Chapter numbers as the chapter list's "Chapter number" display shows them
+eu/kanade/presentation/util/ChapterNumberFormatter.kt
