@@ -67,7 +67,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Appearance: theme mode, color schemes, custom color and style, pure black | Yes, changed | The Android color schemes and settings. "Dynamic" (Material You) takes its colors from the phone's wallpaper, which desktops do not offer, so it shows the default scheme |
 | Appearance: date format, relative timestamps | Yes | Updates, History and chapter dates |
 | Appearance: hide Updates or History, navigation labels | Yes | On the navigation rail |
-| Appearance: app language | Yes, changed | The Android languages, each by its own name. Android redraws the app at once; the desktop shows the new language from the next start, and says so under the setting. The choice stays out of backups, as on Android. Desktop-only text (about 840 strings) is English in every language for now |
+| Appearance: app language | No | Zoukan is English only: there is no language setting, and the app shows English whatever the system language is. Source language filters (which sources and extensions to show) are unchanged |
 | Library: default category | Yes | "Always ask", the default category or a category |
 | Library: update interval, categories to include and exclude, smart update, refresh metadata | Yes | |
 | Library: update only while charging | Yes | Mains power, read from Windows or `pmset` on macOS; a desktop without a battery always qualifies |

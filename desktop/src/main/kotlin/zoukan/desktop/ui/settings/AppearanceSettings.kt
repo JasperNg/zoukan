@@ -12,17 +12,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
@@ -55,10 +52,8 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.AppLanguage
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
 import zoukan.i18n.desktop.DMR
@@ -316,9 +311,6 @@ private fun DisplaySection() {
     val now = remember { LocalDate.now() }
     val format by ui.dateFormat().changes().collectAsState(ui.dateFormat().get())
     Column {
-        // ZOUKAN -->
-        AppLanguageSetting()
-        // ZOUKAN <--
         ChoiceSetting(
             localized(MR.strings.pref_date_format),
             format,
@@ -328,54 +320,6 @@ private fun DisplaySection() {
             localized(MR.strings.pref_relative_format),
             ui.relativeTime(),
             localized(DMR.strings.today_instead_of, Dates.format(now, format)),
-        )
-    }
-}
-
-/**
- * App language, as Android's AppLanguageScreen: the system language, then each language by its own
- * name with its name in the language in use under it. Android redraws the app at once; desktop
- * screens keep the strings they looked up, so the new language shows from the next start.
- */
-@Composable
-private fun AppLanguageSetting() {
-    val preferences = remember { Injekt.get<DesktopPreferences>() }
-    val chosen by preferences.appLanguage().changes().collectAsState(preferences.appLanguage().get())
-    val languages = remember { AppLanguage.languages(localized(MR.strings.label_default)) }
-    var open by remember { mutableStateOf(false) }
-    val title = localized(MR.strings.pref_app_language)
-    val name = languages.firstOrNull { it.tag == chosen }?.displayName ?: languages.first().displayName
-    // The language in use until a restart, when it differs from the chosen one
-    val restart = chosen != AppLanguage.current
-    SettingRow(title, if (restart) "$name\n${localized(DMR.strings.restart_zoukan_to_use_this_language)}" else name, onClick = { open = true })
-    if (open) {
-        AlertDialog(
-            onDismissRequest = { open = false },
-            title = { Text(title) },
-            text = {
-                LazyColumn(Modifier.heightIn(max = 480.dp)) {
-                    items(languages, key = { it.tag }) { language ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                open = false
-                                preferences.appLanguage().set(language.tag)
-                            }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(language.displayName, style = MaterialTheme.typography.bodyLarge)
-                                language.localizedDisplayName?.let {
-                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            if (language.tag == chosen) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
 }
