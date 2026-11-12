@@ -58,6 +58,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -336,6 +337,8 @@ private fun FilterPanel(
             Button(onClick = model::applyFilters) { Text(localized(MR.strings.action_filter)) }
         }
         HorizontalDivider()
+        // SY: "Expand all search filters by default" opens the sort and group filters
+        val startExpanded = remember { Injekt.get<UiPreferences>().expandFilters().get() }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
             // ZOUKAN -->
             if (openMangaDexRandom != null && openMangaDexFollows != null) {
@@ -347,7 +350,7 @@ private fun FilterPanel(
                 }
             }
             // ZOUKAN <--
-            items(model.filters.toList()) { filter -> FilterItem(filter, version, model::filtersChanged) }
+            items(model.filters.toList()) { filter -> FilterItem(filter, version, model::filtersChanged, startExpanded) }
         }
     }
 }
@@ -355,7 +358,7 @@ private fun FilterPanel(
 // [version] changes whenever a filter's state does: Filter.state is not Compose state, so the
 // parameter is what makes the items redraw
 @Composable
-private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit) {
+private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit, startExpanded: Boolean) {
     when (filter) {
         is Filter.Header -> Text(
             filter.name,
@@ -421,7 +424,7 @@ private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit) {
             }
         }
         is Filter.Sort -> {
-            var expanded by remember { mutableStateOf(true) }
+            var expanded by remember { mutableStateOf(startExpanded) }
             GroupHeader(filter.name, expanded) { expanded = !expanded }
             if (expanded) {
                 filter.values.forEachIndexed { i, value ->
@@ -448,11 +451,11 @@ private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit) {
             }
         }
         is Filter.Group<*> -> {
-            var expanded by remember { mutableStateOf(false) }
+            var expanded by remember { mutableStateOf(startExpanded) }
             GroupHeader(filter.name, expanded) { expanded = !expanded }
             if (expanded) {
                 Column(Modifier.padding(start = 16.dp)) {
-                    filter.state.filterIsInstance<Filter<*>>().forEach { FilterItem(it, version, onChange) }
+                    filter.state.filterIsInstance<Filter<*>>().forEach { FilterItem(it, version, onChange, startExpanded) }
                 }
             }
         }

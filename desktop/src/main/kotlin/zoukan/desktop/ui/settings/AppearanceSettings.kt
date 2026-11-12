@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,14 +42,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.materialkolor.PaletteStyle
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ThemeMode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -56,6 +60,7 @@ import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import java.time.LocalDate
 
@@ -85,6 +90,11 @@ fun LazyListScope.appearanceSettings() {
     item(key = "appearance-panorama-cover-flow") {
         val ui = remember { Injekt.get<UiPreferences>() }
         SwitchPreference(localized(KMR.strings.pref_panorama_cover_flow), ui.usePanoramaCoverFlow(), localized(KMR.strings.pref_panorama_cover_flow_summary))
+    }
+    // SY's "Expand all search filters by default" (Android: Appearance > fork settings)
+    item(key = "appearance-expand-filters") {
+        val ui = remember { Injekt.get<UiPreferences>() }
+        SwitchPreference(localized(SYMR.strings.toggle_expand_search_filters), ui.expandFilters())
     }
     // ZOUKAN <--
 }
@@ -285,25 +295,51 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
                     label = { Text(localized(DMR.strings.hex)) },
                     prefix = { Text("#") },
                 )
-                Spacer(Modifier.height(12.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    presetColors.forEach { preset ->
-                        Box(
-                            Modifier.size(28.dp).clip(CircleShape).background(Color(preset)).clickable { setColor(Color(preset)) },
+                // KMK's palettes (ThemeColorPickerWidget): a color picks it into the sliders
+                Column(Modifier.heightIn(max = 240.dp).verticalScrollWithBar()) {
+                    themePalettes.forEach { (name, colors) ->
+                        Text(
+                            localized(name),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                         )
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            colors.forEach { preset ->
+                                Box(
+                                    Modifier.size(32.dp).clip(Corners.Small).background(Color(preset))
+                                        .clickable { setColor(Color(preset)) }
+                                        .testTag("theme-palette-%08X".format(preset)),
+                                )
+                            }
+                        }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onPick(color) }) { Text("OK") } },
+        confirmButton = { TextButton(onClick = { onPick(color) }) { Text(localized(KMR.strings.action_confirm_color)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 
-private val presetColors = listOf(
-    0xFFDF0090, 0xFFF44336, 0xFFFF9800, 0xFFFFC107, 0xFF8BC34A, 0xFF4CAF50, 0xFF009688,
-    0xFF00BCD4, 0xFF2196F3, 0xFF3F51B5, 0xFF673AB7, 0xFF9C27B0, 0xFF795548, 0xFF607D8B,
-).map { it.toInt() }
+/** KMK's custom theme palettes, in its order (ThemeColorPickerWidget's colorsPalette). */
+private val themePalettes: List<Pair<StringResource, List<Int>>> = listOf(
+    KMR.strings.custom_theme_palette_sunset to listOf(0xFF3e9cbf, 0xFFa7ecf2, 0xFFf2c43d, 0xFFf17c37, 0xFFf26d50),
+    KMR.strings.custom_theme_palette_outrun to listOf(0xFFfffc40, 0xFFfaba61, 0xFFff8172, 0xFFff2fa9, 0xFF3a579a),
+    KMR.strings.custom_theme_palette_raspberry to listOf(0xFF730517, 0xFFf44560, 0xFF44d1df, 0xFF32a4a7, 0xFF1e7069),
+    KMR.strings.custom_theme_palette_cathode to listOf(0xFFa8216b, 0xFFf1184c, 0xFFf36943, 0xFFf7dc66, 0xFF2e9599),
+    KMR.strings.custom_theme_palette_bubblegum to listOf(0xFFf8cd82, 0xFFf65b74, 0xFFf72078, 0xFF23b0bd, 0xFF0df7db),
+    KMR.strings.custom_theme_palette_springfield to listOf(0xFF89d1dc, 0xFFf89cfa, 0xFFc386f1, 0xFFf0d689, 0xFFaff28b),
+    KMR.strings.custom_theme_palette_spectral to listOf(0xFF471337, 0xFFb13254, 0xFFff5349, 0xFFff7249, 0xFFff9248),
+    KMR.strings.custom_theme_palette_night_at_the_beach to listOf(0xFF262335, 0xFF503c52, 0xFF9f6c66, 0xFFd4896a, 0xFFffbb6c),
+    KMR.strings.custom_theme_palette_casual to listOf(0xFF4f6a8f, 0xFF88a2bc, 0xFFf0dbb0, 0xFFefb680, 0xFFd99477),
+    KMR.strings.custom_theme_palette_patagonia to listOf(0xFF202e32, 0xFF85937a, 0xFF586c5c, 0xFFa9af90, 0xFFdfdcb9),
+    KMR.strings.custom_theme_palette_lcd to listOf(0xFF0f370e, 0xFF30622f, 0xFF8bad0d, 0xFF9bbc0e),
+    KMR.strings.custom_theme_palette_pop to listOf(0xFF00ff3f, 0xFF35b5ff, 0xFFff479c, 0xFFfffb38),
+    KMR.strings.custom_theme_palette_pico to listOf(
+        0xFF1d2b53, 0xFF7e2453, 0xFF008751, 0xFFab5236, 0xFF5f574e, 0xFFc2c3c7, 0xFFff004d,
+        0xFFffa300, 0xFFffec27, 0xFF00e536, 0xFF29aeff, 0xFF83769c, 0xFFff77a8, 0xFFffcdaa,
+    ),
+).map { (name, colors) -> name to colors.map { it.toInt() } }
 
 @Composable
 private fun DisplaySection() {

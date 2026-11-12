@@ -1,18 +1,26 @@
 package zoukan.desktop.ui.stats
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -22,22 +30,29 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.history.interactor.GetTotalReadDuration
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
+import tachiyomi.domain.manga.interactor.GetReadMangaNotInLibraryView
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import java.io.File
@@ -67,14 +82,31 @@ class StatsScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
     private val preferences: LibraryPreferences = Injekt.get(),
     private val storage: ZoukanStorage = Injekt.get(),
+    // SY -->
+    private val getReadMangaNotInLibraryView: GetReadMangaNotInLibraryView = Injekt.get(),
+    // SY <--
 ) : StateScreenModel<Stats?>(null) {
 
+    // SY: "Include all read entries" adds the read entries that are not in the library
+    private val _allRead = MutableStateFlow(false)
+    val allRead = _allRead.asStateFlow()
+
     init {
-        screenModelScope.launch { mutableState.value = withContext(Dispatchers.IO) { compute() } }
+        screenModelScope.launch {
+            _allRead.collectLatest { allRead ->
+                mutableState.value = null
+                mutableState.value = withContext(Dispatchers.IO) { compute(allRead) }
+            }
+        }
     }
 
-    private suspend fun compute(): Stats {
-        val library = getLibraryManga.await().distinctBy { it.id }
+    fun toggleReadManga() {
+        _allRead.value = !_allRead.value
+    }
+
+    private suspend fun compute(allRead: Boolean): Stats {
+        val entries = getLibraryManga.await() + if (allRead) getReadMangaNotInLibraryView.await() else emptyList()
+        val library = entries.distinctBy { it.id }
         val loggedIn = trackerManager.loggedInTrackers()
         val loggedInIds = loggedIn.mapTo(HashSet()) { it.id }
         val tracks = getTracks.await(library.map { it.id })
@@ -88,7 +120,7 @@ class StatsScreenModel(
             libraryCount = library.size,
             completedCount = library.count { it.manga.status.toInt() == SManga.COMPLETED && it.unreadCount == 0L },
             readDurationMs = getTotalReadDuration.await(),
-            globalUpdateCount = globalUpdateCount(library),
+            globalUpdateCount = globalUpdateCount(entries),
             startedCount = library.count { it.hasStarted },
             localCount = library.count { it.manga.source == LocalSource.ID },
             totalChapters = library.sumOf { it.totalChapters }.toInt(),
@@ -134,8 +166,33 @@ object StatsScreen : Screen {
     override fun Content() {
         val model = rememberScreenModel { StatsScreenModel() }
         val stats by model.state.collectAsState()
+        val allRead by model.allRead.collectAsState()
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader(localized(MR.strings.label_stats))
+            ScreenHeader(localized(MR.strings.label_stats)) {
+                // SY: the overflow switches between library entries and all read entries
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { menu = true })
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (allRead) {
+                                        localized(SYMR.strings.ignore_non_library_entries)
+                                    } else {
+                                        localized(SYMR.strings.include_all_read_entries)
+                                    },
+                                )
+                            },
+                            onClick = {
+                                menu = false
+                                model.toggleReadManga()
+                            },
+                            modifier = Modifier.testTag("stats-all-read"),
+                        )
+                    }
+                }
+            }
             val s = stats ?: return LoadingScreen()
             Column(
                 Modifier.fillMaxSize().verticalScrollWithBar().padding(24.dp),
