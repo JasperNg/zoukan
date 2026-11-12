@@ -85,6 +85,12 @@ fun LazyListScope.appearanceSettings() {
         val ui = remember { Injekt.get<UiPreferences>() }
         SliderPreference(localized(DMR.strings.page_preview_rows), ui.previewsRowCount(), 0..10) { if (it == 0) localized(DMR.strings.hidden) else "$it" }
     }
+    // KMK's panorama covers in the feed and global search rows (Android: Appearance > fork settings)
+    settingsGroup(localized(MR.strings.browse))
+    item(key = "appearance-panorama-cover-flow") {
+        val ui = remember { Injekt.get<UiPreferences>() }
+        SwitchPreference(localized(KMR.strings.pref_panorama_cover_flow), ui.usePanoramaCoverFlow(), localized(KMR.strings.pref_panorama_cover_flow_summary))
+    }
     // ZOUKAN <--
 }
 
