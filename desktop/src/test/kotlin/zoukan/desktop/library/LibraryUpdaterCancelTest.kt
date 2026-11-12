@@ -46,6 +46,14 @@ class LibraryUpdaterCancelTest {
             filterChaptersForDownload = mockk(),
             downloadManager = mockk(),
             errors = mockk(relaxed = true),
+            getManga = mockk(),
+            getMergedMangaForDownloading = mockk(),
+            getTracks = mockk(),
+            insertTrack = mockk(),
+            trackerManager = mockk(),
+            // No sync service, so a manual update does not sync first
+            syncPreferences = mockk { every { syncService() } returns mockk<Preference<Int>> { every { get() } returns 0 } },
+            syncManager = { mockk() },
         )
         val posted = mutableListOf<Notifications.Message>()
         val collector = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) { Notifications.flow.toList(posted) }

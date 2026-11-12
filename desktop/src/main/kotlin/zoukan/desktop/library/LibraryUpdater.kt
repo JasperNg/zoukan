@@ -1,7 +1,14 @@
 package zoukan.desktop.library
 
+import eu.kanade.domain.sync.SyncPreferences
+import eu.kanade.domain.track.model.toDomainTrack
+import eu.kanade.tachiyomi.data.sync.SyncManager
+import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import exh.source.LIBRARY_UPDATE_EXCLUDED_SOURCES
+import exh.source.MERGED_SOURCE_ID
+import exh.source.mangaDexSourceIds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +27,7 @@ import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
 import mihon.domain.chapter.interactor.FilterChaptersForDownload
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -28,8 +37,12 @@ import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_R
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSIDE_RELEASE_PERIOD
 import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.interactor.GetLibraryManga
+import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.interactor.GetMergedMangaForDownloading
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.domain.track.interactor.InsertTrack
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.domain.RefreshManga
@@ -56,6 +69,15 @@ class LibraryUpdater(
     private val filterChaptersForDownload: FilterChaptersForDownload,
     private val downloadManager: DownloadManager,
     private val errors: LibraryUpdateErrors,
+    // ZOUKAN -->
+    private val getManga: GetManga,
+    private val getMergedMangaForDownloading: GetMergedMangaForDownloading,
+    private val getTracks: GetTracks,
+    private val insertTrack: InsertTrack,
+    private val trackerManager: TrackerManager,
+    private val syncPreferences: SyncPreferences,
+    private val syncManager: () -> SyncManager,
+    // ZOUKAN <--
 ) {
     data class Progress(val done: Int, val total: Int, val current: List<String>)
 
@@ -90,17 +112,36 @@ class LibraryUpdater(
      *
      * @param categoryId only this category's entries, or the whole library (with the category
      * settings) when null
-     * @param mangaIds only these entries, without the skip rules (a retry from the update errors
-     * screen); overrides [categoryId]
+     * @param mangaIds only these entries, without the skip rules but "Not set to always update" (a
+     * retry from the update errors screen); overrides [categoryId]
+     * @param groupIds a source, status or tracking tab's entries, with the skip rules, as Android's
+     * group update; overrides [categoryId]
+     * @param manual a manual update, which syncs the data first when sync is on, as Android's
+     * startNow; false for the scheduled update
      * @return whether it started
      */
-    fun start(categoryId: Long? = null, mangaIds: Set<Long>? = null, onDone: (Result) -> Unit = {}): Boolean {
+    fun start(
+        categoryId: Long? = null,
+        mangaIds: Set<Long>? = null,
+        groupIds: Set<Long>? = null,
+        manual: Boolean = true,
+        onDone: (Result) -> Unit = {},
+    ): Boolean {
         synchronized(this) {
             if (job?.isActive == true) return false
+            // ZOUKAN -->
+            // Always sync the data before a manual library update when syncing is on; not while a
+            // sync runs, as on Android
+            val syncFirst = manual && isSyncEnabled()
+            if (syncFirst && syncManager().running.value) return false
+            // ZOUKAN <--
             _progress.value = Progress(0, 0, emptyList())
             job = scope.launch {
                 try {
-                    val result = run(categoryId, mangaIds = mangaIds)
+                    // ZOUKAN -->
+                    if (syncFirst) syncManager().syncData()
+                    // ZOUKAN <--
+                    val result = run(categoryId, mangaIds = mangaIds, groupIds = groupIds)
                     _lastResult.value = result
                     notify(result)
                     onDone(result)
@@ -126,16 +167,33 @@ class LibraryUpdater(
         job?.join()
     }
 
+    private fun isSyncEnabled(): Boolean =
+        SyncManager.SyncService.fromInt(syncPreferences.syncService().get()) in SyncManager.SUPPORTED
+
     /** Runs an update in the calling coroutine; for the command line. */
-    suspend fun run(categoryId: Long? = null, ignoreRestrictions: Boolean = false, mangaIds: Set<Long>? = null): Result {
+    suspend fun run(
+        categoryId: Long? = null,
+        ignoreRestrictions: Boolean = false,
+        mangaIds: Set<Long>? = null,
+        groupIds: Set<Long>? = null,
+    ): Result {
         preferences.lastUpdatedTimestamp().set(System.currentTimeMillis())
         runCatching { errors.clean() }.onFailure { logcat(LogPriority.WARN, it) { "Cleaning the update errors failed" } }
         val library = getLibraryManga.await().distinctBy { it.manga.id }
-        val (toUpdate, skipped) = if (mangaIds != null) {
-            library.filter { it.manga.id in mangaIds } to emptyList()
+        val (selected, skipped) = if (mangaIds != null) {
+            // KMK: a targeted update keeps only "Not set to always update" of the skip rules
+            library.filter {
+                it.manga.id in mangaIds &&
+                    !(it.manga.updateStrategy == UpdateStrategy.ONLY_FETCH_ONCE && it.totalChapters > 0L)
+            } to emptyList()
         } else {
-            select(library, categoryId, ignoreRestrictions)
+            select(library, categoryId, ignoreRestrictions, groupIds)
         }
+        // ZOUKAN -->
+        // SY: E-Hentai, ExHentai, nhentai and Pururin are left out of the library update; the
+        // E-Hentai gallery updates check E-Hentai galleries
+        val toUpdate = selected.filterNot { it.manga.source in LIBRARY_UPDATE_EXCLUDED_SOURCES }
+        // ZOUKAN <--
         val total = toUpdate.size
         _progress.value = Progress(0, total, emptyList())
 
@@ -147,13 +205,46 @@ class LibraryUpdater(
         val current = linkedSetOf<String>()
         val lock = Any()
 
+        // SY -->
+        val mdList = trackerManager.mdList
+        val mdListLogged = mdList.isLoggedIn
+        // SY <--
+
         val semaphore = Semaphore(PARALLEL_SOURCES)
         coroutineScope {
             toUpdate.groupBy { it.manga.source }.values.map { entries ->
                 async {
                     semaphore.withPermit {
+                        // SY -->
+                        // MangaDex entries get their MDList track while signed in to MDList
+                        if (mdListLogged && entries.firstOrNull()?.let { it.manga.source in mangaDexSourceIds } == true) {
+                            launch {
+                                entries.forEach { (manga) ->
+                                    try {
+                                        val tracks = getTracks.await(manga.id)
+                                        if (tracks.isEmpty() || tracks.none { it.trackerId == TrackerManager.MDLIST }) {
+                                            val track = mdList.createInitialTracker(manga)
+                                            insertTrack.await(mdList.refresh(track).toDomainTrack(false)!!)
+                                        }
+                                    } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
+                                        logcat(LogPriority.ERROR, e) { "Error adding initial track for ${manga.title}" }
+                                    }
+                                }
+                            }
+                        }
+                        // SY <--
                         for (item in entries) {
                             val manga = item.manga
+                            ensureActive()
+                            // Don't continue to update if the entry left the library
+                            if (getManga.await(manga.id)?.favorite != true) {
+                                _progress.value = synchronized(lock) {
+                                    done++
+                                    Progress(done, total, current.toList())
+                                }
+                                continue
+                            }
                             _progress.value = synchronized(lock) {
                                 current += manga.title
                                 Progress(done, total, current.toList())
@@ -165,15 +256,17 @@ class LibraryUpdater(
                                     fetchDetails = preferences.autoUpdateMetadata().get(),
                                     fetchChapters = true,
                                 )
-                                if (result.newChapters.isNotEmpty()) {
-                                    val toDownload = filterChaptersForDownload.await(result.manga, result.newChapters)
-                                    if (toDownload.isNotEmpty()) downloadManager.enqueue(result.manga, toDownload)
+                                // Only an entry still in the library has new chapters, as Android's updateManga
+                                val newOnes = if (result.manga.favorite) result.newChapters.sortedByDescending { it.sourceOrder } else emptyList()
+                                if (newOnes.isNotEmpty()) {
+                                    val toDownload = filterChaptersForDownload.await(result.manga, newOnes)
+                                    if (toDownload.isNotEmpty()) downloadChapters(result.manga, toDownload)
                                     synchronized(lock) {
-                                        newChapters += result.newChapters.size
+                                        newChapters += newOnes.size
                                         queued += toDownload.size
                                         withNew += result.manga
                                     }
-                                    synchronized(lock) { preferences.newUpdatesCount().set(preferences.newUpdatesCount().get() + result.newChapters.size) }
+                                    synchronized(lock) { preferences.newUpdatesCount().set(preferences.newUpdatesCount().get() + newOnes.size) }
                                 }
                                 try {
                                     errors.clear(manga.id)
@@ -208,17 +301,42 @@ class LibraryUpdater(
             }.awaitAll()
         }
 
+        // Downloads start once the update ends, as on Android: sites may not like both at once
+        if (queued > 0) downloadManager.start()
+
         val errorFile = if (failures.isNotEmpty()) writeErrors(failures) else null
         return Result(total, newChapters, withNew, queued, skipped, failures, errorFile, toUpdate.map { it.manga })
     }
 
-    /** The entries to update and the skipped ones with why, by the library update settings. */
+    /**
+     * Queues new chapters without starting the downloads; a merged entry's chapters go under the
+     * entries it merges, which own them, as Android's downloadChapters (SY).
+     */
+    private suspend fun downloadChapters(manga: Manga, chapters: List<Chapter>) {
+        if (manga.source == MERGED_SOURCE_ID) {
+            val downloadingManga = getMergedMangaForDownloading.await(manga.id).associateBy { it.id }
+            chapters.groupBy { it.mangaId }.forEach { (id, list) ->
+                downloadManager.enqueue(downloadingManga[id] ?: return@forEach, list, start = false)
+            }
+            return
+        }
+        downloadManager.enqueue(manga, chapters, start = false)
+    }
+
+    /**
+     * The entries to update and the skipped ones with why, by the library update settings.
+     *
+     * @param groupIds a source, status or tracking tab's entries in place of the categories
+     */
     internal fun select(
         library: List<LibraryManga>,
         categoryId: Long?,
         ignoreRestrictions: Boolean = false,
+        groupIds: Set<Long>? = null,
     ): Pair<List<LibraryManga>, List<Pair<Manga, String>>> {
-        val inCategories = if (categoryId != null) {
+        val inCategories = if (groupIds != null) {
+            library.filter { it.manga.id in groupIds }
+        } else if (categoryId != null) {
             library.filter { categoryId in it.categories || (categoryId == 0L && it.categories.isEmpty()) }
         } else {
             val included = preferences.updateCategories().get().mapNotNull { it.toLongOrNull() }.toSet()
@@ -247,7 +365,7 @@ class LibraryUpdater(
             compareByDescending<LibraryManga> { it.manga.nextUpdate <= windowEnd }
                 .thenByDescending { it.lastRead > 0L }
                 .thenByDescending { it.lastRead }
-                .thenByDescending { it.manga.dateAdded },
+                .thenByDescending { it.manga.title },
         )
         return selected to skipped
     }

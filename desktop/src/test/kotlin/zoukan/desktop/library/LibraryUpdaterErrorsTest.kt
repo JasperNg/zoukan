@@ -1,5 +1,6 @@
 package zoukan.desktop.library
 
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -13,6 +14,7 @@ import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
+import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
@@ -27,6 +29,8 @@ class LibraryUpdaterErrorsTest {
             every { this@mockk.id } returns id
             every { title } returns "M$id"
             every { this@mockk.source } returns source
+            every { updateStrategy } returns UpdateStrategy.ALWAYS_UPDATE
+            every { favorite } returns true
         },
         categories = emptyList(),
         totalChapters = 1,
@@ -65,6 +69,13 @@ class LibraryUpdaterErrorsTest {
             filterChaptersForDownload = mockk(),
             downloadManager = mockk(),
             errors = errors,
+            getManga = mockk<GetManga> { coEvery { await(any<Long>()) } answers { library.first { it.id == firstArg<Long>() }.manga } },
+            getMergedMangaForDownloading = mockk(),
+            getTracks = mockk(),
+            insertTrack = mockk(),
+            trackerManager = mockk { every { mdList } returns mockk { every { isLoggedIn } returns false } },
+            syncPreferences = mockk(),
+            syncManager = { mockk() },
         )
 
         val result = updater.run(mangaIds = setOf(1L, 2L, 3L, 4L))
