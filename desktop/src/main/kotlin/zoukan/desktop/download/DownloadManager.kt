@@ -146,6 +146,30 @@ class DownloadManager(
     fun findChapter(manga: Manga, chapter: Chapter): File? =
         if (isDownloaded(manga, chapter)) paths.findChapter(manga, chapter) else null
 
+    /**
+     * Gives a downloaded chapter the name its new name or scanlator calls for, as Android's
+     * renameChapter after a source sync, so the download keeps showing and Clean up downloaded
+     * chapters does not take it for an unknown file.
+     */
+    fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter) {
+        val dir = paths.mangaDir(manga)
+        if (!dir.isDirectory) return
+        // Assume there's only 1 version of the chapter name formats present
+        val oldDownload = paths.validChapterNames(oldChapter).asSequence()
+            .map { File(dir, it) }
+            .firstOrNull { it.exists() } ?: return
+
+        var newName = paths.chapterDirName(newChapter)
+        if (oldDownload.isFile && oldDownload.extension == "cbz") newName += ".cbz"
+        if (oldDownload.name == newName) return
+
+        if (oldDownload.renameTo(File(dir, newName))) {
+            invalidate(dir)
+        } else {
+            logcat(LogPriority.ERROR) { "Could not rename downloaded chapter: ${oldDownload.name}" }
+        }
+    }
+
     /** Forgets what was read from disk, for example after the storage folder moved. */
     fun invalidateCache() {
         lastRenew = System.currentTimeMillis()
