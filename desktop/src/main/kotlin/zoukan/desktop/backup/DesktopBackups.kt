@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
+import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import mihon.domain.extension.interactor.GetExtensionStores
 import okio.sink
 import okio.source
@@ -50,10 +51,15 @@ class DesktopBackups(
         val backup = contentCreator().create(options)
         file.absoluteFile.parentFile?.mkdirs()
         val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
-        temp.sink().use { BackupCodec.write(backup, it) }
-        // Make sure it reads back before it replaces anything
-        temp.source().use { BackupCodec.decode(it) }
-        Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        try {
+            temp.sink().use { BackupCodec.write(backup, it) }
+            // Make sure it reads back before it replaces anything
+            temp.source().use { BackupCodec.decode(it) }
+            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            // A failed write or check leaves nothing behind (automatic backups would pile them up)
+            temp.delete()
+        }
         return backup
     }
 
@@ -81,13 +87,19 @@ class DesktopBackups(
         return BackupContentRestorer(isSync = isSync, onProgress = onProgress).restore(withSafePreferences(backup), options)
     }
 
-    /** The extension stores in [backup] that are not added yet, by index address. */
+    /**
+     * The extension stores in [backup] that a restore would add or change the signing key of, by
+     * the index address the restore writes. A restore replaces a known store's signing key, so a
+     * new key needs the same confirmation as a new store.
+     */
     suspend fun newExtensionStores(
         backup: Backup,
         getStores: GetExtensionStores = Injekt.get(),
     ): List<BackupExtensionStore> {
-        val known = getStores.get().map { it.indexUrl }.toSet()
-        return backup.backupExtensionStores.filter { it.indexUrl !in known }
+        val known = getStores.get().associate { it.indexUrl to it.signingKey }
+        return backup.backupExtensionStores.filter {
+            known[ExtensionStoreRestorer.indexUrlOf(it)] != it.signingKey
+        }
     }
 
     /** The `source_<id>` SharedPreferences that have a file, installed or not. */
@@ -103,7 +115,9 @@ class DesktopBackups(
          * app-state keys into a backup (trusted extensions, the storage folder and other state of
          * this computer), so one that carries them was made by hand; restoring them could trust an
          * extension nobody approved or move the storage folder to another machine. A restore also
-         * does not switch the app lock off.
+         * does not switch the app lock off. Source settings go only to `source_<id>` files, the
+         * only ones a backup makes, so a backup cannot write into the app's own settings file
+         * (and switch the lock off there) by naming it as a source.
          */
         fun withSafePreferences(
             backup: Backup,
@@ -116,15 +130,18 @@ class DesktopBackups(
             }
             return backup.copy(
                 backupPreferences = backup.backupPreferences.filter(::allowed),
-                backupSourcePreferences = backup.backupSourcePreferences.map { source ->
-                    source.copy(prefs = source.prefs.filterNot { Preference.isAppState(it.key) })
-                },
+                backupSourcePreferences = backup.backupSourcePreferences
+                    .filter { SOURCE_PREFS_KEY.matches(it.sourceKey) }
+                    .map { source ->
+                        source.copy(prefs = source.prefs.filterNot { Preference.isAppState(it.key) })
+                    },
             )
         }
 
         private const val LOCK_KEY = "use_biometric_lock"
 
         private val SOURCE_PREFS_FILE = Regex("""source_-?\d+\.xml""")
+        private val SOURCE_PREFS_KEY = Regex("""source_-?\d+""")
 
         /** The file name the Android app uses, with Zoukan's name. */
         fun defaultFileName(): String =

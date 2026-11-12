@@ -3,6 +3,7 @@ package zoukan.desktop.update
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
+import zoukan.desktop.outputWithin
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -113,14 +114,8 @@ class InstallerSignature(
             val process = ProcessBuilder(command).redirectErrorStream(true)
                 .apply { environment().putAll(environment) }
                 .start()
-            process.outputStream.close()
-            val text = process.inputStream.use { it.readBytes() }.decodeToString()
-            if (process.waitFor(TOOL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                ToolOutput(process.exitValue(), text)
-            } else {
-                process.destroyForcibly()
-                null
-            }
+            process.outputWithin(TOOL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                ?.let { ToolOutput(it.exitCode, it.text) }
         } catch (e: Exception) {
             logcat(LogPriority.WARN, e) { "Could not run ${command.first()}" }
             null
