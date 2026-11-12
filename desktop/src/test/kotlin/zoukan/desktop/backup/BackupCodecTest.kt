@@ -37,6 +37,15 @@ class BackupCodecTest {
 
     @Test
     fun `an empty file is an error, not an empty backup`() {
-        shouldThrow<java.io.IOException> { BackupCodec.decode(Buffer()) }
+        shouldThrow<BackupCodec.InvalidBackupException> { BackupCodec.decode(Buffer()) }.error shouldBe BackupCodec.Error.UNKNOWN
+        shouldThrow<BackupCodec.InvalidBackupException> { BackupCodec.decode(Buffer().writeByte(1)) }
+    }
+
+    @Test
+    fun `a cut-off backup is an invalid backup`() {
+        val gzipped = Buffer().also { BackupCodec.write(SyntheticBackup.create(), it) }.readByteArray()
+        shouldThrow<BackupCodec.InvalidBackupException> {
+            BackupCodec.decode(Buffer().write(gzipped.copyOf(gzipped.size / 2)))
+        }
     }
 }

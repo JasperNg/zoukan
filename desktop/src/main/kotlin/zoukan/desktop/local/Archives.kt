@@ -9,8 +9,8 @@ import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.FileNames
 import zoukan.desktop.download.ImageType
+import zoukan.desktop.outputWithin
 import java.io.File
-import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -251,13 +251,13 @@ object Archives {
         val process = ProcessBuilder("tar", "-xf", file.absolutePath, "-C", into.absolutePath)
             .redirectErrorStream(true)
             .start()
-        val output = process.inputStream.use(InputStream::readBytes).decodeToString()
-        if (!process.waitFor(5, TimeUnit.MINUTES)) {
-            process.destroyForcibly()
+        val output = process.outputWithin(5, TimeUnit.MINUTES)
+        if (output == null) {
+            logcat(LogPriority.WARN) { "tar took too long to read ${file.name}" }
             false
         } else {
-            if (process.exitValue() != 0) logcat(LogPriority.WARN) { "tar could not read ${file.name}: $output" }
-            process.exitValue() == 0 && into.walkTopDown().any { it.isFile }
+            if (output.exitCode != 0) logcat(LogPriority.WARN) { "tar could not read ${file.name}: ${output.text}" }
+            output.exitCode == 0 && into.walkTopDown().any { it.isFile }
         }
     } catch (e: Exception) {
         logcat(LogPriority.WARN, e) { "No system tar to read ${file.name}" }
