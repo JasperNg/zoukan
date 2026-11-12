@@ -43,11 +43,15 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.i18n.MR
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.tray.Notifications
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
@@ -150,7 +154,7 @@ class LibraryUpdater(
                     logcat { "The library update was cancelled" }
                 } catch (e: Throwable) {
                     logcat(LogPriority.ERROR, e) { "The library update failed" }
-                    Notifications.post("Library update failed", e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
+                    Notifications.post(localized(DMR.strings.library_update_failed), e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
                 } finally {
                     _progress.value = null
                 }
@@ -391,16 +395,16 @@ class LibraryUpdater(
     private fun notify(result: Result) {
         val text = buildString {
             if (result.newChapters > 0) {
-                append("${result.newChapters} new chapters in ")
-                append(result.entriesWithNewChapters.take(3).joinToString { it.title })
-                if (result.entriesWithNewChapters.size > 3) append(" and ${result.entriesWithNewChapters.size - 3} more")
+                var titles = result.entriesWithNewChapters.take(3).joinToString { it.title }
+                if (result.entriesWithNewChapters.size > 3) titles = localized(DMR.strings.list_and_n_more, titles, result.entriesWithNewChapters.size - 3)
+                append(localized(DMR.strings.new_chapters_in, localizedPlural(MR.plurals.notification_chapters_generic, result.newChapters, result.newChapters), titles))
             } else {
-                append("No new chapters")
+                append(localized(DMR.strings.no_new_chapters))
             }
-            if (result.failures.isNotEmpty()) append(". ${result.failures.size} entries failed to update")
+            if (result.failures.isNotEmpty()) append(". ").append(localizedPlural(MR.plurals.notification_update_error, result.failures.size, result.failures.size))
         }
         val kind = if (result.failures.isNotEmpty()) Notifications.Kind.WARNING else Notifications.Kind.INFO
-        Notifications.post("Library updated", text, kind)
+        Notifications.post(localized(DMR.strings.library_updated), text, kind)
     }
 
     private class SourceNotFoundException : Exception()
