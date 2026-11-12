@@ -89,4 +89,11 @@ class ChapterSettingsTest {
         ChapterSettings.filtered(manga(Manga.CHAPTER_SORTING_NUMBER or Manga.CHAPTER_SORT_ASC), downloadedOnly = false) shouldBe false
         ChapterSettings.filtered(manga(Manga.CHAPTER_SHOW_NOT_DOWNLOADED), downloadedOnly = false) shouldBe true
     }
+
+    @Test
+    fun `the Display tab's chapter numbers read as Android's`() {
+        eu.kanade.presentation.util.formatChapterNumber(12.0) shouldBe "12"
+        eu.kanade.presentation.util.formatChapterNumber(12.5) shouldBe "12.5"
+        eu.kanade.presentation.util.formatChapterNumber(1.25) shouldBe "1.25"
+    }
 }

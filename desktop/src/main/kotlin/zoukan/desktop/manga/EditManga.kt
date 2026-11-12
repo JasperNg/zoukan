@@ -30,6 +30,8 @@ class EditManga(
         val description: String,
         val genres: List<String>,
         val status: Long,
+        /** SY's thumbnail URL; null leaves it as it is */
+        val thumbnailUrl: String? = null,
     )
 
     suspend fun saveInfo(manga: Manga, info: Info) {
@@ -51,6 +53,7 @@ class EditManga(
                     title = sManga.title,
                     author = sManga.author,
                     artist = sManga.artist,
+                    thumbnailUrl = info.thumbnailUrl?.trimOrNull()?.takeIf { it != manga.thumbnailUrl },
                     description = sManga.description,
                     genre = info.genres,
                     status = info.status,
@@ -65,7 +68,7 @@ class EditManga(
                 title = info.title.trimOrNull()?.takeIf { it != manga.ogTitle },
                 author = info.author.trimOrNull()?.takeIf { it != manga.ogAuthor },
                 artist = info.artist.trimOrNull()?.takeIf { it != manga.ogArtist },
-                thumbnailUrl = null,
+                thumbnailUrl = info.thumbnailUrl?.trimOrNull()?.takeIf { it != manga.ogThumbnailUrl },
                 description = info.description.trimOrNull()?.takeIf { it != manga.ogDescription },
                 genre = info.genres.takeIf { it.isNotEmpty() && it != manga.ogGenre },
                 status = info.status.takeUnless { it == manga.ogStatus },

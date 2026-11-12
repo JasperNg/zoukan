@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -164,6 +165,10 @@ fun MangaInfoPane(
     onOpenMetadata: () -> Unit,
     modifier: Modifier = Modifier,
     onCoverClick: (() -> Unit)? = null,
+    // ZOUKAN -->
+    search: EntryInfoSearch,
+    onSourceClick: (() -> Unit)? = null,
+    // ZOUKAN <--
 ) {
     Column(modifier.verticalScrollWithBar()) {
         InfoHeader(
@@ -171,6 +176,8 @@ fun MangaInfoPane(
             sourceName = state.source?.name ?: localized(DMR.strings.source_not_installed_2),
             missingSource = state.source == null,
             onCoverClick = onCoverClick,
+            search = search,
+            onSourceClick = onSourceClick,
         )
         ActionRow(
             favorite = manga.favorite,
@@ -196,15 +203,22 @@ fun MangaInfoPane(
                 Text(notes, style = MaterialTheme.typography.bodyMedium)
             }
             // Metadata sources show their tags by namespace, each searching the source
+            // ZOUKAN -->
+            // A tag's click opens Android's tag menu: Search, Global search, Copy to clipboard
             if (meta != null && meta.tags.isNotEmpty()) {
-                NamespaceTags(meta, manga.source, onClick = onSearch)
+                NamespaceTags(meta, manga.source, search)
             } else {
                 manga.genre?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }?.let { genres ->
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        genres.forEach { AssistChip(onClick = { onSearch(it) }, label = { Text(it) }) }
+                        genres.forEach { genre ->
+                            TagMenuBox(genre, search) { tagModifier, openMenu ->
+                                AssistChip(onClick = openMenu, label = { Text(genre) }, modifier = tagModifier)
+                            }
+                        }
                     }
                 }
             }
+            // ZOUKAN <--
         }
         // ZOUKAN -->
         // Komikku's related titles row, then SY's page previews, under the description
@@ -215,7 +229,14 @@ fun MangaInfoPane(
 }
 
 @Composable
-private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean, onCoverClick: (() -> Unit)?) {
+private fun InfoHeader(
+    manga: Manga,
+    sourceName: String,
+    missingSource: Boolean,
+    onCoverClick: (() -> Unit)?,
+    search: EntryInfoSearch,
+    onSourceClick: (() -> Unit)?,
+) {
     val cover = Cover.of(manga)
     Box {
         // Backdrop: the cover, blurred and faded into the background
@@ -255,17 +276,29 @@ private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean,
                         .then(if (onCoverClick != null) Modifier.clickable(onClick = onCoverClick) else Modifier),
                 )
                 Spacer(Modifier.height(16.dp))
-                // Selectable, so the title can be copied
-                SelectionContainer {
+                // ZOUKAN -->
+                // KMK: a click searches globally; a right click or long press opens Library
+                // search, Global search and Copy to clipboard
+                val title = manga.title.takeIf { it.isNotBlank() }
+                TitleMenuBox(title, search, onClick = { title?.let(search.global) }) { modifier ->
                     Text(
-                        manga.title.ifBlank { localized(MR.strings.unknown_title) },
+                        title ?: localized(MR.strings.unknown_title),
                         style = MaterialTheme.typography.titleLarge,
                         textAlign = TextAlign.Center,
+                        modifier = modifier.testTag("entry-title"),
                     )
                 }
                 Spacer(Modifier.height(2.dp))
-                IconLine(Icons.Outlined.PersonOutline, manga.author?.takeIf { it.isNotBlank() } ?: localized(MR.strings.unknown_author))
-                manga.artist?.takeIf { it.isNotBlank() && it != manga.author }?.let { IconLine(Icons.Outlined.Brush, it) }
+                val author = manga.author?.takeIf { it.isNotBlank() }
+                TitleMenuBox(author, search, onClick = { author?.let(search.global) }) { modifier ->
+                    IconLine(Icons.Outlined.PersonOutline, author ?: localized(MR.strings.unknown_author), modifier)
+                }
+                manga.artist?.takeIf { it.isNotBlank() && it != manga.author }?.let { artist ->
+                    TitleMenuBox(artist, search, onClick = { search.global(artist) }) { modifier ->
+                        IconLine(Icons.Outlined.Brush, artist, modifier)
+                    }
+                }
+                // ZOUKAN <--
                 Spacer(Modifier.height(2.dp))
                 Row(Modifier.alpha(SECONDARY_ALPHA), verticalAlignment = Alignment.CenterVertically) {
                     Icon(statusIcon(manga.status), null, Modifier.padding(end = 4.dp).size(16.dp))
@@ -284,7 +317,12 @@ private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean,
                             tint = MaterialTheme.colorScheme.error,
                         )
                     }
-                    Text(sourceName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // ZOUKAN -->
+                    // KMK: a click browses the source; a right click or long press opens the menu
+                    TitleMenuBox(sourceName, search, onClick = onSourceClick) { modifier ->
+                        Text(sourceName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+                    }
+                    // ZOUKAN <--
                 }
             }
         }
@@ -292,9 +330,9 @@ private fun InfoHeader(manga: Manga, sourceName: String, missingSource: Boolean,
 }
 
 @Composable
-private fun IconLine(icon: ImageVector, text: String) {
+private fun IconLine(icon: ImageVector, text: String, modifier: Modifier = Modifier) {
     Row(
-        Modifier.alpha(SECONDARY_ALPHA),
+        modifier.alpha(SECONDARY_ALPHA),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
