@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,7 +50,7 @@ private val SORTS = listOf(
 )
 
 /**
- * The manga page's chapter Filter and Sort sheet, as on Android. The settings are saved on the
+ * The manga page's chapter Filter, Sort and Display sheet, as on Android. The settings are saved on the
  * entry, so each entry keeps its own.
  */
 @Composable
@@ -70,7 +71,7 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
         text = {
             Column(Modifier.width(420.dp)) {
                 PrimaryTabRow(selectedTabIndex = tab) {
-                    listOf(localized(MR.strings.action_filter), localized(MR.strings.action_sort)).forEachIndexed { i, label ->
+                    listOf(localized(MR.strings.action_filter), localized(MR.strings.action_sort), localized(MR.strings.action_display)).forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                     }
                 }
@@ -98,13 +99,22 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
-                        else -> SORTS.forEach { (sorting, label) ->
+                        1 -> SORTS.forEach { (sorting, label) ->
                             SortRow(
                                 label = label,
                                 descending = manga.sortDescending().takeIf { manga.sorting == sorting },
                                 onClick = { model.setSorting(sorting) },
                             )
                         }
+                        // ZOUKAN -->
+                        // Android's DisplayPage: the source's title or the chapter number
+                        else -> listOf(
+                            MR.strings.show_title to Manga.CHAPTER_DISPLAY_NAME,
+                            MR.strings.show_chapter_number to Manga.CHAPTER_DISPLAY_NUMBER,
+                        ).forEach { (titleRes, mode) ->
+                            DisplayRow(localized(titleRes), selected = manga.displayMode == mode, onClick = { model.setDisplayMode(mode) })
+                        }
+                        // ZOUKAN <--
                     }
                 }
             }
@@ -178,6 +188,20 @@ private fun SortRow(label: String, descending: Boolean?, onClick: () -> Unit) {
         }
     }
 }
+
+// ZOUKAN -->
+/** A Display tab choice, as Android's RadioItem */
+@Composable
+private fun DisplayRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label)
+    }
+}
+// ZOUKAN <--
 
 /** Picks the scanlators whose chapters show; the unticked ones are hidden, as on Android */
 @Composable

@@ -62,6 +62,8 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.isEhBasedSource
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -102,6 +104,21 @@ data class SourceScreen(
         var searchText by rememberSaveable { mutableStateOf(query.orEmpty()) }
         var showFilters by rememberSaveable { mutableStateOf(false) }
         // ZOUKAN -->
+        // A search from an entry's title or tags, as Android's BrowseSourceScreen queryEvent
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            queryEvent.receiveAsFlow().collectLatest {
+                when (it) {
+                    is SearchType.Genre -> {
+                        searchText = ""
+                        model.searchGenre(it.txt)
+                    }
+                    is SearchType.Text -> {
+                        searchText = it.txt
+                        model.search(it.txt)
+                    }
+                }
+            }
+        }
         val bulk = remember { BulkFavorite() }
         val displayModePreference = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>().sourceDisplayMode() }
         val displayMode by displayModePreference.changes().collectAsState(displayModePreference.get())
@@ -234,6 +251,22 @@ data class SourceScreen(
             }
         }
     }
+
+    // ZOUKAN -->
+    sealed class SearchType(val txt: String) {
+        class Text(txt: String) : SearchType(txt)
+        class Genre(txt: String) : SearchType(txt)
+    }
+
+    companion object {
+        // Conflated: the search waits for the screen to show again after the entry page closed
+        private val queryEvent = kotlinx.coroutines.channels.Channel<SearchType>(kotlinx.coroutines.channels.Channel.CONFLATED)
+
+        fun search(query: String) = queryEvent.trySend(SearchType.Text(query))
+
+        fun searchGenre(name: String) = queryEvent.trySend(SearchType.Genre(name))
+    }
+    // ZOUKAN <--
 }
 
 @Composable

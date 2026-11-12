@@ -2,6 +2,7 @@ package zoukan.desktop.ui.manga
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,12 +22,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import eu.kanade.tachiyomi.data.track.EnhancedTracker
+import eu.kanade.tachiyomi.data.track.Tracker
+import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -68,6 +77,26 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
     var status by remember { mutableStateOf(manga.status) }
     var notes by remember { mutableStateOf(manga.notes) }
     val isLocal = manga.source == LocalSource.ID
+    // ZOUKAN -->
+    var thumbnailUrl by remember { mutableStateOf(manga.thumbnailUrl.orEmpty()) }
+    // KMK: Fill from tracker, choosing the tracker when more than one tracks the entry
+    var trackerChoice by remember { mutableStateOf<List<Pair<Track, Tracker>>?>(null) }
+    fun fillFromTracker(track: Track, tracker: Tracker) {
+        scope.launch {
+            try {
+                val metadata = withContext(Dispatchers.IO) { tracker.getMangaMetadata(track) }
+                metadata.title?.takeIf { it.isNotBlank() }?.let { title = it }
+                metadata.authors?.takeIf { it.isNotBlank() }?.let { author = it }
+                metadata.artists?.takeIf { it.isNotBlank() }?.let { artist = it }
+                metadata.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { thumbnailUrl = it }
+                metadata.description?.takeIf { it.isNotBlank() }?.let { description = it }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+                Toasts.show(localized(MR.strings.track_error, tracker.name, e.message ?: ""))
+            }
+        }
+    }
+    // ZOUKAN <--
 
     fun run(block: suspend () -> Unit) {
         scope.launch {
@@ -113,10 +142,27 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     OutlinedTextField(title, { title = it }, label = { Text(localized(MR.strings.title)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(author, { author = it }, label = { Text(localized(MR.strings.author)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(artist, { artist = it }, label = { Text(localized(MR.strings.artist)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    // ZOUKAN -->
+                    OutlinedTextField(thumbnailUrl, { thumbnailUrl = it }, label = { Text(localized(SYMR.strings.thumbnail_url)) }, enabled = editable, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    // ZOUKAN <--
                     OutlinedTextField(description, { description = it }, label = { Text(localized(DMR.strings.description)) }, enabled = editable, minLines = 3, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(genres, { genres = it }, label = { Text(localized(DMR.strings.genres_separated_by_commas)) }, enabled = editable, modifier = Modifier.fillMaxWidth())
                     if (editable) Choice(localized(MR.strings.status), statusLabel(status) ?: localized(MR.strings.unknown), STATUSES) { status = it }
                     OutlinedTextField(notes, { notes = it }, label = { Text(localized(MR.strings.action_notes)) }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                    // ZOUKAN -->
+                    if (editable) {
+                        OutlinedButton(onClick = {
+                            scope.launch {
+                                val tracks = withContext(Dispatchers.IO) { trackersOf(manga) }
+                                when {
+                                    tracks.isEmpty() -> Toasts.show(localized(SYMR.strings.entry_not_tracked))
+                                    tracks.size > 1 -> trackerChoice = tracks
+                                    else -> fillFromTracker(tracks.first().first, tracks.first().second)
+                                }
+                            }
+                        }) { Text(localized(SYMR.strings.fill_from_tracker)) }
+                    }
+                    // ZOUKAN <--
                 }
             }
         },
@@ -126,6 +172,7 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     title = title,
                     author = author,
                     artist = artist,
+                    thumbnailUrl = thumbnailUrl,
                     description = description,
                     genres = genres.split(',').map { it.trim() }.filter { it.isNotEmpty() },
                     status = status,
@@ -149,4 +196,50 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
             }
         },
     )
+    // ZOUKAN -->
+    trackerChoice?.let { tracks ->
+        TrackerSelectDialog(
+            tracks = tracks,
+            onDismissRequest = { trackerChoice = null },
+            onTrackerSelect = { tracker, track -> fillFromTracker(track, tracker) },
+        )
+    }
+    // ZOUKAN <--
 }
+
+// ZOUKAN -->
+/** The trackers tracking [manga] that can fill its details: not the enhanced ones, as on Android */
+private suspend fun trackersOf(manga: Manga): List<Pair<Track, Tracker>> {
+    val trackerManager = Injekt.get<TrackerManager>()
+    return Injekt.get<GetTracks>().await(manga.id).mapNotNull { track ->
+        track to (trackerManager.get(track.trackerId) ?: return@mapNotNull null)
+    }
+        .filterNot { (_, tracker) -> tracker is EnhancedTracker }
+}
+
+/** SY's "Select a tracker" when more than one tracker tracks the entry */
+@Composable
+private fun TrackerSelectDialog(
+    tracks: List<Pair<Track, Tracker>>,
+    onDismissRequest: () -> Unit,
+    onTrackerSelect: (tracker: Tracker, track: Track) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) { Text(localized(MR.strings.action_cancel)) }
+        },
+        title = { Text(localized(SYMR.strings.select_tracker)) },
+        text = {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                tracks.forEach { (track, tracker) ->
+                    OutlinedButton(onClick = {
+                        onTrackerSelect(tracker, track)
+                        onDismissRequest()
+                    }) { Text(tracker.name) }
+                }
+            }
+        },
+    )
+}
+// ZOUKAN <--
