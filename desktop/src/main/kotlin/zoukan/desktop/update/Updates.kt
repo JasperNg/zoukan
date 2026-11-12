@@ -11,13 +11,16 @@ import logcat.LogPriority
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.tray.Notifications
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
 import kotlin.time.Duration.Companion.hours
@@ -95,7 +98,7 @@ object Updates {
                 val version = result.release.version.toString()
                 if (!manual && notifiedVersion().get() != version) {
                     notifiedVersion().set(version)
-                    Notifications.post("Zoukan $version is available", "Install it from Settings > About")
+                    Notifications.post(localized(MR.strings.update_check_notification_update_available), localized(DMR.strings.install_zoukan_version_from_about, version))
                 }
             }
             is UpdateChecker.Result.Failed -> logcat(LogPriority.WARN) { "Update check failed: ${result.message}" }

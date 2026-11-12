@@ -21,8 +21,10 @@ import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.InsertFlatMetadata
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.compat.localized
 import zoukan.desktop.library.PowerStatus
 import zoukan.desktop.tray.Notifications
+import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.days
 
@@ -147,7 +149,7 @@ class EhGalleryUpdater(
             exhPreferences.exhAutoUpdateStats().set(Json.encodeToString(EHentaiUpdaterStats(startTime, allMeta.size, updated)))
             if (updatedManga.isNotEmpty()) {
                 Notifications.post(
-                    "New gallery versions",
+                    localized(DMR.strings.new_gallery_versions),
                     updatedManga.joinToString(", ") { it.first.title }.take(300),
                 )
             }
