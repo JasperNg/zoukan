@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.MetadataMangasPage
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.MetadataSource
+import eu.kanade.tachiyomi.source.online.all.MangaDex
 import exh.metadata.metadata.RaisedSearchMetadata
 import exh.source.getMainSource
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,8 @@ class SourceScreenModel(
     initialQuery: String?,
     // ZOUKAN -->
     savedSearchId: Long? = null,
+    /** The MangaDex follows instead of the source's listings, as Android's MangaDexFollowsScreen */
+    follows: Boolean = false,
     private val getExhSavedSearch: GetExhSavedSearch = Injekt.get(),
     private val insertSavedSearch: InsertSavedSearch = Injekt.get(),
     private val deleteSavedSearchById: DeleteSavedSearchById = Injekt.get(),
@@ -61,6 +64,11 @@ class SourceScreenModel(
         data object Popular : Listing
         data object Latest : Listing
         data class Search(val query: String) : Listing
+
+        // ZOUKAN -->
+        /** The signed-in user's MangaDex follows, as MangaDexFollowsPagingSource */
+        data object Follows : Listing
+        // ZOUKAN <--
     }
 
     data class State(
@@ -103,7 +111,9 @@ class SourceScreenModel(
                 }
             }
         }
-        if (source != null && savedSearchId != null) {
+        if (follows) {
+            setListing(Listing.Follows)
+        } else if (source != null && savedSearchId != null) {
             screenModelScope.launch {
                 val saved = getExhSavedSearch.awaitOne(savedSearchId, source::getFilterList)
                 if (saved != null) applySavedSearch(saved) else setListing(Listing.Popular)
@@ -211,6 +221,16 @@ class SourceScreenModel(
     fun deleteSavedSearch(id: Long) {
         screenModelScope.launch(Dispatchers.IO) { deleteSavedSearchById.await(id) }
     }
+
+    /** Finds a random MangaDex entry and gives its id, as Android's onMangaDexRandom. */
+    fun mangaDexRandom(onRandomFound: (String) -> Unit) {
+        val mangaDex = source?.getMainSource<MangaDex>() ?: return
+        screenModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { mangaDex.fetchRandomMangaUrl() } }
+                .onSuccess(onRandomFound)
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else Toasts.show(it.message ?: it::class.simpleName.orEmpty()) }
+        }
+    }
     // ZOUKAN <--
 
     /**
@@ -263,13 +283,24 @@ class SourceScreenModel(
                         Listing.Popular -> source.getPopularManga(page)
                         Listing.Latest -> source.getLatestUpdates(page)
                         is Listing.Search -> source.getSearchManga(page, listing.query, filters)
+                        // ZOUKAN -->
+                        Listing.Follows -> source.getMainSource<MangaDex>()!!.fetchFollows(page)
+                        // ZOUKAN <--
                     }
                 }
                 val manga = withContext(Dispatchers.IO) {
                     networkToLocalManga(result.mangas.map { it.toDomainManga(source.id) })
                 }
                 // ZOUKAN -->
-                val metadata = withContext(Dispatchers.IO) { metadataOf(manga, result) }
+                val metadata = withContext(Dispatchers.IO) {
+                    // The follows show the metadata they came with (their follow status), as MangaDexFollowsScreenModel
+                    if (current.listing == Listing.Follows) {
+                        (result as? MetadataMangasPage)?.mangasMetadata.orEmpty()
+                            .zip(manga) { meta, entry -> entry.id to meta }.toMap()
+                    } else {
+                        metadataOf(manga, result)
+                    }
+                }
                 // ZOUKAN <--
                 mutableState.update { state ->
                     state.copy(

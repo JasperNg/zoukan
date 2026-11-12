@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -175,6 +176,21 @@ class EndToEndBrowseTest {
                 onAllNodesWithText("Open").onFirst().performClick()
                 waitFor(hasText("Search: https://example.org/title/123"))
                 runOnUiThread { navigator?.popUntilRoot() }
+            }
+
+            step("Sources search box (KMK): by name, comma-separated terms") {
+                runOnUiThread { HomeScreen.selectTab(HomeTab.Browse) }
+                onAllNodesWithText("Sources").onFirst().performClick()
+                waitFor(hasTestTag("source-search"))
+                waitFor(hasText("Local source"))
+                onNodeWithTag("source-search").performTextInput("no such source")
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Local source").fetchSemanticsNodes().isEmpty() }
+                shot("b7-source-search-none")
+                onNodeWithTag("source-search").performTextClearance()
+                onNodeWithTag("source-search").performTextInput("nothing, LOCAL")
+                waitFor(hasText("Local source"))
+                shot("b8-source-search-match")
+                onNodeWithTag("source-search").performTextClearance()
             }
 
             step("Extension details of a missing extension") {
