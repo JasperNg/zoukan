@@ -334,7 +334,10 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             if (state.visibleUntrusted.isNotEmpty()) {
                 sectionHeader(localized(MR.strings.ext_untrusted))
                 items(state.visibleUntrusted, key = { "u-${it.pkgName}" }) { ext ->
-                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy) {
+                    // ZOUKAN -->
+                    // Android's long press on an untrusted extension uninstalls it
+                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { model.uninstall(ext) }) {
+                        // ZOUKAN <--
                         OutlinedButton(onClick = { model.uninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = { model.trust(ext) }) { Text(localized(MR.strings.ext_trust)) }
@@ -378,7 +381,8 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 items(extensions, key = { "i-${it.pkgName}" }) { ext ->
                     val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
                     // ZOUKAN -->
-                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }) {
+                    // Android's long press on an installed extension uninstalls it
+                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { model.uninstall(ext) }) {
                         // ZOUKAN <--
                         if (ext.hasUpdate) {
                             Button(onClick = { model.update(ext) }) { Text(localized(MR.strings.ext_update)) }
@@ -391,7 +395,10 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             val available = state.visibleAvailable
             sectionHeader(if (state.available.isEmpty() && state.refreshing) localized(DMR.strings.available_loading) else localized(DMR.strings.available, available.size))
             items(available, key = { "a-${it.pkgName}" }) { ext ->
-                ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy) {
+                // ZOUKAN -->
+                // Android's long press on an available extension installs it
+                ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy, onSecondaryClick = { model.install(ext) }) {
+                    // ZOUKAN <--
                     FilledTonalButton(onClick = { model.install(ext) }) { Text(localized(MR.strings.action_install)) }
                 }
             }
@@ -407,6 +414,8 @@ private fun ExtensionRow(
     busy: Boolean,
     // ZOUKAN -->
     onClick: (() -> Unit)? = null,
+    /** Android's long press on the row: install it when available, uninstall it otherwise */
+    onSecondaryClick: (() -> Unit)? = null,
     // ZOUKAN <--
     actions: @Composable () -> Unit,
 ) {
@@ -414,6 +423,7 @@ private fun ExtensionRow(
         Modifier.fillMaxWidth()
             // ZOUKAN -->
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onSecondaryClick != null) Modifier.onRightClick(onSecondaryClick) else Modifier)
             // ZOUKAN <--
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

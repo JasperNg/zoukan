@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -85,6 +86,7 @@ import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.ConcurrentHashMap
@@ -168,6 +170,8 @@ fun MangaInfoPane(
     // ZOUKAN -->
     search: EntryInfoSearch,
     onSourceClick: (() -> Unit)? = null,
+    /** Copies the entry's link, as the WebView button's right click does */
+    onCopyLink: (() -> Unit)? = null,
     // ZOUKAN <--
 ) {
     Column(modifier.verticalScrollWithBar()) {
@@ -183,8 +187,10 @@ fun MangaInfoPane(
             favorite = manga.favorite,
             trackCount = state.trackCount,
             onFavorite = model::toggleFavorite,
+            onEditCategories = { model.showCategoryEdit() }.takeIf { manga.favorite },
             onTracking = { model.setTrackingVisible(true) },
             onWebView = onWebView,
+            onCopyLink = onCopyLink,
         )
         Column(
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -238,6 +244,13 @@ private fun InfoHeader(
     onSourceClick: (() -> Unit)?,
 ) {
     val cover = Cover.of(manga)
+    // ZOUKAN -->
+    // KMK: a wide cover shows as a panorama while Appearance > "Panorama Cover" is on
+    val panoramaCover = remember { Injekt.get<UiPreferences>().usePanoramaCoverMangaInfo() }
+    val usePanoramaCover by panoramaCover.changes().collectAsState(panoramaCover.get())
+    // Height over width of the loaded cover, as Komikku's coverRatio
+    var coverRatio by remember(cover) { mutableFloatStateOf(1f) }
+    // ZOUKAN <--
     Box {
         // Backdrop: the cover, blurred and faded into the background
         val background = MaterialTheme.colorScheme.background
@@ -270,10 +283,11 @@ private fun InfoHeader(
                     cover,
                     Modifier
                         .fillMaxWidth(0.65f)
-                        .aspectRatio(2f / 3f)
+                        .aspectRatio(EntryCover.aspectRatio(usePanoramaCover, coverRatio))
                         .clip(Corners.Medium)
                         .coverOutline(Corners.Medium)
                         .then(if (onCoverClick != null) Modifier.clickable(onClick = onCoverClick) else Modifier),
+                    onLoaded = { width, height -> if (width > 0) coverRatio = height.toFloat() / width },
                 )
                 Spacer(Modifier.height(16.dp))
                 // ZOUKAN -->
@@ -359,6 +373,12 @@ private fun ActionRow(
     onFavorite: () -> Unit,
     onTracking: () -> Unit,
     onWebView: (() -> Unit)?,
+    // ZOUKAN -->
+    /** Android's long press on In library: change the entry's categories (library entries only) */
+    onEditCategories: (() -> Unit)? = null,
+    /** Android's long press on WebView: copy the entry's link */
+    onCopyLink: (() -> Unit)? = null,
+    // ZOUKAN <--
 ) {
     val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
     val active = MaterialTheme.colorScheme.primary
@@ -368,6 +388,7 @@ private fun ActionRow(
             if (favorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
             if (favorite) active else inactive,
             onFavorite,
+            onSecondaryClick = onEditCategories,
         )
         ActionButton(
             when (trackCount) {
@@ -379,13 +400,19 @@ private fun ActionRow(
             if (trackCount == 0) inactive else active,
             onTracking,
         )
-        if (onWebView != null) ActionButton("WebView", Icons.Outlined.Public, active, onWebView)
+        if (onWebView != null) ActionButton("WebView", Icons.Outlined.Public, active, onWebView, onSecondaryClick = onCopyLink)
     }
 }
 
 @Composable
-private fun RowScope.ActionButton(title: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = Modifier.weight(1f)) {
+private fun RowScope.ActionButton(title: String, icon: ImageVector, color: Color, onClick: () -> Unit, onSecondaryClick: (() -> Unit)? = null) {
+    TextButton(
+        onClick = onClick,
+        // ZOUKAN -->
+        // Android's long presses on In library (edit categories) and WebView (copy the link)
+        modifier = Modifier.weight(1f).let { if (onSecondaryClick != null) it.onRightClick(onSecondaryClick) else it },
+        // ZOUKAN <--
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
             Spacer(Modifier.height(4.dp))
@@ -409,13 +436,14 @@ private fun Description(text: String) {
     ) {
         Column(Modifier.padding(12.dp)) {
             SelectionContainer {
-                Text(
+                // ZOUKAN -->
+                // The text, with the images written in it (Android's "Render images in manga descriptions")
+                DescriptionText(
                     text,
-                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = if (expanded) Int.MAX_VALUE else 6,
-                    overflow = TextOverflow.Ellipsis,
                     onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow },
                 )
+                // ZOUKAN <--
             }
             if (expanded || overflows) {
                 TextButton(onClick = { expanded = !expanded }, modifier = Modifier.align(Alignment.End)) {
@@ -428,4 +456,21 @@ private fun Description(text: String) {
 
 private const val SECONDARY_ALPHA = 0.78f
 private const val DISABLED_ALPHA = 0.38f
+
+/**
+ * The header's cover, as MangaAndSourceTitlesLarge: a book cover, or a panorama for a wide cover
+ * while Appearance > "Panorama Cover" is on.
+ */
+internal object EntryCover {
+    /** Komikku's RatioSwitchToPanorama: covers this wide or wider (height / width) show as panoramas. */
+    private const val RATIO_SWITCH_TO_PANORAMA = 0.75f
+
+    /** Komikku's MangaCover.Book and MangaCover.Panorama ratios (width / height). */
+    const val BOOK_RATIO = 2f / 3f
+    const val PANORAMA_RATIO = 3f / 2f
+
+    /** The cover's shape (width / height); [coverRatio] is the loaded cover's height / width. */
+    fun aspectRatio(usePanoramaCover: Boolean, coverRatio: Float): Float =
+        if (usePanoramaCover && coverRatio <= RATIO_SWITCH_TO_PANORAMA) PANORAMA_RATIO else BOOK_RATIO
+}
 // ZOUKAN <--

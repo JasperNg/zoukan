@@ -6,6 +6,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +47,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,19 +59,26 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.chapter.model.Chapter
@@ -105,6 +116,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import kotlin.math.roundToInt
 
 data class MangaScreen(val mangaId: Long) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
@@ -143,6 +155,23 @@ data class MangaScreen(val mangaId: Long) : Screen {
         migrateDuplicate?.let { duplicate ->
             MigrateDialog(duplicate.id, manga, onDismiss = { migrateDuplicate = null }, onMigrated = {})
         }
+        // ZOUKAN <--
+
+        // ZOUKAN -->
+        // The Resume button docks to whichever side of the chapter list it was dragged to,
+        // as on Android, through the Android app's readButtonPosition preference.
+        // Android persists FabPosition.Start/End as "Start"/"End" while desktop's Compose
+        // material3 spells them "FabPosition.Start"/"FabPosition.End": read both spellings,
+        // write Android's, as the preference travels in backups between the apps
+        val uiPreferences = remember { Injekt.get<UiPreferences>() }
+        val readButtonPosition = remember { uiPreferences.readButtonPosition() }
+        val fabPosition by readButtonPosition.changes().collectAsState(readButtonPosition.get())
+        val fabAtStart = fabPosition == "Start" || fabPosition == FabPosition.Start.toString()
+        var offsetX by remember { mutableFloatStateOf(0f) }
+        var chaptersLayoutSize by remember { mutableStateOf(IntSize.Zero) }
+        var chaptersLayoutX by remember { mutableFloatStateOf(0f) }
+        var fabSize by remember { mutableStateOf(IntSize.Zero) }
+        var fabX by remember { mutableFloatStateOf(0f) }
         // ZOUKAN <--
 
         CoverBasedTheme(manga) {
@@ -188,6 +217,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 modifier = Modifier.width(infoWidth).fillMaxHeight(),
                                 onCoverClick = { coverDialog = true },
                                 search = search,
+                                onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
                                 onSourceClick = {
                                     val source = state.source
                                     when {
@@ -202,7 +232,12 @@ data class MangaScreen(val mangaId: Long) : Screen {
                             // ZOUKAN <--
                             VerticalDivider()
                             // Chapters
-                            Box(Modifier.weight(1f).fillMaxHeight()) {
+                            Box(
+                                Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { coordinates ->
+                                    chaptersLayoutSize = coordinates.size
+                                    chaptersLayoutX = coordinates.positionInWindow().x
+                                },
+                            ) {
                                 Column(Modifier.fillMaxSize()) {
                                     ChapterToolbar(state, model)
                                     HorizontalDivider()
@@ -296,15 +331,45 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                     }
                                 }
                                 // ZOUKAN -->
-                                // Komikku's Start / Resume button, while there is an unread chapter
+                                // Komikku's Start / Resume button, while there is an unread chapter,
+                                // draggable left/right and docking to the dragged side like on Android
                                 val next = state.nextChapter
                                 androidx.compose.animation.AnimatedVisibility(
                                     visible = next != null && state.selected.isEmpty(),
                                     enter = fadeIn() + scaleIn(),
                                     exit = fadeOut() + scaleOut(),
-                                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                                    modifier = Modifier
+                                        .align(if (fabAtStart) Alignment.BottomStart else Alignment.BottomEnd)
+                                        .padding(16.dp),
                                 ) {
-                                    ExtendedFloatingActionButton(onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } }) {
+                                    ExtendedFloatingActionButton(
+                                        onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } },
+                                        modifier = Modifier
+                                            .offset { IntOffset(offsetX.roundToInt(), 0) }
+                                            .onGloballyPositioned { coordinates ->
+                                                fabSize = coordinates.size
+                                                fabX = coordinates.positionInWindow().x
+                                            }
+                                            .pointerInput(Unit) {
+                                                detectHorizontalDragGestures(
+                                                    onDragEnd = {
+                                                        // Dock to the side the button's center ended on, as on Android
+                                                        if (fabX - chaptersLayoutX + fabSize.width / 2f >= chaptersLayoutSize.width / 2f) {
+                                                            readButtonPosition.set("End")
+                                                        } else {
+                                                            readButtonPosition.set("Start")
+                                                        }
+                                                        offsetX = 0f
+                                                    },
+                                                ) { change, dragAmount ->
+                                                    change.consume()
+                                                    val newOffsetX = offsetX + dragAmount
+                                                    if (!newOffsetX.isNaN()) {
+                                                        offsetX = newOffsetX
+                                                    }
+                                                }
+                                            },
+                                    ) {
                                         Icon(Icons.Filled.PlayArrow, null)
                                         Spacer(Modifier.width(12.dp))
                                         Text(if (state.hasStarted) localized(MR.strings.action_resume) else localized(MR.strings.action_start))
@@ -361,6 +426,17 @@ data class MangaScreen(val mangaId: Long) : Screen {
                 onDismiss = model::dismissCategoryChoice,
             )
         }
+        // ZOUKAN -->
+        // Komikku's In-library long press: the entry's categories, checked as they are now
+        state.categoryEdit?.let { (categories, chosen) ->
+            ChangeCategoryDialog(
+                categories = categories,
+                chosen = chosen,
+                onConfirm = model::setCategories,
+                onDismiss = model::dismissCategoryEdit,
+            )
+        }
+        // ZOUKAN <--
     }
 }
 
@@ -688,6 +764,46 @@ internal fun CategoryDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
+
+// ZOUKAN -->
+/** Android's ChangeCategory dialog: all categories, the entry's own checked, OK applies them. */
+@Composable
+internal fun ChangeCategoryDialog(
+    categories: List<tachiyomi.domain.category.model.Category>,
+    chosen: Set<Long>,
+    onConfirm: (Set<Long>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var checked by remember { mutableStateOf(chosen) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(MR.strings.action_move_category)) },
+        text = {
+            if (categories.isEmpty()) {
+                Text(localized(DMR.strings.there_are_no_categories_yet_add))
+            } else {
+                Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
+                    categories.forEach { category ->
+                        Row(
+                            Modifier.fillMaxWidth().toggleable(
+                                value = category.id in checked,
+                                onValueChange = { on -> checked = if (on) checked + category.id else checked - category.id },
+                            ).padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = category.id in checked, onCheckedChange = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(category.name)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(checked) }) { Text(localized(MR.strings.action_ok)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
+}
+// ZOUKAN <--
 
 private val dateTimeFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
 

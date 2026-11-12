@@ -77,6 +77,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
 
@@ -255,6 +256,7 @@ fun FeedTab(model: FeedScreenModel) {
     // ZOUKAN -->
     val bulk = remember { BulkFavorite() }
     var ordering by remember { mutableStateOf(false) }
+    val libraryToggle = rememberQuickLibraryToggle()
     // ZOUKAN <--
     // ZOUKAN -->
     val sourcePreferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
@@ -305,6 +307,10 @@ fun FeedTab(model: FeedScreenModel) {
                                         },
                                     )
                                 }
+                                // ZOUKAN -->
+                                // Android's long press on a feed row opens its actions: Delete
+                                .onRightClick { if (!row.fixed) model.remove(row) }
+                                // ZOUKAN <--
                                 .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -327,7 +333,8 @@ fun FeedTab(model: FeedScreenModel) {
                                             manga = manga,
                                             // ZOUKAN -->
                                             onClick = { if (bulk.active) bulk.toggle(manga) else navigator.push(MangaScreen(manga.id)) },
-                                            onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
+                                            // While selecting, right-click selects; otherwise it adds or removes (Android's long press)
+                                            onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else ({ libraryToggle.toggle(manga) }),
                                             modifier = Modifier.bulkSelected(bulk.isSelected(manga)),
                                             // ZOUKAN <--
                                         )
@@ -354,6 +361,7 @@ fun FeedTab(model: FeedScreenModel) {
     if (adding) AddFeedDialog(model, onDismiss = { adding = false })
     // ZOUKAN -->
     if (ordering) FeedOrderDialog(model, rows.filterNot { it.fixed }, onDismiss = { ordering = false })
+    QuickLibraryToggleDialogs(libraryToggle)
     // ZOUKAN <--
 }
 
