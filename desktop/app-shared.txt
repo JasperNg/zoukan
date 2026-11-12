@@ -29,6 +29,7 @@ exh/util/UriGroup.kt
 exh/util/ExceptionUtil.kt
 exh/util/OkHttpExtensions.kt
 eu/kanade/domain/manga/interactor/UpdateManga.kt
+eu/kanade/domain/manga/interactor/GetExcludedScanlators.kt
 mihon/domain/source/models/RemoteMangaUpdate.kt
 eu/kanade/domain/manga/interactor/SmartSearchMerge.kt
 mihon/domain/migration/models/MigrationFlag.kt
