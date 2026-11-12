@@ -17,7 +17,7 @@ Zoukan is a free and open source manga reader for the desktop. It is a port of
 [Komikku](https://github.com/komikku-app/komikku), the Android reader based on
 [Mihon](https://github.com/mihonapp/mihon) and [TachiyomiSY](https://github.com/jobobby04/TachiyomiSY),
 to Windows and macOS. It runs the same extensions, reads the same backups and keeps the same
-settings, so a library moves between a phone and a computer.
+settings, so a library can move between a phone and a computer.
 
 The name comes from the Japanese word for a magazine's special extra issue (増刊): the extra edition of
 Komikku.
