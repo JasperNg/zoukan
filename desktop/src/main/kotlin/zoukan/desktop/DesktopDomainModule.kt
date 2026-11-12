@@ -171,6 +171,8 @@ class DesktopDomainModule : InjektModule {
         addSingletonFactory { tachiyomi.domain.history.service.HistoryPreferences(get()) }
         addFactory { tachiyomi.domain.category.interactor.ResetCategoryFlags(get(), get()) }
         addFactory { GetLibraryManga(get()) }
+        // SY: Statistics > Include all read entries
+        addFactory { tachiyomi.domain.manga.interactor.GetReadMangaNotInLibraryView(get()) }
         addFactory { GetManga(get()) }
         addFactory { GetMangaWithChapters(get(), get()) }
         addFactory { NetworkToLocalManga(get()) }

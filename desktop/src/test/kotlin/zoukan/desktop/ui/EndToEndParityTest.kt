@@ -50,6 +50,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -493,16 +494,33 @@ class EndToEndParityTest {
                 onAllNodesWithText("Custom color").onFirst().performClick()
                 waitFor(hasText("Hex"))
                 shot("p17-settings-custom-color")
-                onAllNodesWithText("Cancel").onFirst().performClick()
+                // KMK's palettes: Sunset's first color, then Confirm Color sets it
+                waitFor(hasText("Sunset"))
+                onNodeWithTag("theme-palette-FF3E9CBF").performScrollTo().performClick()
+                onAllNodesWithText("Confirm Color").onFirst().performClick()
+                // The picker keeps hue, saturation and brightness, so a channel may round by one
+                waitUntil(timeoutMillis = 5_000) {
+                    val picked = ui.colorTheme().get()
+                    listOf(16, 8, 0).all { shift -> kotlin.math.abs((picked shr shift and 0xFF) - (0x3E9CBF shr shift and 0xFF)) <= 1 }
+                }
 
                 var list = settingsPage(SettingsCategory.Library)
+                // SY's Library dynamic category updates
+                list.performScrollToNode(hasText("Library dynamic category updates"))
+                onAllNodesWithText("Library dynamic category updates").onFirst().performClick()
+                waitFor(hasText("Launch category updates all the time"))
+                onAllNodesWithText("Launch category updates all the time").onFirst().performClick()
+                val libraryPreferences = Injekt.get<LibraryPreferences>()
+                waitUntil(timeoutMillis = 5_000) { libraryPreferences.groupLibraryUpdateType().get() == GroupLibraryMode.ALL }
+                libraryPreferences.groupLibraryUpdateType().set(GroupLibraryMode.GLOBAL)
                 list.performScrollToNode(hasText("Default category"))
                 onAllNodesWithText("Default category").onFirst().performClick()
                 waitFor(hasText("Always ask"))
                 shot("p18-settings-default-category")
                 onAllNodesWithText("Always ask").onFirst().performClick()
 
-                list.performScrollToNode(hasText("Smart update"))
+                // To the row below Smart update, so a toast at the window's bottom does not cover it
+                list.performScrollToNode(hasText("Show unread count on Updates icon"))
                 onAllNodesWithText("Smart update").onFirst().performClick()
                 waitFor(hasText("Predict next release time"))
                 shot("p19-settings-smart-update")

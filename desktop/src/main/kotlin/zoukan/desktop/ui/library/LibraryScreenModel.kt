@@ -36,6 +36,7 @@ import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.history.interactor.GetNextChapters
+import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibraryManga
@@ -267,6 +268,26 @@ class LibraryScreenModel(
         }.distinctBy { it.id }
 
         fun countIn(category: Long?): Int = inCategory(category).count { passes(it) }
+
+        // ZOUKAN -->
+        /**
+         * What updating [category] updates while the library is grouped, as LibraryUpdateJob's
+         * addMangaToQueue under SY's groupLibraryUpdateType: null for the global update (by the
+         * library update categories), or the ids of the tab's entries; the whole library when
+         * ungrouped.
+         */
+        fun groupUpdateIds(category: Long?, mode: GroupLibraryMode): Set<Long>? {
+            val group = settings.effectiveGroup
+            val global = mode == GroupLibraryMode.GLOBAL ||
+                (mode == GroupLibraryMode.ALL_BUT_UNGROUPED && group == LibraryGroup.UNGROUPED)
+            return when {
+                global -> null
+                group == LibraryGroup.UNGROUPED -> inCategory(null).mapTo(HashSet()) { it.id }
+                category == null -> null
+                else -> inCategory(category).mapTo(HashSet()) { it.id }
+            }
+        }
+        // ZOUKAN <--
 
         private fun TriState.test(value: Boolean): Boolean = when (this) {
             TriState.DISABLED -> true
@@ -540,9 +561,11 @@ class LibraryScreenModel(
     fun refresh() {
         val category = state.value.selectedCategory
         // ZOUKAN -->
-        // A source, status or tracking tab updates the entries in it
-        val started = if (state.value.grouped && category != null) {
-            Injekt.get<LibraryUpdater>().start(groupIds = state.value.inCategory(category).mapTo(HashSet()) { it.id })
+        // A source, status or tracking tab updates the entries in it, or the whole library, as SY's
+        // "Library dynamic category updates" (groupLibraryUpdateType) says
+        val started = if (state.value.grouped) {
+            val groupIds = state.value.groupUpdateIds(category, preferences.groupLibraryUpdateType().get())
+            Injekt.get<LibraryUpdater>().start(groupIds = groupIds)
         } else {
             Injekt.get<LibraryUpdater>().start(categoryId = category)
         }
