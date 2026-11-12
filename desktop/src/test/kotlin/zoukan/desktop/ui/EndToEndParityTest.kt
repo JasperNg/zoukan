@@ -364,6 +364,20 @@ class EndToEndParityTest {
                 shot("p14-update-errors-empty")
             }
 
+            step("Updates: a day's chapters of one entry fold into one row that expands") {
+                runOnUiThread { navigator?.popUntilRoot() }
+                onAllNodesWithText("Updates").onFirst().performClick()
+                // Alpha, Bravo and Charlie each lead their chapters; the others stay folded
+                waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("updates-leader").fetchSemanticsNodes().size == 3 }
+                onAllNodesWithTag("updates-item").fetchSemanticsNodes().size shouldBe 0
+                shot("p15-updates-grouped")
+                byDescription("Expand").performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-item").fetchSemanticsNodes().isNotEmpty() }
+                shot("p16-updates-expanded")
+                byDescription("Collapse").performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-item").fetchSemanticsNodes().isEmpty() }
+            }
+
             step("Settings: appearance, library and downloads") {
                 val ui = Injekt.get<UiPreferences>()
                 runOnUiThread {
