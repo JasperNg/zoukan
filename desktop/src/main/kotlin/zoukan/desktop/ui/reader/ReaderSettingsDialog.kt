@@ -145,6 +145,7 @@ private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPrefe
         SwitchRow(localized(MR.strings.pref_page_rotate), prefs.dualPageRotateToFitWebtoon())
         SwitchRow(localized(MR.strings.pref_page_rotate_invert), prefs.dualPageRotateToFitInvertWebtoon())
         SwitchRow(localized(MR.strings.pref_double_tap_zoom), prefs.webtoonDoubleTapZoomEnabled())
+        SwitchRow(localized(KMR.strings.pref_pinch_to_zoom), prefs.webtoonPinchToZoomEnabled())
         SwitchRow(localized(MR.strings.pref_webtoon_disable_zoom_out), prefs.webtoonDisableZoomOut())
         SwitchRow(localized(MR.strings.pref_page_transitions), prefs.pageTransitionsWebtoon())
         // ZOUKAN <--

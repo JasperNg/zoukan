@@ -76,6 +76,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         val background = readerBackground(theme, dark)
         val foreground = readerForeground(theme, dark)
         val tapZones = remember { TapZonesOverlayState(prefs) }
+        val pagerNavInvert by prefs.pagerNavInverted().changes().collectAsState(prefs.pagerNavInverted().get())
+        val webtoonNavInvert by prefs.webtoonNavInverted().changes().collectAsState(prefs.webtoonNavInverted().get())
         // ZOUKAN <--
         val actions = remember { ReaderActions() }
         val focus = remember { FocusRequester() }
@@ -119,25 +121,34 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
             // ZOUKAN -->
             tapZones.hide()
             // ZOUKAN <--
-            val rtl = state.readingMode == ReadingModes.RIGHT_TO_LEFT
+            // The Left and Right keys follow the taps: flipped in right to left mode or by inverted tap zones
+            val invert = ReaderNavigation.Invert.of(if (webtoon) webtoonNavInvert else pagerNavInvert)
+            val flipped = ReaderNavigation.flipped(
+                rtl = state.readingMode == ReadingModes.RIGHT_TO_LEFT,
+                invert = invert,
+            )
+            // The Up and Down keys follow the vertical taps too; J and K stay physical
+            val verticalFlipped = ReaderNavigation.verticalFlipped(invert)
             val ctrl = event.isCtrlPressed || event.isMetaPressed
             when (event.key) {
                 Key.DirectionRight -> if (event.isAltPressed) {
                     return false
-                } else if (rtl) {
+                } else if (flipped) {
                     actions.previous()
                 } else {
                     actions.next()
                 }
                 Key.DirectionLeft -> if (event.isAltPressed) {
                     return false
-                } else if (rtl) {
+                } else if (flipped) {
                     actions.next()
                 } else {
                     actions.previous()
                 }
-                Key.DirectionDown, Key.J -> actions.down()
-                Key.DirectionUp, Key.K -> actions.up()
+                Key.DirectionDown -> if (verticalFlipped) actions.up() else actions.down()
+                Key.DirectionUp -> if (verticalFlipped) actions.down() else actions.up()
+                Key.J -> actions.down()
+                Key.K -> actions.up()
                 Key.Spacebar -> if (event.isShiftPressed) actions.previous() else actions.next()
                 Key.PageDown -> actions.next()
                 Key.PageUp -> actions.previous()

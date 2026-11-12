@@ -379,9 +379,9 @@
     <string name="next_chapter_n">Next chapter (N)</string>
     <string name="previous_chapter_p">Previous chapter (P)</string>
     <string name="right_and_left">Right and left</string>
-    <string name="next_previous_page_flipped_in_right">Next / previous page (flipped in right to left mode)</string>
+    <string name="next_previous_page_flipped_in_right">Next / previous page (flipped in right to left mode or by inverted tap zones)</string>
     <string name="next_previous_page">Next / previous page</string>
-    <string name="scroll_a_tall_or_zoomed_page">Scroll a tall or zoomed page, then turn the page</string>
+    <string name="scroll_a_tall_or_zoomed_page">Scroll a tall or zoomed page, then turn the page (flipped by vertically inverted tap zones)</string>
     <string name="first_last_page">First / last page</string>
     <string name="next_previous_chapter">Next / previous chapter</string>
     <string name="zoom_in_out">Zoom in / out</string>
