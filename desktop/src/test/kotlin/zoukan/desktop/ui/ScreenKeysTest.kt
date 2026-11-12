@@ -30,6 +30,7 @@ class ScreenKeysTest {
                 SourceSettingsScreen(id),
                 SourceScreen(id),
                 SourceScreen(id, savedSearch = id),
+                SourceScreen(id, follows = true),
             )
         } + listOf(GlobalSearchScreen("one"), GlobalSearchScreen("one piece")) +
             // ZOUKAN -->

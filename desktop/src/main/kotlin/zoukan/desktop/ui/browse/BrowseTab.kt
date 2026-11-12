@@ -59,6 +59,7 @@ import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -182,18 +183,27 @@ private fun SourcesList(state: BrowseScreenModel.State, model: BrowseScreenModel
             actionLabel = if (state.allSources.isEmpty()) localized(MR.strings.label_extensions) else localized(MR.strings.action_filter),
             onAction = if (state.allSources.isEmpty()) onExtensions else ({ navigator.push(SourcesFilterScreen) }),
         )
-        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
-            // ZOUKAN -->
-            state.sections.forEachIndexed { index, (title, sources) ->
-                item(key = "section-$index-$title") {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-                    )
+        // ZOUKAN -->
+        // KMK's search box over the list
+        else -> Column(Modifier.fillMaxSize()) {
+            SearchField(
+                state.sourceQuery,
+                model::searchSources,
+                localized(KMR.strings.action_search_for_source),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).testTag("source-search"),
+            )
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+                state.visibleSections.forEachIndexed { index, (title, sources) ->
+                    item(key = "section-$index-$title") {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(sources, key = { "section-$index-${it.id}" }) { SourceRow(it, state, model, navigator::push) }
                 }
-                items(sources, key = { "section-$index-${it.id}" }) { SourceRow(it, state, model, navigator::push) }
             }
             // ZOUKAN <--
         }
@@ -340,9 +350,32 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                     }
                 }
             }
-            if (state.visibleInstalled.isNotEmpty()) {
-                sectionHeader(localized(MR.strings.ext_installed))
-                items(state.visibleInstalled, key = { "i-${it.pkgName}" }) { ext ->
+            // ZOUKAN -->
+            // Extensions with updates come first under "Updates pending", with Update all, as on Android
+            val (pending, upToDate) = state.visibleInstalled.partition { it.hasUpdate }
+            if (pending.isNotEmpty()) {
+                item(key = "header-updates-pending") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            localized(MR.strings.ext_updates_pending),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(onClick = model::updateAll, modifier = Modifier.testTag("extension-update-all")) {
+                            Text(localized(MR.strings.ext_update_all))
+                        }
+                    }
+                }
+            }
+            listOf(pending to null, upToDate to localized(MR.strings.ext_installed)).forEach { (extensions, header) ->
+                if (extensions.isEmpty()) return@forEach
+                header?.let { sectionHeader(it) }
+                // ZOUKAN <--
+                items(extensions, key = { "i-${it.pkgName}" }) { ext ->
                     val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
                     // ZOUKAN -->
                     ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }) {
