@@ -122,6 +122,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Sources, extensions, extension stores, global search | Yes | Phase 2 |
 | Hidden sources and the sources filter (languages, per-source) | Yes | Browse > Sources > filter button, and Disable in a source's More menu, as Android's long press. The Sources list shows the enabled languages only, as on Android |
 | Pinned, last used and source category sections | Yes | As Android's Sources list |
+| Search box over the Sources list (KMK) | Yes | Above the list: matches a source's name, its extension's name or its id; commas separate terms, any of which may match |
 | Source filters and settings | Yes | Phase 2 |
 | Saved searches | Yes | Chips above the listing; save from the filter panel; right-click deletes |
 | Source display modes: comfortable, panorama (KMK) and compact grid, list | Yes | The source's display mode button, as Android's toolbar; the Android preference, shared by every source. Columns follow the library's column setting |
@@ -130,6 +131,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Batch add (MangaDex, E-H, ExH, nH, 8Muses addresses, E-H Visited export) | Yes | Browse > Batch add button, instead of the More tab; the Android screen model and GalleryAdder, shared |
 | Feed (global, latest/popular or a saved search) | Yes | Browse > Feed, and a per-source feed from the source's feed button |
 | Feed order (global and per source, KMK) | Yes | The feed's reorder button: drag the saved feeds, or move them with the arrows |
+| Extensions: Updates pending and Update all | Yes | Installed extensions with updates come first under Updates pending, whose Update all button updates each shown one |
 | Extension details | Yes | Click an installed extension: version, language, age rating, store, uninstall, incognito, clear cookies, and each source with its on/off switch and settings |
 | Browse > Migrate (migrate by source) | Yes | The sources of the library's entries with their counts, sorted by name or count; pick a source's entries and migrate them with the bulk migration |
 | Bulk add to library (KMK) | Yes | The select button in a source, the global search or the feed, then click or right-click results and Add to library; asks about titles already in the library, then uses the default category or asks |
@@ -137,6 +139,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Global search filters: pinned sources only, has results (KMK) | Yes | Chips above the results. The global search uses the enabled sources, as on Android |
 | E-Hentai and ExHentai built-in sources | Yes | Settings > E-Hentai; sign in through the built-in browser or cookies |
 | MangaDex and other delegated sources, MDList | Yes | MangaDex, NHentai, LANraragi, Pururin and 8Muses extensions run through the Android delegates; MDList signs in with OAuth |
+| MangaDex Random and Follows (SY) | Yes | The buttons at the top of a MangaDex source's filter panel: Random opens a random entry's search (`id:`), Follows lists the signed-in account's follows with the display modes and bulk add |
 | E-Hentai site settings (uconfig), favorites sync, gallery update worker | Yes | Settings > E-Hentai; gallery updates run in the background while the app is open |
 | E-Hentai gallery update restrictions | Yes, changed | Charging waits for mains power, as the library update does. Wi-Fi and unmetered network stay in the setting for Android |
 | Metadata viewer and details block (E-Hentai, MangaDex, NHentai, Pururin, 8Muses, LANraragi) | Yes | Manga screen: rating, category, pages, uploader and tags by namespace (each opens the tag menu); More info lists every field. Right-click copies a value, as a long press on Android |

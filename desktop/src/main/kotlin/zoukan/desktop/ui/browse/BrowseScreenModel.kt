@@ -64,8 +64,32 @@ class BrowseScreenModel(
         val sourceCategories: Map<Long, Set<String>> = emptyMap(),
         /** Android's "Replace latest button" is off */
         val showLatest: Boolean = false,
+        /** KMK's search box over the Sources list */
+        val sourceQuery: String = "",
         // ZOUKAN <--
     ) {
+        // ZOUKAN -->
+        /**
+         * The Sources list with KMK's search: comma-separated terms, each matching a source's name,
+         * its extension's name or its id, as SourcesScreenModel's queryFilter. Empty sections go.
+         */
+        val visibleSections: List<Pair<String, List<CatalogueSource>>>
+            get() {
+                val terms = sourceQuery.split(",").map(String::trim).filter(String::isNotEmpty)
+                if (terms.isEmpty()) return sections
+                val extensionNames = installed.flatMap { ext -> ext.sources.map { it.id to ext.name } }.toMap()
+                return sections.mapNotNull { (title, list) ->
+                    list.filter { source ->
+                        terms.any { input ->
+                            extensionNames[source.id]?.contains(input, ignoreCase = true) == true ||
+                                source.name.contains(input, ignoreCase = true) ||
+                                source.id == input.toLongOrNull()
+                        }
+                    }.takeIf { it.isNotEmpty() }?.let { title to it }
+                }
+            }
+        // ZOUKAN <--
+
         private fun Extension.matches(): Boolean =
             extensionQuery.isBlank() ||
                 name.contains(extensionQuery, ignoreCase = true) ||
@@ -194,6 +218,10 @@ class BrowseScreenModel(
         }
     }
 
+    // ZOUKAN -->
+    fun searchSources(query: String) = mutableState.update { it.copy(sourceQuery = query) }
+    // ZOUKAN <--
+
     fun togglePin(source: CatalogueSource) {
         val key = source.id.toString()
         val pinned = preferences.pinnedSources().get()
@@ -264,6 +292,13 @@ class BrowseScreenModel(
     fun update(extension: Extension.Installed) = busy(extension.pkgName) {
         extensionManager.updateExtension(extension)?.let { report(extension.name, it) }
     }
+
+    // ZOUKAN -->
+    /** Updates every shown extension that has an update, as Android's updateAllExtensions. */
+    fun updateAll() {
+        state.value.visibleInstalled.filter { it.hasUpdate }.forEach(::update)
+    }
+    // ZOUKAN <--
 
     fun uninstall(extension: Extension) = busy(extension.pkgName) {
         extensionManager.uninstallExtension(extension.pkgName)
