@@ -116,6 +116,9 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Pinned, last used and source category sections | Yes | As Android's Sources list |
 | Source filters and settings | Yes | Phase 2 |
 | Saved searches | Yes | Chips above the listing; save from the filter panel; right-click deletes |
+| Source display modes: comfortable, panorama (KMK) and compact grid, list | Yes | The source's display mode button, as Android's toolbar; the Android preference, shared by every source. Columns follow the library's column setting |
+| Enhanced E-Hentai view (detailed list of galleries) | Yes | Settings > E-Hentai: E-Hentai and ExHentai results show the cover, uploader, rating, category, language, pages and date posted |
+| Panorama cover flow in feed and global search rows (KMK) | Yes | Settings > Appearance > Browse: wide covers show wide |
 | Batch add (MangaDex, E-H, ExH, nH, 8Muses addresses, E-H Visited export) | Yes | Browse > Batch add button, instead of the More tab; the Android screen model and GalleryAdder, shared |
 | Feed (global, latest/popular or a saved search) | Yes | Browse > Feed, and a per-source feed from the source's feed button |
 | Feed order (global and per source, KMK) | Yes | The feed's reorder button: drag the saved feeds, or move them with the arrows |
