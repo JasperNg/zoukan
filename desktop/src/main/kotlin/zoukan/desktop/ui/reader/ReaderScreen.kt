@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -35,6 +36,9 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -63,11 +67,16 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         val windowState = LocalWindowState.current
         val prefs = model.preferences
         val theme by prefs.readerTheme().changes().collectAsState(prefs.readerTheme().get())
-        val fitMode by prefs.readerFitMode().changes().collectAsState(prefs.readerFitMode().get())
+        val fitMode by prefs.imageScaleType().changes().collectAsState(prefs.imageScaleType().get())
         val sidePadding by prefs.webtoonSidePadding().changes().collectAsState(prefs.webtoonSidePadding().get())
         val showPageNumber by prefs.showPageNumber().changes().collectAsState(prefs.showPageNumber().get())
-        val background = readerBackground(theme)
-        val foreground = readerForeground(theme)
+        // ZOUKAN -->
+        // The Automatic theme follows the app's light or dark theme, as Android's follows night mode
+        val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        val background = readerBackground(theme, dark)
+        val foreground = readerForeground(theme, dark)
+        val tapZones = remember { TapZonesOverlayState(prefs) }
+        // ZOUKAN <--
         val actions = remember { ReaderActions() }
         val focus = remember { FocusRequester() }
         var showKeys by remember { mutableStateOf(false) }
@@ -107,6 +116,9 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
 
         fun onKey(event: KeyEvent): Boolean {
             if (event.type != KeyEventType.KeyDown) return false
+            // ZOUKAN -->
+            tapZones.hide()
+            // ZOUKAN <--
             val rtl = state.readingMode == ReadingModes.RIGHT_TO_LEFT
             val ctrl = event.isCtrlPressed || event.isMetaPressed
             when (event.key) {
@@ -165,6 +177,10 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
             Modifier
                 .fillMaxSize()
                 .background(background)
+                // ZOUKAN -->
+                // Any click hides the tap zones overlay, and still reaches the reader
+                .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { tapZones.hide() }
+                // ZOUKAN <--
                 .onPreviewKeyEvent(::onKey)
                 .focusRequester(focus)
                 .focusable(),
@@ -186,9 +202,9 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                         Box(Modifier.fillMaxSize().readerFilter(filter)) {
                             // ZOUKAN <--
                             if (webtoon) {
-                                WebtoonViewer(model, state, actions, sidePadding, background, foreground)
+                                WebtoonViewer(model, state, actions, sidePadding, background, foreground, tapZones)
                             } else {
-                                PagedViewer(model, state, actions, fitMode, background, foreground)
+                                PagedViewer(model, state, actions, fitMode, background, foreground, tapZones, autoBackground = theme == 3)
                             }
                         }
                     }
@@ -257,7 +273,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                     onWebView = model::openChapterInWebView,
                     onBrowser = model::openChapterInBrowser,
                     onReadingMode = model::setReadingMode,
-                    onFitMode = { prefs.readerFitMode().set(it) },
+                    onFitMode = { prefs.imageScaleType().set(it) },
                     onToggleCrop = {
                         val pref = if (webtoon) prefs.cropBordersWebtoon() else prefs.cropBorders()
                         pref.set(!pref.get())

@@ -21,6 +21,7 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.reader.ReaderNavigation
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
@@ -33,6 +34,7 @@ import kotlin.math.roundToInt
 fun LazyListScope.readerBehaviourSettings(preferences: DesktopPreferences) {
     settingsGroup(localized(MR.strings.action_display))
     item { SwitchPreference(localized(MR.strings.pref_show_reading_mode), preferences.showReadingMode(), localized(DMR.strings.briefly_shows_the_current_mode_when)) }
+    item { SwitchPreference(localized(MR.strings.pref_show_navigation_mode), preferences.showNavigationOverlayOnStart(), localized(MR.strings.pref_show_navigation_mode_summary)) }
     item { SwitchPreference(localized(MR.strings.pref_always_show_chapter_transition), preferences.alwaysShowChapterTransition()) }
     item { SwitchPreference(localized(MR.strings.pref_keep_screen_on), preferences.keepScreenOn()) }
     item { SwitchPreference(localized(MR.strings.pref_flash_page), preferences.flashOnPageChange(), localized(DMR.strings.reduces_ghosting_on_e_ink_monitors)) }
@@ -69,6 +71,8 @@ fun LazyListScope.readerBehaviourSettings(preferences: DesktopPreferences) {
     settingsGroup(localized(SYMR.strings.entry_type_webtoon))
     item { ChoicePreference(localized(MR.strings.pref_viewer_nav), preferences.navigationModeWebtoon(), ReaderNavigation.layouts) }
     item { ChoicePreference(localized(MR.strings.pref_read_with_tapping_inverted), preferences.webtoonNavInverted(), invertChoices) }
+    item { ChoicePreference(localized(KMR.strings.pref_webtoon_scale_type), preferences.webtoonScaleType(), WebtoonScaleTypes.all) }
+    item { SwitchPreference(localized(KMR.strings.pref_smart_scale_long_strip_gap), preferences.longStripGapSmartScale()) }
     item { SwitchPreference(localized(MR.strings.pref_dual_page_split), preferences.dualPageSplitWebtoon()) }
     item { SwitchPreference(localized(MR.strings.pref_dual_page_invert), preferences.dualPageInvertWebtoon()) }
     item { SwitchPreference(localized(MR.strings.pref_page_rotate), preferences.dualPageRotateToFitWebtoon()) }

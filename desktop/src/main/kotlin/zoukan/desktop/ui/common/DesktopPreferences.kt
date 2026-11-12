@@ -3,6 +3,7 @@ package zoukan.desktop.ui.common
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
@@ -12,6 +13,18 @@ import zoukan.i18n.desktop.DMR
  * (UiPreferences, ReaderPreferences, SourcePreferences), so they travel in backups both ways.
  */
 class DesktopPreferences(private val store: PreferenceStore) {
+    // ZOUKAN -->
+    init {
+        // The paged scale type was a desktop key with its own numbering; it is Android's
+        // imageScaleType now, so it moves with backups
+        val old = store.getInt(OLD_FIT_MODE_KEY, -1)
+        if (old.isSet()) {
+            if (!imageScaleType().isSet()) imageScaleType().set(FitModes.fromOldDesktopValue(old.get()))
+            old.delete()
+        }
+    }
+    // ZOUKAN <--
+
     /** ReadingMode flag values: 1 left to right, 2 right to left, 3 vertical, 4 webtoon, 5 continuous vertical */
     fun defaultReadingMode() = store.getInt("pref_default_reading_mode_key", ReadingModes.RIGHT_TO_LEFT)
 
@@ -20,7 +33,7 @@ class DesktopPreferences(private val store: PreferenceStore) {
     /** 0 to 25, percent of the window width on each side in webtoon mode */
     fun webtoonSidePadding() = store.getInt("webtoon_side_padding", 0)
 
-    /** 0 white, 1 black, 2 gray, as Android's reader theme */
+    /** 0 white, 1 black, 2 gray, 3 automatic, as Android's reader theme */
     fun readerTheme() = store.getInt("pref_reader_theme_key", 1)
 
     fun alwaysShowChapterTransition() = store.getBoolean("always_show_chapter_transition", true)
@@ -97,8 +110,22 @@ class DesktopPreferences(private val store: PreferenceStore) {
     fun folderPerManga() = store.getBoolean("create_folder_per_manga", false)
     // ZOUKAN <--
 
-    /** Desktop only: the reader's zoom in paged modes is kept per window, not per manga */
-    fun readerFitMode() = store.getInt("zoukan_reader_fit_mode", FitModes.FIT_SCREEN)
+    // ZOUKAN -->
+    /** The scale type of the paged modes, as Android's imageScaleType: a [FitModes] value */
+    fun imageScaleType() = store.getInt("pref_image_scale_type_key", FitModes.FIT_SCREEN)
+
+    /** A [WebtoonScaleTypes] name: KMK's "Smart scale on wide screen" in webtoon mode */
+    fun webtoonScaleType() = store.getString("pref_webtoon_scale_type_key", WebtoonScaleTypes.FIT)
+
+    /** KMK's "Apply Smart scale to Long strip with gaps" */
+    fun longStripGapSmartScale() = store.getBoolean("pref_webtoon_smart_scale_long_strip_gap", false)
+
+    /** Android's "Show tap zones overlay": briefly shows the tap zones when the reader opens */
+    fun showNavigationOverlayOnStart() = store.getBoolean("reader_navigation_overlay_on_start", false)
+
+    /** Set until the reader has shown its tap zones once, as Android shows them to a new user */
+    fun showNavigationOverlayNewUser() = store.getBoolean("reader_navigation_overlay_new_user", true)
+    // ZOUKAN <--
 
     // ZOUKAN -->
     /** The reader menu's page slider stays horizontal, as Android's "Force horizontal seekbar" */
@@ -253,17 +280,89 @@ object ReadingModes {
 }
 
 object FitModes {
-    const val FIT_SCREEN = 0
-    const val FIT_WIDTH = 1
-    const val FIT_HEIGHT = 2
-    const val ORIGINAL = 3
+    // ZOUKAN -->
+    // Android's imageScaleType values (the SubsamplingScaleImageView scale types)
+    const val FIT_SCREEN = 1
+    const val STRETCH = 2
+    const val FIT_WIDTH = 3
+    const val FIT_HEIGHT = 4
+    const val ORIGINAL = 5
+    const val SMART_FIT = 6
 
-    val all = listOf(FIT_SCREEN, FIT_WIDTH, FIT_HEIGHT, ORIGINAL)
+    val all = listOf(FIT_SCREEN, STRETCH, FIT_WIDTH, FIT_HEIGHT, ORIGINAL, SMART_FIT)
 
     fun label(mode: Int) = when (mode) {
+        STRETCH -> localized(MR.strings.scale_type_stretch)
         FIT_WIDTH -> localized(MR.strings.scale_type_fit_width)
         FIT_HEIGHT -> localized(MR.strings.scale_type_fit_height)
         ORIGINAL -> localized(MR.strings.scale_type_original_size)
+        SMART_FIT -> localized(MR.strings.scale_type_smart_fit)
         else -> localized(MR.strings.scale_type_fit_screen)
     }
+
+    /** The old desktop-only fit mode (0 fit screen, 1 width, 2 height, 3 original) as an imageScaleType */
+    fun fromOldDesktopValue(value: Int) = when (value) {
+        1 -> FIT_WIDTH
+        2 -> FIT_HEIGHT
+        3 -> ORIGINAL
+        else -> FIT_SCREEN
+    }
+
+    /**
+     * The scale of a page of [page] pixels in a [viewWidth] by [viewHeight] window, as
+     * SubsamplingScaleImageView's minimum scale for each type. [original] is the scale of
+     * Original size (the screen density).
+     */
+    fun scale(mode: Int, pageWidth: Int, pageHeight: Int, viewWidth: Int, viewHeight: Int, original: Float): Float {
+        val w = pageWidth.coerceAtLeast(1).toFloat()
+        val h = pageHeight.coerceAtLeast(1).toFloat()
+        val toWidth = viewWidth / w
+        val toHeight = viewHeight / h
+        return when (mode) {
+            // Center crop: fills the window, the overflow pans
+            STRETCH -> maxOf(toWidth, toHeight)
+            FIT_WIDTH -> toWidth
+            FIT_HEIGHT -> toHeight
+            ORIGINAL -> original
+            // A tall page fits the width, a wide one the height
+            SMART_FIT -> if (h > w) toWidth else toHeight
+            else -> minOf(toWidth, toHeight)
+        }
+    }
+    // ZOUKAN <--
 }
+
+// ZOUKAN -->
+/** KMK's WebtoonScaleType: the strip narrows to this width-to-height ratio of the window when the window is wider */
+object WebtoonScaleTypes {
+    const val FIT = "FIT"
+
+    val all = listOf(
+        FIT to localized(MR.strings.scale_type_fit_screen),
+        "R4_3" to localized(KMR.strings.scale_type_4_3),
+        "R3_2" to localized(KMR.strings.scale_type_3_2),
+        "R16_9" to localized(KMR.strings.scale_type_16_9),
+        "R20_9" to localized(KMR.strings.scale_type_20_9),
+    )
+
+    fun ratio(name: String): Float = when (name) {
+        "R4_3" -> 3f / 4f
+        "R3_2" -> 2f / 3f
+        "R16_9" -> 9f / 16f
+        "R20_9" -> 9f / 20f
+        else -> 0f
+    }
+
+    /**
+     * The strip's scale in a [width] by [height] window, as KMK's webtoon viewer: 1 unless the
+     * window is wider than the ratio, then the scale that makes the strip that ratio of the height.
+     */
+    fun scale(name: String, width: Float, height: Float): Float {
+        val ratio = ratio(name)
+        if (ratio <= 0f || width <= 0f || height <= 0f) return 1f
+        return if (width / height > ratio) height * ratio / width else 1f
+    }
+}
+
+private const val OLD_FIT_MODE_KEY = "zoukan_reader_fit_mode"
+// ZOUKAN <--
