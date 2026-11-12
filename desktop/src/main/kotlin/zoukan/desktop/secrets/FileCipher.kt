@@ -1,5 +1,7 @@
 package zoukan.desktop.secrets
 
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import java.security.SecureRandom
 import java.util.HexFormat
@@ -46,6 +48,7 @@ class FileCipher(private val key: ByteArray) : SettingsFileCodec {
 
     companion object {
         const val KEY_NAME = "file-key"
+        const val UNREADABLE_KEY_NAME = "file-key.unreadable"
 
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val KEY_BYTES = 32
@@ -54,10 +57,19 @@ class FileCipher(private val key: ByteArray) : SettingsFileCodec {
         private val MAGIC = "ZOUKANENC1\n".toByteArray(Charsets.US_ASCII)
         private val random = SecureRandom()
 
-        /** The cipher with the key from [secrets], which gets a new key when it has none. */
+        /**
+         * The cipher with the key from [secrets], which gets a new key when it has none. A stored
+         * key that cannot be read is kept under [UNREADABLE_KEY_NAME] before it is replaced, so
+         * the files it encrypted (kept aside as `.unreadable`) can still be recovered.
+         */
         fun fromStore(secrets: SecretStore): FileCipher {
-            val stored = secrets.get(KEY_NAME)?.let { runCatching { HexFormat.of().parseHex(it.trim()) }.getOrNull() }
+            val text = secrets.get(KEY_NAME)
+            val stored = text?.let { runCatching { HexFormat.of().parseHex(it.trim()) }.getOrNull() }
             if (stored != null && stored.size == KEY_BYTES) return FileCipher(stored)
+            if (text != null) {
+                logcat(LogPriority.ERROR) { "The file key in the secret store cannot be read; it is kept as $UNREADABLE_KEY_NAME" }
+                secrets.set(UNREADABLE_KEY_NAME, text)
+            }
             val key = ByteArray(KEY_BYTES).also { random.nextBytes(it) }
             secrets.set(KEY_NAME, HexFormat.of().formatHex(key))
             return FileCipher(key)

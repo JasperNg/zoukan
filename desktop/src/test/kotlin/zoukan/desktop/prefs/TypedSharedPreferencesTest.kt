@@ -46,4 +46,19 @@ class TypedSharedPreferencesTest {
         prefs.edit().remove("set").remove("int").commit()
         JavaSharedPreferences("typed_test").all shouldBe expected - "set" - "int"
     }
+
+    @Test
+    fun `a save replaces the file and leaves no temporary file, and a half-done save is recovered`() {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        val file = File(root, "settings/atomic_test.xml")
+        JavaSharedPreferences("atomic_test").edit().putString("a", "1").commit()
+        JavaSharedPreferences("atomic_test").edit().putString("b", "2").commit()
+        file.isFile shouldBe true
+        File(root, "settings/atomic_test.xml.tmp").exists() shouldBe false
+
+        // An older version deleted the file before copying the new one over it
+        file.renameTo(File(root, "settings/atomic_test.xml.tmp"))
+        JavaSharedPreferences("atomic_test").all shouldBe mapOf("a" to "1", "b" to "2")
+        file.isFile shouldBe true
+    }
 }
