@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
@@ -62,6 +63,19 @@ class LibraryGroupingTest {
         state.tabs.map { it.id } shouldContainExactly listOf(1L, 5L, 7L)
         state.inCategory(TrackStatus.READING.int.toLong()).map { it.id } shouldContainExactly listOf(1L, 3L)
         state.inCategory(TrackStatus.OTHER.int.toLong()).map { it.id } shouldContainExactly listOf(2L, 4L)
+    }
+
+    @Test
+    fun `group tab updates follow the library dynamic category updates setting`() {
+        val bySource = state(LibraryGroup.BY_SOURCE)
+        bySource.groupUpdateIds(10L, GroupLibraryMode.GLOBAL) shouldBe null
+        bySource.groupUpdateIds(10L, GroupLibraryMode.ALL_BUT_UNGROUPED) shouldBe setOf(1L, 3L)
+        bySource.groupUpdateIds(10L, GroupLibraryMode.ALL) shouldBe setOf(1L, 3L)
+
+        val ungrouped = state(LibraryGroup.UNGROUPED)
+        ungrouped.groupUpdateIds(null, GroupLibraryMode.GLOBAL) shouldBe null
+        ungrouped.groupUpdateIds(null, GroupLibraryMode.ALL_BUT_UNGROUPED) shouldBe null
+        ungrouped.groupUpdateIds(null, GroupLibraryMode.ALL) shouldBe setOf(1L, 2L, 3L, 4L)
     }
 
     @Test
