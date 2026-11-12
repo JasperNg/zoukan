@@ -835,7 +835,6 @@
     <string name="favorites_sync_starting">starting</string>
     <string name="favorites_sync_comparing">comparing</string>
     <string name="page_1">page</string>
-    <string name="restart_zoukan_to_use_this_language">Restart Zoukan to use this language</string>
     <string name="automatic_backup_failed">Automatic backup failed</string>
     <string name="downloads_finished">Downloads finished</string>
     <string name="n_failed">%1$d failed</string>
