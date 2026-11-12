@@ -35,7 +35,9 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Auto webtoon mode, preserve reading position | Yes | SY's tag and source rules |
 | Page loading: preload size, reader threads, aggressive loading, instant retry, retry all, boost page | Yes | Retry all is R, boost page Shift+R |
 | Show reading mode, keep screen on, flash on page change, smooth auto scroll, show actions on long tap | Yes, changed | Keep screen on uses SetThreadExecutionState on Windows and `caffeinate` on macOS. Long tap gates the long press only; a right-click always opens page actions |
-| Reader: volume keys, display cutout, orientation, landscape zoom, pinch to zoom, fullscreen (system bars) | No | Phone hardware and gestures; the desktop has F11 for full screen and Ctrl + wheel to zoom |
+| Reader: volume keys, display cutout, orientation, fullscreen (system bars) | No | Phone hardware and gestures; the desktop has F11 for full screen and Ctrl + wheel to zoom |
+| Reader landscape zoom (KMK `landscapeZoom`) | No | Android's image scale preference for wide pages (Fit or Double); not phone hardware, so it would be meaningful here, but the desktop does not have it |
+| Webtoon pinch-zoom toggle (`webtoonPinchToZoomEnabled`) | Yes | Android's preference; gates Ctrl/Cmd + wheel zoom in webtoon mode; Settings > Reader and the reader sheet |
 | Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
@@ -58,17 +60,21 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Statistics | Yes | Library > Statistics: entries, chapters, reading time, tracking |
 | Statistics: include all read entries, ignore non-library entries (SY) | Yes | Statistics > More: counts the read entries that are not in the library too, and back |
 | Merged entries (merge, edit, priority dedupe, per-entry download) | Yes | The Android `MergedSource`, shared |
-| Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |
+| Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate; the Custom cover checkbox shows when the entry has a custom cover file, as on Android, and the flags are stored the same way |
 | Bulk migration (source priority, smart search, progress, manual pick) | Yes | Library selection > Migrate: sources in priority order, the Android options (data to migrate, extra keywords, hide unmatched or without newer chapters, advanced search, match by chapter number, smart search), then per-entry search, Don't migrate, Migrate now, and Migrate or Copy all with progress |
 | Edit entry info, notes, custom cover | Yes | Manga > More > Edit; local entries write ComicInfo.xml and cover files, as on Android. The thumbnail URL and KMK's Fill from tracker (choosing the tracker when several track the entry) are in the same dialog |
 | Entry title, author, artist and source menus (KMK) | Yes | A click on the title, author or artist searches globally, and a click on the source opens it (its feed with "Use new source navigation"). A right click or long press opens Library search, Global search and Copy to clipboard |
 | Entry tag menu | Yes | A tag's click opens Search (the browse screen the entry was opened from, turning on the source's filter of that name, or else the library), Global search and Copy to clipboard |
+| Images inside descriptions | Yes, changed | Markdown image syntax renders inline, http/https only (file: and network paths from source-controlled text are not loaded); broken images degrade to a link; Settings > Appearance |
 | Open folder, Clear manga (KMK) | Yes | Manga > More. Open folder opens the entry's download folder (a local entry's own folder) in Explorer or Finder; a merged entry asks which entry. Clear manga deletes the downloaded data, the chapters and history from the database, or both |
 | Chapter settings Display tab | Yes | Filter and sort > Display: the source's title or "Chapter <number>" in the chapter list |
 | Entry update frequency (smart update interval) | Yes | Manga > More > Update frequency, for library entries: the predicted next update and, with "Predict next release time" on, a custom interval or none, as Android's dialog |
 | Cover actions: save, share, change, delete custom cover | Yes, changed | Click the cover or Manga > More > Cover. Save goes to Pictures/Zoukan; Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
-| Duplicate check on adding to the library | Yes | Same-title library entries, each to open or migrate, or add anyway; on the manga screen and on a right-click in Browse |
+| Panorama cover on the entry page (KMK `usePanoramaCoverMangaInfo`) | Yes | Wide covers (0.75 ratio threshold, as Android) render 3:2 in the entry header; Settings > Appearance > Entry page |
+| Resume/Read button docking | Yes | Drag the button left/right to dock it (Android's `reading_button_position`, default End) |
+| Duplicate check on adding to the library | Yes | Same-title library entries, and entries bound to the same tracker (upstream v1.14.0's `track_dupes`, inherited with the shared data module), each to open or migrate, or add anyway; on the manga screen and on a right-click in Browse |
 | Add or remove from Browse (long press) | Yes, changed | Right-click a browse result, as Android's long press: removing asks first, adding checks duplicates and categories |
+| Right-click mirrors Android's long press | Yes | Wherever Android has tap + long-press, left click does the tap action and right click the long-press: browse/feed/global-search cards, related titles and recommendations, migration and duplicate rows, extension rows, tracker sheet labels and search results, entry-page In-library (edit categories) and WebView (copy link) buttons |
 | Fetch metadata and chapters when adding to library (KMK) | Yes | Settings > Library; applies to entries added from Browse, as on Android |
 | Missing chapter indicators, hide setting | Yes | "Missing N chapters" between chapter rows; Settings > Library > Hide missing chapter indicators |
 | Share entry link | Yes, changed | Manga > More > Copy link, as there is no desktop share sheet |
@@ -81,6 +87,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 |---|---|---|
 | Appearance: theme mode, color schemes, custom color and style, pure black | Yes, changed | The Android color schemes and settings. "Dynamic" (Material You) takes its colors from the phone's wallpaper, which desktops do not offer, so it shows the default scheme |
 | Appearance: custom theme palettes (KMK) | Yes | The custom color picker lists KMK's named palettes (Sunset to PICO-8); a color picks it, and Confirm Color sets it |
+| Appearance: cover-based theme on the entry page and reader (KMK `themeCoverBased`) | Yes | The entry page and the reader take their colors from the entry's cover; Settings > Appearance |
 | Appearance: expand all search filters by default (SY `expandFilters`) | Yes | Settings > Appearance > Browse, as Android's fork settings; the source filter panel opens its sort and group filters |
 | Appearance: date format, relative timestamps | Yes | Updates, History and chapter dates |
 | Appearance: hide Updates or History, navigation labels | Yes | On the navigation rail |
@@ -96,11 +103,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Downloads: delete after reading (nth to last), after marking read, bookmarked, excluded categories | Yes | As Android's: deleted when the reader closes |
 | Downloads: download new chapters, with categories to include and exclude | Yes | |
 | Downloads: download ahead while reading | Yes | When the open and the next chapter are downloaded |
+| Downloads: parallel download limits per source and per page (v1.13.6) | Yes | How many downloads a source runs at once and how many pages of a chapter download at once; Settings > Downloads |
 | Downloads: only on Wi-Fi | No | As for library updates |
 | Downloads: download cache renew interval | Yes | How often the download folders are read again; Manual waits for Advanced > Reindex downloads |
 | Browse: suggestions, source categories, filter sources in categories, replace latest button, local source hidden folders | Yes | Settings > Browse. Source categories are made in Edit categories and set from a source's More menu (Android's long press) |
 | Browse: hide Feed tab, Feed tab position, hide library entries in the feed and in sources | Yes | |
-| Browse: expand related titles, related titles in the overflow menu | Yes | The related titles row under the entry's description, with See all opening Similar titles. Show home on related titles is Android's and not shown |
+| Browse: expand related titles, related titles in the overflow menu | Yes | The related titles row under the entry's description, with See all opening Similar titles. Show home on related titles is Android's and not shown; neither is Top aligned cover, which upstream applies to the phone layout only, so the tablet layout the desktop follows never receives it (the preference still moves with backups) |
 | Browse: extension stores, NSFW sources | Yes | Extension stores opens the same list as Browse > Stores |
 | Data and storage: storage location, backup and restore, automatic backup frequency, last automatic backup | Yes | Android's frequencies, every hour to weekly. The desktop also opens the backup, download and local source folders |
 | Data and storage: show restoring progress banner | No | The desktop shows a restore's progress in place of the backup buttons |
@@ -131,12 +139,12 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Sources, extensions, extension stores, global search | Yes | Phase 2 |
 | Hidden sources and the sources filter (languages, per-source) | Yes | Browse > Sources > filter button, and Disable in a source's More menu, as Android's long press. The Sources list shows the enabled languages only, as on Android |
 | Pinned, last used and source category sections | Yes | As Android's Sources list |
-| Search box over the Sources list (KMK) | Yes | Above the list: matches a source's name, its extension's name or its id; commas separate terms, any of which may match |
+| Search box over the Sources list (KMK) | Yes | Above the list: matches a source's name, its extension's name or its id; commas separate terms, any of which may match. The desktop also has the search over the Extensions list and the Migration screens |
 | Source filters and settings | Yes | Phase 2 |
 | Saved searches | Yes | Chips above the listing; save from the filter panel; right-click deletes |
 | Source display modes: comfortable, panorama (KMK) and compact grid, list | Yes | The source's display mode button, as Android's toolbar; the Android preference, shared by every source. Columns follow the library's column setting |
 | Enhanced E-Hentai view (detailed list of galleries) | Yes | Settings > E-Hentai: E-Hentai and ExHentai results show the cover, uploader, rating, category, language, pages and date posted |
-| Panorama cover flow in feed and global search rows (KMK) | Yes | Settings > Appearance > Browse: wide covers show wide |
+| Panorama cover flow in feed and global search rows (KMK) | Yes | Settings > Appearance > Browse: wide covers show wide. The entry page has its own panorama cover; upstream's panorama covers in dialogs (`usePanoramaCoverAlways`) is Android's and not ported |
 | Batch add (MangaDex, E-H, ExH, nH, 8Muses addresses, E-H Visited export) | Yes | Browse > Batch add button, instead of the More tab; the Android screen model and GalleryAdder, shared |
 | Feed (global, latest/popular or a saved search) | Yes | Browse > Feed, and a per-source feed from the source's feed button |
 | Feed order (global and per source, KMK) | Yes | The feed's reorder button: drag the saved feeds, or move them with the arrows |
@@ -160,7 +168,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Android feature | Desktop | Notes |
 |---|---|---|
 | MyAnimeList, AniList, Kitsu, Shikimori, Bangumi, MangaUpdates | Yes | The Android tracker code, shared |
-| Komga, Kavita, Suwayomi (enhanced trackers, bound on add) | Yes | |
+| Komga, Kavita, Suwayomi (enhanced trackers, bound on add) | Yes | Suwayomi's delete downloaded chapters on the server toggle is in the extension's own preference screen, as on Android |
 | Tracking sheet: search, bind, status, chapter, score, dates, remove | Yes | Manga > Tracking |
 | Update progress after reading, retry when offline | Yes | Retries every 15 minutes |
 | "Ask" before updating progress | Yes | A dialog after a chapter is marked read |
@@ -184,7 +192,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 
 | Feature | Notes |
 |---|---|
-| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Ctrl/Cmd + F search, Ctrl/Cmd + A select all, Escape back; listed in Settings |
+| Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Ctrl/Cmd + F search, Ctrl/Cmd + A select all, Escape back; in the reader, Right and Left turn pages (flipped in right to left mode or by inverted tap zones), Down and Up scroll or turn (flipped by vertically inverted tap zones), J and K scroll down and up whatever the tap zones do; listed in Settings, and the reader's own shortcuts in the reader itself (press /) |
 | Desktop conventions | Scrollbars on lists and grids, the window opens where it was closed (minimum 800 x 560), tooltips on icon buttons |
 | Tray icon and notifications | Phase 5 |
 
