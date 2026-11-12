@@ -52,6 +52,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.browse.GlobalSearchScreen
+import zoukan.desktop.ui.browse.QuickLibraryToggleDialogs
+import zoukan.desktop.ui.browse.rememberQuickLibraryToggle
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.MangaGridItem
@@ -163,6 +165,13 @@ data class RecommendsScreen(val mangaId: Long) : Screen {
     }
 }
 
+// ZOUKAN -->
+/** A recommendation's right click: opens its site when it is only a link (Android's WebView). */
+internal fun openRecommendation(manga: Manga) {
+    if (manga.url.isNotBlank()) runCatching { zoukan.desktop.app.ExternalLinks.browse(manga.url) }
+}
+// ZOUKAN <--
+
 // SY -->
 /**
  * SY's RecommendsScreen with Args.MergedSourceMangas: the common recommendations of a library
@@ -224,6 +233,11 @@ class CommonRecommendsScreen(private val results: List<RankedSearchResults>) : S
 @Composable
 private fun RecommendsList(groups: List<RecommendsScreenModel.Group>) {
     val navigator = LocalNavigator.currentOrThrow
+    // ZOUKAN -->
+    // A recommendation from a real source's right click adds or removes it (Android's long press)
+    val libraryToggle = rememberQuickLibraryToggle()
+    QuickLibraryToggleDialogs(libraryToggle)
+    // ZOUKAN <--
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         items(groups, key = { it.key }) { group ->
             Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -242,6 +256,15 @@ private fun RecommendsList(groups: List<RecommendsScreenModel.Group>) {
                                         if (group.opensEntry) MangaScreen(manga.id) else GlobalSearchScreen(manga.ogTitle),
                                     )
                                 },
+                                // ZOUKAN -->
+                                // Android's long press: a recommendation from a real source is added to
+                                // the library or removed; one without opens its site instead
+                                onSecondaryClick = if (group.opensEntry) {
+                                    ({ libraryToggle.toggle(manga) })
+                                } else {
+                                    ({ openRecommendation(manga) })
+                                },
+                                // ZOUKAN <--
                                 // SY's RankedSearchMetadata badge: "+N" entries recommend it
                                 badge = listOfNotNull(
                                     result.ranks[manga.url]?.let { "+$it" },

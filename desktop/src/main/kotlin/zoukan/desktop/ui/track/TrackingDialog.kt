@@ -49,11 +49,18 @@ import eu.kanade.tachiyomi.data.track.model.TrackSearch
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackingModel
+import zoukan.desktop.ui.common.ContextMenu
+import zoukan.desktop.ui.common.ContextMenuItem
+import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.onRightClick
+import zoukan.desktop.ui.common.onRightClickAt
+import zoukan.desktop.ui.common.rememberContextMenuState
+import zoukan.desktop.ui.manga.copyToClipboard
 import zoukan.desktop.ui.manga.formatDate
 import zoukan.i18n.desktop.DMR
 import java.time.LocalDate
@@ -101,7 +108,14 @@ private fun TrackerRow(item: TrackingModel.Item, model: TrackingModel) {
     Surface(shape = Corners.Large, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(tracker.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                // ZOUKAN -->
+                // Android's long press on the tracker's logo copies the tracked entry's link
+                Text(
+                    tracker.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f).onRightClick { track?.remoteUrl?.takeIf { it.isNotBlank() }?.let(::copyToClipboard) },
+                )
+                // ZOUKAN <--
                 if (track == null) {
                     FilledTonalButton(onClick = { model.startSearch(tracker) }) { Text(localized(MR.strings.add_tracking)) }
                 } else {
@@ -114,7 +128,17 @@ private fun TrackerRow(item: TrackingModel.Item, model: TrackingModel) {
                 }
             }
             if (track == null) return@Column
-            Text(track.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // ZOUKAN -->
+            // Android's long press on the tracker's logo copies its link, and on the tracked title
+            // copies the title
+            Text(
+                track.title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.onRightClick { copyToClipboard(track.title) },
+            )
+            // ZOUKAN <--
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Choice(
                     label = localized(MR.strings.status),
@@ -286,23 +310,33 @@ private fun SearchPane(state: TrackingModel.State, model: TrackingModel) {
 
 @Composable
 private fun SearchResult(result: TrackSearch, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CoverImage(result.cover_url.takeIf { it.isNotBlank() }, Modifier.size(56.dp, 80.dp))
-        Column(Modifier.weight(1f)) {
-            Text(result.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val details = listOf(result.publishing_type, result.start_date, result.publishing_status)
-                .filter { it.isNotBlank() }
-            if (details.isNotEmpty()) {
-                Text(details.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (result.summary.isNotBlank()) {
-                Text(result.summary, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    // ZOUKAN -->
+    // Android's long press on a search result opens its menu: copy the title, open in browser
+    val menu = rememberContextMenuState()
+    Box {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onClick).onRightClickAt(menu::open).padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CoverImage(result.cover_url.takeIf { it.isNotBlank() }, Modifier.size(56.dp, 80.dp))
+            Column(Modifier.weight(1f)) {
+                Text(result.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val details = listOf(result.publishing_type, result.start_date, result.publishing_status)
+                    .filter { it.isNotBlank() }
+                if (details.isNotEmpty()) {
+                    Text(details.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (result.summary.isNotBlank()) {
+                    Text(result.summary, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
+        ContextMenu(menu) {
+            ContextMenuItem(menu, localized(MR.strings.action_copy_to_clipboard)) { copyToClipboard(result.title) }
+            ContextMenuItem(menu, localized(MR.strings.action_open_in_browser)) { browse(result.tracking_url) }
+        }
     }
+    // ZOUKAN <--
     HorizontalDivider()
 }
 

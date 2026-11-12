@@ -63,6 +63,8 @@ class MangaScreenModel(
     // ZOUKAN -->
     private val getFlatMetadataById: tachiyomi.domain.manga.interactor.GetFlatMetadataById = Injekt.get(),
     private val addToLibraryFlow: zoukan.desktop.library.AddToLibrary = Injekt.get(),
+    private val getCategories: tachiyomi.domain.category.interactor.GetCategories = Injekt.get(),
+    private val setMangaCategories: tachiyomi.domain.category.interactor.SetMangaCategories = Injekt.get(),
     private val chapterSettings: ChapterSettings = ChapterSettings(),
     private val filterChaptersForDownload: mihon.domain.chapter.interactor.FilterChaptersForDownload = Injekt.get(),
     private val updateErrors: zoukan.desktop.library.LibraryUpdateErrors = Injekt.get(),
@@ -77,6 +79,10 @@ class MangaScreenModel(
         val error: String? = null,
         /** Set while the user picks categories for a new library entry */
         val categoryChoice: List<Category>? = null,
+        // ZOUKAN -->
+        /** All categories and the entry's own, while the entry's In-library right click asks to change them */
+        val categoryEdit: Pair<List<Category>, Set<Long>>? = null,
+        // ZOUKAN <--
         val selected: Set<Long> = emptySet(),
         /** Chapters downloaded to disk */
         val downloaded: Set<Long> = emptySet(),
@@ -376,6 +382,27 @@ class MangaScreenModel(
     fun setTrackingVisible(visible: Boolean) = mutableState.update { it.copy(showTracking = visible) }
 
     fun dismissCategoryChoice() = mutableState.update { it.copy(categoryChoice = null) }
+
+    // ZOUKAN -->
+    // Komikku's long press on the entry's In-library button: loads the categories and the entry's
+    // own, so the dialog can change them
+    fun showCategoryEdit() {
+        val manga = state.value.manga ?: return
+        screenModelScope.launch {
+            val categories = withContext(Dispatchers.IO) { getCategories.await() }.filterNot(Category::isSystemCategory)
+            val chosen = withContext(Dispatchers.IO) { getCategories.await(manga.id) }.mapTo(HashSet()) { it.id }
+            mutableState.update { it.copy(categoryEdit = categories to chosen) }
+        }
+    }
+
+    fun setCategories(chosen: Set<Long>) {
+        val manga = state.value.manga ?: return
+        mutableState.update { it.copy(categoryEdit = null) }
+        screenModelScope.launch(Dispatchers.IO) { setMangaCategories.await(manga.id, chosen.toList()) }
+    }
+
+    fun dismissCategoryEdit() = mutableState.update { it.copy(categoryEdit = null) }
+    // ZOUKAN <--
 
     // ZOUKAN -->
     /** The chapter settings sheet's filters and sort, saved on the entry as on Android */

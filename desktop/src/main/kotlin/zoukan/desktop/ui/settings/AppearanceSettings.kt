@@ -74,17 +74,17 @@ fun LazyListScope.appearanceSettings() {
     item(key = "appearance-theme") { ThemeSection() }
     item(key = "appearance-display") { DisplaySection() }
     // ZOUKAN -->
+    // One "Entry page" group: a header's key is its title, and two with one key crash the list
     settingsGroup(localized(DMR.strings.entry_page))
     item(key = "appearance-manga-info") { MangaInfoSection() }
-    // ZOUKAN <--
-    settingsGroup(localized(MR.strings.pref_reader_navigation))
-    item(key = "appearance-navigation") { NavigationSection() }
-    // ZOUKAN -->
-    settingsGroup(localized(DMR.strings.entry_page))
     item(key = "appearance-previews") {
         val ui = remember { Injekt.get<UiPreferences>() }
         SliderPreference(localized(DMR.strings.page_preview_rows), ui.previewsRowCount(), 0..10) { if (it == 0) localized(DMR.strings.hidden) else "$it" }
     }
+    // ZOUKAN <--
+    settingsGroup(localized(MR.strings.pref_reader_navigation))
+    item(key = "appearance-navigation") { NavigationSection() }
+    // ZOUKAN -->
     // KMK's panorama covers in the feed and global search rows (Android: Appearance > fork settings)
     settingsGroup(localized(MR.strings.browse))
     item(key = "appearance-panorama-cover-flow") {
@@ -169,7 +169,10 @@ internal fun ThemeSection() {
 }
 
 // ZOUKAN -->
-/** Android's "Manga info" group: the entry page in its cover's colors, and their style. */
+/**
+ * Android's "Manga info" group: the entry page in its cover's colors and their style, and a wide
+ * cover shown as a panorama.
+ */
 @Composable
 private fun MangaInfoSection() {
     val ui = remember { Injekt.get<UiPreferences>() }
@@ -183,6 +186,8 @@ private fun MangaInfoSection() {
             PaletteStyle.entries.map { it to paletteStyleLabel(it) },
             enabled = coverBased,
         ) { ui.themeCoverBasedStyle().set(it) }
+        // KMK's "Panorama Cover": the entry page shows a wide cover wide
+        SwitchPreference(localized(KMR.strings.pref_panorama_cover), ui.usePanoramaCoverMangaInfo(), localized(KMR.strings.pref_panorama_cover_summary))
     }
 }
 // ZOUKAN <--
@@ -357,6 +362,10 @@ private fun DisplaySection() {
             ui.relativeTime(),
             localized(DMR.strings.today_instead_of, Dates.format(now, format)),
         )
+        // ZOUKAN -->
+        // Android's "Render images in manga descriptions", for the entry page's description
+        SwitchPreference(localized(MR.strings.pref_display_images_description), ui.imagesInDescription())
+        // ZOUKAN <--
     }
 }
 

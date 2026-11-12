@@ -48,6 +48,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSManga
+import zoukan.desktop.ui.browse.QuickLibraryToggleDialogs
+import zoukan.desktop.ui.browse.rememberQuickLibraryToggle
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.recs.RecommendsScreen
@@ -66,6 +68,10 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
     val inOverflow by uiPrefs.relatedMangasInOverflow().changes().collectAsState(uiPrefs.relatedMangasInOverflow().get())
     if (!enabled || inOverflow || manga.source == MERGED_SOURCE_ID) return
     val navigator = LocalNavigator.currentOrThrow
+    // ZOUKAN -->
+    // A related title's right click adds or removes it, as Android's long press
+    val libraryToggle = rememberQuickLibraryToggle()
+    // ZOUKAN <--
     var expanded by remember(manga.id) { mutableStateOf(uiPrefs.expandRelatedMangas().get()) }
     // null while loading
     var related by remember(manga.id) { mutableStateOf<List<Manga>?>(null) }
@@ -106,12 +112,19 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
                         cover = Cover.of(item),
                         onClick = { navigator.push(MangaScreen(item.id)) },
                         badge = if (item.favorite) localized(MR.strings.in_library) else null,
+                        // ZOUKAN -->
+                        // Android's long press on a related title: add it to the library or remove it
+                        onSecondaryClick = { libraryToggle.toggle(item) },
+                        // ZOUKAN <--
                         modifier = Modifier.width(120.dp),
                     )
                 }
             }
         }
     }
+    // ZOUKAN -->
+    QuickLibraryToggleDialogs(libraryToggle)
+    // ZOUKAN <--
 }
 
 /** The source's related titles as library entries, reported to [onPartial] as they arrive. */
