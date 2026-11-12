@@ -68,18 +68,20 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
-import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.common.ChapterSwipeBox
 import zoukan.desktop.ui.common.ChapterSwipeState
 import zoukan.desktop.ui.common.ContextMenu
@@ -124,6 +126,19 @@ data class MangaScreen(val mangaId: Long) : Screen {
         if (coverDialog) CoverDialog(manga, onDismiss = { coverDialog = false })
         var intervalDialog by remember { mutableStateOf(false) }
         if (intervalDialog) FetchIntervalDialog(manga, onDismiss = { intervalDialog = false })
+        // KMK: a merged entry asks which of its entries Open folder and the source name act on
+        var mergedAction by remember { mutableStateOf<MergedAction?>(null) }
+        mergedAction?.let { action -> MergedEntryPicker(action, model, onDismiss = { mergedAction = null }) }
+        var clearDialog by remember { mutableStateOf(false) }
+        if (clearDialog) ClearMangaDialog(onDismissRequest = { clearDialog = false }, onConfirm = model::clearManga)
+        val isMerged = manga.source == exh.source.MERGED_SOURCE_ID
+        val search = remember(navigator, state.source) {
+            EntryInfoSearch(
+                library = { EntrySearch.search(navigator, it, global = false, library = true) },
+                global = { EntrySearch.search(navigator, it, global = true) },
+                tag = { EntrySearch.searchGenre(navigator, it, state.source) },
+            )
+        }
         var migrateDuplicate by remember { mutableStateOf<tachiyomi.domain.manga.model.Manga?>(null) }
         migrateDuplicate?.let { duplicate ->
             MigrateDialog(duplicate.id, manga, onDismiss = { migrateDuplicate = null }, onMigrated = {})
@@ -146,6 +161,14 @@ data class MangaScreen(val mangaId: Long) : Screen {
                             onCover = { coverDialog = true },
                             onFetchInterval = { intervalDialog = true },
                             onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
+                            onOpenFolder = {
+                                if (!isMerged) {
+                                    model.openMangaFolder(state.source, manga)
+                                } else {
+                                    mergedAction = MergedAction(localized(KMR.strings.action_open_folder)) { entry, source -> model.openMangaFolder(source, entry) }
+                                }
+                            }.takeIf { state.source != null && state.source !is tachiyomi.domain.source.model.StubSource },
+                            onClearManga = { clearDialog = true },
                         )
                         // ZOUKAN <--
                     }
@@ -160,10 +183,21 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 state = state,
                                 model = model,
                                 onWebView = model::openInWebView.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
-                                onSearch = { query -> navigator.push(SourceScreen(manga.source, query = query)) },
+                                onSearch = { query -> EntrySearch.search(navigator, query, global = false) },
                                 onOpenMetadata = { navigator.push(MetadataViewScreen(manga.id, manga.source)) },
                                 modifier = Modifier.width(infoWidth).fillMaxHeight(),
                                 onCoverClick = { coverDialog = true },
+                                search = search,
+                                onSourceClick = {
+                                    val source = state.source
+                                    when {
+                                        source == null || source is tachiyomi.domain.source.model.StubSource -> Unit
+                                        !isMerged -> EntrySearch.browseSource(navigator, source)
+                                        else -> mergedAction = MergedAction(localized(MR.strings.browse)) { _, entrySource ->
+                                            EntrySearch.browseSource(navigator, entrySource)
+                                        }
+                                    }
+                                },
                             )
                             // ZOUKAN <--
                             VerticalDivider()
@@ -230,6 +264,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                                     // ZOUKAN <--
                                                     ChapterRow(
                                                         chapter = chapter,
+                                                        displayMode = manga.displayMode,
                                                         selected = chapter.id in state.selected,
                                                         selecting = state.selected.isNotEmpty(),
                                                         onOpen = { navigator.push(ReaderScreen(manga.id, chapter.id)) },
@@ -338,6 +373,8 @@ private fun MoreMenu(
     onCover: () -> Unit,
     onFetchInterval: () -> Unit,
     onCopyLink: (() -> Unit)?,
+    onOpenFolder: (() -> Unit)?,
+    onClearManga: () -> Unit,
 ) {
     val navigator = LocalNavigator.currentOrThrow
     var open by remember { mutableStateOf(false) }
@@ -384,6 +421,17 @@ private fun MoreMenu(
                     navigator.push(pickScreen(manga, merge = false))
                 })
             }
+            // KMK: Open folder (the entry's download folder) and Clear manga
+            if (onOpenFolder != null) {
+                DropdownMenuItem(text = { Text(localized(KMR.strings.action_open_folder)) }, onClick = {
+                    open = false
+                    onOpenFolder()
+                })
+            }
+            DropdownMenuItem(text = { Text(localized(KMR.strings.action_clear_manga)) }, onClick = {
+                open = false
+                onClearManga()
+            })
         }
     }
 }
@@ -463,6 +511,7 @@ private fun ColumnScope.ChapterSelectionMenu(menu: ContextMenuState, state: Mang
 @Composable
 private fun ChapterRow(
     chapter: Chapter,
+    displayMode: Long,
     selected: Boolean,
     selecting: Boolean,
     onOpen: () -> Unit,
@@ -501,7 +550,19 @@ private fun ChapterRow(
                             modifier = Modifier.size(16.dp).padding(end = 2.dp),
                         )
                     }
-                    Text(chapter.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // ZOUKAN -->
+                    // The chapter settings' Display tab, as Android's chapter list
+                    Text(
+                        if (displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
+                            localized(MR.strings.display_mode_chapter, formatChapterNumber(chapter.chapterNumber))
+                        } else {
+                            chapter.name
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    // ZOUKAN <--
                 }
                 val details = listOfNotNull(
                     chapter.dateUpload.takeIf { SyncChapters.hasSourceDate(chapter) }?.let(zoukan.desktop.ui.common.Dates::relative),
