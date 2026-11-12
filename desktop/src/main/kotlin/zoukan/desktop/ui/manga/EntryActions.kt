@@ -66,6 +66,7 @@ import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.reader.PageImages
 import zoukan.desktop.ui.track.Choice
@@ -275,7 +276,10 @@ fun DuplicateDialog(
                 duplicates.forEach { (manga, chapterCount) ->
                     Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = Corners.Medium) {
                         Row(
-                            Modifier.fillMaxWidth().clickable { onOpen(manga) }.padding(8.dp),
+                            // ZOUKAN -->
+                            // Android's long press on a duplicate opens the entry (its tap migrates to it)
+                            Modifier.fillMaxWidth().clickable { onOpen(manga) }.onRightClick { onOpen(manga) }.padding(8.dp),
+                            // ZOUKAN <--
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

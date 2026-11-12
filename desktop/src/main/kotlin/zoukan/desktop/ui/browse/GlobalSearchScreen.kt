@@ -188,6 +188,11 @@ data class GlobalSearchScreen(
         val sourceFilter by model.sourceFilter.changes().collectAsState(model.sourceFilter.get())
         val onlyWithResults by model.onlyWithResults.changes().collectAsState(model.onlyWithResults.get())
         val bulk = remember { BulkFavorite() }
+        // ZOUKAN -->
+        // A result's right click adds or removes it (Android's long press) outside selecting
+        val libraryToggle = rememberQuickLibraryToggle()
+        QuickLibraryToggleDialogs(libraryToggle)
+        // ZOUKAN <--
         val sources = remember(sourceFilter) { model.sources(sourceFilter) }
         // ZOUKAN <--
         // Sources with results first, then the ones still searching, then empty and failed ones
@@ -292,7 +297,14 @@ data class GlobalSearchScreen(
                                                 // ZOUKAN <--
                                             },
                                             // ZOUKAN -->
-                                            onSecondaryClick = if (bulk.active) ({ bulk.toggle(manga) }) else null,
+                                            // While selecting, right-click selects; in a browse search it adds or
+                                            // removes (Android's long press), in a migration search it opens the entry
+                                            // (Android's MigrateSearchScreen long press)
+                                            onSecondaryClick = when {
+                                                bulk.active -> ({ bulk.toggle(manga) })
+                                                purpose == SearchPurpose.Browse -> ({ libraryToggle.toggle(manga) })
+                                                else -> ({ navigator.push(MangaScreen(manga.id)) })
+                                            },
                                             modifier = Modifier.bulkSelected(bulk.isSelected(manga)),
                                             // ZOUKAN <--
                                         )

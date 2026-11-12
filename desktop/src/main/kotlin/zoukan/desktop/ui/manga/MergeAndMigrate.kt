@@ -58,6 +58,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.GlobalSearchScreen
+import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.i18n.desktop.DMR
@@ -160,6 +161,10 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
     val preference = remember { migrate.flags() }
     var flags by remember { mutableStateOf(preference.get()) }
     var busy by remember { mutableStateOf(false) }
+    // ZOUKAN -->
+    // Android's MigrateMangaDialog: the Custom cover flag only applies when the entry has a custom cover
+    val hasCustomCover = remember(mangaId) { Images.customCoverFile(mangaId).isFile }
+    // ZOUKAN <--
     val run = { replace: Boolean ->
         busy = true
         preference.set(flags)
@@ -187,7 +192,7 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
         text = {
             Column {
                 Text(localized(DMR.strings.take_along), style = MaterialTheme.typography.bodyMedium)
-                MigrationFlag.entries.filter { it != MigrationFlag.CUSTOM_COVER }.forEach { flag ->
+                migrationDialogFlags(hasCustomCover).forEach { flag ->
                     Row(
                         Modifier.fillMaxWidth().clickable { flags = if (flag in flags) flags - flag else flags + flag },
                         verticalAlignment = Alignment.CenterVertically,
@@ -215,6 +220,15 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
+
+// ZOUKAN -->
+/**
+ * The flags the Migrate dialog offers checkboxes for: Custom cover only when the migrated entry
+ * has a custom cover, like Android's MigrateMangaDialog.
+ */
+internal fun migrationDialogFlags(hasCustomCover: Boolean): List<MigrationFlag> =
+    MigrationFlag.entries.filter { it != MigrationFlag.CUSTOM_COVER || hasCustomCover }
+// ZOUKAN <--
 
 /** The entries a merged entry merges: which gives the details, which get updates, removing one. */
 @Composable

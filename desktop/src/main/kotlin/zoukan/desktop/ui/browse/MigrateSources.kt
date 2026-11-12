@@ -63,7 +63,9 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.manga.copyToClipboard
 import zoukan.desktop.ui.migration.MigrationConfigScreen
 import zoukan.i18n.desktop.DMR
 
@@ -133,7 +135,12 @@ fun MigrateSourcesList() {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
             items(items, key = { it.id }) { item ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { navigator.push(MigrateMangaScreen(item.id)) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().clickable { navigator.push(MigrateMangaScreen(item.id)) }
+                        // ZOUKAN -->
+                        // Android's long press on a migration source copies its ID
+                        .onRightClick { copyToClipboard(item.id.toString()) }
+                        // ZOUKAN <--
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -213,7 +220,12 @@ data class MigrateMangaScreen(val sourceId: Long) : Screen {
 @Composable
 private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Unit, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onToggle)
+            // ZOUKAN -->
+            // Android's long press on an entry selects it
+            .onRightClick(onToggle)
+            // ZOUKAN <--
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(selected, onCheckedChange = { onToggle() })
