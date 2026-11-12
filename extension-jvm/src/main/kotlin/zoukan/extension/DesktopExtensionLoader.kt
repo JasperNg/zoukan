@@ -28,9 +28,11 @@ sealed interface LoadResult {
  *
  * Each extension lives in `<extensionsDir>/<package name>/`: `<versionCode>.jar` is the code that
  * runs, and `<versionCode>.apk` is kept next to it when the jar was converted from an APK (its
- * signature is then checked on the APK). The jar is loaded in its own child-first class loader;
- * classes the host provides (extensions-lib, OkHttp, the Android compatibility layer) come from the
- * app's class path.
+ * signature is then checked on the APK). The APK's signature does not cover the converted jar, so
+ * it only runs while it still matches the SHA-256 recorded in the `<versionCode>.sha256` sidecar;
+ * a stale or missing hash converts the verified APK again before the load. The jar is loaded in
+ * its own child-first class loader; classes the host provides (extensions-lib, OkHttp, the Android
+ * compatibility layer) come from the app's class path.
  */
 class DesktopExtensionLoader(
     private val extensionsDir: File,
@@ -63,6 +65,7 @@ class DesktopExtensionLoader(
         jars.drop(1).forEach { (code, old) ->
             old.delete()
             File(dir, "$code.apk").delete()
+            File(dir, "$code.sha256").delete()
         }
         val apk = File(dir, "$versionCode.apk").takeIf { it.isFile }
         return InstalledFiles(pkgName, versionCode, jar, apk)
@@ -86,13 +89,17 @@ class DesktopExtensionLoader(
     }
 
     private fun loadOrThrow(files: InstalledFiles, stores: List<ExtensionStore>): LoadResult {
-        val manifest = ExtensionManifest.fromJar(files.jar)
-        val libVersion = manifest.validate()
         val signatures = if (files.apk != null) {
             ExtensionSignatures.verifyApk(files.apk)
         } else {
             ExtensionSignatures.verifyJar(files.jar)
         }
+        // The manifest is read only after the checks that decide whether the jar may run at all: a
+        // swapped jar must not fail the load before it was converted again, and then the manifest
+        // of the healed jar is the one that counts
+        files.apk?.let { verifyConvertedJar(it, files.jar, files.pkgName) }
+        val manifest = ExtensionManifest.fromJar(files.jar)
+        val libVersion = manifest.validate()
         val storeName = stores.firstOrNull { store -> signatures.all { it == store.signingKey } }
             ?.let { store -> store.badgeLabel.takeIf(String::isNotBlank) ?: store.name }
 
@@ -134,6 +141,22 @@ class DesktopExtensionLoader(
             isShared = false,
         )
         return LoadResult.Success(extension)
+    }
+
+    /**
+     * The converted jar is the only unsigned part of an APK install, writable by anything that can
+     * write the app's data, so it runs only while it matches the hash recorded when it was
+     * converted. A missing hash (an install made before this check existed) or a stale one converts
+     * the just signature-verified APK again, which also records the hash; the conversion gets one
+     * attempt per load, and its failure fails the load.
+     */
+    private fun verifyConvertedJar(apk: File, jar: File, pkgName: String) {
+        if (ApkConverter.recordedHash(jar) == ApkConverter.sha256Of(jar)) return
+        logcat(LogPriority.WARN) {
+            "Extension $pkgName: ${jar.name} does not match its recorded hash, converting ${apk.name} again"
+        }
+        ApkConverter.convert(apk, jar)
+        ApkConverter.recordHash(jar)
     }
 
     /** Instantiates the classes in tachiyomi.extension.class, the same way ExtensionLoader does. */
