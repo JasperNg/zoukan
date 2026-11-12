@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.MERGED_SOURCE_ID
+import exh.source.isEhBasedManga
 import exh.source.getMainSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,8 @@ class MangaScreenModel(
     private val getFlatMetadataById: tachiyomi.domain.manga.interactor.GetFlatMetadataById = Injekt.get(),
     private val addToLibraryFlow: zoukan.desktop.library.AddToLibrary = Injekt.get(),
     private val chapterSettings: ChapterSettings = ChapterSettings(),
+    private val filterChaptersForDownload: mihon.domain.chapter.interactor.FilterChaptersForDownload = Injekt.get(),
+    private val updateErrors: zoukan.desktop.library.LibraryUpdateErrors = Injekt.get(),
     // ZOUKAN <--
 ) : StateScreenModel<MangaScreenModel.State>(State()) {
 
@@ -154,7 +157,7 @@ class MangaScreenModel(
                     if (!manga.favorite) chapterSettings.reset(manga)
                     // ZOUKAN <--
                     if (!manga.initialized || chapters.isEmpty()) {
-                        refresh(fetchDetails = !manga.initialized || manga.thumbnailUrl.isNullOrBlank())
+                        refresh(fetchDetails = !manga.initialized || manga.thumbnailUrl.isNullOrBlank(), manualFetch = false)
                     }
                 }
             }
@@ -271,26 +274,48 @@ class MangaScreenModel(
 
     fun cancelDownload(chapter: Chapter) = downloadManager.cancel(setOf(chapter.id))
 
-    fun refresh(fetchDetails: Boolean = true) {
+    /**
+     * Fetches the entry's details and chapters, as Android's fetchAllFromSource.
+     *
+     * @param manualFetch the refresh button, not the first load: a merged entry downloads the new
+     * chapters of references set to download, and the new chapters are downloaded by the "Download
+     * new chapters" settings
+     */
+    fun refresh(fetchDetails: Boolean = true, manualFetch: Boolean = true) {
         val manga = state.value.manga ?: return
         if (state.value.refreshing) return
         mutableState.update { it.copy(refreshing = true, error = null) }
         screenModelScope.launch {
             val error = try {
-                refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = true)
+                val update = refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = true, downloadNew = manualFetch)
+                // KMK: a successful refresh clears the entry's update error
+                runCatching { updateErrors.clear(manga.id) }
+                if (manualFetch) downloadNewChapters(update.manga, update.newChapters)
                 null
-            } catch (e: NoChaptersException) {
-                localized(DMR.strings.the_source_lists_no_chapters)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 // Throwable, not Exception: an extension built against another API fails with a
                 // LinkageError, which would leave the screen refreshing for good
-                e.message ?: e::class.simpleName
+                // KMK: the failure is the entry's update error, as a library update's
+                runCatching { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
+                if (e is NoChaptersException) localized(DMR.strings.the_source_lists_no_chapters) else e.message ?: e::class.simpleName
             }
             mutableState.update { it.copy(refreshing = false, error = error) }
         }
     }
+
+    // ZOUKAN -->
+    /** Queues the new chapters the download settings pick, as Android's downloadNewChapters. */
+    private fun downloadNewChapters(manga: Manga, chapters: List<Chapter>) {
+        screenModelScope.launch(kotlinx.coroutines.NonCancellable) {
+            val chaptersToDownload = filterChaptersForDownload.await(manga, chapters)
+            if (chaptersToDownload.isNotEmpty() && !manga.isEhBasedManga()) {
+                byEntry(manga, chaptersToDownload).forEach { (entry, list) -> downloadManager.enqueue(entry, list) }
+            }
+        }
+    }
+    // ZOUKAN <--
 
     fun toggleFavorite() {
         val manga = state.value.manga ?: return

@@ -36,6 +36,13 @@ class LibraryUpdaterTest {
         filterChaptersForDownload = mockk(),
         downloadManager = mockk(),
         errors = mockk(relaxed = true),
+        getManga = mockk(),
+        getMergedMangaForDownloading = mockk(),
+        getTracks = mockk(),
+        insertTrack = mockk(),
+        trackerManager = mockk(),
+        syncPreferences = mockk(),
+        syncManager = { mockk() },
     )
 
     private fun set(value: Set<String>) = mockk<Preference<Set<String>>> { every { get() } returns value }
@@ -82,5 +89,13 @@ class LibraryUpdaterTest {
         updater.select(library, null, ignoreRestrictions = true).first.map { it.id }.sorted() shouldContainExactly listOf(1L, 2L, 3L)
         updater.select(library, 7L, ignoreRestrictions = true).first.map { it.id } shouldContainExactly listOf(1L)
         updater.select(library, 0L, ignoreRestrictions = true).first.map { it.id } shouldContainExactly listOf(2L)
+    }
+
+    @Test
+    fun `a source, status or tracking tab updates its entries with the skip rules`() {
+        val library = listOf(entry(1, read = 10, categories = listOf(7)), entry(2, read = 3), entry(3, read = 10))
+        val (selected, skipped) = updater.select(library, null, groupIds = setOf(1L, 2L))
+        selected.map { it.id } shouldContainExactly listOf(1L)
+        skipped.map { it.second } shouldContainExactly listOf("Has unread chapters")
     }
 }
