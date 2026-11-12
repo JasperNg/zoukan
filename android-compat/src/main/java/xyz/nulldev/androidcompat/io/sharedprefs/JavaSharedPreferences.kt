@@ -30,7 +30,6 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.io.path.Path
 import kotlin.io.path.copyTo
 import kotlin.io.path.createParentDirectories
-import kotlin.io.path.deleteExisting
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.name
@@ -88,6 +87,14 @@ class JavaSharedPreferences(
     private val properties =
         Properties().also { properties ->
             try {
+                // ZOUKAN -->
+                // A save that an older version left half done (the file deleted, the new one
+                // still in .tmp)
+                val leftover = file.resolveSibling("${file.name}.tmp")
+                if (!file.exists() && leftover.exists()) {
+                    java.nio.file.Files.move(leftover, file)
+                }
+                // ZOUKAN <--
                 if (file.exists()) {
                     // ZOUKAN -->
                     val stored = file.readBytes()
@@ -356,9 +363,20 @@ class JavaSharedPreferences(
                     tempFile.writeBytes(SettingsFileCodec.current?.encode(plain) ?: plain)
                     // ZOUKAN <--
 
-                    file.deleteIfExists()
-                    tempFile.copyTo(file)
-                    tempFile.deleteExisting()
+                    // ZOUKAN -->
+                    // Replace in one step: deleting first and then copying loses every setting
+                    // if the app stops in between
+                    try {
+                        java.nio.file.Files.move(
+                            tempFile,
+                            file,
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        )
+                    } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+                        java.nio.file.Files.move(tempFile, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    }
+                    // ZOUKAN <--
                 }
 
                 return true
