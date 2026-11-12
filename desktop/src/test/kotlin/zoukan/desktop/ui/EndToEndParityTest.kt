@@ -653,6 +653,76 @@ class EndToEndParityTest {
                 shot("p30-source-feed")
                 runOnUiThread { navigator?.popUntilRoot() }
             }
+
+            step("Entry page: tag and title menus, Display tab, Edit, Open folder and Clear manga") {
+                val charlie = favorites.first { it.title == "Charlie" }
+                runBlocking {
+                    Injekt.get<MangaRepository>().update(MangaUpdate(id = charlie.id, genre = listOf("female: sole female")))
+                }
+                runOnUiThread {
+                    HomeScreen.selectTab(HomeTab.Library)
+                    navigator?.push(zoukan.desktop.ui.manga.MangaScreen(charlie.id))
+                }
+                // A tag's click opens Search, Global search and Copy; Search from the library
+                // searches the library, as Android's performGenreSearch
+                waitFor(hasText("female: sole female"))
+                onAllNodesWithText("female: sole female").onFirst().performClick()
+                waitFor(hasText("Copy to clipboard"))
+                waitFor(hasText("Global search"))
+                shot("p31-entry-tag-menu")
+                onAllNodesWithText("Search").onFirst().performClick()
+                waitFor(hasSetTextAction() and hasText("female: sole female"))
+                navigator!!.size shouldBe 1
+                onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+
+                // KMK's title menu: Library search searches the library for the title
+                runOnUiThread { navigator?.push(zoukan.desktop.ui.manga.MangaScreen(charlie.id)) }
+                waitFor(hasTestTag("entry-title"))
+                onNodeWithTag("entry-title").performMouseInput { rightClick() }
+                waitFor(hasText("Library search"))
+                shot("p32-entry-title-menu")
+                onAllNodesWithText("Library search").onFirst().performClick()
+                waitFor(hasSetTextAction() and hasText("Charlie"))
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 1 }
+                onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+
+                // The chapter settings' Display tab saves the display mode on the entry
+                runOnUiThread { navigator?.push(zoukan.desktop.ui.manga.MangaScreen(charlie.id)) }
+                waitFor(hasTestTag("entry-title"))
+                byDescription("Filter and sort").performClick()
+                onAllNodesWithText("Display").onFirst().performClick()
+                waitFor(hasText("Source title"))
+                onAllNodesWithText("Chapter number").onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) {
+                    runBlocking { Injekt.get<GetManga>().await(charlie.id)!!.displayMode } ==
+                        tachiyomi.domain.manga.model.Manga.CHAPTER_DISPLAY_NUMBER
+                }
+                shot("p33-chapter-display-tab")
+                onAllNodesWithText("Close").onFirst().performClick()
+
+                // Edit has the thumbnail URL and Fill from tracker
+                byDescription("More").performClick()
+                waitFor(hasText("Open folder"))
+                waitFor(hasText("Clear manga"))
+                onAllNodesWithText("Edit details, notes and cover").onFirst().performClick()
+                waitFor(hasText("Fill from tracker"))
+                waitFor(hasText("Thumbnail url"))
+                shot("p34-edit-fill-from-tracker")
+                onAllNodesWithText("Cancel").onFirst().performClick()
+
+                // Clear manga removes the chapters from the database (not the local files)
+                byDescription("More").performClick()
+                onAllNodesWithText("Clear manga").onFirst().performClick()
+                waitFor(hasText("Chapters & History from Database"))
+                onAllNodesWithText("Chapters & History from Database").onFirst().performClick()
+                shot("p35-clear-manga")
+                onAllNodesWithText("OK").onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) {
+                    runBlocking { Injekt.get<GetChaptersByMangaId>().await(charlie.id).isEmpty() }
+                }
+                File(storage.local, "Charlie").isDirectory shouldBe true
+                runOnUiThread { navigator?.popUntilRoot() }
+            }
         }
     }
 

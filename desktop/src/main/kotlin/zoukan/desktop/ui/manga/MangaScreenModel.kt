@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.GetMergedChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
@@ -485,4 +487,99 @@ class MangaScreenModel(
             }
         }
     }
+
+    // ZOUKAN -->
+    /** The chapter settings' Display tab: source title or chapter number, as Android's setDisplayMode */
+    fun setDisplayMode(mode: Long) = updateFlags { chapterSettings.setDisplayMode(it, mode) }
+
+    /**
+     * The entries a merged entry merges, each with its source, as Komikku's mergedMangaAction
+     * offers them; empty for an entry that is not merged.
+     */
+    suspend fun mergedEntries(): List<Pair<Manga, Source>> {
+        val manga = state.value.manga ?: return emptyList()
+        if (manga.source != MERGED_SOURCE_ID) return emptyList()
+        return withContext(Dispatchers.IO) {
+            tachiyomi.domain.manga.interactor.GetMergedMangaById(Injekt.get()).await(manga.id)
+                .filterNot { it.source == MERGED_SOURCE_ID }
+                .map { it to sourceManager.getOrStub(it.source) }
+        }
+    }
+
+    /**
+     * KMK's Open folder: the entry's download folder (a local entry's own folder) in Explorer or
+     * Finder. Nothing opens when the folder does not exist, as on Android.
+     */
+    fun openMangaFolder(source: Source?, manga: Manga?) {
+        if (manga == null || source == null || source is tachiyomi.domain.source.model.StubSource) return
+        AppScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val dir = mangaFolder(manga) ?: return@withContext
+                    if (!dir.isDirectory) return@withContext
+                    java.awt.Desktop.getDesktop().open(dir)
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                    Toasts.show(e.message ?: localized(tachiyomi.i18n.kmk.KMR.strings.error_opening_folder))
+                }
+            }
+        }
+    }
+
+    /** Where the entry's chapters are on disk: KMK's DownloadProvider finds a local entry in the local folder. */
+    private fun mangaFolder(manga: Manga): java.io.File? = if (manga.source == LocalSource.ID) {
+        (sourceManager.get(LocalSource.ID) as? LocalSource)?.mangaDir(manga.url)
+    } else {
+        Injekt.get<zoukan.desktop.download.DownloadPaths>().mangaDir(manga)
+    }
+
+    /**
+     * KMK's Clear manga: deletes the entry's downloaded data (for a merged entry, each merged
+     * entry's), and its chapters with their history from the database.
+     */
+    fun clearManga(deleteDownload: Boolean, removeChapters: Boolean) {
+        if (deleteDownload) deleteDownloadedData()
+        if (removeChapters) removeChaptersDatabase()
+    }
+
+    private fun deleteDownloadedData() {
+        val manga = state.value.manga ?: return
+        val source = state.value.source
+        AppScope.launch {
+            try {
+                if (manga.source == MERGED_SOURCE_ID) {
+                    mergedEntries().forEach { (entry, entrySource) ->
+                        deleteManga(entry)
+                        if (entrySource.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
+                    }
+                } else {
+                    deleteManga(manga)
+                    if (source?.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
+        }
+    }
+
+    /** Android's DownloadManager.deleteManga: the queued chapters and the entry's folder. */
+    private suspend fun deleteManga(manga: Manga) {
+        if (manga.source == LocalSource.ID) {
+            withContext(Dispatchers.IO) { mangaFolder(manga)?.deleteRecursively() }
+        } else {
+            downloadManager.deleteManga(manga)
+        }
+    }
+
+    private fun removeChaptersDatabase() {
+        val ids = state.value.chapters.map { it.id }
+        AppScope.launch {
+            try {
+                tachiyomi.domain.chapter.interactor.DeleteChapters(Injekt.get()).await(ids)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
+        }
+    }
+    // ZOUKAN <--
 }

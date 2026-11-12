@@ -142,6 +142,45 @@ class SourceScreenModel(
     }
 
     // ZOUKAN -->
+    /**
+     * Searches by a genre from an entry's tags, as Android's searchGenre: with the source's default
+     * filters, the filter named as the genre is turned on, or the genre is the query when no
+     * filter has its name.
+     */
+    fun searchGenre(genreName: String) {
+        val defaultFilters = source?.getFilterList() ?: FilterList()
+        var genreExists = false
+
+        filter@ for (sourceFilter in defaultFilters) {
+            if (sourceFilter is eu.kanade.tachiyomi.source.model.Filter.Group<*>) {
+                for (filter in sourceFilter.state) {
+                    if (filter is eu.kanade.tachiyomi.source.model.Filter<*> && filter.name.equals(genreName, true)) {
+                        when (filter) {
+                            is eu.kanade.tachiyomi.source.model.Filter.TriState -> filter.state = 1
+                            is eu.kanade.tachiyomi.source.model.Filter.CheckBox -> filter.state = true
+                            else -> {}
+                        }
+                        genreExists = true
+                        break@filter
+                    }
+                }
+            } else if (sourceFilter is eu.kanade.tachiyomi.source.model.Filter.Select<*>) {
+                val index = sourceFilter.values.filterIsInstance<String>()
+                    .indexOfFirst { it.equals(genreName, true) }
+
+                if (index != -1) {
+                    sourceFilter.state = index
+                    genreExists = true
+                    break
+                }
+            }
+        }
+
+        filters = defaultFilters
+        filtersChanged()
+        setListing(Listing.Search(if (genreExists) "" else genreName))
+    }
+
     /** Shows a saved search: its query with its filters, as the Android app does. */
     fun applySavedSearch(search: EXHSavedSearch) {
         filters = search.filterList ?: source?.getFilterList() ?: FilterList()

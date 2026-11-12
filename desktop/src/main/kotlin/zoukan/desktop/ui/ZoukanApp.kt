@@ -374,6 +374,11 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
     /** Lets other screens switch the tab, for example "Browse" from an empty library. */
     var selectTab: (HomeTab) -> Unit = {}
 
+    // ZOUKAN -->
+    /** Opens the library with [query] in its search, as Android's HomeScreen.search (Library search). */
+    var searchLibrary: (query: String) -> Unit = {}
+    // ZOUKAN <--
+
     /** Opens Settings (More > Settings) from anywhere: Ctrl/Cmd + comma, and tests. */
     fun openSettings(navigator: Navigator) {
         navigator.popUntilRoot()
@@ -400,6 +405,12 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         }
         // ZOUKAN <--
         val library = rememberScreenModel { LibraryScreenModel() }
+        // ZOUKAN -->
+        searchLibrary = { query ->
+            tab = HomeTab.Library
+            library.search(query)
+        }
+        // ZOUKAN <--
         val updates = rememberScreenModel { UpdatesScreenModel() }
         val history = rememberScreenModel { HistoryScreenModel() }
         val browse = rememberScreenModel { BrowseScreenModel() }

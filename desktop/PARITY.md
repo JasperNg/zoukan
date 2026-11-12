@@ -53,7 +53,11 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Merged entries (merge, edit, priority dedupe, per-entry download) | Yes | The Android `MergedSource`, shared |
 | Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |
 | Bulk migration (source priority, smart search, progress, manual pick) | Yes | Library selection > Migrate: sources in priority order, the Android options (data to migrate, extra keywords, hide unmatched or without newer chapters, advanced search, match by chapter number, smart search), then per-entry search, Don't migrate, Migrate now, and Migrate or Copy all with progress |
-| Edit entry info, notes, custom cover | Yes | Manga > More > Edit; local entries write ComicInfo.xml and cover files, as on Android |
+| Edit entry info, notes, custom cover | Yes | Manga > More > Edit; local entries write ComicInfo.xml and cover files, as on Android. The thumbnail URL and KMK's Fill from tracker (choosing the tracker when several track the entry) are in the same dialog |
+| Entry title, author, artist and source menus (KMK) | Yes | A click on the title, author or artist searches globally, and a click on the source opens it (its feed with "Use new source navigation"). A right click or long press opens Library search, Global search and Copy to clipboard |
+| Entry tag menu | Yes | A tag's click opens Search (the browse screen the entry was opened from, turning on the source's filter of that name, or else the library), Global search and Copy to clipboard |
+| Open folder, Clear manga (KMK) | Yes | Manga > More. Open folder opens the entry's download folder (a local entry's own folder) in Explorer or Finder; a merged entry asks which entry. Clear manga deletes the downloaded data, the chapters and history from the database, or both |
+| Chapter settings Display tab | Yes | Filter and sort > Display: the source's title or "Chapter <number>" in the chapter list |
 | Entry update frequency (smart update interval) | Yes | Manga > More > Update frequency, for library entries: the predicted next update and, with "Predict next release time" on, a custom interval or none, as Android's dialog |
 | Cover actions: save, share, change, delete custom cover | Yes, changed | Click the cover or Manga > More > Cover. Save goes to Pictures/Zoukan; Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |
 | Duplicate check on adding to the library | Yes | Same-title library entries, each to open or migrate, or add anyway; on the manga screen and on a right-click in Browse |
@@ -135,7 +139,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | MangaDex and other delegated sources, MDList | Yes | MangaDex, NHentai, LANraragi, Pururin and 8Muses extensions run through the Android delegates; MDList signs in with OAuth |
 | E-Hentai site settings (uconfig), favorites sync, gallery update worker | Yes | Settings > E-Hentai; gallery updates run in the background while the app is open |
 | E-Hentai gallery update restrictions | Yes, changed | Charging waits for mains power, as the library update does. Wi-Fi and unmetered network stay in the setting for Android |
-| Metadata viewer and details block (E-Hentai, MangaDex, NHentai, Pururin, 8Muses, LANraragi) | Yes | Manga screen: rating, category, pages, uploader and tags by namespace (each searches the source); More info lists every field. Right-click copies a value, as a long press on Android |
+| Metadata viewer and details block (E-Hentai, MangaDex, NHentai, Pururin, 8Muses, LANraragi) | Yes | Manga screen: rating, category, pages, uploader and tags by namespace (each opens the tag menu); More info lists every field. Right-click copies a value, as a long press on Android |
 | MangaDex settings: sign-in, preferred source, sync follows to the library, follow the library on MangaDex | Yes | Settings > MangaDex, shown when a MangaDex source is enabled, as on Android |
 | Data saver (Bandwidth Hero, wsrv.nl) | Yes, changed | Settings > Data saver, for the reader and (optionally) downloads. Excluded sources are picked there, not from a long press in Browse |
 
