@@ -7,7 +7,6 @@
 **増刊 · A desktop manga reader for Windows and Mac**
 
 [![Latest release](https://img.shields.io/github/v/release/JasperNg/zoukan?label=Release&labelColor=27303D&color=13877A)](https://github.com/JasperNg/zoukan/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/JasperNg/zoukan/total?label=Downloads&labelColor=27303D&color=0D1117&logo=github&logoColor=FFFFFF)](https://github.com/JasperNg/zoukan/releases)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-13877A?labelColor=27303D)](/LICENSE)
 
 *Windows 10 or later (x64) · macOS on Apple Silicon*
