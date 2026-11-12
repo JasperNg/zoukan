@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.reader
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -120,6 +121,10 @@ fun PagedViewer(
     fitMode: Int,
     background: Color,
     foreground: Color,
+    // ZOUKAN -->
+    tapZones: TapZonesOverlayState? = null,
+    autoBackground: Boolean = false,
+    // ZOUKAN <--
 ) {
     val pages = state.pages
     // ZOUKAN -->
@@ -300,6 +305,7 @@ fun PagedViewer(
                         wideMargin = isWide && rotation == 0 && spread.part == PagePart.WHOLE && centerMargin >= 2,
                         zoomStart = zoomStart,
                         rtl = rtl,
+                        autoBackground = autoBackground,
                         // ZOUKAN <--
                     )
                 }
@@ -408,6 +414,11 @@ fun PagedViewer(
                 key = { it },
             ) { pageContent(it) }
         }
+        // ZOUKAN -->
+        if (tapZones != null) {
+            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, vertical, ReaderNavigation.Invert.of(navInvert), smallerZones))
+        }
+        // ZOUKAN <--
     }
 }
 
@@ -443,6 +454,7 @@ private fun ZoomablePage(
     wideMargin: Boolean = false,
     zoomStart: Int = 1,
     rtl: Boolean = false,
+    autoBackground: Boolean = false,
     // ZOUKAN <--
 ) {
     val pageState by page.state.collectAsState()
@@ -456,11 +468,11 @@ private fun ZoomablePage(
                 // The size the page shows at: a half when split, turned when rotated, wider with a center margin
                 val gap = if (wideMargin) image.height / 30 else 0
                 val shown = ReaderSpreads.shownSize(image, part, rotation, gap)
-                val base = when (fitMode) {
-                    FitModes.FIT_WIDTH -> viewport.width / shown.width.toFloat()
-                    FitModes.FIT_HEIGHT -> viewport.height / shown.height.toFloat()
-                    FitModes.ORIGINAL -> density.density
-                    else -> minOf(viewport.width / shown.width.toFloat(), viewport.height / shown.height.toFloat())
+                // Android's scale types, Stretch and Smart fit included
+                val base = FitModes.scale(fitMode, shown.width, shown.height, viewport.width, viewport.height, density.density)
+                // Android's Automatic background: the page's own color behind it, in a theme of its own
+                if (autoBackground) {
+                    image.background?.let { Box(Modifier.fillMaxSize().background(it.brush(viewport.width > viewport.height))) }
                 }
                 val width = (shown.width * base * zoom.zoom).roundToInt().coerceAtLeast(1)
                 val height = (shown.height * base * zoom.zoom).roundToInt().coerceAtLeast(1)

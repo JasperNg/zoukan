@@ -40,6 +40,7 @@ import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
@@ -129,6 +130,12 @@ private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPrefe
         IntSlider(localized(MR.strings.pref_webtoon_side_padding), prefs.webtoonSidePadding(), 0..25) { "$it%" }
         SwitchRow(localized(MR.strings.pref_crop_borders), prefs.cropBordersWebtoon())
         // ZOUKAN -->
+        // KMK's smart scale; Long strip with gaps only when "Apply Smart scale to Long strip with gaps" is on
+        val gapScale by prefs.longStripGapSmartScale().changes().collectAsState(prefs.longStripGapSmartScale().get())
+        if (mode != ReadingModes.CONTINUOUS_VERTICAL || gapScale) {
+            Heading(localized(KMR.strings.pref_webtoon_scale_type))
+            PrefChoices(prefs.webtoonScaleType(), WebtoonScaleTypes.all)
+        }
         Heading(localized(MR.strings.pref_viewer_nav))
         PrefChoices(prefs.navigationModeWebtoon(), ReaderNavigation.layouts)
         Heading(localized(MR.strings.pref_read_with_tapping_inverted))
@@ -143,7 +150,7 @@ private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPrefe
         // ZOUKAN <--
     } else {
         Heading(localized(MR.strings.pref_image_scale_type))
-        PrefChoices(prefs.readerFitMode(), FitModes.all.map { it to FitModes.label(it) })
+        PrefChoices(prefs.imageScaleType(), FitModes.all.map { it to FitModes.label(it) })
         Heading(localized(SYMR.strings.page_layout))
         PrefChoices(prefs.pageLayout(), listOf(0 to localized(SYMR.strings.single_page), 1 to localized(SYMR.strings.double_pages), 2 to localized(DMR.strings.automatic_double_in_a_wide_window)))
         SwitchRow(localized(SYMR.strings.invert_double_pages), prefs.invertDoublePages())
@@ -181,7 +188,7 @@ private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPrefe
 @Composable
 private fun GeneralPage(prefs: DesktopPreferences) {
     Heading(localized(MR.strings.pref_reader_theme))
-    PrefChoices(prefs.readerTheme(), listOf(0 to localized(MR.strings.white_background), 1 to localized(MR.strings.black_background), 2 to localized(MR.strings.gray_background)))
+    PrefChoices(prefs.readerTheme(), ReaderSettingChoices.themes)
     SwitchRow(localized(MR.strings.pref_show_page_number), prefs.showPageNumber())
     SwitchRow(localized(MR.strings.pref_always_show_chapter_transition), prefs.alwaysShowChapterTransition())
     Heading(localized(MR.strings.chapters))
@@ -227,6 +234,9 @@ private fun GeneralPage(prefs: DesktopPreferences) {
 // ZOUKAN -->
 /** Choice labels shared by the reader's settings sheet and Settings > Reader */
 object ReaderSettingChoices {
+    /** Android's reader themes, in its order */
+    val themes = listOf(1 to localized(MR.strings.black_background), 2 to localized(MR.strings.gray_background), 0 to localized(MR.strings.white_background), 3 to localized(MR.strings.automatic_background))
+
     val zoomStarts = listOf(1 to localized(MR.strings.zoom_start_automatic), 2 to localized(MR.strings.nav_zone_left), 3 to localized(MR.strings.nav_zone_right), 4 to localized(MR.strings.zoom_start_center))
     val centerMargins = listOf(0 to localized(MR.strings.none), 1 to localized(SYMR.strings.double_pages), 2 to localized(DMR.strings.wide_pages), 3 to localized(DMR.strings.double_and_wide_pages))
     val flashColors = listOf("BLACK" to localized(MR.strings.black_background), "WHITE" to localized(MR.strings.white_background), "WHITE_BLACK" to localized(DMR.strings.white_and_black))
