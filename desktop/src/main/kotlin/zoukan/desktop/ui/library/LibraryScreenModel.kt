@@ -555,7 +555,7 @@ class LibraryScreenModel(
 
     /** Queues each selected entry's bookmarked chapters (DownloadAction.BOOKMARKED_CHAPTERS). */
     fun downloadBookmarked() {
-        val mangas = selected().filter { it.source != LocalSource.ID }
+        val mangas = selected(state.value.selection).filter { it.source != LocalSource.ID }
         screenModelScope.launch {
             mangas.forEach { manga ->
                 byEntry(manga, chaptersOf(manga).filter { it.bookmark }).forEach { (entry, chapters) ->
@@ -569,13 +569,13 @@ class LibraryScreenModel(
 
     // SY -->
     /** Whether a selected entry is from E-Hentai, ExHentai or nhentai, for Clean titles. */
-    fun showCleanTitles(): Boolean = selected().any { it.isEhBasedManga() || it.source in nHentaiSourceIds }
+    fun showCleanTitles(): Boolean = selected(state.value.selection).any { it.isEhBasedManga() || it.source in nHentaiSourceIds }
 
     /** Whether a selected entry is from MangaDex, for Add to MangaDex follows. */
-    fun showAddToMangadex(): Boolean = selected().any { it.source in mangaDexSourceIds }
+    fun showAddToMangadex(): Boolean = selected(state.value.selection).any { it.source in mangaDexSourceIds }
 
     /** Whether a selected entry has edited details, for Reset info. */
-    fun showResetInfo(): Boolean = selected().any { manga ->
+    fun showResetInfo(): Boolean = selected(state.value.selection).any { manga ->
         manga.title != manga.ogTitle ||
             manga.author != manga.ogAuthor ||
             manga.artist != manga.ogArtist ||
@@ -591,7 +591,7 @@ class LibraryScreenModel(
         val regex2 = "\\(.*?\\)".toRegex()
         val regex3 = "\\{.*?\\}".toRegex()
         val regex4 = ".*\\|".toRegex()
-        val mangas = selected().filter { it.isEhBasedManga() || it.source in nHentaiSourceIds }
+        val mangas = selected(state.value.selection).filter { it.isEhBasedManga() || it.source in nHentaiSourceIds }
         screenModelScope.launch {
             mangas.forEach { manga ->
                 val editedTitle = manga.title
@@ -628,7 +628,7 @@ class LibraryScreenModel(
 
     /** Sets the selected MangaDex entries to Reading in the MangaDex follows. */
     fun syncMangaToDex() {
-        val mangas = selected().filter { it.source in mangaDexSourceIds }
+        val mangas = selected(state.value.selection).filter { it.source in mangaDexSourceIds }
         screenModelScope.launch(Dispatchers.IO) {
             runCatching {
                 MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager)?.let { mdex ->
@@ -643,7 +643,7 @@ class LibraryScreenModel(
 
     /** Puts back the source's details of the selected entries. */
     fun resetInfo() {
-        val mangas = selected()
+        val mangas = selected(state.value.selection)
         screenModelScope.launch {
             mangas.forEach { manga ->
                 val mangaInfo = CustomMangaInfo(
@@ -669,7 +669,7 @@ class LibraryScreenModel(
     private var recommendationSearchJob: Job? = null
 
     /** The selected entries in the library's order, as Android's selectedManga. */
-    fun selectedManga(): List<Manga> = selected()
+    fun selectedManga(): List<Manga> = selected(state.value.selection)
 
     fun runRecommendationSearch(selection: List<Manga>) {
         recommendationSearch.runSearch(screenModelScope, selection)?.let {
