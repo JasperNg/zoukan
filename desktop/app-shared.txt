@@ -59,6 +59,8 @@ exh/util/DataSaver.kt
 # Recommendations
 exh/recs/sources/**
 !exh/recs/sources/StaticResultPagingSource.kt
+exh/recs/batch/SearchFlags.kt
+exh/smartsearch/SmartLibrarySearchEngine.kt
 exh/util/Math.kt
 exh/util/Boolean.kt
 
