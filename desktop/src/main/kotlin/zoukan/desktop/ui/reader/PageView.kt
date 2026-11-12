@@ -100,10 +100,21 @@ fun ChapterTransition(
     }
 }
 
-fun readerBackground(theme: Int): Color = when (theme) {
+// ZOUKAN -->
+/**
+ * The reader's background for a reader theme. Automatic (3) is gray in a dark app theme and white
+ * in a light one, as Android's (which follows night mode); its pages may set their own (PageBackground).
+ */
+fun readerBackground(theme: Int, dark: Boolean = false): Color = when (theme) {
     0 -> Color.White
     2 -> Color(0xFF202125)
+    3 -> if (dark) Color(0xFF202125) else Color.White
     else -> Color.Black
 }
 
-fun readerForeground(theme: Int): Color = if (theme == 0) Color.Black else Color.White
+fun readerForeground(theme: Int, dark: Boolean = false): Color = when (theme) {
+    0 -> Color.Black
+    3 -> if (dark) Color.White else Color.Black
+    else -> Color.White
+}
+// ZOUKAN <--
