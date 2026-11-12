@@ -4,12 +4,21 @@ package eu.kanade.domain.source.service
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 import tachiyomi.core.common.preference.getLongArray
+import tachiyomi.domain.library.model.LibraryDisplayMode
 
 /**
  * The part of the Android app's SourcePreferences the shared code reads, with the same keys (the
  * desktop's other source settings are in DesktopPreferences, also under the Android keys).
  */
 class SourcePreferences(private val preferenceStore: PreferenceStore) {
+    // A source's display mode (compact, comfortable or panorama grid, or list), shared by every source
+    fun sourceDisplayMode() = preferenceStore.getObjectFromString(
+        "pref_display_mode_catalogue",
+        LibraryDisplayMode.default,
+        LibraryDisplayMode.Serializer::serialize,
+        LibraryDisplayMode.Serializer::deserialize,
+    )
+
     fun enabledLanguages() = preferenceStore.getStringSet("source_languages", setOf("all", "en"))
 
     fun incognitoExtensions() = preferenceStore.getStringSet("incognito_extensions", emptySet())
