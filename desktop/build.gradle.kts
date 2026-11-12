@@ -120,6 +120,18 @@ sourceSets.main {
     resources.srcDir(syncAndroidResources)
 }
 
+// Komikku's own app tests that cover code the desktop app compiles (see app-shared.txt) run in
+// :desktop:test as they are. The others are Android-only: MigratorTest covers the upgrade
+// migrations of Android installs, ScreenSerializationTest the Android screens (its desktop port is
+// zoukan.desktop.ui.ScreenSerializationTest).
+val syncAppSharedTests by tasks.registering(Sync::class) {
+    from(rootProject.file("app/src/test/kotlin")) { include("Tester.kt") }
+    into(layout.buildDirectory.dir("generated/app-shared-tests"))
+}
+sourceSets.test {
+    kotlin.srcDir(syncAppSharedTests)
+}
+
 configurations.runtimeClasspath {
     // Its MainDispatcherFactory outranks Swing's and would make Dispatchers.Main the emulated
     // Android main looper; the UI needs the AWT event thread (see also Main.kt). AndroidCompat
