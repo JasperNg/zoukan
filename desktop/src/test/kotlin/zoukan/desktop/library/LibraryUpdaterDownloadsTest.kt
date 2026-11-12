@@ -87,7 +87,7 @@ class LibraryUpdaterDownloadsTest {
             dirs = ZoukanDirs(Files.createTempDirectory("zoukan-update-downloads").toFile()),
             getLibraryManga = mockk<GetLibraryManga> { coEvery { await() } returns library },
             refreshManga = refreshManga,
-            sourceManager = mockk<SourceManager> { every { get(any()) } returns mockk() },
+            sourceManager = mockk<SourceManager> { every { this@mockk.get(any<Long>()) } returns mockk() },
             preferences = mockk<LibraryPreferences> {
                 every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true)
                 every { autoUpdateMetadata() } returns mockk<Preference<Boolean>> { every { get() } returns false }
