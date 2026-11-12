@@ -13,7 +13,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library grouping by source, status or tracking status (SY) | Yes | Filter, sort and display > Group; the tabs become the groups, and updating a tab updates its entries |
 | Library filters and sorts | Yes | Downloaded, unread, started, bookmarked, completed and per-tracker (tri-state); ten sorts with direction; per-category sort |
 | Tag sorting (SY) | Yes | Settings > Library > Sorting > Tag sorting tags: add, order and delete tags; then Sort > Tag sorting, offered once there are tags, as on Android |
-| Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download, delete downloads, remove |
+| Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download (next chapters, unread or bookmarked), delete downloads, update the selected entries (KMK), migrate, remove; More holds Merge (KMK), Clean titles, Find recommendations, Add to MangaDex follows and Reset info (SY), each shown when it applies |
+| Find recommendations over a selection (SY) | Yes | Library selection > More > Find recommendations, with two or more entries: the services to search and Hide results already in your library, then a progress dialog, then Common recommendations ranked by how many of the entries recommend each result ("+N") |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
 | Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule |
 | Library update errors screen (KMK) | Yes | Library > More > Library update errors: failed entries grouped by error, in the Android tables; retry, open, migrate and delete, one or many |
@@ -38,6 +39,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Updates: selection and per-chapter download | Yes | Ctrl/Cmd + click or right click selects, Shift + click selects a range; mark read, bookmark, download or delete the selected chapters; each row has its download button |
 | More tab: downloaded only, incognito, download queue, categories, statistics, update errors, settings | Yes | The fifth rail tab, as Android's; Settings opens from it or with Ctrl/Cmd + comma. Downloaded only filters the library and Updates and shows a bar above every screen, as does incognito |
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
+| Updates grouped by entry (KMK) | Yes | Several new chapters of one entry on the same day fold into one row; its caret button expands them. Each day's header shows its chapter count. Selecting a folded row selects all of its chapters |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
 | Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5. A download follows its chapter when the source renames it or changes its scanlator, as Android |
 | Download queue: sort by upload date or chapter number, move to top or bottom, move or cancel a series | Yes | Downloads > sort button sorts within each source, as Android; each download's More menu has the moves and cancels |

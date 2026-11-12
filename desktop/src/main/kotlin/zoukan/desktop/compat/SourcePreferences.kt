@@ -27,6 +27,9 @@ class SourcePreferences(private val preferenceStore: PreferenceStore) {
 
     fun relatedMangas() = preferenceStore.getBoolean("related_mangas", true)
 
+    // SY's batch recommendation search (exh.recs.batch.SearchFlags)
+    fun recommendationSearchFlags() = preferenceStore.getInt("rec_search_flags", Int.MAX_VALUE)
+
     fun preferredMangaDexId() = preferenceStore.getString("preferred_mangaDex_id", "0")
 
     fun mangadexSyncToLibraryIndexes() = preferenceStore.getStringSet("pref_mangadex_sync_to_library_indexes", emptySet())

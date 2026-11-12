@@ -2,11 +2,19 @@ package zoukan.desktop.ui.library
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.manga.interactor.SmartSearchMerge
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
+import exh.md.utils.FollowStatus
+import exh.md.utils.MdUtil
 import exh.source.MERGED_SOURCE_ID
+import exh.source.isEhBasedManga
+import exh.source.mangaDexSourceIds
+import exh.source.nHentaiSourceIds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -32,6 +40,8 @@ import tachiyomi.domain.library.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
+import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -46,6 +56,7 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.i18n.desktop.DMR
 import java.text.Collator
 import java.util.Locale
@@ -71,6 +82,10 @@ class LibraryScreenModel(
     private val getNextChapters: GetNextChapters = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val mangaRepository: MangaRepository = Injekt.get(),
+    // SY -->
+    private val setCustomMangaInfo: SetCustomMangaInfo = Injekt.get(),
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
+    // SY <--
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     /** The library preferences that change what is shown. */
@@ -537,6 +552,170 @@ class LibraryScreenModel(
         if (manga.source != MERGED_SOURCE_ID) return listOf(manga to chapters)
         return chapters.groupBy { it.mangaId }.mapNotNull { (id, list) -> getManga.await(id)?.let { it to list } }
     }
+
+    /** Queues each selected entry's bookmarked chapters (DownloadAction.BOOKMARKED_CHAPTERS). */
+    fun downloadBookmarked() {
+        val mangas = selected(state.value.selection).filter { it.source != LocalSource.ID }
+        screenModelScope.launch {
+            mangas.forEach { manga ->
+                byEntry(manga, chaptersOf(manga).filter { it.bookmark }).forEach { (entry, chapters) ->
+                    val missing = chapters.filter { !downloadManager.isDownloaded(entry, it) }
+                    downloadManager.enqueue(entry, missing)
+                }
+            }
+            clearSelection()
+        }
+    }
+
+    // SY -->
+    /** Whether a selected entry is from E-Hentai, ExHentai or nhentai, for Clean titles. */
+    fun showCleanTitles(): Boolean = selected(state.value.selection).any { it.isEhBasedManga() || it.source in nHentaiSourceIds }
+
+    /** Whether a selected entry is from MangaDex, for Add to MangaDex follows. */
+    fun showAddToMangadex(): Boolean = selected(state.value.selection).any { it.source in mangaDexSourceIds }
+
+    /** Whether a selected entry has edited details, for Reset info. */
+    fun showResetInfo(): Boolean = selected(state.value.selection).any { manga ->
+        manga.title != manga.ogTitle ||
+            manga.author != manga.ogAuthor ||
+            manga.artist != manga.ogArtist ||
+            manga.thumbnailUrl != manga.ogThumbnailUrl ||
+            manga.description != manga.ogDescription ||
+            manga.genre != manga.ogGenre ||
+            manga.status != manga.ogStatus
+    }
+
+    /** Removes bracketed tags (groups, events, languages) from gallery titles, as custom titles. */
+    fun cleanTitles() {
+        val regex1 = "\\[.*?]".toRegex()
+        val regex2 = "\\(.*?\\)".toRegex()
+        val regex3 = "\\{.*?\\}".toRegex()
+        val regex4 = ".*\\|".toRegex()
+        val mangas = selected(state.value.selection).filter { it.isEhBasedManga() || it.source in nHentaiSourceIds }
+        screenModelScope.launch {
+            mangas.forEach { manga ->
+                val editedTitle = manga.title
+                    .replace(regex1, "").trim()
+                    .replace(regex2, "").trim()
+                    .replace(regex3, "").trim()
+                    .let {
+                        if (it.contains("|")) {
+                            it.replace(regex4, "").trim()
+                        } else {
+                            it
+                        }
+                    }
+                if (manga.title == editedTitle) return@forEach
+                val mangaInfo = CustomMangaInfo(
+                    id = manga.id,
+                    title = editedTitle.ifBlank { null },
+                    author = manga.author.takeUnless { it == manga.ogAuthor },
+                    artist = manga.artist.takeUnless { it == manga.ogArtist },
+                    thumbnailUrl = manga.thumbnailUrl.takeUnless { it == manga.ogThumbnailUrl },
+                    description = manga.description.takeUnless { it == manga.ogDescription },
+                    genre = manga.genre.takeUnless { it == manga.ogGenre },
+                    status = manga.status.takeUnless { it == manga.ogStatus },
+                )
+                setCustomMangaInfo.set(mangaInfo)
+                // ZOUKAN -->
+                // The library reads custom info again when the entry's row changes (as EditManga)
+                mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = manga.lastUpdate + 1))
+                // ZOUKAN <--
+            }
+        }
+        clearSelection()
+    }
+
+    /** Sets the selected MangaDex entries to Reading in the MangaDex follows. */
+    fun syncMangaToDex() {
+        val mangas = selected(state.value.selection).filter { it.source in mangaDexSourceIds }
+        screenModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager)?.let { mdex ->
+                    mangas.forEach { manga ->
+                        mdex.updateFollowStatus(MdUtil.getMangaId(manga.url), FollowStatus.READING)
+                    }
+                }
+            }.onFailure { Toasts.error(localized(DMR.strings.could_not_update_the_mangadex_follows), it) }
+            clearSelection()
+        }
+    }
+
+    /** Puts back the source's details of the selected entries. */
+    fun resetInfo() {
+        val mangas = selected(state.value.selection)
+        screenModelScope.launch {
+            mangas.forEach { manga ->
+                val mangaInfo = CustomMangaInfo(
+                    id = manga.id,
+                    title = null,
+                    author = null,
+                    artist = null,
+                    thumbnailUrl = null,
+                    description = null,
+                    genre = null,
+                    status = null,
+                )
+                setCustomMangaInfo.set(mangaInfo)
+                // ZOUKAN -->
+                mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = manga.lastUpdate + 1))
+                // ZOUKAN <--
+            }
+        }
+        clearSelection()
+    }
+
+    val recommendationSearch = RecommendationSearchHelper()
+    private var recommendationSearchJob: Job? = null
+
+    /** The selected entries in the library's order, as Android's selectedManga. */
+    fun selectedManga(): List<Manga> = selected(state.value.selection)
+
+    fun runRecommendationSearch(selection: List<Manga>) {
+        recommendationSearch.runSearch(screenModelScope, selection)?.let {
+            recommendationSearchJob = it
+        }
+    }
+
+    fun cancelRecommendationSearch() {
+        recommendationSearchJob?.cancel()
+    }
+    // SY <--
+
+    // KMK -->
+    /** Updates the chapters of the selected entries. */
+    fun updateSelectedManga(): Boolean {
+        val mangaIds = state.value.selection
+        return Injekt.get<LibraryUpdater>().start(mangaIds = mangaIds)
+    }
+
+    /**
+     * Will get first merged manga in the list as target merging.
+     * If there is no merged manga, then it will use the first one in list to create a new target.
+     */
+    suspend fun smartSearchMerge(selectedMangas: List<Manga>): Long? {
+        val mergedManga = selectedMangas.firstOrNull { it.source == MERGED_SOURCE_ID }?.let { listOf(it) }
+            ?: emptyList()
+        val mergingMangas = selectedMangas.filterNot { it.source == MERGED_SOURCE_ID }
+        val toMergeMangas = mergedManga + mergingMangas
+        if (toMergeMangas.size <= 1) return null
+
+        var mergingMangaId = toMergeMangas.first().id
+        for (manga in toMergeMangas.drop(1)) {
+            mergingMangaId = withContext(Dispatchers.IO) { SmartSearchMerge().smartSearchMerge(manga, mergingMangaId) }.id
+        }
+        return mergingMangaId
+    }
+
+    /** Takes [mangas] out of the library, keeping their downloads (the merge's "Remove" action). */
+    fun removeMangas(mangas: List<Manga>) {
+        screenModelScope.launch {
+            mangas.distinctBy { it.id }.forEach { manga ->
+                mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
+            }
+        }
+    }
+    // KMK <--
 
     /** The chapter "continue reading" opens: the next unread one. */
     suspend fun nextChapter(mangaId: Long): Chapter? = getNextChapters.await(mangaId, onlyUnread = true).firstOrNull()

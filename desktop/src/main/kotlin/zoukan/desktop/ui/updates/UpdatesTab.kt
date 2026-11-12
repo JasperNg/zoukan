@@ -1,5 +1,11 @@
 package zoukan.desktop.ui.updates
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -9,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -27,23 +35,33 @@ import androidx.compose.material.icons.outlined.Deselect
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -81,7 +99,6 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.browse.sectionHeader
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
@@ -89,11 +106,13 @@ import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
+import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.rememberContextMenuState
@@ -107,6 +126,8 @@ import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.upcoming.UpcomingScreen
 import zoukan.i18n.desktop.DMR
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 class UpdatesScreenModel(
@@ -131,9 +152,60 @@ class UpdatesScreenModel(
         /** Chapters in the download queue, by chapter id */
         val queued: Map<Long, Download> = emptyMap(),
         // ZOUKAN <--
+        // KMK -->
+        /** The [groupByDateAndManga] keys of the groups the user expanded. */
+        val expandedState: Set<String> = emptySet(),
+        // KMK <--
     ) {
         val selecting: Boolean get() = selected.isNotEmpty()
         val selectedItems: List<UpdatesWithRelations> get() = items.filter { it.chapterId in selected }
+
+        // KMK -->
+        /**
+         * KMK's UpdatesScreenModel.State.getUiModel: a header for each day, then that day's chapters
+         * grouped by entry. The first chapter of each entry leads its group; the others show only
+         * while the group is expanded.
+         */
+        fun getUiModel(): List<UpdatesUiModel> = items
+            .groupBy { Dates.toLocalDate(it.dateFetch) }
+            .flatMap { (date, mangas) ->
+                val header = UpdatesUiModel.Header(date, mangas.size)
+                val mangaItems = mangas
+                    .groupBy { it.mangaId }
+                    .values
+                    .flatMap { mangaChapters ->
+                        val isExpandable = mangaChapters.size > 1
+                        var lastMangaId = -1L
+                        mangaChapters.map { chapter ->
+                            if (chapter.mangaId != lastMangaId) {
+                                lastMangaId = chapter.mangaId
+                                UpdatesUiModel.Leader(chapter, isExpandable)
+                            } else {
+                                UpdatesUiModel.Item(chapter, isExpandable)
+                            }
+                        }
+                    }
+                listOf(header) + mangaItems
+            }
+            .distinctBy {
+                when (it) {
+                    is UpdatesUiModel.Header -> it.hashCode()
+                    is UpdatesUiModel.Item -> "${it.item.mangaId}-${it.item.chapterId}"
+                }
+            }
+
+        /** The chapters in the order the list shows them, an entry's chapters together under their leader. */
+        val displayOrder: List<UpdatesWithRelations>
+            get() = getUiModel().mapNotNull { (it as? UpdatesUiModel.Item)?.item }
+
+        /** The chapters a row stands for: a folded group's leader stands for the entry's chapters of that day. */
+        fun groupOf(item: UpdatesWithRelations): List<UpdatesWithRelations> {
+            val key = item.groupByDateAndManga()
+            if (key in expandedState) return listOf(item)
+            val group = items.filter { it.groupByDateAndManga() == key }
+            return if (group.firstOrNull()?.chapterId == item.chapterId) group else listOf(item)
+        }
+        // KMK <--
     }
 
     init {
@@ -162,7 +234,20 @@ class UpdatesScreenModel(
             combine(updates, filters, downloadedOnly, downloadManager.changes) { items, f, only, _ ->
                 items to if (only) f.copy(downloaded = TriState.ENABLED_IS) else f
             }
-                .collectLatest { (all, f) ->
+                .collectLatest { (fetched, f) ->
+                    // KMK -->
+                    // Each entry's chapters of a day: the unread ones oldest first, then the read ones newest first
+                    val all = fetched
+                        .groupBy { Dates.toLocalDate(it.dateFetch) }
+                        .flatMap { (_, mangas) ->
+                            mangas.groupBy { it.mangaId }
+                                .values
+                                .flatMap { mangaChapters ->
+                                    val (unread, read) = mangaChapters.partition { !it.read }
+                                    unread.sortedBy { it.dateFetch } + read.sortedByDescending { it.dateFetch }
+                                }
+                        }
+                    // KMK <--
                     val items = if (f.downloaded == TriState.DISABLED) {
                         all
                     } else {
@@ -266,16 +351,28 @@ class UpdatesScreenModel(
         if (items.mapTo(HashSet()) { it.chapterId } == state.value.selected) clearSelection()
     }
 
-    fun toggleSelection(item: UpdatesWithRelations) = mutableState.update {
-        it.copy(selected = if (item.chapterId in it.selected) it.selected - item.chapterId else it.selected + item.chapterId)
+    /**
+     * Selects [item] or clears it. As KMK's group selection, a folded group's leader takes the entry's
+     * other chapters of that day with it.
+     */
+    fun toggleSelection(item: UpdatesWithRelations) = mutableState.update { state ->
+        val select = item.chapterId !in state.selected
+        val ids = state.groupOf(item).map { it.chapterId }
+        state.copy(selected = if (select) state.selected + ids else state.selected - ids.toSet())
     }
+
+    // KMK -->
+    fun toggleExpandedState(key: String) = mutableState.update {
+        it.copy(expandedState = if (key in it.expandedState) it.expandedState - key else it.expandedState + key)
+    }
+    // KMK <--
 
     /**
      * Shift-click: selects every chapter between the last selected one and [item], as Android's
      * long-press range selection.
      */
     fun selectRange(item: UpdatesWithRelations) = mutableState.update { state ->
-        val ids = state.items.map { it.chapterId }
+        val ids = state.displayOrder.map { it.chapterId }
         val to = ids.indexOf(item.chapterId)
         val from = ids.indexOfLast { it in state.selected }.takeIf { it >= 0 } ?: to
         val range = if (from <= to) from..to else to..from
@@ -332,11 +429,42 @@ fun UpdatesTab(model: UpdatesScreenModel) {
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 // Android's "Library last updated" line above the updates
                 item(key = "updates-lastUpdated") { LastUpdatedLine() }
-                state.items.groupBy { zoukan.desktop.ui.common.Dates.relative(it.dateFetch) }.forEach { (date, items) ->
-                    sectionHeader(date)
-                    items(items, key = { it.chapterId }) { item ->
+                // KMK's updatesUiItems
+                items(
+                    items = state.getUiModel(),
+                    contentType = {
+                        when (it) {
+                            is UpdatesUiModel.Header -> "header"
+                            is UpdatesUiModel.Item -> "item"
+                        }
+                    },
+                    key = {
+                        when (it) {
+                            is UpdatesUiModel.Header -> "updatesHeader-${it.hashCode()}"
+                            is UpdatesUiModel.Item -> "updates-${it.item.mangaId}-${it.item.chapterId}"
+                        }
+                    },
+                ) { uiItem ->
+                    if (uiItem is UpdatesUiModel.Header) {
+                        DateHeading(uiItem.date, uiItem.mangaCount, Modifier.padding(top = 4.dp))
+                        return@items
+                    }
+                    val item = (uiItem as UpdatesUiModel.Item).item
+                    // KMK -->
+                    val isLeader = uiItem is UpdatesUiModel.Leader
+                    val isExpanded = item.groupByDateAndManga() in state.expandedState
+                    AnimatedVisibility(
+                        visible = isLeader || isExpanded,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        // KMK <--
                         UpdateRow(
                             item = item,
+                            isLeader = isLeader,
+                            isExpandable = uiItem.isExpandable,
+                            expanded = isExpanded,
+                            onToggleExpanded = { model.toggleExpandedState(item.groupByDateAndManga()) },
                             selected = item.chapterId in state.selected,
                             downloaded = item.chapterId in state.downloaded,
                             download = state.queued[item.chapterId],
@@ -396,6 +524,7 @@ private fun LastUpdatedLine() {
 @Composable
 private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel) {
     val selected = state.selectedItems
+    var confirmDelete by remember { mutableStateOf<List<UpdatesWithRelations>?>(null) }
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -421,8 +550,22 @@ private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScree
             TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(remote) })
         }
         if (remote.any { it.chapterId in state.downloaded }) {
-            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { model.deleteDownloads(remote) })
+            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { confirmDelete = remote })
         }
+    }
+    // Android's UpdatesDeleteConfirmationDialog
+    confirmDelete?.let { toDelete ->
+        AlertDialog(
+            text = { Text(localized(MR.strings.confirm_delete_chapters)) },
+            onDismissRequest = { confirmDelete = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    model.deleteDownloads(toDelete)
+                    confirmDelete = null
+                }) { Text(localized(MR.strings.action_ok)) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(localized(MR.strings.action_cancel)) } },
+        )
     }
 }
 
@@ -472,9 +615,65 @@ private fun ColumnScope.UpdateContextMenu(
     }
 }
 
+// KMK -->
+/** KMK's UpdatesUiModel: a day's header, or a chapter row that leads or follows its entry's group. */
+sealed interface UpdatesUiModel {
+    data class Header(val date: LocalDate, val mangaCount: Int) : UpdatesUiModel
+    open class Item(open val item: UpdatesWithRelations, open val isExpandable: Boolean = false) : UpdatesUiModel
+
+    /** The first chapter of an entry on a day: it shows the cover, the title and the collapse button. */
+    data class Leader(override val item: UpdatesWithRelations, override val isExpandable: Boolean) : Item(item)
+}
+
+/** String to identify which manga's update on which day it is collapsing */
+fun UpdatesWithRelations.groupByDateAndManga() = "${Dates.toLocalDate(dateFetch).toEpochDay()}-$mangaId"
+
+/** Android's DateHeading (mihon upcoming) as the Updates screen uses it: the day and its chapter count. */
+@Composable
+private fun DateHeading(date: LocalDate, mangaCount: Int, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth().testTag("updates-header")) {
+        Text(
+            text = Dates.relative(date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()),
+            modifier = Modifier.padding(8.dp).padding(start = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Badge(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+            Text("$mangaCount")
+        }
+    }
+}
+
+/** KMK's CollapseButton: a caret that points down while the group is collapsed and up while it is open. */
+@Composable
+private fun CollapseButton(expanded: Boolean, onToggle: () -> Unit) {
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f)
+    val label = localized(if (expanded) DMR.strings.collapse else DMR.strings.expand)
+    Tooltip(label) {
+        IconButton(onClick = onToggle) {
+            Icon(
+                Icons.Outlined.KeyboardArrowDown,
+                contentDescription = label,
+                modifier = Modifier.rotate(rotation),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+private val UpdateItemWidth = 44.dp
+// KMK <--
+
 @Composable
 private fun UpdateRow(
     item: UpdatesWithRelations,
+    // KMK -->
+    isLeader: Boolean,
+    isExpandable: Boolean,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    // KMK <--
     selected: Boolean,
     downloaded: Boolean,
     download: Download?,
@@ -492,17 +691,37 @@ private fun UpdateRow(
             Modifier.fillMaxWidth()
                 .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
                 .selectableClick(menu::open, onClick)
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                // KMK: a group's other chapters sit tight under its leader
+                .padding(horizontal = 16.dp, vertical = if (isLeader) 6.dp else 0.dp)
+                .testTag(if (isLeader) "updates-leader" else "updates-item"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CoverImage(
-                Cover.of(item.coverData),
-                Modifier.size(44.dp, 60.dp).clip(Corners.Medium).coverOutline(Corners.Medium).clickable(onClick = onOpenManga),
-            )
+            // KMK -->
+            if (isLeader) {
+                CoverImage(
+                    Cover.of(item.coverData),
+                    Modifier.size(UpdateItemWidth, 60.dp).clip(Corners.Medium).coverOutline(Corners.Medium).clickable(onClick = onOpenManga),
+                )
+            } else {
+                Box(Modifier.width(UpdateItemWidth))
+            }
+            // KMK <--
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f).alpha(if (item.read) 0.5f else 1f)) {
-                Text(item.mangaTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // KMK -->
+                if (isLeader) {
+                    // KMK <--
+                    Text(item.mangaTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!item.read) {
+                        Icon(
+                            Icons.Filled.Circle,
+                            contentDescription = localized(MR.strings.unread),
+                            modifier = Modifier.height(8.dp).padding(end = 4.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     if (item.bookmark) {
                         Icon(Icons.Default.Bookmark, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                     }
@@ -515,6 +734,11 @@ private fun UpdateRow(
                     )
                 }
             }
+            // KMK -->
+            if (isLeader && isExpandable) {
+                CollapseButton(expanded = expanded, onToggle = onToggleExpanded)
+            }
+            // KMK <--
             if (item.read) {
                 TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = onRead)
             } else {
