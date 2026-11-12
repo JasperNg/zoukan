@@ -45,4 +45,24 @@ class ReaderNavigationTest {
         at(ReaderNavigation.RIGHT_AND_LEFT, 0.3f, 0.5f) shouldBe Region.LEFT
         at(ReaderNavigation.RIGHT_AND_LEFT, 0.3f, 0.5f, smaller = true) shouldBe Region.MENU
     }
+
+    @Test
+    fun `the horizontal keys flip with right to left and with the inverted tap zones`() {
+        ReaderNavigation.flipped(rtl = false) shouldBe false
+        ReaderNavigation.flipped(rtl = true) shouldBe true
+        ReaderNavigation.flipped(rtl = false, invert = Invert.HORIZONTAL) shouldBe true
+        ReaderNavigation.flipped(rtl = true, invert = Invert.VERTICAL) shouldBe true
+        ReaderNavigation.flipped(rtl = false, invert = Invert.BOTH) shouldBe true
+        // An inverted flip undoes right to left: the directions follow the taps either way
+        ReaderNavigation.flipped(rtl = true, invert = Invert.HORIZONTAL) shouldBe false
+    }
+
+    @Test
+    fun `the vertical keys flip with the vertically inverted tap zones`() {
+        ReaderNavigation.verticalFlipped() shouldBe false
+        ReaderNavigation.verticalFlipped(invert = Invert.VERTICAL) shouldBe true
+        ReaderNavigation.verticalFlipped(invert = Invert.BOTH) shouldBe true
+        ReaderNavigation.verticalFlipped(invert = Invert.HORIZONTAL) shouldBe false
+        ReaderNavigation.verticalFlipped(invert = Invert.NONE) shouldBe false
+    }
 }

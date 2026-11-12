@@ -166,6 +166,8 @@ class DesktopPreferences(private val store: PreferenceStore) {
 
     fun webtoonDoubleTapZoomEnabled() = store.getBoolean("pref_enable_double_tap_zoom_webtoon", true)
 
+    fun webtoonPinchToZoomEnabled() = store.getBoolean("pref_enable_pinch_to_zoom_webtoon", true)
+
     fun pagedDisableZoomIn() = store.getBoolean("paged_disable_zoom_in", false)
 
     fun webtoonDisableZoomOut() = store.getBoolean("webtoon_disable_zoom_out", false)

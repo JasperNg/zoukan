@@ -75,6 +75,7 @@ fun WebtoonViewer(
     val smallerZones by prefs.smallerTapZone().changes().collectAsState(prefs.smallerTapZone().get())
     val transitions by prefs.pageTransitionsWebtoon().changes().collectAsState(prefs.pageTransitionsWebtoon().get())
     val doubleTapZoom by prefs.webtoonDoubleTapZoomEnabled().changes().collectAsState(prefs.webtoonDoubleTapZoomEnabled().get())
+    val pinchToZoom by prefs.webtoonPinchToZoomEnabled().changes().collectAsState(prefs.webtoonPinchToZoomEnabled().get())
     val noZoomOut by prefs.webtoonDisableZoomOut().changes().collectAsState(prefs.webtoonDisableZoomOut().get())
     val longTap by prefs.readWithLongTap().changes().collectAsState(prefs.readWithLongTap().get())
     val split by prefs.dualPageSplitWebtoon().changes().collectAsState(prefs.dualPageSplitWebtoon().get())
@@ -157,7 +158,8 @@ fun WebtoonViewer(
                 .fillMaxSize()
                 .onPointerEvent(PointerEventType.Scroll, PointerEventPass.Initial) { event ->
                     val modifiers = event.keyboardModifiers
-                    if (modifiers.isCtrlPressed || modifiers.isMetaPressed) {
+                    // The wheel gesture of Android's pinch to zoom (webtoonPinchToZoomEnabled)
+                    if ((modifiers.isCtrlPressed || modifiers.isMetaPressed) && pinchToZoom) {
                         val change = event.changes.firstOrNull() ?: return@onPointerEvent
                         zoom = (zoom * if (change.scrollDelta.y < 0) 1.1f else 1 / 1.1f).coerceIn(minZoom, 3f)
                         change.consume()

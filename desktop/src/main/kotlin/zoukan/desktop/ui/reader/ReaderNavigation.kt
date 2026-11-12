@@ -99,4 +99,16 @@ object ReaderNavigation {
     /** What a tap at ([x], [y]) does; anywhere outside the zones opens the menu. */
     fun regionAt(x: Float, y: Float, zones: List<Zone>): Region =
         zones.firstOrNull { it.contains(x, y) }?.region ?: Region.MENU
+
+    /**
+     * Whether the horizontal directions are flipped: right-to-left reading, or the tap zones'
+     * horizontal inversion. The screen's sides and the Left and Right keys follow the taps.
+     */
+    fun flipped(rtl: Boolean, invert: Invert = Invert.NONE): Boolean = rtl != invert.horizontal
+
+    /**
+     * Whether the vertical directions are flipped: the tap zones' vertical inversion.
+     * The Up and Down keys follow the taps.
+     */
+    fun verticalFlipped(invert: Invert = Invert.NONE): Boolean = invert.vertical
 }
