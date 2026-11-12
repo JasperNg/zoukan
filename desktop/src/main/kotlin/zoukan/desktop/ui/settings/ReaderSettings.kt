@@ -78,6 +78,7 @@ fun LazyListScope.readerBehaviourSettings(preferences: DesktopPreferences) {
     item { SwitchPreference(localized(MR.strings.pref_page_rotate), preferences.dualPageRotateToFitWebtoon()) }
     item { SwitchPreference(localized(MR.strings.pref_page_rotate_invert), preferences.dualPageRotateToFitInvertWebtoon()) }
     item { SwitchPreference(localized(MR.strings.pref_double_tap_zoom), preferences.webtoonDoubleTapZoomEnabled()) }
+    item { SwitchPreference(localized(KMR.strings.pref_pinch_to_zoom), preferences.webtoonPinchToZoomEnabled()) }
     item { SwitchPreference(localized(MR.strings.pref_webtoon_disable_zoom_out), preferences.webtoonDisableZoomOut()) }
     item { SwitchPreference(localized(MR.strings.pref_page_transitions), preferences.pageTransitionsWebtoon()) }
 
