@@ -123,15 +123,16 @@ private sealed interface Badge {
 private fun startBadges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.Settings): List<Badge> = buildList {
     if (settings.downloadBadge && item.downloadCount > 0) add(Badge.Label(item.downloadCount.toString()))
     if (settings.unreadBadge && item.library.unreadCount > 0) add(Badge.Label(item.library.unreadCount.toString(), primary = true))
-    if (settings.localBadge && item.isLocal) add(Badge.Label(localized(MR.strings.label_local)))
 }
 
 /**
  * The badges at the cover's end, as Android's coverBadgeEnd (KMK): the language, as text or a flag
- * ("Use language icon"), and the source's icon.
+ * ("Use language icon"), and the source's icon, a folder for local entries. As KMK, the local badge
+ * setting leaves the language out for local entries.
  */
 private fun endBadges(item: LibraryScreenModel.Item, settings: LibraryScreenModel.Settings): List<Badge> = buildList {
-    if (settings.languageBadge && !item.isLocal && item.language.isNotEmpty()) {
+    val isLocal = settings.localBadge && item.isLocal
+    if (settings.languageBadge && !isLocal && item.language.isNotEmpty()) {
         add(if (settings.useLangIcon) Badge.Language(item.language) else Badge.Label(item.language.uppercase()))
     }
     if (settings.sourceBadge) add(Badge.Source(item.sourceName, item.sourceIconUrl, item.isStubSource, item.isLocal))
