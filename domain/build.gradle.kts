@@ -51,6 +51,16 @@ kotlin {
                 runtimeOnly(libs.junit.platform.launcher)
             }
         }
+        // Komikku's domain tests also run against the desktop target, as they are
+        //   ./gradlew :domain:desktopTest
+        getByName("desktopTest") {
+            kotlin.srcDir("src/androidUnitTest/kotlin")
+            dependencies {
+                implementation(libs.bundles.test)
+                implementation(kotlinx.coroutines.test)
+                runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
     }
     // ZOUKAN <--
 }
