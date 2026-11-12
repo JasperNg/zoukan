@@ -42,6 +42,15 @@ class FileCipherTest {
     }
 
     @Test
+    fun `a stored key that cannot be read is kept before a new one replaces it`() {
+        val secrets = FileSecretStore(File(root, "secrets"))
+        secrets.set(FileCipher.KEY_NAME, "not hex")
+        FileCipher.fromStore(secrets)
+        secrets.get(FileCipher.UNREADABLE_KEY_NAME) shouldBe "not hex"
+        secrets.get(FileCipher.KEY_NAME)!!.length shouldBe 64
+    }
+
+    @Test
     fun `preference files are encrypted, and a plain one from before is taken over`() {
         System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
         val file = File(root, "settings/cipher_test.xml")
