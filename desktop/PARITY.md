@@ -19,6 +19,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Find recommendations over a selection (SY) | Yes | Library selection > More > Find recommendations, with two or more entries: the services to search and Hide results already in your library, then a progress dialog, then Common recommendations ranked by how many of the entries recommend each result ("+N") |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
 | Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule |
+| Library dynamic category updates (SY `groupLibraryUpdateType`) | Yes | Settings > Library: updating a source, status or tracking tab updates the whole library, or that tab's entries, or that tab's entries except when ungrouped |
+| Library: Sync library in the overflow while data sync is on (SY) | Yes | Library > More > Sync library starts a data sync, or says one is running |
 | Library update errors screen (KMK) | Yes | Library > More > Library update errors: failed entries grouped by error, in the Android tables; retry, open, migrate and delete, one or many |
 | Manga details, chapters, mark read, bookmark, download, delete | Yes | Phase 3, Phase 5 |
 | Reader: paged, right to left, vertical, webtoon, continuous | Yes | Phase 4; keyboard, mouse and wheel |
@@ -54,6 +56,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Create backup choices: entries, chapters, tracking, history, categories, non-library entries, custom info, saved searches and feeds, app, extension store, source and private settings | Yes | Settings > Data and storage > Create backup opens Android's screen, then asks where to save the file (the backup folder by default). Private settings (sign-ins and tokens) no longer need the `--private` command line flag |
 | Restore backup choices and the missing sources and trackers warning | Yes | Settings > Data and storage > Restore backup, after picking the file: Android's screen, with what to restore, the sources the backup needs that are not installed and the trackers it uses that are not signed in, or why the file is not a backup |
 | Statistics | Yes | Library > Statistics: entries, chapters, reading time, tracking |
+| Statistics: include all read entries, ignore non-library entries (SY) | Yes | Statistics > More: counts the read entries that are not in the library too, and back |
 | Merged entries (merge, edit, priority dedupe, per-entry download) | Yes | The Android `MergedSource`, shared |
 | Migration (search other sources, copy or migrate with flags) | Yes | Manga > More > Migrate, custom cover flag included |
 | Bulk migration (source priority, smart search, progress, manual pick) | Yes | Library selection > Migrate: sources in priority order, the Android options (data to migrate, extra keywords, hide unmatched or without newer chapters, advanced search, match by chapter number, smart search), then per-entry search, Don't migrate, Migrate now, and Migrate or Copy all with progress |
@@ -77,6 +80,8 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Android feature | Desktop | Notes |
 |---|---|---|
 | Appearance: theme mode, color schemes, custom color and style, pure black | Yes, changed | The Android color schemes and settings. "Dynamic" (Material You) takes its colors from the phone's wallpaper, which desktops do not offer, so it shows the default scheme |
+| Appearance: custom theme palettes (KMK) | Yes | The custom color picker lists KMK's named palettes (Sunset to PICO-8); a color picks it, and Confirm Color sets it |
+| Appearance: expand all search filters by default (SY `expandFilters`) | Yes | Settings > Appearance > Browse, as Android's fork settings; the source filter panel opens its sort and group filters |
 | Appearance: date format, relative timestamps | Yes | Updates, History and chapter dates |
 | Appearance: hide Updates or History, navigation labels | Yes | On the navigation rail |
 | Appearance: app language | No | Zoukan is English only: there is no language setting, and the app shows English whatever the system language is. Source language filters (which sources and extensions to show) are unchanged |
