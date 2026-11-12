@@ -27,6 +27,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
@@ -289,8 +290,12 @@ class EndToEndParityTest {
                 preferences.defaultReadingMode().set(zoukan.desktop.ui.common.ReadingModes.LEFT_TO_RIGHT)
                 runOnUiThread { navigator?.push(ReaderScreen(alpha.id, chapter.id)) }
                 waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("page-image").fetchSemanticsNodes().isNotEmpty() }
+                // The first reader ever shows the tap zones, as Android does for a new user; a key hides them
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("tap-zones-overlay").fetchSemanticsNodes().isNotEmpty() }
+                shot("p8-reader-tap-zones")
                 // Pages 2 and 3 side by side
                 onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("tap-zones-overlay").fetchSemanticsNodes().isEmpty() }
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("page-image").fetchSemanticsNodes().size >= 2 }
                 shot("p8-reader-double")
                 // Changing the page layout keeps the reader on the same page
@@ -309,10 +314,19 @@ class EndToEndParityTest {
                 onRoot().performKeyInput { pressKey(Key.S) }
                 waitFor(hasText("Reading mode for this entry"))
                 shot("p10-reader-settings")
+                // Android's scale types (imageScaleType), Smart fit included
+                onAllNodesWithText("Smart fit").onFirst().performScrollTo().performClick()
+                waitUntil(timeoutMillis = 5_000) { preferences.imageScaleType().get() == zoukan.desktop.ui.common.FitModes.SMART_FIT }
                 onAllNodesWithText("Filter").onFirst().performClick()
                 waitFor(hasText("Inverted colors"))
                 shot("p11-reader-filter-tab")
+                // The Automatic reader theme
+                onAllNodesWithText("General").onFirst().performClick()
+                onAllNodesWithText("Auto").onFirst().performScrollTo().performClick()
+                waitUntil(timeoutMillis = 5_000) { preferences.readerTheme().get() == 3 }
                 onAllNodesWithText("Close").onFirst().performClick()
+                preferences.readerTheme().set(1)
+                preferences.imageScaleType().set(zoukan.desktop.ui.common.FitModes.FIT_SCREEN)
                 preferences.grayscale().set(false)
                 preferences.colorFilter().set(false)
             }
