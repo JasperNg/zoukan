@@ -14,7 +14,9 @@ import java.nio.file.StandardCopyOption
 /**
  * Installs an extension from its store. Keiyoushi publishes a ready-made, JAR-signed JVM jar of
  * each extension (the store's jarUrl), which is installed as it is. For a store that publishes only
- * APKs, the APK is converted with dex2jar.
+ * APKs, the APK is converted with dex2jar, and the converted jar's SHA-256 is recorded next to it:
+ * unlike the signed jar or APK, the conversion's output is unsigned user-writable data, so the
+ * loader only runs it while it still matches that hash.
  *
  * The signature and manifest are checked before anything is installed; whether the signer is
  * trusted is decided when the extension loads, as on Android.
@@ -64,6 +66,9 @@ class DesktopExtensionInstaller(
             val jar = File(dir, "${manifest.versionCode}.jar")
             Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
             File(dir, "${manifest.versionCode}.apk").delete()
+            // Of an earlier APK-method install of this version: its jar was replaced, so the
+            // sidecar hash would not match and the loader would convert the deleted APK again
+            File(dir, "${manifest.versionCode}.sha256").delete()
             return Installed(
                 DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, null),
                 Method.JAR,
@@ -84,6 +89,7 @@ class DesktopExtensionInstaller(
             val jar = File(dir, "${manifest.versionCode}.jar")
             try {
                 ApkConverter.convert(apk, jar)
+                ApkConverter.recordHash(jar)
             } catch (e: Exception) {
                 apk.delete()
                 throw e

@@ -90,13 +90,19 @@ val zoukanBuildInfo by tasks.registering {
     val output = layout.buildDirectory.dir("generated/zoukan-build-info")
     val version = zoukanVersion
     val repo = providers.gradleProperty("zoukan.releaseRepo").orElse("JasperNg/zoukan")
+    // Whether this OS's packaging signs the app (packaging.gradle.kts, applied below, decides);
+    // the update check reads it to tell an unsigned release from a signed one that lost its
+    // signature. Read through a provider because packaging.gradle.kts sets it later in the
+    // configuration than this registration, on the project's extras, not this task's.
+    val signedRelease = provider { project.extra["zoukanSignedRelease"] == true }
     inputs.property("version", version)
     inputs.property("repo", repo)
+    inputs.property("signedRelease", signedRelease)
     outputs.dir(output)
     doLast {
         output.get().file("zoukan-build.properties").asFile.apply {
             parentFile.mkdirs()
-            writeText("version=$version\nreleaseRepo=${repo.get()}\n")
+            writeText("version=$version\nreleaseRepo=${repo.get()}\nsignedRelease=${signedRelease.get()}\n")
         }
     }
 }

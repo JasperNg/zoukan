@@ -193,8 +193,9 @@ public abstract class SQLiteProgram extends SQLiteClosable {
 
         // Close prepared statement
         try {
-            if (preparedStatement.isClosed())
+            if (!preparedStatement.isClosed()) {
                 preparedStatement.close();
+            }
         } catch(SQLException ignored) {}
     }
 

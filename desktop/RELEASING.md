@@ -126,13 +126,20 @@ GitHub token and kept in the OS secret store. Without one the check says it foun
 Before the installer is opened, and again when Install is clicked:
 
 - GitHub must list a SHA-256 for the asset, and the download must match it.
-- The installer must be signed by the publisher of the running app: the same Authenticode
-  certificate subject on Windows (`Get-AuthenticodeSignature` must say `Valid`), the same Developer
-  ID team on macOS (`codesign --verify --strict`). A renewed certificate with the same subject
-  passes. **A certificate with another subject, or another Apple team, does not**: users on the
-  old publisher's builds must then install the new version by hand once.
-- A build that is not signed itself has no publisher to compare with and checks only the
-  SHA-256, so unsigned builds keep updating as before.
+- When the running app carries a code signature, the installer must be signed by the same
+  publisher: the same signer certificate public key on Windows (`Get-AuthenticodeSignature` must
+  say `Valid`; the check hashes the certificate's public key and compares the hashes), the same
+  Developer ID team on macOS (`codesign --verify --strict`). A renewed certificate that reuses
+  the key pair passes, so renewals do not interrupt updates. **A certificate with another key or
+  subject, or another Apple team, does not**: users on the old publisher's builds must then
+  install the new version by hand once.
+- The packaging records in the app itself (`signedRelease` in `zoukan-build.properties`) whether
+  it was built with a signing certificate. A build that says it shipped signed but carries no
+  readable signature is treated as tampered: its updates are refused rather than falling back to
+  the SHA-256 alone.
+- A release built without a signing certificate (like a development build, and Linux) has no
+  publisher to compare with and checks only the SHA-256, logging a warning: updates go ahead.
+  Users on unsigned builds keep updating this way even after releases start being signed.
 
 ## Chromium's checksum
 
