@@ -835,4 +835,15 @@
     <string name="favorites_sync_starting">starting</string>
     <string name="favorites_sync_comparing">comparing</string>
     <string name="page_1">page</string>
+    <string name="restart_zoukan_to_use_this_language">Restart Zoukan to use this language</string>
+    <string name="automatic_backup_failed">Automatic backup failed</string>
+    <string name="downloads_finished">Downloads finished</string>
+    <string name="n_failed">%1$d failed</string>
+    <string name="new_gallery_versions">New gallery versions</string>
+    <string name="library_update_failed">Library update failed</string>
+    <string name="library_updated">Library updated</string>
+    <string name="new_chapters_in">%1$s in %2$s</string>
+    <string name="list_and_n_more">%1$s and %2$d more</string>
+    <string name="no_new_chapters">No new chapters</string>
+    <string name="install_zoukan_version_from_about">Zoukan %1$s: install it from Settings &gt; About</string>
 </resources>
