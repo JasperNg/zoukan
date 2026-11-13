@@ -4,7 +4,9 @@ package eu.kanade.tachiyomi.data.backup
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.protobuf.ProtoBuf
+import okio.Buffer
 import okio.BufferedSource
+import okio.ForwardingSource
 import okio.Sink
 import okio.Source
 import okio.buffer
@@ -33,17 +35,37 @@ object BackupCodec {
      * Decodes a backup, gzipped or not.
      *
      * @throws InvalidBackupException if the data is not a backup.
+     * @throws IOException as thrown by [source], if reading it fails. A read error is not reported
+     *   as an invalid backup, so the real cause reaches the user.
      */
     fun decode(source: Source, parser: ProtoBuf = ProtoBuf): Backup {
+        val tracked = ReadErrorTrackingSource(source)
         val bytes = try {
-            source.buffer().use { it.readBackupBytes() }
+            tracked.buffer().use { it.readBackupBytes() }
         } catch (e: InvalidBackupException) {
             throw e
         } catch (e: IOException) {
+            // The underlying source failed: pass its error through unchanged
+            if (tracked.readError != null) throw e
             // Empty, truncated or not gzip after all
             throw InvalidBackupException(Error.UNKNOWN, e)
         }
         return decode(bytes, parser)
+    }
+
+    /** Remembers an [IOException] thrown by the wrapped source itself, as opposed to gzip or format checks. */
+    private class ReadErrorTrackingSource(delegate: Source) : ForwardingSource(delegate) {
+        var readError: IOException? = null
+            private set
+
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            try {
+                return super.read(sink, byteCount)
+            } catch (e: IOException) {
+                readError = e
+                throw e
+            }
+        }
     }
 
     /** Decodes the protobuf bytes of a backup, already un-gzipped. */

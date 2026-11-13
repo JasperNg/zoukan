@@ -10,7 +10,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +25,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -41,9 +41,9 @@ fun LazyListScope.dataSaverSettings() {
 @Composable
 private fun DataSaverSettings() {
     val preferences = remember { Injekt.get<SourcePreferences>() }
-    val dataSaver by preferences.dataSaver().changes().collectAsState(preferences.dataSaver().get())
-    val server by preferences.dataSaverServer().changes().collectAsState(preferences.dataSaverServer().get())
-    val excluded by preferences.dataSaverExcludedSources().changes().collectAsState(preferences.dataSaverExcludedSources().get())
+    val dataSaver by preferences.dataSaver().collectAsState()
+    val server by preferences.dataSaverServer().collectAsState()
+    val excluded by preferences.dataSaverExcludedSources().collectAsState()
     var serverDialog by remember { mutableStateOf(false) }
     var sourcesDialog by remember { mutableStateOf(false) }
     val on = dataSaver != DataSaver.NONE
@@ -80,7 +80,7 @@ private fun DataSaverSettings() {
             checked = preferences.dataSaverIgnoreGif().collect(),
             enabled = on,
         ) { preferences.dataSaverIgnoreGif().set(it) }
-        val quality by preferences.dataSaverImageQuality().changes().collectAsState(preferences.dataSaverImageQuality().get())
+        val quality by preferences.dataSaverImageQuality().collectAsState()
         ChoiceSetting(
             localized(SYMR.strings.data_saver_image_quality),
             quality,
@@ -148,6 +148,6 @@ private fun DataSaverSettings() {
 
 @Composable
 private fun tachiyomi.core.common.preference.Preference<Boolean>.collect(): Boolean {
-    val value by changes().collectAsState(get())
+    val value by collectAsState()
     return value
 }

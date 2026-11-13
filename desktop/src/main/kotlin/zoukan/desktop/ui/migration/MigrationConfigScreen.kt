@@ -69,6 +69,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.settings.SwitchPreference
 import zoukan.desktop.ui.settings.SwitchSetting
 import zoukan.desktop.ui.settings.settingsGroup
@@ -197,7 +198,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
     private fun Options(preferences: SourcePreferences, extraQuery: String, onExtraQuery: (String) -> Unit) {
         val migrate = remember { Injekt.get<MigrateManga>() }
         val flagsPreference = remember { migrate.flags() }
-        val flags by flagsPreference.changes().collectAsState(flagsPreference.get())
+        val flags by flagsPreference.collectAsState()
         LazyColumn(Modifier.width(420.dp).fillMaxHeight(), contentPadding = PaddingValues(bottom = 16.dp)) {
             settingsGroup(localized(MR.strings.migrationConfigScreen_dataToMigrateHeader))
             item(key = "flags") {

@@ -43,6 +43,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.settings.CategoriesIncludeExcludeDialog
 import zoukan.i18n.desktop.DMR
@@ -103,7 +104,7 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
  */
 @Composable
 internal fun TriStateRow(label: String, preference: Preference<TriState>, notLabel: String? = null) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     Row(
         Modifier.fillMaxWidth().clickable { preference.set(value.next()) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -130,7 +131,7 @@ private fun FilterPage(model: LibraryScreenModel) {
     TriStateRow(localized(MR.strings.completed), p.filterCompleted())
     // KMK -->
     // Android shows this only in debug builds, with the "outside the release period" update restriction
-    val restrictions by p.autoUpdateMangaRestrictions().changes().collectAsState(p.autoUpdateMangaRestrictions().get())
+    val restrictions by p.autoUpdateMangaRestrictions().collectAsState()
     if (LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in restrictions) {
         TriStateRow(localized(MR.strings.action_filter_interval_custom), p.filterIntervalCustom())
     }
@@ -182,7 +183,7 @@ private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
 
 @Composable
 private fun CheckRow(label: String, preference: Preference<Boolean>) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     Row(
         Modifier.fillMaxWidth().clickable { preference.set(!value) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -195,7 +196,7 @@ private fun CheckRow(label: String, preference: Preference<Boolean>) {
 @Composable
 private fun DisplayPage(model: LibraryScreenModel) {
     val p = model.preferences
-    val mode by p.displayMode().changes().collectAsState(p.displayMode().get())
+    val mode by p.displayMode().collectAsState()
     Text(localized(MR.strings.action_display_mode), style = MaterialTheme.typography.labelLarge)
     DISPLAY_MODES.forEach { (value, label) ->
         Row(
@@ -207,7 +208,7 @@ private fun DisplayPage(model: LibraryScreenModel) {
         }
     }
     if (mode != LibraryDisplayMode.List) {
-        val columns by p.landscapeColumns().changes().collectAsState(p.landscapeColumns().get())
+        val columns by p.landscapeColumns().collectAsState()
         Text(
             localized(DMR.strings.columns, if (columns == 0) localized(DMR.strings.fit_the_window) else columns),
             style = MaterialTheme.typography.labelLarge,
@@ -226,7 +227,7 @@ private fun DisplayPage(model: LibraryScreenModel) {
     CheckRow(localized(MR.strings.action_display_local_badge), p.localBadge())
     CheckRow(localized(MR.strings.action_display_language_badge), p.languageBadge())
     // KMK -->
-    val showLang by p.languageBadge().changes().collectAsState(p.languageBadge().get())
+    val showLang by p.languageBadge().collectAsState()
     if (showLang) CheckRow(localized(KMR.strings.action_display_language_icon), p.useLangIcon())
     CheckRow(localized(KMR.strings.action_display_source_badge), p.sourceBadge())
     // KMK <--
@@ -253,7 +254,7 @@ private val GROUPS = listOf(
 @Composable
 private fun GroupPage(model: LibraryScreenModel) {
     val p = model.preferences.groupLibraryBy()
-    val group by p.changes().collectAsState(p.get())
+    val group by p.collectAsState()
     GROUPS.forEach { (value, label) ->
         Row(
             Modifier.fillMaxWidth().clickable { p.set(value) },
@@ -274,9 +275,9 @@ private fun GroupPage(model: LibraryScreenModel) {
 @Composable
 private fun CategoriesFilter(model: LibraryScreenModel) {
     val p = model.preferences
-    val enabled by p.filterCategories().changes().collectAsState(p.filterCategories().get())
-    val included by p.filterCategoriesInclude().changes().collectAsState(p.filterCategoriesInclude().get())
-    val excluded by p.filterCategoriesExclude().changes().collectAsState(p.filterCategoriesExclude().get())
+    val enabled by p.filterCategories().collectAsState()
+    val included by p.filterCategoriesInclude().collectAsState()
+    val excluded by p.filterCategoriesExclude().collectAsState()
     val categories = model.state.collectAsState().value.categories.filterNot { it.isSystemCategory }
     var dialog by remember { mutableStateOf(false) }
     Row(

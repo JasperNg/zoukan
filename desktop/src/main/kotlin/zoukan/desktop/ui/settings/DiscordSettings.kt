@@ -10,7 +10,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -28,6 +27,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.discord.DiscordPresence
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 
@@ -40,17 +40,17 @@ fun LazyListScope.discordSettings() {
 @Composable
 private fun DiscordSettingsSection() {
     val presence = remember { Injekt.get<DiscordPresence>() }
-    val enabled by presence.enabled().changes().collectAsState(presence.enabled().get())
+    val enabled by presence.enabled().collectAsState()
     val connected by produceState(presence.connected) {
         while (true) {
             value = presence.connected
             delay(2_000)
         }
     }
-    val message by presence.customMessage().changes().collectAsState(presence.customMessage().get())
+    val message by presence.customMessage().collectAsState()
     var messageDialog by remember { mutableStateOf(false) }
     var categoriesDialog by remember { mutableStateOf(false) }
-    val buttons by presence.showButtons().changes().collectAsState(presence.showButtons().get())
+    val buttons by presence.showButtons().collectAsState()
 
     Column {
         SwitchPreference(

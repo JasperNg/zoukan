@@ -34,7 +34,7 @@ class LibraryUpdaterCancelTest {
             }
         }
         val preferences = mockk<LibraryPreferences> {
-            every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true)
+            every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true) { every { get() } returns 0L }
         }
         val updater = LibraryUpdater(
             dirs = mockk(),

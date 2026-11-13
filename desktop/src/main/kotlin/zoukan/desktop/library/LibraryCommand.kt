@@ -85,7 +85,8 @@ object LibraryCommand {
             file.writeText(markdown(result, downloaded, downloadErrors, options, updateTime, total))
             println("Report saved to $file")
         }
-        if (result.failures.isEmpty() && downloadErrors.isEmpty()) 0 else 1
+        // A restore that stopped the update left entries unchecked, so it is not "everything updated"
+        if (!result.stoppedForRestore && result.failures.isEmpty() && downloadErrors.isEmpty()) 0 else 1
     }
 
     private fun markdown(
@@ -114,7 +115,13 @@ object LibraryCommand {
         }
         appendLine("| Total time | ${total.toSeconds()} s |")
         appendLine()
-        appendLine(if (result.failures.isEmpty() && downloadErrors.isEmpty()) "**Result: passed**" else "**Result: failed**")
+        appendLine(
+            when {
+                result.stoppedForRestore -> "**Result: stopped, a backup restore started**"
+                result.failures.isEmpty() && downloadErrors.isEmpty() -> "**Result: passed**"
+                else -> "**Result: failed**"
+            },
+        )
         if (result.failures.isNotEmpty()) {
             appendLine()
             appendLine("## Update failures")

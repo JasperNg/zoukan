@@ -8,14 +8,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -63,6 +68,12 @@ class ReaderPage(val index: Int, val page: Page) {
 
     @Volatile
     var bytes: ByteArray? = null
+
+    // ZOUKAN -->
+    /** The load that owns [state]; a load that was replaced or cancelled leaves the state alone */
+    @Volatile
+    internal var loader: Job? = null
+    // ZOUKAN <--
 }
 
 class ReaderScreenModel(
@@ -133,9 +144,19 @@ class ReaderScreenModel(
     // ZOUKAN -->
     // Android's "Reader threads": how many pages download at once
     private val downloads = Semaphore(preferences.readerThreads().get().coerceIn(1, 8))
+
+    // Full-size decodes at once: each holds a whole page in memory, and preloading asks for many
+    private val decodes = Semaphore(DECODE_THREADS)
+
+    /** The pages the viewer shows, kept decoded: a zoomed-out webtoon shows pages far from the middle one */
+    private var visiblePages: IntRange = IntRange.EMPTY
     // ZOUKAN <--
+    /** Only read and changed on the main thread */
     private val pageJobs = mutableMapOf<Int, Job>()
     private var chapterOpenedAt = System.currentTimeMillis()
+
+    /** Writes reading progress in page-turn order; on the app scope, so writes finish after the reader closes */
+    private val progressWriter = ProgressWriter(zoukan.desktop.ui.AppScope) { updateChapter.await(it) }
 
     private val _menuVisible = MutableStateFlow(false)
     val menuVisible: StateFlow<Boolean> = _menuVisible.asStateFlow()
@@ -196,6 +217,7 @@ class ReaderScreenModel(
         _pageActions.value = null
         prefetchJob?.cancel()
         keepAllBytes = false
+        visiblePages = IntRange.EMPTY
         // ZOUKAN <--
         mutableState.update {
             it.copy(
@@ -231,15 +253,21 @@ class ReaderScreenModel(
                     if (source is LocalSource) source.chapterFile(chapter.url) else downloadManager.findChapter(manga, chapter)
                 }
                 val pages = if (file != null) {
-                    // Not cancellable: a chapter switch during the open would otherwise drop the open
-                    // file without closing it, which keeps it locked (Windows cannot delete it)
-                    val opened = withContext(Dispatchers.IO + NonCancellable) { LocalFormat.open(file) { cbzPassword.get() } }
-                    if (!isActive) {
-                        withContext(Dispatchers.IO + NonCancellable) { runCatching { opened.close() } }
-                        throw CancellationException("Another chapter was opened")
+                    // The open file belongs to this load until it is handed to [format], and is closed
+                    // otherwise: a chapter switch during the open makes withContext throw on return and
+                    // drop its result, and a file left open stays locked (Windows cannot delete it)
+                    var opened: LocalFormat? = null
+                    try {
+                        val owned = withContext(Dispatchers.IO + NonCancellable) {
+                            LocalFormat.open(file) { cbzPassword.get() }.also { opened = it }
+                        }
+                        ensureActive()
+                        format = owned
+                        opened = null
+                        List(owned.pageCount) { ReaderPage(it, Page(it)) }
+                    } finally {
+                        opened?.let { orphan -> zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) { runCatching { orphan.close() } } }
                     }
-                    format = opened
-                    List(opened.pageCount) { ReaderPage(it, Page(it)) }
                 } else {
                     if (source !is HttpSource) error(localized(DMR.strings.the_source_of_this_entry_is))
                     withContext(Dispatchers.IO) { source.getPageList(chapter.toSChapter()) }
@@ -318,9 +346,7 @@ class ReaderScreenModel(
         // Incognito keeps no progress, history or tracking, as on Android
         if (incognito) return
         // ZOUKAN <--
-        zoukan.desktop.ui.AppScope.launch {
-            updateChapter.await(ChapterUpdate(id = chapter.id, read = read, lastPageRead = index.toLong()))
-        }
+        progressWriter.submit(progressUpdate(chapter.id, index, read))
         if (last && !chapter.read) {
             // ZOUKAN -->
             Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterRead }
@@ -419,7 +445,9 @@ class ReaderScreenModel(
             .sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
         wanted.forEach(::loadPage)
         pages.forEach { page ->
-            if (page.index !in center - KEEP_BEHIND..center + keepAhead) {
+            // ZOUKAN -->
+            if (!keepsImage(page.index, center, KEEP_BEHIND, keepAhead, visiblePages)) {
+                // ZOUKAN <--
                 if (page.state.value is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
             }
             // The downloaded bytes are kept longer, so going back a few pages needs no network
@@ -440,33 +468,54 @@ class ReaderScreenModel(
         val source = source as? HttpSource
         if (format == null && source == null) return
         page.state.value = ReaderPage.State.Loading
-        pageJobs[index] = screenModelScope.launch(Dispatchers.IO) {
+        // ZOUKAN -->
+        // Started once it owns the page, so even a load that ends at once finds itself the owner
+        val job = screenModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            val self = coroutineContext.job
+            fun owns() = page.loader === self
+            // ZOUKAN <--
             try {
                 val bytes = page.bytes
                     ?: (format?.page(index) ?: downloads.withPermit { fetch(source!!, page.page) }).also { page.bytes = it }
-                val image = PageImage.decode(bytes, cropBorders())
                 // ZOUKAN -->
+                val image = decodes.withPermit { PageImage.decode(bytes, cropBorders()) }
+                ensureActive()
                 if (image.width > image.height) {
                     mutableState.update { if (index in it.widePages || it.pages.getOrNull(index) !== page) it else it.copy(widePages = it.widePages + index) }
                 }
+                if (owns()) page.state.value = ReaderPage.State.Ready(image)
                 // ZOUKAN <--
-                page.state.value = ReaderPage.State.Ready(image)
             } catch (e: CancellationException) {
-                page.state.value = ReaderPage.State.Queued
+                // ZOUKAN -->
+                // A newer load (Boost page) owns the page now, and its state is not this load's to reset
+                if (owns()) page.state.value = ReaderPage.State.Queued
+                // ZOUKAN <--
                 throw e
             } catch (e: Throwable) {
+                // ZOUKAN -->
+                // A cancelled download can fail with an I/O error ("Canceled"): that is no page error
+                if (!isActive || !owns()) return@launch
+                // ZOUKAN <--
                 logcat(LogPriority.WARN, e) { "Page ${index + 1} failed" }
                 page.bytes = null
                 page.state.value = ReaderPage.State.Error(e.message ?: e::class.simpleName.orEmpty())
                 // ZOUKAN -->
                 // SY's "Instant retry": a failed page is tried once more at once
                 if (attempt == 0 && preferences.readerInstantRetry().get()) {
-                    pageJobs.remove(index)
-                    withContext(Dispatchers.Main) { loadPage(index, retry = true, attempt = 1) }
+                    // pageJobs is only touched on the main thread
+                    withContext(Dispatchers.Main) {
+                        if (pageJobs[index] === self) pageJobs.remove(index)
+                        loadPage(index, retry = true, attempt = 1)
+                    }
                 }
                 // ZOUKAN <--
             }
         }
+        // ZOUKAN -->
+        page.loader = job
+        pageJobs[index] = job
+        job.start()
+        // ZOUKAN <--
     }
 
     // ZOUKAN -->
@@ -480,7 +529,14 @@ class ReaderScreenModel(
         val job = screenModelScope.launch(Dispatchers.IO) {
             pages.forEach { page ->
                 if (page.bytes != null) return@forEach
-                runCatching { downloads.withPermit { if (page.bytes == null) page.bytes = fetch(source, page.page) } }
+                try {
+                    downloads.withPermit { if (page.bytes == null) page.bytes = fetch(source, page.page) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    // The page loads again when it is shown
+                    logcat(LogPriority.WARN, e) { "Prefetching page ${page.index + 1} failed" }
+                }
             }
         }
         prefetchJob?.cancel()
@@ -505,14 +561,26 @@ class ReaderScreenModel(
         val index = state.value.currentPage
         val page = state.value.pages.getOrNull(index) ?: return
         if (page.state.value is ReaderPage.State.Ready) return
-        pageJobs.filterKeys { it != index }.forEach { (i, job) ->
+        val pages = state.value.pages
+        // The cancelled loads give up their pages here, so they are queued again below; their own
+        // cancel handlers then find a newer owner and leave the state alone
+        pageJobs.toList().forEach { (i, job) ->
             job.cancel()
             pageJobs.remove(i)
+            val other = pages.getOrNull(i) ?: return@forEach
+            if (other.loader === job) {
+                other.loader = null
+                if (other.state.value is ReaderPage.State.Loading) other.state.value = ReaderPage.State.Queued
+            }
         }
-        pageJobs.remove(index)?.cancel()
-        page.state.value = ReaderPage.State.Queued
+        if (page.state.value !is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
         loadPage(index, retry = true)
         requestPages(index)
+    }
+
+    /** Called by the webtoon viewer with the pages in its window; those are never released. */
+    fun onVisiblePages(visible: IntRange) {
+        visiblePages = visible
     }
 
     /** SY's "Shift double pages", for this chapter */
@@ -727,10 +795,17 @@ class ReaderScreenModel(
     }
 
     override fun onDispose() {
-        closeFormat()
+        // The queued progress writes still finish
+        progressWriter.close()
         // ZOUKAN -->
+        // The open file is closed before the read downloads are deleted, in that order: Windows
+        // cannot delete a file that is still open
+        val old = format
+        format = null
         val deletes = pendingDeletes.values.toList()
-        if (deletes.isNotEmpty()) zoukan.desktop.ui.AppScope.launch { runCatching { downloadManager.deleteRead(deletes) } }
+        if (old != null || deletes.isNotEmpty()) {
+            zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(old, deletes) { downloadManager.deleteRead(it) } }
+        }
         // ZOUKAN <--
         // ZOUKAN -->
         Injekt.get<zoukan.desktop.discord.DiscordPresence>().clearReading()
@@ -803,5 +878,83 @@ class ReaderScreenModel(
     companion object {
         private const val KEEP_BEHIND = 4
         private const val KEEP_AHEAD = 10
+
+        // ZOUKAN -->
+        private val DECODE_THREADS = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+        // ZOUKAN <--
     }
 }
+
+// ZOUKAN -->
+/**
+ * Whether page [index] keeps its decoded image with [center] the current page: the pages near it,
+ * and every page in [visible], which a zoomed-out webtoon shows far from the middle one.
+ */
+internal fun keepsImage(index: Int, center: Int, behind: Int, ahead: Int, visible: IntRange): Boolean =
+    index in center - behind..center + ahead || index in visible
+
+internal object ReaderCleanup {
+    /**
+     * Closes the reader's [file] (null when it read online), then deletes the read [deletes]. Both
+     * run in this order in one coroutine, so a download is never deleted while it is still open.
+     */
+    suspend fun closeThenDelete(file: AutoCloseable?, deletes: List<Chapter>, delete: suspend (List<Chapter>) -> Unit) {
+        if (file != null) {
+            try {
+                file.close()
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Closing the chapter file failed" }
+            }
+        }
+        if (deletes.isEmpty()) return
+        try {
+            delete(deletes)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Deleting read chapters failed" }
+        }
+    }
+}
+// ZOUKAN <--
+
+// ZOUKAN -->
+/**
+ * The progress write for being on page [index]: the page always, and the read mark only when
+ * [read], so a progress write never makes a read chapter unread. Android's
+ * ReaderViewModel.updateChapterProgress writes the reader's in-memory read flag, which the reader
+ * itself only ever sets to true; leaving read out here also keeps a stale false from undoing a
+ * read mark made elsewhere (the library or a tracker) while the chapter is open.
+ */
+internal fun progressUpdate(chapterId: Long, index: Int, read: Boolean) =
+    ChapterUpdate(id = chapterId, read = true.takeIf { read }, lastPageRead = index.toLong())
+
+/**
+ * Runs the reader's progress writes one at a time, in the order they were submitted, so a late
+ * write never overwrites a newer one (the page going back, or a read chapter becoming unread).
+ * [close] lets the queued writes finish, then stops.
+ */
+internal class ProgressWriter(scope: CoroutineScope, private val write: suspend (ChapterUpdate) -> Unit) {
+    private val queue = Channel<ChapterUpdate>(Channel.UNLIMITED)
+
+    val job: Job = scope.launch {
+        for (update in queue) {
+            try {
+                write(update)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Saving reading progress failed" }
+            }
+        }
+    }
+
+    fun submit(update: ChapterUpdate) {
+        queue.trySend(update)
+    }
+
+    fun close() {
+        queue.close()
+    }
+}
+// ZOUKAN <--

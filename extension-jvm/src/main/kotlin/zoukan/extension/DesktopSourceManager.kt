@@ -2,6 +2,8 @@ package zoukan.extension
 
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,7 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.service.SourceManager
@@ -46,6 +49,9 @@ class DesktopSourceManager(
 
     private val stubSourcesMap = ConcurrentHashMap<Long, StubSource>()
 
+    /** Completed once the stubs were read from the database the first time (or the read failed). */
+    private val stubsLoaded = CompletableDeferred<Unit>()
+
     override val sources: Flow<List<Source>> = sourcesMapFlow.map { it.values.toList() }
 
     init {
@@ -66,18 +72,39 @@ class DesktopSourceManager(
             extensionManager.isInitialized.collect { if (it) _isInitialized.value = true }
         }
         scope.launch {
-            sourceRepository.subscribeAll().collect { stubs ->
-                stubs.forEach { stubSourcesMap[it.id] = it }
+            try {
+                sourceRepository.subscribeAll().collect { stubs ->
+                    stubs.forEach { stubSourcesMap[it.id] = it }
+                    stubsLoaded.complete(Unit)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed to read the stub sources" }
+            } finally {
+                // Never leave a backup waiting forever
+                stubsLoaded.complete(Unit)
             }
         }
     }
 
     override fun get(sourceKey: Long): Source? = sourcesMapFlow.value[sourceKey]
 
+    /**
+     * Never waits for the database: it is called from the UI, and a long transaction (a restore)
+     * holds the database thread. A stub not read yet is a nameless placeholder, which the
+     * [StubSourceRepository.subscribeAll] collector replaces as soon as the stubs are read.
+     */
     override fun getOrStub(sourceKey: Long): Source = sourcesMapFlow.value[sourceKey]
-        ?: stubSourcesMap.getOrPut(sourceKey) {
-            runBlocking { sourceRepository.getStubSource(sourceKey) } ?: StubSource(sourceKey, "", "")
-        }
+        ?: stubSourcesMap[sourceKey]
+        ?: StubSource(sourceKey, "", "")
+
+    /**
+     * Waits until the stubs were read once, so [getOrStub] gives the names of sources whose
+     * extension is not loaded. A backup waits for this: it lists its sources by name, and the
+     * Android app's restore shows missing sources by those names.
+     */
+    suspend fun awaitStubs() = stubsLoaded.await()
 
     override fun getAll(): List<Source> = sourcesMapFlow.value.values.toList()
 

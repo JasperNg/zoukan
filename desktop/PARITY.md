@@ -18,7 +18,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Library selection actions | Yes | Right-click or Ctrl/Shift-click; categories, mark read/unread, download (next chapters, unread or bookmarked), delete downloads, update the selected entries (KMK), migrate, remove; More holds Merge (KMK), Clean titles, Find recommendations, Add to MangaDex follows and Reset info (SY), each shown when it applies |
 | Find recommendations over a selection (SY) | Yes | Library selection > More > Find recommendations, with two or more entries: the services to search and Hide results already in your library, then a progress dialog, then Common recommendations ranked by how many of the entries recommend each result ("+N") |
 | Edit categories: create, rename, delete, drag to reorder, hide, default category | Yes | Library > More > Edit categories, or Settings > Library > Edit categories as on Android. The default category is chosen at the top of the same screen or in Settings > Library; adding an entry uses it, as on Android |
-| Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule |
+| Library update (categories, skip rules, errors file) | Yes | Phase 5, also on a schedule. A library update stops partway when a backup restore starts, and a restore waits for a running automatic backup (Android orders these as WorkManager jobs) |
 | Library dynamic category updates (SY `groupLibraryUpdateType`) | Yes | Settings > Library: updating a source, status or tracking tab updates the whole library, or that tab's entries, or that tab's entries except when ungrouped |
 | Library: Sync library in the overflow while data sync is on (SY) | Yes | Library > More > Sync library starts a data sync, or says one is running |
 | Library update errors screen (KMK) | Yes | Library > More > Library update errors: failed entries grouped by error, in the Android tables; retry, open, migrate and delete, one or many |
@@ -51,7 +51,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Navigation rail: centered, tinted, Updates and extension update badges | Yes | As on an Android tablet |
 | Updates grouped by entry (KMK) | Yes | Several new chapters of one entry on the same day fold into one row; its caret button expands them. Each day's header shows its chapter count. Selecting a folded row selects all of its chapters |
 | Upcoming (expected release calendar, "To be updated" list) | Yes | Updates > calendar button; the calendar beside the list, as on a tablet. Smart update shows the entries the next library update checks |
-| Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5. A download follows its chapter when the source renames it or changes its scanlator, as Android |
+| Downloads queue, CBZ, encrypted CBZ, split tall images, survives restarts | Yes | Phase 5. A download follows its chapter when the source renames it or changes its scanlator, as Android. With password protection on, a download fails (it is never saved unencrypted) when the OS secret store cannot be read; Android's Keystore does not fail this way |
 | Download queue: sort by upload date or chapter number, move to top or bottom, move or cancel a series | Yes | Downloads > sort button sorts within each source, as Android; each download's More menu has the moves and cancels |
 | Local source: folders, CBZ, ZIP, EPUB, RAR, 7z, TAR | Yes | RAR 5 needs the system's `tar` |
 | Backups (.tachibk) create, restore, automatic | Yes | Phase 5; round trip checked by tests |
@@ -137,6 +137,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Android feature | Desktop | Notes |
 |---|---|---|
 | Sources, extensions, extension stores, global search | Yes | Phase 2 |
+| Extension stores over plain http | Exception | A store, its extension list and its downloads must use https (this computer excepted, for a local test store), and a redirect from https to http is refused. Komikku on Android allows http stores; over http anyone on the network could swap a store's signing key and code. An http store fails with a message that says it must use https. The rule is in the shared data module (`requireSecureStoreUrl`), so it also applies to Android builds of this tree, where the extension list only logs a failing store |
 | Hidden sources and the sources filter (languages, per-source) | Yes | Browse > Sources > filter button, and Disable in a source's More menu, as Android's long press. The Sources list shows the enabled languages only, as on Android |
 | Pinned, last used and source category sections | Yes | As Android's Sources list |
 | Search box over the Sources list (KMK) | Yes | Above the list: matches a source's name, its extension's name or its id; commas separate terms, any of which may match. The desktop also has the search over the Extensions list and the Migration screens |
@@ -173,18 +174,18 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Update progress after reading, retry when offline | Yes | Retries every 15 minutes |
 | "Ask" before updating progress | Yes | A dialog after a chapter is marked read |
 | OAuth sign-in | Yes, changed | In the built-in browser, which catches the `komikku://` redirect, instead of the system browser with a loopback redirect: the trackers only accept Komikku's registered redirect. A pasted redirect from another browser also works |
-| Cloudflare challenges | Yes | Hidden first, then the built-in browser |
+| Cloudflare challenges | Yes, changed | Hidden first, then the built-in browser. Parallel requests to one host share one challenge attempt: a request that waited reuses the new clearance, or fails if that attempt failed. Android lets each request solve its own |
 | Site sign-in for a source | Yes | Browse > source > globe button opens the site; cookies are shared |
 
 ## Security, sync and connections
 
 | Android feature | Desktop | Notes |
 |---|---|---|
-| App lock | Yes, changed | A password kept hashed in the OS secret store, instead of biometrics or the device PIN; lock when idle, days and times as on Android |
+| App lock | Yes, changed | A password kept hashed in the OS secret store, instead of biometrics or the device PIN; lock when idle, days and times as on Android. Locking keeps the screen, its back stack and saved state, but closes open dialogs and drops text not yet saved on the screen behind it; Android keeps them under the unlock screen. If the OS secret store cannot be read while the lock is on, the app stays locked |
 | Hide notification content | Yes | |
 | Incognito mode and incognito extensions | Yes | No history, progress or tracking |
 | Secure screen (block screenshots) | No | Desktop systems give apps no way to block screenshots |
-| Data sync: SyncYomi and WebDAV | Yes | Settings > Data sync; the Android merge, on its interval and triggers |
+| Data sync: SyncYomi and WebDAV | Yes, changed | Settings > Data sync; the Android merge, on its interval and triggers. Sync (and the command line `backup restore`) never adds an extension store or changes a store's signing key, which Android's sync does: the skipped stores are named in a notification, to add in Browse > Extensions > Stores or through a Settings restore, which asks first |
 | Data sync: Google Drive | No | Needs Komikku's Google OAuth client, which is a secret of the Android build |
 | Discord Rich Presence | Yes, changed | Through the Discord app on the computer, so no Discord login is needed; the same options |
 
@@ -195,6 +196,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Keyboard shortcuts | Ctrl/Cmd + 1 to 5 tabs, Ctrl/Cmd + `,` settings, Ctrl/Cmd + Shift + U update, Ctrl/Cmd + F search, Ctrl/Cmd + A select all, Escape back; in the reader, Right and Left turn pages (flipped in right to left mode or by inverted tap zones), Down and Up scroll or turn (flipped by vertically inverted tap zones), J and K scroll down and up whatever the tap zones do; listed in Settings, and the reader's own shortcuts in the reader itself (press /) |
 | Desktop conventions | Scrollbars on lists and grids, the window opens where it was closed (minimum 800 x 560), tooltips on icon buttons |
 | Tray icon and notifications | Phase 5 |
+| Install missing extensions after a restore | Android has no such action. After a restore, the Restore backup screen stays open with the results; it refreshes the store lists, matches the library's sources that are still not installed to the stores' extensions by source id (the store copy Browse lists), and offers Install missing extensions. A confirmation lists the extensions (name, store, 18+), those installed but untrusted and the sources no store offers. Each installs through the normal install, so the signature checks, signer pin, https rule and untrusted flow apply; an unknown signer is never trusted by itself, and the summary says to trust it in Browse > Extensions. Failures are listed and do not stop the rest. Android's restore screen closes when the restore starts; the desktop one closes with its Close button |
 
 ## Not on desktop (by design)
 

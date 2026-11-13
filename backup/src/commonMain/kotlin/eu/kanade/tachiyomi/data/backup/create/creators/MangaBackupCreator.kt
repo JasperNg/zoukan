@@ -170,6 +170,6 @@ private fun Manga.toBackupManga(/* SY --> */customMangaInfo: CustomMangaInfo?/* 
 // SY <--
 
 // ZOUKAN -->
-/** ReadingMode.MASK in the Android app's reader settings. */
-private const val READING_MODE_MASK = 0x00000007
+/** ReadingMode.MASK in the Android app; BackupUpstreamConstantsTest (app) checks they match. */
+const val READING_MODE_MASK = 0x00000007
 // ZOUKAN <--

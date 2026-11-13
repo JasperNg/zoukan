@@ -114,6 +114,16 @@ sealed interface UpcomingUIModel {
 }
 
 /**
+ * The row's LazyColumn key: a header by its day, an entry by its id. Keys must be unique within
+ * the list (a duplicate key crashes Compose), so they must not come from hashCode, which collides
+ * for headers of the same month whose counts differ by 31 times the gap in days.
+ */
+fun UpcomingUIModel.listKey(): String = when (this) {
+    is UpcomingUIModel.Header -> "header-${date.toEpochDay()}"
+    is UpcomingUIModel.Item -> "manga-${manga.id}"
+}
+
+/**
  * Android's Updates > Upcoming (mihon.feature.upcoming): library entries by their expected next
  * release date, on a calendar and in a list. Komikku's "Smart update" button switches to the
  * entries the next library update will check ("To be updated").
@@ -278,7 +288,7 @@ object UpcomingScreen : Screen {
                         LazyColumn(Modifier.fillMaxSize(), state = listState) {
                             items(
                                 items,
-                                key = { (if (updating) "updating" else "upcoming") + it.hashCode() },
+                                key = { (if (updating) "updating-" else "upcoming-") + it.listKey() },
                                 contentType = { if (it is UpcomingUIModel.Header) "header" else "item" },
                             ) { item ->
                                 when (item) {

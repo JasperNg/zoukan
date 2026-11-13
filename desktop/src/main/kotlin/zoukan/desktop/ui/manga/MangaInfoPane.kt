@@ -39,7 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +84,7 @@ import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -101,9 +101,9 @@ import androidx.compose.ui.graphics.Brush as GradientBrush
 @Composable
 fun CoverBasedTheme(manga: Manga, content: @Composable () -> Unit) {
     val ui = remember { Injekt.get<UiPreferences>() }
-    val enabled by ui.themeCoverBased().changes().collectAsState(ui.themeCoverBased().get())
-    val style by ui.themeCoverBasedStyle().changes().collectAsState(ui.themeCoverBasedStyle().get())
-    val amoled by ui.themeDarkAmoled().changes().collectAsState(ui.themeDarkAmoled().get())
+    val enabled by ui.themeCoverBased().collectAsState()
+    val style by ui.themeCoverBasedStyle().collectAsState()
+    val amoled by ui.themeDarkAmoled().collectAsState()
     val cover = Cover.of(manga)
     val seed by produceState(cover?.let(CoverColors::cached), cover, enabled) {
         value = if (enabled && cover != null) CoverColors.seed(cover) else null
@@ -247,7 +247,7 @@ private fun InfoHeader(
     // ZOUKAN -->
     // KMK: a wide cover shows as a panorama while Appearance > "Panorama Cover" is on
     val panoramaCover = remember { Injekt.get<UiPreferences>().usePanoramaCoverMangaInfo() }
-    val usePanoramaCover by panoramaCover.changes().collectAsState(panoramaCover.get())
+    val usePanoramaCover by panoramaCover.collectAsState()
     // Height over width of the loaded cover, as Komikku's coverRatio
     var coverRatio by remember(cover) { mutableFloatStateOf(1f) }
     // ZOUKAN <--

@@ -30,9 +30,6 @@ class PageImage(
         const val MAX_SLICE = 4096
 
         fun decode(bytes: ByteArray, cropBorders: Boolean = false): PageImage {
-            if (cropBorders) {
-                runCatching { decodeCropped(bytes) }.getOrNull()?.let { return it }
-            }
             val image = try {
                 Image.makeFromEncoded(bytes)
             } catch (e: Exception) {
@@ -53,6 +50,10 @@ class PageImage(
             // ZOUKAN -->
             val bitmap = Bitmap.makeFromImage(image)
             image.close()
+            // The one decoded bitmap is cropped, or shown whole when it has no plain borders
+            if (cropBorders) {
+                runCatching { cropped(bitmap) }.getOrNull()?.let { return it }
+            }
             val background = background(width, height) { x, y -> bitmap.getColor(x, y) }
             if (height <= MAX_SLICE) {
                 return PageImage(width, height, listOf(bitmap.asComposeImageBitmap()), background)
@@ -66,13 +67,10 @@ class PageImage(
         }
 
         /**
-         * Decodes with the page's plain margins cut off, as Android's "crop borders": rows and
+         * [bitmap] with the page's plain margins cut off, as Android's "crop borders": rows and
          * columns at the edges that are all one color (near white or near black) go.
          */
-        private fun decodeCropped(bytes: ByteArray): PageImage? {
-            val image = Image.makeFromEncoded(bytes)
-            val bitmap = Bitmap.makeFromImage(image)
-            image.close()
+        private fun cropped(bitmap: Bitmap): PageImage? {
             val rect = contentRect(bitmap) ?: return null
             if (rect.width == bitmap.width && rect.height == bitmap.height) return null
             val width = rect.width

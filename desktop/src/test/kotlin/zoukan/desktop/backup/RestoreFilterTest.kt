@@ -92,6 +92,11 @@ class RestoreFilterTest {
         runBlocking {
             DesktopBackups(File("unused"), NoStubSources).newExtensionStores(backup, GetExtensionStores(repository)) shouldBe
                 listOf(newKey, newStore)
+            // Sync and the command line restore without the new and re-keyed stores
+            val (restorable, skipped) =
+                DesktopBackups(File("unused"), NoStubSources).withoutNewExtensionStores(backup, GetExtensionStores(repository))
+            restorable.backupExtensionStores shouldBe listOf(same, legacySame)
+            skipped shouldBe listOf(newKey, newStore)
         }
     }
 }

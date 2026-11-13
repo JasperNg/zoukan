@@ -86,22 +86,9 @@ object ApkConverter {
         }
     }
 
-    /**
-     * Records the SHA-256 of a freshly converted jar in its `<versionCode>.sha256` sidecar. Unlike
-     * the signed APK it came from, the converted jar is plain user-writable data, so
-     * DesktopExtensionLoader only runs it while it still matches the recorded hash.
-     */
-    fun recordHash(jar: File) {
-        hashFileOf(jar).writeText(sha256Of(jar))
-    }
-
-    /** The hash [recordHash] recorded for [jar], when the extension's install has one. */
-    fun recordedHash(jar: File): String? =
-        hashFileOf(jar).takeIf(File::isFile)?.readText()?.trim()?.ifEmpty { null }
-
     /** The hex SHA-256 of [file], like the certificate fingerprints in ExtensionSignatures. */
-    fun sha256Of(file: File): String =
-        MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+    fun sha256Of(file: File): String = sha256Of(file.readBytes())
 
-    private fun hashFileOf(jar: File) = File(jar.parentFile, jar.nameWithoutExtension + ".sha256")
+    fun sha256Of(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }
