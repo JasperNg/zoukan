@@ -1,7 +1,6 @@
 package zoukan.desktop.ui.reader
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -14,6 +13,7 @@ import org.jetbrains.skia.ColorFilter
 import org.jetbrains.skia.ColorMatrix
 import org.jetbrains.skia.ImageFilter
 import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.ui.common.collectAsState
 
 /** The reader's color settings, as Android's reader Filter tab: brightness, a color filter, grayscale and inverted colors. */
 data class ReaderFilter(
@@ -28,13 +28,13 @@ data class ReaderFilter(
     companion object {
         @Composable
         fun collect(prefs: DesktopPreferences): ReaderFilter {
-            val brightnessOn by prefs.customBrightness().changes().collectAsState(prefs.customBrightness().get())
-            val brightness by prefs.customBrightnessValue().changes().collectAsState(prefs.customBrightnessValue().get())
-            val colorOn by prefs.colorFilter().changes().collectAsState(prefs.colorFilter().get())
-            val color by prefs.colorFilterValue().changes().collectAsState(prefs.colorFilterValue().get())
-            val mode by prefs.colorFilterMode().changes().collectAsState(prefs.colorFilterMode().get())
-            val grayscale by prefs.grayscale().changes().collectAsState(prefs.grayscale().get())
-            val inverted by prefs.invertedColors().changes().collectAsState(prefs.invertedColors().get())
+            val brightnessOn by prefs.customBrightness().collectAsState()
+            val brightness by prefs.customBrightnessValue().collectAsState()
+            val colorOn by prefs.colorFilter().collectAsState()
+            val color by prefs.colorFilterValue().collectAsState()
+            val mode by prefs.colorFilterMode().collectAsState()
+            val grayscale by prefs.grayscale().collectAsState()
+            val inverted by prefs.invertedColors().collectAsState()
             return ReaderFilter(
                 brightness = brightness.takeIf { brightnessOn && it != 0 },
                 color = color.takeIf { colorOn },

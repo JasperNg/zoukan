@@ -23,7 +23,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,10 +32,14 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
@@ -65,7 +68,6 @@ object ClearDatabaseScreen : Screen {
     override fun Content() {
         val model = rememberScreenModel { ClearDatabaseScreenModel() }
         val state by model.state.collectAsState()
-        val scope = rememberCoroutineScope()
         val items = state.items
 
         Column(Modifier.fillMaxSize()) {
@@ -124,10 +126,7 @@ object ClearDatabaseScreen : Screen {
                 confirmButton = {
                     TextButton(onClick = {
                         model.confirm(false)
-                        scope.launch {
-                            model.delete(keepRead)
-                            Toasts.show(localized(MR.strings.clear_database_completed))
-                        }
+                        model.delete(keepRead)
                     }) { Text("OK") }
                 },
                 dismissButton = { TextButton(onClick = { model.confirm(false) }) { Text(localized(MR.strings.action_cancel)) } },
@@ -174,13 +173,26 @@ class ClearDatabaseScreenModel(
 
     fun confirm(show: Boolean) = mutableState.update { it.copy(confirming = show) }
 
-    suspend fun delete(keepReadManga: Boolean) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
+    /** Clears the selected sources' entries; a failure is shown as an error instead of closing the app. */
+    fun delete(keepReadManga: Boolean) {
         val selection = state.value.selection.toList()
-        if (selection.isEmpty()) return@withContext
-        handler.await(inTransaction = true) {
-            mangasQueries.deleteNonLibraryManga(selection, if (keepReadManga) 1L else 0L)
-            historyQueries.removeResettedHistory()
+        if (selection.isEmpty()) return
+        screenModelScope.launch {
+            try {
+                withContext(Dispatchers.IO + NonCancellable) {
+                    handler.await(inTransaction = true) {
+                        mangasQueries.deleteNonLibraryManga(selection, if (keepReadManga) 1L else 0L)
+                        historyQueries.removeResettedHistory()
+                    }
+                }
+                mutableState.update { it.copy(selection = emptySet()) }
+                Toasts.show(localized(MR.strings.clear_database_completed))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Clearing the database failed" }
+                Toasts.error(localized(DMR.strings.could_not_clear_the_database), e)
+            }
         }
-        mutableState.update { it.copy(selection = emptySet()) }
     }
 }

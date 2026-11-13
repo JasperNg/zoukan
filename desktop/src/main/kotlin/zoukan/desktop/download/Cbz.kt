@@ -31,17 +31,40 @@ class CbzPassword(
         if (password.isEmpty()) secrets.delete(KEY) else secrets.set(KEY, password)
     }
 
-    /** Whether new downloads are encrypted: the setting is on and a password is set. */
-    fun encryptDownloads(): Boolean = preferences.passwordProtectDownloads().get() && isSet()
-
-    fun encryption(): CbzEncryption? {
-        if (!encryptDownloads()) return null
-        return CbzEncryption(get()!!, preferences.encryptionType().get())
+    /**
+     * The password for a new download, or null when downloads are not encrypted: the setting is
+     * off, or no password is set. When the setting is on and the secret store fails (a locked
+     * Keychain, a cancelled prompt, a Credential Manager error), it throws
+     * [CbzPasswordUnavailableException], so the download fails instead of being saved unencrypted.
+     */
+    private fun downloadPassword(): CharArray? {
+        if (!preferences.passwordProtectDownloads().get()) return null
+        val stored = try {
+            secrets.get(KEY)
+        } catch (e: Exception) {
+            throw CbzPasswordUnavailableException(e)
+        }
+        return stored?.takeIf { it.isNotEmpty() }?.toCharArray()
     }
 
-    /** The random padding SY adds to ComicInfo.xml in encrypted archives, so its size gives nothing away. */
-    fun comicInfoPadding(): String? {
-        if (!encryptDownloads()) return null
+    /**
+     * Whether new downloads are encrypted: the setting is on and a password is set. Throws
+     * [CbzPasswordUnavailableException] when the setting is on and the secret store fails.
+     */
+    fun encryptDownloads(): Boolean = downloadPassword() != null
+
+    /** The encryption for a new download; see [downloadPassword] for when it throws. */
+    fun encryption(): CbzEncryption? {
+        val password = downloadPassword() ?: return null
+        return CbzEncryption(password, preferences.encryptionType().get())
+    }
+
+    /**
+     * The random padding SY adds to ComicInfo.xml in encrypted archives, so its size gives nothing
+     * away. Takes the download's [encryption] (from [encryption]), so the secret store is read once.
+     */
+    fun comicInfoPadding(encryption: CbzEncryption?): String? {
+        if (encryption == null) return null
         val pool = ('a'..'z') + ('A'..'Z') + ('0'..'9')
         val random = SecureRandom()
         return List(random.nextInt(100) + 42) { pool[random.nextInt(pool.size)] }.joinToString("")
@@ -51,6 +74,14 @@ class CbzPassword(
         const val KEY = "cbz-password"
     }
 }
+
+/** The secret store could not be read while "Password protect downloads" is on. */
+class CbzPasswordUnavailableException(cause: Throwable) :
+    IllegalStateException(
+        "Could not read the download password from the system's secret store, so the chapter was not saved " +
+            "(password protect downloads is on). Unlock the secret store and retry. (${cause.message ?: cause::class.simpleName})",
+        cause,
+    )
 
 class CbzEncryption(val password: CharArray, val type: SecurityPreferences.EncryptionType)
 

@@ -37,7 +37,10 @@ data class Version(val parts: List<Int>) : Comparable<Version> {
     companion object {
         private val pattern = Regex("""^v?(\d+(?:\.\d+){0,3})$""")
 
-        fun parse(text: String): Version? =
-            pattern.find(text.trim())?.groupValues?.get(1)?.split('.')?.map { it.toInt() }?.let(::Version)
+        /** Null when [text] is not a version, including a part too long for an Int. */
+        fun parse(text: String): Version? {
+            val digits = pattern.find(text.trim())?.groupValues?.get(1) ?: return null
+            return Version(digits.split('.').map { it.toIntOrNull() ?: return null })
+        }
     }
 }

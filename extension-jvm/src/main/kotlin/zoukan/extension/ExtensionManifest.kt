@@ -80,6 +80,13 @@ data class ExtensionManifest(
             parse(zip.getInputStream(entry).use { it.readAllBytes() }.decodeToString())
         }
 
+        /** Reads the text AndroidManifest.xml from a jar's [contents]; [jarName] is for messages. */
+        fun fromContents(contents: JarContents, jarName: String): ExtensionManifest {
+            val bytes = contents["AndroidManifest.xml"]
+                ?: throw ExtensionException(ExtensionException.Stage.MANIFEST, "No AndroidManifest.xml in $jarName")
+            return parse(bytes.decodeToString())
+        }
+
         /** Decodes the binary AndroidManifest.xml of an APK. */
         fun fromApk(apk: File): ExtensionManifest = ApkFile(apk).use { parse(it.manifestXml) }
 

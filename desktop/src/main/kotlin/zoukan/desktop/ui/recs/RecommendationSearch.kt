@@ -46,6 +46,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.domain.manga.model.toDomainManga
@@ -67,6 +68,10 @@ import java.net.URI
 import java.util.Collections
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+
+/** What a running search's status update leaves: [publish]'s rule, without the coroutine. */
+internal fun searchStatusAfter(current: SearchStatus, new: SearchStatus, searchActive: Boolean): SearchStatus =
+    if (current is SearchStatus.Cancelling || current is SearchStatus.Idle || !searchActive) current else new
 
 /**
  * SY's RecommendationSearchHelper (exh.recs.batch): collects the recommendations of every selected
@@ -94,22 +99,35 @@ class RecommendationSearchHelper {
         return scope.launch(Dispatchers.IO) { beginSearch(mangaList) }
     }
 
+    // ZOUKAN -->
+    /**
+     * Sets the search's own status, unless the user cancelled: a Cancel (Cancelling) is never
+     * overwritten, so it can't be lost, and once the dialog went back to Idle or the job was
+     * cancelled, a late update can't bring the dialog back. One atomic update, so a Cancel that
+     * lands while this runs is seen on the retry.
+     */
+    private suspend fun publish(new: SearchStatus) {
+        val job = currentCoroutineContext()[Job]
+        status.update { current -> searchStatusAfter(current, new, searchActive = job?.isActive != false) }
+    }
+    // ZOUKAN <--
+
     private suspend fun beginSearch(mangaList: List<Manga>) {
-        val flags = preferences.recommendationSearchFlags().get()
-        val libraryManga = getLibraryManga.await()
-        val tracks = getTracks.await()
-
-        // Trackers such as MAL need to be throttled more strictly
-        val stricterThrottling = SearchFlags.hasIncludeTrackers(flags)
-
-        val throttleManager =
-            ThrottleManager(
-                max = 3.seconds,
-                inc = 50.milliseconds,
-                initial = if (stricterThrottling) 2.seconds else 0.seconds,
-            )
-
         try {
+            val flags = preferences.recommendationSearchFlags().get()
+            val libraryManga = getLibraryManga.await()
+            val tracks = getTracks.await()
+
+            // Trackers such as MAL need to be throttled more strictly
+            val stricterThrottling = SearchFlags.hasIncludeTrackers(flags)
+
+            val throttleManager =
+                ThrottleManager(
+                    max = 3.seconds,
+                    inc = 50.milliseconds,
+                    initial = if (stricterThrottling) 2.seconds else 0.seconds,
+                )
+
             // Map of results grouped by recommendation source
             val resultsMap = Collections.synchronizedMap(mutableMapOf<String, SearchResults>())
 
@@ -117,7 +135,7 @@ class RecommendationSearchHelper {
                 // Check if the job has been cancelled
                 currentCoroutineContext().ensureActive()
 
-                status.value = SearchStatus.Processing(sourceManga.toSManga(), index + 1, mangaList.size)
+                publish(SearchStatus.Processing(sourceManga.toSManga(), index + 1, mangaList.size))
 
                 val jobs = RecommendationPagingSource.createSources(
                     sourceManga,
@@ -155,7 +173,10 @@ class RecommendationSearchHelper {
                         } catch (_: NoResultsException) {
                         } catch (e: CancellationException) {
                             throw e
-                        } catch (e: Exception) {
+                        } catch (e: OutOfMemoryError) {
+                            throw e
+                        } catch (e: Throwable) {
+                            // Throwable: an unloaded extension's Error must not leave the search spinning
                             logcat(LogPriority.ERROR, e) { "Error while fetching recommendations for $recSourceId" }
                         }
                     }
@@ -186,14 +207,17 @@ class RecommendationSearchHelper {
                 )
             }
 
-            status.value = when {
-                rankedMap.isNotEmpty() -> SearchStatus.Finished.WithResults(rankedMap)
-                else -> SearchStatus.Finished.WithoutResults
-            }
-        } catch (_: CancellationException) {
+            publish(
+                when {
+                    rankedMap.isNotEmpty() -> SearchStatus.Finished.WithResults(rankedMap)
+                    else -> SearchStatus.Finished.WithoutResults
+                },
+            )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            status.value = SearchStatus.Error(e.message.orEmpty())
             logcat(LogPriority.ERROR, e) { "Error during recommendation search" }
+            publish(SearchStatus.Error(e.message.orEmpty()))
         }
     }
 

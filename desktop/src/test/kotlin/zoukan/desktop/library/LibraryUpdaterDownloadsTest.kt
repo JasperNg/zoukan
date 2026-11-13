@@ -89,7 +89,7 @@ class LibraryUpdaterDownloadsTest {
             refreshManga = refreshManga,
             sourceManager = mockk<SourceManager> { every { this@mockk.get(any<Long>()) } returns mockk() },
             preferences = mockk<LibraryPreferences> {
-                every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true)
+                every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true) { every { get() } returns 0L }
                 every { autoUpdateMetadata() } returns mockk<Preference<Boolean>> { every { get() } returns false }
                 every { newUpdatesCount() } returns mockk<Preference<Int>>(relaxed = true)
             },

@@ -91,6 +91,7 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.library.ClickKind
 import zoukan.desktop.ui.library.TriStateRow
@@ -271,7 +272,7 @@ fun HistoryTab(model: HistoryScreenModel) {
     val state by model.state.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
     val libraryToggle = rememberQuickLibraryToggle()
-    val panorama by model.preferences.usePanoramaCover().let { p -> p.changes().collectAsState(p.get()) }
+    val panorama by model.preferences.usePanoramaCover().let { p -> p.collectAsState() }
     var confirmClear by remember { mutableStateOf(false) }
     var remove by remember { mutableStateOf<List<HistoryWithRelations>?>(null) }
     val timeFormat = remember { DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT) }
@@ -507,7 +508,7 @@ private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -
                 TriStateRow(localized(DMR.strings.not_in_library), preferences.filterNonLibraryManga(), notLabel = localized(MR.strings.in_library))
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 val panorama = preferences.usePanoramaCover()
-                val on by panorama.changes().collectAsState(panorama.get())
+                val on by panorama.collectAsState()
                 Row(
                     Modifier.fillMaxWidth().clickable { panorama.set(!on) }.padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,

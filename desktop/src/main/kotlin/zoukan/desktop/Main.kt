@@ -22,6 +22,7 @@ import zoukan.desktop.backup.BackupCheck
 import zoukan.desktop.backup.BackupComparison
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.NoStubSources
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.backup.SyntheticBackup
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.db.DesktopDatabase
@@ -276,20 +277,30 @@ private fun backup(args: List<String>): Int {
                 val backups = DesktopBackups(ZoukanRuntime.dirs.android)
                 val backup = backups.read(file)
                 var last = 0L
-                val errors = runBlocking {
-                    backups.restore(backup) { step, progress, total ->
-                        val now = System.currentTimeMillis()
-                        if (progress == total || now - last > 1000) {
-                            last = now
-                            val label = when (step) {
-                                is BackupContentRestorer.Step.Entry -> step.title
-                                is BackupContentRestorer.Step.Section -> Injekt.get<Application>().stringResource(step.label)
+                val (errors, skippedStores) = runBlocking {
+                    RestoreGate.whileRestoring {
+                        // Extension stores decide whose code runs, and the command line asks no
+                        // one: it never adds a store or changes a signing key, as Settings would ask
+                        val (restorable, skipped) = backups.withoutNewExtensionStores(backup)
+                        backups.restore(restorable) { step, progress, total ->
+                            val now = System.currentTimeMillis()
+                            if (progress == total || now - last > 1000) {
+                                last = now
+                                val label = when (step) {
+                                    is BackupContentRestorer.Step.Entry -> step.title
+                                    is BackupContentRestorer.Step.Section -> Injekt.get<Application>().stringResource(step.label)
+                                }
+                                println("[$progress/$total] $label")
                             }
-                            println("[$progress/$total] $label")
-                        }
+                        } to skipped
                     }
                 }
                 println("Restored ${backup.backupManga.size} entries from $file")
+                if (skippedStores.isNotEmpty()) {
+                    println("Not restored: ${skippedStores.size} extension stores that are new or have a new signing key:")
+                    skippedStores.forEach { println("  ${it.name}: ${it.indexUrl}") }
+                    println("To add them, restore this backup from Settings in the app, which asks first, or add them in Browse > Extensions > Stores.")
+                }
                 if (errors.isNotEmpty()) {
                     println("${errors.size} errors:")
                     errors.forEach { (_, message) -> println("  $message") }

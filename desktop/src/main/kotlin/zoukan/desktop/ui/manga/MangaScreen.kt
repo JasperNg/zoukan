@@ -105,6 +105,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClickAt
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -165,7 +166,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
         // write Android's, as the preference travels in backups between the apps
         val uiPreferences = remember { Injekt.get<UiPreferences>() }
         val readButtonPosition = remember { uiPreferences.readButtonPosition() }
-        val fabPosition by readButtonPosition.changes().collectAsState(readButtonPosition.get())
+        val fabPosition by readButtonPosition.collectAsState()
         val fabAtStart = fabPosition == "Start" || fabPosition == FabPosition.Start.toString()
         var offsetX by remember { mutableFloatStateOf(0f) }
         var chaptersLayoutSize by remember { mutableStateOf(IntSize.Zero) }
@@ -263,10 +264,8 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                         // ZOUKAN <--
                                         // ZOUKAN -->
                                         val libraryPrefs = remember { Injekt.get<LibraryPreferences>() }
-                                        val swipeToStart by libraryPrefs.swipeToStartAction().changes()
-                                            .collectAsState(libraryPrefs.swipeToStartAction().get())
-                                        val swipeToEnd by libraryPrefs.swipeToEndAction().changes()
-                                            .collectAsState(libraryPrefs.swipeToEndAction().get())
+                                        val swipeToStart by libraryPrefs.swipeToStartAction().collectAsState()
+                                        val swipeToEnd by libraryPrefs.swipeToEndAction().collectAsState()
                                         // ZOUKAN <--
                                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                                             items(state.sortedChapters, key = { it.id }) { chapter ->

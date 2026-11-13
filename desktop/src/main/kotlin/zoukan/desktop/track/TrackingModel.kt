@@ -9,7 +9,9 @@ import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -59,10 +61,14 @@ class TrackingModel(
         }
     }
 
+    /** The running search or match; a new search, or closing the search, cancels it. */
+    private var searchJob: Job? = null
+
     fun startSearch(tracker: Tracker) {
+        searchJob?.cancel()
         val track = state.value.items.find { it.tracker == tracker }?.track
         mutableState.update {
-            it.copy(searching = tracker, query = track?.title ?: manga.ogTitle, results = null, error = null)
+            it.copy(searching = tracker, query = track?.title ?: manga.ogTitle, results = null, loading = false, error = null)
         }
         // Enhanced trackers match by the source's ids instead of a search
         if (tracker is EnhancedTracker) matchEnhanced(tracker) else search()
@@ -70,16 +76,36 @@ class TrackingModel(
 
     fun setQuery(query: String) = mutableState.update { it.copy(query = query) }
 
-    fun closeSearch() = mutableState.update { it.copy(searching = null, results = null, error = null) }
+    fun closeSearch() {
+        searchJob?.cancel()
+        searchJob = null
+        mutableState.update { it.copy(searching = null, results = null, loading = false, error = null) }
+    }
+
+    /** Stores a search's outcome only if [tracker] is still the one being searched; a late result is dropped. */
+    internal fun applyResult(tracker: Any, transform: (State) -> State) {
+        mutableState.update { if (it.searching === tracker) transform(it) else it }
+    }
+
+    private suspend fun <T> runSearch(block: suspend () -> T): Result<T> = withContext(Dispatchers.IO) {
+        try {
+            Result.success(block())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
 
     fun search() {
         val tracker = state.value.searching ?: return
         val query = state.value.query.trim()
         if (query.isEmpty()) return
+        searchJob?.cancel()
         mutableState.update { it.copy(loading = true, error = null) }
-        screenModelScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { tracker.search(query) } }
-            mutableState.update {
+        searchJob = screenModelScope.launch {
+            val result = runSearch { tracker.search(query) }
+            applyResult(tracker) {
                 it.copy(
                     loading = false,
                     results = result.getOrNull().orEmpty(),
@@ -90,10 +116,11 @@ class TrackingModel(
     }
 
     private fun matchEnhanced(tracker: EnhancedTracker) {
+        searchJob?.cancel()
         mutableState.update { it.copy(loading = true) }
-        screenModelScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { tracker.match(manga) } }
-            mutableState.update {
+        searchJob = screenModelScope.launch {
+            val result = runSearch { tracker.match(manga) }
+            applyResult(tracker) {
                 it.copy(
                     loading = false,
                     results = listOfNotNull(result.getOrNull()),

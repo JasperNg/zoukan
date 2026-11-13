@@ -9,8 +9,10 @@ icon with notifications, trackers, E-Hentai and ExHentai, merged entries and mig
 `android-compat/`), installs and loads extensions (`extension-jvm/`), and runs the extension
 compatibility harness.
 
-Building needs JDK 21. The Android SDK is not needed: without one, shared code compiles against
-the desktop's own Android layer (see `android-stubs/build.gradle.kts`).
+Building needs JDK 21. The Android SDK is not needed: shared code always compiles against the
+desktop's own Android layer, with or without an SDK (see `android-stubs/build.gradle.kts`).
+[UPSTREAM-MERGES.md](UPSTREAM-MERGES.md) lists the upstream files Zoukan moved, for merging
+upstream Komikku.
 
 ## Commands
 

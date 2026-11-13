@@ -13,7 +13,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -51,6 +50,7 @@ import zoukan.desktop.app.ExternalLinks
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.manga.DescriptionImages.Part
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
@@ -217,7 +217,7 @@ internal object DescriptionImages {
 @Composable
 internal fun DescriptionText(text: String, maxLines: Int, onTextLayout: (TextLayoutResult) -> Unit) {
     val preference = remember { Injekt.get<UiPreferences>().imagesInDescription() }
-    val loadImages by preference.changes().collectAsState(preference.get())
+    val loadImages by preference.collectAsState()
     DescriptionImagesText(text, maxLines, onTextLayout, loadImages)
 }
 

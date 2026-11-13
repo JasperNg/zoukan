@@ -95,9 +95,14 @@ class SingleInstance private constructor(
         private fun takeLock(root: File): Pair<FileChannel, FileLock>? {
             root.mkdirs()
             val channel = RandomAccessFile(File(root, LOCK), "rw").channel
-            val lock = try {
+            // tryLock throws only when this JVM holds the lock; another process holding it
+            // (a running Zoukan, a CLI command) makes it return null
+            val lock: FileLock? = try {
                 channel.tryLock()
             } catch (_: OverlappingFileLockException) {
+                null
+            }
+            if (lock == null) {
                 channel.close()
                 return null
             }

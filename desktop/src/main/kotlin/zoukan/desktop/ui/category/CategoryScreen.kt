@@ -75,6 +75,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 /** Android's CategoryScreenModel: the user's categories, without the system Default one. */
@@ -217,7 +218,7 @@ object CategoryScreen : Screen {
 /** Settings > Library > Default category on Android: where an entry goes when it is added. */
 @Composable
 private fun DefaultCategoryRow(model: CategoryScreenModel, categories: List<Category>) {
-    val selected by model.defaultCategory.changes().collectAsState(model.defaultCategory.get())
+    val selected by model.defaultCategory.collectAsState()
     var menu by remember { mutableStateOf(false) }
     val label = when (selected) {
         -1 -> localized(MR.strings.default_category_summary)

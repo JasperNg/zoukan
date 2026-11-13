@@ -185,7 +185,10 @@ private fun SourceIconBadge(badge: Badge.Source) {
         ) {
             Icon(Icons.Filled.Warning, contentDescription = badge.name, tint = MaterialTheme.colorScheme.error, modifier = iconModifier)
         }
-        badge.iconUrl != null -> CoverImage(badge.iconUrl, Modifier.height(22.dp).aspectRatio(1f), contentScale = ContentScale.Fit)
+        // A fixed size, not height + aspectRatio: Badges' Row asks for its intrinsic height, and
+        // aspectRatio forwards an unbounded intrinsic-width query to CoverImage, whose
+        // SubcomposeAsyncImage is a SubcomposeLayout (BoxWithConstraints) that throws on intrinsics
+        badge.iconUrl != null -> CoverImage(badge.iconUrl, Modifier.size(22.dp), contentScale = ContentScale.Fit)
         else -> Box(
             Modifier.background(MaterialTheme.colorScheme.tertiary).padding(horizontal = 3.dp, vertical = 1.dp),
         ) {

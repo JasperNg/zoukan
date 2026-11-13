@@ -165,19 +165,34 @@ class RestoreBackupScreen(private val path: String) : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val model = rememberScreenModel { RestoreBackupScreenModel(File(path)) }
         val state by model.state.collectAsState()
+        val restoreStatus by backupStatusFlow.collectAsState()
+        val missing by MissingExtensionsInstall.state.collectAsState()
 
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(localized(MR.strings.pref_restore_backup))
+            // ZOUKAN: the screen stays open after the restore starts, to show its results and offer
+            // "Install missing extensions" (desktop only); its action then closes it
             ColumnWithAction(
-                actionLabel = localized(MR.strings.action_restore),
-                actionEnabled = state.canRestore && state.options.canRestore(),
+                actionLabel = localized(if (state.restoreStarted) MR.strings.action_close else MR.strings.action_restore),
+                actionEnabled = state.restoreStarted || (state.canRestore && state.options.canRestore()),
                 actionTag = "restore-backup-action",
                 onClickAction = {
-                    model.startRestore()
-                    navigator.pop()
+                    if (state.restoreStarted) navigator.pop() else model.startRestore()
                 },
             ) {
-                if (state.canRestore) {
+                if (state.restoreStarted) {
+                    item {
+                        SectionCard {
+                            RestoreResults(
+                                restoreStatus = restoreStatus,
+                                outcome = state.outcome,
+                                missing = missing.forRestore(model),
+                                onInstall = { MissingExtensionsInstall.install(model) },
+                            )
+                        }
+                    }
+                }
+                if (state.canRestore && !state.restoreStarted) {
                     item {
                         SectionCard {
                             RestoreOptions.options.forEach { option ->
@@ -272,6 +287,8 @@ class RestoreBackupScreenModel(
 
     init {
         screenModelScope.launch { validate(file) }
+        // A finished run's results belong to the restore that started it
+        MissingExtensionsInstall.dismiss()
     }
 
     fun toggle(setter: (RestoreOptions, Boolean) -> RestoreOptions, enabled: Boolean) {
@@ -283,7 +300,26 @@ class RestoreBackupScreenModel(
     }
 
     fun startRestore() {
-        restoreBackup(file, state.value.options)
+        if (state.value.restoreStarted) return
+        val running = restoreBackup(file, state.value.options)
+        if (running == null) {
+            Toasts.show(localized(MR.strings.backup_in_progress))
+            return
+        }
+        mutableState.update { it.copy(restoreStarted = true, outcome = null) }
+        // restoreBackup shows its status and toasts until it ends; then, when it restored,
+        // look for the missing extensions. This model is the token that tags them as this restore's.
+        screenModelScope.launch {
+            when (val outcome = running.await()) {
+                RestoreOutcome.OK -> {
+                    mutableState.update { it.copy(outcome = outcome) }
+                    MissingExtensionsInstall.find(this@RestoreBackupScreenModel)
+                }
+                RestoreOutcome.FAILED -> mutableState.update { it.copy(outcome = outcome) }
+                // The user stopped it before it changed anything: back to the options
+                RestoreOutcome.CANCELLED -> mutableState.update { it.copy(restoreStarted = false, outcome = null) }
+            }
+        }
     }
 
     private suspend fun validate(file: File) {
@@ -325,6 +361,9 @@ class RestoreBackupScreenModel(
         val error: Any? = null,
         val canRestore: Boolean = false,
         val options: RestoreOptions = RestoreOptions(),
+        val restoreStarted: Boolean = false,
+        /** How the started restore ended; null while it runs. */
+        val outcome: RestoreOutcome? = null,
     )
 }
 

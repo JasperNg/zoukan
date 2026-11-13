@@ -301,8 +301,17 @@ class BrowseScreenModel(
     // ZOUKAN <--
 
     fun uninstall(extension: Extension) = busy(extension.pkgName) {
-        extensionManager.uninstallExtension(extension.pkgName)
+        extensionManager.uninstall(extension.pkgName)
         Toasts.show(localized(DMR.strings.uninstalled, extension.name))
+    }
+
+    /**
+     * Uninstalls a package that failed to load. An installed copy that no longer verifies blocks
+     * reinstalling (the update must match the installed signer), so this is the way out.
+     */
+    fun uninstallFailed(pkgName: String) = busy(pkgName) {
+        extensionManager.uninstall(pkgName)
+        Toasts.show(localized(DMR.strings.uninstalled, pkgName))
     }
 
     fun trust(extension: Extension.Untrusted) = busy(extension.pkgName) {

@@ -112,10 +112,39 @@ class KcefWebViewProvider(
     private val urlHttpMapping: MutableMap<String, String> = mutableMapOf()
     private var initialRequestData: InitialRequestData? = null
 
-    private var kcefClient: CefClient? = null
-    private var browser: CefBrowser? = null
+    // ZOUKAN -->
+    // Kept in a holder the cleanup of a dropped WebView can reach without reaching this provider
+    private val native = NativeRefs()
+    private var kcefClient: CefClient?
+        get() = native.client
+        set(value) {
+            native.client = value
+        }
+    private var browser: CefBrowser?
+        get() = native.browser
+        set(value) {
+            native.browser = value
+        }
+
+    /**
+     * Set by destroy(): a message from the page that arrives later is dropped, since answering it
+     * on a browser that is being disposed crashed Chromium.
+     */
+    @Volatile
+    private var destroyed = false
+    private var cleanable: java.lang.ref.Cleaner.Cleanable? = null
+    // ZOUKAN <--
 
     private val handler = Handler(view.webViewLooper)
+
+    // ZOUKAN -->
+    // Chromium's client keeps its handlers for as long as Chromium runs, so it gets weak forwarders
+    // to these: a WebView dropped without destroy() can then be collected, and its browser disposed
+    private val lifeSpanHandler = LifeSpanHandler()
+    private val loadHandler = LoadHandler()
+    private val requestHandler = RequestHandler()
+    private val messageRouterHandler = MessageRouterHandler()
+    // ZOUKAN <--
 
     companion object {
         const val TAG = "KcefWebViewProvider"
@@ -124,6 +153,19 @@ class KcefWebViewProvider(
 
         // ZOUKAN: characters per message of a JavaScript-interface call
         private const val CHUNK_CHARS = 16_000
+
+        // ZOUKAN -->
+        // The longest call a page can send in chunks (a long chapter list is a few million
+        // characters), and how many chunked calls it can leave unfinished at once. Calls are async
+        // on the page, so several can be in flight together (Promise.all); the oldest is dropped
+        // past the limit
+        private const val MAX_CALL_CHARS = 16 * 1024 * 1024
+        private const val MAX_PENDING_CALLS = 64
+
+        // The characters all unfinished calls together may hold: 64 calls of 16M would be about
+        // 2 GB of heap. The oldest calls go past it
+        private const val MAX_PENDING_CHARS = 32 * 1024 * 1024
+        // ZOUKAN <--
 
         // ZOUKAN -->
         private val pendingDisposals = java.util.concurrent.ConcurrentLinkedQueue<PendingDisposal>()
@@ -136,12 +178,31 @@ class KcefWebViewProvider(
         fun disposePending() {
             // WebViews an extension never destroyed too
             synchronized(liveProviders) { liveProviders.toList() }.forEach { runCatching { it.destroy() } }
+            // And those of providers already collected whose cleanup has not run yet: a provider
+            // leaves liveProviders before its Cleaner action queues the disposal
+            liveNatives.toList().forEach { native -> native.take()?.let { pendingDisposals += it } }
             while (true) pendingDisposals.poll()?.run() ?: break
         }
+
+        // Browsers not yet taken for disposal; strong, as NativeRefs does not reach its provider
+        private val liveNatives: MutableSet<NativeRefs> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
         // Providers with a browser; weak, so a WebView dropped without destroy() is still collected
         private val liveProviders: MutableSet<KcefWebViewProvider> =
             java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(java.util.WeakHashMap()))
+
+        /** Disposes the browser of a WebView that was dropped without destroy(); see [native]. */
+        private val cleaner by lazy { java.lang.ref.Cleaner.create() }
+
+        /** Disposes [disposal] after the main looper's queued work, on the AWT thread. */
+        private fun disposeLater(
+            handler: Handler,
+            disposal: PendingDisposal?,
+        ) {
+            disposal ?: return
+            pendingDisposals += disposal
+            handler.post { javax.swing.SwingUtilities.invokeLater { disposal.run() } }
+        }
         // ZOUKAN <--
 
         private val initHandler: InitBrowserHandler /* ZOUKAN --> */by injectLazy()/* ZOUKAN <-- */
@@ -322,11 +383,14 @@ class KcefWebViewProvider(
                     // viewClient.onReceivedHttpError(_view, ...);
                 }
                 // ZOUKAN -->
-                // Let the app see cookies the page set (cf_clearance) before the client checks them
-                CefCookieSync.copyFromCef(url)
+                // Let the app see cookies the page set (cf_clearance) before onPageFinished, where a
+                // client checks for them. Chromium visits them on its own thread, so onPageFinished
+                // is posted once the visit ends; a page that starts loading first gets it before
+                // its onPageStarted, as on Android
+                val finish = PageFinish(url)
+                pendingFinish = finish
+                CefCookieSync.copyFromCef(url) { handler.post { finish.run() } }
                 // ZOUKAN <--
-                viewClient.onPageFinished(view, url)
-                chromeClient.onProgressChanged(view, 100)
             }
         }
 
@@ -391,9 +455,33 @@ class KcefWebViewProvider(
 
             // ZOUKAN: read the URL now; the frame can be gone when the main looper runs this
             val frameUrl = frame.url ?: ""
-            handler.post { viewClient.onPageStarted(view, frameUrl, null) }
+            // ZOUKAN -->
+            handler.post {
+                // The last page's onPageFinished first, if its cookie visit has not ended
+                pendingFinish?.run()
+                viewClient.onPageStarted(view, frameUrl, null)
+            }
+            // ZOUKAN <--
         }
     }
+
+    // ZOUKAN -->
+    /** The onPageFinished of a page whose cookies are still being copied; main looper only. */
+    private var pendingFinish: PageFinish? = null
+
+    /** Calls onPageFinished for [url] once; runs on the main looper. */
+    private inner class PageFinish(private val url: String) {
+        private var done = false
+
+        fun run() {
+            if (done) return
+            done = true
+            if (pendingFinish === this) pendingFinish = null
+            viewClient.onPageFinished(view, url)
+            chromeClient.onProgressChanged(view, 100)
+        }
+    }
+    // ZOUKAN <--
 
     private inner class MessageRouterHandler : CefMessageRouterHandlerAdapter() {
         override fun onQuery(
@@ -405,22 +493,21 @@ class KcefWebViewProvider(
             callback: CefQueryCallback,
         ): Boolean {
             // ZOUKAN -->
+            if (destroyed) return false
             val whole = if (request.startsWith("{\"chunkId\"")) {
-                val chunk = try {
-                    Json.decodeFromString<CallChunk>(request)
+                // The chunk comes from the page: one that does not fit is logged and dropped
+                val call = try {
+                    val chunk = Json.decodeFromString<CallChunk>(request)
+                    callChunks.add(chunk.chunkId, chunk.index, chunk.total, chunk.data)
                 } catch (e: Exception) {
                     Log.w(TAG, "Invalid request chunk received $e")
                     return false
                 }
-                val parts = callChunks.computeIfAbsent(chunk.chunkId) { arrayOfNulls(chunk.total) }
-                if (chunk.total != parts.size || chunk.index !in parts.indices) return false
-                parts[chunk.index] = chunk.data
-                if (parts.any { it == null }) {
+                if (call == null) {
                     callback.success("")
                     return true
                 }
-                callChunks.remove(chunk.chunkId)
-                parts.joinToString("")
+                call
             } else {
                 request
             }
@@ -439,6 +526,8 @@ class KcefWebViewProvider(
                         it.interfaceName == invoke.interfaceName
                 }?.let {
                     handler.post {
+                        // ZOUKAN: destroyed while this waited; the browser is being disposed
+                        if (destroyed) return@post
                         try {
                             Log.v(
                                 TAG,
@@ -549,10 +638,13 @@ class KcefWebViewProvider(
             // TODO: we should be calling this on the handler, since CEF calls us on its IO thread
             // thus if a client tried to use WebView#loadUrl as the docs suggest, this fails
             val cancel =
-                viewClient.shouldOverrideUrlLoading(
-                    view,
-                    CefWebResourceRequest(request, frame, false),
-                )
+                // ZOUKAN: Android calls it on the WebView's thread, so it may call WebView methods
+                WebView.callClientOffThread {
+                    viewClient.shouldOverrideUrlLoading(
+                        view,
+                        CefWebResourceRequest(request, frame, false),
+                    )
+                }
             Log.v(TAG, "Resource ${request.url}, result is cancel? $cancel")
 
             // ZOUKAN: read the URL now; the frame can be gone when the main looper runs this
@@ -675,18 +767,24 @@ class KcefWebViewProvider(
             // ZOUKAN: blockingOffEdt, not runBlocking: Chromium's start needs the AWT thread
             blockingOffEdt {
                 CefHelper.createClient().apply {
-                    addLifeSpanHandler(LifeSpanHandler())
+                    // ZOUKAN -->
+                    addLifeSpanHandler(WeakLifeSpanHandler(lifeSpanHandler))
                     addDisplayHandler(DisplayHandler())
-                    addLoadHandler(LoadHandler())
-                    addRequestHandler(RequestHandler())
+                    addLoadHandler(WeakLoadHandler(loadHandler))
+                    addRequestHandler(WeakRequestHandler(requestHandler))
+                    // ZOUKAN <--
                     // ZOUKAN: no addPermissionHandler(PermissionHandler()), see CefPermissionRequest
 
                     val config = CefMessageRouter.CefMessageRouterConfig()
                     config.jsQueryFunction = QUERY_FN
                     config.jsCancelFunction = QUERY_CANCEL_FN
-                    addMessageRouter(CefMessageRouter.create(config, MessageRouterHandler()))
+                    addMessageRouter(CefMessageRouter.create(config, /* ZOUKAN */ WeakMessageRouterHandler(messageRouterHandler)))
                 }
             }
+        // ZOUKAN -->
+        destroyed = false
+        if (cleanable == null) cleanable = cleaner.register(this, UnreachableCleanup(native))
+        // ZOUKAN <--
         initHandler.init(this)
         liveProviders += this // ZOUKAN
     }
@@ -734,17 +832,12 @@ class KcefWebViewProvider(
         // that ends the run (Comix's payload) has the extension destroy the WebView meanwhile.
         // Answering on a disposed browser crashed Chromium. Disposal itself stays on the AWT
         // thread, where JCEF does its work.
-        val oldBrowser = browser
-        val oldClient = kcefClient
-        browser = null
-        kcefClient = null
+        destroyed = true
+        val disposal = native.take()
         // Chunks of a call the page never finished go with the page
         callChunks.clear()
         liveProviders.remove(this)
-        if (oldBrowser == null && oldClient == null) return
-        val disposal = PendingDisposal(oldBrowser, oldClient)
-        pendingDisposals += disposal
-        handler.post { javax.swing.SwingUtilities.invokeLater { disposal.run() } }
+        disposeLater(handler, disposal)
         // ZOUKAN <--
     }
 
@@ -768,7 +861,8 @@ class KcefWebViewProvider(
         loadUrl: String,
         additionalHttpHeaders: Map<String, String>,
     ) {
-        browser?.dispose()
+        // ZOUKAN: after queued work, as in destroy(); a queued answer to the old page needs it
+        disposeLater(handler, browser?.let { PendingDisposal(it, null) })
         chromeClient.onProgressChanged(view, 0)
         initialRequestData = InitialRequestData(additionalHttpHeaders = additionalHttpHeaders)
         browser =
@@ -791,7 +885,8 @@ class KcefWebViewProvider(
         url: String,
         postData: ByteArray,
     ) {
-        browser?.dispose()
+        // ZOUKAN: after queued work, as in destroy(); a queued answer to the old page needs it
+        disposeLater(handler, browser?.let { PendingDisposal(it, null) })
         chromeClient.onProgressChanged(view, 0)
         initialRequestData = InitialRequestData(myPostData = postData)
         browser =
@@ -821,7 +916,8 @@ class KcefWebViewProvider(
         encoding: String?,
         historyUrl: String?,
     ) {
-        browser?.dispose()
+        // ZOUKAN: after queued work, as in destroy(); a queued answer to the old page needs it
+        disposeLater(handler, browser?.let { PendingDisposal(it, null) })
         chromeClient.onProgressChanged(view, 0)
         val url = baseUrl ?: "about:blank"
         urlHttpMapping[url.trimEnd('/')] = data
@@ -1004,6 +1100,122 @@ class KcefWebViewProvider(
     override fun setPictureListener(listener: PictureListener): Unit = throw RuntimeException("Stub!")
 
     // ZOUKAN -->
+    /** The provider's browser and client, which [UnreachableCleanup] reaches without the provider. */
+    private class NativeRefs {
+        @Volatile var browser: CefBrowser? = null
+            @Synchronized set(value) {
+                field = value
+                if (value != null) liveNatives += this
+            }
+
+        @Volatile var client: CefClient? = null
+            @Synchronized set(value) {
+                field = value
+                if (value != null) liveNatives += this
+            }
+
+        /** Takes both out, for disposal; null when there is nothing to dispose. */
+        @Synchronized
+        fun take(): PendingDisposal? {
+            val oldBrowser = browser
+            val oldClient = client
+            browser = null
+            client = null
+            liveNatives.remove(this)
+            return if (oldBrowser == null && oldClient == null) null else PendingDisposal(oldBrowser, oldClient)
+        }
+    }
+
+    /**
+     * Runs once a provider is unreachable: its WebView was dropped without destroy(). Android's
+     * WebView likewise destroys a collected WebView's page. Must not reference the provider.
+     */
+    private class UnreachableCleanup(private val native: NativeRefs) : Runnable {
+        override fun run() {
+            val disposal = native.take() ?: return
+            Log.w(TAG, "A WebView was dropped without destroy(); disposing its browser")
+            pendingDisposals += disposal
+            javax.swing.SwingUtilities.invokeLater { disposal.run() }
+        }
+    }
+
+    private class WeakLifeSpanHandler(target: CefLifeSpanHandlerAdapter) : CefLifeSpanHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun onAfterCreated(browser: CefBrowser) {
+            ref.get()?.onAfterCreated(browser)
+        }
+    }
+
+    private class WeakLoadHandler(target: CefLoadHandlerAdapter) : CefLoadHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun onLoadEnd(
+            browser: CefBrowser,
+            frame: CefFrame,
+            httpStatusCode: Int,
+        ) {
+            ref.get()?.onLoadEnd(browser, frame, httpStatusCode)
+        }
+
+        override fun onLoadError(
+            browser: CefBrowser,
+            frame: CefFrame,
+            errorCode: CefLoadHandler.ErrorCode,
+            errorText: String,
+            failedUrl: String,
+        ) {
+            ref.get()?.onLoadError(browser, frame, errorCode, errorText, failedUrl)
+        }
+
+        override fun onLoadStart(
+            browser: CefBrowser,
+            frame: CefFrame,
+            transitionType: CefRequest.TransitionType,
+        ) {
+            ref.get()?.onLoadStart(browser, frame, transitionType)
+        }
+    }
+
+    private class WeakRequestHandler(target: CefRequestHandlerAdapter) : CefRequestHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun getResourceRequestHandler(
+            browser: CefBrowser,
+            frame: CefFrame,
+            request: CefRequest,
+            isNavigation: Boolean,
+            isDownload: Boolean,
+            requestInitiator: String,
+            disableDefaultHandling: BoolRef,
+        ): CefResourceRequestHandler? =
+            ref.get()?.getResourceRequestHandler(
+                browser, frame, request, isNavigation, isDownload, requestInitiator, disableDefaultHandling,
+            )
+
+        override fun onRenderProcessTerminated(
+            browser: CefBrowser,
+            status: CefRequestHandler.TerminationStatus,
+            errorCode: Int,
+            errorString: String,
+        ) {
+            ref.get()?.onRenderProcessTerminated(browser, status, errorCode, errorString)
+        }
+    }
+
+    private class WeakMessageRouterHandler(target: CefMessageRouterHandlerAdapter) : CefMessageRouterHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun onQuery(
+            browser: CefBrowser,
+            frame: CefFrame,
+            queryId: Long,
+            request: String,
+            persistent: Boolean,
+            callback: CefQueryCallback,
+        ): Boolean = ref.get()?.onQuery(browser, frame, queryId, request, persistent, callback) ?: false
+    }
+
     private class PendingDisposal(private val browser: CefBrowser?, private val client: CefClient?) {
         private val done = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -1024,7 +1236,77 @@ class KcefWebViewProvider(
         val data: String,
     )
 
-    private val callChunks = java.util.concurrent.ConcurrentHashMap<String, Array<String?>>()
+    /**
+     * Puts long JavaScript-interface calls back together from their chunks (see onLoadStart). The
+     * chunks come from the page, so one that does not fit the protocol is refused before any
+     * memory is set aside for it, and at most [maxPending] calls stay unfinished: the oldest goes.
+     * The unfinished calls hold at most [maxPendingChars] characters together: the oldest go first,
+     * and a chunk that would not fit even then is refused, with its call.
+     */
+    class CallChunkAssembler(
+        private val chunkChars: Int,
+        maxCallChars: Int,
+        private val maxPending: Int,
+        private val maxPendingChars: Int,
+    ) {
+        private val maxChunks = (maxCallChars + chunkChars - 1) / chunkChars
+        private val pending = LinkedHashMap<String, Array<String?>>()
+
+        /** The characters the unfinished calls hold. */
+        @get:Synchronized
+        var pendingChars = 0L
+            private set
+
+        /**
+         * Adds a chunk. Returns the whole call once all its chunks are in, null while some are
+         * missing; throws IllegalArgumentException for a chunk that does not fit.
+         */
+        @Synchronized
+        fun add(
+            chunkId: String,
+            index: Int,
+            total: Int,
+            data: String,
+        ): String? {
+            require(total in 1..maxChunks) { "Chunk count $total out of range" }
+            require(index in 0 until total) { "Chunk index $index out of range" }
+            require(data.length <= chunkChars) { "Chunk of ${data.length} characters" }
+            val parts =
+                pending[chunkId] ?: run {
+                    // The page sends a call's chunks in order, so a call starts with its first
+                    require(index == 0) { "Call starts at chunk $index" }
+                    if (pending.size >= maxPending) drop(pending.keys.first())
+                    arrayOfNulls<String>(total).also { pending[chunkId] = it }
+                }
+            require(parts.size == total) { "Chunk count changed from ${parts.size} to $total" }
+            val grow = data.length - (parts[index]?.length ?: 0)
+            while (pendingChars + grow > maxPendingChars) {
+                drop(pending.keys.firstOrNull { it != chunkId } ?: break)
+            }
+            if (pendingChars + grow > maxPendingChars) {
+                drop(chunkId)
+                throw IllegalArgumentException("Unfinished calls over $maxPendingChars characters")
+            }
+            parts[index] = data
+            pendingChars += grow
+            if (parts.any { it == null }) return null
+            drop(chunkId)
+            return parts.joinToString("")
+        }
+
+        @Synchronized
+        fun clear() {
+            pending.clear()
+            pendingChars = 0
+        }
+
+        private fun drop(chunkId: String) {
+            val parts = pending.remove(chunkId) ?: return
+            pendingChars -= parts.sumOf { it?.length ?: 0 }
+        }
+    }
+
+    private val callChunks = CallChunkAssembler(CHUNK_CHARS, MAX_CALL_CHARS, MAX_PENDING_CALLS, MAX_PENDING_CHARS)
     // ZOUKAN <--
 
     @Serializable

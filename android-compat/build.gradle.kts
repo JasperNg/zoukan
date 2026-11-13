@@ -1,5 +1,6 @@
 // ZOUKAN -->
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.MessageDigest
 
 /**
  * Android compatibility layer for the desktop app: Suwayomi-Server's AndroidCompat (MPL-2.0),
@@ -81,4 +82,47 @@ dependencies {
     // BytecodeEditor (extension bytecode rewrites)
     implementation(zoukanlibs.asm)
 }
+
+// Suwayomi's android.jar is served from a GitHub repository (pinned to a commit in
+// settings.gradle.kts), not from a signed Maven repository, and the build has no project-wide
+// dependency verification. Check this one artifact against a known SHA-256 before anything
+// compiles against it. To update the jar: change the commit and version, then put the new jar's
+// `shasum -a 256` here.
+val androidJarSha256 = "d719e8c95a224f970e4d8d5ceabf1a0f90afa9e7b5da62b64bf76f29cad269f5"
+
+val verifyAndroidJar by tasks.registering {
+    group = "verification"
+    description = "Checks Suwayomi's android.jar against its expected SHA-256."
+    val jar: FileCollection = configurations.detachedConfiguration(
+        dependencies.create(zoukanlibs.android.jar.get()),
+    ).apply { isTransitive = false }
+    val expected = androidJarSha256
+    val marker = layout.buildDirectory.file("verification/android-jar.sha256")
+    inputs.files(jar)
+    inputs.property("sha256", expected)
+    outputs.file(marker)
+    doLast {
+        val file = jar.singleFile
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        check(actual == expected) {
+            "Suwayomi's android.jar (${file.name}) has SHA-256 $actual, expected $expected. " +
+                "The artifact changed upstream or was tampered with; do not build against it."
+        }
+        marker.get().asFile.writeText("$actual\n")
+    }
+}
+
+// Everything that uses the jar (this module, android-stubs, the desktop app) compiles this module first
+tasks.named("compileKotlin") { dependsOn(verifyAndroidJar) }
+tasks.named("compileJava") { dependsOn(verifyAndroidJar) }
+tasks.named("check") { dependsOn(verifyAndroidJar) }
 // ZOUKAN <--

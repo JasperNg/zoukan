@@ -39,12 +39,14 @@ class LocalSourcePathTest {
     }
 
     @Test
-    fun `rejects an absolute-path chapter url that discards the parent`() {
-        // "Alpha/<absolute path>": File drops the parent for an absolute child, so this must still be contained
+    fun `an absolute-path chapter url never reaches the file outside the folder`() {
+        // "Alpha/<absolute path>". On macOS and Linux File(parent, child) keeps the parent, so the path stays inside
+        // the folder and simply does not exist; on Windows the embedded drive makes it invalid. Either way it fails,
+        // and never resolves to the file outside.
         val absolute = secret().absolutePath.replace(File.separatorChar, '/')
         val source = source()
         val e = shouldThrow<IllegalStateException> { source.chapterFile("Alpha/$absolute") }
-        e.message shouldContain "Invalid chapter path"
+        (e.message!!.startsWith("Invalid chapter path") || e.message!!.startsWith("Chapter not found")) shouldBe true
     }
 
     @Test

@@ -41,6 +41,20 @@ class UpcomingUIModelTest {
     }
 
     @Test
+    fun `list keys stay unique where header hash codes collide`() {
+        // Same month, counts 31 apart per day of gap: the data class hash codes are equal, which
+        // as LazyColumn keys crashed the window with "Key was already used"
+        val first = UpcomingUIModel.Header(today, 32)
+        val second = UpcomingUIModel.Header(today.plusDays(1), 1)
+        first.hashCode() shouldBe second.hashCode()
+        (first.listKey() == second.listKey()) shouldBe false
+
+        val models = (1L..32L).map { manga(it, today) }.plus(manga(33, today.plusDays(1))).toUpcomingUIModels()
+        models.filterIsInstance<UpcomingUIModel.Header>() shouldBe listOf(first, second)
+        models.map { it.listKey() }.toSet().size shouldBe models.size
+    }
+
+    @Test
     fun `relative dates follow Android's wording`() {
         relativeDateText(today, today) shouldBe "Today"
         relativeDateText(today.plusDays(1), today) shouldBe "Tomorrow"
