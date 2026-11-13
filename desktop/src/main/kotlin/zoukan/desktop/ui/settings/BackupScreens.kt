@@ -31,6 +31,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
@@ -58,6 +59,7 @@ import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
 
@@ -278,6 +280,51 @@ class RestoreBackupScreen(private val path: String) : Screen {
                 }
             }
         }
+    }
+}
+
+/**
+ * "Install missing extensions" from Settings > Data and storage (desktop only), so it is not only
+ * on the restore screen: finds the library's sources with no installed extension and offers to
+ * install the extensions that bring them.
+ */
+object MissingExtensionsScreen : Screen {
+    private fun readResolve(): Any = MissingExtensionsScreen
+
+    override val key: ScreenKey = "missing-extensions"
+
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val model = rememberScreenModel { MissingExtensionsScreenModel() }
+        val missing by MissingExtensionsInstall.state.collectAsState()
+
+        Column(Modifier.fillMaxSize()) {
+            ScreenHeader(localized(DMR.strings.install_missing_extensions))
+            ColumnWithAction(
+                actionLabel = localized(MR.strings.action_close),
+                actionEnabled = true,
+                actionTag = "missing-extensions-close",
+                onClickAction = { navigator.pop() },
+            ) {
+                item {
+                    SectionCard {
+                        MissingExtensionsResults(
+                            missing = missing.forRestore(model),
+                            onInstall = { MissingExtensionsInstall.install(model) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The token that tags [MissingExtensionsInstall]'s results as this screen's. */
+class MissingExtensionsScreenModel : ScreenModel {
+    init {
+        MissingExtensionsInstall.dismiss()
+        MissingExtensionsInstall.find(this)
     }
 }
 

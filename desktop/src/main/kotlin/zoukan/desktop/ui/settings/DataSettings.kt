@@ -82,6 +82,14 @@ fun LazyListScope.dataSettings() {
 
     settingsGroup(localized(MR.strings.label_backup))
     item(key = "data-backup-buttons") { BackupButtons() }
+    item(key = "data-install-missing-extensions") {
+        val navigator = LocalNavigator.currentOrThrow
+        SettingRow(
+            localized(DMR.strings.install_missing_extensions),
+            localized(DMR.strings.install_missing_extensions_summary),
+            onClick = { navigator.push(MissingExtensionsScreen) },
+        )
+    }
     item(key = "data-backup-interval") {
         val preferences = remember { Injekt.get<BackupPreferences>() }
         ChoicePreference(
