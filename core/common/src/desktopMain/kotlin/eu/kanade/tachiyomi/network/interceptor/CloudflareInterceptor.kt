@@ -17,9 +17,12 @@ import okio.AsyncTimeout
 import org.jsoup.Jsoup
 import tachiyomi.core.common.util.system.logcat
 import java.io.IOException
+import java.net.URI
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Solves Cloudflare challenges on desktop, like CloudflareInterceptor on Android.
@@ -51,24 +54,36 @@ class CloudflareInterceptor(
                 original
             }
         }
+        val sentClearance = clearance(request)
         val response = chain.proceed(request)
         if (!isChallenge(response)) return response
 
         try {
             response.close()
-            cookieManager.remove(request.url, COOKIE_NAMES, 0)
-            val oldCookie = cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }
-            // Cloudflare rejects a user agent that does not match the browser (for example the
-            // default Android one on desktop Chromium), so the challenge runs with Chromium's own
-            val browserUserAgent = DesktopBrowser.userAgent
-            val userAgent = browserUserAgent ?: request.header("User-Agent") ?: defaultUserAgentProvider()
-            val solved = solveHeadless(request, userAgent, oldCookie) || run {
-                // The user may take minutes; the call timeout (2 min) would end the call first
-                (chain.call().timeout() as? AsyncTimeout)?.exit()
-                DesktopBrowser.solveChallenge(request.url.toString(), userAgent) { isSolved(request, oldCookie) }
+            // Parallel requests to one host that all hit the challenge solve it once: the others
+            // wait here, then retry with the clearance the first one got, or fail with it
+            val host = request.url.host
+            val waitStarted = System.nanoTime()
+            val solved = hostLocks.withLock(host) {
+                val current = clearance(request)
+                if (current != null && current != sentClearance) return@withLock true
+                // An attempt that ended while this one waited failed (the user closed its window,
+                // say): failing too, not showing the challenge again for each queued request
+                val failedAt = lastFailure[host]
+                if (failedAt != null && failedAt - waitStarted > 0) return@withLock false
+                cookieManager.remove(request.url, COOKIE_NAMES, 0)
+                val oldCookie = clearance(request)
+                // Cloudflare rejects a user agent that does not match the browser (for example the
+                // default Android one on desktop Chromium), so the challenge runs with Chromium's own
+                val userAgent = DesktopBrowser.userAgent ?: request.header("User-Agent") ?: defaultUserAgentProvider()
+                solveHeadless(request, userAgent, oldCookie) || run {
+                    // The user may take minutes; the call timeout (2 min) would end the call first
+                    (chain.call().timeout() as? AsyncTimeout)?.exit()
+                    DesktopBrowser.solveChallenge(request.url.toString(), userAgent) { isSolved(request, oldCookie) }
+                }.also { if (it) lastFailure.remove(host) else lastFailure[host] = System.nanoTime() }
             }
             if (!solved) throw IOException("Failed to bypass Cloudflare on ${request.url.host}")
-            if (browserUserAgent == null) return chain.proceed(request)
+            val browserUserAgent = DesktopBrowser.userAgent ?: return chain.proceed(request)
             return chain.proceed(request.newBuilder().header("User-Agent", browserUserAgent).build())
         } catch (e: IOException) {
             throw e
@@ -86,8 +101,10 @@ class CloudflareInterceptor(
             document.getElementById("challenge-error-text") != null
     }
 
-    private fun hasClearance(request: Request): Boolean =
-        cookieManager.get(request.url).any { it.name == CF_CLEARANCE }
+    private fun hasClearance(request: Request): Boolean = clearance(request) != null
+
+    private fun clearance(request: Request): Cookie? =
+        cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }
 
     private fun isSolved(request: Request, oldCookie: Cookie?): Boolean =
         cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }.let { it != null && it != oldCookie }
@@ -142,6 +159,10 @@ class CloudflareInterceptor(
     }
 
     private companion object {
+        val hostLocks = HostLocks()
+
+        // When the last attempt to solve each host's challenge failed; a success removes it
+        val lastFailure = ConcurrentHashMap<String, Long>()
         const val CF_CLEARANCE = "cf_clearance"
         const val HEADLESS_TIMEOUT_SECONDS = 30L
         val ERROR_CODES = listOf(403, 503)
@@ -177,7 +198,44 @@ object DesktopBrowser {
     @Volatile
     var userAgent: String? = null
 
-    fun solveChallenge(url: String, userAgent: String, isSolved: () -> Boolean): Boolean =
-        challengeSolver?.solve(url, userAgent, isSolved) ?: false
+    private val hostLocks = HostLocks()
+
+    /**
+     * Shows one challenge window per host at a time. A caller that waited for another one's
+     * window checks [isSolved] again first and opens none when it is already solved.
+     */
+    fun solveChallenge(url: String, userAgent: String, isSolved: () -> Boolean): Boolean {
+        val solver = challengeSolver ?: return false
+        val host = runCatching { URI(url).host }.getOrNull().orEmpty()
+        return hostLocks.withLock(host) { isSolved() || solver.solve(url, userAgent, isSolved) }
+    }
+}
+
+/**
+ * One lock per host. A lock is dropped once nobody holds or waits for it, so the map holds only
+ * hosts in use.
+ */
+class HostLocks {
+    private class Entry {
+        val lock = ReentrantLock()
+        var users = 0 // guarded by the map's compute
+    }
+
+    private val locks = ConcurrentHashMap<String, Entry>()
+
+    fun <T> withLock(host: String, block: () -> T): T {
+        val key = host.lowercase(Locale.ENGLISH)
+        val entry = locks.compute(key) { _, existing -> (existing ?: Entry()).also { it.users++ } }!!
+        try {
+            entry.lock.lockInterruptibly()
+            try {
+                return block()
+            } finally {
+                entry.lock.unlock()
+            }
+        } finally {
+            locks.compute(key) { _, existing -> existing?.takeIf { --it.users > 0 } }
+        }
+    }
 }
 // ZOUKAN <--

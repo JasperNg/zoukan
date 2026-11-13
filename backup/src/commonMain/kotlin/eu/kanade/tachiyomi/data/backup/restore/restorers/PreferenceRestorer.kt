@@ -169,6 +169,6 @@ class PreferenceRestorer(
 }
 
 // ZOUKAN -->
-/** SourcePreferences.PINNED_SOURCES_PREF_KEY in the Android app. */
-internal const val PINNED_SOURCES_PREF_KEY = "pinned_catalogues"
+/** SourcePreferences.PINNED_SOURCES_PREF_KEY in the Android app; BackupUpstreamConstantsTest (app) checks they match. */
+const val PINNED_SOURCES_PREF_KEY = "pinned_catalogues"
 // ZOUKAN <--

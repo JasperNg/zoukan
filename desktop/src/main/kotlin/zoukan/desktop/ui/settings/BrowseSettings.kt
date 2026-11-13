@@ -30,6 +30,7 @@ import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.SourceCategoryScreen
 import zoukan.desktop.ui.browse.StoresList
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -60,7 +61,7 @@ fun LazyListScope.browseSettings() {
     item(key = "browse-categories") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         val navigator = LocalNavigator.currentOrThrow
-        val categories by preferences.sourcesTabCategories().changes().collectAsState(preferences.sourcesTabCategories().get())
+        val categories by preferences.sourcesTabCategories().collectAsState()
         SettingRow(
             localized(MR.strings.action_edit_categories),
             if (categories.size == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, categories.size),
@@ -99,8 +100,8 @@ fun LazyListScope.browseSettings() {
     }
     item(key = "browse-feed-position") {
         val preferences = remember { Injekt.get<UiPreferences>() }
-        val hidden by preferences.hideFeedTab().changes().collectAsState(preferences.hideFeedTab().get())
-        val value by preferences.feedTabInFront().changes().collectAsState(preferences.feedTabInFront().get())
+        val hidden by preferences.hideFeedTab().collectAsState()
+        val value by preferences.feedTabInFront().collectAsState()
         SwitchSetting(
             localized(SYMR.strings.pref_feed_position),
             localized(SYMR.strings.pref_feed_position_summery),

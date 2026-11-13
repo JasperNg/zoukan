@@ -20,8 +20,8 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.Uri
 import coil3.decode.DataSource
-import coil3.fetch.Fetcher
 import coil3.fetch.FetchResult
+import coil3.fetch.Fetcher
 import coil3.fetch.ImageFetchResult
 import coil3.key.Keyer
 import coil3.memory.MemoryCache

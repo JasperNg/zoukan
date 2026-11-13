@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.secrets.SecretStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -25,9 +27,23 @@ class AppLock(private val preferences: SecurityPreferences, private val secrets:
     private val _locked = MutableStateFlow(false)
     val locked: StateFlow<Boolean> = _locked.asStateFlow()
 
-    val isEnabled: Boolean get() = preferences.useAuthenticator().get() && hasPassword()
+    /**
+     * Whether the lock is on. When the secret store can't be read (access denied, the keychain
+     * locked), a lock that is turned on stays on rather than failing open: unlocking then shows
+     * the store's error and can be tried again. Never throws, so the window's lifecycle hooks
+     * can't crash the app.
+     */
+    val isEnabled: Boolean get() = preferences.useAuthenticator().get() && hasPasswordOrAssume()
 
+    /** Reads the secret store; throws when it can't be read. */
     fun hasPassword(): Boolean = secrets.get(KEY) != null
+
+    private fun hasPasswordOrAssume(): Boolean = try {
+        hasPassword()
+    } catch (e: Exception) {
+        logcat(LogPriority.WARN, e) { "Could not read the app lock password from ${secrets.name}" }
+        true
+    }
 
     /** At launch: always locked when the lock is on, as Android after the app was killed. */
     fun onStart() {

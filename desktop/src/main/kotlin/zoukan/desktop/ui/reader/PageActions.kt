@@ -193,7 +193,13 @@ object PageImages {
      */
     fun combine(first: ByteArray, second: ByteArray, leftFirst: Boolean, background: Int): ByteArray {
         val a = decode(first)
-        val b = decode(second)
+        // The first image is closed when the second one does not decode
+        val b = try {
+            decode(second)
+        } catch (e: Throwable) {
+            a.close()
+            throw e
+        }
         try {
             val height = maxOf(a.height, b.height)
             val surface = Surface.makeRasterN32Premul(a.width + b.width, height)

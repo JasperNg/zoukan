@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.network
 import android.content.Context
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
+import exh.log.EHLogLevel
 import logcat.LogPriority
 import okhttp3.Cache
 import okhttp3.Headers
@@ -51,7 +52,7 @@ import kotlin.random.Random
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
 
         // KMK -->
-        if (/* ZOUKAN --> */isExtraNetworkLogging()/* ZOUKAN <-- */) {
+        if (EHLogLevel.isExtraLogging()) {
             // KMK <--
             val httpLoggingInterceptor = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.HEADERS

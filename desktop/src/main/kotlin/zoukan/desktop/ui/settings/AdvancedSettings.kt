@@ -52,6 +52,7 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.extension.ExtensionTrust
 import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
@@ -109,7 +110,7 @@ fun LazyListScope.advancedSettings() {
     }
     item(key = "advanced-doh") {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
-        val value by preferences.dohProvider().changes().collectAsState(preferences.dohProvider().get())
+        val value by preferences.dohProvider().collectAsState()
         ChoiceSetting(
             localized(MR.strings.pref_dns_over_https),
             value,
@@ -138,7 +139,7 @@ fun LazyListScope.advancedSettings() {
     item(key = "advanced-user-agent") { UserAgentPreference() }
     item(key = "advanced-reset-user-agent") {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
-        val userAgent by preferences.defaultUserAgent().changes().collectAsState(preferences.defaultUserAgent().get())
+        val userAgent by preferences.defaultUserAgent().collectAsState()
         SettingRow(
             localized(MR.strings.pref_reset_user_agent_string),
             enabled = userAgent != preferences.defaultUserAgent().defaultValue(),
@@ -224,7 +225,7 @@ fun LazyListScope.advancedSettings() {
     // ZOUKAN <--
     item(key = "advanced-log-level") {
         val preferences = remember { Injekt.get<ExhPreferences>() }
-        val level by preferences.logLevel(false).changes().collectAsState(preferences.logLevel(false).get())
+        val level by preferences.logLevel(false).collectAsState()
         ChoiceSetting(
             localized(SYMR.strings.log_level),
             level,
@@ -250,7 +251,7 @@ fun LazyListScope.advancedSettings() {
 @Composable
 private fun UserAgentPreference() {
     val preferences = remember { Injekt.get<NetworkPreferences>() }
-    val userAgent by preferences.defaultUserAgent().changes().collectAsState(preferences.defaultUserAgent().get())
+    val userAgent by preferences.defaultUserAgent().collectAsState()
     var editing by remember { mutableStateOf(false) }
     SettingRow(localized(MR.strings.pref_user_agent_string), userAgent, onClick = { editing = true })
     if (!editing) return

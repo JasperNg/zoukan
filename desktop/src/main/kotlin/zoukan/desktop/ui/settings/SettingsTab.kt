@@ -76,6 +76,8 @@ import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import exh.md.utils.MdUtil
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -481,44 +483,60 @@ internal fun createBackup(file: File, options: BackupOptions) {
     }
 }
 
-/** Restores what [options] picks (Restore backup's choices) from [file]. */
-internal fun restoreBackup(file: File, options: RestoreOptions) {
-    if (backupStatusFlow.value != null) return
-    backupStatusFlow.value = localized(DMR.strings.restoring, file.name)
+/** How a restore that [restoreBackup] started ended. */
+enum class RestoreOutcome { OK, FAILED, CANCELLED }
+
+/**
+ * Restores what [options] picks (Restore backup's choices) from [file]. Returns null, and does
+ * nothing, while another backup or restore runs; otherwise how the restore ends.
+ */
+internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<RestoreOutcome>? {
+    if (!backupStatusFlow.compareAndSet(null, localized(DMR.strings.restoring, file.name))) return null
+    val outcome = CompletableDeferred<RestoreOutcome>()
     AppScope.launch {
-        // The gate holds the background jobs off while the library is half-restored
-        RestoreGate.whileRestoring {
-            try {
-                val backups = DesktopBackups(ZoukanRuntime.dirs.android)
-                val backup = backups.read(file)
-                // Extension stores decide whose code runs, so a backup adds them only when the user
-                // has seen which ones
-                val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
-                val chosen = when {
-                    newStores.isEmpty() -> options
-                    else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
-                        true -> options
-                        false -> options.copy(extensionStores = false)
-                        null -> return@launch
+        var result = RestoreOutcome.FAILED
+        try {
+            // The gate holds the background jobs off while the library is half-restored
+            RestoreGate.whileRestoring {
+                try {
+                    val backups = DesktopBackups(ZoukanRuntime.dirs.android)
+                    val backup = backups.read(file)
+                    // Extension stores decide whose code runs, so a backup adds them only when the user
+                    // has seen which ones
+                    val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
+                    val chosen = when {
+                        newStores.isEmpty() -> options
+                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
+                            true -> options
+                            false -> options.copy(extensionStores = false)
+                            null -> {
+                                result = RestoreOutcome.CANCELLED
+                                return@launch
+                            }
+                        }
                     }
+                    val errors = backups.restore(backup, chosen) { _, progress, total ->
+                        backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
+                    }
+                    result = RestoreOutcome.OK
+                    Toasts.show(
+                        if (errors.isEmpty()) {
+                            localized(DMR.strings.restored_entries, backup.backupManga.size)
+                        } else {
+                            localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
+                        },
+                    )
+                } catch (e: Exception) {
+                    Toasts.error(localized(DMR.strings.restore_failed), e)
+                } finally {
+                    backupStatusFlow.value = null
                 }
-                val errors = backups.restore(backup, chosen) { _, progress, total ->
-                    backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
-                }
-                Toasts.show(
-                    if (errors.isEmpty()) {
-                        localized(DMR.strings.restored_entries, backup.backupManga.size)
-                    } else {
-                        localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
-                    },
-                )
-            } catch (e: Exception) {
-                Toasts.error(localized(DMR.strings.restore_failed), e)
-            } finally {
-                backupStatusFlow.value = null
             }
+        } finally {
+            outcome.complete(result)
         }
     }
+    return outcome
 }
 
 /**

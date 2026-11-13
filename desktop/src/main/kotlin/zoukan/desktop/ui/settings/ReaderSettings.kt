@@ -9,7 +9,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +21,7 @@ import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.reader.ReaderNavigation
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
@@ -39,7 +39,7 @@ fun LazyListScope.readerBehaviourSettings(preferences: DesktopPreferences) {
     item { SwitchPreference(localized(MR.strings.pref_keep_screen_on), preferences.keepScreenOn()) }
     item { SwitchPreference(localized(MR.strings.pref_flash_page), preferences.flashOnPageChange(), localized(DMR.strings.reduces_ghosting_on_e_ink_monitors)) }
     item {
-        val flash by preferences.flashOnPageChange().changes().collectAsState(preferences.flashOnPageChange().get())
+        val flash by preferences.flashOnPageChange().collectAsState()
         if (flash) {
             ChoicePreference(localized(MR.strings.pref_flash_with), preferences.flashColor(), ReaderSettingChoices.flashColors)
             FlashDurationPreference(preferences)
@@ -95,7 +95,7 @@ private val invertChoices = ReaderNavigation.inverts.map { it.first.name to it.s
 @Composable
 private fun FlashDurationPreference(preferences: DesktopPreferences) {
     val pref = preferences.flashDurationMillis()
-    val saved by pref.changes().collectAsState(pref.get())
+    val saved by pref.collectAsState()
     var steps by remember(saved) { mutableFloatStateOf((saved / 100).coerceIn(1, 15).toFloat()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row {

@@ -1,7 +1,6 @@
 package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import tachiyomi.domain.category.model.Category
@@ -12,6 +11,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -59,15 +59,15 @@ fun LazyListScope.downloadBehaviorSettings(categories: List<Category>) {
     }
     item(key = "downloads-new-unread") {
         val preferences = remember { Injekt.get<DownloadPreferences>() }
-        val on by preferences.downloadNewChapters().changes().collectAsState(preferences.downloadNewChapters().get())
-        val value by preferences.downloadNewUnreadChaptersOnly().changes().collectAsState(preferences.downloadNewUnreadChaptersOnly().get())
+        val on by preferences.downloadNewChapters().collectAsState()
+        val value by preferences.downloadNewUnreadChaptersOnly().collectAsState()
         SwitchSetting(localized(MR.strings.pref_download_new_unread_chapters_only), checked = value, enabled = on) {
             preferences.downloadNewUnreadChaptersOnly().set(it)
         }
     }
     item(key = "downloads-new-categories") {
         val preferences = remember { Injekt.get<DownloadPreferences>() }
-        val on by preferences.downloadNewChapters().changes().collectAsState(preferences.downloadNewChapters().get())
+        val on by preferences.downloadNewChapters().collectAsState()
         CategoriesIncludeExcludePreference(
             localized(MR.strings.categories),
             localized(MR.strings.pref_download_new_categories_details),

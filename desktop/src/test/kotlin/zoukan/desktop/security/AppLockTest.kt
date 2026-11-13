@@ -34,6 +34,35 @@ class AppLockTest {
     }
     private val lock by lazy { AppLock(preferences, MemorySecrets()) }
 
+    private class FailingSecrets : SecretStore {
+        override val name = "failing"
+        override fun get(key: String): String = throw IllegalStateException("access denied")
+        override fun set(key: String, value: String) = throw IllegalStateException("access denied")
+        override fun delete(key: String) = throw IllegalStateException("access denied")
+    }
+
+    @Test
+    fun `a secret store failure keeps a lock that is on locked, without throwing`() {
+        val failing = AppLock(preferences, FailingSecrets())
+        preferences.useAuthenticator().set(true)
+        failing.onStart()
+        failing.locked.value shouldBe true
+        // The window's away and back hooks don't throw either
+        failing.onBackground()
+        failing.onForeground()
+        failing.locked.value shouldBe true
+    }
+
+    @Test
+    fun `a secret store failure with the lock off leaves the app unlocked`() {
+        val failing = AppLock(preferences, FailingSecrets())
+        failing.onStart()
+        failing.locked.value shouldBe false
+        failing.onBackground()
+        failing.onForeground()
+        failing.locked.value shouldBe false
+    }
+
     @Test
     fun `locks at start and unlocks with the password only`() {
         lock.setPassword("secret")

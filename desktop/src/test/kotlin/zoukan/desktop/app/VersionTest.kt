@@ -17,6 +17,13 @@ class VersionTest {
     }
 
     @Test
+    fun `a part too long for an Int is not a version instead of a crash`() {
+        Version.parse("1.99999999999999999999") shouldBe null
+        Version.parse("2147483648") shouldBe null
+        Version.parse("2147483647") shouldBe Version(listOf(Int.MAX_VALUE))
+    }
+
+    @Test
     fun `the build writes the version`() {
         AppVersion.name shouldBe AppVersion.version.toString()
         AppVersion.version shouldBeGreaterThan Version(listOf(0, 9))

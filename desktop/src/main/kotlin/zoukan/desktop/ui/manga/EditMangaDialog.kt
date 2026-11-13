@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,6 +42,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.manga.EditManga
+import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
@@ -90,7 +92,10 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                 metadata.artists?.takeIf { it.isNotBlank() }?.let { artist = it }
                 metadata.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { thumbnailUrl = it }
                 metadata.description?.takeIf { it.isNotBlank() }?.let { description = it }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
+                // Throwable: this runs on the window's thread, where an escaping error closes the app
                 logcat(LogPriority.ERROR, e)
                 Toasts.show(localized(MR.strings.track_error, tracker.name, e.message ?: ""))
             }
@@ -98,10 +103,18 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
     }
     // ZOUKAN <--
 
+    // The writes run in the app's scope, not the dialog's: Save and Reset close the dialog at
+    // once, which would cancel a write still running in the dialog's scope and lose the edit
     fun run(block: suspend () -> Unit) {
-        scope.launch {
-            runCatching { withContext(Dispatchers.IO) { block() } }
-                .onFailure { Toasts.error(localized(DMR.strings.could_not_save), it) }
+        AppScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Throwable: an OutOfMemoryError on a huge cover still shows "could not save"
+                Toasts.error(localized(DMR.strings.could_not_save), e)
+            }
         }
     }
 

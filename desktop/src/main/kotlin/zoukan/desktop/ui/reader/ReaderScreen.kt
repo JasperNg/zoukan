@@ -51,6 +51,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? = null) : Screen {
@@ -66,18 +67,18 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         val navigator = LocalNavigator.currentOrThrow
         val windowState = LocalWindowState.current
         val prefs = model.preferences
-        val theme by prefs.readerTheme().changes().collectAsState(prefs.readerTheme().get())
-        val fitMode by prefs.imageScaleType().changes().collectAsState(prefs.imageScaleType().get())
-        val sidePadding by prefs.webtoonSidePadding().changes().collectAsState(prefs.webtoonSidePadding().get())
-        val showPageNumber by prefs.showPageNumber().changes().collectAsState(prefs.showPageNumber().get())
+        val theme by prefs.readerTheme().collectAsState()
+        val fitMode by prefs.imageScaleType().collectAsState()
+        val sidePadding by prefs.webtoonSidePadding().collectAsState()
+        val showPageNumber by prefs.showPageNumber().collectAsState()
         // ZOUKAN -->
         // The Automatic theme follows the app's light or dark theme, as Android's follows night mode
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
         val background = readerBackground(theme, dark)
         val foreground = readerForeground(theme, dark)
         val tapZones = remember { TapZonesOverlayState(prefs) }
-        val pagerNavInvert by prefs.pagerNavInverted().changes().collectAsState(prefs.pagerNavInverted().get())
-        val webtoonNavInvert by prefs.webtoonNavInverted().changes().collectAsState(prefs.webtoonNavInverted().get())
+        val pagerNavInvert by prefs.pagerNavInverted().collectAsState()
+        val webtoonNavInvert by prefs.webtoonNavInverted().collectAsState()
         // ZOUKAN <--
         val actions = remember { ReaderActions() }
         val focus = remember { FocusRequester() }
@@ -86,10 +87,10 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         var showSettings by remember { mutableStateOf(false) }
         var showChapters by remember { mutableStateOf(false) }
         var autoScroll by remember { mutableStateOf(false) }
-        val autoScrollInterval by prefs.autoscrollInterval().changes().collectAsState(prefs.autoscrollInterval().get())
+        val autoScrollInterval by prefs.autoscrollInterval().collectAsState()
         val filter = ReaderFilter.collect(prefs)
-        val crop by prefs.cropBorders().changes().collectAsState(prefs.cropBorders().get())
-        val cropWebtoon by prefs.cropBordersWebtoon().changes().collectAsState(prefs.cropBordersWebtoon().get())
+        val crop by prefs.cropBorders().collectAsState()
+        val cropWebtoon by prefs.cropBordersWebtoon().collectAsState()
         val cropKey = remember { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
         LaunchedEffect(crop, cropWebtoon) {
             if (cropKey.value != null && cropKey.value != (crop to cropWebtoon)) model.redecodePages()
@@ -240,11 +241,11 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
             }
 
             // ZOUKAN -->
-            val buttons by prefs.readerBottomButtons().changes().collectAsState(prefs.readerBottomButtons().get())
-            val forceHorizontal by prefs.forceHorizontalSeekbar().changes().collectAsState(prefs.forceHorizontalSeekbar().get())
-            val verticalInLandscape by prefs.landscapeVerticalSeekbar().changes().collectAsState(prefs.landscapeVerticalSeekbar().get())
-            val leftHanded by prefs.leftVerticalSeekbar().changes().collectAsState(prefs.leftVerticalSeekbar().get())
-            val pageLayout by prefs.pageLayout().changes().collectAsState(prefs.pageLayout().get())
+            val buttons by prefs.readerBottomButtons().collectAsState()
+            val forceHorizontal by prefs.forceHorizontalSeekbar().collectAsState()
+            val verticalInLandscape by prefs.landscapeVerticalSeekbar().collectAsState()
+            val leftHanded by prefs.leftVerticalSeekbar().collectAsState()
+            val pageLayout by prefs.pageLayout().collectAsState()
             ReaderAppBars(
                 visible = menuVisible,
                 menu = ReaderMenuState(

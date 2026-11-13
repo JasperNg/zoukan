@@ -77,6 +77,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.settings.SourceSettingsScreen
@@ -126,9 +127,9 @@ data class SourceScreen(
         }
         val bulk = remember { BulkFavorite() }
         val displayModePreference = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>().sourceDisplayMode() }
-        val displayMode by displayModePreference.changes().collectAsState(displayModePreference.get())
+        val displayMode by displayModePreference.collectAsState()
         val ehentaiPreference = remember { Injekt.get<exh.source.ExhPreferences>().enhancedEHentaiView() }
-        val ehentaiBrowseDisplayMode by ehentaiPreference.changes().collectAsState(ehentaiPreference.get())
+        val ehentaiBrowseDisplayMode by ehentaiPreference.collectAsState()
         // ZOUKAN <--
 
         Column(Modifier.fillMaxSize()) {
@@ -151,7 +152,7 @@ data class SourceScreen(
                         Modifier.width(300.dp),
                         onSearch = { model.search(searchText) },
                     )
-                    if (source != null && source.getFilterList().isNotEmpty()) {
+                    if (source != null && model.hasFilters) {
                         TooltipIconButton(Icons.Outlined.FilterList, localized(DMR.strings.filters), onClick = { showFilters = !showFilters })
                     }
                     // ZOUKAN -->
@@ -229,8 +230,7 @@ data class SourceScreen(
                     } else {
                         // ZOUKAN -->
                         val sourcePreferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
-                        val hideInLibrary by sourcePreferences.hideInLibraryItems().changes()
-                            .collectAsState(sourcePreferences.hideInLibraryItems().get())
+                        val hideInLibrary by sourcePreferences.hideInLibraryItems().collectAsState()
                         val shown = if (hideInLibrary) state.items.filterNot { it.id in state.favorites } else state.items
                         // The display mode (compact, comfortable or panorama grid, or list), as Android's BrowseSourceContent
                         BrowseSourceContent(

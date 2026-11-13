@@ -36,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +80,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LazyVerticalGrid
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import java.time.Instant
@@ -151,7 +151,7 @@ private fun RadioMenuItem(text: String, isChecked: Boolean, onClick: () -> Unit)
 @Composable
 private fun browseColumns(): GridCells {
     val preference = remember { Injekt.get<LibraryPreferences>().landscapeColumns() }
-    val columns by preference.changes().collectAsState(preference.get())
+    val columns by preference.collectAsState()
     return if (columns == 0) GridCells.Adaptive(160.dp) else GridCells.Fixed(columns)
 }
 
@@ -339,7 +339,7 @@ fun BrowseRowItem(
 ) {
     // KMK -->
     val preference = remember { Injekt.get<UiPreferences>().usePanoramaCoverFlow() }
-    val panoramaCover by preference.changes().collectAsState(preference.get())
+    val panoramaCover by preference.collectAsState()
     val coverRatio = remember { mutableFloatStateOf(1f) }
     // KMK <--
     Box(Modifier.width(if (panoramaCover && coverRatio.floatValue <= RATIO_SWITCH_TO_PANORAMA) 300.dp else 140.dp)) {

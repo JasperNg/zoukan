@@ -41,8 +41,10 @@ dependencyResolutionManagement {
         google()
         maven(url = "https://www.jitpack.io")
         // ZOUKAN -->
-        // Suwayomi's android.jar for the desktop runtime (the artifact Suwayomi-Server builds against)
-        maven(url = "https://raw.githubusercontent.com/Suwayomi/Suwayomi-Server/android-jar/") {
+        // Suwayomi's android.jar for the desktop runtime (the artifact Suwayomi-Server builds against).
+        // Pinned to a commit of the android-jar branch, so the jar cannot change under the same
+        // version; android-compat's verifyAndroidJar also checks its SHA-256.
+        maven(url = "https://raw.githubusercontent.com/Suwayomi/Suwayomi-Server/7488b5cd498c0ee945c41d0b07205ec8f1e21314/") {
             content { includeModule("com.github.Suwayomi", "android-jar") }
         }
         // ZOUKAN <--

@@ -846,4 +846,20 @@
     <string name="list_and_n_more">%1$s and %2$d more</string>
     <string name="no_new_chapters">No new chapters</string>
     <string name="install_zoukan_version_from_about">Zoukan %1$s: install it from Settings &gt; About</string>
+    <string name="source_timed_out">The source took too long to answer</string>
+    <string name="sync_skipped_extension_stores">Sync did not add or change these extension stores: %1$s. To use them, add them in Browse &gt; Extensions &gt; Stores, or restore a backup from Settings, which asks first.</string>
+    <string name="could_not_use_the_secret_store">Could not use the system\'s secret store</string>
+    <string name="could_not_clear_the_database">Could not clear the database</string>
+    <string name="restore_finished">The restore has finished</string>
+    <string name="install_missing_extensions">Install missing extensions</string>
+    <string name="finding_missing_extensions">Looking for the extensions of the missing sources…</string>
+    <string name="no_missing_extensions">Every source in the library is installed</string>
+    <string name="missing_extensions_found">Extensions to install: %1$s. Sources that no store offers: %2$s.</string>
+    <string name="missing_extensions_to_install">These extensions will be installed:</string>
+    <string name="missing_extensions_need_trust">These extensions are signed with an unknown key. Trust them in Browse &gt; Extensions:</string>
+    <string name="missing_extensions_unavailable">No added store offers these sources:</string>
+    <string name="missing_extensions_installing">Installing %1$s (%2$s of %3$s)</string>
+    <string name="missing_extensions_installed_list">Installed:</string>
+    <string name="missing_extensions_failed">Failed:</string>
+    <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
 </resources>

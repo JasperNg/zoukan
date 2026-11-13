@@ -53,6 +53,7 @@ import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
@@ -100,7 +101,7 @@ fun LazyListScope.dataSettings() {
     }
     item(key = "data-backup-info") {
         val preferences = remember { Injekt.get<BackupPreferences>() }
-        val last by preferences.lastAutoBackupTimestamp().changes().collectAsState(preferences.lastAutoBackupTimestamp().get())
+        val last by preferences.lastAutoBackupTimestamp().collectAsState()
         InfoText(
             localized(
                 DMR.strings.backup_info,
@@ -152,7 +153,7 @@ fun LazyListScope.dataSettings() {
 internal fun StorageLocationPreference() {
     val storage = remember { Injekt.get<ZoukanStorage>() }
     val window = LocalWindow.current?.window
-    val folder by storage.folderPreference.changes().collectAsState(storage.folderPreference.get())
+    val folder by storage.folderPreference.collectAsState()
     SettingRow(
         localized(MR.strings.pref_storage_location),
         // Read again when the setting changes
@@ -225,7 +226,7 @@ internal fun pickBackupFile(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.
 @Composable
 private fun StorageUsage() {
     val storage = remember { Injekt.get<ZoukanStorage>() }
-    val folder by storage.folderPreference.changes().collectAsState(storage.folderPreference.get())
+    val folder by storage.folderPreference.collectAsState()
     val root = remember(folder) { storage.root.also { it.mkdirs() } }
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }

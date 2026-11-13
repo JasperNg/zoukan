@@ -62,7 +62,7 @@ class LibraryUpdaterErrorsTest {
             refreshManga = refreshManga,
             sourceManager = sourceManager,
             preferences = mockk<LibraryPreferences> {
-                every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true)
+                every { lastUpdatedTimestamp() } returns mockk<Preference<Long>>(relaxed = true) { every { get() } returns 0L }
                 every { autoUpdateMetadata() } returns mockk<Preference<Boolean>> { every { get() } returns false }
             },
             fetchInterval = mockk(),

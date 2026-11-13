@@ -30,6 +30,7 @@ import exh.favorites.FavoritesSyncHelper
 import exh.favorites.FavoritesSyncStatus
 import exh.source.ExhPreferences
 import exh.uconfig.EHConfigurator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +45,7 @@ import zoukan.desktop.exh.EhGalleryUpdater
 import zoukan.desktop.exh.EhLogin
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.manga.formatDateTime
 import zoukan.i18n.desktop.DMR
@@ -58,8 +60,8 @@ fun LazyListScope.ehSettings() {
 private fun EhSettings() {
     val preferences = remember { Injekt.get<ExhPreferences>() }
     val login = remember { Injekt.get<EhLogin>() }
-    val enabled by preferences.isHentaiEnabled().changes().collectAsState(preferences.isHentaiEnabled().get())
-    val exhentai by preferences.enableExhentai().changes().collectAsState(preferences.enableExhentai().get())
+    val enabled by preferences.isHentaiEnabled().collectAsState()
+    val exhentai by preferences.enableExhentai().collectAsState()
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var cookieDialog by remember { mutableStateOf(false) }
@@ -287,7 +289,7 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
             listOf(0 to localized(SYMR.strings.time_between_batches_never), 1 to localized(SYMR.strings.time_between_batches_1_hour), 2 to localized(SYMR.strings.time_between_batches_2_hours), 3 to localized(SYMR.strings.time_between_batches_3_hours), 6 to localized(SYMR.strings.time_between_batches_6_hours), 12 to localized(SYMR.strings.time_between_batches_12_hours), 24 to localized(SYMR.strings.time_between_batches_24_hours), 48 to localized(SYMR.strings.time_between_batches_48_hours)),
         )
         // Android also offers Wi-Fi and unmetered network, which a desktop cannot tell; they stay in the setting
-        val frequency by preferences.exhAutoUpdateFrequency().changes().collectAsState(preferences.exhAutoUpdateFrequency().get())
+        val frequency by preferences.exhAutoUpdateFrequency().collectAsState()
         MultiSelectPreference(
             localized(SYMR.strings.auto_update_restrictions),
             preferences.exhAutoUpdateRequirements(),
@@ -302,8 +304,18 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
             enabled = !busy,
             onClick = {
                 busy = true
+                // In the app's scope, so leaving Settings doesn't stop the update partway
+                val job = AppScope.launch {
+                    try {
+                        updater.run()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        Toasts.error(localized(DMR.strings.updating_galleries_failed), e)
+                    }
+                }
                 scope.launch {
-                    runCatching { updater.run() }.onFailure { Toasts.error(localized(DMR.strings.updating_galleries_failed), it) }
+                    job.join()
                     busy = false
                 }
             },

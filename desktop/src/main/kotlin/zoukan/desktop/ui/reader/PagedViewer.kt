@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.collectAsState
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -129,25 +130,25 @@ fun PagedViewer(
     val pages = state.pages
     // ZOUKAN -->
     // Double pages, as Android's page layout: the first page alone (the cover), then pairs
-    val layout by model.preferences.pageLayout().changes().collectAsState(model.preferences.pageLayout().get())
-    val invertDouble by model.preferences.invertDoublePages().changes().collectAsState(model.preferences.invertDoublePages().get())
+    val layout by model.preferences.pageLayout().collectAsState()
+    val invertDouble by model.preferences.invertDoublePages().collectAsState()
     val windowSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val double = layout == 1 || (layout == 2 && windowSize.width > windowSize.height)
     val prefs = model.preferences
-    val split by prefs.dualPageSplitPaged().changes().collectAsState(prefs.dualPageSplitPaged().get())
-    val splitInvert by prefs.dualPageInvertPaged().changes().collectAsState(prefs.dualPageInvertPaged().get())
-    val rotateWide by prefs.dualPageRotateToFit().changes().collectAsState(prefs.dualPageRotateToFit().get())
-    val rotateInvert by prefs.dualPageRotateToFitInvert().changes().collectAsState(prefs.dualPageRotateToFitInvert().get())
-    val centerMargin by prefs.centerMarginType().changes().collectAsState(prefs.centerMarginType().get())
-    val navLayout by prefs.navigationModePager().changes().collectAsState(prefs.navigationModePager().get())
-    val navInvert by prefs.pagerNavInverted().changes().collectAsState(prefs.pagerNavInverted().get())
-    val smallerZones by prefs.smallerTapZone().changes().collectAsState(prefs.smallerTapZone().get())
-    val navigateToPan by prefs.navigateToPan().changes().collectAsState(prefs.navigateToPan().get())
-    val longTap by prefs.readWithLongTap().changes().collectAsState(prefs.readWithLongTap().get())
-    val transitions by prefs.pageTransitionsPager().changes().collectAsState(prefs.pageTransitionsPager().get())
-    val doubleTapZoom by prefs.pagedDoubleTapZoomEnabled().changes().collectAsState(prefs.pagedDoubleTapZoomEnabled().get())
-    val disableZoomIn by prefs.pagedDisableZoomIn().changes().collectAsState(prefs.pagedDisableZoomIn().get())
-    val zoomStart by prefs.zoomStart().changes().collectAsState(prefs.zoomStart().get())
+    val split by prefs.dualPageSplitPaged().collectAsState()
+    val splitInvert by prefs.dualPageInvertPaged().collectAsState()
+    val rotateWide by prefs.dualPageRotateToFit().collectAsState()
+    val rotateInvert by prefs.dualPageRotateToFitInvert().collectAsState()
+    val centerMargin by prefs.centerMarginType().collectAsState()
+    val navLayout by prefs.navigationModePager().collectAsState()
+    val navInvert by prefs.pagerNavInverted().collectAsState()
+    val smallerZones by prefs.smallerTapZone().collectAsState()
+    val navigateToPan by prefs.navigateToPan().collectAsState()
+    val longTap by prefs.readWithLongTap().collectAsState()
+    val transitions by prefs.pageTransitionsPager().collectAsState()
+    val doubleTapZoom by prefs.pagedDoubleTapZoomEnabled().collectAsState()
+    val disableZoomIn by prefs.pagedDisableZoomIn().collectAsState()
+    val zoomStart by prefs.zoomStart().collectAsState()
     // Wide pages stand alone in double page mode, and split or turn when those settings are on
     val wide = state.widePages
     val spreads: List<Spread> = remember(pages.size, double, wide, split, state.shiftDoublePages) {
@@ -422,23 +423,29 @@ fun PagedViewer(
     }
 }
 
+// ZOUKAN -->
+// The tap detector lives across compositions, so it calls the handlers of the latest one: those
+// read settings such as "Pan wide images when tapping" and "Disable zoom in"
+@Composable
 private fun Modifier.pointerInputTaps(
     onTap: (Offset, IntSize) -> Unit,
     onDoubleTap: (Offset) -> Unit,
-    // ZOUKAN -->
     onLongPress: (Offset) -> Unit,
-    // ZOUKAN <--
-): Modifier = this.then(
-    Modifier.pointerInput(Unit) {
-        detectTapGestures(
-            onTap = { onTap(it, size) },
-            onDoubleTap = onDoubleTap,
-            // ZOUKAN -->
-            onLongPress = onLongPress,
-            // ZOUKAN <--
-        )
-    },
-)
+): Modifier {
+    val latestTap by rememberUpdatedState(onTap)
+    val latestDoubleTap by rememberUpdatedState(onDoubleTap)
+    val latestLongPress by rememberUpdatedState(onLongPress)
+    return this.then(
+        Modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { latestTap(it, size) },
+                onDoubleTap = { latestDoubleTap(it) },
+                onLongPress = { latestLongPress(it) },
+            )
+        },
+    )
+}
+// ZOUKAN <--
 
 @Composable
 private fun ZoomablePage(

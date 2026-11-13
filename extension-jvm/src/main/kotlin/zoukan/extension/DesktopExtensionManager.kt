@@ -1,16 +1,24 @@
 package zoukan.extension
 
 import eu.kanade.tachiyomi.extension.model.Extension
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
 import tachiyomi.core.common.util.system.logcat
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The desktop counterpart of ExtensionManager: keeps the lists of installed, untrusted and
@@ -45,7 +53,12 @@ class DesktopExtensionManager(
     suspend fun init() = withContext(Dispatchers.IO) {
         try {
             val stores = getStores()
-            loader.loadAll(stores).forEach(::register)
+            loader.installedPackageNames().forEach { pkg ->
+                locked(pkg) {
+                    // Read again under the lock: an uninstall may have run since the folder was listed
+                    loader.installedPackage(pkg)?.let { register(loader.load(it, stores)) }
+                }
+            }
         } finally {
             // Also after a failure: the library update, automatic backups and the download queue
             // wait for this, and would otherwise never start
@@ -62,24 +75,48 @@ class DesktopExtensionManager(
             }
             // Stores in the order they were added. When two offer one package, the copy signed like
             // the installed one counts; never simply the last store's (see chooseOffer)
-            offers = results.values.flatMap { it.getOrDefault(emptyList()) }.groupBy { it.pkgName }
-            chooseOffers()
+            synchronized(stateLock) {
+                offers = results.values.flatMap { it.getOrDefault(emptyList()) }.groupBy { it.pkgName }
+                chooseOffers()
+            }
             results
         }
 
-    /** Installs or updates [extension] and loads it. */
+    /**
+     * Installs or updates [extension] and loads it. An update whose new files fail to load leaves
+     * the working version installed and listed: its new files are removed, so the next start loads
+     * the working version too, and the error is returned for the caller to report.
+     */
     suspend fun installExtension(extension: Extension.Available, forceApk: Boolean = false): LoadResult =
         withContext(Dispatchers.IO) {
-            val result = try {
-                // An update must be signed like the version it replaces, as Android's package
-                // manager demands; otherwise any added store could replace an installed extension
-                val files = installer.install(extension, forceApk, requiredSigner = installedSigner(extension.pkgName)).files
-                loader.load(files, getStores())
-            } catch (e: ExtensionException) {
-                LoadResult.Error(extension.pkgName, e)
+            val pkg = extension.pkgName
+            locked(pkg) {
+                val previous = loader.installedPackage(pkg)
+                val files = try {
+                    // An update must be signed like the version it replaces, as Android's package
+                    // manager demands; otherwise any added store could replace an installed extension.
+                    // And it must not be older, as Android refuses a downgrade
+                    installer.install(
+                        extension,
+                        forceApk,
+                        requiredSigner = requiredSigner(pkg),
+                        installedVersionCode = previous?.versionCode,
+                    ).files
+                } catch (e: ExtensionException) {
+                    // Refused before anything was replaced: the installed version stays listed (and
+                    // pinned) as it was. The caller reports the error
+                    return@withContext LoadResult.Error(pkg, e)
+                }
+                val result = loader.load(files, getStores())
+                if (result is LoadResult.Error && installed.value[pkg] != null) {
+                    if (previous != null && previous.versionCode != files.versionCode) {
+                        loader.deleteVersion(pkg, files.versionCode)
+                    }
+                    return@withContext result
+                }
+                register(result)
+                result
             }
-            register(result)
-            result
         }
 
     suspend fun updateExtension(extension: Extension.Installed): LoadResult? {
@@ -87,23 +124,77 @@ class DesktopExtensionManager(
         return installExtension(update)
     }
 
-    fun uninstallExtension(pkgName: String) {
-        installer.uninstall(pkgName)
-        installed.update { it - pkgName }
-        untrusted.update { it - pkgName }
-        errors.update { it - pkgName }
-        chooseOffers()
+    /**
+     * Uninstalls [pkgName] once any install or trust of it running now has finished, so it cannot
+     * come back. Starts the work and returns at once, for callers on the UI thread; see [uninstall].
+     */
+    fun uninstallExtension(pkgName: String): Job = scope.launch {
+        try {
+            uninstall(pkgName)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to uninstall $pkgName" }
+        }
+    }
+
+    /** Uninstalls [pkgName], waiting for any install or trust of it running now. */
+    suspend fun uninstall(pkgName: String) = withContext(Dispatchers.IO) {
+        locked(pkgName) {
+            installer.uninstall(pkgName)
+            loader.forget(pkgName)
+            val old = synchronized(stateLock) {
+                untrusted.update { it - pkgName }
+                errors.update { it - pkgName }
+                installed.update { it - pkgName }
+                chooseOffers()
+                classLoaders.remove(pkgName)
+            }
+            // After the sources left the lists, so nothing new picks them up
+            old?.close()
+        }
     }
 
     /** Trusts this version and signature of an untrusted extension, then loads it. */
     suspend fun trust(extension: Extension.Untrusted): LoadResult? = withContext(Dispatchers.IO) {
-        trust.trust(extension.pkgName, extension.versionCode, extension.signatureHash)
-        val files = loader.installedPackage(extension.pkgName) ?: return@withContext null
-        loader.load(files, getStores()).also(::register)
+        locked(extension.pkgName) {
+            trust.trust(extension.pkgName, extension.versionCode, extension.signatureHash)
+            val files = loader.installedPackage(extension.pkgName) ?: return@withContext null
+            loader.load(files, getStores()).also(::register)
+        }
     }
 
+    /** One lock per package: its install, update, uninstall and trust run one at a time. */
+    private val locks = ConcurrentHashMap<String, Mutex>()
+
+    private suspend inline fun <T> locked(pkgName: String, block: () -> T): T =
+        locks.computeIfAbsent(pkgName) { Mutex() }.withLock { block() }
+
+    /** Guards changes to the lists, so a package is never in two of them at once. */
+    private val stateLock = Any()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** The class loader of each loaded extension, closed when it is replaced or uninstalled. */
+    private val classLoaders = ConcurrentHashMap<String, ExtensionClassLoader>()
+
+    /**
+     * Lists [result] in place of whatever [pkgName][LoadResult.pkgName] had, then closes the class
+     * loader it replaces: only once the new state is in place, so the package never lacks a
+     * working source in between.
+     */
     private fun register(result: LoadResult) {
+        val old = synchronized(stateLock) {
+            updateLists(result)
+            val new = (result as? LoadResult.Success)?.classLoader
+            if (new != null) classLoaders.put(result.pkgName, new) else classLoaders.remove(result.pkgName)
+        }
+        if (old != null && old !== (result as? LoadResult.Success)?.classLoader) old.close()
+    }
+
+    private fun updateLists(result: LoadResult) {
         val pkg = result.pkgName
+        // Removed from every list before it is added to one, so no reader sees it twice
         installed.update { it - pkg }
         untrusted.update { it - pkg }
         errors.update { it - pkg }
@@ -118,6 +209,32 @@ class DesktopExtensionManager(
     /** The signing certificate of the installed (or installed but untrusted) copy of [pkgName]. */
     private fun installedSigner(pkgName: String): String? =
         installed.value[pkgName]?.signatureHash ?: untrusted.value[pkgName]?.signatureHash
+
+    /**
+     * The signer an install of [pkgName] must match: that of the copy installed on disk, which
+     * stays there when it fails to load or an update of it is refused, so the pin survives both.
+     * A loaded copy's signer was read from those same files and saves verifying them again. An
+     * installed copy whose signature no longer verifies cannot be replaced, only uninstalled.
+     */
+    private fun requiredSigner(pkgName: String): String? {
+        installedSigner(pkgName)?.let { return it }
+        val files = loader.installedPackage(pkgName) ?: return null
+        return try {
+            val signers = if (files.apk != null) {
+                ExtensionSignatures.verifyApk(files.apk)
+            } else {
+                ExtensionSignatures.verifyJar(files.jar).signers
+            }
+            signers.lastOrNull() ?: throw ExtensionException(ExtensionException.Stage.SIGNATURE, "No signer")
+        } catch (e: Exception) {
+            throw ExtensionException(
+                ExtensionException.Stage.SIGNATURE,
+                "The installed version of $pkgName could not be verified, so it was not replaced. " +
+                    "Uninstall the extension first.",
+                e,
+            )
+        }
+    }
 
     /** Every store's offer of each package, from the last [findAvailableExtensions]. */
     @Volatile

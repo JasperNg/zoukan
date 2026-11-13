@@ -4,7 +4,10 @@ import eu.kanade.tachiyomi.data.backup.BackupCodec
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import okio.Buffer
+import okio.ForwardingSource
+import okio.Source
 import org.junit.jupiter.api.Test
+import java.io.IOException
 
 class BackupCodecTest {
 
@@ -47,5 +50,27 @@ class BackupCodecTest {
         shouldThrow<BackupCodec.InvalidBackupException> {
             BackupCodec.decode(Buffer().write(gzipped.copyOf(gzipped.size / 2)))
         }
+    }
+
+    @Test
+    fun `a read error is passed through, not reported as an invalid backup`() {
+        val gzipped = Buffer().also { BackupCodec.write(SyntheticBackup.create(), it) }.readByteArray()
+        val readError = IOException("disk gone")
+        // Fails after the header, while gzip is reading the body
+        val failing: Source = object : ForwardingSource(Buffer().write(gzipped.copyOf(16))) {
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                val read = super.read(sink, byteCount)
+                if (read == -1L) throw readError
+                return read
+            }
+        }
+        val e = shouldThrow<IOException> { BackupCodec.decode(failing) }
+        (e is BackupCodec.InvalidBackupException) shouldBe false
+        e shouldBe readError
+
+        val failingAtOnce = object : Source by Buffer() {
+            override fun read(sink: Buffer, byteCount: Long): Long = throw readError
+        }
+        shouldThrow<IOException> { BackupCodec.decode(failingAtOnce) } shouldBe readError
     }
 }

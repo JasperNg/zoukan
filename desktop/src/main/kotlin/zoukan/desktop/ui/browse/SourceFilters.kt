@@ -47,6 +47,7 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 
@@ -64,7 +65,7 @@ object SourcesFilterScreen : Screen {
         val model = rememberScreenModel { BrowseScreenModel() }
         val state by model.state.collectAsState()
         val preferences = remember { Injekt.get<DesktopPreferences>() }
-        val languages by preferences.enabledLanguages().changes().collectAsState(preferences.enabledLanguages().get())
+        val languages by preferences.enabledLanguages().collectAsState()
         val byLanguage = state.allSources.filterNot { it is LocalSource }.groupBy { it.lang }.toSortedMap()
 
         Column(Modifier.fillMaxSize()) {
@@ -119,7 +120,7 @@ object SourceCategoryScreen : Screen {
     @Composable
     override fun Content() {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        val categories by preferences.sourcesTabCategories().changes().collectAsState(preferences.sourcesTabCategories().get())
+        val categories by preferences.sourcesTabCategories().collectAsState()
         var editing by remember { mutableStateOf<String?>(null) }
         var creating by remember { mutableStateOf(false) }
         var deleting by remember { mutableStateOf<String?>(null) }

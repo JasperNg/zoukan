@@ -83,13 +83,28 @@ class DiscordIpc private constructor(private val pipe: Pipe) : Closeable {
                     for (folder in unixFolders()) {
                         val socket = File(folder, "discord-ipc-$i")
                         if (!socket.exists()) continue
-                        runCatching {
-                            SocketChannel.open(StandardProtocolFamily.UNIX).apply { connect(UnixDomainSocketAddress.of(socket.toPath())) }
-                        }.getOrNull()?.let { return DiscordIpc(UnixPipe(it)) }
+                        openUnix { it.connect(UnixDomainSocketAddress.of(socket.toPath())) }
+                            ?.let { return DiscordIpc(UnixPipe(it)) }
                     }
                 }
             }
             return null
+        }
+
+        /**
+         * Opens a Unix socket channel and runs [connect] on it, or returns null if either fails. A
+         * channel whose connect fails is closed: a stale socket file left by a crashed Discord
+         * would otherwise leak one channel per retry.
+         */
+        internal fun openUnix(
+            open: () -> SocketChannel = { SocketChannel.open(StandardProtocolFamily.UNIX) },
+            connect: (SocketChannel) -> Unit,
+        ): SocketChannel? {
+            val channel = runCatching(open).getOrNull() ?: return null
+            return runCatching { connect(channel) }
+                .map { channel }
+                .onFailure { runCatching { channel.close() } }
+                .getOrNull()
         }
 
         private fun unixFolders(): List<File> {

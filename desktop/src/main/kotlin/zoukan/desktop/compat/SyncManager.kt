@@ -31,7 +31,10 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.RestoreGate
+import zoukan.desktop.compat.localized
+import zoukan.desktop.tray.Notifications
 import zoukan.desktop.ui.AppScope
+import zoukan.i18n.desktop.DMR
 import java.util.Date
 
 /**
@@ -204,13 +207,34 @@ class SyncManager(
             backupFeeds = remoteBackup.backupFeeds,
         )
         // The gate holds the background jobs off while the library is half-restored
-        val errors = RestoreGate.whileRestoring {
+        val (errors, skippedStores) = RestoreGate.whileRestoring {
+            // ZOUKAN -->
+            // Extension stores decide whose code runs. Nobody confirms a sync, so it never adds a
+            // store or changes a signing key; the user adds those by hand (Settings restore asks)
+            val (restorable, skipped) = backups.withoutNewExtensionStores(merged)
+            // ZOUKAN <--
             backups.restore(
-                merged,
+                restorable,
                 RestoreOptions(appSettings = true, sourceSettings = true, libraryEntries = true, extensionStores = true),
                 isSync = true,
+            ) to skipped
+        }
+        // ZOUKAN -->
+        if (skippedStores.isNotEmpty()) {
+            logcat(LogPriority.WARN) { "Sync skipped ${skippedStores.size} new or re-keyed extension stores" }
+            val names = skippedStores.map { it.name.ifBlank { it.indexUrl }.take(80) }
+            val shown = if (names.size <= 5) {
+                names.joinToString()
+            } else {
+                localized(DMR.strings.list_and_n_more, names.take(5).joinToString(), names.size - 5)
+            }
+            Notifications.post(
+                localized(DMR.strings.extension_repos),
+                localized(DMR.strings.sync_skipped_extension_stores, shown),
+                Notifications.Kind.WARNING,
             )
         }
+        // ZOUKAN <--
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
             notifier.showSyncSuccess("Sync completed successfully")

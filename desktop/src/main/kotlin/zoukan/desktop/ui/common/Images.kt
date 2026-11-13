@@ -26,6 +26,9 @@ import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
@@ -106,12 +109,30 @@ object Images {
             val request = if (source != null) GET(cover.url, source.headers) else GET(cover.url)
             client.newCall(request).await().use { response ->
                 if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${cover.url}")
-                val tmp = File(dir, "${file.name}.tmp")
-                tmp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
-                tmp.renameTo(file)
+                writeCoverFile(file) { out -> response.body.byteStream().copyTo(out) }
             }
         }
         return file
+    }
+
+    /**
+     * Writes [target] through a temporary file of its own, so two downloads of the same cover at
+     * once never share (and corrupt) one file, then moves it into place. When the move fails, a
+     * complete copy that another download put there first is kept; otherwise it is an error.
+     */
+    internal fun writeCoverFile(target: File, write: (OutputStream) -> Unit) {
+        val tmp = File.createTempFile("${target.name}.", ".tmp", target.parentFile)
+        try {
+            tmp.outputStream().use(write)
+            try {
+                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            } catch (e: IOException) {
+                // On Windows the target can be open for reading; another download's copy then stays
+                if (!target.isFile || target.length() == 0L) throw IOException("Could not save the cover as ${target.name}", e)
+            }
+        } finally {
+            tmp.delete()
+        }
     }
 
     internal fun hash(text: String): String =

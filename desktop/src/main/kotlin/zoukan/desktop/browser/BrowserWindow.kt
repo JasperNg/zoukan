@@ -22,7 +22,6 @@ import java.awt.GraphicsEnvironment
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.JButton
@@ -56,11 +55,28 @@ class BrowserWindow(
     private var browser: CefBrowser? = null
 
     // Tracked from birth, so a quit that happens while the window is opening still finds it
-    // (cleanUp takes it out again once it is gone)
+    // (cleanUp takes it out again once it is gone, and a failed open() at once)
     private val registration = registry.register { disposeForQuit() }
 
-    /** Opens the window. Returns false when there is no display or Chromium cannot start. */
+    // Whether the window counted itself as open for Discord presence; read and written on the AWT thread
+    private var shownForDiscord = false
+
+    /**
+     * Opens the window. Returns false when there is no display or Chromium cannot start. On every
+     * failure, a thrown exception included, the window leaves the registry and its browser is disposed.
+     */
     fun open(): Boolean {
+        val opened = try {
+            openWindow()
+        } catch (e: Throwable) {
+            abandon()
+            throw e
+        }
+        if (!opened) abandon()
+        return opened
+    }
+
+    private fun openWindow(): Boolean {
         if (GraphicsEnvironment.isHeadless()) return false
         // Start addresses come from sources and trackers; a page from the web must not be a local
         // file or another scheme. (What the user types in the address bar is theirs.)
@@ -134,6 +150,8 @@ class BrowserWindow(
                 add(toolbar, BorderLayout.CENTER)
                 message?.let { add(JLabel("  $it"), BorderLayout.SOUTH) }
             }
+            discord()?.setWebView(true)
+            shownForDiscord = true
             frame = JFrame("Zoukan").apply {
                 defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
                 contentPane.add(top, BorderLayout.NORTH)
@@ -147,8 +165,27 @@ class BrowserWindow(
                 toFront()
             }
         }
-        discord()?.setWebView(true)
         return true
+    }
+
+    /**
+     * Undoes a failed open: disposes whatever it created, on the AWT thread, and takes the window out
+     * of the registry. Never throws.
+     */
+    private fun abandon() {
+        val dispose = Runnable {
+            runCatching { frame?.dispose() }
+            runCatching { cleanUp() }
+        }
+        // Nothing to dispose when it failed before Chromium (no display, not a web address)
+        if (client != null || frame != null) {
+            runCatching {
+                if (SwingUtilities.isEventDispatchThread()) dispose.run() else SwingUtilities.invokeAndWait(dispose)
+            }.onFailure { logcat(LogPriority.WARN, it) { "Cleaning up a browser window that failed to open failed" } }
+        }
+        // Also when cleanUp could not run
+        closed.countDown()
+        registry.unregister(registration)
     }
 
     private fun discord() = runCatching { uy.kohesive.injekt.Injekt.getInstance<zoukan.desktop.discord.DiscordPresence>(zoukan.desktop.discord.DiscordPresence::class.java) }.getOrNull()
@@ -185,7 +222,10 @@ class BrowserWindow(
 
     private fun cleanUp() {
         if (closed.count == 0L) return
-        discord()?.setWebView(false)
+        if (shownForDiscord) {
+            shownForDiscord = false
+            discord()?.setWebView(false)
+        }
         browser?.url?.let { runCatching { CefCookieSync.copyFromCef(it) } }
         browser?.run {
             setCloseAllowed()
@@ -239,6 +279,9 @@ class BrowserWindow(
             registry.disposeAll()
         }
 
+        /** How many windows are registered, for tests. */
+        internal fun registeredCount(): Int = registry.size()
+
         /** Lets shared network code show a Cloudflare challenge to the user. */
         fun installChallengeSolver() {
             DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { url, userAgent, isSolved ->
@@ -264,23 +307,31 @@ class BrowserWindowRegistry {
         internal fun dispose() = disposer()
     }
 
-    private val registrations = ConcurrentHashMap.newKeySet<Registration>()
+    // In the order the windows opened; guarded by itself
+    private val registrations = LinkedHashSet<Registration>()
 
     /** Puts a window in, to be disposed by [disposeAll]. */
     fun register(disposer: () -> Unit): Registration {
         val registration = Registration(disposer)
-        registrations += registration
+        synchronized(registrations) { registrations += registration }
         return registration
     }
 
+    internal fun size(): Int = synchronized(registrations) { registrations.size }
+
     /** Takes a window out again, because it closed by itself. */
     fun unregister(registration: Registration) {
-        registrations -= registration
+        synchronized(registrations) { registrations -= registration }
     }
 
-    /** Disposes every window, one failing never stopping the others, and forgets them all. */
+    /**
+     * Disposes every window in the order they opened, one failing never stopping the others, and
+     * forgets them all. The windows are taken out in one step, so one registered meanwhile is kept
+     * for the next call, and they are disposed outside the lock: a disposer waits for the AWT
+     * thread, which unregisters the window.
+     */
     fun disposeAll() {
-        val snapshot = registrations.toList().also { registrations.clear() }
+        val snapshot = synchronized(registrations) { registrations.toList().also { registrations.clear() } }
         snapshot.forEach { runCatching { it.dispose() } }
     }
 }

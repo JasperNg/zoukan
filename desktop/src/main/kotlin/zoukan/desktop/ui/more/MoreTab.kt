@@ -61,6 +61,7 @@ import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
@@ -84,10 +85,10 @@ fun MoreTab() {
     val incognito = remember { Injekt.get<Incognito>() }
     val ui = remember { Injekt.get<UiPreferences>() }
     val downloads = remember { Injekt.get<DownloadManager>() }
-    val downloadedOnly by preferences.downloadedOnly().changes().collectAsState(preferences.downloadedOnly().get())
-    val incognitoMode by incognito.mode().changes().collectAsState(incognito.mode().get())
-    val showUpdates by ui.showNavUpdates().changes().collectAsState(ui.showNavUpdates().get())
-    val showHistory by ui.showNavHistory().changes().collectAsState(ui.showNavHistory().get())
+    val downloadedOnly by preferences.downloadedOnly().collectAsState()
+    val incognitoMode by incognito.mode().collectAsState()
+    val showUpdates by ui.showNavUpdates().collectAsState()
+    val showHistory by ui.showNavHistory().collectAsState()
     val queue by downloads.queue.collectAsState()
     val running by downloads.running.collectAsState()
 
@@ -247,8 +248,8 @@ private fun MoreItem(
 fun AppStateBanners(modifier: Modifier = Modifier) {
     val preferences = remember { Injekt.get<DesktopPreferences>() }
     val incognito = remember { Injekt.get<Incognito>() }
-    val downloadedOnly by preferences.downloadedOnly().changes().collectAsState(preferences.downloadedOnly().get())
-    val incognitoMode by incognito.mode().changes().collectAsState(incognito.mode().get())
+    val downloadedOnly by preferences.downloadedOnly().collectAsState()
+    val incognitoMode by incognito.mode().collectAsState()
     Column(modifier.fillMaxWidth()) {
         if (downloadedOnly) {
             Banner(localized(MR.strings.label_downloaded_only), MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.onTertiary)

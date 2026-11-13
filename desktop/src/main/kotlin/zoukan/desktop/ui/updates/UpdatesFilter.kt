@@ -16,7 +16,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +30,7 @@ import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.library.TriStateRow
 import zoukan.i18n.desktop.DMR
 
@@ -93,7 +93,7 @@ private fun UpdatesFilterDialog(preferences: UpdatesPreferences, onDismiss: () -
                 TriStateRow(localized(MR.strings.label_started), preferences.filterStarted())
                 TriStateRow(localized(MR.strings.action_filter_bookmarked), preferences.filterBookmarked())
                 val excluded = preferences.filterExcludedScanlators()
-                val hide by excluded.changes().collectAsState(excluded.get())
+                val hide by excluded.collectAsState()
                 Row(
                     Modifier.fillMaxWidth().clickable { excluded.set(!hide) }.padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,

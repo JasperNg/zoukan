@@ -25,12 +25,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,12 +58,14 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.manga.EditManga
+import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -117,7 +118,6 @@ object EntryActions {
  */
 @Composable
 fun FetchIntervalDialog(manga: Manga, onDismiss: () -> Unit) {
-    val scope = rememberCoroutineScope()
     val editable = remember {
         LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in Injekt.get<LibraryPreferences>().autoUpdateMangaRestrictions().get()
     }
@@ -159,9 +159,15 @@ fun FetchIntervalDialog(manga: Manga, onDismiss: () -> Unit) {
         confirmButton = {
             TextButton(onClick = {
                 if (editable) {
-                    scope.launch {
-                        runCatching { EntryActions.setFetchInterval(manga, selected) }
-                            .onFailure { Toasts.error(localized(DMR.strings.could_not_set_the_update_frequency), it) }
+                    // In the app's scope: the dialog closes at once, which would cancel the write in its own
+                    AppScope.launch {
+                        try {
+                            EntryActions.setFetchInterval(manga, selected)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Toasts.error(localized(DMR.strings.could_not_set_the_update_frequency), e)
+                        }
                     }
                 }
                 onDismiss()
@@ -177,11 +183,18 @@ private fun days(count: Int) = if (count == 1) localized(KMR.strings.download_ca
 @Composable
 fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
     val edit = remember { Injekt.get<EditManga>() }
-    val scope = rememberCoroutineScope()
     val window = LocalWindow.current?.window
+    // In the app's scope, so closing the dialog does not cancel a cover write halfway
     fun run(failure: String, block: suspend () -> Unit) {
-        scope.launch {
-            runCatching { withContext(Dispatchers.IO) { block() } }.onFailure { Toasts.error(failure, it) }
+        AppScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Throwable: an OutOfMemoryError on a huge cover still shows the failure
+                Toasts.error(failure, e)
+            }
         }
     }
     AlertDialog(
@@ -382,6 +395,6 @@ fun MissingChaptersRow(count: Int) {
 @Composable
 fun showMissingChapters(): Boolean {
     val preference = remember { Injekt.get<LibraryPreferences>().hideMissingChapters() }
-    val hide by preference.changes().collectAsState(preference.get())
+    val hide by preference.collectAsState()
     return !hide
 }
