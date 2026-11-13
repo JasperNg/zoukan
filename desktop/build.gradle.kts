@@ -23,7 +23,7 @@ plugins {
  * tagged desktop-v<version>. It is separate from the Android app's version, which extensions see.
  * MAJOR.MINOR.PATCH, MAJOR at least 1 (macOS) and at most 255 (MSI).
  */
-val zoukanVersion = "1.0.0"
+val zoukanVersion = "1.0.1"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
