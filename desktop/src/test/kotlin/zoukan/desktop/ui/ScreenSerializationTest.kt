@@ -57,6 +57,7 @@ class ScreenSerializationTest {
             DownloadsScreen,
             SettingsScreen,
             CreateBackupScreen,
+            zoukan.desktop.ui.settings.MissingExtensionsScreen,
             ClearDatabaseScreen,
             CategoryScreen,
             StatsScreen,
