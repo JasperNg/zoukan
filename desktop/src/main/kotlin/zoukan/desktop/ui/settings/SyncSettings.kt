@@ -27,6 +27,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 import java.text.DateFormat
 import java.util.Date
@@ -53,9 +54,9 @@ private val INTERVALS = listOf(
 private fun SyncSettingsSection() {
     val preferences = remember { Injekt.get<SyncPreferences>() }
     val manager = remember { Injekt.get<SyncManager>() }
-    val service by preferences.syncService().changes().collectAsState(preferences.syncService().get())
+    val service by preferences.syncService().collectAsState()
     val running by manager.running.collectAsState()
-    val last by preferences.lastSyncTimestamp().changes().collectAsState(preferences.lastSyncTimestamp().get())
+    val last by preferences.lastSyncTimestamp().collectAsState()
     var edit by remember { mutableStateOf<Pair<String, Preference<String>>?>(null) }
     var secret by remember { mutableStateOf(false) }
     var whatDialog by remember { mutableStateOf(false) }
@@ -128,7 +129,7 @@ private fun SyncSettingsSection() {
 
 @Composable
 private fun TextRow(title: String, preference: Preference<String>, hidden: Boolean = false, onClick: (Pair<String, Preference<String>>) -> Unit) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     SettingRow(
         title,
         when {

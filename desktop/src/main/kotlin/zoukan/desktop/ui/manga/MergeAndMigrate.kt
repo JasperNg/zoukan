@@ -39,7 +39,9 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.manga.interactor.SmartSearchMerge
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.domain.migration.models.MigrationFlag
@@ -57,6 +59,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.migration.MigrateManga
+import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
@@ -129,19 +132,26 @@ private fun MergeDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
         confirmButton = {
             TextButton(enabled = !busy, onClick = {
                 busy = true
+                // The merge runs in the app's scope, so closing the dialog or leaving the screen
+                // doesn't stop it partway; its result still shows as a toast
+                val merge = AppScope.async {
+                    reportOutcome(onFailure = { Toasts.error(localized(DMR.strings.merging_failed), it) }) {
+                        SmartSearchMerge().smartSearchMerge(picked, mangaId)
+                    }.also { Toasts.show(localized(DMR.strings.merged)) }
+                }
                 scope.launch {
-                    runCatching { withContext(Dispatchers.IO) { SmartSearchMerge().smartSearchMerge(picked, mangaId) } }
-                        .onSuccess { merged ->
-                            onDismiss()
-                            Toasts.show(localized(DMR.strings.merged))
-                            // Back to where the merge started, showing the merged entry
-                            navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
-                            navigator.replace(MangaScreen(merged.id))
-                        }
-                        .onFailure {
-                            busy = false
-                            Toasts.error(localized(DMR.strings.merging_failed), it)
-                        }
+                    val merged = try {
+                        merge.await()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Throwable) {
+                        busy = false
+                        return@launch
+                    }
+                    onDismiss()
+                    // Back to where the merge started, showing the merged entry
+                    navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
+                    navigator.replace(MangaScreen(merged.id))
                 }
             }) { Text(if (busy) localized(DMR.strings.merging) else localized(SYMR.strings.merge)) }
         },
@@ -168,22 +178,29 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
     val run = { replace: Boolean ->
         busy = true
         preference.set(flags)
-        scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val current = Injekt.get<GetManga>().await(mangaId) ?: error(localized(DMR.strings.the_entry_no_longer_exists))
-                    migrate(current, picked, replace, flags)
-                }
-            }.onSuccess {
-                onDismiss()
-                Toasts.show(if (replace) localized(DMR.strings.migrated_to, picked.title) else localized(DMR.strings.copied_to, picked.title))
-                if (onMigrated != null) return@onSuccess onMigrated()
-                navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
-                navigator.replace(MangaScreen(picked.id))
-            }.onFailure {
-                busy = false
-                Toasts.error(localized(DMR.strings.migration_failed), it)
+        // The migration runs in the app's scope, so closing the dialog or leaving the screen doesn't
+        // stop it partway; its result still shows as a toast
+        val chosen = flags
+        val migration = AppScope.async {
+            reportOutcome(onFailure = { Toasts.error(localized(DMR.strings.migration_failed), it) }) {
+                val current = Injekt.get<GetManga>().await(mangaId) ?: error(localized(DMR.strings.the_entry_no_longer_exists))
+                migrate(current, picked, replace, chosen)
             }
+            Toasts.show(if (replace) localized(DMR.strings.migrated_to, picked.title) else localized(DMR.strings.copied_to, picked.title))
+        }
+        scope.launch {
+            try {
+                migration.await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                busy = false
+                return@launch
+            }
+            onDismiss()
+            if (onMigrated != null) return@launch onMigrated()
+            navigator.popUntil { it is MangaScreen && it.mangaId == mangaId }
+            navigator.replace(MangaScreen(picked.id))
         }
     }
     AlertDialog(
@@ -313,3 +330,19 @@ fun pickScreen(manga: Manga, merge: Boolean): Screen = GlobalSearchScreen(
     manga.ogTitle,
     if (merge) SearchPurpose.Merge(manga.id) else SearchPurpose.Migrate(manga.id, manga.source),
 )
+
+// ZOUKAN -->
+/**
+ * Runs [block], passing a failure to [onFailure] before rethrowing it. Cancellation is rethrown
+ * without being reported.
+ */
+internal suspend fun <T> reportOutcome(onFailure: (Throwable) -> Unit, block: suspend () -> T): T =
+    try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        onFailure(e)
+        throw e
+    }
+// ZOUKAN <--

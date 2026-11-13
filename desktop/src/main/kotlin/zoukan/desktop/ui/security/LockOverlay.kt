@@ -34,9 +34,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -56,15 +59,27 @@ fun LockOverlay() {
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
+    // The secret store failed (for example, access denied): said here, since toasts wait for the unlock
+    var storeError by remember { mutableStateOf<String?>(null) }
     fun tryUnlock() {
         if (checking) return
         val attempt = password
         password = ""
         checking = true
+        storeError = null
         // The password hash is slow on purpose; keep it off the UI thread
         scope.launch {
-            wrong = !withContext(Dispatchers.Default) { lock.unlock(attempt) }
-            checking = false
+            try {
+                wrong = !withContext(Dispatchers.Default) { lock.unlock(attempt) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Unlocking failed" }
+                wrong = false
+                storeError = secretStoreError(e)
+            } finally {
+                checking = false
+            }
         }
     }
     Surface(
@@ -82,18 +97,27 @@ fun LockOverlay() {
                     onValueChange = {
                         password = it
                         wrong = false
+                        storeError = null
                     },
                     label = { Text(localized(MR.strings.password)) },
                     singleLine = true,
-                    isError = wrong,
-                    supportingText = if (wrong) ({ Text(localized(DMR.strings.wrong_password)) }) else null,
+                    isError = wrong || storeError != null,
+                    supportingText = when {
+                        wrong -> ({ Text(localized(DMR.strings.wrong_password)) })
+                        storeError != null -> ({ Text(storeError.orEmpty()) })
+                        else -> null
+                    },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { tryUnlock() }),
                     modifier = Modifier.width(320.dp).focusRequester(focus),
                 )
-                Button(onClick = ::tryUnlock) { Text(localized(DMR.strings.unlock)) }
+                Button(onClick = ::tryUnlock, enabled = !checking) { Text(localized(DMR.strings.unlock)) }
             }
         }
     }
 }
+
+/** The message for a secret store call that failed: what failed, then the store's own reason. */
+internal fun secretStoreError(e: Throwable): String =
+    "${localized(DMR.strings.could_not_use_the_secret_store)}: ${e.message ?: e::class.simpleName}"

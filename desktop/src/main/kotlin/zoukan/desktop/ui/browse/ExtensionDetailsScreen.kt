@@ -61,6 +61,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.security.Incognito
+import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.DropdownMenu
@@ -152,8 +153,17 @@ class ExtensionDetailsScreenModel(
 
     fun uninstall() {
         val extension = state.value.extension ?: return
-        extensionManager.uninstallExtension(extension.pkgName)
-        Toasts.show(localized(DMR.strings.uninstalled, extension.name))
+        // On AppScope: the screen closes once the extension is gone, which would cancel the wait for the toast
+        AppScope.launch {
+            try {
+                extensionManager.uninstall(extension.pkgName)
+                Toasts.show(localized(DMR.strings.uninstalled, extension.name))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Toasts.error(localized(DMR.strings.failed), e)
+            }
+        }
     }
 }
 

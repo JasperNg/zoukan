@@ -23,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +51,7 @@ import zoukan.desktop.ui.browse.QuickLibraryToggleDialogs
 import zoukan.desktop.ui.browse.rememberQuickLibraryToggle
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.MangaGridItem
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.recs.RecommendsScreen
 import zoukan.i18n.desktop.DMR
 
@@ -64,8 +64,8 @@ import zoukan.i18n.desktop.DMR
 fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
     val sourcePrefs = remember { Injekt.get<SourcePreferences>() }
     val uiPrefs = remember { Injekt.get<UiPreferences>() }
-    val enabled by sourcePrefs.relatedMangas().changes().collectAsState(sourcePrefs.relatedMangas().get())
-    val inOverflow by uiPrefs.relatedMangasInOverflow().changes().collectAsState(uiPrefs.relatedMangasInOverflow().get())
+    val enabled by sourcePrefs.relatedMangas().collectAsState()
+    val inOverflow by uiPrefs.relatedMangasInOverflow().collectAsState()
     if (!enabled || inOverflow || manga.source == MERGED_SOURCE_ID) return
     val navigator = LocalNavigator.currentOrThrow
     // ZOUKAN -->
@@ -80,7 +80,13 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
             loadRelated(manga) { related = it }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: OutOfMemoryError) {
+            throw e
+        } catch (e: InternalError) {
+            throw e
+        } catch (e: Throwable) {
+            // Anything else, an Error from the extension's code included (a StackOverflowError too):
+            // escaping this composition effect would close the app
             related.orEmpty()
         }
     }

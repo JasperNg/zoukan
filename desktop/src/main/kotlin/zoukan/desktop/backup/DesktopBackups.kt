@@ -18,8 +18,10 @@ import okio.sink
 import okio.source
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.source.repository.StubSourceRepository
+import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.extension.DesktopSourceManager
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -39,6 +41,10 @@ class DesktopBackups(
     /** The AndroidCompat folder, whose `settings/` holds one file per SharedPreferences name. */
     private val androidDir: File,
     private val stubSourceRepository: StubSourceRepository = Injekt.get(),
+    /** Waits until the source manager knows the names of sources without an extension. */
+    private val awaitSourceNames: suspend () -> Unit = {
+        (Injekt.get<SourceManager>() as? DesktopSourceManager)?.awaitStubs()
+    },
 ) {
 
     fun contentCreator(): BackupContentCreator = BackupContentCreator(
@@ -48,6 +54,9 @@ class DesktopBackups(
 
     /** Builds a backup and writes it to [file], gzipped, as the Android app does. */
     suspend fun create(file: File, options: BackupOptions = BackupOptions()): Backup {
+        // Right after start-up (the command line) the stubs may not be read yet, and the backup
+        // would list its sources with blank names
+        awaitSourceNames()
         val backup = contentCreator().create(options)
         file.absoluteFile.parentFile?.mkdirs()
         val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
@@ -100,6 +109,20 @@ class DesktopBackups(
         return backup.backupExtensionStores.filter {
             known[ExtensionStoreRestorer.indexUrlOf(it)] != it.signingKey
         }
+    }
+
+    /**
+     * [backup] without the extension stores [newExtensionStores] reports, and those stores, for a
+     * restore nobody is asked to confirm (data sync, the command line): it may keep stores the
+     * user already trusts with the same key, but never adds one or changes a signing key.
+     */
+    suspend fun withoutNewExtensionStores(
+        backup: Backup,
+        getStores: GetExtensionStores = Injekt.get(),
+    ): Pair<Backup, List<BackupExtensionStore>> {
+        val new = newExtensionStores(backup, getStores)
+        if (new.isEmpty()) return backup to emptyList()
+        return backup.copy(backupExtensionStores = backup.backupExtensionStores.filterNot { it in new }) to new
     }
 
     /** The `source_<id>` SharedPreferences that have a file, installed or not. */

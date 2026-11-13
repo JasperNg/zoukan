@@ -49,6 +49,7 @@ import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.InfoScreen
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.settings.StorageLocationPreference
 import zoukan.desktop.ui.settings.ThemeSection
 import zoukan.desktop.ui.settings.pickBackupFile
@@ -66,7 +67,7 @@ const val GETTING_STARTED_URL = "https://komikku-app.github.io/docs/guides/getti
  */
 @Composable
 fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
-    val onboardingDone by preferences.shownOnboardingFlow().changes().collectAsState(preferences.shownOnboardingFlow().get())
+    val onboardingDone by preferences.shownOnboardingFlow().collectAsState()
     // Read once: whether this launch follows an update, and whether to set up a new install
     var updatedDialog by remember { mutableStateOf(false) }
     var checked by remember { mutableStateOf(false) }

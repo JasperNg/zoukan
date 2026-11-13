@@ -971,11 +971,38 @@ public class WebView extends AbsoluteLayout
     private final Looper mWebViewThread = Looper.myLooper() != null ? Looper.myLooper() : Looper.getMainLooper();
     // ZOUKAN <--
 
+    // ZOUKAN -->
+    private static final ThreadLocal<int[]> sInClientCallback = ThreadLocal.withInitial(() -> new int[1]);
+
+    /**
+     * Runs [callback], a WebViewClient method that Android calls on the WebView's thread but the
+     * provider calls on one of Chromium's, letting it call WebView methods as it could on Android.
+     *
+     * @hide
+     */
+    public static <T> T callClientOffThread(java.util.function.Supplier<T> callback) {
+        int[] depth = sInClientCallback.get();
+        depth[0]++;
+        try {
+            return callback.get();
+        } finally {
+            depth[0]--;
+        }
+    }
+    // ZOUKAN <--
+
     private void checkThread() {
         // Ignore mWebViewThread == null because this can be called during in the super class
         // constructor, before this class's own constructor has even started.
-        // ZOUKAN: a thread with no Looper (the AWT event thread as Dispatchers.Main) may call too
-        if (mWebViewThread != null && Looper.myLooper() != null && Looper.myLooper() != mWebViewThread) {
+        // ZOUKAN -->
+        // The AWT event thread (Dispatchers.Main on desktop, which has no Looper) may call too, as
+        // the main thread does on Android. Other threads may not: the provider is not thread-safe.
+        // So may a client callback that Android runs on the WebView's thread and the provider runs
+        // on one of Chromium's (see callClientOffThread).
+        boolean allowed = sInClientCallback.get()[0] > 0
+                || (Looper.myLooper() == null && java.awt.EventQueue.isDispatchThread());
+        if (mWebViewThread != null && !allowed && Looper.myLooper() != mWebViewThread) {
+        // ZOUKAN <--
             Throwable throwable = new Throwable(
                     "A WebView method was called on thread '" +
                     Thread.currentThread().getName() + "'. " +

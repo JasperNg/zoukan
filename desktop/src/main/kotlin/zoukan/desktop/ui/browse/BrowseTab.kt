@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +74,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.i18n.desktop.DMR
@@ -89,8 +91,8 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
     // ZOUKAN <--
     // ZOUKAN -->
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
-    val hideFeed by uiPreferences.hideFeedTab().changes().collectAsState(uiPreferences.hideFeedTab().get())
-    val feedInFront by uiPreferences.feedTabInFront().changes().collectAsState(uiPreferences.feedTabInFront().get())
+    val hideFeed by remember { uiPreferences.hideFeedTab() }.collectAsState()
+    val feedInFront by remember { uiPreferences.feedTabInFront() }.collectAsState()
     // Android's order: Feed first when "Feed tab position" is on, else after Sources; none when hidden
     val pages = when {
         hideFeed -> listOf(BrowsePage.SOURCES, BrowsePage.EXTENSIONS, BrowsePage.MIGRATE, BrowsePage.STORES)
@@ -299,6 +301,16 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
     val navigator = LocalNavigator.currentOrThrow
     // ZOUKAN <--
     var languageMenu by remember { mutableStateOf(false) }
+    // ZOUKAN -->
+    // Every uninstall here asks first, as the details screen does (and Android's system prompt)
+    var confirmUninstall by remember { mutableStateOf<UninstallRequest?>(null) }
+    confirmUninstall?.let { request ->
+        ConfirmUninstallDialog(request.name, onConfirm = request.uninstall, onDismiss = { confirmUninstall = null })
+    }
+    fun askUninstall(ext: Extension) {
+        confirmUninstall = UninstallRequest(ext.name) { model.uninstall(ext) }
+    }
+    // ZOUKAN <--
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             SearchField(
@@ -336,9 +348,9 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 items(state.visibleUntrusted, key = { "u-${it.pkgName}" }) { ext ->
                     // ZOUKAN -->
                     // Android's long press on an untrusted extension uninstalls it
-                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { model.uninstall(ext) }) {
+                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { askUninstall(ext) }) {
                         // ZOUKAN <--
-                        OutlinedButton(onClick = { model.uninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
+                        OutlinedButton(onClick = { askUninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = { model.trust(ext) }) { Text(localized(MR.strings.ext_trust)) }
                     }
@@ -347,9 +359,21 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             if (state.loadErrors.isNotEmpty()) {
                 sectionHeader(localized(DMR.strings.failed_to_load_2))
                 items(state.loadErrors.entries.toList(), key = { "e-${it.key}" }) { (pkg, error) ->
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(pkg, style = MaterialTheme.typography.bodyLarge)
-                        Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(pkg, style = MaterialTheme.typography.bodyLarge)
+                            Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = { confirmUninstall = UninstallRequest(pkg) { model.uninstallFailed(pkg) } },
+                            enabled = pkg !in state.busy,
+                        ) {
+                            Text(localized(MR.strings.ext_uninstall))
+                        }
                     }
                 }
             }
@@ -382,13 +406,13 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                     val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
                     // ZOUKAN -->
                     // Android's long press on an installed extension uninstalls it
-                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { model.uninstall(ext) }) {
+                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { askUninstall(ext) }) {
                         // ZOUKAN <--
                         if (ext.hasUpdate) {
                             Button(onClick = { model.update(ext) }) { Text(localized(MR.strings.ext_update)) }
                             Spacer(Modifier.width(8.dp))
                         }
-                        TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.ext_uninstall), onClick = { model.uninstall(ext) })
+                        TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.ext_uninstall), onClick = { askUninstall(ext) })
                     }
                 }
             }
@@ -405,6 +429,27 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
         }
     }
 }
+
+// ZOUKAN -->
+/** An uninstall waiting for the user's yes: the name the dialog shows and what it runs. */
+private class UninstallRequest(val name: String, val uninstall: () -> Unit)
+
+/** The details screen's uninstall question, with the same wording. */
+@Composable
+private fun ConfirmUninstallDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(DMR.strings.uninstall, name)) },
+        confirmButton = {
+            Button(onClick = {
+                onDismiss()
+                onConfirm()
+            }) { Text(localized(MR.strings.ext_uninstall)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
+}
+// ZOUKAN <--
 
 @Composable
 private fun ExtensionRow(

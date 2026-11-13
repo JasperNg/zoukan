@@ -24,6 +24,22 @@ class BrowserWindowRegistryTest {
     }
 
     @Test
+    fun `a window that opens while the others are disposed is kept for the next call`() {
+        val registry = BrowserWindowRegistry()
+        val disposed = mutableListOf<String>()
+        registry.register {
+            disposed += "a"
+            registry.register { disposed += "late" }
+        }
+
+        registry.disposeAll()
+        disposed shouldBe listOf("a")
+
+        registry.disposeAll()
+        disposed shouldBe listOf("a", "late")
+    }
+
+    @Test
     fun `a window that closed by itself is not disposed again`() {
         val registry = BrowserWindowRegistry()
         var disposed = 0

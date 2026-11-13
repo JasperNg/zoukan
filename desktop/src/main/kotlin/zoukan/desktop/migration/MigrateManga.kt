@@ -3,9 +3,12 @@ package zoukan.desktop.migration
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import kotlinx.coroutines.CancellationException
+import logcat.LogPriority
 import mihon.domain.migration.models.MigrationFlag
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withNonCancellableContext
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -116,10 +119,6 @@ class MigrateManga(
             }.takeIf { it.isNotEmpty() }?.let { insertTrack.awaitAll(it) }
         }
 
-        if (MigrationFlag.REMOVE_DOWNLOAD in flags && replace) {
-            downloadManager.delete(current, getChaptersByMangaId.await(current.id))
-        }
-
         if (MigrationFlag.CUSTOM_COVER in flags) {
             zoukan.desktop.ui.common.Images.customCoverFile(current.id).takeIf { it.isFile }?.let { cover ->
                 cover.copyTo(zoukan.desktop.ui.common.Images.customCoverFile(target.id).apply { parentFile.mkdirs() }, overwrite = true)
@@ -137,6 +136,19 @@ class MigrateManga(
             coverLastModified = Instant.now().toEpochMilli().takeIf { MigrationFlag.CUSTOM_COVER in flags },
         )
         updateManga.awaitAll(listOfNotNull(currentUpdate, targetUpdate))
+
+        // Last, once every database step succeeded: a failure above leaves the user on the old
+        // entry, which must still have its downloads
+        if (MigrationFlag.REMOVE_DOWNLOAD in flags && replace) {
+            try {
+                downloadManager.delete(current, getChaptersByMangaId.await(current.id))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The entry has moved; leftover downloads are only disk space
+                logcat(LogPriority.WARN, e) { "Deleting the downloads of ${current.title} after migrating failed" }
+            }
+        }
     }
 
     companion object {

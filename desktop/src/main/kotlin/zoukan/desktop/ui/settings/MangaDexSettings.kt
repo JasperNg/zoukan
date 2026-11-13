@@ -38,6 +38,7 @@ import zoukan.desktop.exh.MangaDexSync
 import zoukan.desktop.track.TrackerLogin
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -94,8 +95,7 @@ private fun MangaDexSettings() {
                 }) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
             }
         }
-        val preferredId by sourcePreferences.preferredMangaDexId().changes()
-            .collectAsState(sourcePreferences.preferredMangaDexId().get())
+        val preferredId by sourcePreferences.preferredMangaDexId().collectAsState()
         ChoiceSetting(
             localized(SYMR.strings.mangadex_preffered_source),
             preferredId,

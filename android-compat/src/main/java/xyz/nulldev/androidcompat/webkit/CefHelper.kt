@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 // ZOUKAN <--
 import kotlinx.coroutines.flow.first
+// ZOUKAN -->
+import kotlinx.coroutines.withTimeoutOrNull
+// ZOUKAN <--
 import org.cef.CefApp
 import org.cef.CefClient
 
@@ -18,7 +21,20 @@ object CefHelper {
     @Volatile
     var requestStart: () -> Unit = {}
 
-    suspend fun createClient(): CefClient = waitForInit().first().createClient()
+    // ZOUKAN -->
+    /**
+     * Waits at most [START_TIMEOUT_MS] for Chromium, then throws [CefException]: a WebView is created
+     * on the main looper, which would otherwise stay blocked for as long as a first download of
+     * Chromium takes, or for good when it hangs. The start goes on, and the next WebView waits again.
+     */
+    suspend fun createClient(): CefClient {
+        val app = withTimeoutOrNull(START_TIMEOUT_MS) { waitForInit().first() }
+            ?: throw CefException("Chromium did not start in time; it may still be downloading")
+        return app.createClient()
+    }
+
+    const val START_TIMEOUT_MS = 3 * 60 * 1000L
+    // ZOUKAN <--
 
     // ZOUKAN -->
     // Upstream JCEF has no CefApp.onInitialization: Chromium starts in the first createClient(),

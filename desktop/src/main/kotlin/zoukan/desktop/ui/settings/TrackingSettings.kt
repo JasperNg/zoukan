@@ -27,6 +27,8 @@ import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
@@ -35,6 +37,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackerLogin
+import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 
@@ -112,10 +115,18 @@ private fun TrackerSetting(tracker: Tracker) {
                 TextButton(onClick = { pasteDialog = true }) { Text(localized(DMR.strings.other_browser)) }
                 OutlinedButton(onClick = {
                     busy = true
+                    // In the app's scope: a sign-in finished after leaving Settings still reports its result
+                    val attempt = AppScope.launch {
+                        try {
+                            if (login.loginWithBrowser(tracker)) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name))
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            Toasts.error(localized(DMR.strings.signing_in_to_failed, tracker.name), e)
+                        }
+                    }
                     scope.launch {
-                        runCatching { login.loginWithBrowser(tracker) }
-                            .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
-                            .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_failed, tracker.name), it) }
+                        attempt.join()
                         busy = false
                     }
                 }) { Text(localized(SYMR.strings.pref_google_drive_sign_in)) }
@@ -164,16 +175,36 @@ private fun TrackerSetting(tracker: Tracker) {
                     onClick = {
                         busy = true
                         error = null
+                        // In the app's scope, so leaving Settings doesn't stop the sign-in partway; only
+                        // a real failure signs out
+                        val userName = user.trim()
+                        val attempt = AppScope.async {
+                            try {
+                                login.loginWithPassword(tracker, userName, password)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Throwable) {
+                                tracker.logout()
+                                throw e
+                            }
+                            Toasts.show(localized(DMR.strings.signed_in_to, tracker.name))
+                        }
                         scope.launch {
-                            runCatching { login.loginWithPassword(tracker, user.trim(), password) }
-                                .onSuccess {
-                                    passwordDialog = false
-                                    Toasts.show(localized(DMR.strings.signed_in_to, tracker.name))
+                            try {
+                                attempt.await()
+                                passwordDialog = false
+                            } catch (e: CancellationException) {
+                                // The dialog is gone (Settings left) while the sign-in runs: a toast
+                                // tells of a failure instead
+                                attempt.invokeOnCompletion { cause ->
+                                    if (cause != null && cause !is CancellationException) {
+                                        Toasts.error(localized(DMR.strings.could_not_sign_in), cause)
+                                    }
                                 }
-                                .onFailure {
-                                    tracker.logout()
-                                    error = it.message ?: localized(DMR.strings.could_not_sign_in)
-                                }
+                                throw e
+                            } catch (e: Throwable) {
+                                error = e.message ?: localized(DMR.strings.could_not_sign_in)
+                            }
                             busy = false
                         }
                     },
@@ -207,17 +238,34 @@ private fun TrackerSetting(tracker: Tracker) {
                     enabled = !busy && TrackerLogin.isRedirect(address.trim()),
                     onClick = {
                         busy = true
+                        // In the app's scope, so leaving Settings doesn't stop the sign-in partway
+                        val pasted = address
+                        val attempt = AppScope.async {
+                            login.handleRedirect(pasted).also { ok -> if (ok) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
+                        }
                         scope.launch {
-                            runCatching { login.handleRedirect(address) }
-                                .onSuccess { ok ->
-                                    if (ok) {
-                                        pasteDialog = false
-                                        Toasts.show(localized(DMR.strings.signed_in_to, tracker.name))
-                                    } else {
-                                        error = localized(DMR.strings.did_not_accept_the_sign_in, tracker.name)
+                            try {
+                                if (attempt.await()) {
+                                    pasteDialog = false
+                                } else {
+                                    error = localized(DMR.strings.did_not_accept_the_sign_in, tracker.name)
+                                }
+                            } catch (e: CancellationException) {
+                                // The dialog is gone (Settings left) while the sign-in runs: a toast
+                                // tells of a failure instead
+                                attempt.invokeOnCompletion { cause ->
+                                    when {
+                                        cause is CancellationException -> Unit
+                                        cause != null -> Toasts.error(localized(DMR.strings.could_not_sign_in), cause)
+                                        else -> AppScope.launch {
+                                            if (!attempt.await()) Toasts.show(localized(DMR.strings.did_not_accept_the_sign_in, tracker.name))
+                                        }
                                     }
                                 }
-                                .onFailure { error = it.message }
+                                throw e
+                            } catch (e: Throwable) {
+                                error = e.message
+                            }
                             busy = false
                         }
                     },

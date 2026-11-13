@@ -62,6 +62,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
@@ -81,8 +82,8 @@ fun MigrateSourcesList() {
     val navigator = LocalNavigator.currentOrThrow
     val preferences = remember { Injekt.get<SourcePreferences>() }
     val sourceManager = remember { Injekt.get<SourceManager>() }
-    val mode by preferences.migrationSortingMode().changes().collectAsState(preferences.migrationSortingMode().get())
-    val direction by preferences.migrationSortingDirection().changes().collectAsState(preferences.migrationSortingDirection().get())
+    val mode by preferences.migrationSortingMode().collectAsState()
+    val direction by preferences.migrationSortingDirection().collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
     val counts by remember {
         Injekt.get<GetLibraryManga>().subscribe().map { library ->

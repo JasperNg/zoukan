@@ -75,6 +75,7 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.i18n.desktop.DMR
 import java.io.IOException
@@ -172,14 +173,17 @@ fun PagePreviewSection(manga: Manga, modifier: Modifier = Modifier) {
     if (remember(manga.source) { PagePreviews.sourceOf(manga) } == null) return
     val navigator = LocalNavigator.currentOrThrow
     val prefs = remember { Injekt.get<UiPreferences>() }
-    val rows by prefs.previewsRowCount().changes().collectAsState(prefs.previewsRowCount().get())
+    val rows by prefs.previewsRowCount().collectAsState()
     if (rows <= 0) return
     val page by produceState<Result<PagePreviews.Page?>?>(null, manga.id) {
         value = try {
             Result.success(PagePreviews.load(manga, 1))
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: OutOfMemoryError) {
+            throw e
+        } catch (e: Throwable) {
+            // Throwable: an unloaded extension's Error must not leave the spinner
             Result.failure(e)
         }
     }
@@ -262,7 +266,10 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                     }
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: OutOfMemoryError) {
+                    throw e
+                } catch (e: Throwable) {
+                    // Throwable: an unloaded extension's Error must not leave the spinner
                     mutableState.update { it.copy(loading = false, error = e.message ?: localized(DMR.strings.couldnt_load_page_previews_2)) }
                 }
             }

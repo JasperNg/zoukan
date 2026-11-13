@@ -54,7 +54,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
@@ -77,6 +76,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
@@ -179,7 +179,7 @@ class FeedScreenModel(
             val result = permits.withPermit {
                 try {
                     val page = withContext(Dispatchers.IO) {
-                        withTimeout(60_000) {
+                        withSourceTimeout {
                             val saved = row.savedSearch?.let { getExhSavedSearch.awaitOne(it.id, source::getFilterList) }
                             when {
                                 saved != null -> source.getSearchManga(1, saved.query.orEmpty(), saved.filterList ?: source.getFilterList())
@@ -189,11 +189,15 @@ class FeedScreenModel(
                             }
                         }
                     }
-                    Result.Success(withContext(Dispatchers.IO) { networkToLocalManga(page.mangas.map { it.toDomainManga(source.id) }) })
+                    // A source can list the same title twice on a page; the row is keyed by id
+                    Result.Success(
+                        withContext(Dispatchers.IO) { networkToLocalManga(page.mangas.map { it.toDomainManga(source.id) }) }
+                            .distinctBy { it.id },
+                    )
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Throwable) {
-                    Result.Error(e.message ?: e::class.simpleName.orEmpty())
+                    Result.Error(sourceErrorMessage(e))
                 }
             }
             mutableState.update { it.copy(results = it.results + (row.feed.id to result)) }
@@ -260,7 +264,7 @@ fun FeedTab(model: FeedScreenModel) {
     // ZOUKAN <--
     // ZOUKAN -->
     val sourcePreferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
-    val hideInLibrary by sourcePreferences.hideInLibraryFeedItems().changes().collectAsState(sourcePreferences.hideInLibraryFeedItems().get())
+    val hideInLibrary by remember { sourcePreferences.hideInLibraryFeedItems() }.collectAsState()
     // ZOUKAN <--
     LaunchedEffect(Unit) { model.start() }
     val rows = state.rows ?: return Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
