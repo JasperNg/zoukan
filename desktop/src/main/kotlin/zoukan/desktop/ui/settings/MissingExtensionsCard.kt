@@ -54,6 +54,17 @@ internal fun RestoreResults(
             }
         }
         Text(localized(DMR.strings.restore_finished), fontWeight = FontWeight.Bold)
+        MissingExtensionsResults(missing, onInstall)
+    }
+}
+
+/**
+ * The missing extensions, the "Install missing extensions" action, its progress and its summary.
+ * The restore screen and Settings > Data and storage's own screen show it.
+ */
+@Composable
+internal fun MissingExtensionsResults(missing: State, onInstall: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when (missing) {
             State.Idle -> Unit
             State.Finding -> Busy(localized(DMR.strings.finding_missing_extensions))
