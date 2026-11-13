@@ -57,6 +57,7 @@ import java.io.File
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The library update: the Android app's LibraryUpdateJob for desktop. It checks the library's
@@ -97,6 +98,8 @@ class LibraryUpdater(
         val failures: List<Failure>,
         val errorFile: File?,
         val entries: List<Manga> = emptyList(),
+        /** A backup restore stopped the update before every entry was updated. */
+        val stoppedForRestore: Boolean = false,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -123,6 +126,7 @@ class LibraryUpdater(
      * group update; overrides [categoryId]
      * @param manual a manual update, which syncs the data first when sync is on, as Android's
      * startNow; false for the scheduled update
+     * @param onDone called when the update finishes; not when a backup restore stops it
      * @return whether it started
      */
     fun start(
@@ -153,8 +157,14 @@ class LibraryUpdater(
                     // ZOUKAN <--
                     val result = run(categoryId, mangaIds = mangaIds, groupIds = groupIds)
                     _lastResult.value = result
-                    notify(result)
-                    onDone(result)
+                    if (result.stoppedForRestore) {
+                        // Not finished: no "updated" notification, and the scheduled update runs
+                        // again on its next check (run restored the last update time)
+                        logcat { "The library update stopped for a backup restore" }
+                    } else {
+                        notify(result)
+                        onDone(result)
+                    }
                 } catch (e: CancellationException) {
                     // Cancelled by the user or at quit: not a failure
                     logcat { "The library update was cancelled" }
@@ -187,6 +197,7 @@ class LibraryUpdater(
         mangaIds: Set<Long>? = null,
         groupIds: Set<Long>? = null,
     ): Result {
+        val previousUpdate = preferences.lastUpdatedTimestamp().get()
         preferences.lastUpdatedTimestamp().set(System.currentTimeMillis())
         runCatching { errors.clean() }.onFailure { logcat(LogPriority.WARN, it) { "Cleaning the update errors failed" } }
         val library = getLibraryManga.await().distinctBy { it.manga.id }
@@ -220,6 +231,70 @@ class LibraryUpdater(
         val mdListLogged = mdList.isLoggedIn
         // SY <--
 
+        val stoppedForRestore = AtomicBoolean(false)
+
+        /** Updates one entry: its details and chapters, its downloads and its update error. */
+        suspend fun updateEntry(manga: Manga) {
+            // Don't continue to update if the entry left the library
+            if (getManga.await(manga.id)?.favorite != true) {
+                _progress.value = synchronized(lock) {
+                    done++
+                    Progress(done, total, current.toList())
+                }
+                return
+            }
+            _progress.value = synchronized(lock) {
+                current += manga.title
+                Progress(done, total, current.toList())
+            }
+            try {
+                if (sourceManager.get(manga.source) == null) throw SourceNotFoundException()
+                val result = refreshManga(
+                    manga,
+                    fetchDetails = preferences.autoUpdateMetadata().get(),
+                    fetchChapters = true,
+                )
+                // Only an entry still in the library has new chapters, as Android's updateManga
+                val newOnes = if (result.manga.favorite) result.newChapters.sortedByDescending { it.sourceOrder } else emptyList()
+                if (newOnes.isNotEmpty()) {
+                    val toDownload = filterChaptersForDownload.await(result.manga, newOnes)
+                    if (toDownload.isNotEmpty()) downloadChapters(result.manga, toDownload)
+                    synchronized(lock) {
+                        newChapters += newOnes.size
+                        queued += toDownload.size
+                        withNew += result.manga
+                    }
+                    synchronized(lock) { preferences.newUpdatesCount().set(preferences.newUpdatesCount().get() + newOnes.size) }
+                }
+                try {
+                    errors.clear(manga.id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Clearing the update error of ${manga.title} failed" }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                val message = errorMessage(e)
+                logcat(LogPriority.WARN, e) { "Updating ${manga.title} failed" }
+                synchronized(lock) { failures += Failure(manga, message) }
+                try {
+                    errors.record(manga.id, message)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Saving the update error of ${manga.title} failed" }
+                }
+            } finally {
+                _progress.value = synchronized(lock) {
+                    current -= manga.title
+                    done++
+                    Progress(done, total, current.toList())
+                }
+            }
+        }
+
         val semaphore = Semaphore(PARALLEL_SOURCES)
         coroutineScope {
             toUpdate.groupBy { it.manga.source }.values.map { entries ->
@@ -230,16 +305,19 @@ class LibraryUpdater(
                         if (mdListLogged && entries.firstOrNull()?.let { it.manga.source in mangaDexSourceIds } == true) {
                             launch {
                                 entries.forEach { (manga) ->
-                                    try {
-                                        val tracks = getTracks.await(manga.id)
-                                        if (tracks.isEmpty() || tracks.none { it.trackerId == TrackerManager.MDLIST }) {
-                                            val track = mdList.createInitialTracker(manga)
-                                            insertTrack.await(mdList.refresh(track).toDomainTrack(false)!!)
+                                    // ZOUKAN: not into a library a restore is rewriting
+                                    RestoreGate.unlessRestoring {
+                                        try {
+                                            val tracks = getTracks.await(manga.id)
+                                            if (tracks.isEmpty() || tracks.none { it.trackerId == TrackerManager.MDLIST }) {
+                                                val track = mdList.createInitialTracker(manga)
+                                                insertTrack.await(mdList.refresh(track).toDomainTrack(false)!!)
+                                            }
+                                        } catch (e: Exception) {
+                                            if (e is CancellationException) throw e
+                                            logcat(LogPriority.ERROR, e) { "Error adding initial track for ${manga.title}" }
                                         }
-                                    } catch (e: Exception) {
-                                        if (e is CancellationException) throw e
-                                        logcat(LogPriority.ERROR, e) { "Error adding initial track for ${manga.title}" }
-                                    }
+                                    } ?: return@launch
                                 }
                             }
                         }
@@ -247,63 +325,18 @@ class LibraryUpdater(
                         for (item in entries) {
                             val manga = item.manga
                             ensureActive()
-                            // Don't continue to update if the entry left the library
-                            if (getManga.await(manga.id)?.favorite != true) {
-                                _progress.value = synchronized(lock) {
-                                    done++
-                                    Progress(done, total, current.toList())
-                                }
-                                continue
+                            // Each entry holds the restore gate while it reads and writes the
+                            // library; once a restore is asked for, the rest of the update stops
+                            // and the restore waits only for the entries being updated
+                            val ran = RestoreGate.unlessRestoring {
+                                updateEntry(manga)
+                                true
                             }
-                            _progress.value = synchronized(lock) {
-                                current += manga.title
-                                Progress(done, total, current.toList())
-                            }
-                            try {
-                                if (sourceManager.get(manga.source) == null) throw SourceNotFoundException()
-                                val result = refreshManga(
-                                    manga,
-                                    fetchDetails = preferences.autoUpdateMetadata().get(),
-                                    fetchChapters = true,
-                                )
-                                // Only an entry still in the library has new chapters, as Android's updateManga
-                                val newOnes = if (result.manga.favorite) result.newChapters.sortedByDescending { it.sourceOrder } else emptyList()
-                                if (newOnes.isNotEmpty()) {
-                                    val toDownload = filterChaptersForDownload.await(result.manga, newOnes)
-                                    if (toDownload.isNotEmpty()) downloadChapters(result.manga, toDownload)
-                                    synchronized(lock) {
-                                        newChapters += newOnes.size
-                                        queued += toDownload.size
-                                        withNew += result.manga
-                                    }
-                                    synchronized(lock) { preferences.newUpdatesCount().set(preferences.newUpdatesCount().get() + newOnes.size) }
+                            if (ran == null) {
+                                if (stoppedForRestore.compareAndSet(false, true)) {
+                                    logcat { "A backup restore started; the library update stops" }
                                 }
-                                try {
-                                    errors.clear(manga.id)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Throwable) {
-                                    logcat(LogPriority.WARN, e) { "Clearing the update error of ${manga.title} failed" }
-                                }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Throwable) {
-                                val message = errorMessage(e)
-                                logcat(LogPriority.WARN, e) { "Updating ${manga.title} failed" }
-                                synchronized(lock) { failures += Failure(manga, message) }
-                                try {
-                                    errors.record(manga.id, message)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Throwable) {
-                                    logcat(LogPriority.WARN, e) { "Saving the update error of ${manga.title} failed" }
-                                }
-                            } finally {
-                                _progress.value = synchronized(lock) {
-                                    current -= manga.title
-                                    done++
-                                    Progress(done, total, current.toList())
-                                }
+                                break
                             }
                         }
                     }
@@ -314,8 +347,15 @@ class LibraryUpdater(
         // Downloads start once the update ends, as on Android: sites may not like both at once
         if (queued > 0) downloadManager.start()
 
+        // A stopped update did not check the rest: keep the previous time, so the schedule runs
+        // the update again instead of waiting a full interval
+        if (stoppedForRestore.get()) preferences.lastUpdatedTimestamp().set(previousUpdate)
+
         val errorFile = if (failures.isNotEmpty()) writeErrors(failures) else null
-        return Result(total, newChapters, withNew, queued, skipped, failures, errorFile, toUpdate.map { it.manga })
+        return Result(
+            total, newChapters, withNew, queued, skipped, failures, errorFile, toUpdate.map { it.manga },
+            stoppedForRestore = stoppedForRestore.get(),
+        )
     }
 
     /**

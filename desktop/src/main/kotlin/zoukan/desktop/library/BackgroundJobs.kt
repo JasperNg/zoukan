@@ -1,5 +1,6 @@
 package zoukan.desktop.library
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,8 +29,10 @@ class BackgroundJobs(
     private val autoBackup: AutoBackup,
     private val sourceManager: SourceManager,
 ) {
+    /** The loop; guarded by `this`, as start and stop may come from different threads. */
     private var job: Job? = null
 
+    @Synchronized
     fun start(scope: CoroutineScope) {
         if (job?.isActive == true) return
         job = scope.launch {
@@ -37,12 +40,20 @@ class BackgroundJobs(
             sourceManager.isInitialized.first { it }
             delay(START_DELAY)
             while (isActive) {
-                runCatching { tick() }.onFailure { logcat(LogPriority.ERROR, it) { "Background work failed" } }
+                try {
+                    tick()
+                } catch (e: CancellationException) {
+                    // Stopped: not a failure
+                    throw e
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "Background work failed" }
+                }
                 delay(CHECK_EVERY)
             }
         }
     }
 
+    @Synchronized
     fun stop() {
         job?.cancel()
         job = null
@@ -65,12 +76,18 @@ class BackgroundJobs(
         if (sync.isDue(now)) sync.syncData()
         // E-Hentai gallery updates, in place of EHentaiUpdateWorker
         runCatching { Injekt.get<zoukan.desktop.exh.EhGalleryUpdater>().runIfDue() }
-            .onFailure { logcat(LogPriority.WARN, it) { "Updating E-Hentai galleries failed" } }
+            .onFailure {
+                if (it is CancellationException) throw it
+                logcat(LogPriority.WARN, it) { "Updating E-Hentai galleries failed" }
+            }
         // Tracker updates that failed (offline, site down), in place of DelayedTrackingUpdateJob
         if (now - lastTrackingRetry >= TRACKING_RETRY_EVERY) {
             lastTrackingRetry = now
             runCatching { Injekt.get<TrackChapters>().retryDelayed() }
-                .onFailure { logcat(LogPriority.WARN, it) { "Retrying tracker updates failed" } }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    logcat(LogPriority.WARN, it) { "Retrying tracker updates failed" }
+                }
         }
     }
 

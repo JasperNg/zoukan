@@ -6,7 +6,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -23,6 +22,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 
@@ -35,8 +35,8 @@ object LibrarySync {
     @Composable
     fun showFavorites(): Boolean {
         val preferences = remember { Injekt.get<ExhPreferences>() }
-        val enabled by preferences.isHentaiEnabled().changes().collectAsState(preferences.isHentaiEnabled().get())
-        val exhentai by preferences.enableExhentai().changes().collectAsState(preferences.enableExhentai().get())
+        val enabled by preferences.isHentaiEnabled().collectAsState()
+        val exhentai by preferences.enableExhentai().collectAsState()
         return enabled && exhentai
     }
 
@@ -44,7 +44,7 @@ object LibrarySync {
     @Composable
     fun showLibrary(): Boolean {
         val preferences = remember { Injekt.get<SyncPreferences>() }
-        val service by preferences.syncService().changes().collectAsState(preferences.syncService().get())
+        val service by preferences.syncService().collectAsState()
         return service != SyncManager.SyncService.NONE.value
     }
 

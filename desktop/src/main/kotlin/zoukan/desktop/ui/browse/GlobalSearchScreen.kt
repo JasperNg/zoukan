@@ -44,7 +44,9 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences.GlobalSearchSourceFilter
 import eu.kanade.tachiyomi.source.CatalogueSource
 import exh.source.MERGED_SOURCE_ID
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -63,12 +65,33 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.PickDialog
 import zoukan.desktop.ui.manga.SearchAgainField
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.desktop.ui.migration.MigrationPicks
 import zoukan.i18n.desktop.DMR
+import java.util.concurrent.TimeoutException
+
+/**
+ * Runs a source's request with the browse screens' time limit, failing with an ordinary
+ * [TimeoutException] past it. withTimeout's own TimeoutCancellationException is a
+ * CancellationException, which the callers rethrow, so a slow source stayed loading forever
+ * instead of showing as failed. Cancelling the caller (leaving the screen) still cancels.
+ */
+internal suspend fun <T> withSourceTimeout(millis: Long = 60_000, block: suspend CoroutineScope.() -> T): T =
+    try {
+        withTimeout(millis, block)
+    } catch (e: TimeoutCancellationException) {
+        throw TimeoutException(e.message)
+    }
+
+/** A browse screen's error text for a source that failed: a timeout gets a translated message. */
+internal fun sourceErrorMessage(e: Throwable): String = when (e) {
+    is TimeoutException -> localized(DMR.strings.source_timed_out)
+    else -> e.message ?: e::class.simpleName.orEmpty()
+}
 
 class GlobalSearchScreenModel(
     val query: String,
@@ -144,16 +167,17 @@ class GlobalSearchScreenModel(
                 val result = permits.withPermit {
                     try {
                         val page = withContext(Dispatchers.IO) {
-                            withTimeout(60_000) { source.getSearchManga(1, query, source.getFilterList()) }
+                            withSourceTimeout { source.getSearchManga(1, query, source.getFilterList()) }
                         }
                         val manga = withContext(Dispatchers.IO) {
                             networkToLocalManga(page.mangas.map { it.toDomainManga(source.id) })
                         }
-                        Result.Success(manga)
+                        // A source can list the same title twice on a page; the row is keyed by id
+                        Result.Success(manga.distinctBy { it.id })
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Throwable) {
-                        Result.Error(e.message ?: e::class.simpleName.orEmpty())
+                        Result.Error(sourceErrorMessage(e))
                     }
                 }
                 mutableState.update { it + (source.id to result) }
@@ -185,8 +209,8 @@ data class GlobalSearchScreen(
         // ZOUKAN -->
         var picked by remember { mutableStateOf<Manga?>(null) }
         picked?.let { manga -> PickDialog(purpose, manga, onDismiss = { picked = null }) }
-        val sourceFilter by model.sourceFilter.changes().collectAsState(model.sourceFilter.get())
-        val onlyWithResults by model.onlyWithResults.changes().collectAsState(model.onlyWithResults.get())
+        val sourceFilter by model.sourceFilter.collectAsState()
+        val onlyWithResults by model.onlyWithResults.collectAsState()
         val bulk = remember { BulkFavorite() }
         // ZOUKAN -->
         // A result's right click adds or removes it (Android's long press) outside selecting

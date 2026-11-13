@@ -222,7 +222,15 @@ class DownloadManager(
      */
     suspend fun chaptersToDelete(manga: Manga, chapters: List<Chapter>): List<Chapter> {
         val excluded = preferences.removeExcludeCategories().get().mapNotNull(String::toLongOrNull).toSet()
-        val categories = runCatching { getCategories.await(manga.id).map { it.id } }.getOrDefault(emptyList()).ifEmpty { listOf(0L) }
+        val categories = try {
+            getCategories.await(manga.id).map { it.id }.ifEmpty { listOf(0L) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Without the categories the "Exclude categories" protection can't be checked; delete nothing
+            logcat(LogPriority.WARN, e) { "Reading the categories of ${manga.title} failed; not deleting its chapters" }
+            return emptyList()
+        }
         val allowed = if (categories.any { it in excluded }) chapters.filterNot { it.read } else chapters
         return if (preferences.removeBookmarkedChapters().get()) allowed else allowed.filterNot { it.bookmark }
     }
@@ -333,14 +341,21 @@ class DownloadManager(
     /** Adds [chapters] to the queue, unless downloaded or queued already. */
     fun enqueue(manga: Manga, chapters: List<Chapter>, start: Boolean = true) {
         if (chapters.isEmpty()) return
-        val queued = _queue.value.mapTo(HashSet()) { it.chapter.id }
-        val added = chapters
-            .filterNot { it.id in queued || isDownloaded(manga, it) }
+        val candidates = chapters
+            .distinctBy { it.id }
+            .filterNot { isDownloaded(manga, it) }
             // Oldest first, as they are read
             .sortedByDescending { it.sourceOrder }
-            .map { Download(manga, it) }
+        if (candidates.isEmpty()) return
+        // The queued check and the add in one atomic update, so callers racing each other (the
+        // library update and the UI) never queue a chapter twice
+        var added = emptyList<Download>()
+        _queue.update { q ->
+            val queued = q.mapTo(HashSet()) { it.chapter.id }
+            added = candidates.filterNot { it.id in queued }.map { Download(manga, it) }
+            if (added.isEmpty()) q else q + added
+        }
         if (added.isEmpty()) return
-        _queue.update { it + added }
         save()
         if (start) start()
     }
@@ -391,13 +406,19 @@ class DownloadManager(
     }
 
     fun cancel(chapterIds: Set<Long>) {
-        val removed = _queue.value.filter { it.chapter.id in chapterIds }
-        if (removed.isEmpty()) return
-        val restart = synchronized(lock) {
-            (job != null && removed.any { it.state.value == Download.State.DOWNLOADING }).also { if (it) pause() }
+        // The state check, the pause and the removal happen under the lock, as the worker's claim
+        // of a chapter does (see [run]), so a chapter is either removed before it starts or its
+        // run is paused
+        var removed: List<Download> = emptyList()
+        var restart = false
+        val stopped = synchronized(lock) {
+            removed = _queue.value.filter { it.chapter.id in chapterIds }
+            if (removed.isEmpty()) return
+            restart = job != null && removed.any { it.state.value == Download.State.DOWNLOADING }
+            if (restart) pause()
+            _queue.update { q -> q.filterNot { it.chapter.id in chapterIds } }
+            stopping
         }
-        _queue.update { q -> q.filterNot { it.chapter.id in chapterIds } }
-        val stopped = synchronized(lock) { stopping }
         scope.launch {
             // After the cancelled download let go of its files
             stopped?.join()
@@ -492,7 +513,13 @@ class DownloadManager(
                     launch {
                         for (download in downloads) {
                             if (!isActive) break
-                            if (download !in _queue.value || download.state.value != Download.State.QUEUED) continue
+                            // Claims the chapter under the lock, so cancel() sees it either still
+                            // queued (and removes it) or downloading (and pauses the run)
+                            val claimed = synchronized(lock) {
+                                (isActive && download in _queue.value && download.state.value == Download.State.QUEUED)
+                                    .also { if (it) download.state.value = Download.State.DOWNLOADING }
+                            }
+                            if (!claimed) continue
                             if (download(download)) downloaded.incrementAndGet() else failed.incrementAndGet()
                         }
                     }
@@ -513,11 +540,10 @@ class DownloadManager(
         }
     }
 
-    /** @return whether it downloaded */
+    /** Downloads a chapter that [run] has claimed (set to downloading). @return whether it downloaded */
     private suspend fun download(download: Download): Boolean {
         val manga = download.manga
         val chapter = download.chapter
-        download.state.value = Download.State.DOWNLOADING
         return try {
             val source = sourceManager.get(manga.source) as? HttpSource
                 ?: error("The source of ${manga.title} is not installed")
@@ -546,10 +572,13 @@ class DownloadManager(
                     },
                     parallelPages = preferences.parallelPageLimit().get(),
                 )
+                // Only a CBZ is encrypted: a folder download never reads the secret store
+                val asCbz = preferences.saveChaptersAsCBZ().get()
+                val encryption = if (asCbz) password.encryption() else null
                 val options = ChapterDownloader.Options(
-                    asCbz = preferences.saveChaptersAsCBZ().get(),
-                    encryption = password.encryption(),
-                    comicInfo = comicInfo(manga, chapter, source),
+                    asCbz = asCbz,
+                    encryption = encryption,
+                    comicInfo = comicInfo(manga, chapter, source, encryption),
                     // ZOUKAN -->
                     splitTallImages = preferences.splitTallImages().get(),
                     // ZOUKAN <--
@@ -575,7 +604,7 @@ class DownloadManager(
         }
     }
 
-    private suspend fun comicInfo(manga: Manga, chapter: Chapter, source: HttpSource): ComicInfoXml {
+    private suspend fun comicInfo(manga: Manga, chapter: Chapter, source: HttpSource, encryption: CbzEncryption?): ComicInfoXml {
         val categories = runCatching { getCategories.await(manga.id) }.getOrDefault(emptyList())
             .map { it.name.trim() }.filter { it.isNotEmpty() }
         val url = runCatching { source.getChapterUrl(chapter.toSChapter()).trim() }.getOrNull()
@@ -595,7 +624,7 @@ class DownloadManager(
                 put("PublishingStatusTachiyomi", ComicInfoXml.statusToComicInfo(manga.status))
                 if (categories.isNotEmpty()) put("Categories", categories.joinToString())
                 put("SourceMihon", source.name)
-                password.comicInfoPadding()?.let { put("PaddingTachiyomiSY", it) }
+                password.comicInfoPadding(encryption)?.let { put("PaddingTachiyomiSY", it) }
             },
         )
     }
@@ -629,8 +658,10 @@ class DownloadManager(
             val chapter = getChapter.await(s.chapterId) ?: return@mapNotNull null
             Download(manga, chapter)
         }
-        val queued = _queue.value.mapTo(HashSet()) { it.chapter.id }
-        _queue.update { it + downloads.filterNot { d -> d.chapter.id in queued } }
+        _queue.update { q ->
+            val queued = q.mapTo(HashSet()) { it.chapter.id }
+            q + downloads.distinctBy { it.chapter.id }.filterNot { d -> d.chapter.id in queued }
+        }
         if (start) start()
     }
 

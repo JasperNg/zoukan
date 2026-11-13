@@ -160,14 +160,12 @@ class DiscordPresence(
 
     private suspend fun connect(): DiscordIpc? {
         val connection = DiscordIpc.connect() ?: return null
-        connection.send(DiscordIpc.OP_HANDSHAKE, """{"v":1,"client_id":"$APPLICATION_ID"}""")
-        val (op, body) = readReply(connection)
-        if (op != DiscordIpc.OP_FRAME || !body.contains("\"READY\"")) {
-            connection.close()
-            error("Discord refused the connection: $body")
+        return handshake(connection, connection::close) {
+            connection.send(DiscordIpc.OP_HANDSHAKE, """{"v":1,"client_id":"$APPLICATION_ID"}""")
+            val (op, body) = readReply(connection)
+            if (op != DiscordIpc.OP_FRAME || !body.contains("\"READY\"")) error("Discord refused the connection: $body")
+            connected = true
         }
-        connected = true
-        return connection
     }
 
     private fun disconnect() {
@@ -262,6 +260,20 @@ class DiscordPresence(
                 runCatching { close() }
                 error("Discord did not answer in time")
             }
+        }
+
+        /**
+         * Runs [block] on a new [connection] and returns it, or closes it if [block] throws
+         * (cancellation included) and rethrows, so a failed handshake never leaks the connection.
+         */
+        internal inline fun <T> handshake(connection: T, close: () -> Unit, block: () -> Unit): T {
+            try {
+                block()
+            } catch (e: Throwable) {
+                runCatching { close() }
+                throw e
+            }
+            return connection
         }
 
         /** The Android app's Discord application, so presence looks the same. */

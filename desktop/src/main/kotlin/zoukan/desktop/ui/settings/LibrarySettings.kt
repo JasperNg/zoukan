@@ -2,7 +2,6 @@ package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -20,6 +19,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -42,7 +42,7 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
     }
     item(key = "library-update-restrictions") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        val interval by preferences.autoUpdateInterval().changes().collectAsState(preferences.autoUpdateInterval().get())
+        val interval by preferences.autoUpdateInterval().collectAsState()
         // Wi-Fi and unmetered network are Android's; they stay in the setting and are not shown
         MultiSelectPreference(
             localized(MR.strings.pref_library_update_restriction),
@@ -102,7 +102,7 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
     }
     item(key = "library-update-now") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        val last by preferences.lastUpdatedTimestamp().changes().collectAsState(preferences.lastUpdatedTimestamp().get())
+        val last by preferences.lastUpdatedTimestamp().collectAsState()
         SettingRow(
             localized(DMR.strings.update_the_library_now),
             if (last > 0) localized(DMR.strings.last_update, zoukan.desktop.ui.manga.formatDateTime(last)) else localized(DMR.strings.never_updated),
@@ -153,7 +153,7 @@ fun LazyListScope.librarySettings(categories: List<Category>) {
     settingsGroup(localized(DMR.strings.sorting))
     item(key = "library-sort-tags") {
         val preferences = remember { Injekt.get<LibraryPreferences>() }
-        val tags by preferences.sortTagsForLibrary().changes().collectAsState(preferences.sortTagsForLibrary().get())
+        val tags by preferences.sortTagsForLibrary().collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         SettingRow(
             localized(SYMR.strings.pref_tag_sorting),
@@ -187,7 +187,7 @@ private fun DefaultCategoryPreference(categories: List<Category>) {
 @Composable
 private fun CategorizedDisplayPreference() {
     val preferences = remember { Injekt.get<LibraryPreferences>() }
-    val value by preferences.categorizedDisplaySettings().changes().collectAsState(preferences.categorizedDisplaySettings().get())
+    val value by preferences.categorizedDisplaySettings().collectAsState()
     val scope = rememberCoroutineScope()
     SwitchSetting(localized(MR.strings.categorized_display_settings), checked = value) { on ->
         preferences.categorizedDisplaySettings().set(on)

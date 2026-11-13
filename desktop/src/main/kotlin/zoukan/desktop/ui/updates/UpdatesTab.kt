@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -114,6 +115,7 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.downloads.DownloadIndicator
@@ -129,6 +131,16 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+
+// ZOUKAN -->
+/** The entry fields the download folder's name is built from. */
+internal fun downloadManga(item: UpdatesWithRelations): Manga =
+    Manga.create().copy(id = item.mangaId, source = item.sourceId, ogTitle = item.ogMangaTitle)
+
+/** The chapter fields the download folder's name is built from. */
+internal fun downloadChapter(item: UpdatesWithRelations): Chapter =
+    Chapter.create().copy(id = item.chapterId, mangaId = item.mangaId, name = item.chapterName, scanlator = item.scanlator, url = item.chapterUrl)
+// ZOUKAN <--
 
 class UpdatesScreenModel(
     getUpdates: GetUpdates = Injekt.get(),
@@ -166,37 +178,49 @@ class UpdatesScreenModel(
          * grouped by entry. The first chapter of each entry leads its group; the others show only
          * while the group is expanded.
          */
-        fun getUiModel(): List<UpdatesUiModel> = items
-            .groupBy { Dates.toLocalDate(it.dateFetch) }
-            .flatMap { (date, mangas) ->
-                val header = UpdatesUiModel.Header(date, mangas.size)
-                val mangaItems = mangas
-                    .groupBy { it.mangaId }
-                    .values
-                    .flatMap { mangaChapters ->
-                        val isExpandable = mangaChapters.size > 1
-                        var lastMangaId = -1L
-                        mangaChapters.map { chapter ->
-                            if (chapter.mangaId != lastMangaId) {
-                                lastMangaId = chapter.mangaId
-                                UpdatesUiModel.Leader(chapter, isExpandable)
-                            } else {
-                                UpdatesUiModel.Item(chapter, isExpandable)
+        fun getUiModel(): List<UpdatesUiModel> = builtUiModel
+
+        // Built once per state, not on every recomposition
+        private val builtUiModel: List<UpdatesUiModel> by lazy {
+            items
+                .groupBy { Dates.toLocalDate(it.dateFetch) }
+                .flatMap { (date, mangas) ->
+                    val header = UpdatesUiModel.Header(date, mangas.size)
+                    val mangaItems = mangas
+                        .groupBy { it.mangaId }
+                        .values
+                        .flatMap { mangaChapters ->
+                            val isExpandable = mangaChapters.size > 1
+                            var lastMangaId = -1L
+                            mangaChapters.map { chapter ->
+                                if (chapter.mangaId != lastMangaId) {
+                                    lastMangaId = chapter.mangaId
+                                    UpdatesUiModel.Leader(chapter, isExpandable)
+                                } else {
+                                    UpdatesUiModel.Item(chapter, isExpandable)
+                                }
                             }
                         }
-                    }
-                listOf(header) + mangaItems
-            }
-            .distinctBy {
-                when (it) {
-                    is UpdatesUiModel.Header -> it.hashCode()
-                    is UpdatesUiModel.Item -> "${it.item.mangaId}-${it.item.chapterId}"
+                    listOf(header) + mangaItems
                 }
-            }
+                .distinctBy { it.listKey() }
+        }
 
         /** The chapters in the order the list shows them, an entry's chapters together under their leader. */
-        val displayOrder: List<UpdatesWithRelations>
-            get() = getUiModel().mapNotNull { (it as? UpdatesUiModel.Item)?.item }
+        val displayOrder: List<UpdatesWithRelations> by lazy { getUiModel().mapNotNull { (it as? UpdatesUiModel.Item)?.item } }
+
+        /**
+         * Shift-click: this state with every chapter between the last selected one and [item]
+         * selected; unchanged when [item] is no longer listed.
+         */
+        fun withRangeTo(item: UpdatesWithRelations): State {
+            val ids = displayOrder.map { it.chapterId }
+            val to = ids.indexOf(item.chapterId)
+            if (to < 0) return this
+            val from = ids.indexOfLast { it in selected }.takeIf { it >= 0 } ?: to
+            val range = if (from <= to) from..to else to..from
+            return copy(selected = selected + range.map { ids[it] })
+        }
 
         /** The chapters a row stands for: a folded group's leader stands for the entry's chapters of that day. */
         fun groupOf(item: UpdatesWithRelations): List<UpdatesWithRelations> {
@@ -280,20 +304,20 @@ class UpdatesScreenModel(
         }
     }
 
-    private suspend fun downloadedIds(items: List<UpdatesWithRelations>): Set<Long> =
-        items.filter { it.sourceId != LocalSource.ID }.groupBy { it.mangaId }.flatMapTo(HashSet()) { (mangaId, list) ->
-            val manga = getManga.await(mangaId) ?: return@flatMapTo emptyList()
-            val chapters = list.mapNotNull { getChapter.await(it.chapterId) }
-            downloadManager.downloadedIds(manga, chapters)
+    // ZOUKAN -->
+    /**
+     * The downloaded chapters of [items]. The download folder names come from the row itself (source,
+     * the entry's own title, chapter name, scanlator and url), so this reads one folder per entry and
+     * no database rows.
+     */
+    private fun downloadedIds(items: List<UpdatesWithRelations>): Set<Long> =
+        items.filter { it.sourceId != LocalSource.ID }.groupBy { it.mangaId }.flatMapTo(HashSet()) { (_, list) ->
+            runCatching { downloadManager.downloadedIds(downloadManga(list.first()), list.map(::downloadChapter)) }.getOrDefault(emptySet())
         }
 
-    // ZOUKAN -->
-    private fun isDownloaded(downloads: zoukan.desktop.download.DownloadManager, item: UpdatesWithRelations): Boolean {
-        if (item.sourceId == zoukan.desktop.local.LocalSource.ID) return true
-        val manga = tachiyomi.domain.manga.model.Manga.create().copy(id = item.mangaId, source = item.sourceId, ogTitle = item.ogMangaTitle)
-        val chapter = tachiyomi.domain.chapter.model.Chapter.create()
-            .copy(id = item.chapterId, mangaId = item.mangaId, name = item.chapterName, scanlator = item.scanlator, url = item.chapterUrl)
-        return downloads.isDownloaded(manga, chapter)
+    private fun isDownloaded(downloads: DownloadManager, item: UpdatesWithRelations): Boolean {
+        if (item.sourceId == LocalSource.ID) return true
+        return downloads.isDownloaded(downloadManga(item), downloadChapter(item))
     }
     // ZOUKAN <--
 
@@ -371,13 +395,7 @@ class UpdatesScreenModel(
      * Shift-click: selects every chapter between the last selected one and [item], as Android's
      * long-press range selection.
      */
-    fun selectRange(item: UpdatesWithRelations) = mutableState.update { state ->
-        val ids = state.displayOrder.map { it.chapterId }
-        val to = ids.indexOf(item.chapterId)
-        val from = ids.indexOfLast { it in state.selected }.takeIf { it >= 0 } ?: to
-        val range = if (from <= to) from..to else to..from
-        state.copy(selected = state.selected + range.map { ids[it] })
-    }
+    fun selectRange(item: UpdatesWithRelations) = mutableState.update { it.withRangeTo(item) }
 
     fun selectAll() = mutableState.update { s -> s.copy(selected = s.items.mapTo(HashSet()) { it.chapterId }) }
 
@@ -396,7 +414,9 @@ class UpdatesScreenModel(
 @Composable
 fun UpdatesTab(model: UpdatesScreenModel) {
     val state by model.state.collectAsState()
-    val refresh by Injekt.get<LibraryUpdater>().progress.collectAsState()
+    // Only whether an update runs, so each progress tick doesn't recompose the whole list
+    val progress = Injekt.get<LibraryUpdater>().progress.collectAsState()
+    val updating by remember(progress) { derivedStateOf { progress.value != null } }
     val navigator = LocalNavigator.currentOrThrow
     // Ctrl/Cmd + A selects every chapter shown; Escape clears the selection before it means "back"
     zoukan.desktop.ui.OnShortcut { action ->
@@ -418,7 +438,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                 // Android's Updates toolbar opens Upcoming from its calendar button
                 TooltipIconButton(Icons.Outlined.CalendarMonth, localized(MR.strings.action_view_upcoming), onClick = { navigator.push(UpcomingScreen) })
                 DownloadsButton()
-                TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_update_library), onClick = model::refresh, enabled = refresh == null)
+                TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_update_library), onClick = model::refresh, enabled = !updating)
             }
         }
         LibraryUpdateProgress()
@@ -438,12 +458,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                             is UpdatesUiModel.Item -> "item"
                         }
                     },
-                    key = {
-                        when (it) {
-                            is UpdatesUiModel.Header -> "updatesHeader-${it.hashCode()}"
-                            is UpdatesUiModel.Item -> "updates-${it.item.mangaId}-${it.item.chapterId}"
-                        }
-                    },
+                    key = { it.listKey() },
                 ) { uiItem ->
                     if (uiItem is UpdatesUiModel.Header) {
                         DateHeading(uiItem.date, uiItem.mangaCount, Modifier.padding(top = 4.dp))
@@ -506,7 +521,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
 @Composable
 private fun LastUpdatedLine() {
     val preferences = remember { Injekt.get<LibraryPreferences>() }
-    val last by preferences.lastUpdatedTimestamp().changes().collectAsState(preferences.lastUpdatedTimestamp().get())
+    val last by preferences.lastUpdatedTimestamp().collectAsState()
     val now by produceState(System.currentTimeMillis()) {
         while (true) {
             delay(60_000)
@@ -623,6 +638,16 @@ sealed interface UpdatesUiModel {
 
     /** The first chapter of an entry on a day: it shows the cover, the title and the collapse button. */
     data class Leader(override val item: UpdatesWithRelations, override val isExpandable: Boolean) : Item(item)
+}
+
+/**
+ * The row's LazyColumn key, also what getUiModel de-duplicates by: a header by its day, a chapter
+ * by its entry and id. Not hashCode, which collides for headers of the same month whose counts
+ * differ by 31 times the gap in days (dropping a header, or crashing the list on a duplicate key).
+ */
+fun UpdatesUiModel.listKey(): String = when (this) {
+    is UpdatesUiModel.Header -> "updatesHeader-${date.toEpochDay()}"
+    is UpdatesUiModel.Item -> "updates-${item.mangaId}-${item.chapterId}"
 }
 
 /** String to identify which manga's update on which day it is collapsing */

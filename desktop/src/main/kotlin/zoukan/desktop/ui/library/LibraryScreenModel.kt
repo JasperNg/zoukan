@@ -14,9 +14,11 @@ import exh.source.isEhBasedManga
 import exh.source.mangaDexSourceIds
 import exh.source.nHentaiSourceIds
 import exh.util.isLewd
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -55,6 +57,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -202,10 +205,10 @@ class LibraryScreenModel(
          * The tabs when the library is grouped by source, status or tracking status, with the entries
          * in each, as Android's getGroupedMangaItems. Ungrouped has none, so only All shows.
          */
-        val groups: List<Pair<Category, Set<Long>>>
-            get() {
+        val groups: List<Pair<Category, Set<Long>>> by lazy {
+            run {
                 fun tab(id: Long, name: String, order: Long) = Category(id = id, name = name, order = order, flags = 0, hidden = false)
-                return when (settings.effectiveGroup) {
+                when (settings.effectiveGroup) {
                     LibraryGroup.BY_SOURCE -> items.groupBy { it.manga.source }
                         .map { (source, list) ->
                             val name = if (source == LocalSource.ID) localized(MR.strings.action_display_local_badge) else sources[source]?.first?.ifBlank { null } ?: source.toString()
@@ -231,6 +234,7 @@ class LibraryScreenModel(
                     else -> emptyList()
                 }
             }
+        }
         // ZOUKAN <--
 
         /**
@@ -238,18 +242,22 @@ class LibraryScreenModel(
          * searching or filtering, categories with no match are left out unless "Show empty
          * categories during search/filtering" is on, as Android's (KMK).
          */
-        val tabs: List<Category>
-            get() {
+        val tabs: List<Category> by lazy {
+            run {
                 // ZOUKAN -->
-                if (grouped) return groups.map { it.first }
+                if (grouped) return@run groups.map { it.first }
                 // ZOUKAN <--
                 val hasUncategorized = items.any { it.categories.isEmpty() || Category.UNCATEGORIZED_ID in it.categories }
                 // KMK: hidden categories show with "Show hidden categories"
                 val shown = categories.filter { (settings.showHiddenCategories || !it.hidden) && (!it.isSystemCategory || hasUncategorized) }
                 val searching = query.isNotBlank() || settings.hasFilter
-                if (!searching || settings.showEmptyCategoriesSearch) return shown
-                return shown.filter { countIn(it.id) > 0 }
+                if (!searching || settings.showEmptyCategoriesSearch) return@run shown
+                shown.filter { countIn(it.id) > 0 }
             }
+        }
+
+        /** How many distinct entries the library holds, for the header */
+        val entryCount: Int by lazy { items.distinctBy { it.id }.size }
 
         val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }.takeIf { !grouped }
 
@@ -267,7 +275,12 @@ class LibraryScreenModel(
             else -> items.filter { category in it.categories }
         }.distinctBy { it.id }
 
-        fun countIn(category: Long?): Int = inCategory(category).count { passes(it) }
+        // Each state computes its tab counts once, not on every recomposition
+        private val counts = HashMap<Long?, Int>()
+
+        fun countIn(category: Long?): Int = synchronized(counts) {
+            counts.getOrPut(category) { inCategory(category).count { passes(it) } }
+        }
 
         // ZOUKAN -->
         /**
@@ -333,10 +346,11 @@ class LibraryScreenModel(
         }
         // KMK <--
 
-        val visible: List<Item>
-            get() {
+        // Computed once per state, so a recomposition that doesn't change the state doesn't refilter or resort
+        val visible: List<Item> by lazy {
+            run {
                 val filtered = inCategory(selectedCategory).filter(::passes)
-                return sorted(filtered).map { lm ->
+                sorted(filtered).map { lm ->
                     val (name, lang) = sources[lm.manga.source] ?: ("" to "")
                     Item(
                         lm,
@@ -349,6 +363,7 @@ class LibraryScreenModel(
                     )
                 }
             }
+        }
 
         private fun sorted(list: List<LibraryManga>): List<LibraryManga> {
             val sort = sort
@@ -846,6 +861,36 @@ class LibraryScreenModel(
             mergingMangaId = withContext(Dispatchers.IO) { SmartSearchMerge().smartSearchMerge(manga, mergingMangaId) }.id
         }
         return mergingMangaId
+    }
+
+    /**
+     * After a multiple merge: the entries that were merged and the merged entry, for Android's
+     * "remove the merged entries?" prompt; null when nothing asks.
+     */
+    val removeMergedPrompt = MutableStateFlow<Pair<List<Manga>, Long>?>(null)
+
+    /**
+     * Merges [selectedMangas] in the screen model's scope, so leaving the screen doesn't stop the
+     * merge partway, then asks whether to remove the merged entries.
+     */
+    fun mergeMultiple(selectedMangas: List<Manga>) {
+        screenModelScope.launch {
+            val mergingMangas = selectedMangas.filterNot { it.source == MERGED_SOURCE_ID }
+            val mergedMangaId = try {
+                smartSearchMerge(selectedMangas)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toasts.error(localized(DMR.strings.merging_failed), e)
+                return@launch
+            }
+            if (mergedMangaId != null) {
+                Toasts.show(localized(SYMR.strings.entry_merged))
+                removeMergedPrompt.value = mergingMangas to mergedMangaId
+            } else {
+                Toasts.show(localized(SYMR.strings.merged_references_invalid))
+            }
+        }
     }
 
     /** Takes [mangas] out of the library, keeping their downloads (the merge's "Remove" action). */

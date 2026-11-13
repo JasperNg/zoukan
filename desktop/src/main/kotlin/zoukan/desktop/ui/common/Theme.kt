@@ -4,7 +4,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -42,11 +41,11 @@ import eu.kanade.presentation.theme.colorscheme.YotsubaColorScheme
  */
 @Composable
 fun ZoukanTheme(preferences: UiPreferences, content: @Composable () -> Unit) {
-    val mode by preferences.themeMode().changes().collectAsState(preferences.themeMode().get())
-    val appTheme by preferences.appTheme().changes().collectAsState(preferences.appTheme().get())
-    val amoled by preferences.themeDarkAmoled().changes().collectAsState(preferences.themeDarkAmoled().get())
-    val seed by preferences.colorTheme().changes().collectAsState(preferences.colorTheme().get())
-    val style by preferences.customThemeStyle().changes().collectAsState(preferences.customThemeStyle().get())
+    val mode by preferences.themeMode().collectAsState()
+    val appTheme by preferences.appTheme().collectAsState()
+    val amoled by preferences.themeDarkAmoled().collectAsState()
+    val seed by preferences.colorTheme().collectAsState()
+    val style by preferences.customThemeStyle().collectAsState()
     val dark = when (mode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true

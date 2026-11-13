@@ -7,7 +7,7 @@ references are repository paths.
 
 The short version: code the app runs (extensions, updates, Chromium) is signature- or
 hash-verified against a pinned identity; data the app reads (archives, XML, filenames) is parsed
-in-process with path-traversal and doctype defenses; secrets at rest are encrypted under a key
+in-process with path-traversal and external-entity defenses; secrets at rest are encrypted under a key
 that lives in the OS secret store. The largest accepted risk is inherited from the extension
 model itself: an extension runs with the user's full privileges, in-process, and the store that
 names its signing key is trusted over TLS alone.
@@ -42,14 +42,20 @@ Verified and trusted:
 
 | Control | Where |
 |---|---|
-| JAR signature: every entry outside META-INF signed, all by one certificate | `extension-jvm/src/main/kotlin/zoukan/extension/ExtensionSignatures.kt` (`verifyJar`) |
+| JAR signature: every entry signed, all by one certificate; only the manifest and the signature files themselves (`META-INF/MANIFEST.MF`, `*.SF`, `*.RSA`, `*.DSA`, `*.EC`, `SIG-*`) are exempt, so service files and multi-release classes under META-INF must be signed too | `extension-jvm/src/main/kotlin/zoukan/extension/ExtensionSignatures.kt` (`verifyJar`, `isSigningRelated`) |
 | APK signature: v1 + v2 + v3 via apksig, as Android's package manager | same file (`verifyApk`) |
 | The signature is re-checked from the file on disk at every load, not remembered from install | `extension-jvm/.../DesktopExtensionLoader.kt` (`loadOrThrow`) |
+| What runs is what was checked: the jar is read into memory once, its signature (or hash) is checked on those bytes, and the class loader defines classes and serves resources from the same bytes, never reopening the file. No jar stays open, so on Windows an uninstall or same-version reinstall is not blocked by a file lock | `extension-jvm/.../ExtensionClassLoader.kt` (`JarContents`, `ExtensionClassLoader`), `DesktopExtensionLoader.loadOrThrow` |
+| A jar converted from an APK runs only while it matches the SHA-256 recorded at conversion, which is kept in the app's preferences (app-state key `converted_jar_sha256_<package>`, encrypted at rest under the OS-store key), not next to the jar; a missing or stale hash (including every install from before this change, which kept a `.sha256` file beside the jar that is now ignored and removed) converts the signature-verified APK again rather than trusting or deleting the jar | `extension-jvm/.../ConvertedJarHashes.kt`, `DesktopExtensionLoader.verifiedConvertedJar` |
+| Installs and updates are staged: an APK is converted into a temporary file and moved into place only after the conversion worked, and an update whose new files fail to load is removed again when an older version was loaded and the version codes differ, so the installed, working version stays (a reinstall of the same version, or a package that was not loaded, keeps the new files and reports the error). The converted jar's hash is recorded only once a load succeeds, so a failed update does not replace the working version's hash | `DesktopExtensionInstaller.installApk`, `DesktopExtensionManager.installExtension`, `DesktopExtensionLoader.loadOrThrow` |
+| No downgrades: the file's version must be the one the store lists, and not older than the installed version | `DesktopExtensionInstaller.checkManifest` |
+| Install, update, uninstall and trust of one package run one at a time, so an uninstall cannot be undone by an install that was still running | `DesktopExtensionManager` (`locked`) |
 | Updates pinned to the installed signer; a differently-signed file is refused before it replaces anything | `extension-jvm/.../DesktopExtensionInstaller.kt` (`checkSigner`, `requiredSigner`) |
 | A rival store cannot offer an update for another store's package; tested | `DesktopExtensionManager.chooseOffer`, `desktop/src/test/kotlin/zoukan/desktop/extension/ExtensionStoreSafetyTest.kt` |
 | Manifest package name must match the store's offer, then validate | `DesktopExtensionInstaller.checkManifest`, `ExtensionManifest.kt` |
-| Store index, list and code URLs are https-only; localhost exempt for a local test store | `data/src/commonMain/kotlin/mihon/data/extension/service/ExtensionStoreService.kt` (`requireSecureStoreUrl`), also used by the installer's download |
-| Per-user trust grants (package + version + signature), revocable | `extension-jvm/.../ExtensionTrust.kt` (`trust`, `revokeAll`; the setting is Android's `trusted_extensions`, so it moves with backups) |
+| Store index, list and code URLs are https-only; localhost exempt for a local test store. A redirect from https to plain http is refused, not followed | `data/src/commonMain/kotlin/mihon/data/extension/service/ExtensionStoreService.kt` (`requireSecureStoreUrl`, `awaitSecureStoreResponse`), also used by the installer's download |
+| Per-user trust grants (package + version + signature), revocable | `extension-jvm/.../ExtensionTrust.kt` (`trust`, `revokeAll`). The grants are an app-state preference (`trusted_extensions` under the app-state prefix), so they stay on this computer: backups leave them out (`PreferenceBackupCreator`) and restores drop them (`DesktopBackups.withSafePreferences`); an extension trusted by hand is trusted again after moving a library |
+| A restored extension store that is new, or whose signing key changed, is added only after the user confirms it | Settings restore: `newExtensionStores` with the confirmation in `ui/settings/BackupScreens.kt`. Data sync (`compat/SyncManager.kt`) and the command line `backup restore` (`Main.kt`) drop those stores instead and say so (`DesktopBackups.withoutNewExtensionStores`) |
 | No debug-build auto-trust on desktop: an unsigned-for-development app trusts exactly what it would trust installed | absence by construction; `ExtensionTrust` has no debug path |
 
 Residual risk:
@@ -71,9 +77,16 @@ Residual risk:
    happens at load. dex2jar is effectively unmaintained; this is pre-consent exposure to its
    parsers. Downloads have no size cap. Stores with ready-made jars (Keiyoushi, the norm) skip
    this path entirely.
-4. **A converted jar can be swapped after install** by a same-user process, because the load-time
-   signature check reads whatever file is on disk. (Mitigated: jar hash bound to verified APK at
-   install time, so the loader refuses a replaced jar.)
+4. **A converted jar can be swapped after install** by a same-user process, because the APK's
+   signature does not cover it. (Mitigated: its hash is recorded at conversion in the encrypted
+   preferences, not beside the jar, and the loader runs the very bytes it hashed; a replaced jar is
+   converted again from the verified APK.) What is left: a same-user process that can read the
+   OS-store key can rewrite the preferences, as residual risk 1 under Secrets at rest says; and
+   the preferences loader still accepts a plain, unencrypted file (the migration path from before
+   encryption, `JavaSharedPreferences`), so such a process can replace the whole preferences file
+   without the key, losing the user's settings. The same applies to the trust grants above.
+   There is also a moment between a conversion and the read of its result in which a swap would
+   be hashed as genuine.
 
 ## Updater
 
@@ -135,7 +148,8 @@ Verified and trusted:
 |---|---|
 | Download filenames sanitized as Android builds them: control chars, `/`, `\`, `:`, drive-colon parts removed | `desktop/.../download/FileNames.kt` (`buildValidFilename`) |
 | CBZ entries are generated page names only, on write and on read; a zip entry name never becomes a path | `desktop/.../download/Cbz.kt`, `ChapterDownloader.kt` |
-| XML parsing refuses doctype declarations, so no XXE, from archives or EPUBs | `desktop/.../download/ComicInfoXml.kt`, `desktop/.../local/LocalFormat.kt` |
+| ComicInfo.xml parsing refuses doctype declarations, so no XXE | `desktop/.../download/ComicInfoXml.kt` |
+| EPUB XML allows a doctype (XHTML carries one) but fetches nothing outside the file: secure processing on, external general and parameter entities off, external DTDs and schemas not loaded, no XInclude, entity references not expanded | `desktop/.../local/LocalFormat.kt` (`xml`) |
 | Archive entry names can't escape the unpack folder: absolute paths, `..`, and drive-colon parts refused | `desktop/.../local/Archives.kt` (`write`) |
 | Unpacking is capped (per entry, per archive total, per entry count; the system tar is watched while it runs and killed over budget) and symlink entries are skipped, in every path | `Archives.kt` (`Budget`, `Limits`, `systemTar`) (hardened) |
 | RAR/7z/TAR read in-process by junrar and Commons Compress; anything they cannot read falls back to the system `tar` with a five-minute timeout | `Archives.kt` (`unpack`) |
@@ -175,7 +189,9 @@ Residual risk:
    write-before-chmod race; and Chromium's own cookie DB on disk uses CEF's well-known static key.
 3. App lock has no attempt rate limit; offline guessing is bounded only by PBKDF2 cost. And
    `AppLock.verify` fails open when the stored hash is missing (returns unlocked rather than
-   locked-down) — a known nit, harmless while the lock is enabled and the hash exists.
+   locked-down) — a known nit, harmless while the lock is enabled and the hash exists. When the
+   secret store itself cannot be read and the lock is on, `AppLock.isEnabled` fails closed: the
+   app stays locked.
 
 ## Processes
 
@@ -204,4 +220,5 @@ fallback's input file is user- or source-chosen content, parsed by libarchive as
 | OAuth login CSRF from unbound `komikku://` redirects | The trackers' app registrations only accept the custom scheme; Android inherits the same flaw | Trackers move to loopback or https redirects, then the window can bind the redirect to the page it was opened from |
 | Same-user malware reads secret-store keys | OS design; no desktop API grants per-read prompts or hardware binding for generic credentials | OS-level change; the app can only shrink what is at rest, which it already does |
 | Updater follows the release JSON's asset URL with its token | Private-repo support needs it; GitHub hosts the JSON and the digest | Pin the download host, or proxy releases through a host the token is not sent to |
+| Build dependencies have no project-wide `verification-metadata.xml` | Upstream has none, and a partial file fails the build; Maven Central, Google and the Gradle plugin portal serve fixed versions over TLS. The one artifact from a plain GitHub repository, Suwayomi's `android-jar`, is pinned to a commit (`settings.gradle.kts`) and checked against a SHA-256 before anything compiles against it (`android-compat`'s `verifyAndroidJar`) | A complete `gradle/verification-metadata.xml` for every dependency, kept current on each update |
 | App-lock verifies fail-open with no rate limit | The lock is a shoulder-surfer control, not a decryption boundary; PBKDF2 at 210k iterations bounds offline guessing | Make `verify` fail closed when the lock is enabled, and add a delay between attempts |
