@@ -40,6 +40,7 @@ class ScreenKeysTest {
                 zoukan.desktop.ui.settings.ExtensionStoresScreen,
                 zoukan.desktop.ui.settings.ClearDatabaseScreen,
                 zoukan.desktop.ui.settings.CreateBackupScreen,
+                zoukan.desktop.ui.settings.MissingExtensionsScreen,
                 zoukan.desktop.ui.settings.RestoreBackupScreen("/backups/a.tachibk"),
                 zoukan.desktop.ui.settings.RestoreBackupScreen("/backups/a.tachibk.old"),
             )
