@@ -13,7 +13,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +28,7 @@ import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.collectAsState
 
 /**
  * The reader's effects that are not controls: the reading mode shown when a chapter opens
@@ -37,7 +37,7 @@ import zoukan.desktop.ui.common.ReadingModes
 @Composable
 fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.State) {
     val prefs = model.preferences
-    val keepAwake by prefs.keepScreenOn().changes().collectAsState(prefs.keepScreenOn().get())
+    val keepAwake by prefs.keepScreenOn().collectAsState()
     if (keepAwake) {
         DisposableEffect(Unit) {
             val lock = KeepAwake.acquire()
@@ -66,7 +66,7 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
 
     // "Flash on page change": a black or white screen for a moment every few pages, as Android's
     // e-ink option (it clears ghosting on e-ink monitors)
-    val flash by prefs.flashOnPageChange().changes().collectAsState(prefs.flashOnPageChange().get())
+    val flash by prefs.flashOnPageChange().collectAsState()
     if (flash) {
         var turns by remember { mutableIntStateOf(0) }
         var color by remember { mutableStateOf<Color?>(null) }

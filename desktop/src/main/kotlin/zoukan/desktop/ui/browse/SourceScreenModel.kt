@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import logcat.LogPriority
 import mihon.domain.manga.model.toDomainManga
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
@@ -90,8 +92,28 @@ class SourceScreenModel(
         // ZOUKAN <--
     )
 
-    var filters: FilterList = source?.getFilterList() ?: FilterList()
+    // ZOUKAN -->
+    /**
+     * The source's default filters, or none when the source fails to make them. Called from the UI
+     * thread (the screen's creation, button clicks), where an exception closes the app: the
+     * extension can throw, or have been updated or uninstalled while the screen was open (see
+     * ExtensionClassLoader).
+     */
+    private fun defaultFilters(): FilterList = try {
+        source?.getFilterList() ?: FilterList()
+    } catch (e: VirtualMachineError) {
+        throw e
+    } catch (e: Throwable) {
+        logcat(LogPriority.ERROR, e) { "Failed to get the filters of ${source?.name}" }
+        FilterList()
+    }
+    // ZOUKAN <--
+
+    var filters: FilterList = defaultFilters()
         private set
+
+    /** Whether the source has filters, read once instead of on every recomposition. */
+    val hasFilters: Boolean = filters.isNotEmpty()
 
     private var job: Job? = null
 
@@ -106,7 +128,7 @@ class SourceScreenModel(
         val source = source
         if (source != null) {
             screenModelScope.launch {
-                getExhSavedSearch.subscribe(source.id, source::getFilterList).collect { searches ->
+                getExhSavedSearch.subscribe(source.id, ::defaultFilters).collect { searches ->
                     mutableState.update { it.copy(savedSearches = searches.sortedBy { s -> s.name.lowercase() }) }
                 }
             }
@@ -115,7 +137,7 @@ class SourceScreenModel(
             setListing(Listing.Follows)
         } else if (source != null && savedSearchId != null) {
             screenModelScope.launch {
-                val saved = getExhSavedSearch.awaitOne(savedSearchId, source::getFilterList)
+                val saved = getExhSavedSearch.awaitOne(savedSearchId, ::defaultFilters)
                 if (saved != null) applySavedSearch(saved) else setListing(Listing.Popular)
             }
         } else {
@@ -142,7 +164,7 @@ class SourceScreenModel(
     fun filtersChanged() = mutableState.update { it.copy(filterVersion = it.filterVersion + 1) }
 
     fun resetFilters() {
-        filters = source?.getFilterList() ?: FilterList()
+        filters = defaultFilters()
         filtersChanged()
     }
 
@@ -158,7 +180,7 @@ class SourceScreenModel(
      * filter has its name.
      */
     fun searchGenre(genreName: String) {
-        val defaultFilters = source?.getFilterList() ?: FilterList()
+        val defaultFilters = defaultFilters()
         var genreExists = false
 
         filter@ for (sourceFilter in defaultFilters) {
@@ -193,7 +215,7 @@ class SourceScreenModel(
 
     /** Shows a saved search: its query with its filters, as the Android app does. */
     fun applySavedSearch(search: EXHSavedSearch) {
-        filters = search.filterList ?: source?.getFilterList() ?: FilterList()
+        filters = search.filterList ?: defaultFilters()
         filtersChanged()
         setListing(Listing.Search(search.query.orEmpty()), savedSearch = search.id)
     }
@@ -202,7 +224,7 @@ class SourceScreenModel(
     fun saveSearch(name: String) {
         val source = source ?: return
         val query = (state.value.listing as? Listing.Search)?.query?.takeIf { it.isNotBlank() }
-        val filterList = filters.ifEmpty { source.getFilterList() }
+        val filterList = filters.ifEmpty { defaultFilters() }
         screenModelScope.launch(Dispatchers.IO) {
             insertSavedSearch.await(
                 SavedSearch(

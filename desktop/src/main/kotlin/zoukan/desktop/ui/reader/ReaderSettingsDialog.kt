@@ -41,6 +41,7 @@ import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
@@ -90,13 +91,13 @@ private fun <T> Choices(selected: T, choices: List<Pair<T, String>>, onSelect: (
 
 @Composable
 private fun <T> PrefChoices(preference: Preference<T>, choices: List<Pair<T, String>>) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     Choices(value, choices) { preference.set(it) }
 }
 
 @Composable
 private fun SwitchRow(label: String, preference: Preference<Boolean>, subtitle: String? = null) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     Row(
         Modifier.fillMaxWidth().clickable { preference.set(!value) }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -111,7 +112,7 @@ private fun SwitchRow(label: String, preference: Preference<Boolean>, subtitle: 
 
 @Composable
 private fun IntSlider(label: String, preference: Preference<Int>, range: IntRange, format: (Int) -> String = { "$it" }) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     Text("$label: ${format(value)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
     Slider(
         value = value.toFloat(),
@@ -131,7 +132,7 @@ private fun ReadingPage(model: ReaderScreenModel, mode: Int, prefs: DesktopPrefe
         SwitchRow(localized(MR.strings.pref_crop_borders), prefs.cropBordersWebtoon())
         // ZOUKAN -->
         // KMK's smart scale; Long strip with gaps only when "Apply Smart scale to Long strip with gaps" is on
-        val gapScale by prefs.longStripGapSmartScale().changes().collectAsState(prefs.longStripGapSmartScale().get())
+        val gapScale by prefs.longStripGapSmartScale().collectAsState()
         if (mode != ReadingModes.CONTINUOUS_VERTICAL || gapScale) {
             Heading(localized(KMR.strings.pref_webtoon_scale_type))
             PrefChoices(prefs.webtoonScaleType(), WebtoonScaleTypes.all)
@@ -205,7 +206,7 @@ private fun GeneralPage(prefs: DesktopPreferences) {
     SwitchRow(localized(DMR.strings.vertical_page_slider_in_a_wide), prefs.landscapeVerticalSeekbar(), localized(DMR.strings.in_vertical_modes_also_when_the))
     SwitchRow(localized(DMR.strings.left_handed_vertical_page_slider), prefs.leftVerticalSeekbar())
     Text(localized(DMR.strings.bottom_bar_buttons), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-    val buttons by prefs.readerBottomButtons().changes().collectAsState(prefs.readerBottomButtons().get())
+    val buttons by prefs.readerBottomButtons().collectAsState()
     ReaderBottomButtons.all.forEach { (value, label) ->
         val on = value in buttons
         val toggle = { prefs.readerBottomButtons().set(if (on) buttons - value else buttons + value) }
@@ -220,7 +221,7 @@ private fun GeneralPage(prefs: DesktopPreferences) {
     SwitchRow(localized(KMR.strings.pref_viewer_nav_smaller_tap_zone), prefs.smallerTapZone())
     // ZOUKAN <--
     Heading(localized(DMR.strings.auto_scroll))
-    val interval by prefs.autoscrollInterval().changes().collectAsState(prefs.autoscrollInterval().get())
+    val interval by prefs.autoscrollInterval().collectAsState()
     Text(localized(DMR.strings.every_seconds_a_starts_and_stops, "%.1f".format(interval)), style = MaterialTheme.typography.bodyMedium)
     Slider(
         value = interval,
@@ -247,12 +248,12 @@ object ReaderSettingChoices {
 @Composable
 private fun FilterPage(prefs: DesktopPreferences) {
     SwitchRow(localized(MR.strings.pref_custom_brightness), prefs.customBrightness())
-    val brightnessOn by prefs.customBrightness().changes().collectAsState(prefs.customBrightness().get())
+    val brightnessOn by prefs.customBrightness().collectAsState()
     if (brightnessOn) IntSlider(localized(DMR.strings.brightness), prefs.customBrightnessValue(), -75..100)
     SwitchRow(localized(DMR.strings.color_filter), prefs.colorFilter())
-    val colorOn by prefs.colorFilter().changes().collectAsState(prefs.colorFilter().get())
+    val colorOn by prefs.colorFilter().collectAsState()
     if (colorOn) {
-        val argb by prefs.colorFilterValue().changes().collectAsState(prefs.colorFilterValue().get())
+        val argb by prefs.colorFilterValue().collectAsState()
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(28.dp).background(Color(argb), Corners.Medium))
             Text("  " + localized(DMR.strings.color_laid_over_pages), style = MaterialTheme.typography.bodySmall)

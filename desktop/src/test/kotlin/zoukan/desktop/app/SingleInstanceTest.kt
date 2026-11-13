@@ -3,9 +3,11 @@ package zoukan.desktop.app
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -86,6 +88,49 @@ class SingleInstanceTest {
             command.close()
         }
         SingleInstance.acquireForCommand(root).shouldNotBeNull().close()
+    }
+
+    @Test
+    fun `a lock held by another process is held`(@TempDir scratch: File) {
+        // Another process holding the lock makes tryLock return null rather than throw: start a
+        // second JVM that takes it like a running Zoukan, then try from this one
+        val java = File(System.getProperty("java.home"), "bin/java").path
+        // Through an argument file: the test classpath can be longer than a Windows command line
+        val argFile = File(scratch, "args").apply {
+            writeText("-cp \"${System.getProperty("java.class.path").replace("\\", "\\\\")}\"\n")
+        }
+        val process = ProcessBuilder(java, "@${argFile.path}", SingleInstanceLockHolder::class.java.name, root.path)
+            .redirectErrorStream(true)
+            .start()
+        try {
+            val output = StringBuffer()
+            val locked = CompletableFuture.supplyAsync {
+                process.inputStream.bufferedReader().lineSequence()
+                    .onEach { output.appendLine(it) }
+                    .any { it == "locked" }
+            }
+            assertTrue(runCatching { locked.get(60, TimeUnit.SECONDS) }.getOrDefault(false)) {
+                "The child JVM did not take the lock:\n$output"
+            }
+            val childPort = File(root, "zoukan.port").readText()
+
+            // The app asks the other process to show its window and does not start
+            SingleInstance.acquire(root) { error("the other process holds the lock") } shouldBe
+                SingleInstance.Result.AlreadyRunning(shown = true)
+            // A command refuses too
+            SingleInstance.acquireForCommand(root) shouldBe null
+            // And neither took over the other process's port file
+            File(root, "zoukan.port").readText() shouldBe childPort
+
+            // Once the other process ends, the folder is free
+            process.outputStream.close()
+            process.waitFor(30, TimeUnit.SECONDS) shouldBe true
+            SingleInstance.acquireForCommand(root).shouldNotBeNull().close()
+        } finally {
+            process.destroyForcibly()
+            process.waitFor(10, TimeUnit.SECONDS)
+            SingleInstance.closeAll()
+        }
     }
 
     /** As runZoukanApp does: only checks that it got the lock and keeps no reference. */

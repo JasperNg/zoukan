@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +32,7 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
@@ -90,7 +90,7 @@ fun SwitchSetting(title: String, subtitle: String? = null, checked: Boolean, ena
 
 @Composable
 fun SwitchPreference(title: String, preference: Preference<Boolean>, subtitle: String? = null) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     SwitchSetting(title, subtitle, value) { preference.set(it) }
 }
 
@@ -134,7 +134,7 @@ fun <T> ChoiceSetting(
 
 @Composable
 fun <T> ChoicePreference(title: String, preference: Preference<T>, choices: List<Pair<T, String>>) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     ChoiceSetting(title, value, choices) { preference.set(it) }
 }
 
@@ -142,7 +142,7 @@ fun <T> ChoicePreference(title: String, preference: Preference<T>, choices: List
 fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange, label: (Int) -> String) {
     LocalSearchTexts.current?.add(title)
     LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOf(title))) return }
-    val saved by preference.changes().collectAsState(preference.get())
+    val saved by preference.collectAsState()
     var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row {
@@ -162,7 +162,7 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
 /** A switch for one value of a string set preference, such as one library update restriction. */
 @Composable
 fun SetMemberPreference(title: String, preference: Preference<Set<String>>, member: String, subtitle: String? = null) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     SwitchSetting(title, subtitle, member in value) { on -> preference.set(if (on) value + member else value - member) }
 }
 
@@ -175,7 +175,7 @@ fun MultiSelectPreference(
     subtitle: String? = null,
     enabled: Boolean = true,
 ) {
-    val value by preference.changes().collectAsState(preference.get())
+    val value by preference.collectAsState()
     var open by remember { mutableStateOf(false) }
     val summary = subtitle ?: choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { localized(MR.strings.none) }
     SettingRow(title, summary, enabled, onClick = { open = true })
@@ -222,8 +222,8 @@ fun CategoriesIncludeExcludePreference(
     exclude: Preference<Set<String>>,
     enabled: Boolean = true,
 ) {
-    val included by include.changes().collectAsState(include.get())
-    val excluded by exclude.changes().collectAsState(exclude.get())
+    val included by include.collectAsState()
+    val excluded by exclude.collectAsState()
     var open by remember { mutableStateOf(false) }
     SettingRow(title, categoriesLabel(categories, included, excluded), enabled, onClick = { open = true })
     if (open) {

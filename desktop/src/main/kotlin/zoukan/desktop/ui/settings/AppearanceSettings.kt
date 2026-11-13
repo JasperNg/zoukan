@@ -31,7 +31,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +57,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -102,11 +102,11 @@ fun LazyListScope.appearanceSettings() {
 @Composable
 internal fun ThemeSection() {
     val ui = remember { Injekt.get<UiPreferences>() }
-    val mode by ui.themeMode().changes().collectAsState(ui.themeMode().get())
-    val theme by ui.appTheme().changes().collectAsState(ui.appTheme().get())
-    val amoled by ui.themeDarkAmoled().changes().collectAsState(ui.themeDarkAmoled().get())
-    val seed by ui.colorTheme().changes().collectAsState(ui.colorTheme().get())
-    val style by ui.customThemeStyle().changes().collectAsState(ui.customThemeStyle().get())
+    val mode by ui.themeMode().collectAsState()
+    val theme by ui.appTheme().collectAsState()
+    val amoled by ui.themeDarkAmoled().collectAsState()
+    val seed by ui.colorTheme().collectAsState()
+    val style by ui.customThemeStyle().collectAsState()
     var pickingColor by remember { mutableStateOf(false) }
     val dark = when (mode) {
         ThemeMode.LIGHT -> false
@@ -176,8 +176,8 @@ internal fun ThemeSection() {
 @Composable
 private fun MangaInfoSection() {
     val ui = remember { Injekt.get<UiPreferences>() }
-    val coverBased by ui.themeCoverBased().changes().collectAsState(ui.themeCoverBased().get())
-    val style by ui.themeCoverBasedStyle().changes().collectAsState(ui.themeCoverBasedStyle().get())
+    val coverBased by ui.themeCoverBased().collectAsState()
+    val style by ui.themeCoverBasedStyle().collectAsState()
     Column {
         SwitchSetting(localized(KMR.strings.pref_theme_cover_based), checked = coverBased) { ui.themeCoverBased().set(it) }
         ChoiceSetting(
@@ -350,7 +350,7 @@ private val themePalettes: List<Pair<StringResource, List<Int>>> = listOf(
 private fun DisplaySection() {
     val ui = remember { Injekt.get<UiPreferences>() }
     val now = remember { LocalDate.now() }
-    val format by ui.dateFormat().changes().collectAsState(ui.dateFormat().get())
+    val format by ui.dateFormat().collectAsState()
     Column {
         ChoiceSetting(
             localized(MR.strings.pref_date_format),

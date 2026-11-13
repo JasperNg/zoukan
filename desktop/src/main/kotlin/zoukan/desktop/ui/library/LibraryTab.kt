@@ -44,6 +44,7 @@ import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +56,6 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.manga.model.Manga
@@ -99,7 +99,9 @@ import zoukan.i18n.desktop.DMR
 @Composable
 fun LibraryTab(model: LibraryScreenModel) {
     val state by model.state.collectAsState()
-    val refresh by Injekt.get<LibraryUpdater>().progress.collectAsState()
+    // Only whether an update runs, so each progress tick doesn't recompose the whole library
+    val progress = Injekt.get<LibraryUpdater>().progress.collectAsState()
+    val updating by remember(progress) { derivedStateOf { progress.value != null } }
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
     var settingsDialog by remember { mutableStateOf(false) }
@@ -116,7 +118,7 @@ fun LibraryTab(model: LibraryScreenModel) {
     var recommendationDialog by remember { mutableStateOf<List<Manga>?>(null) }
     // SY <--
     // KMK -->
-    var removeMerged by remember { mutableStateOf<Pair<List<Manga>, Long>?>(null) }
+    val removeMerged by model.removeMergedPrompt.collectAsState()
     // KMK <--
     val settings = state.settings
     val visible = state.visible
@@ -157,19 +159,8 @@ fun LibraryTab(model: LibraryScreenModel) {
                     } else if (selectedManga.isNotEmpty()) {
                         // Invoke multiple merge
                         model.clearSelection()
-                        scope.launch {
-                            val mergingMangas = selectedManga.filterNot { it.source == MERGED_SOURCE_ID }
-                            val mergedMangaId = runCatching { model.smartSearchMerge(selectedManga) }
-                                .onFailure { Toasts.error(localized(DMR.strings.merging_failed), it) }
-                                .getOrElse { return@launch }
-                            if (mergedMangaId != null) {
-                                Toasts.show(localized(SYMR.strings.entry_merged))
-                                // Android's snackbar asks whether to remove the merged entries, then opens the merge
-                                removeMerged = mergingMangas to mergedMangaId
-                            } else {
-                                Toasts.show(localized(SYMR.strings.merged_references_invalid))
-                            }
-                        }
+                        // Android's snackbar then asks whether to remove the merged entries, and opens the merge
+                        model.mergeMultiple(selectedManga)
                     } else {
                         model.clearSelection()
                         Toasts.show(localized(SYMR.strings.no_valid_entry))
@@ -191,7 +182,7 @@ fun LibraryTab(model: LibraryScreenModel) {
         } else {
             ScreenHeader(
                 title = localized(MR.strings.label_library),
-                subtitle = if (state.loading) null else localized(DMR.strings.entries, state.items.distinctBy { it.id }.size),
+                subtitle = if (state.loading) null else localized(DMR.strings.entries, state.entryCount),
                 showBack = false,
             ) {
                 SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp))
@@ -208,7 +199,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                     Icons.Outlined.Refresh,
                     if (state.selectedCategory == null) localized(MR.strings.action_update_library) else localized(MR.strings.action_update_category),
                     onClick = model::refresh,
-                    enabled = refresh == null,
+                    enabled = !updating,
                 )
                 Row {
                     TooltipIconButton(Icons.Outlined.MoreVert, localized(MR.strings.label_more), onClick = { moreMenu = true })
@@ -373,7 +364,7 @@ fun LibraryTab(model: LibraryScreenModel) {
     removeMerged?.let { (mergingMangas, mergedMangaId) ->
         val close = { remove: Boolean ->
             if (remove) model.removeMangas(mergingMangas)
-            removeMerged = null
+            model.removeMergedPrompt.value = null
             navigator.push(MangaScreen(mergedMangaId))
         }
         AlertDialog(

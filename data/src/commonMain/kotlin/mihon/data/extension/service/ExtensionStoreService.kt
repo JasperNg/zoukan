@@ -2,8 +2,9 @@ package mihon.data.extension.service
 
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.NetworkHelper
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.await
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.okio.decodeFromBufferedSource
@@ -15,6 +16,8 @@ import mihon.data.extension.model.NetworkLegacyExtensionRepo
 import mihon.data.extension.model.toAvailableExtensions
 import mihon.domain.extension.model.ExtensionStore
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Response
 import okio.BufferedSource
 import okio.buffer
 import okio.gzip
@@ -30,7 +33,7 @@ class ExtensionStoreService(
         var updatedIndexUrl: String = indexUrl
         return try {
             // KMK -->
-            val store = network.client.newCall(/* ZOUKAN --> */secureGET/* ZOUKAN <-- */(updatedIndexUrl)).awaitSuccess().use { response ->
+            val store = /* ZOUKAN --> */network.client.awaitSecureStoreResponse/* ZOUKAN <-- */(updatedIndexUrl).use { response ->
                 val source = response.body.source().decompressIfGzipped()
                 // KMK <--
                 val networkStore = when (source.peek().readByte()) {
@@ -40,7 +43,7 @@ class ExtensionStoreService(
                             throw IllegalArgumentException("Provided legacy store url is not valid")
                         }
                         updatedIndexUrl = indexUrl.replace("/index.min.json", "/repo.json")
-                        network.client.newCall(/* ZOUKAN --> */secureGET/* ZOUKAN <-- */(updatedIndexUrl)).awaitSuccess().use {
+                        /* ZOUKAN --> */network.client.awaitSecureStoreResponse/* ZOUKAN <-- */(updatedIndexUrl).use {
                             json.decodeFromBufferedSource<NetworkLegacyExtensionRepo>(it.body.source())
                         }
                     }
@@ -77,7 +80,7 @@ class ExtensionStoreService(
         return try {
             val extensions = if (store.extensionListUrl != null) {
                 // KMK -->
-                network.client.newCall(/* ZOUKAN --> */secureGET/* ZOUKAN <-- */(store.extensionListUrl!!)).awaitSuccess().use { response ->
+                /* ZOUKAN --> */network.client.awaitSecureStoreResponse/* ZOUKAN <-- */(store.extensionListUrl!!).use { response ->
                     val source = response.body.source().decompressIfGzipped()
                     // KMK <--
                     when (source.peek().readByte()) {
@@ -91,7 +94,7 @@ class ExtensionStoreService(
                 }
             } else if (!store.isLegacy) {
                 // KMK -->
-                network.client.newCall(/* ZOUKAN --> */secureGET/* ZOUKAN <-- */(store.indexUrl)).awaitSuccess().use { response ->
+                /* ZOUKAN --> */network.client.awaitSecureStoreResponse/* ZOUKAN <-- */(store.indexUrl).use { response ->
                     val source = response.body.source().decompressIfGzipped()
                     // KMK <--
                     when (source.peek().readByte()) {
@@ -105,7 +108,7 @@ class ExtensionStoreService(
             } else {
                 val storeBaseUrl = store.indexUrl.removeSuffix("/repo.json")
                 // KMK -->
-                network.client.newCall(/* ZOUKAN --> */secureGET/* ZOUKAN <-- */("$storeBaseUrl/index.min.json")).awaitSuccess().use { response ->
+                /* ZOUKAN --> */network.client.awaitSecureStoreResponse/* ZOUKAN <-- */("$storeBaseUrl/index.min.json").use { response ->
                     val source = response.body.source()
                     // KMK <--
                     json.decodeFromBufferedSource<List<NetworkLegacyExtension>>(source)
@@ -119,10 +122,6 @@ class ExtensionStoreService(
             Result.failure(e)
         }
     }
-
-    // ZOUKAN -->
-    private fun secureGET(url: String) = GET(requireSecureStoreUrl(url))
-    // ZOUKAN <--
 
     private fun BufferedSource.decompressIfGzipped(): BufferedSource {
         val isGzip = peek().use { peeked ->
@@ -139,20 +138,57 @@ class ExtensionStoreService(
 
 // ZOUKAN -->
 /**
+ * An extension store, or a file it links to, that is not served over https. Its message says so
+ * plainly, for the screens that show why a store failed. Android allowed http stores; Zoukan's
+ * shared code refuses them (see desktop/PARITY.md).
+ */
+class InsecureExtensionStoreException(message: String) : IllegalArgumentException(message)
+
+/**
  * A store's index names the key its extensions are signed with and where their code is downloaded
  * from, so it must come over https: over plain http anyone on the network could swap both. Plain
  * http stays allowed for this computer (a local test store).
  *
  * @return [url], when it may be fetched.
- * @throws IllegalArgumentException otherwise.
+ * @throws InsecureExtensionStoreException when it is a plain http address of another computer.
+ * @throws IllegalArgumentException when it is not a web address at all.
  */
 fun requireSecureStoreUrl(url: String): String {
     val parsed = url.trim().toHttpUrlOrNull()
         ?: throw IllegalArgumentException("Not a valid extension store address: ${url.take(200)}")
     val local = parsed.host == "localhost" || parsed.host == "127.0.0.1" || parsed.host == "::1"
     if (!parsed.isHttps && !local) {
-        throw IllegalArgumentException("Extension stores must use https: ${url.take(200)}")
+        throw InsecureExtensionStoreException(
+            "This extension store uses http, which is not secure. Extension stores must use https: ${url.take(200)}",
+        )
     }
     return url
+}
+
+/**
+ * Fetches a store's file (index, extension list, or extension code) over https only. The address
+ * is checked by [requireSecureStoreUrl], and a redirect from https to plain http is refused rather
+ * than followed: otherwise a store or CDN that redirects would let anyone on the network swap the
+ * index or the code. Redirects that stay on https are followed as usual.
+ *
+ * @return the successful response; the caller closes it.
+ * @throws InsecureExtensionStoreException for an http address or an https-to-http redirect.
+ * @throws HttpException for any other unsuccessful response.
+ */
+suspend fun OkHttpClient.awaitSecureStoreResponse(url: String): Response {
+    val response = newBuilder()
+        .followSslRedirects(false)
+        .build()
+        .newCall(GET(requireSecureStoreUrl(url)))
+        .await()
+    if (response.isSuccessful) return response
+    response.close()
+    if (response.isRedirect) {
+        throw InsecureExtensionStoreException(
+            "The extension store redirected ${url.take(200)} away from https, so it was not followed. " +
+                "Extension stores must use https.",
+        )
+    }
+    throw HttpException(response.code)
 }
 // ZOUKAN <--

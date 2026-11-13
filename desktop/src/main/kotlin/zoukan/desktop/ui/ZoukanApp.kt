@@ -97,6 +97,7 @@ import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIf
 import zoukan.desktop.ui.common.WindowBounds
 import zoukan.desktop.ui.common.ZoukanTheme
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.LibraryScreenModel
@@ -306,7 +307,9 @@ fun startUi(dirs: ZoukanDirs) {
             .onFailure { logcat(LogPriority.ERROR, it) { "Loading extensions failed" } }
         runCatching { manager.findAvailableExtensions() }
     }
-    AppScope.launch { Notifications.flow.collect { logcat { "Notification: ${it.title}: ${it.text}" } } }
+    // Only the kind: the title and text can name what is read, and the log's end goes into crash
+    // reports, even with "Hide notification content" on
+    AppScope.launch { Notifications.flow.collect { logcat { "Notification: ${it.kind}" } } }
     // The saved download queue, then the scheduled library update and automatic backups
     val downloads = Injekt.get<DownloadManager>()
     AppScope.launch {
@@ -325,39 +328,61 @@ fun startUi(dirs: ZoukanDirs) {
 @Composable
 fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, onNavigator: (Navigator) -> Unit = {}) {
     var navigatorRef by remember { mutableStateOf<Navigator?>(null) }
+    // ZOUKAN -->
+    val appLock = remember { Injekt.get<zoukan.desktop.security.AppLock>() }
+    val locked by appLock.locked.collectAsState()
+    // ZOUKAN <--
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(
             Modifier.fillMaxSize().onPointerEvent(PointerEventType.Press) { event ->
                 // The mouse's back button
                 // ZOUKAN -->
                 // Not while the app lock covers the window
-                val locked = runCatching { Injekt.get<zoukan.desktop.security.AppLock>().locked.value }.getOrDefault(false)
+                if (event.button == PointerButton.Back && !appLock.locked.value) navigatorRef?.takeIf { it.canPop }?.pop()
                 // ZOUKAN <--
-                if (event.button == PointerButton.Back && !locked) navigatorRef?.takeIf { it.canPop }?.pop()
             },
             color = MaterialTheme.colorScheme.background,
         ) {
             val snackbar = remember { SnackbarHostState() }
             LaunchedEffect(Unit) {
-                Toasts.flow.collect { snackbar.showSnackbar(it) }
+                Toasts.flow.collect { message ->
+                    // ZOUKAN -->
+                    // Messages wait for the unlock: the lock shows nothing of the app
+                    appLock.locked.first { !it }
+                    // ZOUKAN <--
+                    snackbar.showSnackbar(message)
+                }
             }
+            // ZOUKAN -->
+            LaunchedEffect(locked) { if (locked) snackbar.currentSnackbarData?.dismiss() }
+            // ZOUKAN <--
             Box(Modifier.fillMaxSize()) {
                 // ZOUKAN -->
                 // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
                 Column(Modifier.fillMaxSize()) {
-                    AppStateBanners()
+                    if (!locked) AppStateBanners()
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         Navigator(HomeScreen) { navigator ->
                             navigatorRef = navigator
                             onNavigator(navigator)
-                            FadeTransition(navigator)
+                            // While locked, the screens leave the composition, so none of their
+                            // controls, dialogs or menus can be clicked or reached with Tab (dialogs
+                            // are layers above the lock). The navigator stays: the back stack, the
+                            // screen models and the screens' saved state (tab, scroll) are kept, and
+                            // the unlock returns to the same screen. Plain `remember` state is not:
+                            // open dialogs, unsaved text, selection mode and coroutines in a
+                            // composable's own scope are lost, where Android keeps the whole activity
+                            // under its unlock screen (see PARITY.md, App lock)
+                            if (!locked) FadeTransition(navigator)
                         }
                     }
                 }
                 // ZOUKAN <--
                 // The first-run setup covers the app, but not its messages
-                if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
-                zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
+                if (!locked) {
+                    if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
+                    zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
+                }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 // ZOUKAN -->
                 zoukan.desktop.ui.security.LockOverlay()
@@ -427,11 +452,11 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         // Settings > Appearance > Navigation, and the new chapters badge, as on Android
         val ui = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
         val libraryPreferences = remember { Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>() }
-        val showUpdates by ui.showNavUpdates().changes().collectAsState(ui.showNavUpdates().get())
-        val showHistory by ui.showNavHistory().changes().collectAsState(ui.showNavHistory().get())
-        val showLabels by ui.bottomBarLabels().changes().collectAsState(ui.bottomBarLabels().get())
-        val showBadge by libraryPreferences.newShowUpdatesCount().changes().collectAsState(libraryPreferences.newShowUpdatesCount().get())
-        val newUpdates by libraryPreferences.newUpdatesCount().changes().collectAsState(libraryPreferences.newUpdatesCount().get())
+        val showUpdates by remember { ui.showNavUpdates() }.collectAsState()
+        val showHistory by remember { ui.showNavHistory() }.collectAsState()
+        val showLabels by remember { ui.bottomBarLabels() }.collectAsState()
+        val showBadge by remember { libraryPreferences.newShowUpdatesCount() }.collectAsState()
+        val newUpdates by remember { libraryPreferences.newUpdatesCount() }.collectAsState()
         // Browse shows how many extensions have an update, as Android's extensionUpdatesCount
         val extensions = remember { Injekt.get<DesktopExtensionManager>() }
         val installedExtensions by extensions.installedExtensionsFlow.collectAsState()

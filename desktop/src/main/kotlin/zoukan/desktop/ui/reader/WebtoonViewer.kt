@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.ui.common.collectAsState
 
 /**
  * Webtoon and continuous vertical modes: every page in one scrolling strip. Webtoon has no gaps
@@ -70,21 +71,21 @@ fun WebtoonViewer(
     val hScroll = rememberScrollState()
     // ZOUKAN -->
     val prefs = model.preferences
-    val navLayout by prefs.navigationModeWebtoon().changes().collectAsState(prefs.navigationModeWebtoon().get())
-    val navInvert by prefs.webtoonNavInverted().changes().collectAsState(prefs.webtoonNavInverted().get())
-    val smallerZones by prefs.smallerTapZone().changes().collectAsState(prefs.smallerTapZone().get())
-    val transitions by prefs.pageTransitionsWebtoon().changes().collectAsState(prefs.pageTransitionsWebtoon().get())
-    val doubleTapZoom by prefs.webtoonDoubleTapZoomEnabled().changes().collectAsState(prefs.webtoonDoubleTapZoomEnabled().get())
-    val pinchToZoom by prefs.webtoonPinchToZoomEnabled().changes().collectAsState(prefs.webtoonPinchToZoomEnabled().get())
-    val noZoomOut by prefs.webtoonDisableZoomOut().changes().collectAsState(prefs.webtoonDisableZoomOut().get())
-    val longTap by prefs.readWithLongTap().changes().collectAsState(prefs.readWithLongTap().get())
-    val split by prefs.dualPageSplitWebtoon().changes().collectAsState(prefs.dualPageSplitWebtoon().get())
-    val splitInvert by prefs.dualPageInvertWebtoon().changes().collectAsState(prefs.dualPageInvertWebtoon().get())
-    val rotateWide by prefs.dualPageRotateToFitWebtoon().changes().collectAsState(prefs.dualPageRotateToFitWebtoon().get())
-    val rotateInvert by prefs.dualPageRotateToFitInvertWebtoon().changes().collectAsState(prefs.dualPageRotateToFitInvertWebtoon().get())
+    val navLayout by prefs.navigationModeWebtoon().collectAsState()
+    val navInvert by prefs.webtoonNavInverted().collectAsState()
+    val smallerZones by prefs.smallerTapZone().collectAsState()
+    val transitions by prefs.pageTransitionsWebtoon().collectAsState()
+    val doubleTapZoom by prefs.webtoonDoubleTapZoomEnabled().collectAsState()
+    val pinchToZoom by prefs.webtoonPinchToZoomEnabled().collectAsState()
+    val noZoomOut by prefs.webtoonDisableZoomOut().collectAsState()
+    val longTap by prefs.readWithLongTap().collectAsState()
+    val split by prefs.dualPageSplitWebtoon().collectAsState()
+    val splitInvert by prefs.dualPageInvertWebtoon().collectAsState()
+    val rotateWide by prefs.dualPageRotateToFitWebtoon().collectAsState()
+    val rotateInvert by prefs.dualPageRotateToFitInvertWebtoon().collectAsState()
     // KMK's "Smart scale on wide screen", for Long strip with gaps only when its own setting is on
-    val scaleType by prefs.webtoonScaleType().changes().collectAsState(prefs.webtoonScaleType().get())
-    val gapScale by prefs.longStripGapSmartScale().changes().collectAsState(prefs.longStripGapSmartScale().get())
+    val scaleType by prefs.webtoonScaleType().collectAsState()
+    val gapScale by prefs.longStripGapSmartScale().collectAsState()
     val smartScaleOn = state.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
     val minZoom = if (noZoomOut) 1f else 0.3f
     LaunchedEffect(minZoom) { if (zoom < minZoom) zoom = minZoom }
@@ -142,15 +143,25 @@ fun WebtoonViewer(
 
         // The current page is the one at the middle of the window
         LaunchedEffect(listState, pages) {
+            // ZOUKAN -->
+            var lastPage = -1
             snapshotFlow {
                 val info = listState.layoutInfo
                 val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
-                info.visibleItemsInfo.firstOrNull { it.offset <= middle && it.offset + it.size > middle }?.index
+                val item = info.visibleItemsInfo.firstOrNull { it.offset <= middle && it.offset + it.size > middle }?.index
                     ?: listState.firstVisibleItemIndex
-            }.distinctUntilChanged().collect { item ->
+                // Every page in the window stays decoded, however far out the strip is zoomed
+                val shown = info.visibleItemsInfo.map { it.index - 1 }.filter { it in pages.indices }
+                item to if (shown.isEmpty()) IntRange.EMPTY else shown.min()..shown.max()
+            }.distinctUntilChanged().collect { (item, visible) ->
+                model.onVisiblePages(visible)
                 val page = (item - 1).coerceIn(0, pages.lastIndex)
-                model.onPageChanged(page)
+                if (page != lastPage) {
+                    lastPage = page
+                    model.onPageChanged(page)
+                }
             }
+            // ZOUKAN <--
         }
 
         Box(
