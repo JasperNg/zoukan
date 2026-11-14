@@ -1,8 +1,9 @@
 # Releasing Zoukan desktop
 
 Phase 7 of the desktop port: the installers, signing, the update check and crash logs. Every
-check runs locally (there is no hosted CI): the Windows x64 steps on the Windows desktop, the
-Apple Silicon steps on the Mac.
+check runs locally: the Windows x64 steps on the Windows desktop, the Apple Silicon steps on the
+Mac. GitHub Actions also builds both installers after each merge (see below); that build does not
+gate merges.
 
 ## Installers
 
@@ -30,6 +31,29 @@ to 255). It is separate from the Android app's version, which extensions still s
 
 Compose Multiplatform's Gradle plugin is not used: its `compose` extension clashes with the
 upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink and jpackage itself.
+
+## Installers built on GitHub
+
+`.github/workflows/desktop-build.yml` builds the Windows x64 MSI (`windows-latest`) and the Apple
+Silicon DMG (`macos-14`) with JetBrains Runtime 21 after every push to `master`, and on demand
+from the Actions tab (Run workflow). Each run keeps the installers as build artifacts
+(`zoukan-windows-x64`, `zoukan-macos-arm64`) on the run's page. The repository is public, so the
+hosted runners cost nothing. The install checks, the self-test and publishing a release stay
+local.
+
+Without secrets the installers are unsigned. To sign them, add these repository secrets
+(Settings > Secrets and variables > Actions):
+
+| Secret | What |
+|---|---|
+| `WINDOWS_SIGN_PFX_BASE64` | The Windows code signing .pfx, base64 encoded (`[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx"))`) |
+| `WINDOWS_SIGN_PASSWORD` | Its password |
+| `MAC_SIGN_P12_BASE64` | The Developer ID Application certificate and key exported from Keychain Access as .p12, base64 encoded (`base64 -i cert.p12`) |
+| `MAC_SIGN_P12_PASSWORD` | Its export password |
+| `MAC_SIGN_IDENTITY` | `Developer ID Application: Name (TEAMID)` |
+| `NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, `NOTARY_TEAM_ID` | To also notarize and staple the DMG; the password is an app-specific password |
+
+The macOS job imports the certificate into a temporary keychain and deletes it at the end.
 
 ## Signing
 
