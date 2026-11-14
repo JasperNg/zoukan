@@ -853,6 +853,7 @@
     <string name="restore_finished">The restore has finished</string>
     <string name="install_missing_extensions">Install missing extensions</string>
     <string name="install_missing_extensions_summary">Installs the extensions of the library's sources that are not installed, for example after a restore</string>
+    <string name="missing_extensions_waiting_for_restore">Waiting for the restore to finish…</string>
     <string name="finding_missing_extensions">Looking for the extensions of the missing sources…</string>
     <string name="no_missing_extensions">Every source in the library is installed</string>
     <string name="missing_extensions_found">Extensions to install: %1$s. Sources that no store offers: %2$s.</string>
