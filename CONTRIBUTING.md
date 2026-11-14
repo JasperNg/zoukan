@@ -25,7 +25,7 @@ Before you start, please note that the ability to use following technologies is 
 - Windows x64 or an Apple Silicon Mac to run and test the desktop app
 
 Before opening a pull request, run `./gradlew spotlessCheck :desktop:build` (see [desktop/README.md](desktop/README.md)).
-The [CI workflow](.github/workflows/ci.yml) runs the same command on every pull request on Windows x64.
+The [CI workflow](.github/workflows/ci.yml) runs the same command on every pull request (on Linux, so it stays quick; docs-only changes skip it).
 The end-to-end tests (`-Pzoukan.e2e=true`) are not part of it and run only locally.
 
 ## Getting help
