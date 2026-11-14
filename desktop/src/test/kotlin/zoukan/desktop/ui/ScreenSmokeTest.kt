@@ -31,12 +31,18 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import exh.md.utils.MdUtil
+import exh.source.getMainSource
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import mihon.domain.manga.model.toDomainManga
 import org.junit.jupiter.api.Test
@@ -52,12 +58,15 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzWriter
+import zoukan.desktop.exh.DelegatedSources
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.secrets.SecretStore
@@ -119,10 +128,10 @@ import zoukan.desktop.ui.settings.MultiSelectPreference
 import zoukan.desktop.ui.settings.RestoreBackupScreen
 import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settings.SourceSettingsScreen
-import zoukan.desktop.ui.settings.mangaDexSettings
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
+import zoukan.extension.DesktopSourceManager
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -151,8 +160,9 @@ import kotlin.time.Duration.Companion.seconds
  *   is created as it is, and a screen with arguments must be in [screensWithArguments], or the
  *   test fails and names it. Each screen's lists are scrolled to the end, so every row composes.
  * - The five home tabs and every page of the Browse tab.
- * - Every Settings page (MangaDex's, which only shows with a MangaDex source installed, is rendered
- *   on its own), and Settings search, which lists every page's settings at once.
+ * - Every Settings page, and Settings search, which lists every page's settings at once.
+ *   MangaDex's page only shows with a MangaDex source, so its check installs an offline stand-in
+ *   for MangaDex while it runs (see [MangaDexStandIn]), and fails unless the page's rows show.
  * - The dialogs that other code can call: rendered directly, with the seeded entries and real
  *   screen models (see [dialogs]). The settings dialogs (ChoiceSetting, MultiSelectPreference)
  *   are opened by clicking their row. Dialogs private to a screen are opened through the UI where
@@ -576,19 +586,68 @@ class ScreenSmokeTest {
         },
     )
 
+    /**
+     * A MangaDex source for one check: the MangaDex extension's stand-in, run through the app's own
+     * delegation into its enhanced MangaDex, and listed by the SourceManager while the check runs.
+     * Only that check sees it, so no other screen can try to reach MangaDex.
+     *
+     * The SourceManager lists only loaded extensions, and Injekt keeps the instance it made even
+     * when the registration is replaced, so the source goes into the manager's own list, by
+     * reflection: a renamed field fails this check rather than skipping it.
+     */
+    private class MangaDexStandIn {
+        private var added: Source? = null
+        private var mangaDexIds = emptyList<Long>()
+
+        @Suppress("UNCHECKED_CAST")
+        private fun sourceList(): MutableStateFlow<Map<Long, Source>> {
+            val manager = Injekt.get<SourceManager>() as DesktopSourceManager
+            return DesktopSourceManager::class.java.getDeclaredField("sourcesMapFlow")
+                .apply { isAccessible = true }
+                .get(manager) as MutableStateFlow<Map<Long, Source>>
+        }
+
+        fun install() {
+            mangaDexIds = exh.source.mangaDexSourceIds
+            val enhanced = Injekt.get<DelegatedSources>().transform(eu.kanade.tachiyomi.extension.all.mangadex.MangaDex())
+            check(enhanced is HttpSource && enhanced.getMainSource<eu.kanade.tachiyomi.source.online.all.MangaDex>() != null) {
+                "the app didn't run the MangaDex stand-in as its MangaDex: $enhanced"
+            }
+            sourceList().update { it + (enhanced.id to enhanced) }
+            added = enhanced
+            check(MdUtil.getEnabledMangaDexs(Injekt.get()).isNotEmpty()) { "the app doesn't see the MangaDex stand-in" }
+        }
+
+        fun uninstall() {
+            added?.let { source -> sourceList().update { it - source.id } }
+            added = null
+            // The delegation counted it among the MangaDex sources
+            exh.source.mangaDexSourceIds = mangaDexIds
+        }
+    }
+
     private fun settings(): List<Check> = SettingsCategory.entries.filter { it != SettingsCategory.MangaDex }.map { page ->
         Check("settings ${page.name}", {
             openSettingsCategory(page)
             HomeScreen.openSettings(it)
         })
     } + listOf(
-        Check("settings MangaDex", {
-            it.push(
-                Host("mangadex") {
-                    androidx.compose.foundation.lazy.LazyColumn { mangaDexSettings() }
+        run {
+            val mangaDex = MangaDexStandIn()
+            Check(
+                "settings MangaDex",
+                {
+                    mangaDex.install()
+                    openSettingsCategory(SettingsCategory.MangaDex)
+                    HomeScreen.openSettings(it)
                 },
+                // The page shows its rows only with a MangaDex source: without one, this check
+                // would open an empty page and pass
+                // and opens the follows dialog from its row (closed with the page)
+                drive = { clickText(localized(SYMR.strings.mangadex_sync_follows_to_library)) },
+                cleanup = { mangaDex.uninstall() },
             )
-        }),
+        },
         Check(
             "settings search",
             { HomeScreen.openSettings(it) },
