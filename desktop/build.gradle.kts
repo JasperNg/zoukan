@@ -22,8 +22,17 @@ plugins {
  * Zoukan's own version, which the installers, the update check and crash logs use. Releases are
  * tagged desktop-v<version>. It is separate from the Android app's version, which extensions see.
  * MAJOR.MINOR.PATCH, MAJOR at least 1 (macOS) and at most 255 (MSI).
+ *
+ * The release workflow (.github/workflows/desktop-build.yml) passes the release's version as
+ * -Pzoukan.version; the value here is the floor it bumps from, so raise it here for a new MINOR or
+ * MAJOR. Local builds without the property use it as it is.
  */
-val zoukanVersion = "1.0.2"
+val zoukanVersion: String = providers.gradleProperty("zoukan.version").orNull?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?.also {
+        require(Regex("""[1-9]\d*\.\d+\.\d+""").matches(it)) { "zoukan.version must be MAJOR.MINOR.PATCH: $it" }
+    }
+    ?: "1.0.2"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21

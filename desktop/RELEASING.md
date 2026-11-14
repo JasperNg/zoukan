@@ -2,8 +2,8 @@
 
 Phase 7 of the desktop port: the installers, signing, the update check and crash logs. Every
 check runs locally: the Windows x64 steps on a Windows machine, the Apple Silicon steps on the
-Mac. GitHub Actions also builds both installers after each merge (see below); that build does not
-gate merges.
+Mac. GitHub Actions builds both installers and publishes a release after each merge (see below);
+that does not gate merges.
 
 ## Installers
 
@@ -32,14 +32,20 @@ to 255). It is separate from the Android app's version, which extensions still s
 Compose Multiplatform's Gradle plugin is not used: its `compose` extension clashes with the
 upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink and jpackage itself.
 
-## Installers built on GitHub
+## Releases built on GitHub
 
 `.github/workflows/desktop-build.yml` builds the Windows x64 MSI (`windows-latest`) and the Apple
-Silicon DMG (`macos-latest`, which is Apple Silicon) with JetBrains Runtime 21 after every push to `master` that changes more than docs (the same list `ci.yml` ignores), and on demand
-from the Actions tab (Run workflow). Each run keeps the installers as build artifacts
-(`zoukan-windows-x64`, `zoukan-macos-arm64`) on the run's page. The repository is public, so the
-hosted runners cost nothing. The install checks, the self-test and publishing a release stay
-local.
+Silicon DMG (`macos-latest`, which is Apple Silicon) with JetBrains Runtime 21 after every push to
+`master` that changes more than docs (the same list `ci.yml` ignores), then publishes both as a
+GitHub release tagged `desktop-v<version>`, which the update check finds. Nothing is built on a
+local machine for a release. Runs on `master` queue, so two quick merges make two releases in
+order. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
+if it has no release yet; a re-run of a released commit only rebuilds.
+
+The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to
+Gradle as `-Pzoukan.version`. `zoukanVersion` in `desktop/build.gradle.kts` is the floor: raise it
+there (to 1.1.0, say) and the next merge releases that version, then bumps from it. The release
+notes list the merged pull requests since the previous release.
 
 These installers are unsigned on purpose: the project does not sign its builds, so no signing
 secrets are set. A downloaded copy shows the usual warnings (SmartScreen on Windows; on macOS,
@@ -113,15 +119,11 @@ database, extension loading, crash logs, the window (Skia's native code) and HTT
 
 ## Publishing a release
 
-1. Raise `zoukanVersion` in `desktop/build.gradle.kts` and merge.
-2. On a Windows machine: run the Windows install check, keep
-   `Zoukan-<version>-windows-x64.msi`.
-3. On a Mac: run the macOS install check with signing and notarization set, keep
-   `Zoukan-<version>-macos-arm64.dmg`.
-4. Create a GitHub release on `JasperNg/zoukan` tagged `desktop-v<version>` with both files
-   attached, for example `gh release create desktop-v1.0.0 Zoukan-1.0.0-windows-x64.msi
-   Zoukan-1.0.0-macos-arm64.dmg --title "Zoukan 1.0.0" --notes "…"`. Mark test builds as
-   pre-releases.
+Merge to `master`: the workflow above publishes the release. To release by hand instead (a
+signed build, say), build with `-Pzoukan.version=<version>` and create the release on
+`JasperNg/zoukan` tagged `desktop-v<version>` with both installers attached, for example
+`gh release create desktop-v1.0.0 Zoukan-1.0.0-windows-x64.msi Zoukan-1.0.0-macos-arm64.dmg
+--title "Zoukan 1.0.0" --notes "..."`; the next merge bumps from that tag.
 
 ## Update check
 
