@@ -294,6 +294,8 @@ val wiringTest by tasks.registering(Test::class) {
     forkEvery = 1
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
+    // Runs only the smoke checks whose name matches, to debug one: -Pzoukan.smoke.only="dialog new category"
+    providers.gradleProperty("zoukan.smoke.only").orNull?.let { systemProperty("zoukan.smoke.only", it) }
     shouldRunAfter(tasks.test)
 }
 tasks.named("check") { dependsOn(wiringTest) }

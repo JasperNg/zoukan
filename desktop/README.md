@@ -125,6 +125,12 @@ own JVM with a throwaway data folder. They catch what compiles but crashes at ru
 registration, a screen that throws when it opens), need no network, and run with every
 `:desktop:build` through `check`, so every pull request runs them.
 
+`ScreenSmokeTest` finds the app's Voyager screens in its compiled classes, so a new screen is
+covered without a change to the test; a screen whose constructor takes arguments must be added to
+`screensWithArguments`, or the test fails and names it. A failed check prints what was on screen.
+To run some checks only: `./gradlew :desktop:wiringTest --tests "*ScreenSmokeTest"
+-Pzoukan.smoke.only="<regex of check names>"`.
+
 Each release also starts the packaged app before publishing it: the release workflow runs
 `Zoukan selftest --ui` on the Windows and macOS builds and stops the release if it fails.
 
