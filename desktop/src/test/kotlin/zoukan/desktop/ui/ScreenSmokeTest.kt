@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -33,6 +34,7 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -127,8 +129,11 @@ import java.io.File
 import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Opens every screen and dialog of the desktop app, offline and with a throwaway data folder, and
@@ -174,15 +179,27 @@ class ScreenSmokeTest {
     private companion object {
         /** Checks per Compose test: about a second each, well within its one-minute limit. */
         const val BATCH = 15
+
+        /** Rows per scroll step: fewer than a screen holds, so every row composes on the way. */
+        const val SCROLL_STEP = 6
+
+        /** Bounds a list's scrolling, at 3,000 rows. */
+        const val MAX_SCROLL_STEPS = 500
+
+        val OUT_OF_BOUNDS = Regex("""^Can't scroll to index -?\d+, it is out of bounds \[0, (\d+)\)""")
     }
 
     private class Fixture(val alpha: Manga, val bravo: Manga, val chapters: List<Chapter>, val backup: File)
 
-    /** One screen or dialog to open: [open] runs on the UI thread, then [drive] in the test. */
+    /**
+     * One screen or dialog to open: [open] runs on the UI thread, then [drive] in the test, and
+     * [cleanup] on the UI thread even when they fail, to undo state that later checks would see.
+     */
     private class Check(
         val name: String,
         val open: (Navigator) -> Unit,
         val drive: ComposeUiTest.() -> Unit = {},
+        val cleanup: () -> Unit = {},
     )
 
     /** A screen that only shows [content], to render a dialog with a navigator and screen models around it. */
@@ -203,31 +220,43 @@ class ScreenSmokeTest {
         val dirs = ZoukanDirs(Files.createTempDirectory("zoukan-smoke").toFile())
         ZoukanRuntime.start(dirs, interactiveBrowser = false)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
+        // A background thread's error can come after the check that started its work has closed
         Thread.setDefaultUncaughtExceptionHandler { thread, e ->
-            fail("uncaught on thread ${thread.name}", e)
+            failAt("during or after $current", "uncaught on thread ${thread.name}", e)
             previous?.uncaughtException(thread, e)
         }
-        startUi(dirs)
-        val fixture = seed()
+        try {
+            startUi(dirs)
+            val fixture = seed()
 
-        val screens = screens(fixture)
-        val all = screens + tabs() + settings() + dialogs(fixture) + uiDialogs()
-        println("Smoke: ${screens.size} screens, ${all.size} checks")
-        // -Dzoukan.smoke.only=<regex> runs only the matching checks, to debug one
-        val only = System.getProperty("zoukan.smoke.only")?.toRegex()
-        val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) }
-        runChecks(checks)
+            val screens = screens(fixture)
+            val all = screens + tabs() + settings() + dialogs(fixture) + uiDialogs()
+            println("Smoke: ${screens.size} screens, ${all.size} checks")
+            // -Pzoukan.smoke.only=<regex> runs only the matching checks, to debug one
+            val only = System.getProperty("zoukan.smoke.only")?.toRegex()
+            val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) }
+            // A filter that matches nothing would otherwise pass without opening anything
+            check(checks.isNotEmpty()) { "no check matches $only; checks are:\n" + all.joinToString("\n") { it.name } }
+            runChecks(checks)
 
-        current = "log"
-        val log = File(dirs.logs, "zoukan.log").takeIf { it.exists() }?.readLines().orEmpty()
-        log.filter { "No registered instance or factory" in it }.forEach { failures += "log: $it" }
-        failures.shouldBeEmpty()
+            current = "log"
+            // The log and the three older ones it rolls into, as Settings > Advanced shares them
+            (listOf(File(dirs.logs, "zoukan.log")) + (1..3).map { File(dirs.logs, "zoukan.$it.log") })
+                .filter { it.isFile }
+                .flatMap { log -> log.readLines().filter { "No registered instance or factory" in it }.map { "${log.name}: $it" } }
+                .forEach { failures += "log: $it" }
+            failures.shouldBeEmpty()
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(previous)
+        }
     }
 
-    private fun fail(where: String, e: Throwable) {
-        println("Smoke: FAILED in $current ($where): $e")
+    private fun fail(where: String, e: Throwable) = failAt(current, where, e)
+
+    private fun failAt(what: String, where: String, e: Throwable) {
+        println("Smoke: FAILED in $what ($where): $e")
         e.printStackTrace()
-        failures += "$current ($where): $e"
+        failures += "$what ($where): $e"
     }
 
     /**
@@ -237,8 +266,14 @@ class ScreenSmokeTest {
     private fun runChecks(checks: List<Check>) {
         val preferences = Injekt.get<DesktopPreferences>()
         var next = 0
+        var batch = 0
         while (next < checks.size) {
+            batch++
             var failed = false
+            // The check that was open, until it's done: an error outside a check (setting the
+            // content up, or the Compose test's end) is the batch's, and skips no check
+            var open = -1
+            val start = next
             try {
                 runDesktopComposeUiTest(width = 1280, height = 820, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                     var navigator: Navigator? = null
@@ -250,13 +285,18 @@ class ScreenSmokeTest {
                     while (next < end) {
                         val check = checks[next]
                         current = check.name
+                        open = next
                         println("Smoke: ${check.name}")
                         try {
-                            runOnUiThread { check.open(navigator!!) }
-                            settle()
-                            check.drive(this)
-                            scrollLists()
-                            settle()
+                            try {
+                                runOnUiThread { check.open(navigator!!) }
+                                settle()
+                                check.drive(this)
+                                scrollLists()
+                                settle()
+                            } finally {
+                                runOnUiThread { check.cleanup() }
+                            }
                             runOnUiThread {
                                 navigator!!.popUntilRoot()
                                 HomeScreen.selectTab(HomeTab.Library)
@@ -271,13 +311,25 @@ class ScreenSmokeTest {
                             throw e
                         }
                         next++
+                        open = -1
                     }
                 }
             } catch (e: Throwable) {
-                // Thrown again at the end of the test it failed in, or at its end
+                // A check's failure is thrown again here; anything else came from the Compose test
+                // itself: while a check was open (its failure), or outside one (the batch's)
                 if (!failed) {
-                    fail("end of the Compose test", e)
-                    next++
+                    if (open == next) {
+                        fail("Compose test", e)
+                        next++
+                    } else {
+                        val after = if (next > start) ", after ${checks[next - 1].name}" else ""
+                        failAt("batch $batch setup/teardown$after", "Compose test", e)
+                        // Nothing could open: running on would fail the same way for every check
+                        if (next == start) {
+                            failures += "${checks.size - next} checks not run, from ${checks[next].name}"
+                            return
+                        }
+                    }
                 }
             }
         }
@@ -292,28 +344,59 @@ class ScreenSmokeTest {
         }
     }
 
-    /** Scrolls every lazy list on screen to its end, so each of its rows composes. */
+    /**
+     * Scrolls every lazy list on screen to its end, so each of its rows composes. A lazy list
+     * doesn't report its length (its CollectionInfo has -1 rows), so this steps through it until
+     * Compose's bounds check says an index is past the end, and then goes to the last row.
+     */
     private fun ComposeUiTest.scrollLists() {
         val lists = onAllNodes(hasScrollToIndexAction()).fetchSemanticsNodes().size
         repeat(lists) { index ->
-            val node = onAllNodes(hasScrollToIndexAction())[index]
-            val rows = runCatching {
-                node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.CollectionInfo)?.let { maxOf(it.rowCount, it.columnCount) }
-            }.getOrNull() ?: return@repeat
-            if (rows < 0) return@repeat
-            for (row in 0 until rows step 6) {
-                // A node gone from the screen is the test's problem, not the app's
-                try {
-                    node.performScrollToIndex(row)
-                } catch (_: AssertionError) {
-                    return@repeat
-                } catch (_: IllegalArgumentException) {
-                    return@repeat
+            // Looked up again by index: scrolling can add lists (rows of a feed) after this one
+            val list = onAllNodes(hasScrollToIndexAction())[index]
+            var row = 0
+            var rows: Int? = null
+            for (step in 0 until MAX_SCROLL_STEPS) {
+                when (val result = scrollTo(list, row)) {
+                    is Scroll.Gone -> return@repeat
+                    is Scroll.PastEnd -> {
+                        rows = result.rows
+                        break
+                    }
+                    is Scroll.Done -> row += SCROLL_STEP
                 }
             }
-            if (rows > 0) runCatching { node.performScrollToIndex(rows - 1) }
+            val count = checkNotNull(rows) { "list $index has more than ${MAX_SCROLL_STEPS * SCROLL_STEP} rows" }
+            if (count > 0 && scrollTo(list, count - 1) !is Scroll.Done) return@repeat
+            println("  list $index: scrolled through $count rows")
             waitForIdle()
         }
+    }
+
+    private sealed interface Scroll {
+        data object Done : Scroll
+
+        /** The list is no longer on screen. */
+        data object Gone : Scroll
+
+        /** The index was past the end of a list of [rows] rows. */
+        data class PastEnd(val rows: Int) : Scroll
+    }
+
+    /**
+     * Scrolls [list] to [index]. A list that's gone, or an index past its end, is the test's
+     * concern, not the app's; anything else, such as a row that throws as it composes, fails.
+     */
+    private fun scrollTo(list: SemanticsNodeInteraction, index: Int): Scroll = try {
+        list.performScrollToIndex(index)
+        Scroll.Done
+    } catch (e: AssertionError) {
+        // Only when the node is no longer in the tree
+        if (runCatching { list.fetchSemanticsNode() }.isFailure) Scroll.Gone else throw e
+    } catch (e: IllegalArgumentException) {
+        // Compose's own bounds check: "Can't scroll to index 12, it is out of bounds [0, 9)"
+        val rows = OUT_OF_BOUNDS.find(e.message.orEmpty())?.groupValues?.get(1)?.toInt() ?: throw e
+        Scroll.PastEnd(rows)
     }
 
     // Seeding
@@ -335,9 +418,7 @@ class ScreenSmokeTest {
                 Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = System.currentTimeMillis()))
             }
         }
-        val updater = Injekt.get<LibraryUpdater>()
-        updater.start()
-        while (updater.progress.value != null || updater.lastResult.value == null) Thread.sleep(200)
+        updateLibrary()
         val favorites = runBlocking { Injekt.get<GetFavorites>().await() }.sortedBy { it.title }
         favorites shouldHaveSize 2
         val chapters = runBlocking { Injekt.get<GetChaptersByMangaId>().await(favorites[0].id) }
@@ -345,6 +426,28 @@ class ScreenSmokeTest {
         val backup = File(ZoukanRuntime.dirs.root, "smoke.tachibk")
         runBlocking { DesktopBackups(ZoukanRuntime.dirs.android).create(backup) }
         return Fixture(favorites[0], favorites[1], chapters, backup)
+    }
+
+    /**
+     * Runs a library update to completion, so the seeded entries get their chapters. An update
+     * already running (one the runtime started) may predate the entries, so this waits for it to
+     * end and starts its own.
+     */
+    private fun updateLibrary() {
+        val updater = Injekt.get<LibraryUpdater>()
+        val deadline = System.nanoTime() + 60.seconds.inWholeNanoseconds
+        fun left() = (deadline - System.nanoTime()).coerceAtLeast(0)
+        while (true) {
+            val done = CountDownLatch(1)
+            if (updater.start(onDone = { done.countDown() })) {
+                check(done.await(left(), TimeUnit.NANOSECONDS)) {
+                    "the library update didn't finish within 60s (progress: ${updater.progress.value})"
+                }
+                return
+            }
+            check(left() > 0) { "the library update couldn't start within 60s: another kept running" }
+            Thread.sleep(200)
+        }
     }
 
     private fun cbz(file: File, pages: Int, label: String) {
@@ -366,37 +469,41 @@ class ScreenSmokeTest {
 
     /**
      * The screens that take arguments, with the arguments to open them with. A new screen with
-     * arguments goes here; the test fails and names it until it does.
+     * arguments goes here; the test fails and names it until it does. Each is made only when its
+     * check opens it, so a screen that throws as it's made fails as that screen.
      */
-    private fun screensWithArguments(f: Fixture): Map<Class<out Screen>, List<Screen>> = mapOf(
-        MangaScreen::class.java to listOf(MangaScreen(f.alpha.id)),
-        PagePreviewScreen::class.java to listOf(PagePreviewScreen(f.alpha.id)),
-        MetadataViewScreen::class.java to listOf(MetadataViewScreen(f.alpha.id, LocalSource.ID)),
-        ReaderScreen::class.java to listOf(ReaderScreen(f.alpha.id, f.chapters.first().id), ReaderScreen(f.alpha.id, f.chapters.last().id, page = 1)),
-        SourceFeedScreen::class.java to listOf(SourceFeedScreen(LocalSource.ID)),
+    private fun screensWithArguments(f: Fixture): Map<Class<out Screen>, List<() -> Screen>> = mapOf(
+        MangaScreen::class.java to listOf({ MangaScreen(f.alpha.id) }),
+        PagePreviewScreen::class.java to listOf({ PagePreviewScreen(f.alpha.id) }),
+        MetadataViewScreen::class.java to listOf({ MetadataViewScreen(f.alpha.id, LocalSource.ID) }),
+        ReaderScreen::class.java to listOf(
+            { ReaderScreen(f.alpha.id, f.chapters.first().id) },
+            { ReaderScreen(f.alpha.id, f.chapters.last().id, page = 1) },
+        ),
+        SourceFeedScreen::class.java to listOf({ SourceFeedScreen(LocalSource.ID) }),
         SourceScreen::class.java to listOf(
-            SourceScreen(LocalSource.ID),
-            SourceScreen(LocalSource.ID, latest = true),
-            SourceScreen(LocalSource.ID, query = "Alpha"),
+            { SourceScreen(LocalSource.ID) },
+            { SourceScreen(LocalSource.ID, latest = true) },
+            { SourceScreen(LocalSource.ID, query = "Alpha") },
         ),
         GlobalSearchScreen::class.java to listOf(
-            GlobalSearchScreen("Alpha"),
-            GlobalSearchScreen("Bravo", SearchPurpose.Merge(f.alpha.id)),
-            GlobalSearchScreen("Bravo", SearchPurpose.Migrate(f.alpha.id, LocalSource.ID)),
-            GlobalSearchScreen("Bravo", SearchPurpose.MigrateInList(f.alpha.id, LocalSource.ID)),
+            { GlobalSearchScreen("Alpha") },
+            { GlobalSearchScreen("Bravo", SearchPurpose.Merge(f.alpha.id)) },
+            { GlobalSearchScreen("Bravo", SearchPurpose.Migrate(f.alpha.id, LocalSource.ID)) },
+            { GlobalSearchScreen("Bravo", SearchPurpose.MigrateInList(f.alpha.id, LocalSource.ID)) },
         ),
-        MigrateMangaScreen::class.java to listOf(MigrateMangaScreen(LocalSource.ID)),
-        ExtensionDetailsScreen::class.java to listOf(ExtensionDetailsScreen("eu.kanade.tachiyomi.extension.en.notinstalled")),
-        OpenUrlScreen::class.java to listOf(OpenUrlScreen("https://example.invalid/manga/1")),
-        SourceSettingsScreen::class.java to listOf(SourceSettingsScreen(LocalSource.ID)),
-        RestoreBackupScreen::class.java to listOf(RestoreBackupScreen(f.backup.path)),
+        MigrateMangaScreen::class.java to listOf({ MigrateMangaScreen(LocalSource.ID) }),
+        ExtensionDetailsScreen::class.java to listOf({ ExtensionDetailsScreen("eu.kanade.tachiyomi.extension.en.notinstalled") }),
+        OpenUrlScreen::class.java to listOf({ OpenUrlScreen("https://example.invalid/manga/1") }),
+        SourceSettingsScreen::class.java to listOf({ SourceSettingsScreen(LocalSource.ID) }),
+        RestoreBackupScreen::class.java to listOf({ RestoreBackupScreen(f.backup.path) }),
         MigrationListScreen::class.java to listOf(
-            MigrationListScreen(listOf(f.alpha.id, f.bravo.id), null),
-            MigrationListScreen(listOf(f.alpha.id), "Bravo", runManually = true),
+            { MigrationListScreen(listOf(f.alpha.id, f.bravo.id), null) },
+            { MigrationListScreen(listOf(f.alpha.id), "Bravo", runManually = true) },
         ),
-        MigrationConfigScreen::class.java to listOf(MigrationConfigScreen(listOf(f.alpha.id, f.bravo.id))),
-        RecommendsScreen::class.java to listOf(RecommendsScreen(f.alpha.id)),
-        CommonRecommendsScreen::class.java to listOf(CommonRecommendsScreen(emptyList())),
+        MigrationConfigScreen::class.java to listOf({ MigrationConfigScreen(listOf(f.alpha.id, f.bravo.id)) }),
+        RecommendsScreen::class.java to listOf({ RecommendsScreen(f.alpha.id) }),
+        CommonRecommendsScreen::class.java to listOf({ CommonRecommendsScreen(emptyList()) }),
     )
 
     private fun screens(f: Fixture): List<Check> {
@@ -405,24 +512,30 @@ class ScreenSmokeTest {
         // About 30 when this was written; far fewer means the scan stopped finding them
         classes.size shouldBeGreaterThan 20
         val missing = mutableListOf<String>()
-        val screens = classes.filter { it != HomeScreen::class.java }.flatMap { type ->
-            withArguments[type] ?: listOfNotNull(instance(type)).ifEmpty {
+        val checks = classes.filter { it != HomeScreen::class.java }.flatMap { type ->
+            val makers = withArguments[type] ?: listOfNotNull(maker(type)).ifEmpty {
                 missing += type.name
                 emptyList()
             }
+            makers.mapIndexed { i, make ->
+                val variant = if (makers.size > 1) " ${i + 1}" else ""
+                Check("screen ${type.simpleName}$variant", { it.push(make()) })
+            }
         }
         missing.shouldBeEmpty()
-        return screens.map { screen -> Check("screen ${screen.javaClass.simpleName} (${screen.key})", { it.push(screen) }) }
+        return checks
     }
 
-    /** An object screen's instance, or a new screen of a class without arguments; null otherwise. */
-    private fun instance(type: Class<out Screen>): Screen? {
+    /**
+     * How to get a screen of [type] without arguments: an object's instance, or a new one of a
+     * class without arguments; null for a class that needs arguments. Nothing is made yet.
+     */
+    private fun maker(type: Class<out Screen>): (() -> Screen)? {
         runCatching { type.getDeclaredField("INSTANCE") }.getOrNull()
             ?.takeIf { Modifier.isStatic(it.modifiers) }
-            ?.let { return it.apply { isAccessible = true }.get(null) as Screen }
+            ?.let { field -> return { field.apply { isAccessible = true }.get(null) as Screen } }
         return type.declaredConstructors.firstOrNull { it.parameterCount == 0 }
-            ?.apply { isAccessible = true }
-            ?.newInstance() as Screen?
+            ?.let { constructor -> { constructor.apply { isAccessible = true }.newInstance() as Screen } }
     }
 
     /** The app's screen classes, from its compiled classes. */
@@ -581,14 +694,28 @@ class ScreenSmokeTest {
                 },
                 drive = { onAllNodesWithText("Smoke choices").onFirst().performClick() },
             ),
-            dialog("first-run setup") {
-                val preferences = remember { Injekt.get<DesktopPreferences>().also { it.shownOnboardingFlow().set(false) } }
-                FirstRun(preferences) { null }
+            run {
+                val shown = Injekt.get<DesktopPreferences>().shownOnboardingFlow()
+                val before = shown.get()
+                Check(
+                    "dialog first-run setup",
+                    {
+                        it.push(
+                            Host("first-run") {
+                                val preferences = remember { Injekt.get<DesktopPreferences>().also { it.shownOnboardingFlow().set(false) } }
+                                FirstRun(preferences) { null }
+                            },
+                        )
+                    },
+                    // Not set back, the app would show the first-run setup over every later check
+                    cleanup = { shown.set(before) },
+                )
             },
-            Check("onboarding reopened", { Onboarding.reopen.value = true }, drive = {
-                settle()
-                runOnUiThread { Onboarding.reopen.value = false }
-            }),
+            Check(
+                "onboarding reopened",
+                { Onboarding.reopen.value = true },
+                cleanup = { Onboarding.reopen.value = false },
+            ),
         )
     }
 
@@ -602,12 +729,15 @@ class ScreenSmokeTest {
                 Injekt.get<SecurityPreferences>().useAuthenticator().set(true)
                 lock.onStart()
             },
-            drive = {
+            // Left locked, every later check would render the lock screen and nothing else
+            cleanup = {
                 val lock = Injekt.get<AppLock>()
-                settle()
-                runOnUiThread { lock.unlock("smoke") }
-                Injekt.get<SecurityPreferences>().useAuthenticator().set(false)
-                lock.clearPassword()
+                try {
+                    lock.unlock("smoke")
+                } finally {
+                    Injekt.get<SecurityPreferences>().useAuthenticator().set(false)
+                    lock.clearPassword()
+                }
             },
         ),
         Check(
