@@ -138,7 +138,7 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
         // ZOUKAN -->
         if (openUrl) OpenUrlDialog(onDismiss = { openUrl = false })
         // ZOUKAN <--
-        PrimaryTabRow(selectedTabIndex = pages.indexOf(current)) {
+        PrimaryTabRow(selectedTabIndex = pages.indexOf(current), modifier = Modifier.testTag("browse-pages")) {
             pages.forEach { page ->
                 Tab(
                     selected = current == page,
