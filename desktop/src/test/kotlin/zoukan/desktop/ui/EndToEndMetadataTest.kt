@@ -15,11 +15,14 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.source.online.MetadataSource
 import exh.metadata.metadata.EHentaiSearchMetadata
 import exh.metadata.metadata.base.RaisedTag
 import exh.source.EH_SOURCE_ID
 import exh.source.ExhPreferences
+import exh.source.getMainSource
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -101,6 +104,11 @@ class EndToEndMetadataTest {
                 tags += RaisedTag("female", "glasses", EHentaiSearchMetadata.TAG_TYPE_LIGHT)
             }
             Injekt.get<InsertFlatMetadata>().await(meta)
+            // Metadata sources resolve their database access through these interfaces (page previews)
+            val source = sources.get(EH_SOURCE_ID)!!.getMainSource<MetadataSource<*, *>>()!!
+            source.getMangaId.awaitId(manga.url, EH_SOURCE_ID) shouldBe manga.id
+            source.getFlatMetadataById.await(manga.id) shouldNotBe null
+            source.insertFlatMetadata shouldNotBe null
             manga
         }
 
