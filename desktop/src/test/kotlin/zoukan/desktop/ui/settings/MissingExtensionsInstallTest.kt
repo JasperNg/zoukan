@@ -94,4 +94,30 @@ class MissingExtensionsInstallTest {
         // A's results are no longer shown anywhere
         MissingExtensionsInstall.state.value.forRestore(restoreA) shouldBe State.Idle
     }
+
+    @Test
+    fun `the Settings screen shows a running install while its find waits`() {
+        val restore = Any()
+        val settings = Any()
+        MissingExtensionsInstall.planner = { plan("ext.a", 1) }
+        val installGate = CompletableDeferred<Unit>()
+        MissingExtensionsInstall.installer = { ext ->
+            installGate.await()
+            LoadResult.Error(ext.pkgName, ExtensionException(ExtensionException.Stage.SIGNATURE, "test"))
+        }
+
+        MissingExtensionsInstall.find(restore)
+        waitUntil { MissingExtensionsInstall.state.value.forRestore(restore) is State.Ready }
+        MissingExtensionsInstall.install(restore)
+
+        // The user leaves the restore screen and opens Settings > Install missing extensions
+        MissingExtensionsInstall.dismiss()
+        MissingExtensionsInstall.find(settings)
+        MissingExtensionsInstall.state.value.forSettings(settings).shouldBeInstanceOf<State.Installing>()
+        // A restore screen still never shows another run's progress
+        MissingExtensionsInstall.state.value.forRestore(settings) shouldBe State.Finding
+
+        installGate.complete(Unit)
+        waitUntil { MissingExtensionsInstall.state.value.forSettings(settings) is State.Ready }
+    }
 }

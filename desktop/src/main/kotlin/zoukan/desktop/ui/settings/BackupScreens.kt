@@ -310,7 +310,7 @@ object MissingExtensionsScreen : Screen {
                 item {
                     SectionCard {
                         MissingExtensionsResults(
-                            missing = missing.forRestore(model),
+                            missing = missing.forSettings(model),
                             onInstall = { MissingExtensionsInstall.install(model) },
                         )
                     }
