@@ -42,7 +42,7 @@ Get the installer for your computer from the [latest release](https://github.com
   image folders, CBZ, ZIP, RAR, 7z and EPUB
 
 **Sources**
-- The extensions from Keiyoushi and other stores, installed and run as on Android
+- The extensions can be installed and run as on Android
 - Browse, global search, saved searches and the feed, with source and language icons
 - A built-in Chromium browser for Cloudflare checks and site sign-in
 - E-Hentai and ExHentai, MangaDex follows sync, and metadata views for supported sources
