@@ -1,8 +1,9 @@
 # Releasing Zoukan desktop
 
 Phase 7 of the desktop port: the installers, signing, the update check and crash logs. Every
-check runs locally (there is no hosted CI): the Windows x64 steps on the Windows desktop, the
-Apple Silicon steps on the Mac.
+check runs locally: the Windows x64 steps on the Windows desktop, the Apple Silicon steps on the
+Mac. GitHub Actions also builds both installers after each merge (see below); that build does not
+gate merges.
 
 ## Installers
 
@@ -30,6 +31,19 @@ to 255). It is separate from the Android app's version, which extensions still s
 
 Compose Multiplatform's Gradle plugin is not used: its `compose` extension clashes with the
 upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink and jpackage itself.
+
+## Installers built on GitHub
+
+`.github/workflows/desktop-build.yml` builds the Windows x64 MSI (`windows-latest`) and the Apple
+Silicon DMG (`macos-latest`, which is Apple Silicon) with JetBrains Runtime 21 after every push to `master`, and on demand
+from the Actions tab (Run workflow). Each run keeps the installers as build artifacts
+(`zoukan-windows-x64`, `zoukan-macos-arm64`) on the run's page. The repository is public, so the
+hosted runners cost nothing. The install checks, the self-test and publishing a release stay
+local.
+
+These installers are unsigned on purpose: the project does not sign its builds, so no signing
+secrets are set. A downloaded copy shows the usual warnings (SmartScreen on Windows; on macOS,
+System Settings > Privacy & Security > Open Anyway the first time).
 
 ## Signing
 
