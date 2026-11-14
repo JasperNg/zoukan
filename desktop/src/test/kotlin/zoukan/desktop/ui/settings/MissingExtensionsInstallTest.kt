@@ -4,9 +4,11 @@ import eu.kanade.tachiyomi.extension.model.Extension
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import mihon.domain.extension.model.ExtensionStore
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.ui.settings.MissingExtensionsInstall.State
 import zoukan.extension.ExtensionException
 import zoukan.extension.LoadResult
@@ -119,5 +121,36 @@ class MissingExtensionsInstallTest {
 
         installGate.complete(Unit)
         waitUntil { MissingExtensionsInstall.state.value.forSettings(settings) is State.Ready }
+    }
+
+    @Test
+    fun `a find waits for a running restore before working out the plan`() {
+        val token = Any()
+        var planned = false
+        MissingExtensionsInstall.planner = {
+            planned = true
+            plan("ext.a", 1)
+        }
+        val restoreGate = CompletableDeferred<Unit>()
+        val restoring = CompletableDeferred<Unit>()
+        val restore = Thread {
+            runBlocking {
+                RestoreGate.whileRestoring {
+                    restoring.complete(Unit)
+                    runBlocking { restoreGate.await() }
+                }
+            }
+        }.apply { start() }
+        runBlocking { restoring.await() }
+
+        MissingExtensionsInstall.find(token)
+        waitUntil { MissingExtensionsInstall.state.value.forRestore(token) == State.WaitingForRestore }
+        Thread.sleep(100)
+        planned shouldBe false
+
+        restoreGate.complete(Unit)
+        restore.join()
+        waitUntil { MissingExtensionsInstall.state.value.forRestore(token) is State.Ready }
+        planned shouldBe true
     }
 }

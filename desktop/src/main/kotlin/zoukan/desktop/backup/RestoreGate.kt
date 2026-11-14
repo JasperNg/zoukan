@@ -1,5 +1,6 @@
 package zoukan.desktop.backup
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -57,6 +58,15 @@ object RestoreGate {
             }
         } finally {
             pending.decrementAndGet()
+        }
+    }
+
+    /** Suspends until no restore is running or waiting, so the library is whole again. */
+    suspend fun awaitNoRestore() {
+        while (isRestoring) {
+            // A running restore holds the lock until it ends; a waiting one may not hold it yet
+            restores.withLock { }
+            if (isRestoring) delay(50)
         }
     }
 

@@ -68,6 +68,7 @@ internal fun MissingExtensionsResults(missing: State, onInstall: () -> Unit) {
         when (missing) {
             State.Idle -> Unit
             State.Finding -> Busy(localized(DMR.strings.finding_missing_extensions))
+            State.WaitingForRestore -> Busy(localized(DMR.strings.missing_extensions_waiting_for_restore))
             is State.Ready -> ReadyPlan(missing.plan, onInstall)
             is State.Installing -> {
                 Text(localized(DMR.strings.missing_extensions_installing, missing.current.orEmpty(), missing.done + 1, missing.total))
@@ -98,8 +99,8 @@ private fun ReadyPlan(plan: MissingExtensionsPlan, onInstall: () -> Unit) {
     }
     var confirm by remember { mutableStateOf(false) }
     Text(localized(DMR.strings.missing_extensions_found, plan.toInstall.size, plan.unavailable.size))
-    if (plan.needsTrust.isNotEmpty()) {
-        Section(localized(DMR.strings.missing_extensions_need_trust), plan.needsTrust.map { it.extension.name })
+    if (plan.needsTrustNames.isNotEmpty()) {
+        Section(localized(DMR.strings.missing_extensions_need_trust), plan.needsTrustNames)
     }
     if (plan.toInstall.isNotEmpty()) {
         Button(onClick = { confirm = true }, modifier = Modifier.testTag("install-missing-extensions")) {
@@ -115,8 +116,11 @@ private fun ReadyPlan(plan: MissingExtensionsPlan, onInstall: () -> Unit) {
             text = {
                 Column(Modifier.verticalScrollWithBar(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Section(localized(DMR.strings.missing_extensions_to_install), plan.toInstall.map { it.label() })
-                    if (plan.needsTrust.isNotEmpty()) {
-                        Section(localized(DMR.strings.missing_extensions_need_trust), plan.needsTrust.map { it.label() })
+                    if (plan.needsTrustNames.isNotEmpty()) {
+                        Section(
+                            localized(DMR.strings.missing_extensions_need_trust),
+                            plan.needsTrust.map { it.label() } + plan.untrustedInstalled.map { it.extension.name },
+                        )
                     }
                     if (plan.unavailable.isNotEmpty()) {
                         Section(localized(DMR.strings.missing_extensions_unavailable), plan.unavailable.map { it.name })

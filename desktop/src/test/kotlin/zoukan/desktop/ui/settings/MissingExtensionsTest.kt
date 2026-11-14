@@ -157,4 +157,57 @@ class MissingExtensionsTest {
         }
         tried shouldBe listOf("ext.a")
     }
+
+    @Test
+    fun `an untrusted extension no store offers gets its sources by name, not unavailable`() {
+        val plan = MissingExtensionsPlan.of(
+            missing = listOf(
+                MissingSource(1, "MangaDex (EN)", "MangaDex"),
+                MissingSource(2, "Other (EN)", "Other"),
+            ),
+            offers = emptyList(),
+            installed = emptyMap(),
+            untrusted = mapOf(
+                "ext.mangadex" to untrusted("ext.mangadex", "own").copy(name = "Tachiyomi: MangaDex"),
+                "ext.misc" to untrusted("ext.misc", "own").copy(name = "Tachiyomi: Misc"),
+            ),
+        )
+        plan.untrustedInstalled.map { it.extension.pkgName to it.sources.map(MissingSource::id) } shouldBe listOf(
+            "ext.mangadex" to listOf(1L),
+            "ext.misc" to emptyList(),
+        )
+        plan.unavailable.map { it.id } shouldBe listOf(2L)
+        plan.needsTrustNames shouldBe listOf("Tachiyomi: MangaDex", "Tachiyomi: Misc")
+        plan.isEmpty shouldBe false
+    }
+
+    @Test
+    fun `an untrusted extension a store offers is not listed twice`() {
+        val plan = MissingExtensionsPlan.of(
+            missing = missing(1),
+            offers = listOf(available("ext.a", 1)),
+            installed = emptyMap(),
+            untrusted = mapOf("ext.a" to untrusted("ext.a", "key-A")),
+        )
+        plan.needsTrust.map { it.extension.pkgName } shouldBe listOf("ext.a")
+        plan.untrustedInstalled.shouldBeEmpty()
+    }
+
+    @Test
+    fun `extension names match source names without their prefix`() {
+        MissingExtensionsPlan.matchesName("Tachiyomi: MangaDex", "mangadex") shouldBe true
+        MissingExtensionsPlan.matchesName("MangaDex", "MangaDex") shouldBe true
+        MissingExtensionsPlan.matchesName("Tachiyomi: Manga", "MangaDex") shouldBe false
+    }
+
+    @Test
+    fun `the summary lists untrusted extensions no store offers as needing trust`() {
+        val plan = MissingExtensionsPlan(
+            toInstall = emptyList(),
+            needsTrust = emptyList(),
+            unavailable = emptyList(),
+            untrustedInstalled = listOf(MissingExtensionsPlan.UntrustedCandidate(untrusted("ext.u", "own"), emptyList())),
+        )
+        runBlocking { installMissingExtensions(plan, { error("nothing to install") }) }.needsTrust shouldBe listOf("u")
+    }
 }
