@@ -1,5 +1,6 @@
 package zoukan.desktop.ui
 
+import android.app.Application
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,15 +35,14 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.online.all.MangaDex
 import exh.md.utils.MdUtil
-import exh.source.getMainSource
+import exh.source.EnhancedHttpSource
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import mihon.domain.manga.model.toDomainManga
 import org.junit.jupiter.api.Test
@@ -66,7 +66,7 @@ import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzWriter
-import zoukan.desktop.exh.DelegatedSources
+import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.secrets.SecretStore
@@ -131,7 +131,6 @@ import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
-import zoukan.extension.DesktopSourceManager
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -587,42 +586,31 @@ class ScreenSmokeTest {
     )
 
     /**
-     * A MangaDex source for one check: the MangaDex extension's stand-in, run through the app's own
-     * delegation into its enhanced MangaDex, and listed by the SourceManager while the check runs.
-     * Only that check sees it, so no other screen can try to reach MangaDex.
+     * A MangaDex source for one check: the MangaDex extension's stand-in inside the app's enhanced
+     * MangaDex, as DelegatedSources wraps the real extension, listed through the SourceManager's
+     * test sources while the check runs. Only that check sees it.
      *
-     * The SourceManager lists only loaded extensions, and Injekt keeps the instance it made even
-     * when the registration is replaced, so the source goes into the manager's own list, by
-     * reflection: a renamed field fails this check rather than skipping it.
+     * It is wrapped here rather than by DelegatedSources (which wraps only extensions' sources, not
+     * the test sources): that would also count it among the MangaDex sources (mangaDexSourceIds)
+     * for the rest of the run, with no way to take it out.
      */
     private class MangaDexStandIn {
-        private var added: Source? = null
-        private var mangaDexIds = emptyList<Long>()
-
-        @Suppress("UNCHECKED_CAST")
-        private fun sourceList(): MutableStateFlow<Map<Long, Source>> {
-            val manager = Injekt.get<SourceManager>() as DesktopSourceManager
-            return DesktopSourceManager::class.java.getDeclaredField("sourcesMapFlow")
-                .apply { isAccessible = true }
-                .get(manager) as MutableStateFlow<Map<Long, Source>>
-        }
+        private val testSources get() = Injekt.get<BuiltInSources>().testSources
 
         fun install() {
-            mangaDexIds = exh.source.mangaDexSourceIds
-            val enhanced = Injekt.get<DelegatedSources>().transform(eu.kanade.tachiyomi.extension.all.mangadex.MangaDex())
-            check(enhanced is HttpSource && enhanced.getMainSource<eu.kanade.tachiyomi.source.online.all.MangaDex>() != null) {
-                "the app didn't run the MangaDex stand-in as its MangaDex: $enhanced"
+            val extension = eu.kanade.tachiyomi.extension.all.mangadex.MangaDex()
+            val enhanced = EnhancedHttpSource(extension, MangaDex(extension, Injekt.get<Application>()))
+            testSources.value = listOf(enhanced)
+            // The SourceManager picks the test sources up on its own thread
+            val deadline = System.nanoTime() + 10.seconds.inWholeNanoseconds
+            while (MdUtil.getEnabledMangaDexs(Injekt.get()).isEmpty()) {
+                check(System.nanoTime() < deadline) { "the SourceManager didn't list the MangaDex stand-in within 10s" }
+                Thread.sleep(50)
             }
-            sourceList().update { it + (enhanced.id to enhanced) }
-            added = enhanced
-            check(MdUtil.getEnabledMangaDexs(Injekt.get()).isNotEmpty()) { "the app doesn't see the MangaDex stand-in" }
         }
 
         fun uninstall() {
-            added?.let { source -> sourceList().update { it - source.id } }
-            added = null
-            // The delegation counted it among the MangaDex sources
-            exh.source.mangaDexSourceIds = mangaDexIds
+            testSources.value = emptyList()
         }
     }
 
@@ -634,18 +622,28 @@ class ScreenSmokeTest {
     } + listOf(
         run {
             val mangaDex = MangaDexStandIn()
+            var navigator: Navigator? = null
             Check(
                 "settings MangaDex",
                 {
+                    navigator = it
                     mangaDex.install()
                     openSettingsCategory(SettingsCategory.MangaDex)
                     HomeScreen.openSettings(it)
                 },
-                // The page shows its rows only with a MangaDex source: without one, this check
-                // would open an empty page and pass
-                // and opens the follows dialog from its row (closed with the page)
+                // The page shows its rows only with a MangaDex source. The check waits for its sync
+                // row, so it fails rather than pass on an empty page.
+                // Clicking the row only opens the follows dialog. Nothing here confirms it, signs in
+                // or syncs: those would call MangaDex's servers.
                 drive = { clickText(localized(SYMR.strings.mangadex_sync_follows_to_library)) },
-                cleanup = { mangaDex.uninstall() },
+                // The page and its dialog close before the source goes away under them
+                cleanup = {
+                    try {
+                        navigator?.popUntilRoot()
+                    } finally {
+                        mangaDex.uninstall()
+                    }
+                },
             )
         },
         Check(

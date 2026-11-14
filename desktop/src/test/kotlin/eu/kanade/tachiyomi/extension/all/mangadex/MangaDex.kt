@@ -7,10 +7,14 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 
 /**
- * A stand-in for the MangaDex extension, for tests that need a MangaDex source offline. The app
- * recognizes the extension by this class name and runs it inside its own enhanced MangaDex (see
- * DelegatedSources), which is what shows the MangaDex settings. Nothing here reaches the network:
- * the address is unreachable and loading pages fails.
+ * A stand-in for the MangaDex extension (named like it), for tests that need a MangaDex source:
+ * the app's enhanced MangaDex wraps it, as DelegatedSources wraps the real extension, and that is
+ * what shows the MangaDex settings.
+ *
+ * This class itself never reaches the network: its address is unreachable and loading pages
+ * fails. The enhanced MangaDex around it does: it calls api.mangadex.org through its own service
+ * to search, sign in or sync. A test stays offline only by showing its screens and dialogs and
+ * never confirming one of those actions.
  */
 class MangaDex : HttpSource() {
     override val name = "MangaDex"
