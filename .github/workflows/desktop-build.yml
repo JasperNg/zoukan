@@ -1,0 +1,125 @@
+# Builds the Zoukan desktop installers on GitHub's hosted runners after every merge to master:
+# the Windows x64 MSI and the Apple Silicon DMG, uploaded as build artifacts.
+#
+# This is an extra next to the local checks (desktop/RELEASING.md); it does not gate merges.
+# Without the signing secrets the installers are unsigned, the same as a local build without
+# signing settings. Secrets (Settings > Secrets and variables > Actions), all optional:
+#   Windows  WINDOWS_SIGN_PFX_BASE64, WINDOWS_SIGN_PASSWORD
+#   macOS    MAC_SIGN_P12_BASE64, MAC_SIGN_P12_PASSWORD, MAC_SIGN_IDENTITY
+#            ("Developer ID Application: Name (TEAMID)")
+#            NOTARY_APPLE_ID, NOTARY_PASSWORD (app-specific), NOTARY_TEAM_ID to also notarize
+name: Desktop installers
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths: [.github/workflows/desktop-build.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x64 MSI
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      WINDOWS_SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGN_PFX_BASE64 }}
+      WINDOWS_SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The installer bundles a runtime made with jlink from this JDK, so it must be a full JDK 21
+      # with jmods: JetBrains Runtime, the plan's choice
+      - uses: actions/setup-java@v4
+        with:
+          distribution: jetbrains
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing certificate
+        if: env.WINDOWS_SIGN_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "zoukan-sign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_SIGN_PFX_BASE64))
+          "ZOUKAN_WINDOWS_SIGN_PFX=$pfx" >> $env:GITHUB_ENV
+          "ZOUKAN_WINDOWS_SIGN_PASSWORD=$env:WINDOWS_SIGN_PASSWORD" >> $env:GITHUB_ENV
+
+      - name: Build the MSI
+        shell: pwsh
+        run: .\gradlew.bat :desktop:packageMsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zoukan-windows-x64
+          path: desktop/build/packaging/installers/*.msi
+          if-no-files-found: error
+
+      - name: Remove the certificate
+        if: always() && env.WINDOWS_SIGN_PFX_BASE64 != ''
+        shell: pwsh
+        run: Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP "zoukan-sign.pfx")
+
+  macos:
+    name: macOS arm64 DMG
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      MAC_SIGN_P12_BASE64: ${{ secrets.MAC_SIGN_P12_BASE64 }}
+      MAC_SIGN_P12_PASSWORD: ${{ secrets.MAC_SIGN_P12_PASSWORD }}
+      MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+      ZOUKAN_NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+      ZOUKAN_NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+      ZOUKAN_NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: jetbrains
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # A temporary keychain with the Developer ID certificate, removed at the end of the job
+      - name: Signing certificate
+        if: env.MAC_SIGN_P12_BASE64 != '' && env.MAC_SIGN_IDENTITY != ''
+        run: |
+          keychain="$RUNNER_TEMP/zoukan-sign.keychain-db"
+          keychain_password="$(uuidgen)"
+          p12="$RUNNER_TEMP/zoukan-sign.p12"
+          echo "$MAC_SIGN_P12_BASE64" | base64 --decode > "$p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$p12" -k "$keychain" -P "$MAC_SIGN_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$p12"
+          echo "ZOUKAN_MAC_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "ZOUKAN_MAC_SIGN_IDENTITY=$MAC_SIGN_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build the DMG
+        run: ./gradlew :desktop:packageDmg
+
+      - name: Notarize the DMG
+        if: env.ZOUKAN_MAC_SIGN_IDENTITY != '' && env.ZOUKAN_NOTARY_APPLE_ID != ''
+        run: ./gradlew :desktop:notarizeDmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zoukan-macos-arm64
+          path: desktop/build/packaging/installers/*.dmg
+          if-no-files-found: error
+
+      - name: Remove the keychain
+        if: always() && env.ZOUKAN_MAC_KEYCHAIN != ''
+        run: security delete-keychain "$ZOUKAN_MAC_KEYCHAIN" || true
