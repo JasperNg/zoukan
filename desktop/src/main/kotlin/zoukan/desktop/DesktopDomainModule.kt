@@ -67,6 +67,7 @@ import tachiyomi.domain.manga.interactor.InsertFavoriteEntryAlternative
 import tachiyomi.domain.manga.interactor.InsertFlatMetadata
 import tachiyomi.domain.manga.interactor.InsertMergedReference
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
+import tachiyomi.domain.manga.interactor.ResetViewerFlags
 import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.UpdateMergedSettings
 import tachiyomi.domain.manga.repository.CustomMangaRepository
@@ -132,6 +133,8 @@ class DesktopDomainModule : InjektModule {
         addFactory { GetMangaByUrlAndSourceId(get()) }
         addFactory { FetchInterval(get()) }
         addFactory { tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga(get()) }
+        // Settings > Advanced > Reset per-series reader settings
+        addFactory { ResetViewerFlags(get()) }
 
         addSingletonFactory<ChapterRepository> { ChapterRepositoryImpl(get()) }
         addFactory { GetChaptersByMangaId(get()) }
