@@ -5,6 +5,8 @@
 # Each release bumps PATCH over the newest desktop-v* tag. zoukanVersion in desktop/build.gradle.kts
 # is the floor: raise it there for a new MINOR or MAJOR and the next merge releases that version.
 # The installers are unsigned on purpose: the project does not sign its builds.
+# Before anything is published, each job starts the packaged app (`Zoukan selftest --ui`), so a
+# build that crashes on startup is never released.
 name: Desktop installers
 
 on:
@@ -97,6 +99,20 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat :desktop:packageMsi "-Pzoukan.version=${{ needs.version.outputs.version }}"
 
+      # Start the packaged app (the folder the MSI installs) before it can be released: its
+      # self-test starts the runtime in a throwaway profile, opens the encrypted database, loads
+      # extensions and draws the main window, so a build that crashes on startup fails here.
+      # The launcher has no console on Windows, so the result comes from the report and exit code.
+      - name: Start the packaged app
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "selftest-windows.md"
+          $app = Start-Process -FilePath "desktop\build\packaging\app\Zoukan\Zoukan.exe" `
+            -ArgumentList "selftest", "--ui", "--report", "`"$report`"" -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report } else { Write-Host "No self-test report was written" }
+          if ($app.ExitCode -ne 0) { Write-Error "The packaged app's self-test failed (exit code $($app.ExitCode))"; exit 1 }
+
       - uses: actions/upload-artifact@v5
         with:
           name: zoukan-windows-x64
@@ -128,6 +144,19 @@ jobs:
 
       - name: Build the DMG
         run: ./gradlew :desktop:packageDmg "-Pzoukan.version=${{ needs.version.outputs.version }}"
+
+      # Start the packaged app (the one inside the DMG) before it can be released, as on Windows
+      - name: Start the packaged app
+        timeout-minutes: 10
+        run: |
+          report="$RUNNER_TEMP/selftest-macos.md"
+          status=0
+          desktop/build/packaging/app/Zoukan.app/Contents/MacOS/Zoukan selftest --ui --report "$report" || status=$?
+          if [ "$status" -ne 0 ]; then
+            [ -f "$report" ] || echo "No self-test report was written"
+            echo "::error::The packaged app's self-test failed (exit code $status)"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v5
         with:

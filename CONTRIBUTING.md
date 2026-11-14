@@ -28,6 +28,12 @@ Before opening a pull request, run `./gradlew spotlessCheck :desktop:build` (see
 The [CI workflow](.github/workflows/ci.yml) runs the same command on every pull request (on Linux, so it stays quick; docs-only changes skip it).
 The end-to-end tests (`-Pzoukan.e2e=true`) are not part of it and run only locally.
 
+Every pull request's checks, however few tests the change touches, include the wiring tests:
+`:desktop:build` runs them through `check`, or run them alone with `./gradlew :desktop:wiringTest`.
+They catch code that compiles but crashes when it runs: `InjektRegistrationsTest` looks up every
+type the code gets from Injekt, and `ScreenSmokeTest` opens every screen and dialog. They need no
+network and use a throwaway data folder.
+
 ## Getting help
 
 - Open an [issue](https://github.com/JasperNg/zoukan/issues) or a draft pull request with your question.
