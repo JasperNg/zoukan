@@ -29,11 +29,18 @@ jobs:
 
       # The installer bundles a runtime made with jlink from this JDK, so it must be a full JDK 21
       # with jmods: JetBrains Runtime, the plan's choice
+      # setup-java's jetbrains distribution looks the release up through the GitHub API without a
+      # token, which the shared hosted-runner IPs often hit the rate limit on. Download a pinned
+      # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file.
+      - name: Download JetBrains Runtime
+        shell: bash
+        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-windows-x64-b1163.125.zip" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-windows-x64-b1163.125.zip"
+
       - uses: actions/setup-java@v5
         with:
-          distribution: jetbrains
+          distribution: jdkfile
+          jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-windows-x64-b1163.125.zip
           java-version: 21
-          token: ${{ github.token }}
 
       - uses: gradle/actions/setup-gradle@v5
 
@@ -54,11 +61,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # setup-java's jetbrains distribution looks the release up through the GitHub API without a
+      # token, which the shared hosted-runner IPs often hit the rate limit on. Download a pinned
+      # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file.
+      - name: Download JetBrains Runtime
+        shell: bash
+        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz"
+
       - uses: actions/setup-java@v5
         with:
-          distribution: jetbrains
+          distribution: jdkfile
+          jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz
           java-version: 21
-          token: ${{ github.token }}
 
       - uses: gradle/actions/setup-gradle@v5
 
