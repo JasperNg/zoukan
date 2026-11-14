@@ -46,6 +46,14 @@ object MissingExtensionsInstall {
             queued == token -> State.Finding
             else -> State.Idle
         }
+
+        /**
+         * What Settings > Data and storage's screen [token] shows: as [forRestore], except that while
+         * its find waits for an install, it shows that install's progress instead of a find that
+         * has not started. That screen is where the user comes back to see a running install.
+         */
+        fun forSettings(token: Any): State =
+            if (queued == token && state is State.Installing) state else forRestore(token)
     }
 
     private val mutableState = MutableStateFlow(Snapshot(owner = null, state = State.Idle, queued = null))
