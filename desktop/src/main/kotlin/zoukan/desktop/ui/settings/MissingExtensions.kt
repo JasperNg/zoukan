@@ -5,8 +5,11 @@ import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import kotlin.coroutines.cancellation.CancellationException
 
-/** A library source with no installed extension: its id, and the name to show for it. */
-data class MissingSource(val id: Long, val name: String)
+/**
+ * A library source with no installed extension: its id, the name to show for it, and the
+ * source's own name (without its language), which matches it to an untrusted extension no store offers.
+ */
+data class MissingSource(val id: Long, val name: String, val sourceName: String? = null)
 
 /**
  * What "Install missing extensions" will do after a restore (desktop only; Android has no such
@@ -17,10 +20,23 @@ data class MissingExtensionsPlan(
     val toInstall: List<Candidate>,
     val needsTrust: List<Candidate>,
     val unavailable: List<MissingSource>,
+    /**
+     * Installed but untrusted extensions that no store offers. An untrusted extension's code never
+     * runs, so its sources are unknown: a missing source goes to the one whose name matches it, and
+     * the rest of these are still listed, as they may bring some of [unavailable].
+     */
+    val untrustedInstalled: List<UntrustedCandidate> = emptyList(),
 ) {
     data class Candidate(val extension: Extension.Available, val sources: List<MissingSource>)
 
-    val isEmpty: Boolean get() = toInstall.isEmpty() && needsTrust.isEmpty() && unavailable.isEmpty()
+    data class UntrustedCandidate(val extension: Extension.Untrusted, val sources: List<MissingSource>)
+
+    /** The names of every extension that only the user can trust. */
+    val needsTrustNames: List<String>
+        get() = needsTrust.map { it.extension.name } + untrustedInstalled.map { it.extension.name }
+
+    val isEmpty: Boolean
+        get() = toInstall.isEmpty() && needsTrust.isEmpty() && unavailable.isEmpty() && untrustedInstalled.isEmpty()
 
     companion object {
         /**
@@ -48,11 +64,18 @@ data class MissingExtensionsPlan(
             val needsTrust = LinkedHashMap<String, MutableList<MissingSource>>()
             val unavailable = mutableListOf<MissingSource>()
             val extensions = HashMap<String, Extension.Available>()
+            val offered = offers.mapTo(HashSet()) { it.pkgName }
+            val unoffered = untrusted.values.filter { it.pkgName !in offered }
+            val byUntrusted = LinkedHashMap<String, MutableList<MissingSource>>()
+            unoffered.forEach { byUntrusted[it.pkgName] = mutableListOf() }
             missing.distinctBy { it.id }.forEach { source ->
                 val ext = bySource[source.id]
                 val loaded = ext?.let { installed[it.pkgName] }
                 when {
-                    ext == null -> unavailable += source
+                    ext == null -> {
+                        val match = unoffered.firstOrNull { matchesName(it.name, source.sourceName ?: source.name) }
+                        if (match != null) byUntrusted.getValue(match.pkgName) += source else unavailable += source
+                    }
                     ext.pkgName in untrusted -> needsTrust.getOrPut(ext.pkgName) { mutableListOf() } += source
                     // Installed without this source: only a newer version can bring it
                     loaded != null && ext.versionCode <= loaded.versionCode -> unavailable += source
@@ -67,7 +90,18 @@ data class MissingExtensionsPlan(
                 toInstall = toInstall.toList().candidates(),
                 needsTrust = needsTrust.toList().candidates(),
                 unavailable = unavailable.sortedBy { it.name.lowercase() },
+                untrustedInstalled = unoffered.map { UntrustedCandidate(it, byUntrusted.getValue(it.pkgName)) }
+                    .sortedBy { it.extension.name.lowercase() },
             )
+        }
+
+        /**
+         * Whether an extension named [extensionName] (as "Tachiyomi: MangaDex", or just "MangaDex")
+         * is the one of the source named [sourceName], ignoring case.
+         */
+        internal fun matchesName(extensionName: String, sourceName: String): Boolean {
+            val name = extensionName.substringAfter(": ").trim()
+            return name.isNotEmpty() && name.equals(sourceName.trim(), ignoreCase = true)
         }
     }
 }
@@ -93,7 +127,7 @@ suspend fun installMissingExtensions(
     onProgress: (done: Int, total: Int, current: String?) -> Unit = { _, _, _ -> },
 ): MissingExtensionsSummary {
     val installed = mutableListOf<String>()
-    val needsTrust = plan.needsTrust.map { it.extension.name }.toMutableList()
+    val needsTrust = plan.needsTrustNames.toMutableList()
     val failed = mutableListOf<Pair<String, String>>()
     val total = plan.toInstall.size
     plan.toInstall.forEachIndexed { index, candidate ->

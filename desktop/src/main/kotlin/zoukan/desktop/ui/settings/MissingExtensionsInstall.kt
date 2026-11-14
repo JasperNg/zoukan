@@ -14,6 +14,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
@@ -30,6 +31,9 @@ object MissingExtensionsInstall {
     sealed interface State {
         data object Idle : State
         data object Finding : State
+
+        /** Finding, once the restore that is running ends: its library is only partly restored. */
+        data object WaitingForRestore : State
         data class Ready(val plan: MissingExtensionsPlan) : State
         data class Installing(val done: Int, val total: Int, val current: String?) : State
         data class Done(val summary: MissingExtensionsSummary) : State
@@ -73,7 +77,7 @@ object MissingExtensionsInstall {
     fun find(token: Any) {
         synchronized(this) {
             val current = mutableState.value
-            if (current.state is State.Finding || current.state is State.Installing) {
+            if (current.state.isRunning) {
                 if (current.owner != token) mutableState.value = current.copy(queued = token)
                 return
             }
@@ -81,6 +85,11 @@ object MissingExtensionsInstall {
         }
         AppScope.launch {
             try {
+                if (RestoreGate.isRestoring) {
+                    setState(token, State.WaitingForRestore)
+                    RestoreGate.awaitNoRestore()
+                    setState(token, State.Finding)
+                }
                 val plan = planner()
                 setState(token, State.Ready(plan))
             } catch (e: CancellationException) {
@@ -149,12 +158,15 @@ object MissingExtensionsInstall {
         val next = synchronized(this) {
             val current = mutableState.value
             val queued = current.queued ?: return
-            if (current.state is State.Finding || current.state is State.Installing) return
+            if (current.state.isRunning) return
             mutableState.value = current.copy(queued = null)
             queued
         }
         find(next)
     }
+
+    private val State.isRunning: Boolean
+        get() = this is State.Finding || this is State.WaitingForRestore || this is State.Installing
 
     private suspend fun findPlan(): MissingExtensionsPlan {
         val manager = Injekt.get<DesktopExtensionManager>()
@@ -168,7 +180,7 @@ object MissingExtensionsInstall {
             .map { it.source }
             .distinct()
             .filter { sourceManager.get(it) == null }
-            .map { MissingSource(it, sourceManager.getOrStub(it).toString()) }
+            .map { id -> sourceManager.getOrStub(id).let { MissingSource(id, it.toString(), it.name) } }
         return MissingExtensionsPlan.of(
             missing = missing,
             offers = manager.availableExtensionsFlow.value.values,
