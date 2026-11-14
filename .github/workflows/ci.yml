@@ -7,8 +7,15 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore: &docs
+      - '**.md'
+      - '.github/readme-images/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'desktop/reports/**'
+      - 'LICENSE'
   push:
     branches: [master]
+    paths-ignore: *docs
   workflow_dispatch:
 
 concurrency:
@@ -21,8 +28,9 @@ permissions:
 jobs:
   check:
     name: Spotless, build and tests
-    # Windows x64 is the platform the local checks run on, and Compose desktop UI tests need a display
-    runs-on: windows-latest
+    # Linux runners start and build faster than Windows ones; the Compose desktop UI tests get a
+    # virtual display from xvfb-run. Windows and macOS are still checked locally before each merge.
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -39,8 +47,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
 
       - name: Spotless, build and tests
-        shell: pwsh
-        run: .\gradlew.bat spotlessCheck :desktop:build --continue
+        run: xvfb-run -a ./gradlew spotlessCheck :desktop:build --continue
 
       - name: Upload test reports
         if: failure()
