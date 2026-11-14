@@ -2,7 +2,6 @@ package zoukan.desktop
 
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.TypeReference
@@ -24,18 +23,19 @@ import java.util.zip.ZipFile
  * type is then resolved, which also runs its factory and the lookups inside it. The types that
  * extensions look up (Application, NetworkHelper, Json) are among them.
  *
- *   ./gradlew :desktop:test -Pzoukan.e2e=true --tests "*InjektRegistrationsTest"
+ * It needs no network, so it runs with every build, in its own JVM since it starts the runtime:
+ *
+ *   ./gradlew :desktop:wiringTest
  */
 class InjektRegistrationsTest {
 
     @Test
     fun `every Injekt lookup has a registration`() {
-        assumeTrue(System.getProperty("zoukan.e2e") == "true", "Starts the runtime; run with -Pzoukan.e2e=true")
         val types = lookedUpTypes()
         // About 180 when this was written; far fewer means the scan stopped finding them
         types.size shouldBeGreaterThan 100
 
-        ZoukanRuntime.start(ZoukanDirs(Files.createTempDirectory("zoukan-e2e-injekt").toFile()), interactiveBrowser = false)
+        ZoukanRuntime.start(ZoukanDirs(Files.createTempDirectory("zoukan-injekt").toFile()), interactiveBrowser = false)
         val missing = types.filter { type -> runCatching { Injekt.getInstance<Any>(type) }.isFailure }
             .map { it.typeName }
         missing.shouldBeEmpty()
