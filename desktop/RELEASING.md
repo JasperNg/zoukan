@@ -35,7 +35,7 @@ upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink a
 ## Installers built on GitHub
 
 `.github/workflows/desktop-build.yml` builds the Windows x64 MSI (`windows-latest`) and the Apple
-Silicon DMG (`macos-14`) with JetBrains Runtime 21 after every push to `master`, and on demand
+Silicon DMG (`macos-latest`, which is Apple Silicon) with JetBrains Runtime 21 after every push to `master`, and on demand
 from the Actions tab (Run workflow). Each run keeps the installers as build artifacts
 (`zoukan-windows-x64`, `zoukan-macos-arm64`) on the run's page. The repository is public, so the
 hosted runners cost nothing. The install checks, the self-test and publishing a release stay
