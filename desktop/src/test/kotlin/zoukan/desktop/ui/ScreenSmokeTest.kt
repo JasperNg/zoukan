@@ -10,15 +10,19 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
@@ -155,12 +159,22 @@ import kotlin.time.Duration.Companion.minutes
  * installed extension, a tracker login, a source with preferences, an E-Hentai or MangaDex
  * account), and anything that opens a native file dialog.
  *
- * Starts the runtime, which can run only once per JVM, so it needs a JVM of its own:
+ * Starts the runtime, which can run only once per JVM, so it runs in a JVM of its own through
+ * `wiringTest`, which `check` and `build` run (on Linux without a display, under xvfb-run -a):
  *
- *   xvfb-run -a ./gradlew :desktop:test --tests "*ScreenSmokeTest" -Pzoukan.e2e=true
+ *   ./gradlew :desktop:wiringTest
+ *   ./gradlew :desktop:wiringTest --tests "*ScreenSmokeTest" -Pzoukan.smoke.only="dialog new category"
+ *
+ * A failed check prints the semantics tree that was on screen, to tell a crash from a test that
+ * looked for the wrong node.
  */
 @OptIn(ExperimentalTestApi::class)
 class ScreenSmokeTest {
+
+    private companion object {
+        /** Checks per Compose test: about a second each, well within its one-minute limit. */
+        const val BATCH = 15
+    }
 
     private class Fixture(val alpha: Manga, val bravo: Manga, val chapters: List<Chapter>, val backup: File)
 
@@ -197,8 +211,11 @@ class ScreenSmokeTest {
         val fixture = seed()
 
         val screens = screens(fixture)
-        val checks = screens + tabs() + settings() + dialogs(fixture) + uiDialogs()
-        println("Smoke: ${screens.size} screens, ${checks.size} checks")
+        val all = screens + tabs() + settings() + dialogs(fixture) + uiDialogs()
+        println("Smoke: ${screens.size} screens, ${all.size} checks")
+        // -Dzoukan.smoke.only=<regex> runs only the matching checks, to debug one
+        val only = System.getProperty("zoukan.smoke.only")?.toRegex()
+        val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) }
         runChecks(checks)
 
         current = "log"
@@ -214,8 +231,8 @@ class ScreenSmokeTest {
     }
 
     /**
-     * Runs the checks in one Compose test, and in a new one after a check that failed, since a
-     * composition that threw can't go on.
+     * Runs the checks [BATCH] at a time in one Compose test, and in a new one after a check that
+     * failed, since a composition that threw can't go on.
      */
     private fun runChecks(checks: List<Check>) {
         val preferences = Injekt.get<DesktopPreferences>()
@@ -227,7 +244,10 @@ class ScreenSmokeTest {
                     var navigator: Navigator? = null
                     setContent { ZoukanContent(preferences) { navigator = it } }
                     waitForIdle()
-                    while (next < checks.size) {
+                    // A Compose test's body must finish within a minute (kotlinx-coroutines-test's
+                    // default, which testTimeout doesn't lift here), so a new one every few checks
+                    val end = minOf(next + BATCH, checks.size)
+                    while (next < end) {
                         val check = checks[next]
                         current = check.name
                         println("Smoke: ${check.name}")
@@ -244,6 +264,8 @@ class ScreenSmokeTest {
                             waitForIdle()
                         } catch (e: Throwable) {
                             fail("check", e)
+                            // What was on screen, to tell a crash from a test that looked for the wrong node
+                            runCatching { onAllNodes(isRoot()).printToString(maxDepth = Int.MAX_VALUE) }.onSuccess { println(it) }
                             failed = true
                             next++
                             throw e
@@ -427,7 +449,9 @@ class ScreenSmokeTest {
         "Browse pages",
         { HomeScreen.selectTab(HomeTab.Browse) },
         drive = {
-            val tab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
+            // The Browse tab's own row, not the navigation rail's tabs
+            val tab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab) and hasAnyAncestor(hasTestTag("browse-pages"))
+            waitUntil(timeoutMillis = 10_000) { onAllNodes(tab).fetchSemanticsNodes().isNotEmpty() }
             val count = onAllNodes(tab).fetchSemanticsNodes().size
             count shouldBeGreaterThan 3
             repeat(count) { index ->
@@ -597,7 +621,10 @@ class ScreenSmokeTest {
         Check(
             "dialog new category",
             { it.push(zoukan.desktop.ui.category.CategoryScreen) },
-            drive = { clickText("Add") },
+            drive = {
+                clickTag("category-add")
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(hasTestTag("category-name")).fetchSemanticsNodes().isNotEmpty() }
+            },
         ),
         Check(
             "dialog new sort tag",
@@ -620,6 +647,12 @@ class ScreenSmokeTest {
     private fun ComposeUiTest.clickText(text: String, substring: Boolean = false) {
         waitUntil(timeoutMillis = 10_000) { onAllNodes(hasText(text, substring = substring)).fetchSemanticsNodes().isNotEmpty() }
         onAllNodesWithText(text, substring = substring).onFirst().performClick()
+        settle()
+    }
+
+    private fun ComposeUiTest.clickTag(tag: String) {
+        waitUntil(timeoutMillis = 10_000) { onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty() }
+        onAllNodes(hasTestTag(tag)).onFirst().performClick()
         settle()
     }
 
