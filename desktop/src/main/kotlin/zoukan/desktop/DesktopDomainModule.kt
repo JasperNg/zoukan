@@ -10,6 +10,7 @@ import eu.kanade.domain.track.interactor.SyncChapterProgressWithTrack
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.domain.track.store.DelayedTrackingStore
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.source.online.MetadataSource
 import exh.eh.EHentaiUpdateHelper
 import mihon.domain.chapter.interactor.FilterChaptersForDownload
 import mihon.domain.extension.interactor.RemoveExtensionStore
@@ -156,6 +157,11 @@ class DesktopDomainModule : InjektModule {
         addFactory { tachiyomi.domain.manga.interactor.GetIdsOfFavoriteMangaWithMetadata(get()) }
         // ZOUKAN <--
         addFactory { InsertFlatMetadata(get()) }
+        // Metadata sources (E-Hentai, nhentai, MangaDex, ...) resolve these through Injekt when they
+        // parse a gallery or its pages, as the Android app's SYDomainModule registers them
+        addFactory<MetadataSource.GetMangaId> { GetManga(get()) }
+        addFactory<MetadataSource.GetFlatMetadataById> { GetFlatMetadataById(get()) }
+        addFactory<MetadataSource.InsertFlatMetadata> { InsertFlatMetadata(get()) }
         addSingletonFactory<CustomMangaRepository> { CustomMangaRepositoryImpl(get<Application>()) }
         addFactory { GetCustomMangaInfo(get()) }
         addFactory { SetCustomMangaInfo(get()) }
