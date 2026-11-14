@@ -252,6 +252,9 @@ tasks.named<JavaExec>("run") {
     }
 }
 
+/** The tests [wiringTest] runs instead of `test`. */
+val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest")
+
 tasks.test {
     useJUnitPlatform()
     // The end-to-end UI test reads a manga from an online source; it runs only when asked:
@@ -267,5 +270,31 @@ tasks.test {
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")
+    // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
+    if (!providers.gradleProperty("zoukan.e2e").isPresent) {
+        filter { wiringTests.forEach { excludeTestsMatching(it) } }
+    }
 }
+
+// The wiring tests catch what compiles but crashes at run time: a lookup with no Injekt
+// registration, a screen or dialog that throws when it opens. They need no network, so `check`
+// (and so `build`) runs them on every change:
+//   ./gradlew :desktop:wiringTest
+val wiringTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Checks every Injekt lookup has a registration and every screen and dialog opens"
+    val test = tasks.test.get()
+    testClassesDirs = test.testClassesDirs
+    classpath = test.classpath
+    useJUnitPlatform()
+    filter {
+        wiringTests.forEach { includeTestsMatching(it) }
+        isFailOnNoMatchingTests = false
+    }
+    forkEvery = 1
+    systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    systemProperty("user.language", "en")
+    shouldRunAfter(tasks.test)
+}
+tasks.named("check") { dependsOn(wiringTest) }
 // ZOUKAN <--

@@ -117,6 +117,17 @@ synced or copied folder works on both:
   runs soon after launch. Closing the window keeps Zoukan in the tray (Settings > General), from
   where it notifies about updates, downloads and failures.
 
+## Wiring tests
+
+`./gradlew :desktop:wiringTest` runs `InjektRegistrationsTest`, which resolves every type the code
+looks up through Injekt, and `ScreenSmokeTest`, which opens every screen and dialog, each in its
+own JVM with a throwaway data folder. They catch what compiles but crashes at run time (a missing
+registration, a screen that throws when it opens), need no network, and run with every
+`:desktop:build` through `check`, so every pull request runs them.
+
+Each release also starts the packaged app before publishing it: the release workflow runs
+`Zoukan selftest --ui` on the Windows and macOS builds and stops the release if it fails.
+
 ## End-to-end tests
 
 `EndToEndDownloadTest` is the Phase 5 gate: it installs an extension, adds three entries, updates the
