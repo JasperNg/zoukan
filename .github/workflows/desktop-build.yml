@@ -6,8 +6,15 @@
 name: Desktop installers
 
 on:
+  # Merges that only change docs skip the build, the same list as ci.yml
   push:
     branches: [master]
+    paths-ignore:
+      - '**.md'
+      - '.github/readme-images/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'desktop/reports/**'
+      - 'LICENSE'
   pull_request:
     paths: [.github/workflows/desktop-build.yml]
   workflow_dispatch:
