@@ -104,7 +104,8 @@ class EndToEndUpcomingTest {
             }
 
             step("Click a day and change the month") {
-                onAllNodesWithTag("upcoming-day-${today.plusDays(3).dayOfMonth}").onFirst().performClick()
+                val day = visibleCalendarDay(today, listOf(1L, 3L))
+                onAllNodesWithTag("upcoming-day-${day.dayOfMonth}").onFirst().performClick()
                 byDescription("Next Month").performClick()
                 val next = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(YearMonth.now().plusMonths(1))
                 waitFor(hasText(next))
@@ -157,4 +158,16 @@ class EndToEndUpcomingTest {
         g.dispose()
         ImageIO.write(image, "png", File(shots, "$name.png"))
     }
+}
+
+/**
+ * The day to click in the Upcoming calendar: the first seeded release day in the month the
+ * calendar opens on, or today when every release falls in the next month.
+ */
+internal fun visibleCalendarDay(today: LocalDate, releaseOffsets: List<Long>): LocalDate {
+    val month = YearMonth.from(today)
+    return releaseOffsets.sortedDescending()
+        .map { today.plusDays(it) }
+        .firstOrNull { YearMonth.from(it) == month }
+        ?: today
 }
