@@ -273,6 +273,9 @@ tasks.named<JavaExec>("run") {
 /** The tests [wiringTest] runs instead of `test`. */
 val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest")
 
+/** The offline user journeys [journeyTest] runs instead of `test`. */
+val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
+
 tasks.test {
     useJUnitPlatform()
     // The end-to-end UI test reads a manga from an online source; it runs only when asked:
@@ -290,7 +293,7 @@ tasks.test {
     systemProperty("user.language", "en")
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
-        filter { wiringTests.forEach { excludeTestsMatching(it) } }
+        filter { (wiringTests + journeyTests).forEach { excludeTestsMatching(it) } }
     }
 }
 
@@ -340,5 +343,52 @@ val extensionWiringTest by tasks.registering(Test::class) {
     maxHeapSize = "4g"
     // Live data: never up to date
     outputs.upToDateWhen { false }
+}
+
+// The user journeys drive the real UI against a local fixture server (src/test/kotlin/zoukan/
+// desktop/e2e): browse a source, read every image format and check the pages drew, change a
+// source's settings, download chapters and read them offline, back up and restore. They need no
+// network but take a few minutes, so they run on request and nightly, not on every build:
+//   ./gradlew :desktop:journeyTest
+// Screenshots go to desktop/build/reports/journeys/.
+val journeyTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Runs the offline user journeys against the fixture source"
+    val test = tasks.test.get()
+    testClassesDirs = test.testClassesDirs
+    classpath = test.classpath
+    useJUnitPlatform()
+    filter { journeyTests.forEach { includeTestsMatching(it) } }
+    // Each journey starts the runtime with its own data folder, once per JVM
+    forkEvery = 1
+    // The journeys check this machine as much as the code (JDK, display, decoders): never skip
+    // them as up to date, and start each run without the last run's screenshots
+    outputs.upToDateWhen { false }
+    val screenshots = layout.projectDirectory.dir("build/reports/journeys")
+    doFirst { screenshots.asFile.deleteRecursively() }
+    systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    systemProperty("user.language", "en")
+    shouldRunAfter(tasks.test, wiringTest)
+}
+
+/**
+ * The extension wiring check that installs every extension from the stores and starts each
+ * source. The nightly run picks it up by this name once it exists; until then it runs the
+ * journeys alone.
+ */
+val extensionWiringTaskName = "extensionWiringTest"
+
+// The nightly run (desktop/packaging/check/nightly-windows.ps1): the offline journeys, then the
+// extension wiring check. Run it by hand with:
+//   ./gradlew :desktop:nightlyCheck --continue
+val nightlyCheck by tasks.registering {
+    group = "verification"
+    description = "Runs the offline user journeys and the extension wiring check"
+    dependsOn(journeyTest)
+    dependsOn(tasks.matching { it.name == extensionWiringTaskName })
+    val hasWiring = provider { tasks.names.contains(extensionWiringTaskName) }
+    doLast {
+        if (!hasWiring.get()) logger.warn("nightlyCheck: there is no $extensionWiringTaskName task yet, so only the journeys ran")
+    }
 }
 // ZOUKAN <--
