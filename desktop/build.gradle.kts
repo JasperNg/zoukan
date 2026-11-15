@@ -131,16 +131,16 @@ val syncAndroidResources by tasks.registering(Sync::class) {
     from(rootProject.file("app/src/main/res/raw/mangadex_dmca_uuids.txt"))
     into(layout.buildDirectory.dir("generated/android-resources"))
 }
-sourceSets.main {
-    resources.srcDir(syncAndroidResources)
-}
 
 // The app icon's vector master, which the window, tray and More header draw at their exact size
+val appIconSvg = file("packaging/icons/zoukan.svg")
 val syncAppIcon by tasks.registering(Sync::class) {
-    from(file("packaging/icons/zoukan.svg")) { rename { "zoukan-icon.svg" } }
+    doFirst { check(appIconSvg.isFile) { "The app icon $appIconSvg is missing" } }
+    from(appIconSvg) { rename { "zoukan-icon.svg" } }
     into(layout.buildDirectory.dir("generated/app-icon"))
 }
 sourceSets.main {
+    resources.srcDir(syncAndroidResources)
     resources.srcDir(syncAppIcon)
 }
 

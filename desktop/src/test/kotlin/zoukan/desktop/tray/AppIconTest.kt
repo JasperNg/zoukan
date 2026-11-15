@@ -28,8 +28,8 @@ class AppIconTest {
 
     @Test
     fun `the window gets the title bar and taskbar sizes of every Windows scale`() {
-        // 16 px title bar and 32 px taskbar at 100%, 125%, 150%, 200% and 250%
-        AppIcon.WindowSizes shouldContainAll listOf(16, 20, 24, 32, 40, 48, 64, 80)
+        // 16 px title bar and 32 px taskbar at 100%, 125%, 150%, 175%, 200% and 250%
+        AppIcon.WindowSizes shouldContainAll listOf(16, 20, 24, 28, 32, 40, 48, 56, 64, 80)
         AppIcon.windowImages().map { it.width } shouldBe AppIcon.WindowSizes
     }
 }
