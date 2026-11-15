@@ -17,6 +17,7 @@ import org.bytedeco.ffmpeg.global.avcodec.avcodec_open2
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_parameters_to_context
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_receive_frame
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_send_packet
+import org.bytedeco.ffmpeg.global.avformat.AV_DISPOSITION_DEFAULT
 import org.bytedeco.ffmpeg.global.avformat.AV_STREAM_GROUP_PARAMS_TILE_GRID
 import org.bytedeco.ffmpeg.global.avformat.av_find_best_stream
 import org.bytedeco.ffmpeg.global.avformat.av_read_frame
@@ -45,6 +46,7 @@ import org.bytedeco.javacpp.DoublePointer
 import org.bytedeco.javacpp.IntPointer
 import org.bytedeco.javacpp.PointerPointer
 import java.awt.image.BufferedImage
+import java.awt.image.DataBufferInt
 import java.io.File
 import java.io.IOException
 import java.nio.ByteOrder
@@ -58,9 +60,8 @@ import java.nio.ByteOrder
  * are opaque.
  */
 object FfmpegImageDecoder {
-    init {
-        av_log_set_level(AV_LOG_QUIET)
-    }
+    // Loads FFmpeg's natives on the first decode, so recognizing other images never touches them
+    private val natives: Unit by lazy { av_log_set_level(AV_LOG_QUIET) }
 
     /** Whether [bytes] start like an image this decoder is for. */
     fun handles(bytes: ByteArray): Boolean = isAvifOrHeif(bytes)
@@ -77,6 +78,12 @@ object FfmpegImageDecoder {
     }
 
     fun decode(file: File): BufferedImage {
+        try {
+            natives
+        } catch (e: LinkageError) {
+            // Natives missing for this OS or CPU: these images fail, the others still show
+            throw IOException("FFmpeg could not load", e)
+        }
         val format = AVFormatContext(null)
         val path = BytePointer(file.absolutePath, Charsets.UTF_8)
         try {
@@ -101,14 +108,13 @@ object FfmpegImageDecoder {
 
     /** The stream group of a grid image, with the indexes of its tiles' streams in the file. */
     private fun tileGrid(format: AVFormatContext): Pair<AVStreamGroupTileGrid, List<Int>>? {
-        for (g in 0 until format.nb_stream_groups()) {
-            val group = format.stream_groups(g)
-            if (group.type() != AV_STREAM_GROUP_PARAMS_TILE_GRID) continue
-            val grid = group.params_tile_grid()
-            val streams = (0 until grid.nb_tiles()).map { group.streams(grid.offsets_idx(it)).index() }
-            return grid to streams
-        }
-        return null
+        val grids = (0 until format.nb_stream_groups()).map { format.stream_groups(it) }
+            .filter { it.type() == AV_STREAM_GROUP_PARAMS_TILE_GRID }
+        // The primary image's grid is the default one; an alpha or other auxiliary grid is not
+        val group = grids.firstOrNull { (it.disposition() and AV_DISPOSITION_DEFAULT) != 0 } ?: grids.firstOrNull() ?: return null
+        val grid = group.params_tile_grid()
+        val streams = (0 until grid.nb_tiles()).map { group.streams(grid.offsets_idx(it)).index() }
+        return grid to streams
     }
 
     private fun decodeGrid(format: AVFormatContext, grid: AVStreamGroupTileGrid, streams: List<Int>): BufferedImage {
@@ -204,10 +210,10 @@ object FfmpegImageDecoder {
                 dst.close()
                 dstStride.close()
             }
-            val ints = IntArray(width * height)
-            // BGRA in memory is ARGB as a little-endian int
-            pixels.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(ints)
-            return BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB).apply { setRGB(0, 0, width, height, ints, 0, width) }
+            val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+            // BGRA in memory is ARGB as a little-endian int; copied straight into the image's pixels
+            pixels.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get((image.raster.dataBuffer as DataBufferInt).data)
+            return image
         } finally {
             pixels.close()
             sws_freeContext(sws)
@@ -226,7 +232,7 @@ object FfmpegImageDecoder {
     // The matrices sws_getCoefficients knows; AVCOL_SPC_* and SWS_CS_* share these numbers
     private val SWS_MATRICES = setOf(1, 4, 5, 6, 7, 9, 10)
 
-    private val DECODER_NAMES = mapOf(
-        org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AV1 to listOf("libdav1d", "libaom-av1"),
-    )
+    private val DECODER_NAMES by lazy {
+        mapOf(org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AV1 to listOf("libdav1d", "libaom-av1"))
+    }
 }

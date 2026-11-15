@@ -24,6 +24,9 @@ class ZoukanDirs(val root: File) {
     val backups = File(root, "backups")
     val covers = File(root, "cache/covers")
 
+    /** FFmpeg's natives (AVIF and HEIF images), unpacked by JavaCPP */
+    val javacppCache = File(root, "cache/javacpp")
+
     // Phase 7: the log file, crash reports and downloaded updates
     val logs = File(root, "logs")
     val crashes = File(root, "crashes")

@@ -17,8 +17,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.NonSkippableComposable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -116,18 +116,13 @@ private fun summaryOf(pref: Preference): String? {
     return summary
 }
 
+// Never skipped: the preference values are not Compose state, so a change (which bumps
+// [version]) must re-read them. Compose ignores unused parameters when it decides to skip a
+// call, so with an unused version every row kept showing its first values.
+@NonSkippableComposable
 @Composable
-internal fun PreferenceItem(pref: Preference, version: Int, onChanged: () -> Unit, onOpen: () -> Unit) {
+internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") version: Int, onChanged: () -> Unit, onOpen: () -> Unit) {
     val title = pref.title?.toString().orEmpty()
-    // The row reads [version] so that a change redraws it: Compose skips a call when its used
-    // parameters are unchanged, and ignores unused ones, so an unused version never redrew it
-    key(version) {
-        PreferenceRow(pref, title, onChanged, onOpen)
-    }
-}
-
-@Composable
-private fun PreferenceRow(pref: Preference, title: String, onChanged: () -> Unit, onOpen: () -> Unit) {
     when (pref) {
         is TwoStatePreference -> SwitchSetting(
             title = title,

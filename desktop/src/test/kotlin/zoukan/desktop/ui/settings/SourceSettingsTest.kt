@@ -27,8 +27,18 @@ class SourceSettingsTest {
     lateinit var root: File
 
     @Test
-    fun `a switch shows its new state after each click`() = runDesktopComposeUiTest {
-        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+    fun `a switch shows its new state after each click`() {
+        val property = "$CONFIG_PREFIX.server.rootDir"
+        val previous = System.getProperty(property)
+        System.setProperty(property, root.absolutePath)
+        try {
+            switchRedraws()
+        } finally {
+            if (previous == null) System.clearProperty(property) else System.setProperty(property, previous)
+        }
+    }
+
+    private fun switchRedraws() = runDesktopComposeUiTest {
         val prefs = JavaSharedPreferences("source_switch_test")
         // As Atsumaru's adult mode switch: summaries for on and off, and no default value of its own
         val pref = SwitchPreferenceCompat(null).apply {

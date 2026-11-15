@@ -57,7 +57,7 @@ object ZoukanRuntime {
 
         // FFmpeg's natives (AVIF and HEIF images) unpack into Zoukan's own cache, not ~/.javacpp
         if (System.getProperty("org.bytedeco.javacpp.cachedir") == null) {
-            System.setProperty("org.bytedeco.javacpp.cachedir", java.io.File(dirs.root, "cache/javacpp").absolutePath)
+            System.setProperty("org.bytedeco.javacpp.cachedir", dirs.javacppCache.absolutePath)
         }
 
         // AndroidCompat keeps the emulated app's files (SharedPreferences, files, cache) here
