@@ -33,6 +33,15 @@ import android.util.Log;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.awt.Font;
+// ZOUKAN -->
+import java.awt.Shape;
+import java.awt.font.FontRenderContext;
+import java.awt.font.LineMetrics;
+import java.awt.font.TextLayout;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Path2D;
+import java.text.AttributedString;
+// ZOUKAN <--
 import java.awt.font.TextAttribute;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,6 +78,13 @@ public class Paint {
     private float           mStrokeWidth = 1.0f;
     private Cap             mStrokeCap = Cap.BUTT;
     private Typeface        mTypeface = Typeface.DEFAULT;
+    // ZOUKAN -->
+    private Join            mStrokeJoin = Join.MITER;
+    private float           mStrokeMiter = 4.0f;
+    private Align           mTextAlign = Align.LEFT;
+    private float           mTextScaleX = 1.0f;
+    private float           mLetterSpacing = 0.0f;
+    // ZOUKAN <--
 
     private static final Object sCacheLock = new Object();
 
@@ -283,6 +299,13 @@ public class Paint {
         mStrokeWidth = 1.0f;
         mStrokeCap = Cap.BUTT;
         mTypeface = Typeface.DEFAULT;
+        // ZOUKAN -->
+        mStrokeJoin = Join.MITER;
+        mStrokeMiter = 4.0f;
+        mTextAlign = Align.LEFT;
+        mTextScaleX = 1.0f;
+        mLetterSpacing = 0.0f;
+        // ZOUKAN <--
         setFlags(ANTI_ALIAS_FLAG);
     }
 
@@ -320,6 +343,13 @@ public class Paint {
         mStrokeWidth = paint.mStrokeWidth;
         mStrokeCap = paint.mStrokeCap;
         mTypeface = paint.mTypeface;
+        // ZOUKAN -->
+        mStrokeJoin = paint.mStrokeJoin;
+        mStrokeMiter = paint.mStrokeMiter;
+        mTextAlign = paint.mTextAlign;
+        mTextScaleX = paint.mTextScaleX;
+        mLetterSpacing = paint.mLetterSpacing;
+        // ZOUKAN <--
     }
 
     /** @hide */
@@ -393,15 +423,25 @@ public class Paint {
     }
 
     public void setAntiAlias(boolean aa) {
-        setFlags(getFlags() | ANTI_ALIAS_FLAG);
+        // ZOUKAN -->
+        setFlag(ANTI_ALIAS_FLAG, aa);
+        // ZOUKAN <--
     }
+
+    // ZOUKAN -->
+    private void setFlag(int flag, boolean on) {
+        setFlags(on ? (getFlags() | flag) : (getFlags() & ~flag));
+    }
+    // ZOUKAN <--
 
     public final boolean isDither() {
         return (getFlags() & DITHER_FLAG) != 0;
     }
 
     public void setDither(boolean dither) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFlag(DITHER_FLAG, dither);
+        // ZOUKAN <--
     }
 
     public final boolean isLinearText() {
@@ -457,7 +497,9 @@ public class Paint {
     }
 
     public void setFakeBoldText(boolean fakeBoldText) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFlag(FAKE_BOLD_TEXT_FLAG, fakeBoldText);
+        // ZOUKAN <--
     }
 
     public final boolean isFilterBitmap() {
@@ -465,7 +507,9 @@ public class Paint {
     }
 
     public void setFilterBitmap(boolean filter) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFlag(FILTER_BITMAP_FLAG, filter);
+        // ZOUKAN <--
     }
 
     public Style getStyle() {
@@ -520,13 +564,15 @@ public class Paint {
         mStrokeWidth = width;
     }
 
+    // ZOUKAN -->
     public float getStrokeMiter() {
-        throw new RuntimeException("Stub!");
+        return mStrokeMiter;
     }
 
     public void setStrokeMiter(float miter) {
-        throw new RuntimeException("Stub!");
+        mStrokeMiter = miter;
     }
+    // ZOUKAN <--
 
     public Cap getStrokeCap() {
         return mStrokeCap;
@@ -536,13 +582,15 @@ public class Paint {
         mStrokeCap = cap;
     }
 
+    // ZOUKAN -->
     public Join getStrokeJoin() {
-        throw new RuntimeException("Stub!");
+        return mStrokeJoin;
     }
 
     public void setStrokeJoin(Join join) {
-        throw new RuntimeException("Stub!");
+        mStrokeJoin = join;
     }
+    // ZOUKAN <--
 
     public boolean getFillPath(Path src, Path dst) {
         throw new RuntimeException("Stub!");
@@ -660,13 +708,15 @@ public class Paint {
         return mShadowLayerColor;
     }
 
+    // ZOUKAN -->
     public Align getTextAlign() {
-        throw new RuntimeException("Stub!");
+        return mTextAlign;
     }
 
     public void setTextAlign(Align align) {
-        throw new RuntimeException("Stub!");
+        mTextAlign = align;
     }
+    // ZOUKAN <--
 
     @NonNull
     public Locale getTextLocale() {
@@ -704,13 +754,15 @@ public class Paint {
         mTypeface = mTypeface.deriveFont(textSize);
     }
 
+    // ZOUKAN -->
     public float getTextScaleX() {
-        throw new RuntimeException("Stub!");
+        return mTextScaleX;
     }
 
     public void setTextScaleX(float scaleX) {
-        throw new RuntimeException("Stub!");
+        mTextScaleX = scaleX;
     }
+    // ZOUKAN <--
 
     public float getTextSkewX() {
         throw new RuntimeException("Stub!");
@@ -720,13 +772,16 @@ public class Paint {
         throw new RuntimeException("Stub!");
     }
 
+    // ZOUKAN -->
+    // In ems, applied as AWT tracking (also in ems) when measuring and drawing text
     public float getLetterSpacing() {
-        throw new RuntimeException("Stub!");
+        return mLetterSpacing;
     }
 
     public void setLetterSpacing(float letterSpacing) {
-        throw new RuntimeException("Stub!");
+        mLetterSpacing = letterSpacing;
     }
+    // ZOUKAN <--
 
     public float getWordSpacing() {
         throw new RuntimeException("Stub!");
@@ -779,13 +834,107 @@ public class Paint {
         throw new RuntimeException("Stub!");
     }
 
+    // ZOUKAN -->
     public float ascent() {
-        throw new RuntimeException("Stub!");
+        return getFontMetrics().ascent;
     }
 
     public float descent() {
-        throw new RuntimeException("Stub!");
+        return getFontMetrics().descent;
     }
+
+    private static final FontRenderContext FRC = new FontRenderContext(null, true, true);
+
+    /** The laid-out text in this paint's typeface (with fallback fonts), or null for empty text. */
+    private TextLayout layout(String text) {
+        if (text.isEmpty()) return null;
+        return new TextLayout(attributedText(text).getIterator(), FRC);
+    }
+
+    /** [text] in this paint's typeface with fallback fonts and letter spacing. */
+    AttributedString attributedText(String text) {
+        Typeface typeface = mTypeface;
+        if (mLetterSpacing != 0f) {
+            // The FONT attribute overrides others, so the tracking goes into the fonts themselves
+            Map<TextAttribute, Object> tracking = new HashMap<TextAttribute, Object>();
+            tracking.put(TextAttribute.TRACKING, mLetterSpacing);
+            typeface = typeface.deriveFont(tracking);
+        }
+        return typeface.createWithFallback(text);
+    }
+
+    /** The advance of [text] as Canvas.drawText draws it. */
+    private float advance(String text) {
+        TextLayout layout = layout(text);
+        return layout == null ? 0f : layout.getAdvance() * mTextScaleX;
+    }
+
+    /** The outline of [text] with its baseline origin at (x, y), honouring text scale X but not alignment. */
+    Shape textOutline(String text, float x, float y) {
+        TextLayout layout = layout(text);
+        if (layout == null) return new Path2D.Float();
+        AffineTransform at = AffineTransform.getTranslateInstance(x, y);
+        at.scale(mTextScaleX, 1);
+        return layout.getOutline(at);
+    }
+
+    /** How far left of x drawText starts the text, for this paint's alignment. */
+    float alignOffset(String text) {
+        switch (mTextAlign) {
+            case CENTER:
+                return advance(text) / 2f;
+            case RIGHT:
+                return advance(text);
+            default:
+                return 0f;
+        }
+    }
+
+    private void textBounds(String text, Rect bounds) {
+        TextLayout layout = layout(text);
+        if (layout == null) {
+            bounds.set(0, 0, 0, 0);
+            return;
+        }
+        java.awt.geom.Rectangle2D r = layout.getBounds();
+        bounds.set((int) Math.floor(r.getMinX() * mTextScaleX), (int) Math.floor(r.getMinY()),
+                (int) Math.ceil(r.getMaxX() * mTextScaleX), (int) Math.ceil(r.getMaxY()));
+    }
+
+    private int textWidths(String text, float[] widths) {
+        // One width per char; the second char of a surrogate pair gets 0, as on Android
+        int n = text.length();
+        for (int i = 0; i < n; ) {
+            int cp = text.codePointAt(i);
+            int len = Character.charCount(cp);
+            widths[i] = advance(text.substring(i, i + len));
+            if (len == 2) widths[i + 1] = 0f;
+            i += len;
+        }
+        return n;
+    }
+
+    private int breakTextImpl(String text, boolean measureForwards, float maxWidth, float[] measuredWidth) {
+        int n = text.length();
+        int count = 0;
+        float width = 0f;
+        while (count < n) {
+            int len;
+            if (measureForwards) {
+                len = Character.charCount(text.codePointAt(count));
+            } else {
+                len = Character.charCount(text.codePointBefore(n - count));
+            }
+            String part = measureForwards ? text.substring(0, count + len) : text.substring(n - count - len);
+            float w = advance(part);
+            if (w > maxWidth) break;
+            width = w;
+            count += len;
+        }
+        if (measuredWidth != null && measuredWidth.length > 0) measuredWidth[0] = width;
+        return count;
+    }
+    // ZOUKAN <--
 
     public static class FontMetrics {
         public float   top;
@@ -833,16 +982,25 @@ public class Paint {
         }
     }
 
+    // ZOUKAN -->
+    // Android has ascent and top negative (above the baseline) and returns the line spacing
     public float getFontMetrics(FontMetrics metrics) {
-        java.awt.Canvas c = new java.awt.Canvas();
-        java.awt.FontMetrics m = c.getFontMetrics(mTypeface.getFont());
-        metrics.top = m.getMaxDescent();
-        metrics.ascent = m.getAscent();
-        metrics.descent = m.getDescent();
-        metrics.bottom = m.getMaxAscent();
-        metrics.leading = m.getLeading();
-        return m.getLeading();
+        Font font = mTypeface.getFont();
+        LineMetrics lm = font.getLineMetrics("Ag", FRC);
+        java.awt.geom.Rectangle2D max = font.getMaxCharBounds(FRC);
+        float ascent = -lm.getAscent();
+        float descent = lm.getDescent();
+        float leading = lm.getLeading();
+        if (metrics != null) {
+            metrics.ascent = ascent;
+            metrics.descent = descent;
+            metrics.top = Math.min(ascent, (float) max.getMinY());
+            metrics.bottom = Math.max(descent, (float) max.getMaxY());
+            metrics.leading = leading;
+        }
+        return descent - ascent + leading;
     }
+    // ZOUKAN <--
 
     public FontMetrics getFontMetrics() {
         FontMetrics fm = new FontMetrics();
@@ -968,7 +1126,18 @@ public class Paint {
     }
 
     public int getFontMetricsInt(FontMetricsInt fmi) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        FontMetrics fm = new FontMetrics();
+        getFontMetrics(fm);
+        if (fmi != null) {
+            fmi.top = (int) Math.floor(fm.top);
+            fmi.ascent = Math.round(fm.ascent);
+            fmi.descent = Math.round(fm.descent);
+            fmi.bottom = (int) Math.ceil(fm.bottom);
+            fmi.leading = Math.round(fm.leading);
+        }
+        return Math.round(fm.descent - fm.ascent + fm.leading);
+        // ZOUKAN <--
     }
 
     public FontMetricsInt getFontMetricsInt() {
@@ -996,22 +1165,9 @@ public class Paint {
         if (text.length == 0 || count == 0) {
             return 0f;
         }
-        int oldFlag = getFlags();
-        setFlags(getFlags() | (TEXT_RUN_FLAG_LEFT_EDGE | TEXT_RUN_FLAG_RIGHT_EDGE));
-        try {
-
-            if (!mHasCompatScaling) {
-                throw new RuntimeException("Stub!");
-            }
-
-            final float oldSize = getTextSize();
-            setTextSize(oldSize * mCompatScaling);
-            throw new RuntimeException("Stub!");
-            // setTextSize(oldSize);
-            // return (float) Math.ceil(w * mInvCompatScaling);
-        } finally {
-            setFlags(oldFlag);
-        }
+        // ZOUKAN -->
+        return advance(new String(text, index, count));
+        // ZOUKAN <--
     }
 
     public float measureText(String text, int start, int end) {
@@ -1025,20 +1181,9 @@ public class Paint {
         if (text.length() == 0 || start == end) {
             return 0f;
         }
-        int oldFlag = getFlags();
-        setFlags(getFlags() | (TEXT_RUN_FLAG_LEFT_EDGE | TEXT_RUN_FLAG_RIGHT_EDGE));
-        try {
-            if (!mHasCompatScaling) {
-                throw new RuntimeException("Stub!");
-            }
-            final float oldSize = getTextSize();
-            setTextSize(oldSize * mCompatScaling);
-            throw new RuntimeException("Stub!");
-            // setTextSize(oldSize);
-            // return (float) Math.ceil(w * mInvCompatScaling);
-        } finally {
-            setFlags(oldFlag);
-        }
+        // ZOUKAN -->
+        return advance(text.substring(start, end));
+        // ZOUKAN <--
     }
 
     public float measureText(String text) {
@@ -1086,16 +1231,12 @@ public class Paint {
         if (text.length == 0 || count == 0) {
             return 0;
         }
-        if (!mHasCompatScaling) {
-            throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        if (count < 0) {
+            return breakTextImpl(new String(text, index, -count), false, maxWidth, measuredWidth);
         }
-
-        final float oldSize = getTextSize();
-        setTextSize(oldSize * mCompatScaling);
-        throw new RuntimeException("Stub!");
-        // setTextSize(oldSize);
-        // if (measuredWidth != null) measuredWidth[0] *= mInvCompatScaling;
-        // return res;
+        return breakTextImpl(new String(text, index, count), true, maxWidth, measuredWidth);
+        // ZOUKAN <--
     }
 
     public int breakText(CharSequence text, int start, int end,
@@ -1140,16 +1281,9 @@ public class Paint {
         if (text.length() == 0) {
             return 0;
         }
-        if (!mHasCompatScaling) {
-            throw new RuntimeException("Stub!");
-        }
-
-        final float oldSize = getTextSize();
-        setTextSize(oldSize*mCompatScaling);
-        throw new RuntimeException("Stub!");
-        // setTextSize(oldSize);
-        // if (measuredWidth != null) measuredWidth[0] *= mInvCompatScaling;
-        // return res;
+        // ZOUKAN -->
+        return breakTextImpl(text, measureForwards, maxWidth, measuredWidth);
+        // ZOUKAN <--
     }
 
     public int getTextWidths(char[] text, int index, int count,
@@ -1165,25 +1299,9 @@ public class Paint {
         if (text.length == 0 || count == 0) {
             return 0;
         }
-        int oldFlag = getFlags();
-        setFlags(getFlags() | (TEXT_RUN_FLAG_LEFT_EDGE | TEXT_RUN_FLAG_RIGHT_EDGE));
-        try {
-            if (!mHasCompatScaling) {
-                throw new RuntimeException("Stub!");
-                // return count;
-            }
-
-            final float oldSize = getTextSize();
-            setTextSize(oldSize * mCompatScaling);
-            throw new RuntimeException("Stub!");
-            // setTextSize(oldSize);
-            // for (int i = 0; i < count; i++) {
-            //     widths[i] *= mInvCompatScaling;
-            // }
-            // return count;
-        } finally {
-            setFlags(oldFlag);
-        }
+        // ZOUKAN -->
+        return textWidths(new String(text, index, count), widths);
+        // ZOUKAN <--
     }
 
     public int getTextWidths(CharSequence text, int start, int end,
@@ -1230,25 +1348,9 @@ public class Paint {
         if (text.length() == 0 || start == end) {
             return 0;
         }
-        int oldFlag = getFlags();
-        setFlags(getFlags() | (TEXT_RUN_FLAG_LEFT_EDGE | TEXT_RUN_FLAG_RIGHT_EDGE));
-        try {
-            if (!mHasCompatScaling) {
-                throw new RuntimeException("Stub!");
-                // return end - start;
-            }
-
-            final float oldSize = getTextSize();
-            setTextSize(oldSize * mCompatScaling);
-            throw new RuntimeException("Stub!");
-            // setTextSize(oldSize);
-            // for (int i = 0; i < end - start; i++) {
-            //     widths[i] *= mInvCompatScaling;
-            // }
-            // return end - start;
-        } finally {
-            setFlags(oldFlag);
-        }
+        // ZOUKAN -->
+        return textWidths(text.substring(start, end), widths);
+        // ZOUKAN <--
     }
 
     public int getTextWidths(String text, float[] widths) {
@@ -1342,7 +1444,9 @@ public class Paint {
         if ((index | count) < 0 || index + count > text.length) {
             throw new ArrayIndexOutOfBoundsException();
         }
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        getTextPath(new String(text, index, count), 0, count, x, y, path);
+        // ZOUKAN <--
     }
 
     public void getTextPath(String text, int start, int end,
@@ -1350,7 +1454,11 @@ public class Paint {
         if ((start | end | (end - start) | (text.length() - end)) < 0) {
             throw new IndexOutOfBoundsException();
         }
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        String str = text.substring(start, end);
+        path.reset();
+        path.addShape(textOutline(str, x - alignOffset(str), y));
+        // ZOUKAN <--
     }
 
     public void getTextBounds(String text, int start, int end, Rect bounds) {
@@ -1360,7 +1468,9 @@ public class Paint {
         if (bounds == null) {
             throw new NullPointerException("need bounds Rect");
         }
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        textBounds(text.substring(start, end), bounds);
+        // ZOUKAN <--
     }
 
     public void getTextBounds(@NonNull CharSequence text, int start, int end,
@@ -1384,11 +1494,16 @@ public class Paint {
         if (bounds == null) {
             throw new NullPointerException("need bounds Rect");
         }
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        textBounds(new String(text, index, count), bounds);
+        // ZOUKAN <--
     }
 
     public boolean hasGlyph(String string) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        if (string == null || string.isEmpty()) return false;
+        return mTypeface.getFont().canDisplayUpTo(string) == -1;
+        // ZOUKAN <--
     }
 
     public float getRunAdvance(char[] text, int start, int end, int contextStart, int contextEnd,

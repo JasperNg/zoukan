@@ -30,6 +30,7 @@ import android.view.autofill.AutofillValue
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.textclassifier.TextClassifier
+import android.webkit.ConsoleMessage
 import android.webkit.DownloadListener
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
@@ -144,6 +145,7 @@ class KcefWebViewProvider(
     private val loadHandler = LoadHandler()
     private val requestHandler = RequestHandler()
     private val messageRouterHandler = MessageRouterHandler()
+    private val displayHandler = DisplayHandler()
     // ZOUKAN <--
 
     companion object {
@@ -203,6 +205,20 @@ class KcefWebViewProvider(
             pendingDisposals += disposal
             handler.post { javax.swing.SwingUtilities.invokeLater { disposal.run() } }
         }
+        // ZOUKAN <--
+
+        // ZOUKAN -->
+        /** Chromium's severity of a console message as Android's level (console.debug is VERBOSE). */
+        @JvmStatic
+        fun consoleLevel(level: CefSettings.LogSeverity): ConsoleMessage.MessageLevel =
+            when (level) {
+                CefSettings.LogSeverity.LOGSEVERITY_VERBOSE -> ConsoleMessage.MessageLevel.DEBUG
+                CefSettings.LogSeverity.LOGSEVERITY_WARNING -> ConsoleMessage.MessageLevel.WARNING
+                CefSettings.LogSeverity.LOGSEVERITY_ERROR,
+                CefSettings.LogSeverity.LOGSEVERITY_FATAL,
+                -> ConsoleMessage.MessageLevel.ERROR
+                else -> ConsoleMessage.MessageLevel.LOG
+            }
         // ZOUKAN <--
 
         private val initHandler: InitBrowserHandler /* ZOUKAN --> */by injectLazy()/* ZOUKAN <-- */
@@ -324,7 +340,8 @@ class KcefWebViewProvider(
     */
     // ZOUKAN <--
 
-    private class DisplayHandler : CefDisplayHandlerAdapter() {
+    // ZOUKAN: inner, to hand console messages to the WebChromeClient (see WeakDisplayHandler)
+    private inner class DisplayHandler : CefDisplayHandlerAdapter() {
         override fun onConsoleMessage(
             browser: CefBrowser,
             level: CefSettings.LogSeverity,
@@ -333,6 +350,14 @@ class KcefWebViewProvider(
             line: Int,
         ): Boolean {
             Log.v(TAG, "$source:$line[$level]: $message")
+            // ZOUKAN -->
+            // As on Android, where extensions read results of injected scripts from console.log
+            // in WebChromeClient.onConsoleMessage, which also calls the deprecated 3-argument one
+            val consoleMessage = ConsoleMessage(message, source, line, consoleLevel(level))
+            handler.post {
+                if (!destroyed) chromeClient.onConsoleMessage(consoleMessage)
+            }
+            // ZOUKAN <--
             return true
         }
 
@@ -769,7 +794,7 @@ class KcefWebViewProvider(
                 CefHelper.createClient().apply {
                     // ZOUKAN -->
                     addLifeSpanHandler(WeakLifeSpanHandler(lifeSpanHandler))
-                    addDisplayHandler(DisplayHandler())
+                    addDisplayHandler(WeakDisplayHandler(displayHandler))
                     addLoadHandler(WeakLoadHandler(loadHandler))
                     addRequestHandler(WeakRequestHandler(requestHandler))
                     // ZOUKAN <--
@@ -1146,6 +1171,35 @@ class KcefWebViewProvider(
             ref.get()?.onAfterCreated(browser)
         }
     }
+
+    // ZOUKAN -->
+    private class WeakDisplayHandler(target: CefDisplayHandlerAdapter) : CefDisplayHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun onConsoleMessage(
+            browser: CefBrowser,
+            level: CefSettings.LogSeverity,
+            message: String,
+            source: String,
+            line: Int,
+        ): Boolean = ref.get()?.onConsoleMessage(browser, level, message, source, line) ?: false
+
+        override fun onAddressChange(
+            browser: CefBrowser,
+            frame: CefFrame,
+            url: String,
+        ) {
+            ref.get()?.onAddressChange(browser, frame, url)
+        }
+
+        override fun onStatusMessage(
+            browser: CefBrowser,
+            value: String,
+        ) {
+            ref.get()?.onStatusMessage(browser, value)
+        }
+    }
+    // ZOUKAN <--
 
     private class WeakLoadHandler(target: CefLoadHandlerAdapter) : CefLoadHandlerAdapter() {
         private val ref = java.lang.ref.WeakReference(target)

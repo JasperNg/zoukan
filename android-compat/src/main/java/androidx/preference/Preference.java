@@ -39,6 +39,11 @@ public class Preference {
     @JsonIgnore
     public OnPreferenceChangeListener onChangeListener;
 
+    // ZOUKAN -->
+    @JsonIgnore
+    private OnPreferenceClickListener onClickListener;
+    // ZOUKAN <--
+
     public Preference(Context context) {
         this.context = context;
     }
@@ -51,9 +56,29 @@ public class Preference {
         this.onChangeListener = onPreferenceChangeListener;
     }
 
+    // ZOUKAN -->
     public void setOnPreferenceClickListener(OnPreferenceClickListener onPreferenceClickListener) {
-        throw new RuntimeException("Stub!");
+        this.onClickListener = onPreferenceClickListener;
     }
+
+    @JsonIgnore
+    public OnPreferenceClickListener getOnPreferenceClickListener() {
+        return onClickListener;
+    }
+
+    @JsonIgnore
+    public OnPreferenceChangeListener getOnPreferenceChangeListener() {
+        return onChangeListener;
+    }
+
+    /** Zoukan specific API: a click on the preference's row, as Android's Preference.performClick(). */
+    public boolean performClick() {
+        if (!isEnabled) {
+            return false;
+        }
+        return onClickListener != null && onClickListener.onPreferenceClick(this);
+    }
+    // ZOUKAN <--
 
     public CharSequence getTitle() {
         return title;

@@ -27,6 +27,7 @@ import zoukan.desktop.backup.SyntheticBackup
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.harness.CompatibilityHarness
+import zoukan.desktop.harness.ExtensionWiringCheck
 import zoukan.desktop.library.LibraryCommand
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.runZoukanApp
@@ -58,6 +59,8 @@ Commands:
       --apk                 Install from APKs with dex2jar even when the store has jars
       --skip-nsfw           With --all, skip NSFW extensions
       --interactive         Open a browser window for Cloudflare challenges the hidden browser cannot solve
+      --wiring              Check every extension (or --packages) is wired up, without calling manga sites:
+                            missing Android or app APIs, Injekt lookups, sources, client and headers, settings
   backup create [file]    Back up the library and settings (default: <data>/backups/zoukan_<date>.tachibk)
       --private             Include private settings (tracker logins and the like)
   backup restore <file>   Restore a .tachibk backup from Komikku, Mihon, TachiyomiSY or Zoukan
@@ -182,6 +185,7 @@ private fun status(): Int {
 
 private fun harness(args: List<String>): Int {
     var options = CompatibilityHarness.Options()
+    var wiring = false
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
@@ -193,6 +197,7 @@ private fun harness(args: List<String>): Int {
             "--apk" -> options = options.copy(forceApk = true)
             "--skip-nsfw" -> options = options.copy(skipNsfw = true)
             "--interactive" -> options = options.copy(interactive = true)
+            "--wiring" -> wiring = true
             else -> {
                 System.err.println("Unknown option $arg\n\n$USAGE")
                 return 2
@@ -202,6 +207,20 @@ private fun harness(args: List<String>): Int {
     // A separate profile, so the harness never touches the user's library or trusted extensions
     val dirs = ZoukanDirs(File(ZoukanDirs.default().root, "harness"))
     ZoukanRuntime.start(dirs, interactiveBrowser = options.interactive)
+    if (wiring) {
+        Injekt.get<NetworkHelper>()
+        val check = ExtensionWiringCheck(
+            dirs = dirs,
+            storeService = Injekt.get<ExtensionStoreService>(),
+            installer = Injekt.get<DesktopExtensionInstaller>(),
+            loader = Injekt.get<DesktopExtensionLoader>(),
+            options = ExtensionWiringCheck.Options(options.storeUrl, options.packages, options.skipNsfw),
+        )
+        val (report, _) = check.run()
+        report.save(check.reportFile())
+        println("\nReport saved to ${check.reportFile()}")
+        return 0
+    }
     val harness = CompatibilityHarness(
         dirs = dirs,
         storeService = Injekt.get<ExtensionStoreService>(),
