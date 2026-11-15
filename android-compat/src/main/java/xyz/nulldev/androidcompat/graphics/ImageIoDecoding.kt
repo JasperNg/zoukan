@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import javax.imageio.ImageIO
 import javax.imageio.ImageReader
+import org.w3c.dom.Node
 
 /**
  * Image decoding on ImageIO (with the TwelveMonkeys and WebP readers on the classpath) for the
@@ -57,6 +58,113 @@ internal object ImageIoDecoding {
     /** The number of frames in [bytes] (1 for a still image, or when the reader cannot tell). */
     fun frameCount(bytes: ByteArray): Int =
         withReader(bytes) { reader -> runCatching { reader.getNumImages(true) }.getOrDefault(1).coerceAtLeast(1) }
+
+    /**
+     * The size of the canvas the frames of [bytes] are drawn on: a GIF's logical screen, otherwise
+     * the first image's size.
+     */
+    fun canvasSize(bytes: ByteArray): Pair<Int, Int> =
+        withReader(bytes) { reader ->
+            val screen =
+                runCatching {
+                    val root = reader.streamMetadata?.getAsTree(GIF_STREAM_FORMAT) as? Node
+                    val descriptor = root?.child("LogicalScreenDescriptor")
+                    val w = descriptor?.attr("logicalScreenWidth")?.toIntOrNull() ?: 0
+                    val h = descriptor?.attr("logicalScreenHeight")?.toIntOrNull() ?: 0
+                    if (w > 0 && h > 0) w to h else null
+                }.getOrNull()
+            screen ?: (reader.getWidth(0) to reader.getHeight(0))
+        }
+
+    /**
+     * Draws the frames of an animation one after another on a [width] x [height] canvas, as a
+     * player shows them: ImageIO gives each GIF frame at its own size, at an offset, to be drawn
+     * over what the previous frames left (by their disposal method).
+     */
+    class FrameCompositor(
+        private val bytes: ByteArray,
+        private val width: Int,
+        private val height: Int,
+    ) {
+        private val canvas = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        private var nextIndex = 0
+
+        // What to do to the canvas before drawing the next frame
+        private var pendingDispose: (() -> Unit)? = null
+
+        /** Frame [index] composited, as a new width x height image; frames must come in order. */
+        fun frame(index: Int): BufferedImage {
+            require(index == nextIndex) { "Frames are composited in order: expected $nextIndex, got $index" }
+            nextIndex++
+            val (image, placement) =
+                withReader(bytes) { reader ->
+                    val image = reader.read(index)
+                    image to placementOf(reader, index, image)
+                }
+            pendingDispose?.invoke()
+            pendingDispose = null
+            val previous = if (placement.disposal == "restoreToPrevious") copy(canvas) else null
+            val graphics = canvas.createGraphics()
+            try {
+                graphics.drawImage(image, placement.x, placement.y, null)
+            } finally {
+                graphics.dispose()
+            }
+            pendingDispose =
+                when (placement.disposal) {
+                    "restoreToBackgroundColor" -> {
+                        { clear(placement.x, placement.y, image.width, image.height) }
+                    }
+                    "restoreToPrevious" -> {
+                        { previous?.let { canvas.data = it.data } }
+                    }
+                    else -> null
+                }
+            return copy(canvas)
+        }
+
+        private fun clear(x: Int, y: Int, w: Int, h: Int) {
+            val graphics = canvas.createGraphics()
+            try {
+                graphics.composite = java.awt.AlphaComposite.Clear
+                graphics.fillRect(x, y, w, h)
+            } finally {
+                graphics.dispose()
+            }
+        }
+
+        private fun copy(image: BufferedImage): BufferedImage =
+            BufferedImage(image.colorModel, image.copyData(null), image.isAlphaPremultiplied, null)
+    }
+
+    private class Placement(val x: Int, val y: Int, val disposal: String?)
+
+    /** Where frame [index] goes on the canvas, and its disposal method (GIF metadata; 0,0 otherwise). */
+    private fun placementOf(reader: ImageReader, index: Int, image: BufferedImage): Placement =
+        runCatching {
+            val root = reader.getImageMetadata(index)?.getAsTree(GIF_IMAGE_FORMAT) as? Node ?: return@runCatching null
+            val descriptor = root.child("ImageDescriptor")
+            val control = root.child("GraphicControlExtension")
+            Placement(
+                descriptor?.attr("imageLeftPosition")?.toIntOrNull() ?: 0,
+                descriptor?.attr("imageTopPosition")?.toIntOrNull() ?: 0,
+                control?.attr("disposalMethod"),
+            )
+        }.getOrNull() ?: Placement(0, 0, null)
+
+    private fun Node.child(name: String): Node? {
+        var node = firstChild
+        while (node != null) {
+            if (node.nodeName == name) return node
+            node = node.nextSibling
+        }
+        return null
+    }
+
+    private fun Node.attr(name: String): String? = attributes?.getNamedItem(name)?.nodeValue
+
+    private const val GIF_STREAM_FORMAT = "javax_imageio_gif_stream_1.0"
+    private const val GIF_IMAGE_FORMAT = "javax_imageio_gif_image_1.0"
 
     fun toArgb(image: BufferedImage): BufferedImage {
         if (image.type == BufferedImage.TYPE_INT_ARGB) return image

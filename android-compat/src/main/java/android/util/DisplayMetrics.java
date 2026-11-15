@@ -4,8 +4,8 @@ package android.util;
 // Shadows Suwayomi android.jar's stub of this class, keeping every public member. Members the
 // extensions use are implemented; the rest still throw "Stub!" as in android.jar. Generated from
 // `javap -public` of android.jar, then edited.
-// The defaults are a desktop screen: 1280x2856 pixels (the extension WebView's size, as in
-// DesktopResources) at Android's baseline density of 160 dpi, so 1 dp = 1 px.
+// The defaults (setToDefaults, used by DesktopResources) are the desktop screen: 1280x2856 pixels,
+// the extension WebView's size, at Android's baseline density of 160 dpi, so 1 dp = 1 px.
 // ZOUKAN <--
 
 public class DisplayMetrics {

@@ -18,6 +18,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
 import javax.imageio.ImageIO
+import kotlin.math.abs
 
 /**
  * Extensions descramble pages and draw onto them with android.graphics; these check the AWT-backed
@@ -142,6 +143,43 @@ class GraphicsCompatTest {
         val out = ByteBuffer.allocate(8)
         bitmap.copyPixelsToBuffer(out)
         out.array().toList() shouldBe listOf<Byte>(0x11, 0x22, 0x33, 0xFF.toByte(), 0, 0, 0, 0xFF.toByte())
+    }
+
+    @Test
+    fun `an ALPHA_8 bitmap keeps its mask bytes through the buffers`() {
+        val bitmap = Bitmap.createBitmap(4, 1, Bitmap.Config.ALPHA_8)
+        bitmap.hasAlpha() shouldBe true
+        val mask = byteArrayOf(0, 0x40, 0x80.toByte(), 0xFF.toByte())
+        bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(mask))
+        val out = ByteBuffer.allocate(4)
+        bitmap.copyPixelsToBuffer(out)
+        out.position() shouldBe 4
+        out.array().toList() shouldBe mask.toList()
+    }
+
+    @Test
+    fun `breakText fits as much text as measureText says fits`() {
+        val paint = Paint().apply { textSize = 16f }
+        val text = "The quick brown fox jumps over the lazy dog. "
+        val maxWidth = paint.measureText(text) / 2
+        val measured = FloatArray(1)
+        val count = paint.breakText(text, true, maxWidth, measured)
+        (count in 1 until text.length) shouldBe true
+        (paint.measureText(text, 0, count) <= maxWidth + 0.5f) shouldBe true
+        (paint.measureText(text, 0, count + 1) > maxWidth - 0.5f) shouldBe true
+        abs(measured[0] - paint.measureText(text, 0, count)) shouldBeLessThan 0.5f
+
+        val backwards = paint.breakText(text, false, maxWidth, measured)
+        (paint.measureText(text, text.length - backwards, text.length) <= maxWidth + 0.5f) shouldBe true
+
+        paint.breakText(text, true, 10_000f, null) shouldBe text.length
+        paint.breakText(text, true, 0f, null) shouldBe 0
+
+        // One layout per call: a long paragraph breaks quickly
+        val paragraph = text.repeat(200)
+        val started = System.nanoTime()
+        paint.breakText(paragraph, true, paint.measureText(paragraph) / 3, null)
+        ((System.nanoTime() - started) / 1_000_000f) shouldBeLessThan 2_000f
     }
 
     @Test

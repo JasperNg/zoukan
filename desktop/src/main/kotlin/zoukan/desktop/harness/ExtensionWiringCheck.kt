@@ -8,6 +8,7 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.TwoStatePreference
 import com.sun.net.httpserver.HttpServer
+import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.Source
@@ -20,7 +21,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withTimeoutOrNull
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
 import okhttp3.Request
@@ -36,9 +36,11 @@ import java.io.File
 import java.lang.reflect.ParameterizedType
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.zip.ZipFile
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -71,6 +73,8 @@ class ExtensionWiringCheck(
         val skipNsfw: Boolean = false,
         /** Extensions checked at the same time. */
         val parallelism: Int = 6,
+        /** Package names (as [packages]) to leave out. */
+        val exclude: List<String> = emptyList(),
     )
 
     /** One extension's result. Each list holds the problems found by that check. */
@@ -114,12 +118,14 @@ class ExtensionWiringCheck(
         traces.writeText("")
         val store = storeService.fetch(options.storeUrl).getOrThrow()
         val available = storeService.getExtensions(store).getOrThrow()
+        fun names(list: List<String>) = list.map { if (it.startsWith(PREFIX)) it else PREFIX + it }.toSet()
+        val excluded = names(options.exclude)
         val wanted = if (options.packages.isEmpty()) {
             available.filterNot { options.skipNsfw && it.isNsfw }
         } else {
-            val names = options.packages.map { if (it.startsWith(PREFIX)) it else PREFIX + it }.toSet()
+            val names = names(options.packages)
             available.filter { it.pkgName in names }
-        }
+        }.filterNot { it.pkgName in excluded }
         report.line("Store: ${store.name} (${options.storeUrl}), ${available.size} extensions, ${wanted.size} checked")
         report.line()
 
@@ -136,34 +142,47 @@ class ExtensionWiringCheck(
         }
         val base = "http://127.0.0.1:${server.address.port}"
         val gate = Semaphore(options.parallelism)
+        // Each extension runs on a thread of its own, so one that blocks for good (a listener or
+        // interceptor waiting on something that never comes) is left behind at the timeout
+        // instead of holding up the run
+        val workers = Executors.newCachedThreadPool { r -> Thread(r, "wiring-check").apply { isDaemon = true } }
         val rows = try {
             wanted.mapIndexed { i, extension ->
                 async(Dispatchers.IO) {
                     gate.withPermit {
                         val row = Row(extension.pkgName.removePrefix(PREFIX), extension.versionName)
-                        val done = withTimeoutOrNull(EXTENSION_TIMEOUT) {
-                            val installed = try {
-                                installer.install(extension)
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Throwable) {
-                                row.load = "install: ${CompatibilityHarness.describe(e)}"
-                                return@withTimeoutOrNull Unit
-                            }
-                            runInterruptible { checkOne(installed, store, row, base) }
+                        val work = workers.submit { checkExtension(extension, store, row, base) }
+                        try {
+                            runInterruptible { work.get(EXTENSION_TIMEOUT.inWholeSeconds, TimeUnit.SECONDS) }
+                        } catch (_: TimeoutException) {
+                            work.cancel(true)
+                            row.sourceErrors += "timed out after $EXTENSION_TIMEOUT"
+                        } catch (e: ExecutionException) {
+                            row.sourceErrors += "check failed: ${CompatibilityHarness.describe(e.cause ?: e)}"
+                            trace(row, "check", e.cause ?: e)
                         }
-                        if (done == null) row.sourceErrors += "timed out after $EXTENSION_TIMEOUT"
                         println("  [${i + 1}/${wanted.size}] ${row.pkg}: ${if (row.passed) "PASS" else "FAIL"}")
                         row
                     }
                 }
             }.awaitAll()
         } finally {
+            workers.shutdownNow()
             server.stop(0)
             (server.executor as? java.util.concurrent.ExecutorService)?.shutdownNow()
         }
         write(report, rows)
         report to rows
+    }
+
+    private fun checkExtension(extension: Extension.Available, store: ExtensionStore, row: Row, base: String) {
+        val installed = try {
+            runBlocking { installer.install(extension) }
+        } catch (e: Throwable) {
+            row.load = "install: ${CompatibilityHarness.describe(e)}"
+            return
+        }
+        checkOne(installed, store, row, base)
     }
 
     private fun checkOne(installed: DesktopExtensionInstaller.Installed, store: ExtensionStore, row: Row, base: String) {
@@ -217,7 +236,12 @@ class ExtensionWiringCheck(
         names.asSequence()
             .mapNotNull { runCatching { Class.forName(it, false, classLoader) }.getOrNull() }
             .filter { it.isAnonymousClass && typeReference.isAssignableFrom(it) }
-            .mapNotNull { (it.genericSuperclass as? ParameterizedType)?.actualTypeArguments?.singleOrNull() }
+            .mapNotNull { cls ->
+                // A looked-up type the app does not have cannot even be named
+                runCatching { (cls.genericSuperclass as? ParameterizedType)?.actualTypeArguments?.singleOrNull() }
+                    .onFailure { row.injekt += "${cls.name}: ${CompatibilityHarness.describe(it)}" }
+                    .getOrNull()
+            }
             .filter { it is Class<*> || it is ParameterizedType }
             .distinctBy { it.typeName }
             .forEach { type ->
@@ -291,23 +315,43 @@ class ExtensionWiringCheck(
         }
         screen.preferences.toList().forEach { pref ->
             val key = pref.key ?: return@forEach
+            val preferences = source.sourcePreferences()
+            // What is stored, not the default: put back as it was, also after a failure
+            val stored = preferences.all
+            val hadValue = key in stored
+            val before = stored[key]
             try {
                 val changed = changedValue(pref) ?: return@forEach
                 row.settingsChecked++
-                val before = pref.currentValue
                 // As the settings screen saves a value: a change listener may refuse it
                 if (!pref.callChangeListener(changed)) return@forEach
                 pref.saveNewValue(changed)
-                val stored = source.sourcePreferences().all[key]
-                if (stored != changed) {
-                    row.settings += "${source.name}: $key saved $changed but reads back $stored"
+                val readBack = source.sourcePreferences().all[key]
+                if (readBack != changed) {
+                    row.settings += "${source.name}: $key saved $changed but reads back $readBack"
                 }
-                if (before != null && pref.callChangeListener(before)) pref.saveNewValue(before)
             } catch (e: Throwable) {
                 row.settings += "${source.name}: $key: ${CompatibilityHarness.describe(e)}"
                 trace(row, "settings $key", e)
+            } finally {
+                runCatching { restore(preferences, key, hadValue, before) }
             }
         }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun restore(preferences: android.content.SharedPreferences, key: String, hadValue: Boolean, value: Any?) {
+        val editor = preferences.edit()
+        when {
+            !hadValue || value == null -> editor.remove(key)
+            value is Boolean -> editor.putBoolean(key, value)
+            value is String -> editor.putString(key, value)
+            value is Int -> editor.putInt(key, value)
+            value is Long -> editor.putLong(key, value)
+            value is Float -> editor.putFloat(key, value)
+            value is Set<*> -> editor.putStringSet(key, value as Set<String>)
+        }
+        editor.commit()
     }
 
     /** A value different from [pref]'s current one, of the type it stores; null for preferences that store nothing. */

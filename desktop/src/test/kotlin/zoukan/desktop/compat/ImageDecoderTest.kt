@@ -11,7 +11,10 @@ import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import javax.imageio.IIOImage
 import javax.imageio.ImageIO
+import javax.imageio.ImageTypeSpecifier
+import javax.imageio.metadata.IIOMetadataNode
 import ca.mpreg.imagedecoder.ImageDecoder as FrameDecoder
 
 class ImageDecoderTest {
@@ -71,6 +74,59 @@ class ImageDecoderTest {
                 frame.image.get(pixel + 1).toInt() and 0xFF shouldBe 0
                 frame.image.get(pixel + 2).toInt() and 0xFF shouldBe 0
                 frame.image.get(pixel + 3).toInt() and 0xFF shouldBe 0xFF
+            }
+        }
+    }
+
+    /** 300x200 red, then a 50x40 blue frame at (100, 60) drawn over it. */
+    private fun twoFrameGif(): ByteArray {
+        val writer = ImageIO.getImageWritersByFormatName("gif").next()
+        val out = ByteArrayOutputStream()
+        ImageIO.createImageOutputStream(out).use { stream ->
+            writer.output = stream
+            writer.prepareWriteSequence(null)
+            fun frame(width: Int, height: Int, color: Color, left: Int, top: Int) {
+                val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+                image.createGraphics().apply {
+                    this.color = color
+                    fillRect(0, 0, width, height)
+                    dispose()
+                }
+                val type = ImageTypeSpecifier.createFromRenderedImage(image)
+                val metadata = writer.getDefaultImageMetadata(type, writer.defaultWriteParam)
+                val format = metadata.nativeMetadataFormatName
+                val root = metadata.getAsTree(format) as IIOMetadataNode
+                val descriptor = root.getElementsByTagName("ImageDescriptor").item(0) as IIOMetadataNode
+                descriptor.setAttribute("imageLeftPosition", left.toString())
+                descriptor.setAttribute("imageTopPosition", top.toString())
+                val control = root.getElementsByTagName("GraphicControlExtension").item(0) as IIOMetadataNode
+                control.setAttribute("disposalMethod", "doNotDispose")
+                control.setAttribute("delayTime", "10")
+                metadata.setFromTree(format, root)
+                writer.writeToSequence(IIOImage(image, null, metadata), writer.defaultWriteParam)
+            }
+            frame(300, 200, Color.RED, 0, 0)
+            frame(50, 40, Color.BLUE, 100, 60)
+            writer.endWriteSequence()
+        }
+        writer.dispose()
+        return out.toByteArray()
+    }
+
+    @Test
+    fun `the frame decoder composites animation frames on the whole canvas`() {
+        FrameDecoder.open(ByteArrayInputStream(twoFrameGif())).use { decoder ->
+            decoder.width shouldBe 300
+            decoder.height shouldBe 200
+            decoder.frameCount shouldBe 2
+            decoder.decodeNext().use { it.width to it.height shouldBe (300 to 200) }
+            decoder.decodeNext().use { frame ->
+                frame.width shouldBe 300
+                frame.height shouldBe 200
+                fun rgb(x: Int, y: Int): List<Int> =
+                    (0 until 3).map { frame.image.get((y * 300 + x) * 4 + it).toInt() and 0xFF }
+                rgb(120, 80) shouldBe listOf(0, 0, 0xFF) // the new blue frame
+                rgb(10, 10) shouldBe listOf(0xFF, 0, 0) // the red first frame left in place
             }
         }
     }

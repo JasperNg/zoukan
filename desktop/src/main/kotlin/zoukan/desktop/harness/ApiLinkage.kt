@@ -2,12 +2,14 @@ package zoukan.desktop.harness
 
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.FieldVisitor
 import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import java.lang.reflect.Modifier
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -31,24 +33,69 @@ class ApiLinkage(private val host: ClassLoader) {
     data class Gap(val symbol: String, val reason: String, val activityOnly: Boolean = false)
 
     private val classCache = ConcurrentHashMap<String, Result<Class<*>>>()
-    private val memberCache = ConcurrentHashMap<String, Gap?>()
+    // Optional, since a ConcurrentHashMap keeps no nulls and most members resolve
+    private val memberCache = ConcurrentHashMap<String, Optional<Gap>>()
 
     /** The unresolved references of the classes in [classes] (internal name to bytes), distinct and sorted. */
     fun check(classes: Map<String, ByteArray>): List<Gap> {
-        val own = classes.keys
-        val supers = HashMap<String, String>()
+        val jar = Jar(classes.keys)
         // Each reference, with the classes that make it
         val refs = LinkedHashMap<Ref, MutableSet<String>>()
-        classes.forEach { (name, bytes) -> collect(name, bytes, refs, supers) }
-        val activities = own.filterTo(HashSet()) { isActivity(it, supers) }
+        classes.forEach { (name, bytes) -> collect(name, bytes, refs, jar) }
+        val activities = jar.own.filterTo(HashSet()) { isActivity(it, jar.supers) }
         // Lambdas and inner classes of an activity run only in it
         fun inActivity(caller: String) = caller in activities || activities.any { caller.startsWith("$it$") }
         return refs.asSequence()
-            .filter { (ref, _) -> ownerOf(ref.owner) !in own }
-            .mapNotNull { (ref, callers) -> resolve(ref)?.copy(activityOnly = callers.all(::inActivity)) }
-            .distinct()
+            .mapNotNull { (ref, callers) -> resolveFrom(ref, jar)?.let { it to callers.all(::inActivity) } }
+            // A symbol is Activity-only when every use of it is
+            .groupBy({ it.first }, { it.second })
+            .map { (gap, activityOnly) -> gap.copy(activityOnly = activityOnly.all { it }) }
             .sortedBy { it.symbol }
-            .toList()
+    }
+
+    /** The extension's own classes: their superclasses, interfaces and declared members. */
+    private class Jar(val own: Set<String>) {
+        val supers = HashMap<String, String>()
+        val interfaces = HashMap<String, List<String>>()
+        val declared = HashMap<String, MutableSet<String>>()
+    }
+
+    /**
+     * Resolves [ref] as the JVM would for the extension: a member named on one of its own classes
+     * that the class does not declare is inherited, so it is looked up in the first app class up
+     * the hierarchy (and the app interfaces on the way), where it may be missing or a stub.
+     */
+    private fun resolveFrom(ref: Ref, jar: Jar): Gap? {
+        val owner = ownerOf(ref.owner)
+        if (owner !in jar.own) return resolve(ref)
+        val key = when (ref) {
+            is ClassRef -> return null
+            is MethodRef -> ref.name + ref.desc
+            is FieldRef -> ref.name + ":" + ref.desc
+        }
+        // The whole hierarchy of the extension's own classes and interfaces, and the app types it reaches
+        val external = LinkedHashSet<String>()
+        val seen = HashSet<String>()
+        val queue = ArrayDeque<String>().apply { add(owner) }
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            if (!seen.add(current)) continue
+            if (current !in jar.own) {
+                external += current
+                continue
+            }
+            if (key in jar.declared[current].orEmpty()) return null
+            jar.supers[current]?.let(queue::add)
+            jar.interfaces[current].orEmpty().forEach(queue::add)
+        }
+        val gaps = external.map { candidate ->
+            when (ref) {
+                is MethodRef -> resolve(ref.copy(owner = candidate))
+                is FieldRef -> resolve(ref.copy(owner = candidate))
+                is ClassRef -> null
+            } ?: return null
+        }
+        return gaps.firstOrNull()
     }
 
     private fun isActivity(name: String, supers: Map<String, String>): Boolean {
@@ -84,9 +131,12 @@ class ApiLinkage(private val host: ClassLoader) {
             is MethodRef -> if (ref.owner.startsWith("[")) {
                 null
             } else {
-                memberCache.computeIfAbsent("${ref.owner}.${ref.name}${ref.desc}") { checkMethod(cls, ref) }
+                memberCache.computeIfAbsent("${ref.owner}.${ref.name}${ref.desc}") { Optional.ofNullable(checkMethod(cls, ref)) }
+                    .orElse(null)
             }
-            is FieldRef -> memberCache.computeIfAbsent("${ref.owner}.${ref.name}:${ref.desc}") { checkField(cls, ref) }
+            is FieldRef ->
+                memberCache.computeIfAbsent("${ref.owner}.${ref.name}:${ref.desc}") { Optional.ofNullable(checkField(cls, ref)) }
+                    .orElse(null)
         }
     }
 
@@ -188,7 +238,8 @@ class ApiLinkage(private val host: ClassLoader) {
         if (Modifier.isInterface(cls.modifiers) && Any::class.java !in seen) yield(Any::class.java)
     }
 
-    private fun collect(className: String, bytes: ByteArray, refMap: MutableMap<Ref, MutableSet<String>>, supers: MutableMap<String, String>) {
+    private fun collect(className: String, bytes: ByteArray, refMap: MutableMap<Ref, MutableSet<String>>, jar: Jar) {
+        val declared = jar.declared.getOrPut(className) { HashSet() }
         val refs = object {
             operator fun plusAssign(ref: Ref) {
                 refMap.getOrPut(ref) { HashSet() } += className
@@ -232,13 +283,21 @@ class ApiLinkage(private val host: ClassLoader) {
         ClassReader(bytes).accept(
             object : ClassVisitor(Opcodes.ASM9) {
                 override fun visit(version: Int, access: Int, name: String, signature: String?, superName: String?, interfaces: Array<out String>?) {
-                    superName?.let { supers[className] = it }
+                    superName?.let { jar.supers[className] = it }
+                    jar.interfaces[className] = interfaces?.toList().orEmpty()
                     superName?.let { refs += ClassRef(it) }
                     interfaces?.forEach { refs += ClassRef(it) }
                 }
 
-                override fun visitMethod(access: Int, name: String?, descriptor: String?, signature: String?, exceptions: Array<out String>?): MethodVisitor =
-                    methodVisitor
+                override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
+                    declared += name + descriptor
+                    return methodVisitor
+                }
+
+                override fun visitField(access: Int, name: String, descriptor: String, signature: String?, value: Any?): FieldVisitor? {
+                    declared += "$name:$descriptor"
+                    return null
+                }
             },
             ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES,
         )

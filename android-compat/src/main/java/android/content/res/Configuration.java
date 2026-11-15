@@ -150,10 +150,12 @@ public final class Configuration implements android.os.Parcelable, java.lang.Com
         screenLayout = SCREENLAYOUT_SIZE_NORMAL | SCREENLAYOUT_LONG_YES | SCREENLAYOUT_LAYOUTDIR_LTR | SCREENLAYOUT_ROUND_NO;
         colorMode = COLOR_MODE_UNDEFINED;
         uiMode = UI_MODE_TYPE_NORMAL | UI_MODE_NIGHT_NO;
-        screenWidthDp = 1280;
-        screenHeightDp = 2856;
-        smallestScreenWidthDp = 1280;
-        densityDpi = android.util.DisplayMetrics.DENSITY_DEFAULT;
+        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+        metrics.setToDefaults();
+        screenWidthDp = (int) (metrics.widthPixels / metrics.density);
+        screenHeightDp = (int) (metrics.heightPixels / metrics.density);
+        smallestScreenWidthDp = Math.min(screenWidthDp, screenHeightDp);
+        densityDpi = metrics.densityDpi;
     }
     public int updateFrom(android.content.res.Configuration p0) {
         throw new RuntimeException("Stub!");

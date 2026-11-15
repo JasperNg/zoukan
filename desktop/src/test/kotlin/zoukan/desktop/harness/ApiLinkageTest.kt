@@ -19,7 +19,7 @@ class ApiLinkageTest {
             calls.forEach { (owner, name, desc) -> visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, desc, false) }
             field?.let { (owner, name) -> visitFieldInsn(Opcodes.GETSTATIC, owner, name, "I") }
             // The extension's own classes are not checked
-            visitMethodInsn(Opcodes.INVOKESTATIC, "ext/Probe", "missing", "()V", false)
+            visitMethodInsn(Opcodes.INVOKESTATIC, "ext/Probe", "run", "()V", false)
             visitInsn(Opcodes.RETURN)
             visitMaxs(0, 0)
             visitEnd()
@@ -51,6 +51,30 @@ class ApiLinkageTest {
             "android.zoukan.NoSuchClass",
             "java.lang.Integer.noSuchMethod()V",
             "java.lang.Integer.NO_SUCH_FIELD:I",
+        )
+    }
+
+    @Test
+    fun `members inherited from the app through an extension class are checked`() {
+        // ext/Receiver extends ResultReceiver (a stub) and calls the inherited send() on itself
+        val writer = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "ext/Receiver", null, "android/os/ResultReceiver", null)
+        writer.visitMethod(Opcodes.ACC_PUBLIC, "run", "()V", null, null).apply {
+            visitCode()
+            visitVarInsn(Opcodes.ALOAD, 0)
+            visitInsn(Opcodes.ICONST_0)
+            visitInsn(Opcodes.ACONST_NULL)
+            visitMethodInsn(Opcodes.INVOKEVIRTUAL, "ext/Receiver", "send", "(ILandroid/os/Bundle;)V", false)
+            // Its own method is not the app's
+            visitVarInsn(Opcodes.ALOAD, 0)
+            visitMethodInsn(Opcodes.INVOKEVIRTUAL, "ext/Receiver", "run", "()V", false)
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        writer.visitEnd()
+        linkage.check(mapOf("ext/Receiver" to writer.toByteArray())).map { it.symbol } shouldContainExactlyInAnyOrder listOf(
+            "android.os.ResultReceiver.send(ILandroid/os/Bundle;)V",
         )
     }
 

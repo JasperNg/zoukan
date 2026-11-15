@@ -915,24 +915,50 @@ public class Paint {
     }
 
     private int breakTextImpl(String text, boolean measureForwards, float maxWidth, float[] measuredWidth) {
+        // One layout; the width of a run of chars is its logical highlight in that layout. The
+        // width only grows as chars are added, so binary-search the longest run that fits.
         int n = text.length();
-        int count = 0;
+        TextLayout layout = layout(text);
+        int lo = 0, hi = n;
         float width = 0f;
-        while (count < n) {
-            int len;
-            if (measureForwards) {
-                len = Character.charCount(text.codePointAt(count));
-            } else {
-                len = Character.charCount(text.codePointBefore(n - count));
+        while (layout != null && lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            int count = codePointBoundary(text, measureForwards, mid);
+            if (count <= lo) {
+                // mid fell inside a surrogate pair at the lower edge: try the whole pair
+                count = codePointBoundary(text, measureForwards, lo + 1);
+                if (count <= lo) break;
             }
-            String part = measureForwards ? text.substring(0, count + len) : text.substring(n - count - len);
-            float w = advance(part);
-            if (w > maxWidth) break;
-            width = w;
-            count += len;
+            float w = runWidth(layout, text, measureForwards, count);
+            if (w <= maxWidth) {
+                lo = count;
+                width = w;
+            } else {
+                hi = count - 1;
+            }
         }
         if (measuredWidth != null && measuredWidth.length > 0) measuredWidth[0] = width;
+        return lo;
+    }
+
+    /** [count] moved so as not to split a surrogate pair, counting from the start or the end. */
+    private static int codePointBoundary(String text, boolean fromStart, int count) {
+        int n = text.length();
+        if (count <= 0 || count >= n) return Math.max(0, Math.min(count, n));
+        int index = fromStart ? count : n - count;
+        if (Character.isLowSurrogate(text.charAt(index)) && Character.isHighSurrogate(text.charAt(index - 1))) {
+            return count + 1;
+        }
         return count;
+    }
+
+    private float runWidth(TextLayout layout, String text, boolean fromStart, int count) {
+        if (count == 0) return 0f;
+        int n = text.length();
+        if (count == n) return layout.getAdvance() * mTextScaleX;
+        int start = fromStart ? 0 : n - count;
+        Shape highlight = layout.getLogicalHighlightShape(start, start + count);
+        return (float) highlight.getBounds2D().getWidth() * mTextScaleX;
     }
     // ZOUKAN <--
 

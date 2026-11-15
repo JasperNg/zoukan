@@ -32,14 +32,17 @@ class ImageDecoder private constructor(
 
     private var nextFrame = 0
 
+    // Draws animation frames, which ImageIO gives at their own size and offset, on the full canvas
+    private val compositor =
+        if (frameCount > 1) ImageIoDecoding.FrameCompositor(bytes!!, crop.width, crop.height) else null
+
     /** Decodes the next frame; throws once all frames were decoded or the decoder was closed. */
     fun decodeNext(): Frame {
         val data = bytes ?: throw IllegalStateException("The decoder is closed")
         if (nextFrame >= frameCount) throw NoSuchElementException("No more frames")
         val index = nextFrame++
-        // Frames of an animation are the full canvas; crop only applies to still images
-        val region = if (frameCount == 1) crop else null
-        val image = ImageIoDecoding.decode(data, region, 1, index)
+        // Every frame of an animation is the whole canvas; crop only applies to still images
+        val image = compositor?.frame(index) ?: ImageIoDecoding.decode(data, crop, 1, index)
         val width = image.width
         val height = image.height
         val pixels = IntArray(width * height)
@@ -83,6 +86,9 @@ class ImageDecoder private constructor(
             val crop =
                 if (cropBorders && frames == 1) {
                     ImageIoDecoding.contentBounds(ImageIoDecoding.decode(bytes))
+                } else if (frames > 1) {
+                    val (w, h) = ImageIoDecoding.canvasSize(bytes)
+                    Rectangle(0, 0, w, h)
                 } else {
                     val (w, h) = ImageIoDecoding.size(bytes)
                     Rectangle(0, 0, w, h)

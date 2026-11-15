@@ -10,8 +10,8 @@ import android.util.DisplayMetrics;
 
 public class Resources {
     private final AssetManager mAssets;
-    private DisplayMetrics mMetrics;
-    private Configuration mConfiguration;
+    private final DisplayMetrics mMetrics;
+    private final Configuration mConfiguration;
     public static final int ID_NULL = 0;
     public Resources(android.content.res.AssetManager p0, android.util.DisplayMetrics p1, android.content.res.Configuration p2) {
         mAssets = p0;
@@ -142,30 +142,18 @@ public class Resources {
         throw new RuntimeException("Stub!");
     }
     public void updateConfiguration(android.content.res.Configuration p0, android.util.DisplayMetrics p1) {
-        if (p0 != null) {
-            getConfiguration().setTo(p0);
+        if (p0 != null && mConfiguration != null) {
+            mConfiguration.setTo(p0);
         }
-        if (p1 != null) {
-            getDisplayMetrics().setTo(p1);
+        if (p1 != null && mMetrics != null) {
+            mMetrics.setTo(p1);
         }
     }
     public android.util.DisplayMetrics getDisplayMetrics() {
-        // DesktopResources.INSTANCE is allocated without running a constructor, so the fields can be null
-        DisplayMetrics metrics = mMetrics;
-        if (metrics == null) {
-            metrics = new DisplayMetrics();
-            metrics.setToDefaults();
-            mMetrics = metrics;
-        }
-        return metrics;
+        return mMetrics;
     }
     public android.content.res.Configuration getConfiguration() {
-        Configuration configuration = mConfiguration;
-        if (configuration == null) {
-            configuration = new Configuration();
-            mConfiguration = configuration;
-        }
-        return configuration;
+        return mConfiguration;
     }
     public int getIdentifier(java.lang.String p0, java.lang.String p1, java.lang.String p2) {
         throw new RuntimeException("Stub!");

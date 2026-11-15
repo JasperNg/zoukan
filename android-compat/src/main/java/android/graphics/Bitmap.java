@@ -433,7 +433,8 @@ public final class Bitmap {
     }
 
     public boolean hasAlpha() {
-        return image.getColorModel().hasAlpha();
+        // ALPHA_8 is held as TYPE_BYTE_GRAY, its gray samples being the alpha mask
+        return getConfig() == Config.ALPHA_8 || image.getColorModel().hasAlpha();
     }
 
     private int bytesPerPixel() {
@@ -497,6 +498,12 @@ public final class Bitmap {
                 bytes[i * 4 + 3] = (byte) (v >> 24);
             }
         }
+        if (bpp == 1) {
+            // ALPHA_8: the mask bytes are the gray raster's samples, read and written directly
+            image.getRaster().setDataElements(0, 0, width, height, bytes);
+            src.position(position + (int) (byteCount >> shift));
+            return;
+        }
         int[] pixels = new int[width * height];
         for (int i = 0; i < pixels.length; i++) {
             int o = i * bpp;
@@ -524,8 +531,15 @@ public final class Bitmap {
         if (((long) dst.remaining() << shift) < byteCount) {
             throw new RuntimeException("Buffer not large enough for pixels");
         }
-        int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
         byte[] bytes = new byte[(int) byteCount];
+        int[] pixels;
+        if (bpp == 1) {
+            // ALPHA_8: the gray raster's samples are the mask bytes
+            image.getRaster().getDataElements(0, 0, width, height, bytes);
+            pixels = new int[0];
+        } else {
+            pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        }
         for (int i = 0; i < pixels.length; i++) {
             int p = pixels[i], o = i * bpp;
             int a = p >>> 24, r = (p >> 16) & 0xff, g = (p >> 8) & 0xff, b = p & 0xff;
