@@ -29,7 +29,10 @@ object AppIcon {
      */
     val WindowSizes = listOf(16, 20, 24, 28, 30, 32, 36, 40, 48, 56, 60, 64, 72, 80, 96, 128, 256)
 
-    // Parsed once; the window, the tray and the More header all draw on the UI thread
+    // Parsed once; the window, the tray and the More header all draw on the UI thread.
+    // loadSvgPainter is deprecated: its replacement, decodeToSvgPainter, is in the Compose resources
+    // library, which the app does not use. AppIconTest fails if this stops drawing the vector icon
+    @Suppress("DEPRECATION")
     private val vector: Painter by lazy {
         runCatching {
             val stream = checkNotNull(AppIcon::class.java.getResourceAsStream("/zoukan-icon.svg")) { "zoukan-icon.svg is not in the resources" }
