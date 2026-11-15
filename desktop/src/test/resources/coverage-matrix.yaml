@@ -9,16 +9,17 @@
 
 # --- App shell, window and global ---
 
+# The smoke test renders these two under every check, but no check is keyed to them
 - key: screen:HomeScreen
   feature: "Main window, navigation rail with 5 tabs"
   tier: smoke
-  smoke: true
+  smoke: false
   tests: [ui.ScreenSmokeTest]
 
 - key: state:shell
   feature: "Window content: theme, snackbar messages, mouse Back button"
   tier: smoke
-  smoke: true
+  smoke: false
   tests: [ui.ScreenSmokeTest]
 
 - key: flow:shell.window-bounds
@@ -1149,10 +1150,11 @@
   tests: [ui.ScreenSmokeTest]
   gap: "006_JOURNEYS/03_gap_journeys_simple SettingsPagesJourneyTest; login and sync need MangaDex's servers (manual)"
 
+# Opened by the smoke test's settings:MangaDex check, which clicks the sync row
 - key: dialog:settings.SyncFollowsDialog
   feature: "MangaDex: sync follows"
   tier: smoke
-  smoke: true
+  smoke: false
   tests: [ui.ScreenSmokeTest]
 
 - key: settings:Advanced
