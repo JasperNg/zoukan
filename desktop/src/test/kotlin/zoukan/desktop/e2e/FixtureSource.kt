@@ -12,7 +12,12 @@ import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.newCachelessCallWithProgress
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.PagePreviewInfo
+import eu.kanade.tachiyomi.source.PagePreviewPage
+import eu.kanade.tachiyomi.source.PagePreviewSource
 import eu.kanade.tachiyomi.source.PreferenceScreen
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,6 +33,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import okhttp3.CacheControl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -60,10 +66,19 @@ import java.util.concurrent.atomic.AtomicInteger
  * Html.fromHtml, and descrambles the pages of [FixtureCatalog.SCRAMBLED_TITLE] in an OkHttp
  * interceptor with android.graphics ([descrambled] counts them). Search lists the search-only
  * titles too.
+ *
+ * With [previews] it serves page previews for the entry screen, and with [related] related
+ * titles. Both are off by default, so a journey that does not ask for them sees no extra requests.
  */
-class FixtureSource(override val baseUrl: String) :
-    HttpSource(),
-    ConfigurableSource {
+class FixtureSource(
+    override val baseUrl: String,
+    /** Page previews on the entry screen ([PagePreviewSource]): the first chapter's pages. Off by default. */
+    val previews: Boolean = false,
+    /** Two other catalogue titles as the related titles, and no related titles by search. Off by default. */
+    val related: Boolean = false,
+) : HttpSource(),
+    ConfigurableSource,
+    PagePreviewSource {
 
     override val name = NAME
     override val lang = "en"
@@ -244,8 +259,38 @@ class FixtureSource(override val baseUrl: String) :
             Page(index, imageUrl = url.jsonPrimitive.content)
         }
 
-    // The fixture titles have no related titles
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
+    // Page previews, as E-Hentai serves them: the pages of the title's first chapter (in reading
+    // order), all on one preview page. A title that is not in the catalogue (a migrated entry) has none.
+
+    override suspend fun getPagePreviewList(manga: SManga, chapters: List<SChapter>, page: Int): PagePreviewPage {
+        val chapter = FixtureCatalog.manga(manga.url.removePrefix("/manga/"))?.chapters?.firstOrNull()
+        if (!previews || chapter == null) return PagePreviewPage(page, emptyList(), hasNextPage = false, pagePreviewPages = 0)
+        // Numbered from 1, as the app opens the reader at a preview's index - 1
+        val infos = FixtureCatalog.pages(chapter.format).mapIndexed { i, p -> PagePreviewInfo(i + 1, "$baseUrl/images/${p.file}") }
+        return PagePreviewPage(page, infos, hasNextPage = false, pagePreviewPages = 1)
+    }
+
+    // Through the source's client (the descrambling interceptor too), reporting progress to the preview
+    override suspend fun fetchPreviewImage(page: PagePreviewInfo, cacheControl: CacheControl?): Response =
+        client.newCachelessCallWithProgress(GET(page.imageUrl, headers, cacheControl ?: CacheControl.FORCE_NETWORK), page)
+            .awaitSuccess()
+
+    // Related titles from the source only: the app's search for the title's words would list the
+    // catalogue as well, and hide whether these came through
+    override val disableRelatedMangasBySearch: Boolean get() = related
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        if (!related) return emptyList()
+        return FixtureCatalog.manga.filter { !it.searchOnly && !it.bonus && "/manga/${it.key}" != manga.url }
+            .take(2)
+            .map { other ->
+                SManga.create().apply {
+                    url = "/manga/${other.key}"
+                    title = other.title
+                    thumbnail_url = "$baseUrl/images/${other.cover}"
+                }
+            }
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
