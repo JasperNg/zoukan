@@ -54,6 +54,7 @@ class DescramblingJourneyTest {
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
         val pages = FixtureCatalog.pages(FixtureCatalog.SCRAMBLED)
+        val error = "Page ${pages.size + 1} could not load"
 
         journey.step("The scrambled images are about half their page's colour") {
             pages.forEach { page ->
@@ -78,12 +79,20 @@ class DescramblingJourneyTest {
                 }
 
                 step("The page the site answers with HTML shows the reader's error") {
-                    val error = "Page ${pages.size + 1} could not load"
+                    // Turn only while a page drew and the error is not on screen; a slow decode only makes this slower
                     var turns = 0
-                    while (onAllNodesWithText(error).fetchSemanticsNodes().isEmpty() && turns < 3) {
-                        val shown = runCatching { waitUntil(timeoutMillis = 5_000) { onAllNodesWithText(error).fetchSemanticsNodes().isNotEmpty() } }.isSuccess
-                        if (shown) break
+                    while (true) {
+                        var shown = emptyList<FixturePage>()
+                        runCatching {
+                            waitUntil(timeoutMillis = Journey.PAGE_TIMEOUT) {
+                                shown = pagesShown(pages, DESCRAMBLED_SHARE)
+                                textOnScreen(error) || (shown.isNotEmpty() && !loadingOnScreen())
+                            }
+                        }
+                        if (textOnScreen(error) || shown.isEmpty() || turns >= 3) break
+                        println("Journey $name: the error is not on screen; showing ${shown.map { it.file }}, turn $turns")
                         root().performKeyInput { pressKey(Key.DirectionLeft) }
+                        waitForIdle()
                         turns++
                     }
                     waitFor(hasText(error))
@@ -93,13 +102,26 @@ class DescramblingJourneyTest {
                 }
 
                 step("The reader goes on: back to the first page") {
-                    // Right turns back, past the HTML page and the AVIF and PNG pages
+                    // Right turns back, past the HTML page and the AVIF and PNG pages. Each turn waits
+                    // until the reader shows something known: a page, the error or the transition
+                    val first = pages.first()
                     var turns = 0
-                    while (turns++ < 6) {
-                        if (runCatching { waitUntil(timeoutMillis = 3_000) { pageDrew(pages.first(), DESCRAMBLED_SHARE) } }.isSuccess) break
+                    while (true) {
+                        var shown = emptyList<FixturePage>()
+                        runCatching {
+                            waitUntil(timeoutMillis = Journey.PAGE_TIMEOUT) {
+                                shown = pagesShown(pages, DESCRAMBLED_SHARE)
+                                first in shown ||
+                                    ((shown.isNotEmpty() || textOnScreen(error) || textOnScreen(NO_PREVIOUS)) && !loadingOnScreen())
+                            }
+                        }
+                        if (first in shown || turns++ >= 6) break
                         // One turn too many shows the previous chapter's transition
-                        val back = if (onAllNodesWithText("There is no previous chapter").fetchSemanticsNodes().isEmpty()) Key.DirectionRight else Key.DirectionLeft
-                        root().performKeyInput { pressKey(back) }
+                        val transition = textOnScreen(NO_PREVIOUS)
+                        if (shown.isEmpty() && !transition && !textOnScreen(error)) break
+                        println("Journey $name: the first page is not on screen; showing ${shown.map { it.file }}, transition $transition, turn $turns")
+                        root().performKeyInput { pressKey(if (transition) Key.DirectionLeft else Key.DirectionRight) }
+                        waitForIdle()
                     }
                     waitOrDump("for the first page to draw again") { pageDrew(pages.first(), DESCRAMBLED_SHARE) }
                     shot("back-to-first")
@@ -118,5 +140,8 @@ class DescramblingJourneyTest {
          * (0.77 on screen). A scrambled one on screen is under 0.46.
          */
         const val DESCRAMBLED_SHARE = 0.7
+
+        /** The transition before the first page of a chapter with none before it. */
+        const val NO_PREVIOUS = "There is no previous chapter"
     }
 }

@@ -2,6 +2,7 @@ package zoukan.desktop.e2e
 
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -67,6 +69,9 @@ class Journey private constructor(val name: String) {
     companion object {
         const val WIDTH = 1280
         const val HEIGHT = 820
+
+        /** How long a page or chapter may take to load and decode before a journey gives up on it. */
+        const val PAGE_TIMEOUT = 15_000L
 
         /** Starts the app's runtime on a fresh data folder with the fixture source installed. */
         fun start(name: String): Journey {
@@ -147,10 +152,7 @@ class Journey private constructor(val name: String) {
 
     /** The reader's page images that are on screen: off-screen pages have no visible bounds. */
     private fun ComposeUiTest.pagesOnScreen(): List<SemanticsNode> =
-        onAllNodesWithTag("page-image").fetchSemanticsNodes().filter { node ->
-            val bounds = node.boundsInRoot
-            bounds.width > 0f && bounds.height > 0f && bounds.right > 0f && bounds.left < WIDTH && bounds.top < HEIGHT
-        }
+        onAllNodesWithTag("page-image").fetchSemanticsNodes().filter { it.isOnScreen() }
 
     /**
      * Whether [page] drew: [minShare] or more of an on-screen page image is its colour (a quarter
@@ -160,31 +162,69 @@ class Journey private constructor(val name: String) {
     fun ComposeUiTest.pageDrew(page: FixturePage, minShare: Double = 0.25): Boolean = pageShare(page) >= minShare
 
     /** The largest share of an on-screen page image that is [page]'s colour; 0 with none on screen. */
-    fun ComposeUiTest.pageShare(page: FixturePage): Double {
-        val window = runCatching { root().captureToImage().toAwtImage() }.getOrNull() ?: return 0.0
-        return pagesOnScreen().maxOfOrNull { node -> share(window, node, page) } ?: 0.0
+    fun ComposeUiTest.pageShare(page: FixturePage): Double = sharesOnScreen(listOf(page)).getValue(page)
+
+    /**
+     * For each of [pages], the largest share of an on-screen page image that is its colour, from
+     * one capture of the window (a capture is the costly part of a poll on a busy machine).
+     */
+    private fun ComposeUiTest.sharesOnScreen(pages: List<FixturePage>): Map<FixturePage, Double> {
+        val window = runCatching { root().captureToImage().toAwtImage() }.getOrNull() ?: return pages.associateWith { 0.0 }
+        val nodes = pagesOnScreen()
+        return pages.associateWith { page -> nodes.maxOfOrNull { node -> share(window, node, page) } ?: 0.0 }
+    }
+
+    /** Those of [pages] that drew on screen ([minShare] or more of a page image is their colour), from one capture. */
+    fun ComposeUiTest.pagesShown(pages: List<FixturePage>, minShare: Double = 0.25): List<FixturePage> =
+        sharesOnScreen(pages).filterValues { it >= minShare }.keys.toList()
+
+    /** Whether [text] is on screen, not only composed on a page beside the current one. */
+    fun ComposeUiTest.textOnScreen(text: String): Boolean = onAllNodesWithText(text).fetchSemanticsNodes().any { it.isOnScreen() }
+
+    /** Whether a page (or the chapter) is still loading on screen: the reader shows a spinner for it. */
+    fun ComposeUiTest.loadingOnScreen(): Boolean =
+        onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo), useUnmergedTree = true)
+            .fetchSemanticsNodes()
+            .any { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate && it.isOnScreen() }
+
+    /** Whether [this] node has visible bounds in the window (pages beside the current one are composed but clipped). */
+    fun SemanticsNode.isOnScreen(): Boolean {
+        val bounds = boundsInRoot
+        return bounds.width > 0f && bounds.height > 0f && bounds.right > 0f && bounds.left < WIDTH && bounds.top < HEIGHT
     }
 
     /**
      * Reads [pages] in order in the paged reader: waits for each to draw, turning the page (Left,
-     * the next page right to left) when it is not on screen yet. A wide window shows two pages
-     * side by side, so one turn can bring two of them.
+     * the next page right to left) when it is not on screen. A wide window shows two pages side by
+     * side, so one turn can bring two of them.
+     *
+     * It turns only on what the reader shows, never because a short wait ran out: it waits until
+     * the page drew, or until another of [pages] drew and nothing on screen is still loading (in
+     * a two-page spread the other half may still be decoding). A busy machine only makes this
+     * slower. When nothing drew within [PAGE_TIMEOUT], or the page is still not there after two
+     * turns, it fails.
      */
     fun ComposeUiTest.readThrough(pages: List<FixturePage>, label: String, minShare: Double = 0.25) {
         pages.forEachIndexed { index, page ->
             var turns = 0
             while (true) {
-                // A page after the first is often one turn away: look briefly before turning; the
-                // first page, and a page after a turn, get time to load and decode
-                val timeout = if (index > 0 && turns == 0) 2_000L else 15_000L
-                val drew = runCatching { waitUntil(timeoutMillis = timeout) { pageDrew(page, minShare) } }.isSuccess
-                if (drew) break
-                println("Journey $name: page ${index + 1} (${page.file}) is ${pageShare(page)} its colour, turn $turns")
-                if (turns++ >= 2) {
+                var shares = emptyMap<FixturePage, Double>()
+                runCatching {
+                    waitUntil(timeoutMillis = PAGE_TIMEOUT) {
+                        shares = sharesOnScreen(pages)
+                        shares.getValue(page) >= minShare || (shares.values.any { it >= minShare } && !loadingOnScreen())
+                    }
+                }
+                if (shares.getValue(page) >= minShare) break
+                val shown = pages.filter { shares.getValue(it) >= minShare }
+                println("Journey $name: page ${index + 1} (${page.file}) not on screen; showing ${shown.map { it.file }}, turn $turns")
+                if (shown.isEmpty() || turns++ >= 2) {
                     shot("$label-page-${index + 1}-failed")
                     waitOrDump("for page ${index + 1} (${page.file}) to draw", timeout = 1) { pageDrew(page, minShare) }
                 }
                 root().performKeyInput { pressKey(Key.DirectionLeft) }
+                // The turn's animation ends before the next look, so the page turned from is not taken for what is shown
+                waitForIdle()
             }
             shot("$label-page-${index + 1}")
         }
