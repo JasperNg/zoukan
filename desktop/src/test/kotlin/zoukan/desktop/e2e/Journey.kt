@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import eu.kanade.tachiyomi.source.model.FilterList
+import exh.source.getMainSource
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -94,16 +95,35 @@ class Journey private constructor(val name: String) {
                 }
             }
             Injekt.get<BuiltInSources>().testSources.value = listOf(journey.source)
-            runBlocking {
-                val sources = Injekt.get<SourceManager>()
-                sources.isInitialized.first { it }
-                val deadline = System.currentTimeMillis() + 10_000
-                while (sources.get(journey.source.id) == null) {
-                    check(System.currentTimeMillis() < deadline) { "the SourceManager didn't list the fixture source within 10s" }
-                    Thread.sleep(50)
-                }
-            }
+            journey.awaitListed(journey.source)
         }
+    }
+
+    /**
+     * Waits until the app's SourceManager lists [source] itself (not an earlier instance with the
+     * same id), for up to 10 s.
+     */
+    fun awaitListed(source: FixtureSource) = runBlocking {
+        val sources = Injekt.get<SourceManager>()
+        sources.isInitialized.first { it }
+        val deadline = System.currentTimeMillis() + 10_000
+        while (sources.get(source.id)?.getMainSource<FixtureSource>() !== source) {
+            check(System.currentTimeMillis() < deadline) { "the SourceManager didn't list the fixture source \"${source.name}\" within 10s" }
+            Thread.sleep(50)
+        }
+    }
+
+    /**
+     * Installs another fixture source over the same server, beside [source], as a merge or
+     * migration target. Its own name gives it its own id, settings file and entries.
+     */
+    fun addSource(name: String = FixtureSource.SECOND_NAME): FixtureSource {
+        val extra = FixtureSource(server.baseUrl, name)
+        require(extra.id != source.id) { "a second fixture source needs another name than \"${source.name}\": the id comes from the name" }
+        val tests = Injekt.get<BuiltInSources>().testSources
+        tests.value = tests.value + extra
+        awaitListed(extra)
+        return extra
     }
 
     fun <T> step(title: String, block: () -> T): T {
@@ -231,12 +251,13 @@ class Journey private constructor(val name: String) {
     /**
      * Adds a fixture title to the library with its chapters, as "Add to library" on its screen
      * does, for journeys about what comes after. Found by searching, so search-only titles too.
+     * From the journey's [source] unless [from] names another one ([addSource]).
      */
-    fun addToLibrary(title: String): Manga = runBlocking {
-        val listed = source.getSearchManga(1, title, FilterList()).mangas.single { it.title == title }
-        val manga = Injekt.get<NetworkToLocalManga>()(listOf(listed.toDomainManga(source.id))).single()
+    fun addToLibrary(title: String, from: FixtureSource = source): Manga = runBlocking {
+        val listed = from.getSearchManga(1, title, FilterList()).mangas.single { it.title == title }
+        val manga = Injekt.get<NetworkToLocalManga>()(listOf(listed.toDomainManga(from.id))).single()
         Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = System.currentTimeMillis()))
-        Injekt.get<RefreshManga>()(Injekt.get<MangaRepository>().getMangaById(manga.id), source = source).manga
+        Injekt.get<RefreshManga>()(Injekt.get<MangaRepository>().getMangaById(manga.id), source = from).manga
     }
 
     fun close() {

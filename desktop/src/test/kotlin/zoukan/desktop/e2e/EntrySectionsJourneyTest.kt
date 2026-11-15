@@ -13,17 +13,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
-import exh.source.getMainSource
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.doubles.shouldBeLessThan
 import io.kotest.matchers.ints.shouldBeGreaterThan
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.interactor.GetManga
-import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.exh.BuiltInSources
@@ -123,14 +120,6 @@ class EntrySectionsJourneyTest {
     /** Puts [source] in place of the journey's fixture source and waits until the app lists it. */
     private fun install(source: FixtureSource) {
         Injekt.get<BuiltInSources>().testSources.value = listOf(source)
-        runBlocking {
-            val sources = Injekt.get<SourceManager>()
-            sources.isInitialized.first { it }
-            val deadline = System.currentTimeMillis() + 10_000
-            while (sources.get(source.id)?.getMainSource<FixtureSource>() !== source) {
-                check(System.currentTimeMillis() < deadline) { "the SourceManager didn't list the opted-in fixture source within 10s" }
-                Thread.sleep(50)
-            }
-        }
+        journey.awaitListed(source)
     }
 }

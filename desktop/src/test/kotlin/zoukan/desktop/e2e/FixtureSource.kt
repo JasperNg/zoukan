@@ -72,6 +72,11 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class FixtureSource(
     override val baseUrl: String,
+    /**
+     * Another name is another source: the id comes from the name. A second instance over the same
+     * server ([SECOND_NAME]) is a merge or migration target that fetches real chapters.
+     */
+    override val name: String = NAME,
     /** Page previews on the entry screen ([PagePreviewSource]): the first chapter's pages. Off by default. */
     val previews: Boolean = false,
     /** Two other catalogue titles as the related titles, and no related titles by search. Off by default. */
@@ -80,7 +85,6 @@ class FixtureSource(
     ConfigurableSource,
     PagePreviewSource {
 
-    override val name = NAME
     override val lang = "en"
     override val supportsLatest = true
 
@@ -298,6 +302,9 @@ class FixtureSource(
 
     companion object {
         const val NAME = "Zoukan Fixtures"
+
+        /** The name of a second instance ([Journey.addSource]): another source id over the same server. */
+        const val SECOND_NAME = "Zoukan Fixtures Mirror"
         const val SHOW_BONUS = "show_bonus"
         const val SHOW_BONUS_TITLE = "Show the bonus title"
         const val ORDER = "popular_order"
