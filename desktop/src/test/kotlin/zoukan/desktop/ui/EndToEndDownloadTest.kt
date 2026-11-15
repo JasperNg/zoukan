@@ -1,13 +1,11 @@
 package zoukan.desktop.ui
 
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -286,8 +284,6 @@ class EndToEndDownloadTest {
         }
 
     private fun ComposeUiTest.shot(name: String) {
-        waitForIdle()
-        val image = onRoot().captureToImage().toAwtImage()
-        ImageIO.write(image, "png", File(shots, "$name.png"))
+        saveScreenshot(shots, name)
     }
 }

@@ -38,13 +38,13 @@ import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.E2EDiagnostics
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.saveScreenshot
 import zoukan.desktop.ui.startUi
 import zoukan.desktop.update.Updates
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.util.Collections
-import javax.imageio.ImageIO
 import kotlin.math.abs
 
 /**
@@ -182,9 +182,9 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
      */
     fun ComposeUiTest.root() = onAllNodes(isRoot()).onFirst()
 
+    /** Saves what is on screen, dialogs and popups included, as `<journey>-<title>.png`. */
     fun ComposeUiTest.shot(title: String) {
-        waitForIdle()
-        ImageIO.write(root().captureToImage().toAwtImage(), "png", File(shots, "$name-$title.png"))
+        saveScreenshot(shots, "$name-$title")
     }
 
     /**

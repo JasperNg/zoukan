@@ -1,7 +1,6 @@
 package zoukan.desktop.ui
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -11,12 +10,10 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -794,20 +791,6 @@ class EndToEndParityTest {
     }
 
     private fun ComposeUiTest.shot(name: String) {
-        waitForIdle()
-        Thread.sleep(300)
-        waitForIdle()
-        // A dialog is its own root: draw each root over the window at its place
-        val roots = onAllNodes(isRoot())
-        val count = roots.fetchSemanticsNodes().size
-        val image = roots[0].captureToImage().toAwtImage()
-        val g = image.createGraphics()
-        (1 until count).forEach { i ->
-            val node = roots[i]
-            val bounds = node.fetchSemanticsNode().boundsInWindow
-            g.drawImage(node.captureToImage().toAwtImage(), bounds.left.toInt(), bounds.top.toInt(), null)
-        }
-        g.dispose()
-        ImageIO.write(image, "png", File(shots, "$name.png"))
+        saveScreenshot(shots, name)
     }
 }
