@@ -2,6 +2,8 @@ package zoukan.desktop.e2e
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldBeNull
@@ -13,7 +15,9 @@ import org.junit.platform.engine.UniqueId
 import org.junit.platform.engine.support.descriptor.AbstractTestDescriptor
 import org.junit.platform.engine.support.descriptor.ClassSource
 import org.junit.platform.engine.support.descriptor.MethodSource
+import org.junit.platform.launcher.PostDiscoveryFilter
 import java.io.File
+import java.util.ServiceLoader
 
 /** `-Pzoukan.shard=i/n` splits the journeys so that the n shards together run each exactly once. */
 class JourneyShardTest {
@@ -72,15 +76,36 @@ class JourneyShardTest {
         error.message shouldBe "zoukan.shard must be i/n with 1 <= i <= n, got 4/3"
     }
 
-    /** The journey classes `journeyTest` runs: the compiled `zoukan/desktop/e2e/ *JourneyTest.class` files. */
-    private fun journeyClasses(): List<String> {
-        val root = File(JourneyShardTest::class.java.protectionDomain.codeSource.location.toURI())
-        return File(root, "zoukan/desktop/e2e").listFiles().orEmpty()
-            .filter { it.isFile && it.name.endsWith("JourneyTest.class") }
-            .map { "zoukan.desktop.e2e." + it.name.removeSuffix(".class") }
-            .filter { JourneyShard.isJourney(it) }
-            .sorted()
+    @Test
+    fun `the launcher loads the filter from the service file`() {
+        ServiceLoader.load(PostDiscoveryFilter::class.java).map { it::class.java } shouldContain JourneyShardFilter::class.java
     }
+
+    @Test
+    fun `every test class in the journey package is a journey that journeyTest runs`() {
+        // `test` leaves out zoukan.desktop.e2e.*JourneyTest and journeyTest runs only those, so a
+        // journey named otherwise would run in the shared JVM of `test`, where the runtime may
+        // already be started. Unit tests of the kit itself are listed here.
+        val unitTests = setOf(JourneyShardTest::class.java.name, ReadThroughMovesTest::class.java.name)
+        val misnamed = topLevelClasses()
+            .filter { it !in unitTests && !JourneyShard.isJourney(it) }
+            .filter { name -> Class.forName(name, false, javaClass.classLoader).declaredMethods.any { it.isAnnotationPresent(Test::class.java) } }
+        withClue("name each journey *JourneyTest, or list a unit test of the kit here") { misnamed.shouldBeEmpty() }
+        journeyClasses() shouldContain AvifJourneyTest::class.java.name
+    }
+
+    /** The compiled top-level classes of zoukan.desktop.e2e and its subpackages (no nested or lambda classes). */
+    private fun topLevelClasses(): List<String> {
+        val root = File(JourneyShardTest::class.java.protectionDomain.codeSource.location.toURI())
+        return File(root, "zoukan/desktop/e2e").walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".class") && '$' !in it.name }
+            .map { it.relativeTo(root).invariantSeparatorsPath.removeSuffix(".class").replace('/', '.') }
+            .sorted()
+            .toList()
+    }
+
+    /** The journey classes `journeyTest` runs: the compiled top-level ...JourneyTest classes of zoukan.desktop.e2e and its subpackages. */
+    private fun journeyClasses(): List<String> = topLevelClasses().filter { JourneyShard.isJourney(it) }
 
     private fun classDescriptor(className: String): TestDescriptor = Descriptor(className, ClassSource.from(className))
 
