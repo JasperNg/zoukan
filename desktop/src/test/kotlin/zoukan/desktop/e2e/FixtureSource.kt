@@ -1,6 +1,15 @@
 package zoukan.desktop.e2e
 
+import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.text.Html
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -19,8 +28,15 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.ByteArrayOutputStream
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A source over [FixtureServer], written as an extension is: it builds requests and parses the
@@ -30,6 +46,20 @@ import okhttp3.Response
  * - "Show the bonus title" ([SHOW_BONUS], off by default) adds [FixtureCatalog.BONUS_TITLE] to
  *   the catalogue.
  * - "Popular order" ([ORDER]) lists the catalogue A to Z (the default) or Z to A.
+ * - "Hidden genres" ([HIDDEN_GENRES], a multi-select, none by default) leaves out the titles of
+ *   those genres.
+ * - "Title prefix" ([TITLE_PREFIX], an edit text, empty by default) goes before every title in the
+ *   catalogue.
+ * - "Experimental mode" ([EXPERIMENTAL]) has a change listener that throws, as a buggy
+ *   extension's does.
+ * - "Image quality" ([QUALITY]) has a change listener that reads the stored value and shows an
+ *   Android toast; picking "Auto" stores "High" through setValueIndex instead.
+ *
+ * It also does what extensions do outside the settings screen: it records the keys its
+ * OnSharedPreferenceChangeListener hears ([changedKeys]), runs descriptions through
+ * Html.fromHtml, and descrambles the pages of [FixtureCatalog.SCRAMBLED_TITLE] in an OkHttp
+ * interceptor with android.graphics ([descrambled] counts them). Search lists the search-only
+ * titles too.
  */
 class FixtureSource(override val baseUrl: String) :
     HttpSource(),
@@ -39,16 +69,52 @@ class FixtureSource(override val baseUrl: String) :
     override val lang = "en"
     override val supportsLatest = true
 
-    private val preferences by lazy { getSourcePreferences() }
+    /** The keys the source's settings listener heard change, in order. */
+    val changedKeys: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    /** How many scrambled pages the interceptor put back together. */
+    val descrambled = AtomicInteger()
+
+    // Held by the source: SharedPreferences keeps its listeners weakly, as Android does
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key != null) changedKeys += key
+    }
+
+    private val preferences by lazy {
+        getSourcePreferences().also { it.registerOnSharedPreferenceChangeListener(preferenceListener) }
+    }
+
+    // As descrambling extensions do: the app's client with an interceptor that puts the pages back
+    // together. Lazy, because the source is made before the app's network is up.
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder().addInterceptor(::descramble).build()
+    }
+
+    private fun descramble(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (!response.request.url.pathSegments.last().startsWith("scrambled-")) return response
+        // The extensions' idiom: a body that is no image (a site's HTML page) goes on as it is
+        val scrambled = BitmapFactory.decodeStream(response.body.byteStream()) ?: return response
+        // The page is squeezed into the right half: stretch that half over the whole image
+        val width = scrambled.width
+        val height = scrambled.height
+        val page = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        Canvas(page).drawBitmap(scrambled, Rect(width / 2, 0, width, height), Rect(0, 0, width, height), null)
+        val bytes = ByteArrayOutputStream().also { page.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        response.body.close()
+        descrambled.incrementAndGet()
+        return response.newBuilder().body(bytes.toResponseBody("image/png".toMediaType())).build()
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
+        val context = screen.context
+        SwitchPreferenceCompat(context).apply {
             key = SHOW_BONUS
             title = SHOW_BONUS_TITLE
             summary = "Adds ${FixtureCatalog.BONUS_TITLE} to the catalogue"
             setDefaultValue(false)
         }.also(screen::addPreference)
-        ListPreference(screen.context).apply {
+        ListPreference(context).apply {
             key = ORDER
             title = ORDER_TITLE
             summary = "%s"
@@ -56,6 +122,51 @@ class FixtureSource(override val baseUrl: String) :
             entryValues = arrayOf("az", "za")
             setDefaultValue("az")
         }.also(screen::addPreference)
+        // The settings below come after the first two, which other journeys find first
+        MultiSelectListPreference(context).apply {
+            key = HIDDEN_GENRES
+            title = HIDDEN_GENRES_TITLE
+            entries = arrayOf(GENRE_ACTION, GENRE_COMEDY, GENRE_DRAMA)
+            entryValues = arrayOf(FixtureCatalog.GENRE_ACTION, FixtureCatalog.GENRE_COMEDY, FixtureCatalog.GENRE_DRAMA)
+            setDefaultValue(emptySet<String>())
+        }.also(screen::addPreference)
+        EditTextPreference(context).apply {
+            key = TITLE_PREFIX
+            title = TITLE_PREFIX_TITLE
+            dialogTitle = TITLE_PREFIX_TITLE
+            setDefaultValue("")
+        }.also(screen::addPreference)
+        SwitchPreferenceCompat(context).apply {
+            key = EXPERIMENTAL
+            title = EXPERIMENTAL_TITLE
+            setDefaultValue(false)
+            setOnPreferenceChangeListener { _, _ -> throw IllegalStateException(EXPERIMENTAL_FAILURE) }
+        }.also(screen::addPreference)
+        ListPreference(context).apply {
+            key = QUALITY
+            title = QUALITY_TITLE
+            summary = "%s"
+            entries = arrayOf(QUALITY_AUTO, QUALITY_HIGH, QUALITY_LOW)
+            entryValues = arrayOf("auto", "high", "low")
+            setDefaultValue("low")
+            setOnPreferenceChangeListener { pref, newValue ->
+                pref as ListPreference
+                // The stored value: the listener runs before the change is saved
+                val old = pref.entries[pref.findIndexOfValue(pref.value)]
+                if (newValue == "auto") {
+                    // Auto means High here: stored without calling this listener again
+                    pref.setValueIndex(1)
+                    Toast.makeText(context, qualityToast(QUALITY_AUTO + " chose " + QUALITY_HIGH, old), Toast.LENGTH_SHORT).show()
+                    false
+                } else {
+                    val new = pref.entries[pref.findIndexOfValue(newValue as String)]
+                    Toast.makeText(context, qualityToast(new, old), Toast.LENGTH_SHORT).show()
+                    true
+                }
+            }
+        }.also(screen::addPreference)
+        // Registers the settings listener before the first change, as an extension does at start
+        preferences
     }
 
     // Popular, latest and search all read the catalogue
@@ -76,13 +187,17 @@ class FixtureSource(override val baseUrl: String) :
 
     private fun catalog(response: Response, query: String): MangasPage {
         val showBonus = preferences.getBoolean(SHOW_BONUS, false)
+        val hiddenGenres = preferences.getStringSet(HIDDEN_GENRES, emptySet()).orEmpty()
+        val prefix = preferences.getString(TITLE_PREFIX, "").orEmpty()
         val entries = Json.parseToJsonElement(response.body.string()).jsonArray.map { it.jsonObject }
             .filter { showBonus || !it.getValue("bonus").jsonPrimitive.boolean }
+            .filter { query.isNotBlank() || !it.getValue("searchOnly").jsonPrimitive.boolean }
             .filter { query.isBlank() || it.string("title").contains(query, ignoreCase = true) }
+            .filter { it.string("genre") !in hiddenGenres }
             .map { json ->
                 SManga.create().apply {
                     url = "/manga/${json.string("key")}"
-                    title = json.string("title")
+                    title = prefix + json.string("title")
                     thumbnail_url = json.string("cover")
                 }
             }
@@ -98,7 +213,8 @@ class FixtureSource(override val baseUrl: String) :
         return SManga.create().apply {
             title = json.string("title")
             author = json.string("author")
-            description = json.string("description")
+            // Sites send HTML descriptions; extensions turn them into text this way
+            description = Html.fromHtml(json.string("description"), Html.FROM_HTML_MODE_LEGACY).toString().trim()
             thumbnail_url = json.string("cover")
             status = SManga.ONGOING
             initialized = true
@@ -143,5 +259,23 @@ class FixtureSource(override val baseUrl: String) :
         const val ORDER_TITLE = "Popular order"
         const val ORDER_A_TO_Z = "A to Z"
         const val ORDER_Z_TO_A = "Z to A"
+        const val HIDDEN_GENRES = "hidden_genres"
+        const val HIDDEN_GENRES_TITLE = "Hidden genres"
+        const val GENRE_ACTION = "Action"
+        const val GENRE_COMEDY = "Comedy"
+        const val GENRE_DRAMA = "Drama"
+        const val TITLE_PREFIX = "title_prefix"
+        const val TITLE_PREFIX_TITLE = "Title prefix"
+        const val EXPERIMENTAL = "experimental"
+        const val EXPERIMENTAL_TITLE = "Experimental mode"
+        const val EXPERIMENTAL_FAILURE = "The experimental mode is not ready"
+        const val QUALITY = "image_quality"
+        const val QUALITY_TITLE = "Image quality"
+        const val QUALITY_AUTO = "Auto"
+        const val QUALITY_HIGH = "High"
+        const val QUALITY_LOW = "Low"
+
+        /** The toast "Image quality" shows for a change to [new] from [old]. */
+        fun qualityToast(new: CharSequence, old: CharSequence) = "Image quality: $new (was $old)"
     }
 }

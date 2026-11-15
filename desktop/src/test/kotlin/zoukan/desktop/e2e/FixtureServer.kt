@@ -24,7 +24,8 @@ import java.util.concurrent.Executors
  * `src/test/resources/e2e-fixtures/generate.py`: one chapter per image format (JPEG, PNG, WebP and
  * AVIF), each page one known colour so a test can check from a screenshot that it drew.
  *
- * It listens on 127.0.0.1 on a free port and records every path it is asked for.
+ * It listens on 127.0.0.1 on a free port and records every path it is asked for, with the cookies
+ * sent. The catalogue sets a cookie ([COOKIE_NAME]), as sites set a session cookie.
  */
 class FixtureServer : AutoCloseable {
 
@@ -33,6 +34,9 @@ class FixtureServer : AutoCloseable {
 
     /** Every path asked for, in order. */
     val requests: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    /** Every request, in order, with its Cookie headers. */
+    val requestLog: MutableList<FixtureRequest> = Collections.synchronizedList(mutableListOf())
 
     val baseUrl: String get() = "http://127.0.0.1:${server.address.port}"
 
@@ -47,12 +51,24 @@ class FixtureServer : AutoCloseable {
     /** How many times an image was asked for. */
     fun imageRequests(file: String): Int = requests.count { it == "/images/$file" }
 
+    /**
+     * More routes, asked before the built-in ones with the request and its path segments: a route
+     * that answers returns true. [FixtureStore] serves an extension store through this.
+     */
+    val extraRoutes = java.util.concurrent.CopyOnWriteArrayList<(HttpExchange, List<String>) -> Boolean>()
+
     private fun handle(exchange: HttpExchange) {
         val path = exchange.requestURI.path
         requests += path
+        requestLog += FixtureRequest(path, exchange.requestHeaders["Cookie"].orEmpty())
         val parts = path.trim('/').split('/')
+        if (extraRoutes.any { it(exchange, parts) }) return
         when {
-            parts == listOf("catalog") -> json(exchange, catalogJson())
+            parts == listOf("catalog") -> {
+                // A session cookie for the whole site, as a site's first page sets one
+                exchange.responseHeaders.add("Set-Cookie", "$COOKIE_NAME=$COOKIE_VALUE; Max-Age=3600; Path=/")
+                json(exchange, catalogJson())
+            }
             parts.size == 2 && parts[0] == "manga" -> FixtureCatalog.manga(parts[1])?.let { json(exchange, mangaJson(it)) }
                 ?: notFound(exchange)
             parts.size == 3 && parts[0] == "chapter" -> {
@@ -72,6 +88,8 @@ class FixtureServer : AutoCloseable {
                     put("title", manga.title)
                     put("cover", "$baseUrl/images/${manga.cover}")
                     put("bonus", manga.bonus)
+                    put("searchOnly", manga.searchOnly)
+                    put("genre", manga.genre)
                 },
             )
         }
@@ -102,11 +120,17 @@ class FixtureServer : AutoCloseable {
 
     private fun pagesJson(chapter: FixtureChapter): JsonArray = buildJsonArray {
         FixtureCatalog.pages(chapter.format).forEach { add(JsonPrimitive("$baseUrl/images/${it.file}")) }
+        // The scrambled chapter ends with a page the site answers with HTML
+        if (chapter.format == FixtureCatalog.SCRAMBLED) add(JsonPrimitive("$baseUrl/images/${FixtureCatalog.HTML_PAGE}"))
     }
 
     private fun image(exchange: HttpExchange, file: String) {
         // Only the generated files, never a path out of the folder
         if (!FILE_NAME.matches(file)) return notFound(exchange)
+        // An image URL that answers with a web page, as a site's error or login page does
+        if (file == FixtureCatalog.HTML_PAGE) {
+            return send(exchange, 200, "text/html", "<html><body><h1>Please sign in</h1></body></html>".toByteArray())
+        }
         val bytes = FixtureServer::class.java.getResourceAsStream("/e2e-fixtures/images/$file")?.use { it.readBytes() }
             ?: return notFound(exchange)
         val type = when (file.substringAfterLast('.')) {
@@ -139,9 +163,20 @@ class FixtureServer : AutoCloseable {
         pool.shutdownNow()
     }
 
-    private companion object {
-        val FILE_NAME = Regex("[a-z0-9-]+\\.(jpg|png|webp|avif)")
+    companion object {
+        const val COOKIE_NAME = "fixture_session"
+        const val COOKIE_VALUE = "journey-cookie-1"
+        private val FILE_NAME = Regex("[a-z0-9-]+\\.(jpg|png|webp|avif)")
     }
+}
+
+/** A request the server got: its path and its Cookie headers (none when it sent no cookie). */
+data class FixtureRequest(val path: String, val cookieHeaders: List<String>) {
+    /** The value of each cookie named [name] it sent, in order; more than one is a duplicate. */
+    fun cookieValues(name: String): List<String> = cookieHeaders.flatMap { it.split(';') }
+        .map { it.trim() }
+        .filter { it.substringBefore('=') == name }
+        .map { it.substringAfter('=', "") }
 }
 
 /** A page of the fixture manga: its image file and the colour most of it is. */
@@ -157,6 +192,10 @@ data class FixtureManga(
     val chapters: List<FixtureChapter>,
     /** Listed only when the source's "Show the bonus title" setting is on. */
     val bonus: Boolean = false,
+    /** Listed only in search results, so the catalogue's default count stays the same. */
+    val searchOnly: Boolean = false,
+    /** The one genre [FixtureSource]'s "Hidden genres" setting filters on. */
+    val genre: String = FixtureCatalog.GENRE_ACTION,
 )
 
 /** The fixture catalogue, and the pages `generate.py` made (from its manifest.json). */
@@ -167,6 +206,23 @@ object FixtureCatalog {
 
     const val FORMATS_TITLE = "Fixture Formats"
     const val BONUS_TITLE = "Fixture Bonus"
+
+    /** Search-only: its description from the server is HTML (see HtmlDescriptionJourneyTest). */
+    const val HTML_TITLE = "Markup Description"
+    const val HTML_DESCRIPTION = "Tom &amp; Jerry<br>Second line &lt;3"
+
+    /** Search-only: its chapter's pages are scrambled (see DescramblingJourneyTest). */
+    const val SCRAMBLED_TITLE = "Scrambled Pages"
+
+    /** The format of the scrambled chapter; its pages are manifest.json's "scrambled". */
+    const val SCRAMBLED = "scrambled"
+
+    /** The scrambled chapter's last page: an image URL the server answers with HTML. */
+    const val HTML_PAGE = "scrambled-html.jpg"
+
+    const val GENRE_ACTION = "action"
+    const val GENRE_COMEDY = "comedy"
+    const val GENRE_DRAMA = "drama"
 
     private const val DAY = 24 * 60 * 60 * 1000L
     private const val START = 1_767_225_600_000L // 2026-01-01
@@ -187,6 +243,7 @@ object FixtureCatalog {
             cover = "cover-2.png",
             description = "A second title, so the catalogue lists more than one.",
             chapters = listOf(FixtureChapter("jpeg", "Chapter 1", 1f, START, "jpeg")),
+            genre = GENRE_DRAMA,
         ),
         FixtureManga(
             key = "third",
@@ -194,6 +251,7 @@ object FixtureCatalog {
             cover = "cover-3.png",
             description = "A third title.",
             chapters = listOf(FixtureChapter("png", "Chapter 1", 1f, START, "png")),
+            genre = GENRE_COMEDY,
         ),
         FixtureManga(
             key = "bonus",
@@ -202,6 +260,22 @@ object FixtureCatalog {
             description = "Listed only with the source's bonus setting on.",
             chapters = listOf(FixtureChapter("webp", "Chapter 1", 1f, START, "webp")),
             bonus = true,
+        ),
+        FixtureManga(
+            key = "markup",
+            title = HTML_TITLE,
+            cover = "cover-2.png",
+            description = HTML_DESCRIPTION,
+            chapters = listOf(FixtureChapter("jpeg", "Chapter 1", 1f, START, "jpeg")),
+            searchOnly = true,
+        ),
+        FixtureManga(
+            key = "scrambled",
+            title = SCRAMBLED_TITLE,
+            cover = "cover-3.png",
+            description = "Its pages come scrambled; the source puts them back together.",
+            chapters = listOf(FixtureChapter(SCRAMBLED, "Chapter 1 (scrambled)", 1f, START, SCRAMBLED)),
+            searchOnly = true,
         ),
     )
 

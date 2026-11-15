@@ -9,10 +9,12 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
+import eu.kanade.tachiyomi.source.model.FilterList
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -36,6 +38,7 @@ import zoukan.desktop.ui.startUi
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
+import java.util.Collections
 import javax.imageio.ImageIO
 import kotlin.math.abs
 
@@ -53,6 +56,9 @@ class Journey private constructor(val name: String) {
     val server = FixtureServer()
     val source = FixtureSource(server.baseUrl)
     private val shots = File("build/reports/journeys").apply { mkdirs() }
+
+    /** Every toast the app showed, in order (the app's own and the extensions'). */
+    val toasts: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     /** The source's settings file, as the app writes it (AndroidCompat's settings folder). */
     val sourcePreferencesFile: File get() = File(dirs.android, "settings/source_${source.id}.xml")
@@ -81,7 +87,12 @@ class Journey private constructor(val name: String) {
             startUi(journey.dirs)
             // The source's grid, as before Android's "Replace latest button" (on by default) opened its feed
             Injekt.get<eu.kanade.domain.ui.UiPreferences>().useNewSourceNavigation().set(false)
-            AppScope.launch { Toasts.flow.collect { println("Journey toast: $it") } }
+            AppScope.launch {
+                Toasts.flow.collect {
+                    println("Journey toast: $it")
+                    journey.toasts += it
+                }
+            }
             Injekt.get<BuiltInSources>().testSources.value = listOf(journey.source)
             runBlocking {
                 val sources = Injekt.get<SourceManager>()
@@ -119,9 +130,15 @@ class Journey private constructor(val name: String) {
         }
     }
 
+    /**
+     * The window's root. A toast or tooltip is a popup with a root of its own, where onRoot()
+     * fails with "found 2 nodes"; the first root is the window's.
+     */
+    fun ComposeUiTest.root() = onAllNodes(isRoot()).onFirst()
+
     fun ComposeUiTest.shot(title: String) {
         waitForIdle()
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(shots, "$name-$title.png"))
+        ImageIO.write(root().captureToImage().toAwtImage(), "png", File(shots, "$name-$title.png"))
     }
 
     /** The reader's page images that are on screen: off-screen pages have no visible bounds. */
@@ -132,13 +149,16 @@ class Journey private constructor(val name: String) {
         }
 
     /**
-     * Whether [page] drew: a quarter or more of an on-screen page image is its colour. A page that
-     * failed to decode shows the reader's error or a blank, and a page still loading its spinner,
-     * so none of them pass.
+     * Whether [page] drew: [minShare] or more of an on-screen page image is its colour (a quarter
+     * by default). A page that failed to decode shows the reader's error or a blank, and a page
+     * still loading its spinner, so none of them pass.
      */
-    fun ComposeUiTest.pageDrew(page: FixturePage): Boolean {
-        val window = runCatching { onRoot().captureToImage().toAwtImage() }.getOrNull() ?: return false
-        return pagesOnScreen().any { node -> share(window, node, page) >= 0.25 }
+    fun ComposeUiTest.pageDrew(page: FixturePage, minShare: Double = 0.25): Boolean = pageShare(page) >= minShare
+
+    /** The largest share of an on-screen page image that is [page]'s colour; 0 with none on screen. */
+    fun ComposeUiTest.pageShare(page: FixturePage): Double {
+        val window = runCatching { root().captureToImage().toAwtImage() }.getOrNull() ?: return 0.0
+        return pagesOnScreen().maxOfOrNull { node -> share(window, node, page) } ?: 0.0
     }
 
     /**
@@ -146,20 +166,21 @@ class Journey private constructor(val name: String) {
      * the next page right to left) when it is not on screen yet. A wide window shows two pages
      * side by side, so one turn can bring two of them.
      */
-    fun ComposeUiTest.readThrough(pages: List<FixturePage>, label: String) {
+    fun ComposeUiTest.readThrough(pages: List<FixturePage>, label: String, minShare: Double = 0.25) {
         pages.forEachIndexed { index, page ->
             var turns = 0
             while (true) {
                 // A page after the first is often one turn away: look briefly before turning; the
                 // first page, and a page after a turn, get time to load and decode
                 val timeout = if (index > 0 && turns == 0) 2_000L else 15_000L
-                val drew = runCatching { waitUntil(timeoutMillis = timeout) { pageDrew(page) } }.isSuccess
+                val drew = runCatching { waitUntil(timeoutMillis = timeout) { pageDrew(page, minShare) } }.isSuccess
                 if (drew) break
+                println("Journey $name: page ${index + 1} (${page.file}) is ${pageShare(page)} its colour, turn $turns")
                 if (turns++ >= 2) {
                     shot("$label-page-${index + 1}-failed")
-                    waitOrDump("for page ${index + 1} (${page.file}) to draw", timeout = 1) { pageDrew(page) }
+                    waitOrDump("for page ${index + 1} (${page.file}) to draw", timeout = 1) { pageDrew(page, minShare) }
                 }
-                onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+                root().performKeyInput { pressKey(Key.DirectionLeft) }
             }
             shot("$label-page-${index + 1}")
         }
@@ -168,10 +189,20 @@ class Journey private constructor(val name: String) {
     /** The share of [node]'s area in [window] that is [page]'s colour. */
     private fun share(window: BufferedImage, node: SemanticsNode, page: FixturePage): Double {
         val bounds = node.boundsInRoot
-        val left = bounds.left.toInt().coerceIn(0, window.width)
-        val top = bounds.top.toInt().coerceIn(0, window.height)
-        val right = bounds.right.toInt().coerceIn(0, window.width)
-        val bottom = bounds.bottom.toInt().coerceIn(0, window.height)
+        return share(
+            window,
+            page,
+            bounds.left.toInt().coerceIn(0, window.width),
+            bounds.top.toInt().coerceIn(0, window.height),
+            bounds.right.toInt().coerceIn(0, window.width),
+            bounds.bottom.toInt().coerceIn(0, window.height),
+        )
+    }
+
+    /** The share of a whole decoded [image] that is [page]'s colour, for images straight from the server. */
+    fun share(image: BufferedImage, page: FixturePage): Double = share(image, page, 0, 0, image.width, image.height)
+
+    private fun share(window: BufferedImage, page: FixturePage, left: Int, top: Int, right: Int, bottom: Int): Double {
         if (right <= left || bottom <= top) return 0.0
         var matching = 0
         var total = 0
@@ -199,10 +230,10 @@ class Journey private constructor(val name: String) {
 
     /**
      * Adds a fixture title to the library with its chapters, as "Add to library" on its screen
-     * does, for journeys about what comes after.
+     * does, for journeys about what comes after. Found by searching, so search-only titles too.
      */
     fun addToLibrary(title: String): Manga = runBlocking {
-        val listed = source.getPopularManga(1).mangas.single { it.title == title }
+        val listed = source.getSearchManga(1, title, FilterList()).mangas.single { it.title == title }
         val manga = Injekt.get<NetworkToLocalManga>()(listOf(listed.toDomainManga(source.id))).single()
         Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = System.currentTimeMillis()))
         Injekt.get<RefreshManga>()(Injekt.get<MangaRepository>().getMangaById(manga.id), source = source).manga

@@ -103,6 +103,32 @@
           120
         ]
       }
+    ],
+    "scrambled": [
+      {
+        "file": "scrambled-1.jpg",
+        "rgb": [
+          60,
+          180,
+          170
+        ]
+      },
+      {
+        "file": "scrambled-2.png",
+        "rgb": [
+          170,
+          60,
+          160
+        ]
+      },
+      {
+        "file": "scrambled-3.avif",
+        "rgb": [
+          100,
+          100,
+          220
+        ]
+      }
     ]
   },
   "covers": [
