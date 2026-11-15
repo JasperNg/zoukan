@@ -247,7 +247,8 @@ dependencies {
 
     testImplementation(libs.bundles.test)
     testImplementation(zoukanlibs.compose.ui.test)
-    testRuntimeOnly(libs.junit.platform.launcher)
+    // On the compile classpath too: JourneyShardFilter is a launcher PostDiscoveryFilter
+    testImplementation(libs.junit.platform.launcher)
 }
 
 val jvmFlags = listOf(
@@ -383,6 +384,23 @@ val journeyTest by tasks.registering(Test::class) {
     // FFmpeg's natives (AVIF) unpack once for all forks instead of into each journey's data folder;
     // ZoukanRuntime keeps a cachedir that is already set
     systemProperty("org.bytedeco.javacpp.cachedir", layout.buildDirectory.dir("javacpp-cache").get().asFile.absolutePath)
+    // CI splits the journeys over jobs: -Pzoukan.shard=2/3 runs the second third (by a stable hash
+    // of the class name; JourneyShardFilter filters in the test JVMs). A bad value fails here
+    providers.gradleProperty("zoukan.shard").orNull?.let { value ->
+        val (index, count) = value.split('/').mapNotNull { it.trim().toIntOrNull() }
+            .takeIf { it.size == 2 && value.count { c -> c == '/' } == 1 && it[1] >= 1 && it[0] in 1..it[1] }
+            ?: error("zoukan.shard must be i/n with 1 <= i <= n, not \"$value\"")
+        systemProperty("zoukan.shard", value)
+        val classDirs = testClassesDirs
+        doFirst {
+            // The same rule as JourneyShard.includes; the test JVMs' output of the filter is not shown
+            val kept = classDirs.asFileTree.matching { include("zoukan/desktop/e2e/*JourneyTest.class") }.files
+                .map { "zoukan.desktop.e2e." + it.name.removeSuffix(".class") }
+                .filter { Math.floorMod(it.hashCode(), count) == index - 1 }
+                .sorted()
+            logger.lifecycle("Journey shard $index/$count: ${kept.ifEmpty { listOf("none") }.joinToString()}")
+        }
+    }
     // The journeys check this machine as much as the code (JDK, display, decoders): never skip
     // them as up to date, and start each run without the last run's screenshots
     outputs.upToDateWhen { false }
