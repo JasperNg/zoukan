@@ -16,11 +16,12 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.secrets.FileCipher
+import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
@@ -85,9 +86,13 @@ class SourcePreferencesJourneyTest {
                     prefs.getBoolean(FixtureSource.SHOW_BONUS, false) shouldBe true
                     prefs.getString(FixtureSource.ORDER, null) shouldBe "za"
                     waitOrDump("for ${sourcePreferencesFile.name}") { sourcePreferencesFile.isFile }
-                    val saved = sourcePreferencesFile.readText()
-                    saved shouldContain FixtureSource.SHOW_BONUS
-                    saved shouldContain "za"
+                    // Read the file as the next start of the app would: decrypted, then parsed
+                    val stored = sourcePreferencesFile.readBytes()
+                    val cipher = FileCipher.fromStore(Injekt.get<SecretStore>())
+                    val plain = if (cipher.isEncoded(stored)) cipher.decode(stored) else stored
+                    val reloaded = java.util.Properties().apply { plain.inputStream().use { loadFromXML(it) } }
+                    reloaded.getProperty(FixtureSource.SHOW_BONUS) shouldBe "true"
+                    reloaded.getProperty(FixtureSource.ORDER) shouldBe "za"
                 }
 
                 step("The source lists the bonus title, Z to A") {

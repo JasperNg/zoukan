@@ -72,7 +72,8 @@ class BackupRestoreJourneyTest {
         val chapters = runBlocking { Injekt.get<GetChaptersByMangaId>().await(manga.id) }.sortedBy { it.chapterNumber }
         val shelf = journey.step("Put the title in a category, read a chapter and a half, change the source's settings") {
             runBlocking {
-                val shelf = (Injekt.get<CreateCategoryWithName>().await(SHELF) as CreateCategoryWithName.Result.Success).category
+                Injekt.get<CreateCategoryWithName>().await(SHELF)
+                val shelf = Injekt.get<GetCategories>().await().single { it.name == SHELF }
                 Injekt.get<SetMangaCategories>().await(manga.id, listOf(shelf.id))
                 chapterRepository.update(ChapterUpdate(id = chapters[0].id, read = true, lastPageRead = 2))
                 chapterRepository.update(ChapterUpdate(id = chapters[1].id, lastPageRead = 1))
@@ -130,33 +131,30 @@ class BackupRestoreJourneyTest {
                         onAllNodes(hasTestTag("restore-backup-action")).fetchSemanticsNodes().isEmpty()
                     }
                 }
+
+                step("Progress, category and settings are back") {
+                    runBlocking {
+                        Injekt.get<GetFavorites>().await().map { it.title } shouldContainExactly listOf(FixtureCatalog.FORMATS_TITLE)
+                        Injekt.get<GetCategories>().await(manga.id).map { it.id } shouldContainExactly listOf(shelf.id)
+                        val restored = Injekt.get<GetChaptersByMangaId>().await(manga.id).sortedBy { it.chapterNumber }
+                        restored.map { it.read } shouldContainExactly listOf(true, false, false, false)
+                        restored[1].lastPageRead shouldBe 1L
                     }
+                    val prefs = source.getSourcePreferences()
+                    prefs.getBoolean(FixtureSource.SHOW_BONUS, false) shouldBe true
+                    prefs.getString(FixtureSource.ORDER, null) shouldBe "za"
                 }
 
-                step("The library shows the title in its category") {
+                step("The library shows the title again") {
                     waitFor(hasText("Library"))
                     onAllNodesWithText("Library").onFirst().performClick()
-                    waitFor(hasText(SHELF))
-                    onAllNodesWithText(SHELF).onFirst().performClick()
+                    // With every entry in one category the library shows no category tabs
                     waitOrDump("for the restored title") {
                         onAllNodes(hasTestTag("manga-item")).fetchSemanticsNodes().size == 1
                     }
                     waitFor(hasText(FixtureCatalog.FORMATS_TITLE))
                     shot("3-library")
                 }
-            }
-
-            step("Progress, category and settings are back") {
-                runBlocking {
-                    Injekt.get<GetFavorites>().await().map { it.title } shouldContainExactly listOf(FixtureCatalog.FORMATS_TITLE)
-                    Injekt.get<GetCategories>().await(manga.id).map { it.id } shouldContainExactly listOf(shelf.id)
-                    val restored = Injekt.get<GetChaptersByMangaId>().await(manga.id).sortedBy { it.chapterNumber }
-                    restored.map { it.read } shouldContainExactly listOf(true, false, false, false)
-                    restored[1].lastPageRead shouldBe 1L
-                }
-                val prefs = source.getSourcePreferences()
-                prefs.getBoolean(FixtureSource.SHOW_BONUS, false) shouldBe true
-                prefs.getString(FixtureSource.ORDER, null) shouldBe "za"
             }
         }
     }
