@@ -104,7 +104,10 @@ class EndToEndUpcomingTest {
             }
 
             step("Click a day and change the month") {
+                // The calendar opens on this month and tags only its days: on the 29th-31st,
+                // today + 3 is not on screen. Keep visibleCalendarDay when this test moves.
                 val day = visibleCalendarDay(today, listOf(1L, 3L))
+                check(YearMonth.from(day) == YearMonth.now()) { "$day is not in the month the calendar shows" }
                 onAllNodesWithTag("upcoming-day-${day.dayOfMonth}").onFirst().performClick()
                 byDescription("Next Month").performClick()
                 val next = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(YearMonth.now().plusMonths(1))

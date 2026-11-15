@@ -114,6 +114,7 @@ class JavaSharedPreferences(
          * Throws [kotlinx.coroutines.TimeoutCancellationException] if a writer is still running
          * after [timeout].
          */
+        @ForTestsOnly
         @JvmStatic
         fun awaitPendingSaves(timeout: Duration = 10.seconds) {
             // No file lock is held here: the writers take them, and joining while holding one
@@ -127,6 +128,7 @@ class JavaSharedPreferences(
         }
 
         /** The number of apply() writers still running; for tests. */
+        @ForTestsOnly
         @JvmStatic
         fun pendingWriterCount(): Int = writers.size
         // ZOUKAN <--

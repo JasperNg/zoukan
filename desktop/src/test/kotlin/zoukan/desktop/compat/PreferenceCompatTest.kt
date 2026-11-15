@@ -16,15 +16,21 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.ToastSink
+import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
+import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * The androidx.preference values, SharedPreferences and Toast as extensions use them: values read
  * and written through the stored preference, sets that do not take neighbouring keys with them,
  * listeners that cannot break a write, and toasts that reach the app.
  */
+@OptIn(ForTestsOnly::class)
 class PreferenceCompatTest {
 
     @TempDir
@@ -58,6 +64,46 @@ class PreferenceCompatTest {
 
         JavaSharedPreferences.pendingWriterCount() shouldBe 0
         // a fresh instance reads the file, so the value must be on disk
+        JavaSharedPreferences(name).getString("key", null) shouldBe "value"
+    }
+
+    @Test
+    fun `awaitPendingSaves waits for a writer that is still saving`() {
+        // A codec that holds the background writer inside save() until the test lets it go, so
+        // the writer is certainly running while awaitPendingSaves() is called
+        val saving = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val previousCodec = SettingsFileCodec.current
+        SettingsFileCodec.current = object : SettingsFileCodec {
+            override fun isEncoded(stored: ByteArray) = false
+            override fun encode(plain: ByteArray): ByteArray {
+                saving.countDown()
+                release.await(10, TimeUnit.SECONDS)
+                return plain
+            }
+            override fun decode(stored: ByteArray) = stored
+        }
+        val name = "await_blocked_${System.nanoTime()}"
+        try {
+            JavaSharedPreferences(name).edit().putString("key", "value").apply()
+            saving.await(10, TimeUnit.SECONDS) shouldBe true
+            // The writer that apply() started is tracked while it runs
+            JavaSharedPreferences.pendingWriterCount() shouldBe 1
+
+            val waiter = thread(name = "await-pending-saves") { JavaSharedPreferences.awaitPendingSaves() }
+            // Still waiting: the writer cannot finish before it is released
+            waiter.join(300)
+            waiter.isAlive shouldBe true
+
+            release.countDown()
+            waiter.join(10_000)
+            waiter.isAlive shouldBe false
+            JavaSharedPreferences.pendingWriterCount() shouldBe 0
+        } finally {
+            release.countDown()
+            SettingsFileCodec.current = previousCodec
+        }
+        // Read back without the test codec: the writer stored the value as plain XML
         JavaSharedPreferences(name).getString("key", null) shouldBe "value"
     }
 
