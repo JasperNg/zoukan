@@ -368,8 +368,21 @@ val journeyTest by tasks.registering(Test::class) {
     classpath = test.classpath
     useJUnitPlatform()
     filter { journeyTests.forEach { includeTestsMatching(it) } }
+    // Only the journey classes themselves, not their nested and lambda classes: Gradle hands the
+    // classes it scans to the forks in turn, so empty forks would leave journeys queued behind
+    // each other in one fork while the other forks have nothing to do
+    include("zoukan/desktop/e2e/*JourneyTest.class")
     // Each journey starts the runtime with its own data folder, once per JVM
     forkEvery = 1
+    // Journeys share nothing but this machine (each has its own data folder and a free port), so
+    // their JVMs run side by side. Each runs a full runtime, Skia and FFmpeg: half the cores, at
+    // most 4. -Pzoukan.journey.forks=1 runs them one at a time (to time or debug them).
+    maxParallelForks = providers.gradleProperty("zoukan.journey.forks").orNull
+        ?.let { forks -> forks.toIntOrNull()?.takeIf { it >= 1 } ?: error("zoukan.journey.forks must be a positive number, not \"$forks\"") }
+        ?: (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
+    // FFmpeg's natives (AVIF) unpack once for all forks instead of into each journey's data folder;
+    // ZoukanRuntime keeps a cachedir that is already set
+    systemProperty("org.bytedeco.javacpp.cachedir", layout.buildDirectory.dir("javacpp-cache").get().asFile.absolutePath)
     // The journeys check this machine as much as the code (JDK, display, decoders): never skip
     // them as up to date, and start each run without the last run's screenshots
     outputs.upToDateWhen { false }
