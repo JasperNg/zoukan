@@ -135,6 +135,15 @@ sourceSets.main {
     resources.srcDir(syncAndroidResources)
 }
 
+// The app icon's vector master, which the window, tray and More header draw at their exact size
+val syncAppIcon by tasks.registering(Sync::class) {
+    from(file("packaging/icons/zoukan.svg")) { rename { "zoukan-icon.svg" } }
+    into(layout.buildDirectory.dir("generated/app-icon"))
+}
+sourceSets.main {
+    resources.srcDir(syncAppIcon)
+}
+
 // Komikku's own app tests that cover code the desktop app compiles (see app-shared.txt) run in
 // :desktop:test as they are. The others are Android-only: MigratorTest covers the upgrade
 // migrations of Android installs, ScreenSerializationTest the Android screens (its desktop port is

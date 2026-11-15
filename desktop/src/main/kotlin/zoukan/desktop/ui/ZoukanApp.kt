@@ -258,6 +258,9 @@ fun runZoukanApp() {
                 // Below this size the two-pane screens and the toolbars no longer fit
                 LaunchedEffect(Unit) {
                     window.minimumSize = java.awt.Dimension(WindowBounds.MIN_WIDTH, WindowBounds.MIN_HEIGHT)
+                    // The title bar and taskbar icons: one bitmap per size, so Windows picks a sharp
+                    // one at every display scale instead of shrinking or stretching a single size
+                    window.iconImages = AppIcon.windowImages()
                 }
                 CompositionLocalProvider(LocalWindow provides this, LocalWindowState provides windowState) {
                     ZoukanContent(preferences, onNavigator = { navigatorRef = it }, firstRun = true)
