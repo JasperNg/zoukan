@@ -52,6 +52,10 @@ class BrowseAndReadJourneyTest {
         journey = Journey.start("browse-read")
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
+        // The PNG chapter's last page comes late, as on a slow site or a busy machine: it is the
+        // second half of a two-page spread whose first half draws at once, so a reader that turns
+        // after a short look instead of on what is on screen turns past it
+        journey.server.imageDelays[SLOW_PAGE] = SLOW_PAGE_DELAY
 
         with(journey) {
             step("The journey is offline: no update check") {
@@ -113,5 +117,12 @@ class BrowseAndReadJourneyTest {
                 listOf("Chapter 1 (JPEG)", "Chapter 2 (PNG)", "Chapter 3 (WEBP)")
             Injekt.get<GetHistory>().subscribe("", null, null, null).first().isNotEmpty() shouldBe true
         }
+    }
+
+    private companion object {
+        const val SLOW_PAGE = "png-3.png"
+
+        /** Longer than the chapter takes to open and show its first two pages, even on a busy machine. */
+        const val SLOW_PAGE_DELAY = 6_000L
     }
 }

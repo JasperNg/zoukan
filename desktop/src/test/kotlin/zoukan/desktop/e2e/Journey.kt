@@ -73,6 +73,20 @@ class Journey private constructor(val name: String) {
         /** How long a page or chapter may take to load and decode before a journey gives up on it. */
         const val PAGE_TIMEOUT = 15_000L
 
+        /** How many turns [readThrough] takes to find a page before it fails. */
+        const val MAX_TURNS = 2
+
+        /**
+         * What [readThrough] does after a look for a page: stay when it drew; turn while another
+         * page drew and fewer than [MAX_TURNS] turns were taken; otherwise give up. Every turn
+         * counts, and a page that drew is never turned away from.
+         */
+        internal fun nextMove(drew: Boolean, othersShown: Boolean, turns: Int): Move = when {
+            drew -> Move.Stay
+            !othersShown || turns >= MAX_TURNS -> Move.GiveUp
+            else -> Move.Turn
+        }
+
         /** Starts the app's runtime on a fresh data folder with the fixture source installed. */
         fun start(name: String): Journey {
             // The OS keychain is not for tests: keep the secrets in the data folder
@@ -187,11 +201,22 @@ class Journey private constructor(val name: String) {
             .fetchSemanticsNodes()
             .any { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate && it.isOnScreen() }
 
+    /**
+     * Whether nothing on screen is loading, for a look that then captures the window: call it
+     * before the capture. A page that finishes loading between a capture and a later check would
+     * count as settled although the capture shows its spinner, and the look would turn away from
+     * it. Checked first, a page that is not loading is already drawn when the capture is taken.
+     */
+    fun ComposeUiTest.settledBeforeCapture(): Boolean = !loadingOnScreen()
+
     /** Whether [this] node has visible bounds in the window (pages beside the current one are composed but clipped). */
     fun SemanticsNode.isOnScreen(): Boolean {
         val bounds = boundsInRoot
-        return bounds.width > 0f && bounds.height > 0f && bounds.right > 0f && bounds.left < WIDTH && bounds.top < HEIGHT
+        return bounds.width > 0f && bounds.height > 0f && bounds.right > 0f && bounds.bottom > 0f && bounds.left < WIDTH && bounds.top < HEIGHT
     }
+
+    /** What [readThrough] does after a look, see [nextMove]. */
+    enum class Move { Stay, Turn, GiveUp }
 
     /**
      * Reads [pages] in order in the paged reader: waits for each to draw, turning the page (Left,
@@ -211,17 +236,22 @@ class Journey private constructor(val name: String) {
                 var shares = emptyMap<FixturePage, Double>()
                 runCatching {
                     waitUntil(timeoutMillis = PAGE_TIMEOUT) {
+                        val settled = settledBeforeCapture()
                         shares = sharesOnScreen(pages)
-                        shares.getValue(page) >= minShare || (shares.values.any { it >= minShare } && !loadingOnScreen())
+                        shares.getValue(page) >= minShare || (shares.values.any { it >= minShare } && settled)
                     }
                 }
-                if (shares.getValue(page) >= minShare) break
                 val shown = pages.filter { shares.getValue(it) >= minShare }
+                val move = nextMove(drew = page in shown, othersShown = shown.isNotEmpty(), turns = turns)
+                if (move == Move.Stay) break
                 println("Journey $name: page ${index + 1} (${page.file}) not on screen; showing ${shown.map { it.file }}, turn $turns")
-                if (shown.isEmpty() || turns++ >= 2) {
+                if (move == Move.GiveUp) {
                     shot("$label-page-${index + 1}-failed")
+                    // Fails with the dump, unless the page drew after the last look: then it is on screen, so never turn away
                     waitOrDump("for page ${index + 1} (${page.file}) to draw", timeout = 1) { pageDrew(page, minShare) }
+                    break
                 }
+                turns++
                 root().performKeyInput { pressKey(Key.DirectionLeft) }
                 // The turn's animation ends before the next look, so the page turned from is not taken for what is shown
                 waitForIdle()

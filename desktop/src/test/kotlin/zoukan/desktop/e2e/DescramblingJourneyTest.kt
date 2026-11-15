@@ -85,8 +85,9 @@ class DescramblingJourneyTest {
                         var shown = emptyList<FixturePage>()
                         runCatching {
                             waitUntil(timeoutMillis = Journey.PAGE_TIMEOUT) {
+                                val settled = settledBeforeCapture()
                                 shown = pagesShown(pages, DESCRAMBLED_SHARE)
-                                textOnScreen(error) || (shown.isNotEmpty() && !loadingOnScreen())
+                                textOnScreen(error) || (shown.isNotEmpty() && settled)
                             }
                         }
                         if (textOnScreen(error) || shown.isEmpty() || turns >= 3) break
@@ -95,8 +96,11 @@ class DescramblingJourneyTest {
                         waitForIdle()
                         turns++
                     }
-                    waitFor(hasText(error))
-                    waitFor(hasText("Retry"))
+                    // On screen, not only composed beside the current page, and not the chapter's end
+                    // (its transition still shows the error): one turn too many or too few fails here
+                    waitOrDump("for the error page on screen after $turns turns") {
+                        textOnScreen(error) && textOnScreen("Retry") && !textOnScreen(NO_NEXT)
+                    }
                     shot("html-page")
                     server.imageRequests(FixtureCatalog.HTML_PAGE) shouldBeGreaterThan 0
                 }
@@ -110,9 +114,10 @@ class DescramblingJourneyTest {
                         var shown = emptyList<FixturePage>()
                         runCatching {
                             waitUntil(timeoutMillis = Journey.PAGE_TIMEOUT) {
+                                val settled = settledBeforeCapture()
                                 shown = pagesShown(pages, DESCRAMBLED_SHARE)
                                 first in shown ||
-                                    ((shown.isNotEmpty() || textOnScreen(error) || textOnScreen(NO_PREVIOUS)) && !loadingOnScreen())
+                                    ((shown.isNotEmpty() || textOnScreen(error) || textOnScreen(NO_PREVIOUS)) && settled)
                             }
                         }
                         if (first in shown || turns++ >= 6) break
@@ -143,5 +148,8 @@ class DescramblingJourneyTest {
 
         /** The transition before the first page of a chapter with none before it. */
         const val NO_PREVIOUS = "There is no previous chapter"
+
+        /** The transition after the last page of a chapter with none after it. */
+        const val NO_NEXT = "There is no next chapter"
     }
 }
