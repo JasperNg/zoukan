@@ -17,7 +17,11 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.SetSerializer
@@ -36,6 +40,8 @@ import kotlin.io.path.name
 import kotlin.io.path.outputStream
 import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalSerializationApi::class, ExperimentalSettingsApi::class)
 class JavaSharedPreferences(
@@ -81,6 +87,9 @@ class JavaSharedPreferences(
         /** Files with an apply() not yet written; flushed when the JVM shuts down. */
         private val unsaved = java.util.concurrent.ConcurrentHashMap.newKeySet<JavaSharedPreferences>()
 
+        /** Background writers started by apply() that have not finished; tests wait for them. */
+        private val writers = java.util.concurrent.ConcurrentHashMap.newKeySet<Job>()
+
         init {
             Runtime.getRuntime().addShutdownHook(Thread(::flushPendingSaves, "shared-preferences-flush"))
         }
@@ -98,6 +107,28 @@ class JavaSharedPreferences(
                 unsaved.remove(prefs)
             }
         }
+
+        /**
+         * Waits until every writer started by apply() has finished, then writes anything still
+         * unsaved. For tests that delete the settings folder afterwards; not called by the app.
+         * Throws [kotlinx.coroutines.TimeoutCancellationException] if a writer is still running
+         * after [timeout].
+         */
+        @JvmStatic
+        fun awaitPendingSaves(timeout: Duration = 10.seconds) {
+            // No file lock is held here: the writers take them, and joining while holding one
+            // could deadlock
+            runBlocking {
+                withTimeout(timeout) {
+                    while (writers.isNotEmpty()) writers.toList().joinAll()
+                }
+            }
+            flushPendingSaves()
+        }
+
+        /** The number of apply() writers still running; for tests. */
+        @JvmStatic
+        fun pendingWriterCount(): Int = writers.size
         // ZOUKAN <--
     }
 
@@ -509,7 +540,8 @@ class JavaSharedPreferences(
             return
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        // ZOUKAN: the job is kept so tests can wait for it (awaitPendingSaves)
+        val job = GlobalScope.launch(Dispatchers.IO) {
             while (true) {
                 dirty.store(false)
 
@@ -530,6 +562,12 @@ class JavaSharedPreferences(
                 }
             }
         }
+        // ZOUKAN -->
+        // Added before invokeOnCompletion, which runs at once if the job already finished, so a
+        // fast writer is never left in the set
+        writers.add(job)
+        job.invokeOnCompletion { writers.remove(job) }
+        // ZOUKAN <--
     }
 
     @OptIn(ExperimentalAtomicApi::class)

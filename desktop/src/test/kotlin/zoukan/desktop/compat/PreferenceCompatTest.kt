@@ -41,11 +41,25 @@ class PreferenceCompatTest {
 
     @AfterEach
     fun restoreRoot() {
+        // apply() writes in the background: let those writers finish before JUnit deletes root
+        JavaSharedPreferences.awaitPendingSaves()
         previousRoot?.let { System.setProperty(property, it) } ?: System.clearProperty(property)
         ToastSink.set(null)
     }
 
     private fun prefs(name: String) = JavaSharedPreferences("${name}_${System.nanoTime()}")
+
+    @Test
+    fun `awaitPendingSaves returns only after apply() reached the disk`() {
+        val name = "await_${System.nanoTime()}"
+        JavaSharedPreferences(name).edit().putString("key", "value").apply()
+
+        JavaSharedPreferences.awaitPendingSaves()
+
+        JavaSharedPreferences.pendingWriterCount() shouldBe 0
+        // a fresh instance reads the file, so the value must be on disk
+        JavaSharedPreferences(name).getString("key", null) shouldBe "value"
+    }
 
     @Test
     fun `ListPreference value round-trips through its SharedPreferences`() {
