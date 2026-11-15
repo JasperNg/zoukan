@@ -55,6 +55,11 @@ object ZoukanRuntime {
         CrashReporter.install(dirs)
         logcat { "Zoukan ${AppVersion.name} on ${Platform.id}, Java ${System.getProperty("java.runtime.version")}, data in ${dirs.root}" }
 
+        // FFmpeg's natives (AVIF and HEIF images) unpack into Zoukan's own cache, not ~/.javacpp
+        if (System.getProperty("org.bytedeco.javacpp.cachedir") == null) {
+            System.setProperty("org.bytedeco.javacpp.cachedir", java.io.File(dirs.root, "cache/javacpp").absolutePath)
+        }
+
         // AndroidCompat keeps the emulated app's files (SharedPreferences, files, cache) here
         System.setProperty("$CONFIG_PREFIX.server.rootDir", dirs.android.absolutePath)
         dirs.android.resolve("server.conf").writeText(

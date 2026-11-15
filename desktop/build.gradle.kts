@@ -64,6 +64,17 @@ val composeDesktopRuntime: String = run {
     "org.jetbrains.compose.desktop:desktop-jvm-$platform:${zoukanlibs.versions.compose.multiplatform.get()}"
 }
 
+// JavaCPP's name for the same OS and CPU, for FFmpeg's natives
+val javacppPlatform: String = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arm = System.getProperty("os.arch").lowercase().let { it == "aarch64" || it == "arm64" }
+    when {
+        os.contains("win") -> "windows-x86_64"
+        os.contains("mac") -> if (arm) "macosx-arm64" else "macosx-x86_64"
+        else -> if (arm) "linux-arm64" else "linux-x86_64"
+    }
+}
+
 // Android app code the desktop app compiles as it is (Phase 6): trackers, E-Hentai and merged
 // manga. The files stay in app/ so upstream merges keep working; desktop supplies what they need
 // from Android (R, BuildConfig, toasts) in src/main/kotlin/zoukan/desktop/compat. The list is in
@@ -194,6 +205,11 @@ dependencies {
     implementation(zoukanlibs.commons.compress)
     implementation(zoukanlibs.xz)
     implementation(zoukanlibs.junrar)
+    // AVIF and HEIF images (Atsumaru serves AVIF covers and pages), with the natives for this OS only
+    implementation(zoukanlibs.javacpp)
+    implementation(zoukanlibs.ffmpeg)
+    implementation(variantOf(zoukanlibs.javacpp) { classifier(javacppPlatform) })
+    implementation(variantOf(zoukanlibs.ffmpeg) { classifier(javacppPlatform) })
     // The bulk migration's smart search, as the Android app
     implementation(libs.stringSimilarity)
 

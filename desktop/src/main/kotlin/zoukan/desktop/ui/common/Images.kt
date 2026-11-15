@@ -64,6 +64,8 @@ object Images {
                 // ZOUKAN -->
                 add(zoukan.desktop.ui.manga.PagePreviewKeyer())
                 add(zoukan.desktop.ui.manga.PagePreviewFetcher.Factory())
+                // AVIF and HEIF covers (Atsumaru's), which Coil's Skia decoder cannot read
+                add(zoukan.desktop.image.FfmpegCoilDecoder.Factory())
                 // ZOUKAN <--
             }
             .memoryCache {

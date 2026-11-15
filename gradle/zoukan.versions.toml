@@ -39,6 +39,10 @@ twelvemonkeys-imageio-metadata = { module = "com.twelvemonkeys.imageio:imageio-m
 twelvemonkeys-imageio-jpeg = { module = "com.twelvemonkeys.imageio:imageio-jpeg", version.ref = "twelvemonkeys" }
 twelvemonkeys-imageio-webp = { module = "com.twelvemonkeys.imageio:imageio-webp", version.ref = "twelvemonkeys" }
 webp-imageio = "com.github.usefulness:webp-imageio:0.11.0"
+# AVIF and HEIF pages and covers, which Skia and ImageIO cannot read: FFmpeg (LGPL build, libaom)
+# through JavaCPP. desktop/build.gradle.kts adds the natives for the OS that builds the app.
+javacpp = "org.bytedeco:javacpp:1.5.14"
+ffmpeg = "org.bytedeco:ffmpeg:8.1.2-1.5.14"
 
 # Built-in browser: JCEF with Chromium natives from Maven Central
 jcefmaven = { module = "me.friwi:jcefmaven", version.ref = "jcefmaven" }
