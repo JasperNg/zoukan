@@ -89,9 +89,9 @@ fun SwitchSetting(title: String, subtitle: String? = null, checked: Boolean, ena
 }
 
 @Composable
-fun SwitchPreference(title: String, preference: Preference<Boolean>, subtitle: String? = null) {
+fun SwitchPreference(title: String, preference: Preference<Boolean>, subtitle: String? = null, enabled: Boolean = true) {
     val value by preference.collectAsState()
-    SwitchSetting(title, subtitle, value) { preference.set(it) }
+    SwitchSetting(title, subtitle, value, enabled) { preference.set(it) }
 }
 
 @Composable

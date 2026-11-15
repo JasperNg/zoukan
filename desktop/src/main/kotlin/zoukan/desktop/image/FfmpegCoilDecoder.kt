@@ -12,6 +12,7 @@ import coil3.request.Options
 import coil3.size.Dimension
 import coil3.size.Scale
 import kotlinx.coroutines.runInterruptible
+import tachiyomi.decoder.ImageFormats
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 
@@ -55,14 +56,15 @@ class FfmpegCoilDecoder(private val source: ImageSource, private val options: Op
     class Factory : Decoder.Factory {
         override fun create(result: SourceFetchResult, options: Options, imageLoader: ImageLoader): Decoder? {
             val peek = result.source.source().peek()
-            // Twelve bytes hold the ftyp box's brand; a shorter file is no AVIF or HEIF
-            if (!peek.request(HEADER)) return null
-            if (!FfmpegImageDecoder.handles(peek.readByteArray(HEADER))) return null
+            // The ftyp box with its compatible brands (an AVIF may say so only there); a short file has fewer bytes
+            peek.request(HEADER)
+            val header = peek.readByteArray(minOf(HEADER, peek.buffer.size))
+            if (!FfmpegImageDecoder.handles(header)) return null
             return FfmpegCoilDecoder(result.source, options)
         }
     }
 
     private companion object {
-        const val HEADER = 12L
+        const val HEADER = ImageFormats.HEADER.toLong()
     }
 }

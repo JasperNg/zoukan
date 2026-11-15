@@ -9,6 +9,7 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.pm.ExternalPackages
 import java.io.File
 
 sealed interface LoadResult {
@@ -64,6 +65,8 @@ class DesktopExtensionLoader(
 
     init {
         extensionsDir.mkdirs()
+        // Android's package manager knows the installed extensions: getPackageInfo(own package)
+        ExternalPackages.provider = InstalledExtensionPackages(extensionsDir)
     }
 
     data class InstalledFiles(

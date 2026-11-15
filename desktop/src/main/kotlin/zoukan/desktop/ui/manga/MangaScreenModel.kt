@@ -68,6 +68,7 @@ class MangaScreenModel(
     private val chapterSettings: ChapterSettings = ChapterSettings(),
     private val filterChaptersForDownload: mihon.domain.chapter.interactor.FilterChaptersForDownload = Injekt.get(),
     private val updateErrors: zoukan.desktop.library.LibraryUpdateErrors = Injekt.get(),
+    private val refreshTracks: eu.kanade.domain.track.interactor.RefreshTracks = Injekt.get(),
     // ZOUKAN <--
 ) : StateScreenModel<MangaScreenModel.State>(State()) {
 
@@ -309,9 +310,30 @@ class MangaScreenModel(
                 runCatching { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
                 if (e is NoChaptersException) localized(DMR.strings.the_source_lists_no_chapters) else e.message ?: e::class.simpleName
             }
+            // KMK: a manual refresh also syncs progress from the trackers, as Android's fetchAllFromSource
+            if (manualFetch) launch { syncTrackers() }
             mutableState.update { it.copy(refreshing = false, error = error) }
         }
     }
+
+    // KMK -->
+    /** Android's syncTrackers: refreshes every tracker and syncs chapter progress from it when the setting is on. */
+    private suspend fun syncTrackers() {
+        if (!trackPreferences.autoSyncProgressFromTrackers().get()) return
+        try {
+            refreshTracks.await(mangaId, enhancedTrackersOnly = false)
+                .forEach { (tracker, e) ->
+                    if (tracker == null) return@forEach
+                    logcat(LogPriority.ERROR, e) { "Failed to refresh track data mangaId=$mangaId for service ${tracker.id}" }
+                    Toasts.show(localized(MR.strings.track_error, tracker.name, e.message ?: ""))
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to sync trackers mangaId=$mangaId" }
+        }
+    }
+    // KMK <--
 
     // ZOUKAN -->
     /** Queues the new chapters the download settings pick, as Android's downloadNewChapters. */

@@ -1,12 +1,15 @@
 package zoukan.desktop
 
 import android.os.Looper
+import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.migrateRemovedDohProvider
 import exh.log.EHLogLevel
 import logcat.LogPriority
 import logcat.LogcatLogger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.AndroidCompat
 import xyz.nulldev.androidcompat.AndroidCompatInitializer
 import xyz.nulldev.androidcompat.AndroidCompatModule
@@ -101,9 +104,21 @@ object ZoukanRuntime {
         AndroidCompatInitializer().init()
         AndroidCompat().startApp(app)
         EHLogLevel.init(app)
+        // Quad101 and Shecan are no longer offered: a stored choice of one moves to Cloudflare (after
+        // the config modules above, which the preference store needs; before any client is built)
+        Injekt.get<NetworkPreferences>().migrateRemovedDohProvider()
 
         JcefRuntime.install(dirs)
-        if (interactiveBrowser) BrowserWindow.installChallengeSolver()
+        if (interactiveBrowser) {
+            BrowserWindow.installChallengeSolver()
+            // ZOUKAN -->
+            // The browser windows hide while the app is locked, and a challenge waits for the unlock
+            BrowserWindow.followAppLock(
+                Injekt.getInstance<zoukan.desktop.security.AppLock>(zoukan.desktop.security.AppLock::class.java).locked,
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+            )
+            // ZOUKAN <--
+        }
     }
 
     /** Like Suwayomi's LooperThread: extensions and the WebView post to Android's main looper. */

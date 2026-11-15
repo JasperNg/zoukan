@@ -99,4 +99,57 @@ class ChapterDownloaderTest {
         ImageType.fromBytes("GIF89a".toByteArray()) shouldBe ImageType.GIF
         ImageType.fromBytes("hello".toByteArray()) shouldBe null
     }
+
+    @Test
+    fun `an HTML body is retried, then fails the page instead of being saved as an image`() = runBlocking<Unit> {
+        val tries = AtomicInteger()
+        val html = "<!DOCTYPE html><html><body>Please log in</body></html>".toByteArray()
+        val downloader = ChapterDownloader(
+            pageList = { listOf(Page(0, url = "p0"), Page(1, url = "p1")) },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { page ->
+                if (page.index == 1) {
+                    tries.incrementAndGet()
+                    html
+                } else {
+                    pages[0]
+                }
+            },
+            parallelPages = 2,
+        )
+        val error = shouldThrow<java.io.IOException> {
+            downloader.download(temp, "Chapter 4", ChapterDownloader.Options(true, null, null)) { _, _ -> }
+        }
+        error.message shouldContain "not an image"
+        tries.get() shouldBe 3
+        val tmp = File(temp, "Chapter 4_tmp")
+        ChapterDownloader.imageFiles(tmp).map { it.name } shouldContainExactly listOf("001.png")
+        File(temp, "Chapter 4.cbz").exists() shouldBe false
+    }
+
+    @Test
+    fun `an HTML body that turns into an image on a retry is saved`() = runBlocking<Unit> {
+        val tries = AtomicInteger()
+        val downloader = ChapterDownloader(
+            pageList = { listOf(Page(0, url = "p0")) },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { if (tries.incrementAndGet() == 1) "<html>busy</html>".toByteArray() else pages[0] },
+            parallelPages = 1,
+        )
+        val dir = downloader.download(temp, "Chapter 5", ChapterDownloader.Options(false, null, null)) { _, _ -> }
+        ChapterDownloader.imageFiles(dir).map { it.name } shouldBe listOf("001.png")
+    }
+
+    @Test
+    fun `an unknown binary format is still kept`() = runBlocking<Unit> {
+        val bmp = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "bmp", it) }.toByteArray()
+        val downloader = ChapterDownloader(
+            pageList = { listOf(Page(0, url = "p0")) },
+            imageUrl = { "https://example.org/${it.url}.bmp" },
+            image = { bmp },
+            parallelPages = 1,
+        )
+        val dir = downloader.download(temp, "Chapter 6", ChapterDownloader.Options(false, null, null)) { _, _ -> }
+        ChapterDownloader.imageFiles(dir).size shouldBe 1
+    }
 }

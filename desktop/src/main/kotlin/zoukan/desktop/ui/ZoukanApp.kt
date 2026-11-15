@@ -136,8 +136,21 @@ fun runZoukanApp() {
     // English only, before anything looks up a string
     zoukan.desktop.ui.common.AppLanguage.applyEnglish()
     val preferences = Injekt.get<DesktopPreferences>()
+    // ZOUKAN -->
+    // The app lock engages before anything runs in the background: a Cloudflare challenge that the
+    // library update or the extension loading meets must not open a browser window over a locked app
+    Injekt.get<zoukan.desktop.security.AppLock>().onStart()
+    zoukan.desktop.security.AppActivity.install()
+    // ZOUKAN <--
     startUi(ZoukanRuntime.dirs)
     // ZOUKAN -->
+    // Secure screen follows its setting and incognito mode, for the windows that attach to it
+    zoukan.desktop.security.SecureScreen.start(
+        AppScope,
+        Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>(),
+        Injekt.get<zoukan.desktop.security.Incognito>().mode(),
+    )
+
     // Data and storage > "Clear chapter cache on app launch", as Android's MainActivity on launch
     if (Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>().autoClearChapterCache().get()) {
         AppScope.launch { runCatching { zoukan.desktop.local.Archives.clearCache() } }
@@ -174,21 +187,24 @@ fun runZoukanApp() {
         val downloads = remember { Injekt.get<DownloadManager>() }
         val downloading by downloads.running.collectAsState()
         // ZOUKAN -->
-        // The app lock: away (minimized or in the tray) and back, as Android's background and foreground
-        val appLock = remember { Injekt.get<zoukan.desktop.security.AppLock>().apply { onStart() } }
-        val away = !visible || windowState.isMinimized
+        // The app lock: away (minimized, in the tray, or another app in front) and back, as
+        // Android's background and foreground; "Lock when idle" counts from leaving the app
+        val appLock = remember { Injekt.get<zoukan.desktop.security.AppLock>() }
+        val hidden = !visible || windowState.isMinimized
+        val appActive by zoukan.desktop.security.AppActivity.active.collectAsState()
+        val away = hidden || !appActive
+        LaunchedEffect(away) { if (away) appLock.onBackground() else appLock.onForeground() }
         // Data sync on start and when the window comes back, as Android's sync triggers
         val sync = remember { Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>() }
         var wasAway by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { sync.syncOn { it.syncOnAppStart } }
         remember { Injekt.get<zoukan.desktop.discord.DiscordPresence>().apply { start() } }
-        LaunchedEffect(away) {
-            if (away) {
-                appLock.onBackground()
+        // Only for a window that was hidden: switching to another app and back is no resume to sync on
+        LaunchedEffect(hidden) {
+            if (hidden) {
                 wasAway = true
-            } else {
-                appLock.onForeground()
-                if (wasAway) sync.syncOn { it.syncOnAppResume }
+            } else if (wasAway) {
+                sync.syncOn { it.syncOnAppResume }
             }
         }
         // ZOUKAN <--
@@ -258,6 +274,10 @@ fun runZoukanApp() {
                 // Below this size the two-pane screens and the toolbars no longer fit
                 LaunchedEffect(Unit) {
                     window.minimumSize = java.awt.Dimension(WindowBounds.MIN_WIDTH, WindowBounds.MIN_HEIGHT)
+                    // ZOUKAN -->
+                    // Settings > Security and privacy > Secure screen
+                    zoukan.desktop.security.SecureScreen.attach(window)
+                    // ZOUKAN <--
                 }
                 CompositionLocalProvider(LocalWindow provides this, LocalWindowState provides windowState) {
                     ZoukanContent(preferences, onNavigator = { navigatorRef = it }, firstRun = true)
@@ -293,7 +313,7 @@ private fun showAlreadyRunning() {
 
 /** What the app needs besides the runtime: the image loader and the extensions. */
 fun startUi(dirs: ZoukanDirs) {
-    Images.init(dirs.covers)
+    Images.init(dirs.covers, dirs.images)
     // NetworkHelper first, so the cookie store and Chromium hooks are in place
     Injekt.get<NetworkHelper>()
     // Injekt's singleton factories are not thread-safe: create the database and the managers here,

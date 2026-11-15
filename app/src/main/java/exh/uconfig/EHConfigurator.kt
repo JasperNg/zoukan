@@ -1,6 +1,7 @@
 package exh.uconfig
 
 import android.content.Context
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.online.all.EHentai
 import eu.kanade.tachiyomi.util.asJsoup
@@ -10,11 +11,12 @@ import exh.source.EH_SOURCE_ID
 import exh.source.EXH_SOURCE_ID
 import exh.source.ExhPreferences
 import okhttp3.FormBody
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
@@ -22,9 +24,12 @@ class EHConfigurator(val context: Context) {
     private val exhPreferences: ExhPreferences by injectLazy()
     private val sourceManager: SourceManager by injectLazy()
 
-    private val configuratorClient = OkHttpClient.Builder()
+    // ZOUKAN -->
+    // The app's DNS (over HTTPS when it is on): OkHttpClient.Builder() would use the system's
+    private val configuratorClient = Injekt.get<NetworkHelper>().plainClient.newBuilder()
         .maybeInjectEHLogger()
         .build()
+    // ZOUKAN <--
 
     private fun EHentai.requestWithCreds(sp: Int = 1) =
         Request.Builder()

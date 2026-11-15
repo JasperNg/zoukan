@@ -83,6 +83,9 @@ dependencies {
     implementation(zoukanlibs.dex2jar.tools)
     // BytecodeEditor (extension bytecode rewrites)
     implementation(zoukanlibs.asm)
+    // ExtensionHttp: the clients extensions make for themselves (the app provides OkHttp at run time)
+    implementation(libs.okhttp.core)
+    implementation(libs.okio)
 }
 
 // Suwayomi's android.jar is served from a GitHub repository (pinned to a commit in

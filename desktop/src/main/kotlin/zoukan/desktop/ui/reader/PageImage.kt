@@ -2,10 +2,13 @@ package zoukan.desktop.ui.reader
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.IRect
 import org.jetbrains.skia.Image
+import tachiyomi.decoder.Format
+import tachiyomi.decoder.ImageFormats
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
 import java.io.ByteArrayInputStream
@@ -18,38 +21,51 @@ import javax.imageio.ImageIO
 class PageImage(
     val width: Int,
     val height: Int,
-    val slices: List<ImageBitmap>,
+    slices: List<ImageBitmap>,
     // ZOUKAN -->
     /** The page's own background for the Automatic reader theme, read when it decodes */
     val background: PageBackground? = null,
+    /** The animation of an animated GIF or WebP page, which the page's composable plays */
+    val animation: PageAnimation? = null,
     // ZOUKAN <--
 ) {
+    // ZOUKAN -->
+    private val stillSlices = slices
+
+    /** The slices to draw: an animated page's current frame (snapshot state, so drawing follows it) */
+    val slices: List<ImageBitmap> get() = animation?.let { listOf(it.frame) } ?: stillSlices
+    // ZOUKAN <--
+
     val aspectRatio: Float get() = width.toFloat() / height.coerceAtLeast(1)
 
     companion object {
         const val MAX_SLICE = 4096
 
         fun decode(bytes: ByteArray, cropBorders: Boolean = false): PageImage {
-            val image = try {
-                Image.makeFromEncoded(bytes)
+            // ZOUKAN -->
+            val format = ImageFormats.sniff(bytes)
+            // Neither Skia, ImageIO nor the bundled FFmpeg (no libjxl) reads JPEG XL: say so plainly
+            if (format == Format.Jxl) throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
+            // Animated GIF and WebP pages play, as on Android; they are not cropped, nor given a background
+            if (format == Format.Gif || format == Format.Webp) {
+                PageAnimation.of(bytes)?.let { return PageImage(it.width, it.height, emptyList(), null, it) }
+            }
+            val bitmap = try {
+                val image = Image.makeFromEncoded(bytes)
+                try {
+                    Bitmap.makeFromImage(image)
+                } finally {
+                    image.close()
+                }
             } catch (e: Exception) {
-                // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys covers a few more
+                // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys and the AVIF and
+                // HEIF reader covers a few more. Their pages go the same way, cropped as the others
                 val buffered = ImageIO.read(ByteArrayInputStream(bytes))
                     ?: throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
-                val bitmap = buffered.toComposeImageBitmap()
-                // ZOUKAN -->
-                val background = background(buffered.width, buffered.height) { x, y -> buffered.getRGB(x, y) }
-                if (buffered.height <= MAX_SLICE) return PageImage(buffered.width, buffered.height, listOf(bitmap), background)
-                return slice(buffered.width, buffered.height, background) { y, h ->
-                    buffered.getSubimage(0, y, buffered.width, h).toComposeImageBitmap()
-                }
-                // ZOUKAN <--
+                buffered.toComposeImageBitmap().asSkiaBitmap()
             }
-            val width = image.width
-            val height = image.height
-            // ZOUKAN -->
-            val bitmap = Bitmap.makeFromImage(image)
-            image.close()
+            val width = bitmap.width
+            val height = bitmap.height
             // The one decoded bitmap is cropped, or shown whole when it has no plain borders
             if (cropBorders) {
                 runCatching { cropped(bitmap) }.getOrNull()?.let { return it }
@@ -145,13 +161,19 @@ class PageImage(
             runCatching { PageBackground.of(width, height, pixel) }.getOrNull()
         // ZOUKAN <--
 
+        private const val JPEG_XL = "JPEG XL"
+
         private fun sniff(bytes: ByteArray): String {
             fun at(i: Int, text: String) = bytes.size >= i + text.length &&
                 text.indices.all { bytes[i + it] == text[it].code.toByte() }
-            return when {
-                at(4, "ftypavif") || at(4, "ftypavis") -> "AVIF"
-                at(4, "ftypheic") || at(4, "ftypmif1") -> "HEIF"
-                bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0x0A.toByte() -> "JPEG XL"
+            // ZOUKAN -->
+            return when (ImageFormats.sniff(bytes)) {
+                Format.Avif -> "AVIF"
+                Format.Heif -> "HEIF"
+                Format.Jxl -> JPEG_XL
+                else -> null
+            } ?: when {
+                // ZOUKAN <--
                 at(0, "<") || at(0, "\n<") -> localized(DMR.strings.an_html_page_not_an_image)
                 else -> localized(DMR.strings.bytes, bytes.size)
             }

@@ -1,18 +1,26 @@
 package zoukan.desktop.ui.settings
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceScreen
+import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -116,5 +124,92 @@ class SourceSettingsTest {
         switch.assertIsOff()
         onNodeWithText("Safe (default)").assertExists()
         prefs.getBoolean("pref_18_mode", true) shouldBe false
+    }
+
+    private fun withRoot(block: () -> Unit) {
+        val property = "$CONFIG_PREFIX.server.rootDir"
+        val previous = System.getProperty(property)
+        System.setProperty(property, root.absolutePath)
+        try {
+            block()
+        } finally {
+            if (previous == null) System.clearProperty(property) else System.setProperty(property, previous)
+        }
+    }
+
+    /** A screen as an extension builds one with a category, a dependency and a seek bar. */
+    private fun categorisedScreen(): PreferenceScreen {
+        val screen = PreferenceScreen(null).apply { sharedPreferences = JavaSharedPreferences("source_category_test_${System.nanoTime()}") }
+        val login = SwitchPreferenceCompat(null).apply {
+            key = "login"
+            title = "Use login"
+            setDefaultValue(false)
+        }
+        screen.addPreference(login)
+        val category = PreferenceCategory(null).apply { title = "Account" }
+        screen.addPreference(category)
+        category.addPreference(
+            EditTextPreference(null).apply {
+                key = "user"
+                title = "Username"
+                dependency = "login"
+            },
+        )
+        category.addPreference(
+            SeekBarPreference(null).apply {
+                key = "pages"
+                title = "Pages to preload"
+                min = 1
+                max = 5
+                setDefaultValue(2)
+                showSeekBarValue = true
+            },
+        )
+        category.addPreference(
+            SwitchPreferenceCompat(null).apply {
+                key = "hidden"
+                title = "Hidden"
+                isVisible = false
+            },
+        )
+        return screen
+    }
+
+    @Test
+    fun `a category is flattened into its title row followed by its preferences`() = withRoot {
+        val rows = flattenPreferences(categorisedScreen())
+        rows.map { it.title?.toString() } shouldBe listOf("Use login", "Account", "Username", "Pages to preload")
+        rows[1].shouldBeInstanceOf<PreferenceCategory>()
+        snapSeekBar(2.6f, 1, 5, 1) shouldBe 3
+        snapSeekBar(9f, 0, 10, 4) shouldBe 8
+        snapSeekBar(-3f, 1, 5, 1) shouldBe 1
+    }
+
+    @Test
+    fun `categories, seek bars and dependencies draw as on Android`() = withRoot {
+        runDesktopComposeUiTest {
+            val screen = categorisedScreen()
+            setContent {
+                var version by remember { mutableIntStateOf(0) }
+                Column {
+                    flattenPreferences(screen).forEach { pref ->
+                        PreferenceItem(pref, version, onChanged = { version++ }, onOpen = {})
+                    }
+                }
+            }
+            // The category's title is a header
+            onNodeWithText("Account").assertExists()
+            // The seek bar is a slider showing its value
+            onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().size shouldBe 1
+            onNodeWithText("2").assertExists()
+
+            // The username depends on the login switch, which is off
+            val user = screen.findPreference<EditTextPreference>("user")!!
+            user.isEnabled shouldBe false
+            onNodeWithText("Use login").performClick()
+            waitForIdle()
+            user.isEnabled shouldBe true
+            screen.sharedPreferences.getBoolean("login", false) shouldBe true
+        }
     }
 }

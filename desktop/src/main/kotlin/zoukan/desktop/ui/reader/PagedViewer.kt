@@ -155,7 +155,13 @@ fun PagedViewer(
         ReaderSpreads.build(pages.size, double, wide, split, state.shiftDoublePages)
     }
     fun spreadOf(page: Int) = spreads.indexOfFirst { page in it.pages }.coerceAtLeast(0)
-    // Pager index 0 and spreads.size + 1 are the chapter transitions
+    // Pager index 0 and spreads.size + 1 are the chapter transitions. With "Always show chapter
+    // transition" off, the one between back-to-back chapters is skipped: turning onto it, or a drag
+    // settling on it, opens that chapter, as Android shows its pages there instead
+    val alwaysTransition by prefs.alwaysShowChapterTransition().collectAsState()
+    val showPrevious = ChapterTransitions.shown(alwaysTransition, state.chapter, state.previousChapter, next = false, hasPages = pages.isNotEmpty())
+    val showNext = ChapterTransitions.shown(alwaysTransition, state.chapter, state.nextChapter, next = true, hasPages = pages.isNotEmpty())
+    val latestShown by rememberUpdatedState(showPrevious to showNext)
     val pagerState = rememberPagerState(initialPage = spreadOf(state.startPage) + 1) { spreads.size + 2 }
     // ZOUKAN <--
     val scope = rememberCoroutineScope()
@@ -172,6 +178,8 @@ fun PagedViewer(
             to < 0 -> model.previousChapter(atEnd = true)
             to > spreads.size + 1 -> model.nextChapter()
             // ZOUKAN -->
+            to == 0 && !showPrevious -> model.previousChapter(atEnd = true)
+            to == spreads.size + 1 && !showNext -> model.nextChapter()
             // Android's "Animate page transitions"
             transitions -> scope.launch { pagerState.animateScrollToPage(to) }
             else -> scope.launch { pagerState.scrollToPage(to) }
@@ -246,6 +254,12 @@ fun PagedViewer(
             // Leaving a page resets its zoom, as on Android
             zooms.keys.filter { it != index }.forEach { zooms.remove(it) }
             if (index in 1..spreads.size) spreads[index - 1].let { model.onPageChanged(it.last, first = it.first) }
+            // ZOUKAN -->
+            // A drag onto a skipped transition opens that chapter
+            val (previousShown, nextShown) = latestShown
+            if (index == 0 && !previousShown) model.previousChapter(atEnd = true)
+            if (index == spreads.size + 1 && !nextShown) model.nextChapter()
+            // ZOUKAN <--
         }
     }
 

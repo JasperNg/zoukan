@@ -6,9 +6,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.parseAs
+import eu.kanade.tachiyomi.network.withSystemFallback
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
-import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -23,7 +23,10 @@ class KavitaApi(private val client: OkHttpClient, interceptor: KavitaInterceptor
     private val json: Json by injectLazy()
 
     private val authClient = client.newBuilder()
-        .dns(Dns.SYSTEM)
+        // ZOUKAN -->
+        // DNS over HTTPS for public names, the system's for a home server's (was Dns.SYSTEM for every name)
+        .dns(client.dns.withSystemFallback())
+        // ZOUKAN <--
         .addInterceptor(interceptor)
         .build()
 

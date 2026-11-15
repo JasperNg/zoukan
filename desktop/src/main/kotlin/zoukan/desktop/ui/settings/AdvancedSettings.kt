@@ -24,9 +24,7 @@ import eu.kanade.tachiyomi.network.PREF_DOH_DNSPOD
 import eu.kanade.tachiyomi.network.PREF_DOH_GOOGLE
 import eu.kanade.tachiyomi.network.PREF_DOH_MULLVAD
 import eu.kanade.tachiyomi.network.PREF_DOH_NJALLA
-import eu.kanade.tachiyomi.network.PREF_DOH_QUAD101
 import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
-import eu.kanade.tachiyomi.network.PREF_DOH_SHECAN
 import exh.log.EHLogLevel
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
@@ -123,11 +121,9 @@ fun LazyListScope.advancedSettings() {
                 PREF_DOH_ALIDNS to "AliDNS",
                 PREF_DOH_DNSPOD to "DNSPod",
                 PREF_DOH_360 to "360",
-                PREF_DOH_QUAD101 to "Quad 101",
                 PREF_DOH_MULLVAD to "Mullvad",
                 PREF_DOH_CONTROLD to "Control D",
                 PREF_DOH_NJALLA to "Njalla",
-                PREF_DOH_SHECAN to "Shecan",
             ),
         ) {
             if (it != value) {

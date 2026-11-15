@@ -705,7 +705,7 @@
     <string name="webtoon_side_padding">Webtoon side padding</string>
     <string name="password_protect_downloads">Password-protect downloads</string>
     <string name="new_cbz_downloads_are_encrypted_with">New CBZ downloads are encrypted with your password</string>
-    <string name="set_a_password_first">Set a password first</string>
+    <string name="set_a_download_password_first_only_cbz">Set a download password first. Only CBZ downloads are encrypted</string>
     <string name="change_the_download_password">Change the download password</string>
     <string name="set_the_download_password">Set the download password</string>
     <string name="kept_in_use_the_same_password">Kept in %1$s. Use the same password as on Android to read the same archives.</string>

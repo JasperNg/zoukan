@@ -66,8 +66,10 @@ class ChapterDownloader(
                         val existing = TallImageSplitter.settle(tmp, base, options.splitTallImages)
                         if (existing.isEmpty()) {
                             if (page.imageUrl.isNullOrEmpty()) page.imageUrl = imageUrl(page)
-                            val bytes = retry(3) { image(page) }
+                            // An HTML or JSON body (an error or login page sent with status 200) is no page: retried, then failed
+                            val bytes = retry(3) { image(page).also { checkImage(it, page.number) } }
                             if (bytes.isEmpty()) error("Page ${page.number} is empty")
+                            // Formats the sniffer does not know (BMP, say) are kept, as Android keeps them
                             val ext = ImageType.fromBytes(bytes)?.extension ?: "jpg"
                             val part = File(tmp, "$base.tmp")
                             part.writeBytes(bytes)
@@ -104,6 +106,13 @@ class ChapterDownloader(
             if (target.exists()) target.deleteRecursively()
             if (!tmp.renameTo(target)) error("Could not rename ${tmp.name}")
             target
+        }
+    }
+
+    /** Fails a body that is no known image and looks like text, so it is retried and never saved as a page. */
+    private fun checkImage(bytes: ByteArray, number: Int) {
+        if (bytes.isNotEmpty() && ImageType.fromBytes(bytes) == null && ImageType.looksLikeText(bytes)) {
+            throw java.io.IOException("Page $number is not an image (the server sent text or an HTML page)")
         }
     }
 

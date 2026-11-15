@@ -91,6 +91,38 @@ class AppLockTest {
     }
 
     @Test
+    fun `Never does not lock on coming back, however long the app was away`() {
+        lock.setPassword("secret")
+        preferences.useAuthenticator().set(true)
+        preferences.lockAppAfter().set(-1)
+        lock.onStart()
+        lock.unlock("secret")
+        lock.onBackground()
+        lock.onForeground(now = System.currentTimeMillis() + 24 * 60 * 60_000)
+        lock.locked.value shouldBe false
+    }
+
+    @Test
+    fun `going to another app with Always locks when the app comes back`() {
+        lock.setPassword("secret")
+        preferences.useAuthenticator().set(true)
+        preferences.lockAppAfter().set(0)
+        lock.onStart()
+        lock.unlock("secret")
+        // Another app's window became active (see LockTriggers), then the app's came back
+        lock.onBackground()
+        lock.onForeground()
+        lock.locked.value shouldBe true
+    }
+
+    @Test
+    fun `deactivation to one of the app's windows or a native file dialog is no background`() {
+        LockTriggers.deactivationIsBackground(oppositeIsOurs = false, nativeFileDialogOpen = false) shouldBe true
+        LockTriggers.deactivationIsBackground(oppositeIsOurs = true, nativeFileDialogOpen = false) shouldBe false
+        LockTriggers.deactivationIsBackground(oppositeIsOurs = false, nativeFileDialogOpen = true) shouldBe false
+    }
+
+    @Test
     fun `honours the days and time ranges`() {
         // 2026-11-09 is a Monday
         val mondayNight = LocalDateTime.of(2026, 11, 9, 23, 0)

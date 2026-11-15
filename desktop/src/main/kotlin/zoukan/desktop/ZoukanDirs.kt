@@ -24,6 +24,9 @@ class ZoukanDirs(val root: File) {
     val backups = File(root, "backups")
     val covers = File(root, "cache/covers")
 
+    /** Coil's disk cache: images fetched by address (extension icons, tracker covers, ...) */
+    val images = File(root, "cache/images")
+
     /** FFmpeg's natives (AVIF and HEIF images), unpacked by JavaCPP */
     val javacppCache = File(root, "cache/javacpp")
 

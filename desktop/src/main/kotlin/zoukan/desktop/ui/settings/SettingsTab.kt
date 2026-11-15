@@ -444,7 +444,9 @@ private fun LazyListScope.downloadSettings(
         SwitchPreference(
             localized(DMR.strings.password_protect_downloads),
             securityPreferences.passwordProtectDownloads(),
-            if (hasPassword) localized(DMR.strings.new_cbz_downloads_are_encrypted_with) else localized(DMR.strings.set_a_password_first),
+            if (hasPassword) localized(DMR.strings.new_cbz_downloads_are_encrypted_with) else localized(DMR.strings.set_a_download_password_first_only_cbz),
+            // As Android: nothing to encrypt with until a password is set
+            enabled = hasPassword,
         )
     }
     item {

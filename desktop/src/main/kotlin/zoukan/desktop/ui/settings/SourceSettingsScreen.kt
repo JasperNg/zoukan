@@ -13,12 +13,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.NonSkippableComposable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,7 +34,9 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
+import androidx.preference.PreferenceGroup
 import androidx.preference.PreferenceScreen
+import androidx.preference.SeekBarPreference
 import androidx.preference.TwoStatePreference
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
@@ -52,6 +57,7 @@ import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.roundToInt
 
 /**
  * A source's own settings: the androidx.preference screen the extension builds, drawn in Compose.
@@ -65,29 +71,31 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
     @Composable
     override fun Content() {
         val source = remember { Injekt.get<SourceManager>().get(sourceId) as? ConfigurableSource }
-        val preferences = remember(source) {
+        val screen = remember(source) {
             source?.let {
                 runCatching {
-                    val screen = PreferenceScreen(Injekt.get<Application>())
-                    screen.sharedPreferences = it.sourcePreferences()
-                    it.setupPreferenceScreen(screen)
-                    screen.preferences.toList()
+                    PreferenceScreen(Injekt.get<Application>()).also { screen ->
+                        screen.sharedPreferences = it.sourcePreferences()
+                        it.setupPreferenceScreen(screen)
+                    }
                 }.onFailure { e -> Toasts.error(localized(DMR.strings.the_sources_settings_failed_to_load), e) }.getOrNull()
             }
         }
         // Preference values are not Compose state; this redraws the list after a change
         var version by remember { mutableIntStateOf(0) }
         var dialog by remember { mutableStateOf<Preference?>(null) }
+        // Again after each change: a change listener may show or hide preferences
+        val rows = remember(screen, version) { screen?.let(::flattenPreferences) }
 
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(source?.let { localized(DMR.strings.settings, it.name) } ?: localized(MR.strings.source_settings))
             when {
                 source == null -> EmptyScreen(localized(DMR.strings.this_source_is_not_installed_or))
-                preferences.isNullOrEmpty() -> EmptyScreen(localized(DMR.strings.this_source_has_no_settings))
+                rows == null || rows.none { it !is PreferenceGroup } -> EmptyScreen(localized(DMR.strings.this_source_has_no_settings))
                 else -> LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp)) {
                     // Index-qualified: an extension may give two preferences the same key, and a
                     // repeated LazyColumn key crashes the window
-                    itemsIndexed(preferences.filter { it.visible }, key = { i, p -> "$i:${p.key}" }) { _, pref ->
+                    itemsIndexed(rows, key = { i, p -> "$i:${p.key}" }) { _, pref ->
                         PreferenceItem(pref, version, onChanged = { version++ }, onOpen = { dialog = pref })
                     }
                 }
@@ -103,6 +111,19 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
         }
     }
 }
+
+/**
+ * The rows of [group], as Android lists a screen: a category (or a nested screen) is its title row,
+ * followed by its own preferences. Hidden preferences, and everything in a hidden group, are left out.
+ */
+internal fun flattenPreferences(group: PreferenceGroup): List<Preference> =
+    group.preferences.toList().flatMap { pref ->
+        when {
+            !pref.isVisible -> emptyList()
+            pref is PreferenceGroup -> listOf(pref) + flattenPreferences(pref)
+            else -> listOf(pref)
+        }
+    }
 
 // The extension's code runs in the window: its change listener, a stored value of another type
 // (ClassCastException) or a summary that throws must show an error, never end the app (an uncaught
@@ -162,12 +183,27 @@ private fun summaryOf(pref: Preference): String? = readSafely(pref, null) {
 @Composable
 internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") version: Int, onChanged: () -> Unit, onOpen: () -> Unit) {
     val title = pref.title?.toString().orEmpty()
+    // As Android: off while the switch it depends on (setDependency) is off, or its group is disabled
+    val enabled = readSafely(pref, true) { pref.isEnabled }
     when (pref) {
+        // A category's title, as a section header; one without a title draws nothing
+        is PreferenceGroup -> if (title.isNotBlank()) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp),
+            )
+        }
+        is SeekBarPreference -> SeekBarSetting(pref, title, enabled) { value ->
+            save(pref, value)
+            onChanged()
+        }
         is TwoStatePreference -> SwitchSetting(
             title = title,
             subtitle = summaryOf(pref),
             checked = readSafely(pref, false) { pref.currentValue as? Boolean ?: false },
-            enabled = pref.isEnabled,
+            enabled = enabled,
         ) {
             save(pref, it)
             onChanged()
@@ -184,7 +220,7 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
                 }
                 else -> summaryOf(pref)
             },
-            enabled = pref.isEnabled,
+            enabled = enabled,
             onClick = onOpen,
         )
         // A plain preference with a click listener is a button, as on Android: the click runs the
@@ -192,7 +228,7 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
         else -> SettingRow(
             title = title,
             subtitle = summaryOf(pref),
-            enabled = pref.isEnabled,
+            enabled = enabled,
             onClick = pref.onPreferenceClickListener?.let {
                 {
                     runCatching { pref.performClick() }.onFailure { e -> reportFailure(pref, e) }
@@ -201,6 +237,57 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
             },
         )
     }
+}
+
+/** Android's SeekBarPreference: a slider from min to max in steps of its increment, saved when released. */
+@Composable
+private fun SeekBarSetting(pref: SeekBarPreference, title: String, enabled: Boolean, onSave: (Int) -> Unit) {
+    val min = pref.min
+    val max = pref.max.coerceAtLeast(min)
+    val saved = readSafely(pref, min) { pref.currentValue as? Int ?: min }.coerceIn(min, max)
+    var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
+    val increment = pref.seekBarIncrement.takeIf { it > 0 } ?: 1
+    val summary = summaryOf(pref)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!summary.isNullOrBlank()) {
+                    Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (pref.showSeekBarValue) {
+                Text(
+                    snapSeekBar(value, min, max, increment).toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (max > min) {
+            Slider(
+                value = value,
+                onValueChange = { value = it },
+                onValueChangeFinished = {
+                    val snapped = snapSeekBar(value, min, max, increment)
+                    if (snapped != saved) onSave(snapped)
+                },
+                enabled = enabled && pref.isAdjustable,
+                valueRange = min.toFloat()..max.toFloat(),
+                steps = ((max - min) / increment - 1).coerceIn(0, 1000),
+            )
+        }
+    }
+}
+
+/** [value] rounded to the nearest step of [increment] from [min], within [min]..[max]. */
+internal fun snapSeekBar(value: Float, min: Int, max: Int, increment: Int): Int {
+    val steps = ((value - min) / increment).roundToInt()
+    return (min + steps * increment).coerceIn(min, max)
 }
 
 @Composable

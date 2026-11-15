@@ -1,6 +1,10 @@
 package zoukan.desktop.browser
 
 import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -56,7 +60,8 @@ class BrowserWindow(
 
     // Tracked from birth, so a quit that happens while the window is opening still finds it
     // (cleanUp takes it out again once it is gone, and a failed open() at once)
-    private val registration = registry.register { disposeForQuit() }
+    // While the app lock is on, the window hides (see [Companion.followAppLock])
+    private val registration = registry.register(onLockChange = { SwingUtilities.invokeLater(::applyLock) }) { disposeForQuit() }
 
     // Whether the window counted itself as open for Discord presence; read and written on the AWT thread
     private var shownForDiscord = false
@@ -161,8 +166,13 @@ class BrowserWindow(
                 addWindowListener(object : WindowAdapter() {
                     override fun windowClosed(e: WindowEvent) = cleanUp()
                 })
-                isVisible = true
-                toFront()
+                // Settings > Security and privacy > Secure screen, as the main window
+                zoukan.desktop.security.SecureScreen.attach(this)
+                // Not over a locked app: it shows once the app is unlocked
+                if (!registry.locked) {
+                    isVisible = true
+                    toFront()
+                }
             }
         }
         return true
@@ -186,6 +196,22 @@ class BrowserWindow(
         // Also when cleanUp could not run
         closed.countDown()
         registry.unregister(registration)
+    }
+
+    /**
+     * Hides the window while the app is locked and shows it again at the unlock, as the lock covers
+     * the main window. Runs on the AWT thread and reads the registry's current state, so lock
+     * changes queued out of order still end in the right one.
+     */
+    private fun applyLock() {
+        val frame = frame ?: return
+        if (closed.count == 0L) return
+        if (registry.locked) {
+            frame.isVisible = false
+        } else if (!frame.isVisible) {
+            frame.isVisible = true
+            frame.toFront()
+        }
     }
 
     private fun discord() = runCatching { uy.kohesive.injekt.Injekt.getInstance<zoukan.desktop.discord.DiscordPresence>(zoukan.desktop.discord.DiscordPresence::class.java) }.getOrNull()
@@ -282,16 +308,39 @@ class BrowserWindow(
         /** How many windows are registered, for tests. */
         internal fun registeredCount(): Int = registry.size()
 
+        /**
+         * Hides every built-in browser window while the app lock is on, and keeps a Cloudflare
+         * challenge from opening one until the unlock (see [installChallengeSolver]). Call once at start.
+         */
+        fun followAppLock(locked: StateFlow<Boolean>, scope: CoroutineScope) {
+            registry.setLocked(locked.value)
+            locked.onEach(registry::setLocked).launchIn(scope)
+        }
+
         /** Lets shared network code show a Cloudflare challenge to the user. */
         fun installChallengeSolver() {
             DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { url, userAgent, isSolved ->
-                val window = BrowserWindow(
-                    url,
-                    userAgent,
-                    message = "This site wants to check you are human. Solve the check; the window closes by itself.",
-                )
-                window.open() && window.await(CHALLENGE_TIMEOUT_MS, isSolved)
+                val started = System.currentTimeMillis()
+                // Background traffic can meet a challenge while the app is locked: the window waits
+                // for the unlock, within the challenge's usual time, instead of showing a source's
+                // site over the lock
+                if (!registry.awaitUnlocked(CHALLENGE_TIMEOUT_MS, isSolved)) {
+                    isSolved()
+                } else {
+                    val left = CHALLENGE_TIMEOUT_MS - (System.currentTimeMillis() - started)
+                    isSolved() || openChallenge(url, userAgent, left, isSolved)
+                }
             }
+        }
+
+        private fun openChallenge(url: String, userAgent: String, timeoutMs: Long, isSolved: () -> Boolean): Boolean {
+            if (timeoutMs <= 0) return false
+            val window = BrowserWindow(
+                url,
+                userAgent,
+                message = "This site wants to check you are human. Solve the check; the window closes by itself.",
+            )
+            return window.open() && window.await(timeoutMs, isSolved)
         }
     }
 }
@@ -302,22 +351,67 @@ class BrowserWindow(
  * JCEF on the classpath.
  */
 class BrowserWindowRegistry {
-    /** One live window: [disposer] closes it, and is safe to run more than once. */
-    class Registration internal constructor(private val disposer: () -> Unit) {
+    /**
+     * One live window: [disposer] closes it, and is safe to run more than once; [onLockChange] hears
+     * that the app lock went on or off (it reads [locked] for the current state).
+     */
+    class Registration internal constructor(private val disposer: () -> Unit, private val onLockChange: () -> Unit) {
         internal fun dispose() = disposer()
+        internal fun lockChanged() = onLockChange()
     }
 
     // In the order the windows opened; guarded by itself
     private val registrations = LinkedHashSet<Registration>()
 
-    /** Puts a window in, to be disposed by [disposeAll]. */
-    fun register(disposer: () -> Unit): Registration {
-        val registration = Registration(disposer)
+    // Guards the writes of [locked] and wakes [awaitUnlocked]
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+    private val lockSignal = java.lang.Object()
+
+    /** Whether the app lock is on: the windows hide, and new ones open hidden. */
+    @Volatile
+    var locked: Boolean = false
+        private set
+
+    /** Puts a window in, to be disposed by [disposeAll] and told of lock changes by [setLocked]. */
+    fun register(onLockChange: () -> Unit = {}, disposer: () -> Unit): Registration {
+        val registration = Registration(disposer, onLockChange)
         synchronized(registrations) { registrations += registration }
         return registration
     }
 
     internal fun size(): Int = synchronized(registrations) { registrations.size }
+
+    /**
+     * The app lock went on or off: every window hears it, one failing never stopping the others.
+     * A window registered meanwhile reads [locked] when it opens.
+     */
+    fun setLocked(value: Boolean) {
+        synchronized(lockSignal) {
+            if (locked == value) return
+            locked = value
+            lockSignal.notifyAll()
+        }
+        val snapshot = synchronized(registrations) { registrations.toList() }
+        snapshot.forEach { runCatching { it.lockChanged() } }
+    }
+
+    /**
+     * Waits until the app is unlocked, at most [timeoutMs], checking [giveUp] now and then (the
+     * challenge was solved some other way meanwhile). Returns whether it is unlocked.
+     */
+    fun awaitUnlocked(timeoutMs: Long, giveUp: () -> Boolean = { false }): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.coerceIn(0, MAX_WAIT_MS))
+        while (true) {
+            synchronized(lockSignal) {
+                if (!locked) return true
+                val left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+                if (left <= 0) return false
+                lockSignal.wait(left.coerceIn(1, GIVE_UP_CHECK_MS))
+            }
+            // Outside the lock: it may read the cookie store
+            if (locked && giveUp()) return false
+        }
+    }
 
     /** Takes a window out again, because it closed by itself. */
     fun unregister(registration: Registration) {
@@ -333,5 +427,10 @@ class BrowserWindowRegistry {
     fun disposeAll() {
         val snapshot = synchronized(registrations) { registrations.toList().also { registrations.clear() } }
         snapshot.forEach { runCatching { it.dispose() } }
+    }
+
+    private companion object {
+        const val GIVE_UP_CHECK_MS = 500L
+        const val MAX_WAIT_MS = 24 * 60 * 60 * 1000L
     }
 }

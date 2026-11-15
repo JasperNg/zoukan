@@ -69,6 +69,15 @@ class JavaSharedPreferences(
             return suffix == "size" || suffix.all { it in '0'..'9' }
         }
 
+        /** The file the preferences named [key] are kept in (Context.getSharedPreferencesPath). */
+        @JvmStatic
+        fun fileFor(key: String): java.io.File =
+            Path(
+                ApplicationRootDir,
+                "settings",
+                "${SafePath.buildValidFilename(key)}.xml",
+            ).toFile()
+
         /** Files with an apply() not yet written; flushed when the JVM shuts down. */
         private val unsaved = java.util.concurrent.ConcurrentHashMap.newKeySet<JavaSharedPreferences>()
 
@@ -109,12 +118,7 @@ class JavaSharedPreferences(
     private var migrateToCodec = false
     // ZOUKAN <--
 
-    private val file =
-        Path(
-            ApplicationRootDir,
-            "settings",
-            "${SafePath.buildValidFilename(key)}.xml",
-        )
+    private val file = fileFor(key).toPath()
     private val properties =
         Properties().also { properties ->
             try {

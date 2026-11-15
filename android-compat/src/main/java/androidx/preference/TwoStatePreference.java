@@ -95,6 +95,16 @@ public class TwoStatePreference extends Preference {
         this.disableDependentsState = disableDependentsState;
     }
 
+    // ZOUKAN -->
+    /** As Android: off disables the dependents (on, with setDisableDependentsState(true)). */
+    @Override
+    public boolean shouldDisableDependents() {
+        boolean checked = isChecked();
+        boolean shouldDisable = disableDependentsState ? checked : !checked;
+        return shouldDisable || super.shouldDisableDependents();
+    }
+    // ZOUKAN <--
+
     /** Tachidesk specific API */
     @Override
     public String getDefaultValueType() {

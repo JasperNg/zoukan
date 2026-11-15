@@ -15,6 +15,7 @@
  */
 package android.os;
 
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.support.annotation.VisibleForTesting;
 import android.util.ArrayMap;
@@ -956,6 +957,45 @@ public final class Bundle extends BaseBundle implements Cloneable, Parcelable {
     public Serializable getSerializable(@Nullable String key) {
         return super.getSerializable(key);
     }
+
+    // ZOUKAN -->
+    /** As Android (API 33): the value when it is a [clazz], else null. */
+    @Nullable
+    public <T> T getParcelable(@Nullable String key, @NonNull Class<T> clazz) {
+        Object o = getParcelable(key);
+        return clazz.isInstance(o) ? clazz.cast(o) : null;
+    }
+
+    @Nullable
+    @SuppressWarnings("unchecked")
+    public <T> ArrayList<T> getParcelableArrayList(@Nullable String key, @NonNull Class<? extends T> clazz) {
+        ArrayList<?> list = getParcelableArrayList(key);
+        if (list == null) return null;
+        for (Object item : list) {
+            if (item != null && !clazz.isInstance(item)) return null;
+        }
+        return (ArrayList<T>) list;
+    }
+
+    @Nullable
+    public <T> T[] getParcelableArray(@Nullable String key, @NonNull Class<T> clazz) {
+        Parcelable[] array = getParcelableArray(key);
+        if (array == null) return null;
+        @SuppressWarnings("unchecked")
+        T[] typed = (T[]) java.lang.reflect.Array.newInstance(clazz, array.length);
+        for (int i = 0; i < array.length; i++) {
+            if (array[i] != null && !clazz.isInstance(array[i])) return null;
+            typed[i] = clazz.cast(array[i]);
+        }
+        return typed;
+    }
+
+    @Nullable
+    public <T extends Serializable> T getSerializable(@Nullable String key, @NonNull Class<T> clazz) {
+        Serializable o = getSerializable(key);
+        return clazz.isInstance(o) ? clazz.cast(o) : null;
+    }
+    // ZOUKAN <--
     /**
      * Returns the value associated with the given key, or null if
      * no mapping of the desired type exists for the given key or a null

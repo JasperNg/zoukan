@@ -42,18 +42,21 @@ class CloudflareInterceptor(
 
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
+    private val clearanceUserAgents by lazy {
+        val preferences = context.getSharedPreferences("cloudflare_clearance", Context.MODE_PRIVATE)
+        ClearanceUserAgents(
+            object : ClearanceUserAgents.Store {
+                override fun get(key: String): String? = preferences.getString(key, null)
+                override fun put(key: String, value: String) = preferences.edit().putString(key, value).apply()
+            },
+        )
+    }
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        // Challenges are solved in Chromium, and Cloudflare only accepts the cf_clearance cookie with
-        // the user agent that solved it. The cookie store keeps cf_clearance across restarts, so a
-        // host that has one gets Chromium's user agent, in this run or a later one.
-        val request = chain.request().let { original ->
-            val browserUserAgent = DesktopBrowser.userAgent
-            if (browserUserAgent != null && hasClearance(original)) {
-                original.newBuilder().header("User-Agent", browserUserAgent).build()
-            } else {
-                original
-            }
-        }
+        val original = chain.request()
+        // Cloudflare only accepts the cf_clearance cookie with the user agent that solved it. The
+        // cookie store keeps cf_clearance across restarts, and so is the user agent recorded for it
+        val request = withClearanceUserAgent(original)
         val sentClearance = clearance(request)
         val response = chain.proceed(request)
         if (!isChallenge(response)) return response
@@ -73,24 +76,44 @@ class CloudflareInterceptor(
                 if (failedAt != null && failedAt - waitStarted > 0) return@withLock false
                 cookieManager.remove(request.url, COOKIE_NAMES, 0)
                 val oldCookie = clearance(request)
-                // Cloudflare rejects a user agent that does not match the browser (for example the
-                // default Android one on desktop Chromium), so the challenge runs with Chromium's own
-                val userAgent = DesktopBrowser.userAgent ?: request.header("User-Agent") ?: defaultUserAgentProvider()
-                solveHeadless(request, userAgent, oldCookie) || run {
+                // Solved with the request's own user agent when Cloudflare accepts it, so the request
+                // keeps it; else with Chromium's, which the host's requests then get
+                val requestUserAgent = original.header("User-Agent") ?: defaultUserAgentProvider()
+                val userAgents = ClearanceUserAgents.solveOrder(requestUserAgent, DesktopBrowser.userAgent)
+                val solvedWith = userAgents.firstOrNull { solveHeadless(original, it, oldCookie) } ?: run {
                     // The user may take minutes; the call timeout (2 min) would end the call first
                     (chain.call().timeout() as? AsyncTimeout)?.exit()
-                    DesktopBrowser.solveChallenge(request.url.toString(), userAgent) { isSolved(request, oldCookie) }
-                }.also { if (it) lastFailure.remove(host) else lastFailure[host] = System.nanoTime() }
+                    val userAgent = userAgents.last()
+                    userAgent.takeIf {
+                        DesktopBrowser.solveChallenge(request.url.toString(), it) { isSolved(request, oldCookie) }
+                    }
+                }
+                // A clearance someone else's window got already has its record
+                if (solvedWith != null) {
+                    clearance(request)?.takeIf { clearanceUserAgents.userAgentOf(it) == null }
+                        ?.let { clearanceUserAgents.record(it, solvedWith) }
+                }
+                (solvedWith != null).also { if (it) lastFailure.remove(host) else lastFailure[host] = System.nanoTime() }
             }
             if (!solved) throw IOException("Failed to bypass Cloudflare on ${request.url.host}")
-            val browserUserAgent = DesktopBrowser.userAgent ?: return chain.proceed(request)
-            return chain.proceed(request.newBuilder().header("User-Agent", browserUserAgent).build())
+            return chain.proceed(withClearanceUserAgent(original))
         } catch (e: IOException) {
             throw e
         } catch (e: Exception) {
             // OkHttp's enqueue only handles IOExceptions
             throw IOException(e)
         }
+    }
+
+    /** [request] with the user agent its host's clearance was obtained with, when that differs. */
+    private fun withClearanceUserAgent(request: Request): Request {
+        val clearance = clearance(request) ?: return request
+        val userAgent = ClearanceUserAgents.overrideFor(
+            requestUserAgent = request.header("User-Agent"),
+            clearanceUserAgent = clearanceUserAgents.userAgentOf(clearance),
+            browserUserAgent = DesktopBrowser.userAgent,
+        ) ?: return request
+        return request.newBuilder().header("User-Agent", userAgent).build()
     }
 
     private fun isChallenge(response: Response): Boolean {
@@ -100,8 +123,6 @@ class CloudflareInterceptor(
         return document.getElementById("challenge-error-title") != null ||
             document.getElementById("challenge-error-text") != null
     }
-
-    private fun hasClearance(request: Request): Boolean = clearance(request) != null
 
     private fun clearance(request: Request): Cookie? =
         cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }
@@ -155,6 +176,8 @@ class CloudflareInterceptor(
     private fun isRequestHeaderSafe(name: String, value: String): Boolean {
         val lowerName = name.lowercase(Locale.ENGLISH)
         if (lowerName in UNSAFE_HEADER_NAMES || lowerName.startsWith("proxy-")) return false
+        // The WebView's user agent setting is the one solving; a header would contradict it
+        if (lowerName == "user-agent") return false
         return !(lowerName == "connection" && value.lowercase(Locale.ENGLISH) == "upgrade")
     }
 
@@ -192,8 +215,8 @@ object DesktopBrowser {
     var challengeSolver: ChallengeSolver? = null
 
     /**
-     * The user agent of the app's Chromium, set by the app at start. Challenges are solved with it,
-     * and requests to hosts that hold a cf_clearance cookie use it.
+     * The user agent of the app's Chromium, set by the app at start. A challenge that the request's
+     * own user agent cannot solve is solved with it, and that host's requests then use it.
      */
     @Volatile
     var userAgent: String? = null

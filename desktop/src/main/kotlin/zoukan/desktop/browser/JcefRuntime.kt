@@ -1,6 +1,8 @@
 package zoukan.desktop.browser
 
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.dohProviderHostResolverRule
 import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -11,6 +13,7 @@ import me.friwi.jcefmaven.EnumProgress
 import me.friwi.jcefmaven.MavenCefAppHandlerAdapter
 import org.cef.CefApp
 import org.cef.CefSettings
+import org.cef.browser.CefRequestContext
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -80,6 +83,9 @@ object JcefRuntime {
         // Downloads Chromium when it is missing, and installs it only when its checksum is the
         // pinned one; jcefmaven below then finds it installed and downloads nothing itself
         ChromiumNatives.ensureInstalled(dirs.browser) { Injekt.get<NetworkHelper>().client }
+        // Chromium resolves names itself; the DNS over HTTPS preference reaches it through its Local State
+        val dohProvider = Injekt.get<NetworkPreferences>().dohProvider().get()
+        ChromiumDns.apply(dirs.browserCache, dohProvider)
         val builder = CefAppBuilder().apply {
             setInstallDir(dirs.browser)
             setProgressHandler { state, percent ->
@@ -107,11 +113,60 @@ object JcefRuntime {
             if (System.getProperty("os.name").startsWith("Linux") && System.getProperty("user.name") == "root") {
                 addJcefArgs("--no-sandbox")
             }
+            // Chromium looks the DoH server's own name up with the system's DNS; this connects to
+            // it at its known address instead, so no name leaves through the system's DNS
+            dohProviderHostResolverRule(dohProvider)?.let { addJcefArgs("--host-resolver-rules=$it") }
+            addJcefArgs(*PRIVACY_SWITCHES.toTypedArray())
             // Extra Chromium switches for debugging, separated by spaces
             System.getProperty("zoukan.cefArgs")?.split(' ')?.filter { it.isNotBlank() }?.let { addJcefArgs(*it.toTypedArray()) }
-            setAppHandler(object : MavenCefAppHandlerAdapter() {})
+            setAppHandler(
+                object : MavenCefAppHandlerAdapter() {
+                    // On Chromium's UI thread, where its preferences can be set
+                    override fun onContextInitialized() = applyPrivacyPreferences()
+                },
+            )
         }
         val app = builder.build()
         return app
+    }
+
+    /**
+     * Switches that keep the Chrome runtime's background services from contacting Google (field
+     * trial Variations, component and model downloads, Optimization Hints, Domain Reliability
+     * reports, hyperlink auditing pings, media router discovery, autofill form signatures). None of
+     * them changes how a page loads or runs: the browser window, WebViews and Cloudflare challenges
+     * work as before.
+     */
+    internal val PRIVACY_SWITCHES = listOf(
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-domain-reliability",
+        "--disable-client-side-phishing-detection",
+        "--no-pings",
+        "--metrics-recording-only",
+        "--disable-features=" + listOf(
+            "OptimizationHints",
+            "OptimizationHintsFetching",
+            "OptimizationGuideModelDownloading",
+            "MediaRouter",
+            "DialMediaRouteProvider",
+            "AutofillServerCommunication",
+        ).joinToString(","),
+    )
+
+    /** Profile preferences for the same: Safe Browsing would send visited addresses' hashes to Google. */
+    internal val PRIVACY_PREFERENCES: Map<String, Any> = mapOf("safebrowsing.enabled" to false)
+
+    /** Sets [PRIVACY_PREFERENCES] on the global request context. Call on Chromium's UI thread. */
+    internal fun applyPrivacyPreferences() {
+        runCatching {
+            val context = CefRequestContext.getGlobalContext()
+            for ((name, value) in PRIVACY_PREFERENCES) {
+                if (!context.canSetPreference(name)) continue
+                context.setPreference(name, value)?.let { error ->
+                    logcat(LogPriority.WARN) { "Chromium preference $name: $error" }
+                }
+            }
+        }.onFailure { logcat(LogPriority.WARN, it) { "Could not set Chromium's privacy preferences" } }
     }
 }

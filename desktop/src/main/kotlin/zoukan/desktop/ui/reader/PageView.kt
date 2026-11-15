@@ -26,11 +26,15 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.i18n.desktop.DMR
 
 /** A decoded page drawn at its own aspect ratio: the slices stacked, filling the width it gets. */
 @Composable
 fun PageSlices(image: PageImage, modifier: Modifier = Modifier) {
+    // ZOUKAN -->
+    PlayAnimation(image)
+    // ZOUKAN <--
     Column(modifier.testTag("page-image")) {
         image.slices.forEach { slice ->
             Image(
@@ -67,7 +71,10 @@ fun PageError(number: Int, message: String, color: Color, onRetry: () -> Unit, m
     }
 }
 
-/** Shown before the first and after the last page: where the reader goes next. */
+/**
+ * Shown before the first and after the last page: where the reader goes next. It warns about the
+ * chapters missing between the two, as Android's ChapterTransition.
+ */
 @Composable
 fun ChapterTransition(
     current: Chapter?,
@@ -77,6 +84,9 @@ fun ChapterTransition(
     onGo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // ZOUKAN -->
+    val missing = ChapterTransitions.gap(current, other, next)
+    // ZOUKAN <--
     Box(modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (current != null) {
@@ -93,6 +103,18 @@ fun ChapterTransition(
             } else {
                 Text(if (next) localized(MR.strings.nav_zone_next) else localized(DMR.strings.previous), color = color.copy(alpha = 0.7f), style = MaterialTheme.typography.labelLarge)
                 Text(other.name, color = color, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                // ZOUKAN -->
+                if (missing > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        localizedPlural(MR.plurals.missing_chapters_warning, missing, missing),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(max = 420.dp),
+                    )
+                }
+                // ZOUKAN <--
                 Spacer(Modifier.height(8.dp))
                 FilledTonalButton(onClick = onGo) { Text(if (next) localized(DMR.strings.read_next_chapter) else localized(DMR.strings.read_previous_chapter)) }
             }

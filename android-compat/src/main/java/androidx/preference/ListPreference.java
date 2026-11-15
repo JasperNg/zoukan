@@ -85,6 +85,27 @@ public class ListPreference extends DialogPreference {
         }
     }
 
+    /** As Android's ListPreference.SimpleSummaryProvider: the chosen entry, or "Not set". */
+    public static final class SimpleSummaryProvider implements SummaryProvider<ListPreference> {
+        private static SimpleSummaryProvider instance;
+
+        private SimpleSummaryProvider() {
+        }
+
+        public static SimpleSummaryProvider getInstance() {
+            if (instance == null) {
+                instance = new SimpleSummaryProvider();
+            }
+            return instance;
+        }
+
+        @Override
+        public CharSequence provideSummary(ListPreference preference) {
+            CharSequence entry = preference.getEntry();
+            return entry == null || entry.length() == 0 ? "Not set" : entry;
+        }
+    }
+
     @JsonIgnore
     public CharSequence getEntry() {
         int index = findIndexOfValue(getValue());

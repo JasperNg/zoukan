@@ -110,6 +110,12 @@ private fun SecuritySettings() {
                 onClick = { timesDialog = true },
             )
         }
+        // Leaves the windows out of screenshots and screen sharing (see SecureScreen)
+        ChoicePreference(
+            localized(MR.strings.secure_screen),
+            preferences.secureScreen(),
+            SecurityPreferences.SecureScreenMode.entries.map { it to localized(it.titleRes) },
+        )
         SwitchPreference(localized(MR.strings.hide_notification_content), preferences.hideNotificationContent(), localized(DMR.strings.notifications_say_only_that_there_is))
         SwitchPreference(localized(MR.strings.pref_incognito_mode), incognito.mode(), localized(DMR.strings.reading_keeps_no_history_progress_or))
         SettingRow(localized(DMR.strings.incognito_extensions), localized(DMR.strings.always_read_these_sources_in_incognito), onClick = { extensionsDialog = true })

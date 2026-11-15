@@ -234,19 +234,20 @@ class ReaderScreenModel(
             )
         }
         // ZOUKAN -->
-        if (!incognito) Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterOpen }
+        // Unknown until the chapter's own entry is: nothing is written for it before then
+        incognito = true
         // ZOUKAN <--
         loadJob = screenModelScope.launch {
             try {
                 // ZOUKAN -->
                 // A merged entry's chapter is read from the entry and source it comes from
-                val manga = if (readerManga.source == MERGED_SOURCE_ID && chapter.mangaId != readerManga.id) {
-                    getManga.await(chapter.mangaId) ?: error(localized(DMR.strings.the_merged_entry_of_this_chapter))
-                } else {
-                    readerManga
-                }
+                val manga = chapterManga(readerManga, chapter) { getManga.await(it) }
+                    ?: error(localized(DMR.strings.the_merged_entry_of_this_chapter))
                 val source = sourceManager.get(manga.source)
                 this@ReaderScreenModel.source = source
+                // Per-extension incognito follows the chapter's own source, also in a merged entry
+                incognito = Injekt.get<zoukan.desktop.security.Incognito>().isOn(manga.source)
+                if (!incognito) Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterOpen }
                 // ZOUKAN <--
                 // A download (or the local source's file) first, then the source online
                 val file = withContext(Dispatchers.IO) {
@@ -772,9 +773,13 @@ class ReaderScreenModel(
     }
 
     // ZOUKAN -->
-    private val incognito: Boolean by lazy {
-        Injekt.get<zoukan.desktop.security.Incognito>().isOn(state.value.manga?.source)
-    }
+    /**
+     * Whether the open chapter is read in incognito, for the source it comes from: a merged entry's
+     * chapter by its own entry's source, not the merged entry's. Set by [loadChapter] once that
+     * entry is known, true until then.
+     */
+    @Volatile
+    private var incognito: Boolean = true
     // ZOUKAN <--
 
     private fun saveHistory() {
@@ -957,4 +962,14 @@ internal class ProgressWriter(scope: CoroutineScope, private val write: suspend 
         queue.close()
     }
 }
+// ZOUKAN <--
+
+// ZOUKAN -->
+/**
+ * The entry [chapter] is read from: [readerManga] itself, or for a merged entry the merged entry the
+ * chapter belongs to (null when it is gone), whose source gives the pages, the downloads and the
+ * per-extension incognito.
+ */
+internal suspend fun chapterManga(readerManga: Manga, chapter: Chapter, getManga: suspend (Long) -> Manga?): Manga? =
+    if (readerManga.source == MERGED_SOURCE_ID && chapter.mangaId != readerManga.id) getManga(chapter.mangaId) else readerManga
 // ZOUKAN <--

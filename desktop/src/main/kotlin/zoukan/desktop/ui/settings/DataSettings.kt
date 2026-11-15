@@ -52,6 +52,7 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
+import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
@@ -143,6 +144,8 @@ fun LazyListScope.dataSettings() {
         SettingRow(localized(DMR.strings.clear_cover_cache), localized(DMR.strings.covers_download_again_when_shown), onClick = {
             scope.launch(Dispatchers.IO) {
                 dirs.covers.listFiles()?.forEach { it.delete() }
+                // ZOUKAN: and the other images kept on disk (extension icons, tracker covers, ...)
+                runCatching { Images.clearDiskCache() }
                 Toasts.show(localized(DMR.strings.cover_cache_cleared))
             }
         })

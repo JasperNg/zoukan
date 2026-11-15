@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,6 +65,14 @@ fun WebtoonViewer(
     val pages = state.pages
     val hasPrevious = state.previousChapter != null
     // Item 0 is the previous chapter transition, then the pages, then the next chapter transition
+    // ZOUKAN -->
+    // With "Always show chapter transition" off, the one between back-to-back chapters is an empty
+    // item, so the indices stay; the reader then goes on to that chapter at the strip's end, as
+    // Android shows its pages there instead
+    val alwaysTransition by model.preferences.alwaysShowChapterTransition().collectAsState()
+    val showPrevious = ChapterTransitions.shown(alwaysTransition, state.chapter, state.previousChapter, next = false, hasPages = pages.isNotEmpty())
+    val showNext = ChapterTransitions.shown(alwaysTransition, state.chapter, state.nextChapter, next = true, hasPages = pages.isNotEmpty())
+    // ZOUKAN <--
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = state.startPage + 1)
     val scope = rememberCoroutineScope()
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -221,14 +230,18 @@ fun WebtoonViewer(
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
                     item(key = "previous") {
-                        ChapterTransition(
-                            state.chapter,
-                            state.previousChapter,
-                            next = false,
-                            color = foreground,
-                            onGo = { model.previousChapter(atEnd = true) },
-                            modifier = Modifier.height(if (hasPrevious) 320.dp else 160.dp),
-                        )
+                        if (showPrevious) {
+                            ChapterTransition(
+                                state.chapter,
+                                state.previousChapter,
+                                next = false,
+                                color = foreground,
+                                onGo = { model.previousChapter(atEnd = true) },
+                                modifier = Modifier.height(if (hasPrevious) 320.dp else 160.dp),
+                            )
+                        } else {
+                            Spacer(Modifier.height(1.dp))
+                        }
                     }
                     items(pages.size, key = { "page-$it" }) { index ->
                         val page = pages[index]
@@ -271,14 +284,18 @@ fun WebtoonViewer(
                         }
                     }
                     item(key = "next") {
-                        ChapterTransition(
-                            state.chapter,
-                            state.nextChapter,
-                            next = true,
-                            color = foreground,
-                            onGo = { model.nextChapter() },
-                            modifier = Modifier.fillMaxWidth().height(with(density) { (viewportHeight * 0.6f).toDp() }),
-                        )
+                        if (showNext) {
+                            ChapterTransition(
+                                state.chapter,
+                                state.nextChapter,
+                                next = true,
+                                color = foreground,
+                                onGo = { model.nextChapter() },
+                                modifier = Modifier.fillMaxWidth().height(with(density) { (viewportHeight * 0.6f).toDp() }),
+                            )
+                        } else {
+                            Spacer(Modifier.height(1.dp))
+                        }
                     }
                 }
             }

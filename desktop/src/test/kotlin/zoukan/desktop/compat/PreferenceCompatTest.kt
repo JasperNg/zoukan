@@ -5,6 +5,10 @@ import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceScreen
+import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
@@ -225,5 +229,139 @@ class PreferenceCompatTest {
         ToastSink.set(null)
         Toast.makeText(null, "printed", Toast.LENGTH_SHORT).show()
         received shouldBe listOf("Logged in", "Changed")
+    }
+
+    @Test
+    fun `a category gets the screen's SharedPreferences, also for children added before it was added`() {
+        val prefs = prefs("category")
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs }
+        val category = PreferenceCategory(null).apply { title = "Reading" }
+        // Some extensions fill a category before adding it to the screen
+        val early = SwitchPreferenceCompat(null).apply { key = "early" }
+        category.addPreference(early)
+        screen.addPreference(category)
+        val late = EditTextPreference(null).apply { key = "late" }
+        category.addPreference(late)
+
+        early.sharedPreferences shouldBe prefs
+        late.sharedPreferences shouldBe prefs
+        early.parent shouldBe category
+        category.parent shouldBe screen
+        screen.preferenceCount shouldBe 1
+        category.preferenceCount shouldBe 2
+        category.getPreference(1) shouldBe late
+        // findPreference searches nested groups, as on Android
+        screen.findPreference<Preference>("late") shouldBe late
+        screen.findPreference<Preference>("missing") shouldBe null
+
+        early.isChecked = true
+        prefs.getBoolean("early", false) shouldBe true
+        category.removePreference(late) shouldBe true
+        late.parent shouldBe null
+    }
+
+    @Test
+    fun `a dependent preference is disabled while the switch it depends on is off`() {
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs("dependency") }
+        val master = SwitchPreferenceCompat(null).apply {
+            key = "master"
+            setDefaultValue(false)
+        }
+        val category = PreferenceCategory(null)
+        val dependent = EditTextPreference(null).apply { key = "dependent" }
+        screen.addPreference(master)
+        screen.addPreference(category)
+        category.addPreference(dependent)
+        dependent.dependency = "master"
+
+        dependent.isEnabled shouldBe false
+        dependent.performClick() shouldBe false
+        master.isChecked = true
+        dependent.isEnabled shouldBe true
+
+        // setDisableDependentsState(true): on disables them instead
+        master.disableDependentsState = true
+        dependent.isEnabled shouldBe false
+
+        // A disabled group disables its children, as on Android
+        master.disableDependentsState = false
+        category.isEnabled = false
+        dependent.isEnabled shouldBe false
+        category.isEnabled = true
+
+        // An empty text disables what depends on a text preference
+        val chained = Preference(null).apply { key = "chained" }
+        screen.addPreference(chained)
+        chained.dependency = "dependent"
+        chained.isEnabled shouldBe false
+        dependent.text = "x"
+        chained.isEnabled shouldBe true
+
+        // A dependency cycle does not recurse forever
+        master.dependency = "chained"
+        dependent.isEnabled shouldBe true
+    }
+
+    @Test
+    fun `SeekBarPreference keeps an int within its range in its SharedPreferences`() {
+        val prefs = prefs("seekbar")
+        val pref = SeekBarPreference(null).apply {
+            key = "page_count"
+            min = 1
+            max = 10
+            setDefaultValue(4)
+            showSeekBarValue = true
+        }
+        pref.value shouldBe 4
+        pref.sharedPreferences = prefs
+        pref.currentValue shouldBe 4
+        pref.value = 7
+        prefs.getInt("page_count", 0) shouldBe 7
+        pref.value = 50
+        pref.value shouldBe 10
+        // As the settings screen saves it
+        pref.saveNewValue(3)
+        prefs.getInt("page_count", 0) shouldBe 3
+        pref.value shouldBe 3
+    }
+
+    @Test
+    fun `setPersistent(false) keeps values out of SharedPreferences, and the common setters exist`() {
+        val prefs = prefs("persistent")
+        val pref = SwitchPreferenceCompat(null).apply {
+            key = "transient"
+            sharedPreferences = prefs
+            isPersistent = false
+            isIconSpaceReserved = false
+            isSingleLineTitle = false
+            order = 3
+            isSelectable = false
+        }
+        pref.isChecked = true
+        prefs.contains("transient") shouldBe false
+        pref.isChecked shouldBe true
+        pref.isIconSpaceReserved shouldBe false
+        pref.isSingleLineTitle shouldBe false
+        pref.order shouldBe 3
+        pref.isSelectable shouldBe false
+        pref.hasKey() shouldBe true
+        PreferenceCategory(null).isSelectable shouldBe false
+    }
+
+    @Test
+    fun `a summary provider replaces the summary, as on Android`() {
+        val pref = ListPreference(null).apply {
+            key = "lang"
+            entries = arrayOf("English", "French")
+            entryValues = arrayOf("en", "fr")
+            setDefaultValue("fr")
+            summary = "ignored"
+            summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
+        }
+        pref.summary shouldBe "French"
+        val text = EditTextPreference(null).apply { summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance() }
+        text.summary shouldBe "Not set"
+        text.text = "abc"
+        text.summary shouldBe "abc"
     }
 }

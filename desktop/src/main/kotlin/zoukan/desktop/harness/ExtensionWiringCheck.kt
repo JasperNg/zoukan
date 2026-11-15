@@ -313,7 +313,8 @@ class ExtensionWiringCheck(
             trace(row, "settings", e)
             return
         }
-        screen.preferences.toList().forEach { pref ->
+        // Also the preferences in a category, as the settings screen lists them
+        zoukan.desktop.ui.settings.flattenPreferences(screen).forEach { pref ->
             val key = pref.key ?: return@forEach
             val preferences = source.sourcePreferences()
             // What is stored, not the default: put back as it was, also after a failure
@@ -366,6 +367,10 @@ class ExtensionWiringCheck(
             values.firstOrNull()?.let { first -> if (first in current) current - first else current + first }
         }
         is EditTextPreference -> ((pref.currentValue as? String) ?: "") + "x"
+        is androidx.preference.SeekBarPreference -> {
+            val current = (pref.currentValue as? Int) ?: pref.min
+            if (current < pref.max) current + 1 else pref.min
+        }
         else -> null
     }
 

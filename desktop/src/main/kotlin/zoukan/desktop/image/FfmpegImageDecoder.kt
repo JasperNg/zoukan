@@ -29,8 +29,10 @@ import org.bytedeco.ffmpeg.global.avutil.AVERROR_EAGAIN
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO
 import org.bytedeco.ffmpeg.global.avutil.AV_LOG_QUIET
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
+import org.bytedeco.ffmpeg.global.avutil.av_dict_get
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
 import org.bytedeco.ffmpeg.global.avutil.av_frame_free
+import org.bytedeco.ffmpeg.global.avutil.av_get_pix_fmt_name
 import org.bytedeco.ffmpeg.global.avutil.av_log_set_level
 import org.bytedeco.ffmpeg.global.swscale.SWS_ACCURATE_RND
 import org.bytedeco.ffmpeg.global.swscale.SWS_BICUBIC
@@ -45,6 +47,9 @@ import org.bytedeco.javacpp.BytePointer
 import org.bytedeco.javacpp.DoublePointer
 import org.bytedeco.javacpp.IntPointer
 import org.bytedeco.javacpp.PointerPointer
+import tachiyomi.decoder.Format
+import tachiyomi.decoder.ImageFormats
+import java.awt.AlphaComposite
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferInt
 import java.io.File
@@ -56,15 +61,18 @@ import java.nio.ByteOrder
  * frame of the primary image, or its tiles put together when the image is a grid.
  *
  * On Android Komikku reads these with its image decoder (libavif, libheif); FFmpeg does the same
- * job here. Alpha planes, which FFmpeg reads as a separate image, are left out: pages and covers
- * are opaque.
+ * job here. Transparency is kept: from a frame with an alpha plane (the yuva pixel formats), or
+ * from the AVIF or HEIF alpha auxiliary image, which FFmpeg does not merge but gives as one more
+ * stream (or tile grid): a gray image the primary image's size, put in as the alpha channel.
+ *
+ * JPEG XL is not decoded: the bundled FFmpeg has no libjxl decoder.
  */
 object FfmpegImageDecoder {
     // Loads FFmpeg's natives on the first decode, so recognizing other images never touches them
     private val natives: Unit by lazy { av_log_set_level(AV_LOG_QUIET) }
 
-    /** Whether [bytes] start like an image this decoder is for. */
-    fun handles(bytes: ByteArray): Boolean = isAvifOrHeif(bytes)
+    /** Whether [bytes] start like an image this decoder is for ([ImageFormats.HEADER] bytes are enough). */
+    fun handles(bytes: ByteArray): Boolean = ImageFormats.sniff(bytes).let { it == Format.Avif || it == Format.Heif }
 
     fun decode(bytes: ByteArray): BufferedImage {
         // FFmpeg reads from a file here, which keeps the native code simple and safe
@@ -93,79 +101,160 @@ object FfmpegImageDecoder {
         }
         try {
             if (avformat_find_stream_info(format, null as PointerPointer<*>?) < 0) throw IOException("Could not read the image's streams")
-            val grid = tileGrid(format)
-            return if (grid != null) {
-                decodeGrid(format, grid.first, grid.second)
-            } else {
-                val index = av_find_best_stream(format, AVMEDIA_TYPE_VIDEO, -1, -1, null as AVCodec?, 0)
-                if (index < 0) throw IOException("The file has no image")
-                decodeFirstFrames(format, listOf(index)).getValue(index)
+            val grids = tileGrids(format)
+            val grid = grids.firstOrNull { it.isDefault } ?: grids.firstOrNull()
+            if (grid != null) {
+                val alpha = grids.firstOrNull { it !== grid && isAlphaGrid(format, it, grid) }
+                val alphaStreams = alpha?.streams.orEmpty()
+                val frames = decodeFirstFrames(format, (grid.streams + alphaStreams).distinct(), optional = alphaStreams.toSet())
+                val color = composeGrid(grid, frames) ?: throw IOException("The image could not be decoded")
+                return withAlpha(color, alpha?.let { composeGrid(it, frames) })
             }
+            val index = av_find_best_stream(format, AVMEDIA_TYPE_VIDEO, -1, -1, null as AVCodec?, 0)
+            if (index < 0) throw IOException("The file has no image")
+            val alpha = alphaStream(format, index)
+            val frames = decodeFirstFrames(format, listOfNotNull(index, alpha), optional = setOfNotNull(alpha))
+            return withAlpha(frames.getValue(index), alpha?.let { frames[it] })
         } finally {
             avformat_close_input(format)
         }
     }
 
-    /** The stream group of a grid image, with the indexes of its tiles' streams in the file. */
-    private fun tileGrid(format: AVFormatContext): Pair<AVStreamGroupTileGrid, List<Int>>? {
-        val grids = (0 until format.nb_stream_groups()).map { format.stream_groups(it) }
+    /** A tile grid of the file, with the indexes of its tiles' streams. */
+    private class Grid(val grid: AVStreamGroupTileGrid, val streams: List<Int>, val isDefault: Boolean)
+
+    /** The file's tile grids: the primary image's is the default one; an alpha or other auxiliary grid is not. */
+    private fun tileGrids(format: AVFormatContext): List<Grid> =
+        (0 until format.nb_stream_groups()).map { format.stream_groups(it) }
             .filter { it.type() == AV_STREAM_GROUP_PARAMS_TILE_GRID }
-        // The primary image's grid is the default one; an alpha or other auxiliary grid is not
-        val group = grids.firstOrNull { (it.disposition() and AV_DISPOSITION_DEFAULT) != 0 } ?: grids.firstOrNull() ?: return null
-        val grid = group.params_tile_grid()
-        val streams = (0 until grid.nb_tiles()).map { group.streams(grid.offsets_idx(it)).index() }
-        return grid to streams
+            .map { group ->
+                val grid = group.params_tile_grid()
+                val streams = (0 until grid.nb_tiles()).map { group.streams(grid.offsets_idx(it)).index() }
+                Grid(grid, streams, (group.disposition() and AV_DISPOSITION_DEFAULT) != 0)
+            }
+
+    /** Whether [candidate] is the alpha image of [primary]: a grid of gray tiles the same size. */
+    private fun isAlphaGrid(format: AVFormatContext, candidate: Grid, primary: Grid): Boolean =
+        !candidate.isDefault &&
+            candidate.grid.coded_width() == primary.grid.coded_width() &&
+            candidate.grid.coded_height() == primary.grid.coded_height() &&
+            candidate.streams.isNotEmpty() &&
+            candidate.streams.none { it in primary.streams } &&
+            candidate.streams.all { isGray(format, it) }
+
+    /**
+     * The stream of the alpha auxiliary image of the image in stream [primary], or null: another
+     * stream, not the default one, of gray pixels and the same size. libavif names the item "Alpha".
+     */
+    private fun alphaStream(format: AVFormatContext, primary: Int): Int? {
+        val main = format.streams(primary).codecpar()
+        val candidates = (0 until format.nb_streams()).filter { i ->
+            val stream = format.streams(i)
+            val parameters = stream.codecpar()
+            i != primary &&
+                parameters.codec_type() == AVMEDIA_TYPE_VIDEO &&
+                (stream.disposition() and AV_DISPOSITION_DEFAULT) == 0 &&
+                parameters.width() == main.width() &&
+                parameters.height() == main.height() &&
+                isGray(format, i)
+        }
+        return candidates.firstOrNull { title(format, it)?.contains("alpha", ignoreCase = true) == true } ?: candidates.firstOrNull()
     }
 
-    private fun decodeGrid(format: AVFormatContext, grid: AVStreamGroupTileGrid, streams: List<Int>): BufferedImage {
-        val tiles = decodeFirstFrames(format, streams.distinct())
-        val canvas = BufferedImage(grid.coded_width(), grid.coded_height(), BufferedImage.TYPE_INT_ARGB)
+    private fun isGray(format: AVFormatContext, stream: Int): Boolean =
+        av_get_pix_fmt_name(format.streams(stream).codecpar().format())?.string?.startsWith("gray") == true
+
+    private fun title(format: AVFormatContext, stream: Int): String? =
+        av_dict_get(format.streams(stream).metadata(), "title", null, 0)?.value()?.string
+
+    /** [color] with the gray levels of [alpha] as its alpha channel, when they are the same size. */
+    internal fun withAlpha(color: BufferedImage, alpha: BufferedImage?): BufferedImage {
+        if (alpha == null || alpha.width != color.width || alpha.height != color.height) return color
+        val width = color.width
+        val colors = IntArray(width)
+        val levels = IntArray(width)
+        for (y in 0 until color.height) {
+            color.getRGB(0, y, width, 1, colors, 0, width)
+            alpha.getRGB(0, y, width, 1, levels, 0, width)
+            // A gray frame converts to equal red, green and blue: red is the level
+            for (x in 0 until width) colors[x] = (colors[x] and 0xFFFFFF) or (((levels[x] shr 16) and 0xFF) shl 24)
+            color.setRGB(0, y, width, 1, colors, 0, width)
+        }
+        return color
+    }
+
+    /** The grid's tiles from [tiles] put together, or null when a tile is missing. */
+    private fun composeGrid(grid: Grid, tiles: Map<Int, BufferedImage>): BufferedImage? {
+        if (grid.streams.any { it !in tiles }) return null
+        val params = grid.grid
+        val canvas = BufferedImage(params.coded_width(), params.coded_height(), BufferedImage.TYPE_INT_ARGB)
         val g = canvas.createGraphics()
         try {
-            streams.forEachIndexed { i, stream ->
-                g.drawImage(tiles.getValue(stream), grid.offsets_horizontal(i), grid.offsets_vertical(i), null)
+            // Tiles replace what is under them, alpha included
+            g.composite = AlphaComposite.Src
+            grid.streams.forEachIndexed { i, stream ->
+                g.drawImage(tiles.getValue(stream), params.offsets_horizontal(i), params.offsets_vertical(i), null)
             }
         } finally {
             g.dispose()
         }
-        val width = grid.width().takeIf { it > 0 } ?: canvas.width
-        val height = grid.height().takeIf { it > 0 } ?: canvas.height
-        val x = grid.horizontal_offset().coerceIn(0, canvas.width - 1)
-        val y = grid.vertical_offset().coerceIn(0, canvas.height - 1)
+        val width = params.width().takeIf { it > 0 } ?: canvas.width
+        val height = params.height().takeIf { it > 0 } ?: canvas.height
+        val x = params.horizontal_offset().coerceIn(0, canvas.width - 1)
+        val y = params.vertical_offset().coerceIn(0, canvas.height - 1)
         if (x == 0 && y == 0 && width == canvas.width && height == canvas.height) return canvas
         return canvas.getSubimage(x, y, width.coerceAtMost(canvas.width - x), height.coerceAtMost(canvas.height - y))
     }
 
-    /** The first decoded frame of each of [streams], as images. */
-    private fun decodeFirstFrames(format: AVFormatContext, streams: List<Int>): Map<Int, BufferedImage> {
+    /**
+     * The first decoded frame of each of [streams], as images. A stream in [optional] (an alpha
+     * image) that cannot be decoded is left out instead of failing the image.
+     */
+    private fun decodeFirstFrames(
+        format: AVFormatContext,
+        streams: List<Int>,
+        optional: Set<Int> = emptySet(),
+    ): Map<Int, BufferedImage> {
         val decoders = HashMap<Int, AVCodecContext>()
         val images = HashMap<Int, BufferedImage>()
         val packet = av_packet_alloc()
         val frame = av_frame_alloc()
         try {
-            streams.forEach { decoders[it] = openDecoder(format, it) }
+            streams.forEach { stream ->
+                if (stream in optional) {
+                    runCatching { openDecoder(format, stream) }.getOrNull()?.let { decoders[stream] = it }
+                } else {
+                    decoders[stream] = openDecoder(format, stream)
+                }
+            }
+            val wanted = streams.filter { it in decoders }
 
             fun receive(stream: Int) {
                 if (stream in images) return
                 if (avcodec_receive_frame(decoders.getValue(stream), frame) == 0) images[stream] = toImage(frame)
             }
 
-            while (images.size < streams.size && av_read_frame(format, packet) >= 0) {
+            val failed = HashSet<Int>()
+            while (images.size + failed.size < wanted.size && av_read_frame(format, packet) >= 0) {
                 val stream = packet.stream_index()
                 val decoder = decoders[stream]
-                if (decoder != null && stream !in images) {
+                if (decoder != null && stream !in images && stream !in failed) {
                     val sent = avcodec_send_packet(decoder, packet)
-                    if (sent < 0 && sent != AVERROR_EAGAIN()) throw IOException("Could not decode the image ($sent)")
-                    receive(stream)
+                    if (sent < 0 && sent != AVERROR_EAGAIN()) {
+                        if (stream !in optional) throw IOException("Could not decode the image ($sent)")
+                        failed += stream
+                    } else {
+                        receive(stream)
+                    }
                 }
                 av_packet_unref(packet)
             }
             // Decoders that hold a frame back until the end of the stream
-            streams.filter { it !in images }.forEach { stream ->
+            wanted.filter { it !in images && it !in failed }.forEach { stream ->
                 avcodec_send_packet(decoders.getValue(stream), null)
                 receive(stream)
             }
-            streams.firstOrNull { it !in images }?.let { throw IOException("The image could not be decoded") }
+            streams.firstOrNull { it !in images && it !in optional }?.let { throw IOException("The image could not be decoded") }
             return images
         } finally {
             av_frame_free(frame)
@@ -219,15 +308,6 @@ object FfmpegImageDecoder {
             sws_freeContext(sws)
         }
     }
-
-    internal fun isAvifOrHeif(bytes: ByteArray): Boolean {
-        fun ascii(offset: Int, text: String) =
-            bytes.size >= offset + text.length && text.indices.all { bytes[offset + it].toInt().toChar() == text[it] }
-        return ascii(4, "ftyp") && BRANDS.any { ascii(8, it) }
-    }
-
-    // The ISO-BMFF major brands of AVIF and HEIF still images
-    private val BRANDS = listOf("avif", "avis", "heic", "heix", "heim", "heis", "mif1", "msf1")
 
     // The matrices sws_getCoefficients knows; AVCOL_SPC_* and SWS_CS_* share these numbers
     private val SWS_MATRICES = setOf(1, 4, 5, 6, 7, 9, 10)

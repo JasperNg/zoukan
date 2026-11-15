@@ -114,7 +114,8 @@ public class CustomContext extends Context {
 
     @Override
     public Looper getMainLooper() {
-        return null;
+        // ZOUKAN: the looper the desktop app runs as Android's main thread (null until it is prepared)
+        return Looper.getMainLooper();
     }
 
     @Override
@@ -139,17 +140,18 @@ public class CustomContext extends Context {
 
     @Override
     public String getPackageName() {
-        return null;
+        // ZOUKAN: the emulated app's package name (android.app.packageName), as Android reports it
+        return applicationInfo.packageName;
     }
 
     @Override
     public String getBasePackageName() {
-        return null;
+        return getPackageName();
     }
 
     @Override
     public String getOpPackageName() {
-        return null;
+        return getPackageName();
     }
 
     @Override
@@ -194,9 +196,17 @@ public class CustomContext extends Context {
     }
 
     @Override
-    public boolean deleteSharedPreferences(String name) {
+    public synchronized boolean deleteSharedPreferences(String name) {
+        // ZOUKAN -->
+        // As Android: the file is deleted whether or not it was opened in this process, and a name
+        // with no file is not an error
         JavaSharedPreferences item = (JavaSharedPreferences) prefs.remove(name);
-        return item.deleteAll();
+        if (item != null) item.deleteAll();
+        File file = JavaSharedPreferences.fileFor(name);
+        File leftover = new File(file.getPath() + ".tmp");
+        leftover.delete();
+        return !file.exists() || file.delete();
+        // ZOUKAN <--
     }
 
     @Override
@@ -221,7 +231,8 @@ public class CustomContext extends Context {
 
     @Override
     public File getSharedPreferencesPath(String name) {
-        return null;
+        // ZOUKAN: where getSharedPreferences(name) keeps its values
+        return JavaSharedPreferences.fileFor(name);
     }
 
     @Override
