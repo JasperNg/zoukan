@@ -1130,7 +1130,10 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     @Override
     public final void layout(int l, int t, int r, int b) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // AOSP's, without layout transitions (never running on desktop)
+        super.layout(l, t, r, b);
+        // ZOUKAN <--
     }
 
     @Override

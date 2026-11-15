@@ -212,6 +212,8 @@ dependencies {
     implementation(variantOf(zoukanlibs.ffmpeg) { classifier(javacppPlatform) })
     // The bulk migration's smart search, as the Android app
     implementation(libs.stringSimilarity)
+    // The extension wiring check reads extension bytecode
+    implementation(zoukanlibs.asm)
 
     // UI
     implementation(composeDesktopRuntime)
@@ -315,4 +317,28 @@ val wiringTest by tasks.registering(Test::class) {
     shouldRunAfter(tasks.test)
 }
 tasks.named("check") { dependsOn(wiringTest) }
+
+// Installs every extension of the Keiyoushi store and checks it is wired up on the desktop: no
+// class, method or field its bytecode uses is missing or a stub, its Injekt lookups resolve, its
+// sources, client, headers and settings work (ExtensionWiringCheck). It downloads every
+// extension, so it is not part of `check`; the nightly check runs it. The report goes to
+// build/reports/e2e/extensions-wiring.md. -Pzoukan.e2e.package=en.mangapill,all.mangadex limits it:
+//   ./gradlew :desktop:extensionWiringTest
+val extensionWiringTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Installs every Keiyoushi extension and checks it is wired up on the desktop"
+    val test = tasks.test.get()
+    testClassesDirs = test.testClassesDirs
+    classpath = test.classpath
+    useJUnitPlatform()
+    filter { includeTestsMatching("*ExtensionWiringTest") }
+    systemProperty("zoukan.e2e", "true")
+    providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
+    systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    systemProperty("user.language", "en")
+    // Over a thousand extensions load into one JVM, one class loader each
+    maxHeapSize = "4g"
+    // Live data: never up to date
+    outputs.upToDateWhen { false }
+}
 // ZOUKAN <--

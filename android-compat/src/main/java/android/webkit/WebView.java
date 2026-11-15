@@ -1043,8 +1043,31 @@ public class WebView extends AbsoluteLayout
 
     @Override
     public void setLayoutParams(ViewGroup.LayoutParams params) {
+        // ZOUKAN -->
+        // The Chromium provider has no view delegate: the offscreen browser keeps its own size, so
+        // the WebView only keeps the parameters, as a plain view does
+        if (isKcef()) {
+            super.setLayoutParams(params);
+            return;
+        }
+        // ZOUKAN <--
         mProvider.getViewDelegate().setLayoutParams(params);
     }
+
+    // ZOUKAN -->
+    private boolean isKcef() {
+        return mProvider instanceof xyz.nulldev.androidcompat.webkit.KcefWebViewProvider;
+    }
+
+    /**
+     * Lays out nothing: on desktop the page renders in an offscreen browser, not in child views.
+     * AbsoluteLayout's own onLayout is a stub.
+     */
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        if (!isKcef()) super.onLayout(changed, l, t, r, b);
+    }
+    // ZOUKAN <--
 
     @Override
     public void setOverScrollMode(int mode) {
@@ -1296,12 +1319,17 @@ public class WebView extends AbsoluteLayout
 
     /** @hide */
     protected boolean setFrame(int left, int top, int right, int bottom) {
+        // ZOUKAN -->
+        if (isKcef()) return super.setFrame(left, top, right, bottom);
+        // ZOUKAN <--
         return mProvider.getViewDelegate().setFrame(left, top, right, bottom);
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
+        // ZOUKAN: the offscreen browser keeps its own size (see KcefWebViewProvider.RenderHandler)
+        if (isKcef()) return;
         mProvider.getViewDelegate().onSizeChanged(w, h, ow, oh);
     }
 
@@ -1323,6 +1351,16 @@ public class WebView extends AbsoluteLayout
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        // ZOUKAN -->
+        // AbsoluteLayout's onMeasure is a stub, and a WebView has no children to measure: it takes
+        // the size it is given, or the display's
+        if (isKcef()) {
+            android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+            setMeasuredDimension(resolveSize(metrics.widthPixels, widthMeasureSpec),
+                    resolveSize(metrics.heightPixels, heightMeasureSpec));
+            return;
+        }
+        // ZOUKAN <--
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         mProvider.getViewDelegate().onMeasure(widthMeasureSpec, heightMeasureSpec);
     }

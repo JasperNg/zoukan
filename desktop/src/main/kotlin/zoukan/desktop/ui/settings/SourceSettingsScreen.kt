@@ -146,7 +146,19 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
             enabled = pref.isEnabled,
             onClick = onOpen,
         )
-        else -> SettingRow(title, summaryOf(pref), enabled = pref.isEnabled)
+        // A plain preference with a click listener is a button, as on Android: the click runs the
+        // listener, which may change the summary or other preferences, so the list redraws after it
+        else -> SettingRow(
+            title = title,
+            subtitle = summaryOf(pref),
+            enabled = pref.isEnabled,
+            onClick = pref.onPreferenceClickListener?.let {
+                {
+                    runCatching { pref.performClick() }.onFailure { e -> Toasts.error(title, e) }
+                    onChanged()
+                }
+            },
+        )
     }
 }
 

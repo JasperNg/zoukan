@@ -86,6 +86,8 @@ public class CustomContext extends Context {
         serviceMap.put(Context.POWER_SERVICE, PowerManager.INSTANCE);
         // ZOUKAN: virtual displays for offscreen WebViews
         serviceMap.put(Context.DISPLAY_SERVICE, android.hardware.display.DisplayManager.INSTANCE);
+        // ZOUKAN: memory info (ActivityManager.getMemoryInfo)
+        serviceMap.put(Context.ACTIVITY_SERVICE, android.app.ActivityManager.INSTANCE);
     }
 
     @Override
@@ -566,7 +568,15 @@ public class CustomContext extends Context {
 
     @Override
     public String getSystemServiceName(Class<?> aClass) {
+        // ZOUKAN -->
+        // getSystemService(Class) maps the class to its name here
+        for (Map.Entry<String, Object> entry : serviceMap.entrySet()) {
+            if (aClass.isInstance(entry.getValue())) {
+                return entry.getKey();
+            }
+        }
         return null;
+        // ZOUKAN <--
     }
 
     @Override

@@ -240,7 +240,12 @@ public class Typeface {
             family = getSystemDefaultTypeface(DEFAULT_FAMILY);
         }
 
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        Map<TextAttribute, Object> attributes = new HashMap<TextAttribute, Object>();
+        attributes.put(TextAttribute.WEIGHT, (style & BOLD) != 0 ? TextAttribute.WEIGHT_BOLD : TextAttribute.WEIGHT_REGULAR);
+        attributes.put(TextAttribute.POSTURE, (style & ITALIC) != 0 ? TextAttribute.POSTURE_OBLIQUE : TextAttribute.POSTURE_REGULAR);
+        return family.deriveFont(attributes);
+        // ZOUKAN <--
     }
 
     public static @NonNull Typeface create(@Nullable Typeface family,

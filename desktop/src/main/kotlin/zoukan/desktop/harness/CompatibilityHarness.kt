@@ -11,6 +11,7 @@ import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.ui.reader.PageImage
 import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.LoadResult
@@ -131,6 +132,10 @@ class CompatibilityHarness(
         report.line("Installed and loaded: $installed of ${rows.size}")
         if (!options.offline) {
             report.line("Passed every required step (popular, details, chapters, pages): ${rows.count { it.passed }} of ${rows.size}")
+            val undecodable = rows.filter { it.image.startsWith("undecodable") }
+            if (undecodable.isNotEmpty()) {
+                report.line("Images the reader cannot decode: ${undecodable.joinToString { "${it.pkg} (${it.image})" }}")
+            }
             // A Cloudflare check the hidden browser cannot pass needs the user in the browser
             // window (--interactive); those sources are a known limitation, not a failure
             val cloudflare = rows.filter { !it.passed && CLOUDFLARE_MANUAL in it.allErrors() }
@@ -228,8 +233,15 @@ class CompatibilityHarness(
                 page.imageUrl = page.imageUrl ?: http.getImageUrl(page)
                 http.getImage(page).use { response ->
                     val type = response.body.contentType()?.toString() ?: "?"
-                    val size = response.body.bytes().size
-                    row.image = if (response.isSuccessful) "ok $type ${size / 1024} KB" else "HTTP ${response.code}"
+                    val bytes = response.body.bytes()
+                    row.image = when {
+                        !response.isSuccessful -> "HTTP ${response.code}"
+                        // As the reader decodes it: a format the app cannot show (AVIF, JPEG XL) fails here
+                        else -> runCatching { PageImage.decode(bytes) }.fold(
+                            onSuccess = { "ok $type ${bytes.size / 1024} KB" },
+                            onFailure = { "undecodable $type: ${describe(it)}" },
+                        )
+                    }
                 }
             }
         }.onFailure {

@@ -8,6 +8,12 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.OutputStream;
+// ZOUKAN -->
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import java.nio.ShortBuffer;
+// ZOUKAN <--
 import java.util.Iterator;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -416,6 +422,170 @@ public final class Bitmap {
     public void recycle() {
         // do nothing
     }
+
+    // ZOUKAN -->
+    public final boolean isRecycled() {
+        return false;
+    }
+
+    public final boolean isMutable() {
+        return true;
+    }
+
+    public boolean hasAlpha() {
+        // ALPHA_8 is held as TYPE_BYTE_GRAY, its gray samples being the alpha mask
+        return getConfig() == Config.ALPHA_8 || image.getColorModel().hasAlpha();
+    }
+
+    private int bytesPerPixel() {
+        Config config = getConfig();
+        if (config == Config.RGB_565) return 2;
+        if (config == Config.ALPHA_8) return 1;
+        return 4;
+    }
+
+    public final int getRowBytes() {
+        return width * bytesPerPixel();
+    }
+
+    public final int getByteCount() {
+        return getRowBytes() * height;
+    }
+
+    public final int getAllocationByteCount() {
+        return getByteCount();
+    }
+
+    private static int bufferShift(Buffer buffer) {
+        if (buffer instanceof ByteBuffer) return 0;
+        if (buffer instanceof ShortBuffer) return 1;
+        if (buffer instanceof IntBuffer) return 2;
+        throw new RuntimeException("unsupported Buffer subclass");
+    }
+
+    /**
+     * Copies raw pixels in the bitmap's memory layout from [src], as Android does: ARGB_8888 is
+     * premultiplied R, G, B, A bytes (an IntBuffer holds them as little-endian ints, so 0xAABBGGRR),
+     * RGB_565 is little-endian 16-bit values and ALPHA_8 one byte each. The buffer's position
+     * moves past the pixels.
+     */
+    public void copyPixelsFromBuffer(@NonNull Buffer src) {
+        int shift = bufferShift(src);
+        int bpp = bytesPerPixel();
+        long byteCount = (long) getByteCount();
+        if (((long) src.remaining() << shift) < byteCount) {
+            throw new RuntimeException("Buffer not large enough for pixels");
+        }
+        byte[] bytes = new byte[(int) byteCount];
+        int position = src.position();
+        if (src instanceof ByteBuffer) {
+            ByteBuffer b = (ByteBuffer) src;
+            for (int i = 0; i < bytes.length; i++) bytes[i] = b.get(position + i);
+        } else if (src instanceof ShortBuffer) {
+            ShortBuffer s = (ShortBuffer) src;
+            for (int i = 0; i < bytes.length / 2; i++) {
+                short v = s.get(position + i);
+                bytes[i * 2] = (byte) v;
+                bytes[i * 2 + 1] = (byte) (v >> 8);
+            }
+        } else {
+            IntBuffer ib = (IntBuffer) src;
+            for (int i = 0; i < bytes.length / 4; i++) {
+                int v = ib.get(position + i);
+                bytes[i * 4] = (byte) v;
+                bytes[i * 4 + 1] = (byte) (v >> 8);
+                bytes[i * 4 + 2] = (byte) (v >> 16);
+                bytes[i * 4 + 3] = (byte) (v >> 24);
+            }
+        }
+        if (bpp == 1) {
+            // ALPHA_8: the mask bytes are the gray raster's samples, read and written directly
+            image.getRaster().setDataElements(0, 0, width, height, bytes);
+            src.position(position + (int) (byteCount >> shift));
+            return;
+        }
+        int[] pixels = new int[width * height];
+        for (int i = 0; i < pixels.length; i++) {
+            int o = i * bpp;
+            if (bpp == 4) {
+                int r = bytes[o] & 0xff, g = bytes[o + 1] & 0xff, b = bytes[o + 2] & 0xff, a = bytes[o + 3] & 0xff;
+                pixels[i] = (a << 24) | (unpremultiply(r, a) << 16) | (unpremultiply(g, a) << 8) | unpremultiply(b, a);
+            } else if (bpp == 2) {
+                int v = (bytes[o] & 0xff) | ((bytes[o + 1] & 0xff) << 8);
+                int r = (v >> 11) & 0x1f, g = (v >> 5) & 0x3f, b = v & 0x1f;
+                pixels[i] = 0xff000000 | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+            } else {
+                int a = bytes[o] & 0xff;
+                pixels[i] = (a << 24) | (a << 16) | (a << 8) | a;
+            }
+        }
+        image.setRGB(0, 0, width, height, pixels, 0, width);
+        src.position(position + (int) (byteCount >> shift));
+    }
+
+    /** The reverse of {@link #copyPixelsFromBuffer}: writes the raw pixels into [dst]. */
+    public void copyPixelsToBuffer(@NonNull Buffer dst) {
+        int shift = bufferShift(dst);
+        int bpp = bytesPerPixel();
+        long byteCount = (long) getByteCount();
+        if (((long) dst.remaining() << shift) < byteCount) {
+            throw new RuntimeException("Buffer not large enough for pixels");
+        }
+        byte[] bytes = new byte[(int) byteCount];
+        int[] pixels;
+        if (bpp == 1) {
+            // ALPHA_8: the gray raster's samples are the mask bytes
+            image.getRaster().getDataElements(0, 0, width, height, bytes);
+            pixels = new int[0];
+        } else {
+            pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        }
+        for (int i = 0; i < pixels.length; i++) {
+            int p = pixels[i], o = i * bpp;
+            int a = p >>> 24, r = (p >> 16) & 0xff, g = (p >> 8) & 0xff, b = p & 0xff;
+            if (bpp == 4) {
+                bytes[o] = (byte) premultiply(r, a);
+                bytes[o + 1] = (byte) premultiply(g, a);
+                bytes[o + 2] = (byte) premultiply(b, a);
+                bytes[o + 3] = (byte) a;
+            } else if (bpp == 2) {
+                int v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+                bytes[o] = (byte) v;
+                bytes[o + 1] = (byte) (v >> 8);
+            } else {
+                bytes[o] = (byte) a;
+            }
+        }
+        int position = dst.position();
+        if (dst instanceof ByteBuffer) {
+            ByteBuffer b = (ByteBuffer) dst;
+            for (int i = 0; i < bytes.length; i++) b.put(position + i, bytes[i]);
+        } else if (dst instanceof ShortBuffer) {
+            ShortBuffer s = (ShortBuffer) dst;
+            for (int i = 0; i < bytes.length / 2; i++) {
+                s.put(position + i, (short) ((bytes[i * 2] & 0xff) | ((bytes[i * 2 + 1] & 0xff) << 8)));
+            }
+        } else {
+            IntBuffer ib = (IntBuffer) dst;
+            for (int i = 0; i < bytes.length / 4; i++) {
+                ib.put(position + i, (bytes[i * 4] & 0xff) | ((bytes[i * 4 + 1] & 0xff) << 8)
+                        | ((bytes[i * 4 + 2] & 0xff) << 16) | ((bytes[i * 4 + 3] & 0xff) << 24));
+            }
+        }
+        dst.position(position + (int) (byteCount >> shift));
+    }
+
+    private static int unpremultiply(int c, int a) {
+        if (a == 255) return c;
+        if (a == 0) return 0;
+        return Math.min(255, (c * 255 + a / 2) / a);
+    }
+
+    private static int premultiply(int c, int a) {
+        if (a == 255) return c;
+        return (c * a + 127) / 255;
+    }
+    // ZOUKAN <--
 
     @Nullable
     public final Config getConfig() {

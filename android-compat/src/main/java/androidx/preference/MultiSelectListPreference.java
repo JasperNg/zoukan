@@ -10,6 +10,9 @@ package androidx.preference;
 import android.content.Context;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import android.text.TextUtils;
+
+import java.util.HashSet;
 import java.util.Set;
 
 public class MultiSelectListPreference extends DialogPreference {
@@ -39,19 +42,47 @@ public class MultiSelectListPreference extends DialogPreference {
         return entryValues;
     }
 
+    // ZOUKAN -->
+    // As Android: setValues stores the values (persisting them once the preference has its
+    // SharedPreferences) without calling the change listener.
+    @JsonIgnore
+    private Set<String> values;
+
     @JsonIgnore
     public void setValues(Set<String> values) {
-        throw new RuntimeException("Stub!");
+        this.values = values == null ? new HashSet<>() : new HashSet<>(values);
+        if (getKey() != null && getSharedPreferences() != null) {
+            saveNewValue(this.values);
+        }
     }
 
     @JsonIgnore
+    @SuppressWarnings("unchecked")
     public Set<String> getValues() {
-        throw new RuntimeException("Stub!");
+        if (getKey() != null && getSharedPreferences() != null) {
+            Object current = getCurrentValue();
+            if (current != null) {
+                return (Set<String>) current;
+            }
+        }
+        if (values != null) {
+            return values;
+        }
+        Object defaultValue = getDefaultValue();
+        return defaultValue instanceof Set ? (Set<String>) defaultValue : new HashSet<>();
     }
 
     public int findIndexOfValue(String value) {
-        throw new RuntimeException("Stub!");
+        if (value != null && entryValues != null) {
+            for (int i = entryValues.length - 1; i >= 0; i--) {
+                if (TextUtils.equals(entryValues[i].toString(), value)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
+    // ZOUKAN <--
 
     /** Tachidesk specific API */
     @Override
