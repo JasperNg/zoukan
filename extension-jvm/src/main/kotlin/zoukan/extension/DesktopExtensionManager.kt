@@ -69,6 +69,8 @@ class DesktopExtensionManager(
     /** Fetches the extension lists of all added stores. */
     suspend fun findAvailableExtensions(): Map<ExtensionStore, Result<List<Extension.Available>>> =
         withContext(Dispatchers.IO) {
+            // A store removed while this fetches must not have its offers put back
+            val forgottenBefore = synchronized(stateLock) { forgottenStores.size }
             val results = getStores().associateWith { storeService.getExtensions(it) }
             results.forEach { (store, result) ->
                 result.onFailure { logcat(LogPriority.ERROR, it) { "Failed to get extensions of ${store.name}" } }
@@ -76,7 +78,12 @@ class DesktopExtensionManager(
             // Stores in the order they were added. When two offer one package, the copy signed like
             // the installed one counts; never simply the last store's (see chooseOffer)
             synchronized(stateLock) {
-                offers = results.values.flatMap { it.getOrDefault(emptyList()) }.groupBy { it.pkgName }
+                val forgotten = forgottenStores.subList(forgottenBefore, forgottenStores.size).toSet()
+                offers = results
+                    .filterKeys { it.indexUrl !in forgotten }
+                    .values
+                    .flatMap { it.getOrDefault(emptyList()) }
+                    .groupBy { it.pkgName }
                 chooseOffers()
             }
             results
@@ -88,6 +95,7 @@ class DesktopExtensionManager(
      */
     fun forgetStore(indexUrl: String) {
         synchronized(stateLock) {
+            forgottenStores += indexUrl
             offers = offers
                 .mapValues { (_, list) -> list.filterNot { it.store.indexUrl == indexUrl } }
                 .filterValues { it.isNotEmpty() }
@@ -252,6 +260,10 @@ class DesktopExtensionManager(
     /** Every store's offer of each package, from the last [findAvailableExtensions]. */
     @Volatile
     private var offers = emptyMap<String, List<Extension.Available>>()
+
+    /** Every store [forgetStore] removed, in order; a fetch drops those removed while it ran. */
+    // Guarded by stateLock
+    private val forgottenStores = mutableListOf<String>()
 
     /** Again after an install or uninstall: which store's copy counts depends on what is installed. */
     private fun chooseOffers() {

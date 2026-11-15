@@ -83,8 +83,9 @@ class CookieManagerImpl : CookieManager() {
             .filter { domain == null || it.domain?.trimStart('.').equals(domain, ignoreCase = true) }
             .filter { expired.path == null || it.path == expired.path }
             .forEach { store.remove(uri, it) }
-        // Chromium would otherwise hand the cookie back after the next page load
-        CefCookieSync.deleteFromCef(if (url.startsWith("http")) url else "https://$url", name)
+        // Chromium would otherwise hand the cookie back after the next page load. Limited to the
+        // same Domain and Path, so expiring a path-scoped cookie keeps the browser's other one
+        CefCookieSync.deleteFromCef(if (url.startsWith("http")) url else "https://$url", name, domain, expired.path)
     }
     // ZOUKAN <--
 
@@ -105,8 +106,12 @@ class CookieManagerImpl : CookieManager() {
             } else {
                 URI("http://$url")
             }
+        // ZOUKAN: as Chromium, only cookies whose Path matches the URL's, the longest path first
+        val requestPath = uri.rawPath.takeUnless { it.isNullOrEmpty() } ?: "/"
         return cookieHandler.cookieStore
             .get(uri)
+            .filter { pathMatches(it.path ?: "/", requestPath) }
+            .sortedByDescending { (it.path ?: "/").length }
             .joinToString("; ") { "${it.name}=${it.value}" }
             .ifEmpty { null }
     }
@@ -151,6 +156,17 @@ class CookieManagerImpl : CookieManager() {
          */
         fun hasExpiredAttribute(header: String): Boolean? =
             maxAgeAttribute.find(header)?.groupValues?.get(1)?.toLongOrNull()?.let { it <= 0 }
+
+        /** RFC 6265's path-match: [requestPath] is [cookiePath] or a path under it. */
+        fun pathMatches(
+            cookiePath: String,
+            requestPath: String,
+        ): Boolean =
+            requestPath == cookiePath ||
+                (
+                    requestPath.startsWith(cookiePath) &&
+                        (cookiePath.endsWith("/") || requestPath[cookiePath.length] == '/')
+                )
 
         /** RFC 6265's default-path: the URL path up to its last "/", or "/". */
         fun defaultPath(uri: URI): String {

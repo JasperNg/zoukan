@@ -9,6 +9,8 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import xyz.nulldev.androidcompat.webkit.CefCookieDeletion
+import xyz.nulldev.androidcompat.webkit.PendingCefCookieDeletions
 import java.io.File
 import java.net.CookieHandler
 import java.net.CookiePolicy
@@ -129,6 +131,69 @@ class CookieManagerSemanticsTest {
 
         manager.setCookie("https://example.org", "q=1; Max-Age=3600")
         store.cookies.single { it.name == "q" }.path shouldBe "/"
+    }
+
+    @Test
+    fun `getCookie sends only cookies whose path matches, the longest path first`() {
+        manager.setCookie("https://example.org/", "a=1; Path=/; Max-Age=3600")
+        manager.setCookie("https://example.org/api/x", "a=2; Path=/api; Max-Age=3600")
+        manager.setCookie("https://example.org/", "b=3; Path=/apis; Max-Age=3600")
+
+        manager.getCookie("https://example.org/") shouldBe "a=1"
+        manager.getCookie("https://example.org") shouldBe "a=1"
+        manager.getCookie("https://example.org/api") shouldBe "a=2; a=1"
+        manager.getCookie("https://example.org/api/list") shouldBe "a=2; a=1"
+        manager.getCookie("https://example.org/apis/1") shouldBe "b=3; a=1"
+
+        // A cookie saved without a path (before paths were defaulted) goes everywhere, as "/"
+        store.add(URI("https://example.org/"), java.net.HttpCookie("old", "1").apply { maxAge = 3600 })
+        manager.getCookie("https://example.org/api") shouldBe "a=2; a=1; old=1"
+    }
+
+    @Test
+    fun `expiring a path-scoped cookie keeps the same name at another path`() {
+        manager.setCookie("https://example.org/", "sess=root; Path=/; Max-Age=3600")
+        manager.setCookie("https://example.org/api/", "sess=api; Path=/api; Max-Age=3600")
+
+        manager.setCookie("https://example.org/api/", "sess=; Path=/api; Max-Age=0")
+        manager.getCookie("https://example.org/api/") shouldBe "sess=root"
+    }
+
+    @Test
+    fun `a Chromium deletion with a Path or Domain matches only those cookies`() {
+        val broad = CefCookieDeletion("https://example.org/", "sess")
+        broad.isExact shouldBe false
+
+        val scoped = CefCookieDeletion("https://example.org/api/", "sess", path = "/api")
+        scoped.isExact shouldBe true
+        scoped.matches("example.org", "sess", "example.org", "/api") shouldBe true
+        scoped.matches("example.org", "sess", "example.org", "/") shouldBe false
+        scoped.matches("example.org", "sess", ".example.org", "/api") shouldBe true
+        scoped.matches("example.org", "sess", "other.org", "/api") shouldBe false
+        scoped.matches("example.org", "other", "example.org", "/api") shouldBe false
+
+        val domain = CefCookieDeletion("https://www.example.org/", "sess", domain = "example.org")
+        domain.matches("www.example.org", "sess", ".example.org", "/x") shouldBe true
+        domain.matches("www.example.org", "sess", "www.example.org", "/") shouldBe false
+    }
+
+    @Test
+    fun `Chromium deletions made before it runs wait, and a clear replaces those before it`() {
+        val pending = PendingCefCookieDeletions()
+        val named = CefCookieDeletion("https://example.org/", "a")
+        pending.addUnless(named) { true } shouldBe true
+        pending.drain() shouldBe emptyList()
+
+        pending.addUnless(named) { false } shouldBe false
+        pending.drain() shouldBe listOf(named)
+        pending.drain() shouldBe emptyList()
+
+        val all = CefCookieDeletion("", "")
+        val after = CefCookieDeletion("https://example.org/", "b")
+        pending.addUnless(named) { false }
+        pending.addUnless(all) { false }
+        pending.addUnless(after) { false }
+        pending.drain() shouldBe listOf(all, after)
     }
 
     @Test

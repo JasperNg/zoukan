@@ -85,7 +85,7 @@ class JavaSharedPreferences(
             unsaved.toList().forEach { prefs ->
                 // save() takes the file's lock, so this never interleaves with the background writer;
                 // writing the latest snapshot again is harmless
-                prefs.save(prefs.getSnapshot())
+                prefs.save()
                 unsaved.remove(prefs)
             }
         }
@@ -151,7 +151,7 @@ class JavaSharedPreferences(
 
     // ZOUKAN -->
     init {
-        if (migrateToCodec && !properties.isEmpty) save(getSnapshot())
+        if (migrateToCodec && !properties.isEmpty) save()
     }
     // ZOUKAN <--
 
@@ -310,6 +310,13 @@ class JavaSharedPreferences(
             if (isSetEntry(key, name)) preferences.remove(name)
         }
     }
+
+    /** Whether [key] holds a Set, or one written before types were kept; not a key.size of its own type. */
+    private fun storedAsSet(key: String): Boolean {
+        val storedType = preferences.getStringOrNull(TYPE_PREFIX + key)
+        return storedType == TYPE_STRING_SET ||
+            (storedType == null && "$key.size" in preferences.keys && "$TYPE_PREFIX$key.size" !in preferences.keys)
+    }
     // ZOUKAN <--
 
     private fun saveAction(
@@ -320,6 +327,9 @@ class JavaSharedPreferences(
             is Action.Add -> {
                 // ZOUKAN -->
                 val before = stateOf(action.key)
+                // A value of another type replaces a Set: its entries go, or contains() and
+                // getStringSet() would still find it, and a later remove() would leave them
+                if (action.value !is Set<*> && storedAsSet(action.key)) removeSetEntries(action.key)
                 // ZOUKAN <--
                 when (val value = action.value) {
                     is Set<*> -> {
@@ -377,15 +387,7 @@ class JavaSharedPreferences(
             is Action.Remove -> {
                 // ZOUKAN -->
                 val before = stateOf(action.key)
-                // A Set, or one written before types were kept; not a key.size of its own type
-                val storedType = preferences.getStringOrNull(TYPE_PREFIX + action.key)
-                val wasSet =
-                    storedType == TYPE_STRING_SET ||
-                        (
-                            storedType == null &&
-                                "${action.key}.size" in preferences.keys &&
-                                "$TYPE_PREFIX${action.key}.size" !in preferences.keys
-                        )
+                val wasSet = storedAsSet(action.key)
                 // ZOUKAN <--
                 preferences.remove(action.key)
                 // ZOUKAN -->
@@ -484,19 +486,18 @@ class JavaSharedPreferences(
         }
 
     private fun save(actions: List<Action>): Boolean {
-        val (changed, snapshot) =
-            synchronized(properties) {
-                saveActions(actions) to getSnapshot()
-            }
+        val changed = saveActions(actions)
 
-        val saved = save(snapshot)
+        val saved = save()
         // ZOUKAN: outside the lock, so a listener that reads or writes these preferences cannot
         // deadlock, and one that throws does not fail the commit
         notify(changed)
         return saved
     }
 
-    private fun save(): Boolean = save(getSnapshot())
+    // ZOUKAN: the snapshot is taken under the file's lock, so a writer holding an older snapshot
+    // cannot write it over a newer one that commit(), apply() or the shutdown flush already wrote
+    private fun save(): Boolean = synchronized(file) { save(getSnapshot()) }
 
     @OptIn(DelicateCoroutinesApi::class, ExperimentalAtomicApi::class)
     private fun startAsyncSaver() {
@@ -508,7 +509,7 @@ class JavaSharedPreferences(
             while (true) {
                 dirty.store(false)
 
-                save(getSnapshot())
+                save()
 
                 if (!dirty.load()) {
                     // ZOUKAN: off the shutdown flush's list before the next apply() can start a
@@ -532,11 +533,15 @@ class JavaSharedPreferences(
         val changed = saveActions(actions)
 
         dirty.store(true)
-        // ZOUKAN -->
-        unsaved.add(this)
-        // ZOUKAN <--
 
         startAsyncSaver()
+
+        // ZOUKAN -->
+        // After the writer is started: a writer that is ending removes the file from the list
+        // before it lets a new one start, so an add before that could be removed while this
+        // change is still unwritten, and the shutdown flush would skip it
+        unsaved.add(this)
+        // ZOUKAN <--
 
         // ZOUKAN -->
         notify(changed)

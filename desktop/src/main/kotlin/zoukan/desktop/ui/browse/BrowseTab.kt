@@ -338,7 +338,9 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 TooltipIconButton(Icons.Outlined.Refresh, localized(DMR.strings.check_the_stores_again), onClick = model::refreshAvailable)
             }
         }
-        if (state.stores.isEmpty()) {
+        // Only with nothing installed either: after the last store is removed, its installed
+        // extensions must stay listed here, where they are uninstalled
+        if (state.stores.isEmpty() && state.installed.isEmpty() && state.untrusted.isEmpty() && state.loadErrors.isEmpty()) {
             EmptyScreen(localized(DMR.strings.add_an_extension_store_to_find), actionLabel = localized(DMR.strings.stores), onAction = onStores)
             return
         }

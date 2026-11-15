@@ -148,6 +148,21 @@ class PreferenceCompatTest {
     }
 
     @Test
+    fun `a value of another type replaces a Set, and removing it leaves nothing`() {
+        val name = "settype_${System.nanoTime()}"
+        val prefs = JavaSharedPreferences(name)
+        prefs.edit().putStringSet("langs", mutableSetOf("en", "ja")).commit()
+        prefs.edit().putString("langs", "en").commit()
+        prefs.getString("langs", null) shouldBe "en"
+        JavaSharedPreferences(name).all shouldBe mapOf("langs" to "en")
+
+        prefs.edit().remove("langs").commit()
+        prefs.contains("langs") shouldBe false
+        prefs.getStringSet("langs", null) shouldBe null
+        JavaSharedPreferences(name).all shouldBe emptyMap<String, Any?>()
+    }
+
+    @Test
     fun `a throwing listener does not break commit or apply, and the others still hear`() {
         val name = "listener_${System.nanoTime()}"
         val prefs = JavaSharedPreferences(name)

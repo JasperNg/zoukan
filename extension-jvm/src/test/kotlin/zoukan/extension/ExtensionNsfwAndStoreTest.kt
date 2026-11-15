@@ -7,6 +7,9 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
@@ -155,5 +158,36 @@ class ExtensionNsfwAndStoreTest {
             it.hasUpdate shouldBe false
             it.store shouldBe null
         }
+    }
+
+    @Test
+    fun `a store removed while the lists are fetched does not come back`() = withStubbedSignatures {
+        val storeA = store("a")
+        val storeB = store("b")
+        val fetching = CompletableDeferred<Unit>()
+        val removed = CompletableDeferred<Unit>()
+        val storeService = mockk<ExtensionStoreService> {
+            coEvery { getExtensions(storeA) } coAnswers {
+                fetching.complete(Unit)
+                removed.await()
+                Result.success(listOf(offer("only.in.a", 1, storeA)))
+            }
+            coEvery { getExtensions(storeB) } returns Result.success(listOf(offer("only.in.b", 1, storeB)))
+        }
+        val manager = DesktopExtensionManager(
+            loader = loader { true },
+            installer = DesktopExtensionInstaller(extensionsDir) { error("no downloads") },
+            trust = trust,
+            storeService = storeService,
+            getStores = { listOf(storeA, storeB) },
+        )
+        coroutineScope {
+            val find = async { manager.findAvailableExtensions() }
+            fetching.await()
+            manager.forgetStore(storeA.indexUrl)
+            removed.complete(Unit)
+            find.await()
+        }
+        manager.availableExtensionsFlow.value.keys shouldBe setOf("only.in.b")
     }
 }

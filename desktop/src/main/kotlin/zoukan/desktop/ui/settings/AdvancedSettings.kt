@@ -327,9 +327,8 @@ internal fun clearCookies() {
 }
 
 private fun deleteBrowserCookies() {
-    // Only when Chromium is running: getting the cookie manager would start it
-    if (org.cef.CefApp.getState() != org.cef.CefApp.CefAppState.INITIALIZED) return
-    runCatching { org.cef.network.CefCookieManager.getGlobalManager()?.deleteCookies("", "") }
+    // Now when Chromium is running, else when it starts: it keeps its cookies on disk
+    xyz.nulldev.androidcompat.webkit.CefCookieSync.deleteFromCef("", "")
 }
 
 /**
