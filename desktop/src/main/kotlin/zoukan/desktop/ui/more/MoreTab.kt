@@ -192,7 +192,7 @@ private object HistoryScreen : Screen {
 /** The app icon and name at the top of More, as Android's LogoHeader. */
 @Composable
 private fun LogoHeader() {
-    val icon = remember { AppIcon.painter(128) }
+    val icon = remember { AppIcon.painter() }
     Column(
         Modifier.fillMaxWidth().padding(vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
