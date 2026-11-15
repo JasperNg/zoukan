@@ -24,6 +24,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
@@ -37,6 +38,13 @@ class SourceSettingsTest {
 
     @TempDir
     lateinit var root: File
+
+    @AfterEach
+    fun waitForWriters() {
+        // A click saves with apply(), which writes in the background: let those writers finish
+        // before JUnit deletes root
+        JavaSharedPreferences.awaitPendingSaves()
+    }
 
     @Test
     fun `a switch shows its new state after each click`() {
