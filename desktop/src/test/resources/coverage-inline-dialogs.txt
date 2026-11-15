@@ -1,0 +1,32 @@
+# Inline AlertDialog/Dialog sites outside a *Dialog function. This list may only shrink:
+# a new dialog goes in a function named ...Dialog (so the coverage matrix sees it), and
+# extracting an old one removes its line here. Checked by CoverageMatrixTest.
+dialog-inline:AboutSettings.kt:TokenRow
+dialog-inline:AdvancedSettings.kt:UserAgentPreference
+dialog-inline:BatchAddScreen.kt:Content
+dialog-inline:CategoryScreen.kt:Content
+dialog-inline:ClearDatabaseScreen.kt:Content
+dialog-inline:DataSaverSettings.kt:DataSaverSettings
+dialog-inline:DataSettings.kt:ExportLibraryPreference
+dialog-inline:DiscordSettings.kt:DiscordSettingsSection
+dialog-inline:EhSettings.kt:EhFavoritesSync
+dialog-inline:EhSettings.kt:EhSettings
+dialog-inline:EntryInfoMenus.kt:MergedEntryPicker
+dialog-inline:ExtensionDetailsScreen.kt:Content
+dialog-inline:HistoryTab.kt:HistoryTab
+dialog-inline:LibraryTab.kt:LibraryTab
+dialog-inline:MangaDexSettings.kt:MangaDexSettings
+dialog-inline:MangaScreen.kt:Content
+dialog-inline:MigrationListScreen.kt:Content
+dialog-inline:MissingExtensionsCard.kt:ReadyPlan
+dialog-inline:ReaderScreen.kt:KeyboardHelp
+dialog-inline:SettingsTab.kt:SearchResults
+dialog-inline:SettingsWidgets.kt:ChoiceSetting
+dialog-inline:SettingsWidgets.kt:MultiSelectPreference
+dialog-inline:SortTagScreen.kt:Content
+dialog-inline:SourceFilters.kt:Content
+dialog-inline:SourceScreen.kt:Content
+dialog-inline:SourceScreen.kt:FilterPanel
+dialog-inline:TrackingDialog.kt:RemoveButton
+dialog-inline:TrackingSettings.kt:TrackerSetting
+dialog-inline:UpdatesTab.kt:SelectionHeader
