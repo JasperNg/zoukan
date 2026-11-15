@@ -31,12 +31,19 @@ class PersistentCookieStore(
     private val file: File,
     /** Encrypts the file; a plain file from an earlier version is still read, then written encrypted. */
     private val cipher: SettingsFileCodec? = null,
+    /** How long after a change the file is written. */
+    private val saveDelayMillis: Long = 2_000,
+    /** How long after a failed write it is tried again, times the failures so far. */
+    private val retryDelayMillis: Long = 500,
 ) : CookieStore, CookieExpirySource {
     private val delegate: CookieStore = CookieManager().cookieStore
     private val saver = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "cookie-store").apply { isDaemon = true }
     }
     private var pendingSave: ScheduledFuture<*>? = null
+
+    /** Saves failed in a row since the last change; each failure tries again a little later. */
+    private var failedSaves = 0
 
     // HttpCookie keeps its max age relative to when it was created, which it does not expose
     private val expiresAt = Collections.synchronizedMap(IdentityHashMap<HttpCookie, Long>())
@@ -97,10 +104,17 @@ class PersistentCookieStore(
 
     override fun removeAll(): Boolean = delegate.removeAll().also { scheduleSave() }
 
+    /** A change: saved a moment later, so a burst of Set-Cookie headers is written once. */
     @Synchronized
     private fun scheduleSave() {
+        failedSaves = 0
+        scheduleSaveIn(saveDelayMillis)
+    }
+
+    @Synchronized
+    private fun scheduleSaveIn(delayMillis: Long) {
         pendingSave?.cancel(false)
-        pendingSave = saver.schedule(::save, 2, TimeUnit.SECONDS)
+        pendingSave = saver.schedule(::save, delayMillis, TimeUnit.MILLISECONDS)
     }
 
     @Synchronized
@@ -123,7 +137,18 @@ class PersistentCookieStore(
             } catch (_: AtomicMoveNotSupportedException) {
                 Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
-        }.onFailure { logcat(LogPriority.ERROR, it) { "Saving cookies failed" } }
+        }
+            .onSuccess { failedSaves = 0 }
+            .onFailure {
+                logcat(LogPriority.ERROR, it) { "Saving cookies failed" }
+                // On Windows the replace fails while another program has the file open (a virus
+                // scanner, a backup or indexing tool); without another try the file would keep the
+                // old cookies, cleared ones included, until the next change
+                if (failedSaves < MAX_SAVE_RETRIES) {
+                    failedSaves++
+                    scheduleSaveIn(retryDelayMillis * failedSaves)
+                }
+            }
     }
 
     private fun load() {
@@ -202,5 +227,8 @@ class PersistentCookieStore(
 
         val json = Json { ignoreUnknownKeys = true }
         const val MIN_PRUNE_AT = 256
+
+        /** Tries after a failed save, 0.5 s to 2.5 s apart: 7.5 s in all. */
+        const val MAX_SAVE_RETRIES = 5
     }
 }
