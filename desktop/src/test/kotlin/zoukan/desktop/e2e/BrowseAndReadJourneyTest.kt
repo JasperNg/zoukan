@@ -27,6 +27,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
+import zoukan.desktop.update.Updates
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -53,6 +54,10 @@ class BrowseAndReadJourneyTest {
         var navigator: Navigator? = null
 
         with(journey) {
+            step("The journey is offline: no update check") {
+                Updates.autoCheck().get() shouldBe false
+            }
+
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                 setContent { ZoukanContent(preferences) { navigator = it } }
 

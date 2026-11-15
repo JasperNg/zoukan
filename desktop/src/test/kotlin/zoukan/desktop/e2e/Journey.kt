@@ -35,6 +35,7 @@ import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.E2EDiagnostics
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.startUi
+import zoukan.desktop.update.Updates
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
@@ -84,6 +85,9 @@ class Journey private constructor(val name: String) {
 
         private fun startRuntime(journey: Journey) {
             ZoukanRuntime.start(journey.dirs, interactiveBrowser = false)
+            // Journeys are offline: no daily update check against GitHub (Updates.start, which
+            // startUi calls, checks after 30 s on Windows and macOS)
+            Updates.autoCheck().set(false)
             startUi(journey.dirs)
             // The source's grid, as before Android's "Replace latest button" (on by default) opened its feed
             Injekt.get<eu.kanade.domain.ui.UiPreferences>().useNewSourceNavigation().set(false)
