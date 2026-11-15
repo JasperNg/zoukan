@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -28,6 +30,10 @@ import kotlin.time.Duration.Companion.minutes
  * which the source turns into text with android.text.Html.fromHtml, as extensions do. Searches the
  * source for it (it is search-only), opens it and checks the details show the decoded text on two
  * lines, with no entity or tag left.
+ *
+ * Then two more search-only titles that stress what the entry screen draws: the CJK title
+ * (Japanese and Korean, from a system fallback font; its screenshot shows whether the glyphs drew)
+ * and the title whose cover the server answers 404, which shows the broken-cover placeholder.
  *
  *   ./gradlew :desktop:journeyTest --tests "*HtmlDescriptionJourneyTest"
  */
@@ -68,8 +74,35 @@ class HtmlDescriptionJourneyTest {
                     description.lines().map { it.trim() }.filter { it.isNotEmpty() } shouldBe listOf("Tom & Jerry", "Second line <3")
                     texts().filter { "&amp;" in it || "&lt;" in it || "<br" in it } shouldBe emptyList()
                 }
+
+                step("Search for the CJK title and open it: its title and description show") {
+                    openFromSearch(navigator, query = "東京の漫画", title = FixtureCatalog.CJK_TITLE)
+                    waitFor(hasText(FixtureCatalog.CJK_DESCRIPTION, substring = true))
+                    // For a look at the glyphs: they draw from a system CJK font, or as boxes without one
+                    shot("3-cjk")
+                }
+
+                step("Open the title whose cover is missing: the placeholder shows, nothing breaks") {
+                    openFromSearch(navigator, query = "Without Cover", title = FixtureCatalog.MISSING_COVER_TITLE)
+                    waitOrDump("for the cover placeholder") {
+                        server.requests.contains("/images/${FixtureCatalog.MISSING_COVER}") &&
+                            // Unmerged: the clickable cover merges its content, and a merge keeps no child's tag
+                            onAllNodesWithTag("cover-error", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+                    }
+                    shot("4-missing-cover")
+                    onAllNodes(hasTestTag("entry-title") and hasText(FixtureCatalog.MISSING_COVER_TITLE)).fetchSemanticsNodes() shouldHaveSize 1
+                }
             }
         }
+    }
+
+    /** Searches the source for [query] and opens [title], waiting for its entry screen. */
+    private fun ComposeUiTest.openFromSearch(navigator: Navigator?, query: String, title: String) = with(journey) {
+        runOnUiThread { navigator?.push(SourceScreen(source.id, query = query)) }
+        waitFor(hasTestTag("manga-item") and hasText(title))
+        onAllNodes(hasTestTag("manga-item") and hasText(title)).onFirst().performClick()
+        waitFor(hasTestTag("entry-title") and hasText(title))
+        waitForIdle()
     }
 
     /** Every text on screen. */

@@ -267,8 +267,9 @@ class FixtureServer : AutoCloseable {
         else -> "application/octet-stream"
     }
 
+    // The charset said out loud: the titles are not all ASCII (FixtureCatalog.CJK_TITLE)
     private fun json(exchange: HttpExchange, body: Any) =
-        send(exchange, 200, "application/json", body.toString().toByteArray())
+        send(exchange, 200, JSON_TYPE, body.toString().toByteArray(Charsets.UTF_8))
 
     private fun notFound(exchange: HttpExchange) = send(exchange, 404, "text/plain", "Not found".toByteArray())
 
@@ -295,6 +296,9 @@ class FixtureServer : AutoCloseable {
 
         const val COOKIE_NAME = "fixture_session"
         const val COOKIE_VALUE = "journey-cookie-1"
+
+        /** The content type of the JSON the server answers. */
+        const val JSON_TYPE = "application/json; charset=utf-8"
         private val FILE_NAME = Regex("[a-z0-9-]+\\.(jpg|png|webp|avif)")
     }
 }
@@ -348,6 +352,31 @@ object FixtureCatalog {
 
     /** The scrambled chapter's last page: an image URL the server answers with HTML. */
     const val HTML_PAGE = "scrambled-html.jpg"
+
+    /**
+     * Search-only: a title far longer than any grid cell, row or header has room for (about 180
+     * characters), for truncation, ellipsis and wrapping. In the middle is one 45-letter word with
+     * no space to break at, so a layout that only wraps at spaces overflows there.
+     */
+    const val LONG_TITLE = "The Extraordinarily Long Chronicle of the Wandering Cartographer and the " +
+        "Pneumonoultramicroscopicsilicovolcanoconiosis Outbreak in the Forgotten Northern Mountain Villages, Volume Two"
+
+    /**
+     * Search-only: Japanese (kanji, hiragana, katakana) and Korean (Hangul), for font fallback:
+     * the glyphs come from a system CJK font, which a bare Linux CI image may not have. Its
+     * description is CJK too, and the server must send both as UTF-8.
+     */
+    const val CJK_TITLE = "東京の漫画テスト・長いタイトル 한국어"
+    const val CJK_DESCRIPTION = "東京を舞台にした試験用の漫画です。한국어 설명도 있습니다."
+
+    /**
+     * Search-only: its cover ([MISSING_COVER]) is not on the server, which answers 404, so the
+     * app shows its broken-cover placeholder.
+     */
+    const val MISSING_COVER_TITLE = "Fixture Without Cover"
+
+    /** A cover file name the server accepts but has no image for (404). */
+    const val MISSING_COVER = "missing-cover.png"
 
     const val GENRE_ACTION = "action"
     const val GENRE_COMEDY = "comedy"
@@ -404,6 +433,30 @@ object FixtureCatalog {
             cover = "cover-3.png",
             description = "Its pages come scrambled; the source puts them back together.",
             chapters = listOf(FixtureChapter(SCRAMBLED, "Chapter 1 (scrambled)", 1f, START, SCRAMBLED)),
+            searchOnly = true,
+        ),
+        FixtureManga(
+            key = "long",
+            title = LONG_TITLE,
+            cover = "cover-4.png",
+            description = "A title too long for any row, with one very long word in the middle.",
+            chapters = listOf(FixtureChapter("jpeg", "Chapter 1", 1f, START, "jpeg")),
+            searchOnly = true,
+        ),
+        FixtureManga(
+            key = "cjk",
+            title = CJK_TITLE,
+            cover = "cover-1.png",
+            description = CJK_DESCRIPTION,
+            chapters = listOf(FixtureChapter("png", "第1話", 1f, START, "png")),
+            searchOnly = true,
+        ),
+        FixtureManga(
+            key = "nocover",
+            title = MISSING_COVER_TITLE,
+            cover = MISSING_COVER,
+            description = "Its cover is missing on the server.",
+            chapters = listOf(FixtureChapter("jpeg", "Chapter 1", 1f, START, "jpeg")),
             searchOnly = true,
         ),
     )

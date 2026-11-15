@@ -41,6 +41,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
+import java.net.URLEncoder
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -198,32 +199,19 @@ class FixtureSource(
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/catalog?q=${java.net.URLEncoder.encode(query, "UTF-8")}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(searchUrl(baseUrl, query), headers)
 
     override fun searchMangaParse(response: Response): MangasPage =
         catalog(response, query = response.request.url.queryParameter("q").orEmpty())
 
-    private fun catalog(response: Response, query: String): MangasPage {
-        val showBonus = preferences.getBoolean(SHOW_BONUS, false)
-        val hiddenGenres = preferences.getStringSet(HIDDEN_GENRES, emptySet()).orEmpty()
-        val prefix = preferences.getString(TITLE_PREFIX, "").orEmpty()
-        val entries = Json.parseToJsonElement(response.body.string()).jsonArray.map { it.jsonObject }
-            .filter { showBonus || !it.getValue("bonus").jsonPrimitive.boolean }
-            .filter { query.isNotBlank() || !it.getValue("searchOnly").jsonPrimitive.boolean }
-            .filter { query.isBlank() || it.string("title").contains(query, ignoreCase = true) }
-            .filter { it.string("genre") !in hiddenGenres }
-            .map { json ->
-                SManga.create().apply {
-                    url = "/manga/${json.string("key")}"
-                    title = prefix + json.string("title")
-                    thumbnail_url = json.string("cover")
-                }
-            }
-            .sortedBy { it.title }
-        val ordered = if (preferences.getString(ORDER, "az") == "za") entries.reversed() else entries
-        return MangasPage(ordered, hasNextPage = false)
-    }
+    private fun catalog(response: Response, query: String): MangasPage = catalogPage(
+        body = response.body.string(),
+        query = query,
+        showBonus = preferences.getBoolean(SHOW_BONUS, false),
+        hiddenGenres = preferences.getStringSet(HIDDEN_GENRES, emptySet()).orEmpty(),
+        prefix = preferences.getString(TITLE_PREFIX, "").orEmpty(),
+        zToA = preferences.getString(ORDER, "az") == "za",
+    )
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
@@ -298,9 +286,41 @@ class FixtureSource(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
-
     companion object {
+        /** The search request's URL: the query URL-encoded as UTF-8, as extensions build it. */
+        fun searchUrl(baseUrl: String, query: String): String = "$baseUrl/catalog?q=${URLEncoder.encode(query, "UTF-8")}"
+
+        /**
+         * The titles the source lists from the server's catalogue [body]: for a blank [query] the
+         * catalogue, otherwise the titles (search-only ones too) that contain it. The other
+         * arguments are the source's settings. Needs no app runtime, so tests call it directly.
+         */
+        fun catalogPage(
+            body: String,
+            query: String,
+            showBonus: Boolean = false,
+            hiddenGenres: Set<String> = emptySet(),
+            prefix: String = "",
+            zToA: Boolean = false,
+        ): MangasPage {
+            val entries = Json.parseToJsonElement(body).jsonArray.map { it.jsonObject }
+                .filter { showBonus || !it.getValue("bonus").jsonPrimitive.boolean }
+                .filter { query.isNotBlank() || !it.getValue("searchOnly").jsonPrimitive.boolean }
+                .filter { query.isBlank() || it.string("title").contains(query, ignoreCase = true) }
+                .filter { it.string("genre") !in hiddenGenres }
+                .map { json ->
+                    SManga.create().apply {
+                        url = "/manga/${json.string("key")}"
+                        title = prefix + json.string("title")
+                        thumbnail_url = json.string("cover")
+                    }
+                }
+                .sortedBy { it.title }
+            return MangasPage(if (zToA) entries.reversed() else entries, hasNextPage = false)
+        }
+
+        private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
+
         const val NAME = "Zoukan Fixtures"
 
         /** The name of a second instance ([Journey.addSource]): another source id over the same server. */
