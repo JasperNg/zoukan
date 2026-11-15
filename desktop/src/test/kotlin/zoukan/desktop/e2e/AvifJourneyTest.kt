@@ -29,7 +29,9 @@ class AvifJourneyTest {
     private lateinit var journey: Journey
 
     @AfterEach
-    fun close() = journey.close()
+    fun close() {
+        if (::journey.isInitialized) journey.close()
+    }
 
     @Test
     fun readAvifChapter() {

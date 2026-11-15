@@ -62,7 +62,9 @@ Write-Log "Checking master at $commit"
 
 # Gradle writes to stderr; Windows PowerShell would stop on it under 'Stop'
 $ErrorActionPreference = 'Continue'
-& .\gradlew.bat :desktop:nightlyCheck --continue --console=plain *>&1 | Tee-Object -FilePath $log -Append | Out-Null
+# Out-File, not Tee-Object: Windows PowerShell's Tee-Object writes UTF-16 into the UTF-8 log
+& .\gradlew.bat :desktop:nightlyCheck --continue --console=plain *>&1 | ForEach-Object { "$_" } |
+    Out-File -FilePath $log -Append -Encoding utf8
 $code = $LASTEXITCODE
 
 foreach ($report in @('desktop\build\reports\tests', 'desktop\build\reports\journeys', 'desktop\build\test-results')) {

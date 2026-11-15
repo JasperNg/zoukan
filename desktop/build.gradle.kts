@@ -316,12 +316,14 @@ val journeyTest by tasks.registering(Test::class) {
     testClassesDirs = test.testClassesDirs
     classpath = test.classpath
     useJUnitPlatform()
-    filter {
-        journeyTests.forEach { includeTestsMatching(it) }
-        isFailOnNoMatchingTests = false
-    }
+    filter { journeyTests.forEach { includeTestsMatching(it) } }
     // Each journey starts the runtime with its own data folder, once per JVM
     forkEvery = 1
+    // The journeys check this machine as much as the code (JDK, display, decoders): never skip
+    // them as up to date, and start each run without the last run's screenshots
+    outputs.upToDateWhen { false }
+    val screenshots = layout.projectDirectory.dir("build/reports/journeys")
+    doFirst { screenshots.asFile.deleteRecursively() }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
     shouldRunAfter(tasks.test, wiringTest)

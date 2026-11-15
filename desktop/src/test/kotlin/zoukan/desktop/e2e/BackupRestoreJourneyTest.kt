@@ -57,7 +57,9 @@ class BackupRestoreJourneyTest {
     private lateinit var journey: Journey
 
     @AfterEach
-    fun close() = journey.close()
+    fun close() {
+        if (::journey.isInitialized) journey.close()
+    }
 
     @Test
     fun backUpAndRestoreTheLibrary() {
@@ -89,11 +91,13 @@ class BackupRestoreJourneyTest {
         with(journey) {
             step("Back up") {
                 createBackup(backup, BackupOptions())
+                // The status clears when the backup ends, written or not (a failure is a toast)
                 val deadline = System.currentTimeMillis() + 60_000
-                while (backupStatusFlow.value != null || !backup.isFile) {
+                while (backupStatusFlow.value != null) {
                     check(System.currentTimeMillis() < deadline) { "the backup did not finish within 60s" }
                     Thread.sleep(100)
                 }
+                check(backup.isFile) { "the backup failed; see the toast above" }
             }
 
             step("Take it all away") {

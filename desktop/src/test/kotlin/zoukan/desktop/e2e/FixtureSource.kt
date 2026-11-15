@@ -1,9 +1,8 @@
 package zoukan.desktop.e2e
 
-import android.app.Application
-import android.content.Context
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.PreferenceScreen
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,8 +21,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 /**
  * A source over [FixtureServer], written as an extension is: it builds requests and parses the
@@ -42,9 +39,7 @@ class FixtureSource(override val baseUrl: String) :
     override val lang = "en"
     override val supportsLatest = true
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", Context.MODE_PRIVATE)
-    }
+    private val preferences by lazy { getSourcePreferences() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -139,9 +134,6 @@ class FixtureSource(override val baseUrl: String) :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
-
-    @Suppress("FunctionName")
-    private fun GET(url: String, headers: okhttp3.Headers) = Request.Builder().url(url).headers(headers).build()
 
     companion object {
         const val NAME = "Zoukan Fixtures"

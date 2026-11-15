@@ -41,7 +41,9 @@ class SourcePreferencesJourneyTest {
     private lateinit var journey: Journey
 
     @AfterEach
-    fun close() = journey.close()
+    fun close() {
+        if (::journey.isInitialized) journey.close()
+    }
 
     @Test
     fun changeSourceSettingsAndSeeThemPersist() {
@@ -85,14 +87,17 @@ class SourcePreferencesJourneyTest {
                     val prefs = source.getSourcePreferences()
                     prefs.getBoolean(FixtureSource.SHOW_BONUS, false) shouldBe true
                     prefs.getString(FixtureSource.ORDER, null) shouldBe "za"
-                    waitOrDump("for ${sourcePreferencesFile.name}") { sourcePreferencesFile.isFile }
-                    // Read the file as the next start of the app would: decrypted, then parsed
-                    val stored = sourcePreferencesFile.readBytes()
+                    // Read the file as the next start of the app would: decrypted, then parsed. The
+                    // app saves in the background, so wait for the last change to reach it.
                     val cipher = FileCipher.fromStore(Injekt.get<SecretStore>())
-                    val plain = if (cipher.isEncoded(stored)) cipher.decode(stored) else stored
-                    val reloaded = java.util.Properties().apply { plain.inputStream().use { loadFromXML(it) } }
-                    reloaded.getProperty(FixtureSource.SHOW_BONUS) shouldBe "true"
-                    reloaded.getProperty(FixtureSource.ORDER) shouldBe "za"
+                    fun saved(): java.util.Properties? = runCatching {
+                        val stored = sourcePreferencesFile.readBytes()
+                        val plain = if (cipher.isEncoded(stored)) cipher.decode(stored) else stored
+                        java.util.Properties().apply { plain.inputStream().use { loadFromXML(it) } }
+                    }.getOrNull()
+                    waitOrDump("for both settings in ${sourcePreferencesFile.name}") {
+                        saved()?.let { it.getProperty(FixtureSource.SHOW_BONUS) == "true" && it.getProperty(FixtureSource.ORDER) == "za" } == true
+                    }
                 }
 
                 step("The source lists the bonus title, Z to A") {

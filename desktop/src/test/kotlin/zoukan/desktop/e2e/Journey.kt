@@ -66,6 +66,17 @@ class Journey private constructor(val name: String) {
             // The OS keychain is not for tests: keep the secrets in the data folder
             System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
             val journey = Journey(name)
+            try {
+                startRuntime(journey)
+            } catch (e: Throwable) {
+                journey.server.close()
+                throw e
+            }
+            println("Journey $name: fixtures at ${journey.server.baseUrl}, data in ${journey.dirs.root}")
+            return journey
+        }
+
+        private fun startRuntime(journey: Journey) {
             ZoukanRuntime.start(journey.dirs, interactiveBrowser = false)
             startUi(journey.dirs)
             // The source's grid, as before Android's "Replace latest button" (on by default) opened its feed
@@ -81,8 +92,6 @@ class Journey private constructor(val name: String) {
                     Thread.sleep(50)
                 }
             }
-            println("Journey $name: fixtures at ${journey.server.baseUrl}, data in ${journey.dirs.root}")
-            return journey
         }
     }
 
@@ -141,7 +150,10 @@ class Journey private constructor(val name: String) {
         pages.forEachIndexed { index, page ->
             var turns = 0
             while (true) {
-                val drew = runCatching { waitUntil(timeoutMillis = 15_000) { pageDrew(page) } }.isSuccess
+                // A page after the first is often one turn away: look briefly before turning; the
+                // first page, and a page after a turn, get time to load and decode
+                val timeout = if (index > 0 && turns == 0) 2_000L else 15_000L
+                val drew = runCatching { waitUntil(timeoutMillis = timeout) { pageDrew(page) } }.isSuccess
                 if (drew) break
                 if (turns++ >= 2) {
                     shot("$label-page-${index + 1}-failed")
@@ -199,5 +211,8 @@ class Journey private constructor(val name: String) {
     fun close() {
         Injekt.get<BuiltInSources>().testSources.value = emptyList()
         server.close()
+        // The database stays open until the JVM exits, so this removes what it can; the JVM is
+        // the journey's own (forkEvery = 1)
+        dirs.root.deleteRecursively()
     }
 }
