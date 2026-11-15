@@ -158,6 +158,35 @@ the network and a display, so it is skipped unless asked for:
 
 It uses a throwaway data folder and saves screenshots to `desktop/build/reports/e2e/`.
 
+## User journeys (offline)
+
+`./gradlew :desktop:journeyTest` drives the real UI through what a reader does, against a local
+fixture server instead of a website, so it runs offline and always sees the same titles:
+
+- `BrowseAndReadJourneyTest` browses the fixture source, opens a title, adds it to the library and
+  reads its JPEG, PNG and WebP chapters, checking from a screenshot that each page drew.
+- `AvifJourneyTest` does the same for the AVIF chapter.
+- `SourcePreferencesJourneyTest` changes the source's own settings (a switch and a list), checks the
+  catalogue follows them, that they are in the source's settings file and that they show again.
+- `DownloadJourneyTest` downloads three chapters from the title's screen, checks every page in the
+  files, then stops the server and reads a download.
+- `BackupRestoreJourneyTest` backs up a title with its category, progress and source settings,
+  removes them, restores from the Restore backup screen and checks they are back.
+
+The fixtures live in `src/test/resources/e2e-fixtures/`: `generate.py` makes the page images (one
+colour per page, one chapter per format) and `manifest.json`; `FixtureServer` serves them on
+127.0.0.1 and `FixtureSource` reads them as an extension would. Each journey runs in its own JVM
+with a throwaway data folder and saves screenshots to `desktop/build/reports/journeys/`. They take a
+few minutes, so `check` does not run them; the nightly check does.
+
+### Nightly check
+
+`./gradlew :desktop:nightlyCheck --continue` runs the journeys and, once it exists, the extension
+wiring check (`extensionWiringTest`). On Windows, `desktop\packaging\check\nightly-windows.ps1`
+runs it on a clone of master it keeps for itself and saves the log and reports to
+`%LOCALAPPDATA%\Zoukan-nightly\<date>`; `-Register` adds a scheduled task that runs it every night
+at 03:00 and `-Unregister` removes it.
+
 The harness writes its report to `<data>/harness/reports/extensions-<platform>.md` and uses its own
 profile in `<data>/harness`, so it never touches the app's extensions or database.
 
