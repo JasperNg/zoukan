@@ -133,7 +133,12 @@ fun LazyListScope.browseSettings() {
     settingsGroup(localized(MR.strings.pref_category_nsfw_content))
     item(key = "browse-nsfw") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        SwitchPreference(localized(MR.strings.pref_show_nsfw_source), preferences.showNsfwSource())
+        // Installed NSFW extensions load (or stop loading) on the next start, as in Komikku
+        SwitchPreference(
+            localized(MR.strings.pref_show_nsfw_source),
+            preferences.showNsfwSource(),
+            subtitle = localized(MR.strings.requires_app_restart),
+        )
     }
     item(key = "browse-nsfw-info") {
         InfoText(

@@ -25,13 +25,30 @@ public class EditTextPreference extends DialogPreference {
         super(context);
     }
 
+    // ZOUKAN -->
+    // As Android: the text is the stored one; setText persists it (once the preference has its
+    // SharedPreferences) without calling the change listener.
     public String getText() {
-        return text;
+        if (shouldPersist()) {
+            Object current = getCurrentValue();
+            if (current != null) {
+                return current.toString();
+            }
+        }
+        if (text != null) {
+            return text;
+        }
+        Object defaultValue = getDefaultValue();
+        return defaultValue instanceof String s ? s : null;
     }
 
     public void setText(String text) {
         this.text = text;
+        if (shouldPersist()) {
+            saveNewValue(text);
+        }
     }
+    // ZOUKAN <--
 
     public OnBindEditTextListener getOnBindEditTextListener() {
         return onBindEditTextListener;

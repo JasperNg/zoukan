@@ -108,7 +108,11 @@ class DesktopAppModule(
         addSingletonFactory<StubSourceRepository> { StubSourceRepositoryImpl(get()) }
 
         addSingletonFactory { ExtensionTrust(get()) }
-        addSingletonFactory { DesktopExtensionLoader(dirs.extensions, get()) }
+        addSingletonFactory {
+            // ZOUKAN: as ExtensionLoader, NSFW extensions stay unloaded while NSFW sources are hidden
+            val sourcePreferences = get<eu.kanade.domain.source.service.SourcePreferences>()
+            DesktopExtensionLoader(dirs.extensions, get()) { sourcePreferences.showNsfwSource().get() }
+        }
         addSingletonFactory { DesktopExtensionInstaller(dirs.extensions) { get<NetworkHelper>().client } }
         addSingletonFactory {
             val getStores = get<GetExtensionStores>()

@@ -11,7 +11,7 @@ import android.content.Context;
 import android.text.TextUtils;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-public class ListPreference extends Preference {
+public class ListPreference extends DialogPreference {
     // reference: https://android.googlesource.com/platform/frameworks/support/+/996971f962fcd554339a7cb2859cef9ca89dbcb7/preference/preference/src/main/java/androidx/preference/ListPreference.java
     // Note: remove @JsonIgnore and implement methods if any extension ever uses these methods or the variables behind them
 
@@ -49,14 +49,48 @@ public class ListPreference extends Preference {
         this.entryValues = entryValues;
     }
 
+    // ZOUKAN -->
+    // As Android: the value is the stored one; setValue persists it (once the preference has its
+    // SharedPreferences) without calling the change listener.
     @JsonIgnore
-    public void setValueIndex(int index) { throw new RuntimeException("Stub!"); }
+    private String value;
 
     @JsonIgnore
-    public String getValue() { throw new RuntimeException("Stub!"); }
+    public void setValueIndex(int index) {
+        if (entryValues != null) {
+            setValue(entryValues[index].toString());
+        }
+    }
 
     @JsonIgnore
-    public void setValue(String value) { throw new RuntimeException("Stub!"); }
+    public String getValue() {
+        if (shouldPersist()) {
+            Object current = getCurrentValue();
+            if (current != null) {
+                return current.toString();
+            }
+        }
+        if (value != null) {
+            return value;
+        }
+        Object defaultValue = getDefaultValue();
+        return defaultValue instanceof String s ? s : null;
+    }
+
+    @JsonIgnore
+    public void setValue(String value) {
+        this.value = value;
+        if (shouldPersist()) {
+            saveNewValue(value);
+        }
+    }
+
+    @JsonIgnore
+    public CharSequence getEntry() {
+        int index = findIndexOfValue(getValue());
+        return index >= 0 && entries != null && index < entries.length ? entries[index] : null;
+    }
+    // ZOUKAN <--
 
     /** Tachidesk specific API */
     @Override

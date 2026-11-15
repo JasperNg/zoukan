@@ -142,6 +142,21 @@ public class Preference {
         return isVisible;
     }
 
+    // ZOUKAN -->
+    /** As Android's Preference.isVisible(). */
+    public boolean isVisible() {
+        return isVisible;
+    }
+
+    /**
+     * As Android: whether a value set on this preference goes to its SharedPreferences. Here that
+     * needs a key and the SharedPreferences the screen gives it.
+     */
+    protected boolean shouldPersist() {
+        return key != null && sharedPreferences != null;
+    }
+    // ZOUKAN <--
+
     /** Tachidesk specific API */
     public void setSharedPreferences(SharedPreferences sharedPreferences) {
         this.sharedPreferences = sharedPreferences;
@@ -158,7 +173,9 @@ public class Preference {
     /** Tachidesk specific API */
     @SuppressWarnings("unchecked")
     public Object getCurrentValue() {
-        if (key == null) {
+        // ZOUKAN: also without SharedPreferences (a preference not added to a screen yet), and a
+        // default value of the wrong type is ignored instead of throwing ClassCastException
+        if (!shouldPersist()) {
             return Objects.requireNonNullElseGet(defaultValue, () -> switch (getDefaultValueType()) {
                 case "String" -> "";
                 case "Boolean" -> false;
@@ -167,9 +184,9 @@ public class Preference {
             });
         }
         return switch (getDefaultValueType()) {
-            case "String" -> sharedPreferences.getString(key, (String) defaultValue);
-            case "Boolean" -> sharedPreferences.getBoolean(key, (Boolean) defaultValue);
-            case "Set<String>" -> sharedPreferences.getStringSet(key, (Set<String>) defaultValue);
+            case "String" -> sharedPreferences.getString(key, defaultValue instanceof String s ? s : null);
+            case "Boolean" -> sharedPreferences.getBoolean(key, defaultValue instanceof Boolean b && b);
+            case "Set<String>" -> sharedPreferences.getStringSet(key, defaultValue instanceof Set<?> set ? (Set<String>) set : null);
             default -> throw new RuntimeException("Unsupported type");
         };
     }
@@ -177,7 +194,7 @@ public class Preference {
     /** Tachidesk specific API */
     @SuppressWarnings("unchecked")
     public void saveNewValue(Object value) {
-        if (key == null) {
+        if (!shouldPersist()) {
             return;
         }
         switch (getDefaultValueType()) {

@@ -3,6 +3,7 @@ package xyz.nulldev.androidcompat.webkit
 
 import android.webkit.CookieManager
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.cef.CefApp
 import org.cef.network.CefCookie
 import org.cef.network.CefCookieManager
 import java.net.CookieHandler
@@ -132,6 +133,22 @@ object CefCookieSync {
             logger.warn(e) { "Copying cookies from Chromium failed" }
             end.finish()
         }
+    }
+
+    /**
+     * Deletes Chromium's cookies named [name] for [url]'s host (every cookie when both are empty),
+     * so a cookie the app deleted is not copied back after the next page load. Only while Chromium
+     * runs: getting its cookie manager would start it, and its store is copied over before a
+     * browser opens.
+     */
+    fun deleteFromCef(
+        url: String,
+        name: String,
+    ) {
+        runCatching {
+            if (CefApp.getState() != CefApp.CefAppState.INITIALIZED) return
+            CefCookieManager.getGlobalManager()?.deleteCookies(url, name)
+        }.onFailure { logger.warn(it) { "Deleting cookie $name from Chromium failed" } }
     }
 
     // No visitor call this long after the visit started: there were no cookies

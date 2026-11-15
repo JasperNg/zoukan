@@ -46,15 +46,21 @@ sealed interface LoadResult {
  * bytes are what [ExtensionClassLoader] runs, so a jar swapped on disk after the check never runs,
  * and no jar stays open (or locked, on Windows) while its extension is loaded. Classes the host
  * provides (extensions-lib, OkHttp, the Android compatibility layer) come from the app's class path.
+ *
+ * As in ExtensionLoader, an NSFW extension is not loaded while [showNsfwSources] is off. It is read
+ * once, at the first load, so changing the setting takes effect after a restart, as in Komikku.
  */
 class DesktopExtensionLoader(
     private val extensionsDir: File,
     private val trust: ExtensionTrust,
     private val hashes: ConvertedJarHashes,
+    private val showNsfwSources: () -> Boolean = { true },
 ) {
     /** The hashes go in the app's (encrypted) preferences. */
-    constructor(extensionsDir: File, trust: ExtensionTrust) :
-        this(extensionsDir, trust, PreferenceConvertedJarHashes(Injekt.get<PreferenceStore>()))
+    constructor(extensionsDir: File, trust: ExtensionTrust, showNsfwSources: () -> Boolean = { true }) :
+        this(extensionsDir, trust, PreferenceConvertedJarHashes(Injekt.get<PreferenceStore>()), showNsfwSources)
+
+    private val loadNsfwSource by lazy { showNsfwSources() }
 
     init {
         extensionsDir.mkdirs()
@@ -162,6 +168,20 @@ class DesktopExtensionLoader(
                     libVersion = libVersion,
                     signatureHash = signatures.last(),
                     storeName = storeName,
+                ),
+            )
+        }
+
+        if (!loadNsfwSource && manifest.isNsfw) {
+            logcat(LogPriority.WARN) { "NSFW extension ${manifest.packageName} not allowed" }
+            // Like an untrusted one, the jar is fine and stays the installed version
+            hashToRecord?.let { record(files, it) }
+            return LoadResult.Error(
+                manifest.packageName,
+                ExtensionException(
+                    ExtensionException.Stage.LOAD,
+                    "NSFW extensions are not loaded while NSFW sources are hidden. Show NSFW sources " +
+                        "in Browse settings and restart the app to load it.",
                 ),
             )
         }

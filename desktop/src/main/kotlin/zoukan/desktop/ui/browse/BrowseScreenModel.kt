@@ -340,6 +340,8 @@ class BrowseScreenModel(
     fun removeStore(store: ExtensionStore) {
         screenModelScope.launch {
             removeStore.invoke(store.indexUrl)
+            // Its extensions leave the available list, and stop being offered as updates
+            extensionManager.forgetStore(store.indexUrl)
             Toasts.show(localized(DMR.strings.removed, store.name))
         }
     }

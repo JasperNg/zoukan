@@ -83,6 +83,19 @@ class DesktopExtensionManager(
         }
 
     /**
+     * Drops the offers of the removed store at [indexUrl], so its extensions are no longer listed
+     * or installable, and an installed extension it updated loses that update.
+     */
+    fun forgetStore(indexUrl: String) {
+        synchronized(stateLock) {
+            offers = offers
+                .mapValues { (_, list) -> list.filterNot { it.store.indexUrl == indexUrl } }
+                .filterValues { it.isNotEmpty() }
+            chooseOffers()
+        }
+    }
+
+    /**
      * Installs or updates [extension] and loads it. An update whose new files fail to load leaves
      * the working version installed and listed: its new files are removed, so the next start loads
      * the working version too, and the error is returned for the caller to report.
@@ -255,7 +268,8 @@ class DesktopExtensionManager(
         val availableExt = available.value[pkgName]
             // Only a store that signs with this extension's key can update it
             ?.takeIf { it.store.signingKey == signatureHash || it.store.signingKey == NO_SIGNING_KEY }
-            ?: return copy(hasUpdate = false)
+            // No store offers it any more (one was removed): no update, and no store to update from
+            ?: return copy(hasUpdate = false, store = null)
         return copy(
             hasUpdate = availableExt.versionCode > versionCode || availableExt.libVersion > libVersion,
             store = availableExt.store,

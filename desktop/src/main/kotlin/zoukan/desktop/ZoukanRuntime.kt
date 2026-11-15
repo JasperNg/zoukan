@@ -10,6 +10,7 @@ import uy.kohesive.injekt.Injekt
 import xyz.nulldev.androidcompat.AndroidCompat
 import xyz.nulldev.androidcompat.AndroidCompatInitializer
 import xyz.nulldev.androidcompat.AndroidCompatModule
+import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManagerModule
@@ -20,6 +21,7 @@ import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.ui.common.Toasts
 import java.net.CookieHandler
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -81,6 +83,9 @@ object ZoukanRuntime {
         CookieHandler.setDefault(CookieManager(PersistentCookieStore(dirs.cookies, fileCipher), CookiePolicy.ACCEPT_ALL))
 
         startMainLooper()
+
+        // An extension's android.widget.Toast shows in the window, as the app's own messages
+        ToastSink.set(Toasts::show)
 
         // Android ships Bouncy Castle's ciphers, which some extensions need
         // (Mangago: AES/CBC/ZeroBytePadding)

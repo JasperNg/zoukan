@@ -19,11 +19,34 @@ public class TwoStatePreference extends Preference {
         setDefaultValue(false);
     }
 
+    // ZOUKAN -->
+    // As Android: the checked state is the stored one; setChecked persists it (once the preference
+    // has its SharedPreferences) without calling the change listener.
     @JsonIgnore
-    public boolean isChecked() { throw new RuntimeException("Stub!"); }
+    private Boolean checked;
 
     @JsonIgnore
-    public void setChecked(boolean checked) { throw new RuntimeException("Stub!"); }
+    private boolean disableDependentsState;
+
+    @JsonIgnore
+    public boolean isChecked() {
+        if (shouldPersist()) {
+            return Boolean.TRUE.equals(getCurrentValue());
+        }
+        if (checked != null) {
+            return checked;
+        }
+        return Boolean.TRUE.equals(getDefaultValue());
+    }
+
+    @JsonIgnore
+    public void setChecked(boolean checked) {
+        this.checked = checked;
+        if (shouldPersist()) {
+            saveNewValue(checked);
+        }
+    }
+    // ZOUKAN <--
 
     @JsonIgnore
     public CharSequence getSummaryOn() {
@@ -52,7 +75,7 @@ public class TwoStatePreference extends Preference {
             return summary;
         }
 
-        final boolean checked = (Boolean) getCurrentValue();
+        final boolean checked = isChecked();
         if (checked && mSummaryOn != null) {
             return mSummaryOn;
         } else if (!checked && mSummaryOff != null) {
@@ -63,10 +86,14 @@ public class TwoStatePreference extends Preference {
     }
 
     @JsonIgnore
-    public boolean getDisableDependentsState() { throw new RuntimeException("Stub!"); }
+    public boolean getDisableDependentsState() {
+        return disableDependentsState;
+    }
 
     @JsonIgnore
-    public void setDisableDependentsState(boolean disableDependentsState) { throw new RuntimeException("Stub!"); }
+    public void setDisableDependentsState(boolean disableDependentsState) {
+        this.disableDependentsState = disableDependentsState;
+    }
 
     /** Tachidesk specific API */
     @Override

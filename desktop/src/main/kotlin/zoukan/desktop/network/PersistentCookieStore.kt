@@ -50,6 +50,7 @@ class PersistentCookieStore(
     }
 
     override fun add(uri: URI?, cookie: HttpCookie) {
+        normalize(cookie)
         val expires = System.currentTimeMillis() + cookie.maxAge * 1000
         delegate.add(uri, cookie)
         // After the add and under the prune's lock: a prune either sees the stored cookie in its
@@ -75,7 +76,18 @@ class PersistentCookieStore(
 
     internal fun trackedExpiryCount(): Int = expiresAt.size
 
-    override fun get(uri: URI): List<HttpCookie> = delegate.get(uri)
+    /**
+     * The delegate matches a domain by suffix alone, which would send a cookie for toon.com to
+     * webtoon.com; a domain cookie goes only to its domain and the hosts under it, as in Chromium.
+     */
+    override fun get(uri: URI): List<HttpCookie> {
+        val host = uri.host?.lowercase() ?: return delegate.get(uri)
+        return delegate.get(uri).filter { cookie ->
+            // Without a domain it is host-only, which the delegate matches by the exact host
+            val domain = cookie.domain?.trimStart('.')?.lowercase() ?: return@filter true
+            host == domain || host.endsWith(".$domain")
+        }
+    }
 
     override fun getCookies(): List<HttpCookie> = delegate.cookies
 
@@ -124,11 +136,17 @@ class PersistentCookieStore(
             wasPlain = cipher != null && plain === stored
             json.decodeFromString<List<StoredCookie>>(plain.decodeToString())
         }
-            .onFailure { logcat(LogPriority.ERROR, it) { "Reading cookies failed" } }
+            .onFailure {
+                logcat(LogPriority.ERROR, it) { "Reading cookies failed" }
+                // The next save would replace a file that could not be read (a lost key, a damaged
+                // file) and every session in it; keep it beside the new one, as settings files do
+                runCatching { file.copyTo(File(file.path + ".unreadable"), overwrite = true) }
+                    .onFailure { e -> logcat(LogPriority.ERROR, e) { "Keeping the unreadable cookie file failed" } }
+            }
             .getOrDefault(emptyList())
             .filter { it.expiresAt > now }
             .forEach { stored ->
-                val cookie = stored.toHttpCookie(now)
+                val cookie = stored.toHttpCookie(now).also(::normalize)
                 expiresAt[cookie] = stored.expiresAt
                 delegate.add(URI(stored.uri), cookie)
             }
@@ -171,6 +189,17 @@ class PersistentCookieStore(
     }
 
     private companion object {
+        /**
+         * Chromium's semantics for every cookie, however it came: no leading dot on the domain
+         * (OkHttp writes domain=example.com and Chromium .example.com for the same cookie, which
+         * java.net would keep and send twice), and Netscape (version 0) domain matching, which a
+         * Max-Age attribute would otherwise turn into RFC 2965's.
+         */
+        fun normalize(cookie: HttpCookie) {
+            cookie.domain?.let { if (it.startsWith('.')) cookie.domain = it.trimStart('.') }
+            cookie.version = 0
+        }
+
         val json = Json { ignoreUnknownKeys = true }
         const val MIN_PRUNE_AT = 256
     }

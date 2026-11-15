@@ -58,6 +58,37 @@ class JavaSharedPreferences(
         private const val TYPE_FLOAT = "float"
         private const val TYPE_DOUBLE = "double"
         private const val TYPE_BOOLEAN = "boolean"
+
+        /** Whether [name] is one of the entries a Set stored under [key] is kept in: key.size, key.0, key.1... */
+        private fun isSetEntry(
+            key: String,
+            name: String,
+        ): Boolean {
+            if (name.length <= key.length + 1 || !name.startsWith(key) || name[key.length] != '.') return false
+            val suffix = name.substring(key.length + 1)
+            return suffix == "size" || suffix.all { it in '0'..'9' }
+        }
+
+        /** Files with an apply() not yet written; flushed when the JVM shuts down. */
+        private val unsaved = java.util.concurrent.ConcurrentHashMap.newKeySet<JavaSharedPreferences>()
+
+        init {
+            Runtime.getRuntime().addShutdownHook(Thread(::flushPendingSaves, "shared-preferences-flush"))
+        }
+
+        /**
+         * Writes every change made with apply() that is not on disk yet. Runs at JVM shutdown, so a
+         * change just before quitting is not lost.
+         */
+        @JvmStatic
+        fun flushPendingSaves() {
+            unsaved.toList().forEach { prefs ->
+                // save() takes the file's lock, so this never interleaves with the background writer;
+                // writing the latest snapshot again is harmless
+                prefs.save(prefs.getSnapshot())
+                unsaved.remove(prefs)
+            }
+        }
         // ZOUKAN <--
     }
 
@@ -125,10 +156,10 @@ class JavaSharedPreferences(
     // ZOUKAN <--
 
     // ZOUKAN -->
-    // Listeners come and go on the UI thread while changes notify them on the main looper, so the
-    // map must allow both at once
+    // As Android, listeners are held weakly: an extension's listener must not keep its class loader
+    // alive after the extension is updated or removed. Guarded by itself; notifications use a copy.
     private val listeners =
-        java.util.concurrent.ConcurrentHashMap<SharedPreferences.OnSharedPreferenceChangeListener, (String) -> Unit>()
+        java.util.WeakHashMap<SharedPreferences.OnSharedPreferenceChangeListener, Any>()
     // ZOUKAN <--
 
     // TODO: 2021-05-29 Need to find a way to get this working with all pref types
@@ -142,8 +173,17 @@ class JavaSharedPreferences(
                 keys
                     .filter { it.startsWith(TYPE_PREFIX) }
                     .associate { it.removePrefix(TYPE_PREFIX) to preferences.getStringOrNull(it) }
+            // A key.size is a Set's only when the key is typed as a Set, or (written before types
+            // were kept) nothing types it otherwise and the indexed entries are all there
             val setKeys =
-                keys.filter { it.endsWith(".size") }.map { it.removeSuffix(".size") } +
+                keys
+                    .filter { it.endsWith(".size") }
+                    .map { it.removeSuffix(".size") }
+                    .filter { base ->
+                        val baseType = types[base]
+                        baseType == TYPE_STRING_SET ||
+                            (baseType == null && "$base.size" !in types && hasSetEntries(base, keys))
+                    } +
                     types.filterValues { it == TYPE_STRING_SET }.keys
             val result = mutableMapOf<String, Any?>()
             types.forEach { (key, type) ->
@@ -158,10 +198,18 @@ class JavaSharedPreferences(
                 .filter { key ->
                     !key.startsWith(TYPE_PREFIX) &&
                         key !in result &&
-                        setKeys.none { key.startsWith("$it.") }
+                        setKeys.none { isSetEntry(it, key) }
                 }.forEach { key -> result[key] = preferences.getStringOrNull(key) }
             result
         }
+
+    private fun hasSetEntries(
+        key: String,
+        keys: Set<String>,
+    ): Boolean {
+        val size = preferences.getStringOrNull("$key.size")?.toIntOrNull() ?: return false
+        return size >= 0 && (0 until size).all { "$key.$it" in keys }
+    }
 
     private fun readTyped(
         key: String,
@@ -231,21 +279,54 @@ class JavaSharedPreferences(
     override fun contains(key: String): Boolean =
         key in preferences.keys /* ZOUKAN --> */ || "$key.size" in preferences.keys /* ZOUKAN <-- */
 
-    private fun notify(key: String) {
-        listeners.forEach { (_, listener) ->
-            listener(key)
+    // ZOUKAN -->
+    // Called after the properties' lock is released, on the writer's thread. A listener that throws
+    // is logged and the others still run: it must not fail the writer's apply() or commit().
+    private fun notify(keys: List<String>) {
+        if (keys.isEmpty()) return
+        val current = synchronized(listeners) { listeners.keys.toList() }
+        keys.forEach { key ->
+            current.forEach { listener ->
+                try {
+                    listener.onSharedPreferenceChanged(this, key)
+                } catch (e: Exception) {
+                    logger.error(e) { "A listener of ${this.key} failed on $key" }
+                } catch (e: LinkageError) {
+                    logger.error(e) { "A listener of ${this.key} failed on $key" }
+                }
+            }
         }
     }
 
+    /** What is stored for [key]: its value, its type and a Set's entries. Under the properties' lock. */
+    private fun stateOf(key: String): Map<String, String?> =
+        preferences.keys
+            .filter { it == key || it == TYPE_PREFIX + key || isSetEntry(key, it) }
+            .associateWith { preferences.getStringOrNull(it) }
+
+    /** Removes the entries a Set stored under [key] is kept in (key.size, key.0, key.1...), and only those. */
+    private fun removeSetEntries(key: String) {
+        preferences.keys.forEach { name ->
+            if (isSetEntry(key, name)) preferences.remove(name)
+        }
+    }
+    // ZOUKAN <--
+
     private fun saveAction(
         action: Action,
-        shouldNotify: Boolean = true,
+        changed: MutableList<String>,
     ) {
         when (action) {
             is Action.Add -> {
+                // ZOUKAN -->
+                val before = stateOf(action.key)
+                // ZOUKAN <--
                 when (val value = action.value) {
                     is Set<*> -> {
-                        saveAction(Action.Remove(action.key), shouldNotify = false)
+                        // ZOUKAN: the old value and Set entries go; a value of its own under
+                        // key.<name> (domain.custom beside domain) stays
+                        preferences.remove(action.key)
+                        removeSetEntries(action.key)
                         @Suppress("UNCHECKED_CAST")
                         preferences.encodeValue(SetSerializer(String.serializer()), action.key, value as Set<String>)
                     }
@@ -287,12 +368,25 @@ class JavaSharedPreferences(
                         else -> null
                     }
                 if (type != null) preferences.putString(TYPE_PREFIX + action.key, type)
-                // ZOUKAN <--
 
-                if (shouldNotify) notify(action.key)
+                // As Android, writing the value a key already has notifies no one
+                if (stateOf(action.key) != before) changed += action.key
+                // ZOUKAN <--
             }
 
             is Action.Remove -> {
+                // ZOUKAN -->
+                val before = stateOf(action.key)
+                // A Set, or one written before types were kept; not a key.size of its own type
+                val storedType = preferences.getStringOrNull(TYPE_PREFIX + action.key)
+                val wasSet =
+                    storedType == TYPE_STRING_SET ||
+                        (
+                            storedType == null &&
+                                "${action.key}.size" in preferences.keys &&
+                                "$TYPE_PREFIX${action.key}.size" !in preferences.keys
+                        )
+                // ZOUKAN <--
                 preferences.remove(action.key)
                 // ZOUKAN -->
                 preferences.remove(TYPE_PREFIX + action.key)
@@ -302,14 +396,14 @@ class JavaSharedPreferences(
                  key.0 = value1
                  key.1 = value2
                  key.size = 2
+                 ZOUKAN: only those entries go, not other keys that start with "key." (domain.custom
+                 beside domain)
                  */
-                preferences.keys.forEach { key ->
-                    if (key.startsWith(action.key + ".")) {
-                        preferences.remove(key)
-                    }
-                }
+                if (wasSet) removeSetEntries(action.key)
 
-                if (shouldNotify) notify(action.key)
+                // ZOUKAN -->
+                if (stateOf(action.key) != before) changed += action.key
+                // ZOUKAN <--
             }
 
             Action.Clear -> {
@@ -321,20 +415,23 @@ class JavaSharedPreferences(
                     // ZOUKAN -->
                     if (key.startsWith(TYPE_PREFIX)) return@forEach
                     // ZOUKAN <--
-                    notify(key)
+                    changed += key
 
                     val isSetKey = key.endsWith(".size")
                     if (isSetKey) {
-                        notify(key.removeSuffix(".size"))
+                        changed += key.removeSuffix(".size")
                     }
                 }
             }
         }
     }
 
-    private fun saveActions(actions: List<Action>) =
+    /** Applies [actions] to the properties; returns the keys whose listeners are to be told. */
+    private fun saveActions(actions: List<Action>): List<String> =
         synchronized(properties) {
-            actions.forEach(::saveAction)
+            val changed = mutableListOf<String>()
+            actions.forEach { saveAction(it, changed) }
+            changed
         }
 
     private fun getSnapshot(): Properties =
@@ -387,13 +484,16 @@ class JavaSharedPreferences(
         }
 
     private fun save(actions: List<Action>): Boolean {
-        val snapshot =
+        val (changed, snapshot) =
             synchronized(properties) {
-                saveActions(actions)
-                getSnapshot()
+                saveActions(actions) to getSnapshot()
             }
 
-        return save(snapshot)
+        val saved = save(snapshot)
+        // ZOUKAN: outside the lock, so a listener that reads or writes these preferences cannot
+        // deadlock, and one that throws does not fail the commit
+        notify(changed)
+        return saved
     }
 
     private fun save(): Boolean = save(getSnapshot())
@@ -411,9 +511,13 @@ class JavaSharedPreferences(
                 save(getSnapshot())
 
                 if (!dirty.load()) {
+                    // ZOUKAN: off the shutdown flush's list before the next apply() can start a
+                    // writer, and back on it if this writer carries on
+                    unsaved.remove(this@JavaSharedPreferences)
                     pendingAsyncSave.store(false)
 
                     if (dirty.load() && pendingAsyncSave.compareAndSet(false, true)) {
+                        unsaved.add(this@JavaSharedPreferences)
                         continue
                     }
 
@@ -425,11 +529,18 @@ class JavaSharedPreferences(
 
     @OptIn(ExperimentalAtomicApi::class)
     private fun saveAsync(actions: List<Action>) {
-        saveActions(actions)
+        val changed = saveActions(actions)
 
         dirty.store(true)
+        // ZOUKAN -->
+        unsaved.add(this)
+        // ZOUKAN <--
 
         startAsyncSaver()
+
+        // ZOUKAN -->
+        notify(changed)
+        // ZOUKAN <--
     }
 
     override fun edit(): SharedPreferences.Editor = Editor(::save, ::saveAsync)
@@ -516,14 +627,12 @@ class JavaSharedPreferences(
     }
 
     override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        val javaListener: (String) -> Unit = {
-            listener.onSharedPreferenceChanged(this, it)
-        }
-        listeners[listener] = javaListener
+        // ZOUKAN: the value must not refer to the listener, or the weak key would never go
+        synchronized(listeners) { listeners[listener] = Unit }
     }
 
     override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        listeners.remove(listener)
+        synchronized(listeners) { listeners.remove(listener) }
     }
 
     fun deleteAll(): Boolean {

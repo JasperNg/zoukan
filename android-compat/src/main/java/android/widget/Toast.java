@@ -12,22 +12,29 @@ public class Toast {
     public static final int LENGTH_SHORT = 0;
 
     private CharSequence text;
+    // ZOUKAN -->
+    private android.content.Context context;
+    private int duration;
+    // ZOUKAN <--
 
     private Toast(CharSequence text) {
         this.text = text;
     }
 
+    // ZOUKAN -->
     public Toast(android.content.Context context) {
-        throw new RuntimeException("Stub!");
+        this.context = context;
     }
 
+    // The desktop app shows the text (see xyz.nulldev.androidcompat.ToastSink)
     public void show() {
-        System.out.printf("made a Toast: \"%s\"\n", text.toString());
+        xyz.nulldev.androidcompat.ToastSink.show(text);
     }
 
     public void cancel() {
-        throw new RuntimeException("Stub!");
+        // Nothing to take back: the desktop toast hides itself
     }
+    // ZOUKAN <--
 
     public void setView(android.view.View view) {
         throw new RuntimeException("Stub!");
@@ -37,13 +44,15 @@ public class Toast {
         throw new RuntimeException("Stub!");
     }
 
+    // ZOUKAN -->
     public void setDuration(int duration) {
-        throw new RuntimeException("Stub!");
+        this.duration = duration;
     }
 
     public int getDuration() {
-        throw new RuntimeException("Stub!");
+        return duration;
     }
+    // ZOUKAN <--
 
     public void setMargin(float horizontalMargin, float verticalMargin) {
         throw new RuntimeException("Stub!");
@@ -74,18 +83,36 @@ public class Toast {
     }
 
     public static Toast makeText(android.content.Context context, java.lang.CharSequence text, int duration) {
-        return new Toast(text);
+        // ZOUKAN -->
+        Toast toast = new Toast(text);
+        toast.context = context;
+        toast.duration = duration;
+        return toast;
+        // ZOUKAN <--
     }
 
+    // ZOUKAN -->
     public static android.widget.Toast makeText(android.content.Context context, int resId, int duration) throws android.content.res.Resources.NotFoundException {
-        throw new RuntimeException("Stub!");
+        return makeText(context, textOf(context, resId), duration);
     }
 
     public void setText(int resId) {
-        throw new RuntimeException("Stub!");
+        this.text = textOf(context, resId);
+    }
+
+    // The desktop has no extension resources to look a string up in: an id that cannot be read
+    // leaves the toast without text (only logged) rather than failing the extension's call
+    private static CharSequence textOf(android.content.Context context, int resId) {
+        try {
+            return context.getResources().getText(resId);
+        } catch (RuntimeException e) {
+            System.out.printf("Toast: no text for resource %d (%s)%n", resId, e);
+            return null;
+        }
     }
 
     public void setText(java.lang.CharSequence s) {
-        throw new RuntimeException("Stub!");
+        this.text = s;
     }
+    // ZOUKAN <--
 }

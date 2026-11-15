@@ -37,6 +37,8 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.sourcePreferences
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -48,6 +50,8 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * A source's own settings: the androidx.preference screen the extension builds, drawn in Compose.
@@ -81,7 +85,9 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
                 source == null -> EmptyScreen(localized(DMR.strings.this_source_is_not_installed_or))
                 preferences.isNullOrEmpty() -> EmptyScreen(localized(DMR.strings.this_source_has_no_settings))
                 else -> LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp)) {
-                    itemsIndexed(preferences.filter { it.visible }, key = { i, p -> p.key ?: "pref-$i" }) { _, pref ->
+                    // Index-qualified: an extension may give two preferences the same key, and a
+                    // repeated LazyColumn key crashes the window
+                    itemsIndexed(preferences.filter { it.visible }, key = { i, p -> "$i:${p.key}" }) { _, pref ->
                         PreferenceItem(pref, version, onChanged = { version++ }, onOpen = { dialog = pref })
                     }
                 }
@@ -98,22 +104,55 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
     }
 }
 
+// The extension's code runs in the window: its change listener, a stored value of another type
+// (ClassCastException) or a summary that throws must show an error, never end the app (an uncaught
+// exception in the window is fatal)
 private fun save(pref: Preference, value: Any) {
-    if (pref.callChangeListener(value)) pref.saveNewValue(value)
+    try {
+        if (pref.callChangeListener(value)) pref.saveNewValue(value)
+    } catch (e: Exception) {
+        reportFailure(pref, e)
+    } catch (e: LinkageError) {
+        reportFailure(pref, e)
+    }
 }
 
-private fun summaryOf(pref: Preference): String? {
+private fun reportFailure(pref: Preference, e: Throwable) {
+    pref.logcat(LogPriority.ERROR, e) { "Source preference ${pref.key} failed" }
+    Toasts.error(pref.title?.toString().orEmpty().ifEmpty { pref.key.orEmpty() }, e)
+}
+
+// Reads run at every redraw: a preference whose reads fail is reported once, not at each redraw
+private val failedReads: MutableSet<Preference> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))
+
+/** [read] of an extension's preference, or [fallback] (logged and shown once) when it throws. */
+private inline fun <T> readSafely(pref: Preference, fallback: T, read: () -> T): T =
+    try {
+        read()
+    } catch (e: Exception) {
+        readFailed(pref, e)
+        fallback
+    } catch (e: LinkageError) {
+        readFailed(pref, e)
+        fallback
+    }
+
+private fun readFailed(pref: Preference, e: Throwable) {
+    if (failedReads.add(pref)) reportFailure(pref, e) else pref.logcat(LogPriority.DEBUG) { "Source preference ${pref.key} still fails: $e" }
+}
+
+private fun summaryOf(pref: Preference): String? = readSafely(pref, null) {
     val summary = pref.summary?.toString()
     if (pref is ListPreference) {
         val index = pref.findIndexOfValue(pref.currentValue as? String)
         val entry = pref.entries?.getOrNull(index)?.toString()
-        return when {
+        return@readSafely when {
             summary == null -> entry
             summary.contains("%s") -> summary.replace("%s", entry.orEmpty())
             else -> summary
         }
     }
-    return summary
+    summary
 }
 
 // Never skipped: the preference values are not Compose state, so a change (which bumps
@@ -127,7 +166,7 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
         is TwoStatePreference -> SwitchSetting(
             title = title,
             subtitle = summaryOf(pref),
-            checked = pref.currentValue as? Boolean ?: false,
+            checked = readSafely(pref, false) { pref.currentValue as? Boolean ?: false },
             enabled = pref.isEnabled,
         ) {
             save(pref, it)
@@ -136,10 +175,12 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
         is ListPreference, is MultiSelectListPreference, is EditTextPreference -> SettingRow(
             title = title,
             subtitle = when (pref) {
-                is EditTextPreference -> summaryOf(pref) ?: (pref.currentValue as? String)
-                is MultiSelectListPreference -> summaryOf(pref) ?: (pref.currentValue as? Set<*>)?.let { values ->
-                    values.mapNotNull { v -> pref.entryValues?.indexOfFirst { it.toString() == v }?.let { pref.entries?.getOrNull(it) } }
-                        .joinToString()
+                is EditTextPreference -> summaryOf(pref) ?: readSafely(pref, null) { pref.currentValue as? String }
+                is MultiSelectListPreference -> summaryOf(pref) ?: readSafely(pref, null) {
+                    (pref.currentValue as? Set<*>)?.let { values ->
+                        values.mapNotNull { v -> pref.entryValues?.indexOfFirst { it.toString() == v }?.let { pref.entries?.getOrNull(it) } }
+                            .joinToString()
+                    }
                 }
                 else -> summaryOf(pref)
             },
@@ -154,7 +195,7 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
             enabled = pref.isEnabled,
             onClick = pref.onPreferenceClickListener?.let {
                 {
-                    runCatching { pref.performClick() }.onFailure { e -> Toasts.error(title, e) }
+                    runCatching { pref.performClick() }.onFailure { e -> reportFailure(pref, e) }
                     onChanged()
                 }
             },
@@ -169,7 +210,7 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
         is ListPreference -> {
             val entries = pref.entries.orEmpty()
             val values = pref.entryValues.orEmpty()
-            val current = pref.currentValue as? String
+            val current = readSafely(pref, null) { pref.currentValue as? String }
             AlertDialog(
                 onDismissRequest = onDismiss,
                 title = { Text(title) },
@@ -196,7 +237,7 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
             val values = pref.entryValues.orEmpty()
 
             @Suppress("UNCHECKED_CAST")
-            var chosen by remember { mutableStateOf((pref.currentValue as? Set<String>).orEmpty()) }
+            var chosen by remember { mutableStateOf(readSafely(pref, null) { pref.currentValue as? Set<String> }.orEmpty()) }
             AlertDialog(
                 onDismissRequest = onDismiss,
                 title = { Text(title) },
@@ -222,7 +263,7 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
             )
         }
         is EditTextPreference -> {
-            var text by remember { mutableStateOf(pref.currentValue as? String ?: "") }
+            var text by remember { mutableStateOf(readSafely(pref, null) { pref.currentValue as? String } ?: "") }
             AlertDialog(
                 onDismissRequest = onDismiss,
                 title = { Text(title) },
