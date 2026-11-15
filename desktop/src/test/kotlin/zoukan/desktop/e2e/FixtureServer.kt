@@ -16,7 +16,50 @@ import kotlinx.serialization.json.put
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+
+/**
+ * How a path fails on purpose ([FixtureServer.fail]), for the error-state journeys.
+ */
+sealed interface FixtureFailure {
+
+    /** Answers with [code] (404, 500, 504...) and a plain-text [body]. */
+    data class Status(val code: Int, val body: String = "Fixture failure $code") : FixtureFailure
+
+    /** Answers normally, but only after [delayMillis]. */
+    data class Slow(val delayMillis: Long) : FixtureFailure
+
+    /**
+     * Holds the request without an answer until [FixtureServer.clearFailures] or
+     * [FixtureServer.close], then answers 503. A forgotten hang gives up after 5 minutes.
+     *
+     * How long the app waits is the app's choice:
+     * - the browse screens (global search, feed) stop a source call after 60 s
+     *   (`withSourceTimeout`, GlobalSearchScreen.kt);
+     * - the app's OkHttp client (`NetworkHelper.client`, which sources use) has a 30 s connect and
+     *   a 30 s read timeout and a 120 s call timeout; `NetworkHelper.plainClient` (sync and other
+     *   services that are not sources) has 10 s connect, read and write timeouts and no call
+     *   timeout.
+     *
+     * So a hang reaches the app's timeout message only after 30 s or more. To show a timeout,
+     * answer [Status] 504 (a gateway timeout) instead; use Hang only to show a loading state,
+     * then [FixtureServer.clearFailures].
+     */
+    data object Hang : FixtureFailure
+
+    /**
+     * An image path answers 200 with its real content type, but only the image's first 64 bytes
+     * followed by zeros, so the decoder rejects it. Any other path answers 200 JSON that is not
+     * valid (`{`).
+     */
+    data object CorruptImage : FixtureFailure
+}
 
 /**
  * A local web server with the fixture manga, so the end-to-end journeys run offline and always see
@@ -30,7 +73,18 @@ import java.util.concurrent.Executors
 class FixtureServer : AutoCloseable {
 
     private val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
-    private val pool = Executors.newFixedThreadPool(4) { Thread(it, "fixture-server").apply { isDaemon = true } }
+    // Cached, not fixed: each request gets a thread, so requests held by [FixtureFailure.Hang]
+    // cannot starve the others
+    private val pool = Executors.newCachedThreadPool { Thread(it, "fixture-server").apply { isDaemon = true } }
+
+    private class FailureRule(val prefix: String, val failure: FixtureFailure, val remaining: AtomicInteger)
+
+    private val failures = CopyOnWriteArrayList<FailureRule>()
+
+    /** Hung requests wait on this; [clearFailures] opens it and puts a fresh one in its place. */
+    private val healSignal = AtomicReference(CountDownLatch(1))
+
+    private val closed = AtomicBoolean()
 
     /** Every path asked for, in order. */
     val requests: MutableList<String> = Collections.synchronizedList(mutableListOf())
@@ -55,13 +109,77 @@ class FixtureServer : AutoCloseable {
      * More routes, asked before the built-in ones with the request and its path segments: a route
      * that answers returns true. [FixtureStore] serves an extension store through this.
      */
-    val extraRoutes = java.util.concurrent.CopyOnWriteArrayList<(HttpExchange, List<String>) -> Boolean>()
+    val extraRoutes = CopyOnWriteArrayList<(HttpExchange, List<String>) -> Boolean>()
+
+    /**
+     * Makes every path that starts with [pathPrefix] fail as [failure], [times] times (by default
+     * until [clearFailures]). Rules are asked in the order they were added and the first that
+     * matches and has times left applies. They apply before [extraRoutes] too, so to the store and
+     * sync routes. The request is still recorded in [requests] and [requestLog].
+     */
+    fun fail(pathPrefix: String, failure: FixtureFailure, times: Int = Int.MAX_VALUE) {
+        require(times > 0) { "times must be positive: $times" }
+        failures += FailureRule(pathPrefix, failure, AtomicInteger(times))
+    }
+
+    /** Removes every failure rule and answers the requests a [FixtureFailure.Hang] holds. */
+    fun clearFailures() {
+        failures.clear()
+        healSignal.getAndSet(CountDownLatch(1)).countDown()
+    }
 
     private fun handle(exchange: HttpExchange) {
         val path = exchange.requestURI.path
         requests += path
         requestLog += FixtureRequest(path, exchange.requestHeaders["Cookie"].orEmpty())
         val parts = path.trim('/').split('/')
+        // Taken before the rules are read, so a clearFailures in between still releases this request
+        val heal = healSignal.get()
+        val rule = failures.firstOrNull { rule ->
+            path.startsWith(rule.prefix) && rule.remaining.getAndUpdate { n -> if (n > 0) n - 1 else n } > 0
+        }
+        if (rule != null) {
+            failWith(exchange, rule.failure, parts, heal)
+        } else {
+            route(exchange, parts)
+        }
+    }
+
+    private fun failWith(exchange: HttpExchange, failure: FixtureFailure, parts: List<String>, heal: CountDownLatch) {
+        when (failure) {
+            is FixtureFailure.Status -> send(exchange, failure.code, "text/plain", failure.body.toByteArray())
+            is FixtureFailure.Slow -> {
+                try {
+                    Thread.sleep(failure.delayMillis)
+                } catch (_: InterruptedException) {
+                    return // the server is closing
+                }
+                route(exchange, parts)
+            }
+            FixtureFailure.Hang -> {
+                if (!closed.get()) {
+                    try {
+                        heal.await(HANG_LIMIT_MINUTES, TimeUnit.MINUTES)
+                    } catch (_: InterruptedException) {
+                        // The server is closing: answer as if healed
+                    }
+                }
+                // The server may be stopping; the client then just sees the connection close
+                runCatching { send(exchange, 503, "text/plain", "Fixture hang released".toByteArray()) }
+            }
+            FixtureFailure.CorruptImage -> {
+                val bytes = if (parts.size == 2 && parts[0] == "images") imageBytes(parts[1]) else null
+                if (bytes == null) {
+                    send(exchange, 200, "application/json", "{".toByteArray())
+                } else {
+                    val corrupt = ByteArray(bytes.size).also { bytes.copyInto(it, endIndex = minOf(CORRUPT_KEPT_BYTES, bytes.size)) }
+                    send(exchange, 200, imageType(parts[1]), corrupt)
+                }
+            }
+        }
+    }
+
+    private fun route(exchange: HttpExchange, parts: List<String>) {
         if (extraRoutes.any { it(exchange, parts) }) return
         when {
             parts == listOf("catalog") -> {
@@ -131,16 +249,22 @@ class FixtureServer : AutoCloseable {
         if (file == FixtureCatalog.HTML_PAGE) {
             return send(exchange, 200, "text/html", "<html><body><h1>Please sign in</h1></body></html>".toByteArray())
         }
-        val bytes = FixtureServer::class.java.getResourceAsStream("/e2e-fixtures/images/$file")?.use { it.readBytes() }
-            ?: return notFound(exchange)
-        val type = when (file.substringAfterLast('.')) {
-            "jpg" -> "image/jpeg"
-            "png" -> "image/png"
-            "webp" -> "image/webp"
-            "avif" -> "image/avif"
-            else -> "application/octet-stream"
-        }
-        send(exchange, 200, type, bytes)
+        val bytes = imageBytes(file) ?: return notFound(exchange)
+        send(exchange, 200, imageType(file), bytes)
+    }
+
+    /** A generated image's bytes, or null for a name that is not one. */
+    private fun imageBytes(file: String): ByteArray? {
+        if (!FILE_NAME.matches(file)) return null
+        return FixtureServer::class.java.getResourceAsStream("/e2e-fixtures/images/$file")?.use { it.readBytes() }
+    }
+
+    private fun imageType(file: String): String = when (file.substringAfterLast('.')) {
+        "jpg" -> "image/jpeg"
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        "avif" -> "image/avif"
+        else -> "application/octet-stream"
     }
 
     private fun json(exchange: HttpExchange, body: Any) =
@@ -154,16 +278,21 @@ class FixtureServer : AutoCloseable {
         exchange.responseBody.use { it.write(bytes) }
     }
 
-    private val closed = java.util.concurrent.atomic.AtomicBoolean()
-
-    /** Stops the server; a journey closes it early to check what still works offline. */
+    /**
+     * Stops the server; a journey closes it early to check what still works offline. Requests a
+     * [FixtureFailure.Hang] holds are answered first.
+     */
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        healSignal.get().countDown()
         server.stop(0)
         pool.shutdownNow()
     }
 
     companion object {
+        private const val HANG_LIMIT_MINUTES = 5L
+        private const val CORRUPT_KEPT_BYTES = 64
+
         const val COOKIE_NAME = "fixture_session"
         const val COOKIE_VALUE = "journey-cookie-1"
         private val FILE_NAME = Regex("[a-z0-9-]+\\.(jpg|png|webp|avif)")
