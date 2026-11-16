@@ -607,7 +607,7 @@
   feature: "Clear entry (delete downloads / chapters); local files only behind their own option and a second confirmation"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest]
   gap: "Clearing downloads and chapters of an online entry only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
 
 - key: dialog:common.ConfirmDestructiveDialog

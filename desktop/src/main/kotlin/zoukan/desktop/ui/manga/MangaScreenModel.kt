@@ -13,6 +13,7 @@ import exh.source.getMainSource
 import exh.source.isEhBasedManga
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -337,6 +338,7 @@ class MangaScreenModel(
     fun refresh(fetchDetails: Boolean = true, manualFetch: Boolean = true) {
         val manga = state.value.manga ?: return
         if (state.value.refreshing) return
+        onRefreshStart?.invoke(Thread.currentThread())
         mutableState.update { it.copy(refreshing = true, error = null) }
         screenModelScope.launch {
             val error = try {
@@ -682,14 +684,21 @@ class MangaScreenModel(
      */
     fun deleteLocalFiles(confirmed: Boolean) {
         if (!confirmed) return
-        AppScope.launch {
+        // On the screen's scope, so the refresh below checks and sets its busy flag on the UI
+        // thread, as the Refresh button does, and not after the screen is closed. Only the move
+        // to the trash is made non-cancellable, so closing the screen cannot cut it short.
+        screenModelScope.launch {
             try {
-                var moved = false
-                localFolders().forEach { dir ->
-                    val ok = withContext(Dispatchers.IO) { systemTrash(dir) }
-                    if (ok) moved = true else Toasts.show(localized(DMR.strings.local_files_not_trashed, dir.absolutePath))
+                val moved = withContext(NonCancellable + Dispatchers.IO) {
+                    var moved = false
+                    localFolders().forEach { dir ->
+                        if (systemTrash(dir)) moved = true else Toasts.show(localized(DMR.strings.local_files_not_trashed, dir.absolutePath))
+                    }
+                    moved
                 }
                 if (moved) refresh(fetchDetails = false, manualFetch = false)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
             }
@@ -710,6 +719,12 @@ class MangaScreenModel(
 }
 
 // ZOUKAN -->
+/**
+ * Journeys set it to see on which thread a refresh passes its busy check: it must be the one of
+ * Dispatchers.Main, the UI thread. It has no effect in the app.
+ */
+internal var onRefreshStart: ((Thread) -> Unit)? = null
+
 /** Moves a folder to the system trash; false when it could not (journeys replace it, so no test machine's trash is used). */
 internal var systemTrash: (java.io.File) -> Boolean = SystemTrash::move
 
