@@ -42,12 +42,24 @@ object Updates {
             download = { asset, progress ->
                 val dir = Injekt.get<ZoukanDirs>().updates
                 // Only the newest download is kept
-                dir.listFiles()?.filter { it.name != asset.name }?.forEach { it.deleteRecursively() }
+                dir.listFiles()?.filter { it.name != asset.name && it.name != asset.name + ".sig" }?.forEach { it.deleteRecursively() }
                 // Without GitHub's checksum the download cannot be told from a damaged or swapped one
                 if (asset.sha256 == null) {
                     throw IOException("GitHub lists no checksum for ${asset.name}; get it from the release page instead")
                 }
                 checker.download(asset, dir, progress).also { file ->
+                    val sig = try {
+                        checker.downloadSignature(asset, dir)
+                    } catch (e: IOException) {
+                        file.delete()
+                        File(dir, asset.name + ".sig").delete()
+                        throw IOException("The release signature could not be downloaded: ${e.message}", e)
+                    }
+                    (releaseSignature.verify(file, sig) as? InstallerSignature.Verdict.Rejected)?.let {
+                        file.delete()
+                        sig?.delete()
+                        throw IOException(it.reason)
+                    }
                     val verdict = signature.verify(file)
                     if (verdict is InstallerSignature.Verdict.Rejected) {
                         file.delete()
@@ -60,6 +72,8 @@ object Updates {
     }
 
     private val signature by lazy { InstallerSignature() }
+
+    private val releaseSignature by lazy { ReleaseSignature.builtIn() }
 
     val state: StateFlow<UpdateStates.State> get() = states.state
 
@@ -117,6 +131,13 @@ object Updates {
      */
     fun install(file: File, quit: () -> Unit) {
         // Again, right before it runs: the file sat in a folder other programs can write to
+        val sigFile = File(file.parentFile, file.name + ".sig")
+        (releaseSignature.verify(file, sigFile) as? InstallerSignature.Verdict.Rejected)?.let {
+            file.delete()
+            sigFile.delete()
+            states.installRejected(file, it.reason)
+            throw IOException(it.reason)
+        }
         (signature.verify(file) as? InstallerSignature.Verdict.Rejected)?.let {
             // Not kept: the same file would be rejected at every click, with no way to get another
             file.delete()

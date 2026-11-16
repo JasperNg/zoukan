@@ -142,6 +142,9 @@ GitHub token and kept in the OS secret store. Without one the check says it foun
 Before the installer is opened, and again when Install is clicked:
 
 - GitHub must list a SHA-256 for the asset, and the download must match it.
+- The release must carry the installer's detached release signature, `<installer name>.sig`, and
+  it must verify under the key built into the app (see "The release signature" below). A missing
+  or wrong signature is refused, whatever the SHA-256 says.
 - When the running app carries a code signature, the installer must be signed by the same
   publisher: the same signer certificate public key on Windows (`Get-AuthenticodeSignature` must
   say `Valid`; the check hashes the certificate's public key and compares the hashes), the same
@@ -156,6 +159,24 @@ Before the installer is opened, and again when Install is clicked:
 - A release built without a signing certificate (like a development build, and Linux) has no
   publisher to compare with and checks only the SHA-256, logging a warning: updates go ahead.
   Users on unsigned builds keep updating this way even after releases start being signed.
+
+### The release signature
+
+The installers are not OS-signed, and GitHub's SHA-256 comes from the same release as the
+installer, so anyone who can publish a release controls both. The release job therefore signs
+every installer with Ed25519 and publishes the signature next to it as `<installer name>.sig` (64
+raw bytes). What is signed is the text `zoukan-release-v1`, the installer's file name and its
+SHA-256 in lower-case hex, each on its own line; the app recomputes the SHA-256 of the file it
+downloaded. The public key is `desktop/src/main/resources/zoukan-release-key.pem`, compiled into
+the app; the private key is the repository secret `ZOUKAN_RELEASE_SIGNING_KEY` (PEM), read only by
+the `release` job, which fails without it and checks each signature against the public key before
+publishing. Apps built before this check do not look at the signature and keep updating.
+
+To rotate the key: make a new Ed25519 key pair, replace the secret, and commit the new public key.
+The first release carrying the new public key must still be signed with the **old** private key
+(the running apps check it with the old public key). The release job checks signatures against the
+committed key, so it cannot publish that one transition release: sign its installers by hand with
+the old private key and publish it with `gh release create`, then set the secret to the new key.
 
 ## Chromium's checksum
 

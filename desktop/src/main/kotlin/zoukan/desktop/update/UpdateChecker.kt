@@ -49,7 +49,14 @@ class UpdateChecker(
         val asset: Asset?,
     )
 
-    data class Asset(val name: String, val apiUrl: String, val size: Long, val sha256: String?)
+    data class Asset(
+        val name: String,
+        val apiUrl: String,
+        val size: Long,
+        val sha256: String?,
+        /** The API address of the installer's detached release signature (`<name>.sig`), if the release has one */
+        val signatureApiUrl: String? = null,
+    )
 
     var token: String?
         get() = runCatching { secrets.get(TOKEN_KEY) }.getOrNull()?.takeIf { it.isNotBlank() }
@@ -133,6 +140,26 @@ class UpdateChecker(
         target
     }
 
+    /**
+     * Downloads the detached release signature of [asset] to `<name>.sig` in [dir], or returns null
+     * when the release lists none. The signature is 64 bytes; a larger body is refused.
+     */
+    suspend fun downloadSignature(asset: Asset, dir: File): File? = withContext(Dispatchers.IO) {
+        val url = asset.signatureApiUrl ?: return@withContext null
+        dir.mkdirs()
+        val target = File(dir, asset.name + ".sig")
+        val request = request(url).header("Accept", "application/octet-stream").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            val body = response.body
+            if (body.contentLength() > MAX_SIGNATURE_BYTES) throw IOException("The release signature is too large")
+            val bytes = body.byteStream().use { it.readNBytes(MAX_SIGNATURE_BYTES + 1) }
+            if (bytes.size > MAX_SIGNATURE_BYTES) throw IOException("The release signature is too large")
+            target.writeBytes(bytes)
+        }
+        target
+    }
+
     private fun downloadTo(
         request: Request,
         partial: File,
@@ -195,6 +222,8 @@ class UpdateChecker(
         /** The GitHub token's name in the secret store. */
         const val TOKEN_KEY = "github-token"
 
+        private const val MAX_SIGNATURE_BYTES = 1024
+
         private val json = Json { ignoreUnknownKeys = true }
 
         /** One release's JSON [body] as [Notes]. */
@@ -223,8 +252,14 @@ class UpdateChecker(
                         name = release.name?.takeIf { it.isNotBlank() } ?: "Zoukan $version",
                         notes = release.body.orEmpty(),
                         pageUrl = release.htmlUrl,
-                        asset = installerFor(release.assets, platform)?.let {
-                            Asset(it.name, it.url, it.size, it.digest?.takeIf { d -> d.startsWith("sha256:") }?.removePrefix("sha256:"))
+                        asset = installerFor(release.assets, platform)?.let { installer ->
+                            Asset(
+                                installer.name,
+                                installer.url,
+                                installer.size,
+                                installer.digest?.takeIf { d -> d.startsWith("sha256:") }?.removePrefix("sha256:"),
+                                release.assets.firstOrNull { it.name == installer.name + ".sig" }?.url,
+                            )
                         },
                     )
                 }

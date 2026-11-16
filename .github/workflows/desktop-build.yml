@@ -187,9 +187,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
+          ZOUKAN_RELEASE_SIGNING_KEY: ${{ secrets.ZOUKAN_RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
           ls -l installers
+          # Every installer gets a detached Ed25519 signature that the app checks; with no key
+          # nothing is published, so an unsigned release cannot go out
+          [ -n "$ZOUKAN_RELEASE_SIGNING_KEY" ] || { echo "release signing key missing"; exit 1; }
+          umask 077
+          printf '%s\n' "$ZOUKAN_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-key.pem"
+          for f in installers/*.msi installers/*.dmg; do
+            name=$(basename "$f")
+            sum=$(sha256sum "$f" | cut -d' ' -f1)
+            printf 'zoukan-release-v1\n%s\n%s\n' "$name" "$sum" > "$RUNNER_TEMP/statement"
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/release-key.pem" -rawin -in "$RUNNER_TEMP/statement" -out "$f.sig"
+            openssl pkeyutl -verify -pubin -inkey desktop/src/main/resources/zoukan-release-key.pem -rawin -in "$RUNNER_TEMP/statement" -sigfile "$f.sig"
+          done
+          rm -f "$RUNNER_TEMP/release-key.pem"
           previous=$(git tag --list 'desktop-v*' | sed 's/^desktop-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           cat > notes.md <<'EOF'
           Built by GitHub Actions from the merge to master.
@@ -198,4 +212,4 @@ jobs:
           EOF
           args=(--target "$GITHUB_SHA" --title "Zoukan $VERSION" --notes-file notes.md --generate-notes --latest)
           if [ -n "$previous" ]; then args+=(--notes-start-tag "desktop-v$previous"); fi
-          gh release create "desktop-v$VERSION" installers/*.msi installers/*.dmg "${args[@]}"
+          gh release create "desktop-v$VERSION" installers/*.msi installers/*.dmg installers/*.sig "${args[@]}"
