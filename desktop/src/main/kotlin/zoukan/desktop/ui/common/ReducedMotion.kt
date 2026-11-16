@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -36,14 +37,17 @@ object ReducedMotion {
         return on.value == 0
     }
 
-    private fun run(vararg command: String): String? {
+    internal fun run(vararg command: String, timeoutSeconds: Long = 5): String? {
         val process = ProcessBuilder(*command).redirectErrorStream(true).start()
-        val out = process.inputStream.bufferedReader().readText().trim()
-        if (!process.waitFor(5, TimeUnit.SECONDS)) {
-            process.destroy()
+        // Read on another thread: readText() returns only when the helper closes its output
+        val output = CompletableFuture.supplyAsync { process.inputStream.bufferedReader().readText().trim() }
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            output.cancel(true)
+            logcat(LogPriority.WARN) { "The reduced motion helper did not answer in time" }
             return null
         }
-        return out.takeIf { process.exitValue() == 0 }
+        return runCatching { output.get(1, TimeUnit.SECONDS) }.getOrNull()?.takeIf { process.exitValue() == 0 }
     }
 
     private const val SPI_GETCLIENTAREAANIMATION = 0x1042
