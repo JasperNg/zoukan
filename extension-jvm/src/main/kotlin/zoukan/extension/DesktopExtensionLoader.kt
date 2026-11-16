@@ -100,7 +100,8 @@ class DesktopExtensionLoader(
             .mapNotNull { f -> f.nameWithoutExtension.toLongOrNull()?.let { it to f } }
             .sortedByDescending { it.first }
         val (versionCode, jar) = jars.firstOrNull() ?: return null
-        // A jar that was loaded stays locked on Windows until the app exits; it goes on a later start
+        // Older versions left behind are deleted now: loaded extensions run from memory
+        // (ExtensionClassLoader), so no jar is held open, also on Windows
         jars.drop(1).forEach { (code, _) -> deleteVersion(pkgName, code) }
         val apk = File(dir, "$versionCode.apk").takeIf { it.isFile }
         return InstalledFiles(pkgName, versionCode, jar, apk)
