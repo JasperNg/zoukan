@@ -107,6 +107,12 @@ class FixtureServer : AutoCloseable {
         server.start()
     }
 
+    /**
+     * How long the server takes to answer for an image, by file name, as a slow site or a busy
+     * machine does. A page that comes late must not make a journey turn past it.
+     */
+    val imageDelays: MutableMap<String, Long> = java.util.concurrent.ConcurrentHashMap()
+
     /** How many times an image was asked for. */
     fun imageRequests(file: String): Int = requests.count { it == "/images/$file" }
 
@@ -247,6 +253,7 @@ class FixtureServer : AutoCloseable {
     private fun image(exchange: HttpExchange, file: String) {
         // Only the generated files, never a path out of the folder
         if (!FILE_NAME.matches(file)) return notFound(exchange)
+        imageDelays[file]?.let { Thread.sleep(it) }
         // An image URL that answers with a web page, as a site's error or login page does
         if (file == FixtureCatalog.HTML_PAGE) {
             return send(exchange, 200, "text/html", "<html><body><h1>Please sign in</h1></body></html>".toByteArray())
