@@ -53,6 +53,8 @@ class BackupJobs(
             try {
                 val backup = backups().create(file, options)
                 Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toasts.error(localized(MR.strings.creating_backup_error), e)
             } finally {
@@ -120,6 +122,8 @@ class BackupJobs(
                                 localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
                             },
                         )
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Toasts.error(localized(DMR.strings.restore_failed), e)
                     } finally {

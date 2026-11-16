@@ -55,7 +55,7 @@ object LibrarySync {
             Toasts.show(localized(SYMR.strings.sync_in_progress))
             return
         }
-        AppScope.launch { runCatching { manager.syncData() }.onFailure { Toasts.error(localized(DMR.strings.sync_failed), it) } }
+        AppScope.launch { zoukan.desktop.app.runCatchingCancellable { manager.syncData() }.onFailure { Toasts.error(localized(DMR.strings.sync_failed), it) } }
     }
 
     /** Whether "Sync EH favorites" first shows the sync notes, which it does once. */

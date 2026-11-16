@@ -730,7 +730,7 @@ class DownloadManager(
     }
 
     private suspend fun comicInfo(manga: Manga, chapter: Chapter, source: HttpSource, encryption: CbzEncryption?): ComicInfoXml {
-        val categories = runCatching { getCategories.await(manga.id) }.getOrDefault(emptyList())
+        val categories = zoukan.desktop.app.runCatchingCancellable { getCategories.await(manga.id) }.getOrDefault(emptyList())
             .map { it.name.trim() }.filter { it.isNotEmpty() }
         val url = runCatching { source.getChapterUrl(chapter.toSChapter()).trim() }.getOrNull()
         return ComicInfoXml(

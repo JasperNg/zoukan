@@ -384,7 +384,7 @@ fun LibraryTab(model: LibraryScreenModel) {
     removeMerged?.let { (mergingMangas, mergedMangaId) ->
         val close = { remove: Boolean ->
             if (remove) model.removeMangas(mergingMangas)
-            model.removeMergedPrompt.value = null
+            model.dismissMergedPrompt()
             navigator.push(MangaScreen(mergedMangaId))
         }
         AlertDialog(

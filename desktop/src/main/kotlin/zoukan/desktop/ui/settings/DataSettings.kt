@@ -325,6 +325,8 @@ private fun ChapterCachePreference() {
             try {
                 val deleted = withContext(Dispatchers.IO) { Archives.clearCache() }
                 Toasts.show(localized(DMR.strings.cache_cleared_files_deleted, deleted))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toasts.error(localized(MR.strings.cache_delete_error), e)
             }
@@ -370,6 +372,8 @@ private fun ExportLibraryPreference() {
                             target.writeText(LibraryCsv.generate(Injekt.get<GetFavorites>().await(), options))
                         }
                         Toasts.show(localized(MR.strings.library_exported))
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Toasts.error(localized(DMR.strings.could_not_export_the_library), e)
                     }

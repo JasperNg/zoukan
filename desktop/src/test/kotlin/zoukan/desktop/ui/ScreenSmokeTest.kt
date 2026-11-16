@@ -676,7 +676,35 @@ open class ScreenSmokeTest {
             }
         }
         missing.shouldBeEmpty()
-        return checks
+        return checks + deletedEntryCheck()
+    }
+
+    /**
+     * The entry screen of an entry the database then loses, as Settings > Clear database does it:
+     * the screen must say so, and no failure may reach a thread's uncaught handler.
+     */
+    private fun deletedEntryCheck(): Check {
+        val message = localized(DMR.strings.this_entry_no_longer_exists)
+        return Check(
+            key = UiInventory.screenKey(MangaScreen::class.java),
+            name = "manga screen of a deleted entry",
+            open = { navigator ->
+                val gone = SManga.create().apply {
+                    url = "Gone"
+                    title = "Gone"
+                }.toDomainManga(LocalSource.ID)
+                val entry = runBlocking { Injekt.get<NetworkToLocalManga>()(listOf(gone)).single() }
+                navigator.push(MangaScreen(entry.id))
+            },
+            drive = {
+                runBlocking {
+                    Injekt.get<tachiyomi.data.DatabaseHandler>().await(inTransaction = true) {
+                        mangasQueries.deleteNonLibraryManga(listOf(LocalSource.ID), 0L)
+                    }
+                }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty() }
+            },
+        )
     }
 
     // Tabs and settings

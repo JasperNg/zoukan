@@ -20,6 +20,7 @@ import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefHelper
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import java.awt.EventQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -59,10 +60,21 @@ object JcefRuntime {
 
     private const val DEFAULT_CHROME_MAJOR = "152"
 
-    /** The app, starting Chromium if needed. Blocks until Chromium is ready. */
-    fun app(): CefApp? = runCatching {
-        runBlocking { CefHelper.waitForInit().first() }
-    }.onFailure { logcat(LogPriority.ERROR, it) { "Chromium is not available" } }.getOrNull()
+    /**
+     * The app, starting Chromium if needed. Blocks until Chromium is ready, so never call it on the
+     * AWT thread: there it returns null at once (Chromium's start needs that thread).
+     */
+    fun app(): CefApp? {
+        if (EventQueue.isDispatchThread()) {
+            logcat(LogPriority.ERROR, IllegalStateException("Chromium was asked for on the UI thread")) {
+                "Chromium is not available on the UI thread; call it from a background thread"
+            }
+            return null
+        }
+        return runCatching {
+            runBlocking { CefHelper.waitForInit().first() }
+        }.onFailure { logcat(LogPriority.ERROR, it) { "Chromium is not available" } }.getOrNull()
+    }
 
     private fun requestStart() {
         if (!requested.compareAndSet(false, true)) return

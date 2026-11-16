@@ -16,6 +16,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.KcefWebViewProvider
+import zoukan.desktop.app.AppShutdown
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.SelfTest
@@ -32,6 +33,7 @@ import zoukan.desktop.harness.CompatibilityHarness
 import zoukan.desktop.harness.ExtensionWiringCheck
 import zoukan.desktop.library.LibraryCommand
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.ui.runZoukanApp
 import zoukan.extension.ApkConverter
 import zoukan.extension.DesktopExtensionInstaller
@@ -151,6 +153,9 @@ private fun dispatch(command: String, rest: List<String>): Int {
                 // crash log is, since the installed app has no console
                 CrashReporter.fatal(e)
             }
+            // The windows are closed: stop the background work and let the reader's progress and
+            // history, and the other writes already started, finish (a few seconds at most)
+            AppShutdown.runForApp(AppScope)
             0
         }
         "version", "--version" -> {

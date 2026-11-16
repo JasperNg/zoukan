@@ -100,6 +100,8 @@ fun LazyListScope.advancedSettings() {
                 try {
                     withContext(Dispatchers.IO) { clearBrowserData() }
                     Toasts.show(localized(MR.strings.webview_data_deleted))
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Toasts.error(localized(MR.strings.cache_delete_error), e)
                 }
@@ -159,7 +161,7 @@ fun LazyListScope.advancedSettings() {
     item(key = "advanced-reset-viewer") {
         SettingRow(localized(MR.strings.pref_reset_viewer_flags), localized(MR.strings.pref_reset_viewer_flags_summary), onClick = {
             AppScope.launch {
-                val success = runCatching { Injekt.get<ResetViewerFlags>().await() }.getOrDefault(false)
+                val success = zoukan.desktop.app.runCatchingCancellable { Injekt.get<ResetViewerFlags>().await() }.getOrDefault(false)
                 Toasts.show(if (success) localized(MR.strings.pref_reset_viewer_flags_success) else localized(MR.strings.pref_reset_viewer_flags_error))
             }
         })
@@ -290,6 +292,8 @@ private fun CrashLogsPreference() {
             try {
                 withContext(Dispatchers.IO) { target.writeText(crashLogs(Injekt.get())) }
                 Toasts.show(localized(DMR.strings.saved_crash_logs_to, target.name))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toasts.error(localized(DMR.strings.could_not_save_the_crash_logs), e)
             }
@@ -350,7 +354,7 @@ private fun refreshLibraryCovers() {
             var failed = 0
             favorites.forEachIndexed { index, manga ->
                 refreshingCovers.value = localized(DMR.strings.refreshing_covers_of, index + 1, favorites.size)
-                runCatching {
+                zoukan.desktop.app.runCatchingCancellable {
                     zoukan.desktop.ui.common.Images.forget(manga)
                     val updated = refresh(manga, fetchDetails = true, fetchChapters = false).manga
                     zoukan.desktop.ui.common.Images.forget(updated)

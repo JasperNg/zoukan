@@ -87,6 +87,7 @@ import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.ServiceScope
 import zoukan.desktop.app.SingleInstance
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
@@ -155,7 +156,7 @@ fun runZoukanApp() {
     // ZOUKAN -->
     // Secure screen follows its setting and incognito mode, for the windows that attach to it
     zoukan.desktop.security.SecureScreen.start(
-        AppScope,
+        ServiceScope,
         Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>(),
         Injekt.get<zoukan.desktop.security.Incognito>().mode(),
     )
@@ -339,22 +340,22 @@ fun startUi(dirs: ZoukanDirs) {
     Injekt.get<SourceManager>()
     val manager = Injekt.get<DesktopExtensionManager>()
     AppScope.launch {
-        runCatching { manager.init() }
+        zoukan.desktop.app.runCatchingCancellable { manager.init() }
             .onFailure { logcat(LogPriority.ERROR, it) { "Loading extensions failed" } }
-        runCatching { manager.findAvailableExtensions() }
+        zoukan.desktop.app.runCatchingCancellable { manager.findAvailableExtensions() }
     }
     // Only the kind: the title and text can name what is read, and the log's end goes into crash
     // reports, even with "Hide notification content" on
-    AppScope.launch { Notifications.flow.collect { logcat { "Notification: ${it.kind}" } } }
+    ServiceScope.launch { Notifications.flow.collect { logcat { "Notification: ${it.kind}" } } }
     // The saved download queue, then the scheduled library update and automatic backups
     val downloads = Injekt.get<DownloadManager>()
     AppScope.launch {
         Injekt.get<SourceManager>().isInitialized.first { it }
-        runCatching { downloads.restore() }.onFailure { logcat(LogPriority.ERROR, it) { "Restoring the download queue failed" } }
+        zoukan.desktop.app.runCatchingCancellable { downloads.restore() }.onFailure { logcat(LogPriority.ERROR, it) { "Restoring the download queue failed" } }
     }
-    Injekt.get<BackgroundJobs>().start(AppScope)
+    Injekt.get<BackgroundJobs>().start(ServiceScope)
     // The daily update check (Phase 7)
-    Updates.start(AppScope)
+    Updates.start(ServiceScope)
 }
 
 /**

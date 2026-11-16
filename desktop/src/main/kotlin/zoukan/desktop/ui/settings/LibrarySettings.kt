@@ -191,6 +191,6 @@ private fun CategorizedDisplayPreference() {
     val scope = rememberCoroutineScope()
     SwitchSetting(localized(MR.strings.categorized_display_settings), checked = value) { on ->
         preferences.categorizedDisplaySettings().set(on)
-        if (!on) scope.launch { runCatching { Injekt.get<tachiyomi.domain.category.interactor.ResetCategoryFlags>().await() } }
+        if (!on) scope.launch { zoukan.desktop.app.runCatchingCancellable { Injekt.get<tachiyomi.domain.category.interactor.ResetCategoryFlags>().await() } }
     }
 }

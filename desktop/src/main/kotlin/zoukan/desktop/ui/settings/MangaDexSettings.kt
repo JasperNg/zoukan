@@ -89,7 +89,7 @@ private fun MangaDexSettings() {
                 else -> OutlinedButton(onClick = {
                     busy = true
                     scope.launch {
-                        runCatching { login.loginWithBrowser(mdList) }
+                        zoukan.desktop.app.runCatchingCancellable { login.loginWithBrowser(mdList) }
                             .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to_mangadex)) }
                             .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_mangadex_failed), it) }
                         busy = false
@@ -113,7 +113,7 @@ private fun MangaDexSettings() {
         ) { if (running) CircularProgressIndicator(Modifier.size(24.dp)) }
         FollowLibraryRow(enabled = !running, count = sync::libraryEntriesToFollow) {
             AppScope.launch {
-                runCatching { sync.pushFavorites() }
+                zoukan.desktop.app.runCatchingCancellable { sync.pushFavorites() }
                     .onSuccess { Toasts.show(localized(DMR.strings.followed_library_entries_on_mangadex, it)) }
                     .onFailure { Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), it) }
             }
@@ -128,7 +128,7 @@ private fun MangaDexSettings() {
                 TextButton(onClick = {
                     logoutDialog = false
                     scope.launch(Dispatchers.IO) {
-                        val ok = runCatching { mdex.logout() }.getOrDefault(false)
+                        val ok = zoukan.desktop.app.runCatchingCancellable { mdex.logout() }.getOrDefault(false)
                         Toasts.show(localized(if (ok) MR.strings.logout_success else MR.strings.unknown_error))
                     }
                 }) { Text(localized(MR.strings.logout)) }
@@ -144,7 +144,7 @@ private fun MangaDexSettings() {
                 syncDialog = false
                 sourcePreferences.mangadexSyncToLibraryIndexes().set(statuses)
                 AppScope.launch {
-                    runCatching { sync.syncFollows() }
+                    zoukan.desktop.app.runCatchingCancellable { sync.syncFollows() }
                         .onSuccess {
                             if (it.failed.isEmpty()) {
                                 Toasts.show(localized(DMR.strings.added_mangadex_follows_to_the_library, it.added))

@@ -132,7 +132,16 @@ data class MangaScreen(val mangaId: Long) : Screen {
         val model = rememberScreenModel { MangaScreenModel(mangaId) }
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
-        val manga = state.manga ?: return LoadingScreen()
+        val manga = state.manga ?: run {
+            // An entry that is gone shows why, instead of loading for ever
+            val error = state.error
+            if (error == null) {
+                LoadingScreen()
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(error) }
+            }
+            return
+        }
         // ZOUKAN -->
         // The one dialog the user opened (edit, cover, clear, a question before deleting, ...)
         var dialog by remember { mutableStateOf<MangaDialog?>(null) }

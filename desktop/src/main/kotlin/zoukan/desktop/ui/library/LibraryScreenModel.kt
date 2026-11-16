@@ -18,6 +18,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -59,11 +61,14 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
+import zoukan.desktop.domain.ChaptersByEntry
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
@@ -100,6 +105,10 @@ class LibraryScreenModel(
     // SY <--
     private val librarySearch: LibrarySearch = LibrarySearch(),
     private val extensionManager: DesktopExtensionManager = Injekt.get(),
+    private val chaptersByEntry: ChaptersByEntry = Injekt.get(),
+    // Resolved on first use, as before, so a missing registration only fails where it is used
+    private val desktopPreferences: Lazy<zoukan.desktop.app.DesktopPreferences> = injectLazy(),
+    private val libraryUpdater: Lazy<LibraryUpdater> = injectLazy(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     /** The library preferences that change what is shown. */
@@ -611,7 +620,7 @@ class LibraryScreenModel(
             p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
             // ZOUKAN -->
             // More > Downloaded only shows only downloaded entries, as Android's library
-            Injekt.get<zoukan.desktop.app.DesktopPreferences>().downloadedOnly().changes(),
+            desktopPreferences.value.downloadedOnly().changes(),
             p.groupLibraryBy().changes(),
             // ZOUKAN <--
             p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
@@ -669,9 +678,9 @@ class LibraryScreenModel(
         // "Library dynamic category updates" (groupLibraryUpdateType) says
         val started = if (state.value.grouped) {
             val groupIds = state.value.groupUpdateIds(category, preferences.groupLibraryUpdateType().get())
-            Injekt.get<LibraryUpdater>().start(groupIds = groupIds)
+            libraryUpdater.value.start(groupIds = groupIds)
         } else {
-            Injekt.get<LibraryUpdater>().start(categoryId = category)
+            libraryUpdater.value.start(categoryId = category)
         }
         // ZOUKAN <--
         if (!started) Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
@@ -726,7 +735,7 @@ class LibraryScreenModel(
     fun setCategories(add: Set<Long>, remove: Set<Long>, ids: Set<Long> = state.value.selection) {
         val current = state.value.items.filter { it.id in ids }.groupBy { it.id }
             .mapValues { (_, rows) -> rows.flatMap { it.categories }.toSet() }
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_set_categories) }) {
             current.forEach { (id, categories) ->
                 val updated = (categories - remove + add).filter { it != Category.UNCATEGORIZED_ID }
                 setMangaCategories.await(id, updated)
@@ -740,7 +749,7 @@ class LibraryScreenModel(
 
     fun markRead(read: Boolean, ids: Set<Long> = state.value.selection) {
         val mangas = selected(ids)
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_mark_read) }) {
             mangas.forEach { manga ->
                 val changed = chaptersOf(manga).filter { it.read != read }
                 val updates = changed.map { ChapterUpdate(id = it.id, read = read, lastPageRead = if (read) null else 0L) }
@@ -781,7 +790,7 @@ class LibraryScreenModel(
 
     fun removeFromLibrary(deleteDownloads: Boolean, ids: Set<Long> = state.value.selection) {
         val mangas = selected(ids)
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_remove_from_library) }) {
             mangas.forEach { manga ->
                 if (deleteDownloads && manga.source != LocalSource.ID) {
                     byEntry(manga, chaptersOf(manga)).forEach { (entry, chapters) -> downloadManager.delete(entry, chapters) }
@@ -793,10 +802,8 @@ class LibraryScreenModel(
         }
     }
 
-    private suspend fun byEntry(manga: Manga, chapters: List<Chapter>): List<Pair<Manga, List<Chapter>>> {
-        if (manga.source != MERGED_SOURCE_ID) return listOf(manga to chapters)
-        return chapters.groupBy { it.mangaId }.mapNotNull { (id, list) -> getManga.await(id)?.let { it to list } }
-    }
+    private suspend fun byEntry(manga: Manga, chapters: List<Chapter>): List<Pair<Manga, List<Chapter>>> =
+        chaptersByEntry.group(manga, chapters)
 
     /** Queues each selected entry's bookmarked chapters (DownloadAction.BOOKMARKED_CHAPTERS). */
     fun downloadBookmarked() {
@@ -853,7 +860,7 @@ class LibraryScreenModel(
         val regex3 = "\\{.*?\\}".toRegex()
         val regex4 = ".*\\|".toRegex()
         val mangas = selected(state.value.selection).filter { it.isEhBasedManga() || it.source in nHentaiSourceIds }
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_clean_titles) }) {
             mangas.forEach { manga ->
                 val editedTitle = manga.title
                     .replace(regex1, "").trim()
@@ -883,15 +890,16 @@ class LibraryScreenModel(
                 mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = manga.lastUpdate + 1))
                 // ZOUKAN <--
             }
+            // The selection stays when the action failed
+            clearSelection()
         }
-        clearSelection()
     }
 
     /** Sets the selected MangaDex entries to Reading in the MangaDex follows. */
     fun syncMangaToDex() {
         val mangas = selected(state.value.selection).filter { it.source in mangaDexSourceIds }
         screenModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            zoukan.desktop.app.runCatchingCancellable {
                 MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager)?.let { mdex ->
                     mangas.forEach { manga ->
                         mdex.updateFollowStatus(MdUtil.getMangaId(manga.url), FollowStatus.READING)
@@ -934,7 +942,7 @@ class LibraryScreenModel(
     /** Updates the chapters of the selected entries. */
     fun updateSelectedManga(): Boolean {
         val mangaIds = state.value.selection
-        return Injekt.get<LibraryUpdater>().start(mangaIds = mangaIds)
+        return libraryUpdater.value.start(mangaIds = mangaIds)
     }
 
     /**
@@ -959,7 +967,13 @@ class LibraryScreenModel(
      * After a multiple merge: the entries that were merged and the merged entry, for Android's
      * "remove the merged entries?" prompt; null when nothing asks.
      */
-    val removeMergedPrompt = MutableStateFlow<Pair<List<Manga>, Long>?>(null)
+    private val _removeMergedPrompt = MutableStateFlow<Pair<List<Manga>, Long>?>(null)
+    val removeMergedPrompt: StateFlow<Pair<List<Manga>, Long>?> = _removeMergedPrompt.asStateFlow()
+
+    /** Closes the "remove the merged entries?" prompt. */
+    fun dismissMergedPrompt() {
+        _removeMergedPrompt.value = null
+    }
 
     /**
      * Merges [selectedMangas] in the screen model's scope, so leaving the screen doesn't stop the
@@ -978,7 +992,7 @@ class LibraryScreenModel(
             }
             if (mergedMangaId != null) {
                 Toasts.show(localized(SYMR.strings.entry_merged))
-                removeMergedPrompt.value = mergingMangas to mergedMangaId
+                _removeMergedPrompt.value = mergingMangas to mergedMangaId
             } else {
                 Toasts.show(localized(SYMR.strings.merged_references_invalid))
             }
@@ -987,7 +1001,7 @@ class LibraryScreenModel(
 
     /** Takes [mangas] out of the library, keeping their downloads (the merge's "Remove" action). */
     fun removeMangas(mangas: List<Manga>) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_remove_from_library) }) {
             mangas.distinctBy { it.id }.forEach { manga ->
                 mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
             }

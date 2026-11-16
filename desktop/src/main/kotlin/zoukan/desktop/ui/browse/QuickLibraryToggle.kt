@@ -65,7 +65,7 @@ class QuickLibraryToggle internal constructor(private val scope: CoroutineScope)
     internal fun add(manga: Manga, categoryIds: List<Long>) {
         categories = null
         scope.launch {
-            runCatching { addToLibrary.add(manga, categoryIds, fetchOnAdd = true) }
+            zoukan.desktop.app.runCatchingCancellable { addToLibrary.add(manga, categoryIds, fetchOnAdd = true) }
                 .onSuccess { Toasts.show(localized(MR.strings.manga_added_library)) }
                 .onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
         }

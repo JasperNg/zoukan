@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -42,13 +43,16 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.download.CbzPassword
+import zoukan.desktop.download.DownloadAhead
 import zoukan.desktop.download.DownloadManager
+import zoukan.desktop.download.ReadDeletionPolicy
 import zoukan.desktop.local.LocalFormat
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
@@ -65,7 +69,13 @@ class ReaderPage(val index: Int, val page: Page) {
         data class Error(val message: String) : State
     }
 
-    val state = MutableStateFlow<State>(State.Queued)
+    private val _state = MutableStateFlow<State>(State.Queued)
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    /** Only the reader's screen model sets a page's state. */
+    internal fun setState(value: State) {
+        _state.value = value
+    }
 
     @Volatile
     var bytes: ByteArray? = null
@@ -87,7 +97,7 @@ class ReaderPage(val index: Int, val page: Page) {
     /** Sets the page back to Queued when it is Ready; its image frees its pixels once nothing draws it */
     fun release() {
         val current = state.value
-        if (current is State.Ready && state.compareAndSet(current, State.Queued)) current.image.release()
+        if (current is State.Ready && _state.compareAndSet(current, State.Queued)) current.image.release()
     }
 
     fun rememberSize(width: Int, height: Int) {
@@ -127,6 +137,19 @@ class ReaderScreenModel(
     private val downloadPreferences: tachiyomi.domain.download.service.DownloadPreferences = Injekt.get(),
     private val libraryPreferences: tachiyomi.domain.library.service.LibraryPreferences = Injekt.get(),
     val preferences: DesktopPreferences = Injekt.get(),
+    // Resolved on first use, as before, so a missing registration only fails where it is used
+    private val getMergedChapters: Lazy<GetMergedChaptersByMangaId> = injectLazy(),
+    private val incognitoPolicy: Lazy<zoukan.desktop.security.Incognito> = injectLazy(),
+    private val syncManager: Lazy<eu.kanade.tachiyomi.data.sync.SyncManager> = injectLazy(),
+    private val discordPresence: Lazy<zoukan.desktop.discord.DiscordPresence> = injectLazy(),
+    private val trackChapters: Lazy<TrackChapters> = injectLazy(),
+    private val sourcePreferences: Lazy<eu.kanade.domain.source.service.SourcePreferences> = injectLazy(),
+    private val editManga: Lazy<zoukan.desktop.manga.EditManga> = injectLazy(),
+    private val getChapter: Lazy<tachiyomi.domain.chapter.interactor.GetChapter> = injectLazy(),
+    private val networkHelper: Lazy<eu.kanade.tachiyomi.network.NetworkHelper> = injectLazy(),
+    private val downloadAheadRule: DownloadAhead = DownloadAhead(downloadManager::isDownloaded),
+    /** Scope of the work that outlives the screen: progress, history, deletion after reading */
+    private val appScope: CoroutineScope = zoukan.desktop.app.AppScope,
 ) : StateScreenModel<ReaderScreenModel.State>(State()) {
 
     data class State(
@@ -189,7 +212,7 @@ class ReaderScreenModel(
     private var chapterOpenedAt = System.currentTimeMillis()
 
     /** Writes reading progress in page-turn order; on the app scope, so writes finish after the reader closes */
-    private val progressWriter = ProgressWriter(zoukan.desktop.app.AppScope) { updateChapter.await(it) }
+    private val progressWriter = ProgressWriter(appScope) { updateChapter.await(it) }
 
     private val _menuVisible = MutableStateFlow(false)
     val menuVisible: StateFlow<Boolean> = _menuVisible.asStateFlow()
@@ -210,7 +233,7 @@ class ReaderScreenModel(
             }
             // ZOUKAN -->
             val chapters = if (manga.source == MERGED_SOURCE_ID) {
-                Injekt.get<GetMergedChaptersByMangaId>().await(mangaId)
+                getMergedChapters.value.await(mangaId)
             } else {
                 getChapters.await(mangaId)
             }.sortedByDescending { it.sourceOrder }
@@ -281,8 +304,8 @@ class ReaderScreenModel(
                 val source = sourceManager.get(manga.source)
                 this@ReaderScreenModel.source = source
                 // Per-extension incognito follows the chapter's own source, also in a merged entry
-                incognito = Injekt.get<zoukan.desktop.security.Incognito>().isOn(manga.source)
-                if (!incognito) Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterOpen }
+                incognito = incognitoPolicy.value.isOn(manga.source)
+                if (!incognito) syncManager.value.syncOn { it.syncOnChapterOpen }
                 // ZOUKAN <--
                 // A download (or the local source's file) first, then the source online
                 val file = withContext(Dispatchers.IO) {
@@ -302,7 +325,7 @@ class ReaderScreenModel(
                         opened = null
                         List(owned.pageCount) { ReaderPage(it, Page(it)) }
                     } finally {
-                        opened?.let { orphan -> zoukan.desktop.app.AppScope.launch(Dispatchers.IO) { runCatching { orphan.close() } } }
+                        opened?.let { orphan -> appScope.launch(Dispatchers.IO) { runCatching { orphan.close() } } }
                     }
                 } else {
                     if (source !is HttpSource) error(localized(DMR.strings.the_source_of_this_entry_is))
@@ -342,7 +365,7 @@ class ReaderScreenModel(
                 if (preferences.aggressivePageLoading().get() && file == null) prefetchAll(pages)
                 // ZOUKAN <--
                 // ZOUKAN -->
-                Injekt.get<zoukan.desktop.discord.DiscordPresence>().setReading(
+                discordPresence.value.setReading(
                     zoukan.desktop.discord.DiscordPresence.Reading(
                         mangaId = readerManga.id,
                         title = readerManga.title,
@@ -385,10 +408,10 @@ class ReaderScreenModel(
         progressWriter.submit(progressUpdate(chapter.id, index, read))
         if (last && !chapter.read) {
             // ZOUKAN -->
-            Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterRead }
+            syncManager.value.syncOn { it.syncOnChapterRead }
             if (chapter.isRecognizedNumber) {
-                zoukan.desktop.app.AppScope.launch {
-                    runCatching { Injekt.get<TrackChapters>().afterReading(mangaId, chapter.chapterNumber) }
+                appScope.launch {
+                    zoukan.desktop.app.runCatchingCancellable { trackChapters.value.afterReading(mangaId, chapter.chapterNumber) }
                 }
             }
             // ZOUKAN <--
@@ -419,24 +442,15 @@ class ReaderScreenModel(
     private fun afterChapterRead(chapter: Chapter) {
         val state = state.value
         val slots = downloadPreferences.removeAfterReadSlots().get()
-        if (slots >= 0) {
-            val position = state.navigable.indexOfFirst { it.id == chapter.id }
-            // The read state of this session, not the one the list was made with
-            val toDelete = state.navigable.getOrNull(position - slots)
-                ?.let { c -> if (c.id == chapter.id) chapter else state.chapters.find { it.id == c.id } ?: c }
-            if (toDelete != null && toDelete.read) pendingDeletes[toDelete.id] = toDelete
-        }
         val markDuplicates = libraryPreferences.markDuplicateReadChapterAsRead().get()
             .contains(tachiyomi.domain.library.service.LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
-        if (markDuplicates && chapter.isRecognizedNumber) {
-            val duplicates = state.chapters.filter { !it.read && it.isRecognizedNumber && it.chapterNumber == chapter.chapterNumber }
-            if (duplicates.isNotEmpty()) {
-                zoukan.desktop.app.AppScope.launch { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
-                val ids = duplicates.mapTo(HashSet()) { it.id }
-                mutableState.update { s -> s.copy(chapters = s.chapters.map { if (it.id in ids) it.copy(read = true) else it }) }
-                // Android deletes them too when "Last read chapter" is the delete setting
-                if (slots == 0) duplicates.forEach { pendingDeletes[it.id] = it.copy(read = true) }
-            }
+        val decision = ReadDeletionPolicy.afterRead(chapter, state.navigable, state.chapters, slots, markDuplicates)
+        decision.toDelete.forEach { pendingDeletes[it.id] = it }
+        val duplicates = decision.markRead
+        if (duplicates.isNotEmpty()) {
+            appScope.launch(CoroutineName("duplicate chapters read")) { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
+            val ids = duplicates.mapTo(HashSet()) { it.id }
+            mutableState.update { s -> s.copy(chapters = s.chapters.map { if (it.id in ids) it.copy(read = true) else it }) }
         }
     }
 
@@ -454,18 +468,12 @@ class ReaderScreenModel(
         if (readerManga.source == LocalSource.ID) return
         val next = state.nextChapter ?: return
         downloadedAheadFor = current.id
-        zoukan.desktop.app.AppScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO + CoroutineName("download ahead")) {
             val mangas = HashMap<Long, Manga?>()
             suspend fun mangaOf(chapter: Chapter): Manga? =
                 if (chapter.mangaId == readerManga.id) readerManga else mangas.getOrPut(chapter.mangaId) { getManga.await(chapter.mangaId) }
-            val nextManga = mangaOf(next) ?: return@launch
-            if (!downloadManager.isDownloaded(nextManga, next)) return@launch
-            val from = state.navigable.indexOfFirst { it.id == next.id }
-            val chapters = state.navigable.drop(from).filter { !it.read }.take(amount)
-            chapters.groupBy { it.mangaId }.forEach { (_, list) ->
-                val manga = mangaOf(list.first()) ?: return@forEach
-                downloadManager.enqueue(manga, list)
-            }
+            downloadAheadRule.chaptersToQueue(readerManga, next, state.navigable, amount) { mangaOf(it) }
+                .forEach { (manga, list) -> downloadManager.enqueue(manga, list) }
         }
     }
     // ZOUKAN <--
@@ -512,7 +520,7 @@ class ReaderScreenModel(
         val format = format
         val source = source as? HttpSource
         if (format == null && source == null) return
-        page.state.value = ReaderPage.State.Loading
+        page.setState(ReaderPage.State.Loading)
         // ZOUKAN -->
         // Started once it owns the page, so even a load that ends at once finds itself the owner
         val job = screenModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
@@ -535,7 +543,7 @@ class ReaderScreenModel(
                 }
                 if (owns()) {
                     page.rememberSize(image.width, image.height)
-                    page.state.value = ReaderPage.State.Ready(image)
+                    page.setState(ReaderPage.State.Ready(image))
                 } else {
                     image.release()
                 }
@@ -543,7 +551,7 @@ class ReaderScreenModel(
             } catch (e: CancellationException) {
                 // ZOUKAN -->
                 // A newer load (Boost page) owns the page now, and its state is not this load's to reset
-                if (owns()) page.state.value = ReaderPage.State.Queued
+                if (owns()) page.setState(ReaderPage.State.Queued)
                 // ZOUKAN <--
                 throw e
             } catch (e: Throwable) {
@@ -553,7 +561,7 @@ class ReaderScreenModel(
                 // ZOUKAN <--
                 logcat(LogPriority.WARN, e) { "Page ${index + 1} failed" }
                 page.bytes = null
-                page.state.value = ReaderPage.State.Error(sourceErrorText(e))
+                page.setState(ReaderPage.State.Error(sourceErrorText(e)))
                 // ZOUKAN -->
                 // SY's "Instant retry": a failed page is tried once more at once
                 if (attempt == 0 && preferences.readerInstantRetry().get()) {
@@ -625,10 +633,10 @@ class ReaderScreenModel(
             val other = pages.getOrNull(i) ?: return@forEach
             if (other.loader === job) {
                 other.loader = null
-                if (other.state.value is ReaderPage.State.Loading) other.state.value = ReaderPage.State.Queued
+                if (other.state.value is ReaderPage.State.Loading) other.setState(ReaderPage.State.Queued)
             }
         }
-        if (page.state.value !is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
+        if (page.state.value !is ReaderPage.State.Ready) page.setState(ReaderPage.State.Queued)
         loadPage(index, retry = true)
         requestPages(index)
     }
@@ -656,7 +664,7 @@ class ReaderScreenModel(
         if (page.imageUrl.isNullOrEmpty()) page.imageUrl = source.getImageUrl(page)
         // ZOUKAN -->
         // The SY data saver, as Android's HttpPageLoader
-        val dataSaver = runCatching { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }.getOrNull()
+        val dataSaver = runCatching { sourcePreferences.value }.getOrNull()
             ?.let { exh.util.DataSaver(source, it) } ?: exh.util.DataSaver.NoOp
         return with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
             // ZOUKAN <--
@@ -751,7 +759,7 @@ class ReaderScreenModel(
     /** Sets the page as the entry's cover: a library entry's custom cover, or a local entry's cover file, as Android. */
     fun setPageAsCover(index: Int) = pageAction(localized(MR.strings.notification_cover_update_failed)) {
         val manga = getManga.await(mangaId) ?: return@pageAction
-        val edit = Injekt.get<zoukan.desktop.manga.EditManga>()
+        val edit = editManga.value
         if (!edit.canEditCover(manga)) {
             Toasts.show(localized(MR.strings.notification_first_add_to_library))
             return@pageAction
@@ -770,7 +778,7 @@ class ReaderScreenModel(
 
     /** Runs a page action to the end even when the reader closes, as Android's launchNonCancellable. */
     private fun pageAction(failure: String, block: suspend () -> Unit) {
-        zoukan.desktop.app.AppScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             try {
                 block()
             } catch (e: CancellationException) {
@@ -848,7 +856,7 @@ class ReaderScreenModel(
         if (state.value.pages.isEmpty()) return
         val duration = System.currentTimeMillis() - chapterOpenedAt
         chapterOpenedAt = System.currentTimeMillis()
-        zoukan.desktop.app.AppScope.launch {
+        appScope.launch(CoroutineName("reading history")) {
             upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
         }
     }
@@ -856,7 +864,7 @@ class ReaderScreenModel(
     private fun closeFormat() {
         val old = format ?: return
         format = null
-        zoukan.desktop.app.AppScope.launch(Dispatchers.IO) { runCatching { old.close() } }
+        appScope.launch(Dispatchers.IO) { runCatching { old.close() } }
     }
 
     override fun onDispose() {
@@ -869,16 +877,16 @@ class ReaderScreenModel(
         format = null
         val deletes = pendingDeletes.values.toList()
         if (old != null || deletes.isNotEmpty()) {
-            zoukan.desktop.app.AppScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(old, deletes) { downloadManager.deleteRead(it) } }
+            appScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(old, deletes) { downloadManager.deleteRead(it) } }
         }
         // ZOUKAN <--
         // ZOUKAN -->
-        Injekt.get<zoukan.desktop.discord.DiscordPresence>().clearReading()
+        discordPresence.value.clearReading()
         // ZOUKAN <--
         val chapter = state.value.chapter
         if (chapter != null && state.value.pages.isNotEmpty() && !incognito) {
             val duration = System.currentTimeMillis() - chapterOpenedAt
-            zoukan.desktop.app.AppScope.launch {
+            appScope.launch(CoroutineName("reading history")) {
                 upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
             }
         }
@@ -898,7 +906,7 @@ class ReaderScreenModel(
                 navigable = s.navigable.map { it.updated() },
             )
         }
-        zoukan.desktop.app.AppScope.launch {
+        appScope.launch(CoroutineName("bookmark")) {
             updateChapter.await(ChapterUpdate(id = chapter.id, bookmark = bookmark))
         }
     }
@@ -907,7 +915,7 @@ class ReaderScreenModel(
     fun openChapter(chapter: Chapter) {
         if (chapter.id == state.value.chapter?.id) return
         screenModelScope.launch {
-            val fresh = runCatching { Injekt.get<tachiyomi.domain.chapter.interactor.GetChapter>().await(chapter.id) }
+            val fresh = zoukan.desktop.app.runCatchingCancellable { getChapter.value.await(chapter.id) }
                 .getOrNull() ?: chapter
             loadChapter(fresh, fromStart = false)
         }
@@ -922,8 +930,8 @@ class ReaderScreenModel(
     /** Opens the chapter's page in the built-in browser, which shares cookies with the app */
     fun openChapterInWebView() {
         val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
-        zoukan.desktop.app.AppScope.launch {
-            val userAgent = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
+        appScope.launch {
+            val userAgent = networkHelper.value.defaultUserAgentProvider()
             if (!zoukan.desktop.browser.BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
     }
@@ -931,7 +939,7 @@ class ReaderScreenModel(
     /** Opens the chapter's page in the system browser */
     fun openChapterInBrowser() {
         val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
-        zoukan.desktop.app.AppScope.launch {
+        appScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }
                     .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_browser), it) }
