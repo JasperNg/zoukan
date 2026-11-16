@@ -54,11 +54,11 @@ import kotlin.math.abs
  * task forks a JVM for each (see desktop/build.gradle.kts).
  */
 @OptIn(ExperimentalTestApi::class)
-class Journey private constructor(val name: String) {
+class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Long?) {
 
     val dirs = ZoukanDirs(Files.createTempDirectory("zoukan-journey-$name").toFile())
     val server = FixtureServer()
-    val source = FixtureSource(server.baseUrl)
+    val source = FixtureSource(server.baseUrl, readTimeoutSeconds = sourceReadTimeoutSeconds)
     private val shots = File("build/reports/journeys").apply { mkdirs() }
 
     /** Every toast the app showed, in order (the app's own and the extensions'). */
@@ -89,10 +89,10 @@ class Journey private constructor(val name: String) {
         }
 
         /** Starts the app's runtime on a fresh data folder with the fixture source installed. */
-        fun start(name: String): Journey {
+        fun start(name: String, sourceReadTimeoutSeconds: Long? = null): Journey {
             // The OS keychain is not for tests: keep the secrets in the data folder
             System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
-            val journey = Journey(name)
+            val journey = Journey(name, sourceReadTimeoutSeconds)
             try {
                 startRuntime(journey)
             } catch (e: Throwable) {

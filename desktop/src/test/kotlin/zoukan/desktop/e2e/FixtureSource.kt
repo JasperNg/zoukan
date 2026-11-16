@@ -82,6 +82,11 @@ class FixtureSource(
     val previews: Boolean = false,
     /** Two other catalogue titles as the related titles, and no related titles by search. Off by default. */
     val related: Boolean = false,
+    /**
+     * A shorter read timeout for the source's client than the app's 30 s, so a journey can show the
+     * timeout error without waiting that long. The app's own default when null.
+     */
+    val readTimeoutSeconds: Long? = null,
 ) : HttpSource(),
     ConfigurableSource,
     PagePreviewSource {
@@ -107,7 +112,10 @@ class FixtureSource(
     // As descrambling extensions do: the app's client with an interceptor that puts the pages back
     // together. Lazy, because the source is made before the app's network is up.
     override val client: OkHttpClient by lazy {
-        network.client.newBuilder().addInterceptor(::descramble).build()
+        network.client.newBuilder()
+            .apply { readTimeoutSeconds?.let { readTimeout(it, java.util.concurrent.TimeUnit.SECONDS) } }
+            .addInterceptor(::descramble)
+            .build()
     }
 
     private fun descramble(chain: Interceptor.Chain): Response {

@@ -459,6 +459,18 @@
   tests: []
   gap: "Saved searches are not driven; planned: BrowseFeaturesJourneyTest"
 
+- key: flow:browse.source-error-retry
+  feature: "Source catalogue fails (500): the error shows, Retry lists the titles"
+  tier: journey
+  smoke: false
+  tests: [e2e.SourceErrorJourneyTest]
+
+- key: flow:browse.source-timeout
+  feature: "Source answers past the client's read timeout: the timeout error shows, Retry lists the titles"
+  tier: journey
+  smoke: false
+  tests: [e2e.SourceTimeoutJourneyTest]
+
 - key: flow:browse.source-header
   feature: "Open website (sign in / Cloudflare), source feed, source settings"
   tier: journey
@@ -534,8 +546,20 @@
   feature: "Refresh, open in browser"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Refresh after an error is not driven; planned: SourceErrorJourneyTest; open in browser starts the system browser (manual)"
+  tests: [e2e.SourceErrorJourneyTest]
+  gap: "Open in browser starts the system browser (manual)"
+
+- key: flow:manga.details-error-refresh
+  feature: "A title's details fail (404): the error shows, Refresh loads them"
+  tier: journey
+  smoke: false
+  tests: [e2e.SourceErrorJourneyTest]
+
+- key: flow:manga.chapters-error-refresh
+  feature: "A title's chapter list fails (500): the error shows, Refresh lists the chapters"
+  tier: journey
+  smoke: false
+  tests: [e2e.SourceErrorJourneyTest]
 
 - key: flow:manga.action-row
   feature: "Add to library, tracking, WebView (copy link on secondary click)"
@@ -780,8 +804,8 @@
   feature: "Retry failed pages, load this page first"
   tier: journey
   smoke: false
-  tests: []
-  gap: "DescramblingJourneyTest shows a page error but retries nothing; planned: CorruptPageJourneyTest"
+  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest]
+  gap: "The bar's Retry failed pages (R) and Load this page first are not driven; the page's own Retry is"
 
 - key: flow:reader.chapter-nav
   feature: "Next / previous chapter"
