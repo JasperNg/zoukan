@@ -425,14 +425,23 @@ private fun backup(args: List<String>): Int {
                 System.err.println("$file exists; pass --force to replace it")
                 return 1
             }
-            file.absoluteFile.parentFile?.mkdirs()
-            // Through a temporary file, as `backup create` does: a failed write leaves the target alone
-            val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
+            val parent = file.absoluteFile.parentFile
+            parent?.mkdirs()
+            // Through a temporary file of its own: a failed write leaves the target alone, and no
+            // other file of the folder is written or deleted
+            val temp = Files.createTempFile(parent?.toPath(), "${file.name}.", ".tmp")
             try {
-                temp.sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
-                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                temp.toFile().sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
+                // Without --force, a file that appeared since the check above is not replaced either
+                val options = if ("--force" in flags) arrayOf(StandardCopyOption.REPLACE_EXISTING) else emptyArray()
+                try {
+                    Files.move(temp, file.toPath(), *options)
+                } catch (_: java.nio.file.FileAlreadyExistsException) {
+                    System.err.println("$file exists; pass --force to replace it")
+                    return 1
+                }
             } finally {
-                temp.delete()
+                Files.deleteIfExists(temp)
             }
             println("Wrote $file (${file.length()} bytes)")
             0

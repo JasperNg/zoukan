@@ -75,4 +75,17 @@ class BackupCommandTest {
         decodes(file)
         File(dir, "new.tachibk.tmp").exists() shouldBe false
     }
+
+    @Test
+    fun `synthetic leaves a file named like its temporary file alone`() {
+        val bystander = File(dir, "new.tachibk.tmp").apply { writeBytes(Random(11).nextBytes(4 * 1024)) }
+        val original = bystander.readBytes()
+
+        val (code, _) = run("backup", "synthetic", File(dir, "new.tachibk").path)
+
+        code shouldBe 0
+        bystander.exists() shouldBe true
+        sha256(bystander.readBytes()) shouldBe sha256(original)
+        dir.list()!!.sorted() shouldBe listOf("new.tachibk", "new.tachibk.tmp")
+    }
 }
