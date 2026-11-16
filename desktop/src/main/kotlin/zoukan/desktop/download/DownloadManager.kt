@@ -40,6 +40,8 @@ import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -173,6 +175,43 @@ class DownloadManager(
         }
     }
 
+    /**
+     * Moves an entry's download folder to the name [newTitle] gives it, as Android's renameManga.
+     * Never replaces anything: returns false, and moves nothing, when a folder of that name exists
+     * or a chapter of the entry is in the queue. True when there is nothing to move.
+     */
+    suspend fun renameManga(manga: Manga, newTitle: String): Boolean =
+        renameManga(manga.id, manga.source, manga.ogTitle, newTitle)
+
+    suspend fun renameManga(mangaId: Long, sourceId: Long, fromTitle: String, toTitle: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val old = File(paths.sourceDir(sourceId), paths.mangaDirName(fromTitle))
+            val target = File(old.parentFile, paths.mangaDirName(toTitle))
+            if (old.name == target.name || !old.exists()) return@withContext true
+            if (_queue.value.any { it.manga.id == mangaId }) {
+                logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: chapters of the entry are queued" }
+                return@withContext false
+            }
+            if (target.exists()) {
+                // A case-only change on a case-insensitive disk names the same folder
+                if (runCatching { Files.isSameFile(old.toPath(), target.toPath()) }.getOrDefault(false)) {
+                    return@withContext true
+                }
+                logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: a folder named ${target.name} exists" }
+                return@withContext false
+            }
+            try {
+                // No REPLACE_EXISTING: nothing already on disk is ever overwritten
+                Files.move(old.toPath(), target.toPath())
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not rename the download folder ${old.name} to ${target.name}" }
+                return@withContext false
+            }
+            invalidate(old)
+            invalidate(target)
+            true
+        }
+
     /** Forgets what was read from disk, for example after the storage folder moved. */
     fun invalidateCache() {
         lastRenew = System.currentTimeMillis()
@@ -284,6 +323,13 @@ class DownloadManager(
             folders.forEach folder@{ folder ->
                 val manga = byFolder[folder.name]
                 if (manga == null) {
+                    // Not orphaned when it holds chapters of an entry whose own folder has another
+                    // name (the source changed the title); the next refresh moves it
+                    val owner = renamedOwner(folder, mangas.filter { it.source == source.id }, chaptersOf)
+                    if (owner != null) {
+                        logcat(LogPriority.WARN) { "Kept ${folder.name}: its chapters belong to ${owner.ogTitle}, whose folder has another name" }
+                        return@folder
+                    }
                     // Orphaned: no entry of this source has this folder
                     cleared += 1 + (folder.list()?.size ?: 0)
                     folder.deleteRecursively()
@@ -295,6 +341,20 @@ class DownloadManager(
             }
         }
         cleared
+    }
+
+    /** An entry of the source without a folder of its own that has a chapter's download in [folder]. */
+    private suspend fun renamedOwner(
+        folder: File,
+        sourceMangas: List<Manga>,
+        chaptersOf: suspend (Long) -> List<Chapter>,
+    ): Manga? {
+        val names = folder.list()?.toHashSet().orEmpty()
+        if (names.isEmpty()) return null
+        return sourceMangas.firstOrNull { manga ->
+            !paths.mangaDir(manga).exists() &&
+                chaptersOf(manga.id).any { chapter -> paths.validChapterNames(chapter).any { it in names } }
+        }
     }
 
     private fun cleanupEntry(
