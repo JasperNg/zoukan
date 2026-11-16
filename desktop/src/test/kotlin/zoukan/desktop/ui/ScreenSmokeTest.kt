@@ -30,6 +30,8 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.Source
@@ -187,9 +189,23 @@ import kotlin.time.Duration.Companion.seconds
  *
  * A failed check prints the semantics tree that was on screen, to tell a crash from a test that
  * looked for the wrong node.
+ *
+ * Each check also runs the usability rules (report only, see [usabilityChecks]) in the light and
+ * the dark theme. [ScreenSmokeSmallWindowTest] runs the same checks at the app's minimum window
+ * size, in a JVM of its own beside this one. Failures name the window size: "[800x560] tab Library".
  */
 @OptIn(ExperimentalTestApi::class)
-class ScreenSmokeTest {
+open class ScreenSmokeTest {
+
+    /** The window the checks run in; [ScreenSmokeSmallWindowTest] runs them at the smallest one the app allows. */
+    protected open val width = 1280
+    protected open val height = 820
+
+    /** A small-window run: it skips scrolling the lists, which the default run already does. */
+    protected open val small = false
+
+    /** The window size, named in failures and usability findings. */
+    private val size get() = "${width}x$height"
 
     private companion object {
         /** Checks per Compose test: about a second each, well within its one-minute limit. */
@@ -235,11 +251,8 @@ class ScreenSmokeTest {
     private var current = "starting"
     private val failures = Collections.synchronizedList(mutableListOf<String>())
 
-    /** Usability problems: reported in build/reports/usability.md, never a failure (see [usabilityChecks]). */
+    /** Usability problems: reported in build/reports/usability/<size>.md, never a failure (see [usabilityChecks]). */
     private val usabilityFindings = mutableListOf<UsabilityFinding>()
-
-    /** The window size and theme the checks run in, named in each usability finding. */
-    private val variant = "1280x820/light"
 
     @Test
     fun `every screen and dialog opens without an error`() {
@@ -288,8 +301,10 @@ class ScreenSmokeTest {
                 .filter { it.isFile }
                 .flatMap { log -> log.readLines().filter { "No registered instance or factory" in it }.map { "${log.name}: $it" } }
                 .forEach { failures += "log: $it" }
-            println("Usability: ${usabilityFindings.size} findings, in build/reports/usability.md")
-            writeUsabilityReport(usabilityFindings, File("build/reports/usability.md"))
+            // One file per window size: the default and the small-window runs are separate JVMs, side by side
+            val report = File("build/reports/usability/$size.md")
+            println("Usability: ${usabilityFindings.size} findings, in $report")
+            writeUsabilityReport(usabilityFindings, report)
             failures.shouldBeEmpty()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)
@@ -310,6 +325,9 @@ class ScreenSmokeTest {
      */
     private fun runChecks(checks: List<Check>) {
         val preferences = Injekt.get<DesktopPreferences>()
+        // Light, not SYSTEM: the result must not depend on the machine's theme. The dark pass of each check switches it.
+        val ui = Injekt.get<UiPreferences>()
+        ui.themeMode().set(ThemeMode.LIGHT)
         var next = 0
         var batch = 0
         while (next < checks.size) {
@@ -320,7 +338,7 @@ class ScreenSmokeTest {
             var open = -1
             val start = next
             try {
-                runDesktopComposeUiTest(width = 1280, height = 820, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
+                runDesktopComposeUiTest(width = width, height = height, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                     var navigator: Navigator? = null
                     setContent {
                         // Escape as the window turns it into Back, for the usability check's Escape rule
@@ -333,17 +351,38 @@ class ScreenSmokeTest {
                     val end = minOf(next + BATCH, checks.size)
                     while (next < end) {
                         val check = checks[next]
-                        current = check.name
+                        current = "[$size] ${check.name}"
                         open = next
-                        println("Smoke: ${check.name}")
+                        println("Smoke: $current")
                         try {
                             try {
                                 runOnUiThread { check.open(navigator!!) }
                                 settle()
                                 check.drive(this)
-                                // What the user sees first, before the lists scroll; findings never fail the check
-                                usabilityFindings += usabilityChecks(check.key, variant, check.probe)
-                                scrollLists()
+                                // What the user sees first, before the lists scroll; findings never fail the
+                                // check, but an exception while the theme switches does, as in any check.
+                                // The order matters: the rules that only read the screen run in light and
+                                // then in dark, and the ones that press Tab and Escape last, in light,
+                                // because Escape may close the dialog.
+                                usabilityFindings += staticUsabilityChecks(check.key, "$size/light")
+                                // The theme preference reaches ZoukanTheme as Compose goes idle, so
+                                // waitForIdle is enough here; settle's sleeps would add ~1 s per check
+                                try {
+                                    // A failure while dark names the dark variant: "[1280x820/dark] tab Library"
+                                    current = "[$size/dark] ${check.name}"
+                                    ui.themeMode().set(ThemeMode.DARK)
+                                    waitForIdle()
+                                    usabilityFindings += staticUsabilityChecks(check.key, "$size/dark")
+                                } finally {
+                                    // Light again for the next checks even when the dark pass threw; waiting
+                                    // here would throw again over a broken composition and hide the first error
+                                    ui.themeMode().set(ThemeMode.LIGHT)
+                                }
+                                waitForIdle()
+                                current = "[$size] ${check.name}"
+                                usabilityFindings += interactiveUsabilityChecks(check.key, "$size/light", check.probe)
+                                // The default run scrolls every list; the small window adds nothing there
+                                if (!small) scrollLists()
                                 settle()
                             } finally {
                                 runOnUiThread { check.cleanup() }

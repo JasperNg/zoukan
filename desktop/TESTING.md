@@ -32,6 +32,7 @@ Use the cheapest tier that can catch the bug:
 ./gradlew :desktop:test --tests "*CoverageMatrix*"   # one class, or a pattern
 ./gradlew :desktop:wiringTest                        # Injekt registrations and the smoke test
 ./gradlew :desktop:wiringTest --tests "*ScreenSmokeTest" -Pzoukan.smoke.only="tab:Library"
+./gradlew :desktop:wiringTest --tests "*ScreenSmokeSmallWindowTest" -Pzoukan.smoke.only="settings:"   # at 800x560
 ./gradlew :desktop:journeyTest                       # every offline journey
 ./gradlew :desktop:journeyTest --tests "*BrowseAndReadJourneyTest"
 ./gradlew :desktop:nightlyCheck --continue           # nightly only: journeys and every extension
@@ -45,7 +46,10 @@ Notes:
   one, run Gradle under `xvfb-run -a`, as CI does.
 - `-Pzoukan.smoke.only` is a regular expression. It runs only the smoke checks whose name or
   coverage-matrix key matches it, for example `"tab:Library"`, `"browse:"` or `"dialog new category"`.
-  Without `--tests "*ScreenSmokeTest"`, `wiringTest` also runs `InjektRegistrationsTest`.
+  Without `--tests`, `wiringTest` runs `InjektRegistrationsTest` and both smoke classes:
+  `ScreenSmokeTest` at 1280x820 and `ScreenSmokeSmallWindowTest` at the app's minimum window size
+  (800x560), in two JVMs side by side. Each smoke check runs the usability rules in the light and
+  the dark theme, and a failure names the window size, for example `[800x560] tab Library`.
 - Gradle can take `:desktop:test` from its build cache. Add `--rerun` to run the tests again
   anyway.
 - `journeyTest` and `extensionWiringTest` never count as up to date. They always run.

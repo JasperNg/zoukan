@@ -283,7 +283,7 @@ tasks.named<JavaExec>("run") {
 }
 
 /** The tests [wiringTest] runs instead of `test`. */
-val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest")
+val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest", "*ScreenSmokeSmallWindowTest")
 
 /** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
@@ -324,7 +324,12 @@ val wiringTest by tasks.registering(Test::class) {
         wiringTests.forEach { includeTestsMatching(it) }
         isFailOnNoMatchingTests = false
     }
+    // Only the test classes themselves, not their nested and lambda classes: Gradle hands the
+    // classes it scans to the forks in turn, which would queue both smoke runs in one fork
+    include(wiringTests.map { "**/${it.removePrefix("*")}.class" })
     forkEvery = 1
+    // The default and the small-window smoke runs, side by side
+    maxParallelForks = 2
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
     // Runs only the smoke checks whose name matches, to debug one: -Pzoukan.smoke.only="dialog new category"

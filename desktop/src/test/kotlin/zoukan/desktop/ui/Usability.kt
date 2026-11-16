@@ -76,19 +76,36 @@ private val CONTROL_ROLES = setOf(Role.Button, Role.Tab, Role.Checkbox, Role.Swi
  * - for "dialog:" keys with a [dismiss] probe, Escape that doesn't call the dialog's dismiss. Last,
  *   because it may close the dialog.
  */
-fun ComposeUiTest.usabilityChecks(key: String, variant: String, dismiss: DismissProbe?): List<UsabilityFinding> {
+fun ComposeUiTest.usabilityChecks(key: String, variant: String, dismiss: DismissProbe?): List<UsabilityFinding> =
+    staticUsabilityChecks(key, variant) + interactiveUsabilityChecks(key, variant, dismiss)
+
+/** The rules that only read the screen (labels, overflow): they change nothing, so any number of passes can run. */
+fun ComposeUiTest.staticUsabilityChecks(key: String, variant: String): List<UsabilityFinding> = findings(key, variant) { rule ->
+    rule(Rule.UNLABELLED_CLICKABLE) { unlabelledClickables() }
+    rule(Rule.TEXT_OVERFLOW) { textOverflow() }
+}
+
+/** The rules that press keys (Tab, then Escape): they move focus and may close the dialog, so they run last. */
+fun ComposeUiTest.interactiveUsabilityChecks(key: String, variant: String, dismiss: DismissProbe?): List<UsabilityFinding> =
+    findings(key, variant) { rule ->
+        if (key.startsWith("dialog:") || key.startsWith("settings:")) rule(Rule.TAB_TRAVERSAL) { tabTraversal(key) }
+        if (key.startsWith("dialog:") && dismiss != null) rule(Rule.ESCAPE_NOT_DISMISSING) { escape(key, dismiss) }
+    }
+
+/** Runs the rules [body] names; a rule that throws becomes a finding of its own. */
+private fun findings(
+    key: String,
+    variant: String,
+    body: (rule: (Rule, () -> List<Pair<String, String>>) -> Unit) -> Unit,
+): List<UsabilityFinding> {
     val findings = mutableListOf<UsabilityFinding>()
-    fun rule(rule: Rule, body: () -> List<Pair<String, String>>) {
+    body { rule, check ->
         try {
-            body().forEach { (node, detail) -> findings += UsabilityFinding(variant, key, rule, node, detail) }
+            check().forEach { (node, detail) -> findings += UsabilityFinding(variant, key, rule, node, detail) }
         } catch (e: Throwable) {
             findings += UsabilityFinding(variant, key, rule, "-", "rule error: $e")
         }
     }
-    rule(Rule.UNLABELLED_CLICKABLE) { unlabelledClickables() }
-    rule(Rule.TEXT_OVERFLOW) { textOverflow() }
-    if (key.startsWith("dialog:") || key.startsWith("settings:")) rule(Rule.TAB_TRAVERSAL) { tabTraversal(key) }
-    if (key.startsWith("dialog:") && dismiss != null) rule(Rule.ESCAPE_NOT_DISMISSING) { escape(key, dismiss) }
     return findings
 }
 
