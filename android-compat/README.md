@@ -28,6 +28,7 @@ Every change is marked with `// ZOUKAN -->` / `// ZOUKAN <--` (or `/* ZOUKAN -->
 | `SharedPreferences.getAll()` returns each value with its type (Int, Long, Float, Boolean, String, Set) instead of all as text, and a Set as one value. The type is kept beside each value under `__zoukan_type__.<key>`. Backups need it: they store values by type, and a restore only writes over a value of the same type. | `JavaSharedPreferences.kt` |
 | A failed background save stays pending, is retried, and is written at shutdown. A change is no longer lost when the settings file is briefly locked (antivirus, indexer, sync client). | `JavaSharedPreferences.kt` |
 | An unreadable settings file is kept aside once (`<name>.xml.unreadable`, later ones with a timestamp) and never saved over: the first copy is never overwritten, and an encrypted file opened before the key is set is left untouched. | `JavaSharedPreferences.kt` |
+| A stale temporary settings file is removed and never replaces cleared settings: clearing a settings file also removes its `.tmp`, and a `.tmp` beside a main file is deleted when the file is opened. The main file is not rewritten. | `JavaSharedPreferences.kt` |
 
 `AndroidCompatInitializer` and `AndroidCompat.startApp` are called by `zoukan.desktop.ZoukanRuntime`, after it registers the Injekt modules.
 

@@ -90,4 +90,21 @@ class TypedSharedPreferencesTest {
         File(root, "settings/retry_test.xml").isFile shouldBe true
         JavaSharedPreferences("retry_test").getString("a", null) shouldBe "1"
     }
+
+    @Test
+    fun `a stale temporary file never replaces cleared settings`() {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        JavaSharedPreferences("other_src").edit().putString("token", "old").commit()
+        JavaSharedPreferences("stale_tmp").edit().putString("token", "secret").commit()
+        val main = File(root, "settings/stale_tmp.xml")
+        File(root, "settings/other_src.xml").copyTo(File(root, "settings/stale_tmp.xml.tmp"))
+
+        // A reload with a good main file leaves it byte for byte as it was
+        val before = main.readBytes()
+        JavaSharedPreferences("stale_tmp").getString("token", null) shouldBe "secret"
+        main.readBytes().contentEquals(before) shouldBe true
+
+        JavaSharedPreferences("stale_tmp").edit().clear().commit()
+        JavaSharedPreferences("stale_tmp").all shouldBe emptyMap()
+    }
 }

@@ -185,6 +185,11 @@ class JavaSharedPreferences(
                 val leftover = file.resolveSibling("${file.name}.tmp")
                 if (!file.exists() && leftover.exists()) {
                     java.nio.file.Files.move(leftover, file)
+                } else if (file.exists()) {
+                    // Every save writes .tmp and moves it under the file lock, so a .tmp next to
+                    // a main file is stale; it must not come back if the main file is cleared
+                    // later. The main file itself is not touched.
+                    runCatching { leftover.deleteIfExists() }
                 }
                 // ZOUKAN <--
                 if (file.exists()) {
@@ -538,6 +543,10 @@ class JavaSharedPreferences(
             try {
                 if (properties.isEmpty) {
                     file.deleteIfExists()
+                    // ZOUKAN -->
+                    // A stale temporary file would be moved in as the settings on the next start
+                    file.resolveSibling("${file.name}.tmp").deleteIfExists()
+                    // ZOUKAN <--
                 } else {
                     file.createParentDirectories()
 
