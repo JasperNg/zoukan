@@ -1,6 +1,8 @@
 package zoukan.desktop.ui.reader
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -53,7 +55,13 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
         delay(1500)
         modeShown = false
     }
-    AnimatedVisibility(modeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
+    AnimatedVisibility(
+        modeShown,
+        enter = if (reduceMotion) EnterTransition.None else fadeIn(),
+        exit = if (reduceMotion) ExitTransition.None else fadeOut(),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
         Text(
             ReadingModes.label(state.readingMode),
             color = Color.White,

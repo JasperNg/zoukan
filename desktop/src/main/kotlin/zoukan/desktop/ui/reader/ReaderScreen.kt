@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,8 +53,10 @@ import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.reducedMotion
 import zoukan.i18n.desktop.DMR
 
 data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? = null) : Screen {
@@ -188,124 +191,132 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         // While the menu is open the focus stays where the user put it, so its buttons and slider work
         LaunchedEffect(menuVisible, state.generation) { if (!menuVisible) focus.requestFocus() }
 
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(background)
-                // ZOUKAN -->
-                // Any click hides the tap zones overlay, and still reaches the reader
-                .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { tapZones.hide() }
-                // ZOUKAN <--
-                // Bubbling pass: a focused button, slider or menu gets its keys first
-                .onKeyEvent(::onKey)
-                .focusRequester(focus)
-                .focusable(),
-        ) {
-            when {
-                state.loading -> PageLoading(state.currentPage + 1, foreground, Modifier.fillMaxSize())
-                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(state.error!!, color = foreground)
-                        Row {
-                            TextButton(onClick = model::retryChapter) { Text(localized(MR.strings.action_retry)) }
-                            TextButton(onClick = { navigator.pop() }) { Text(localized(MR.strings.action_close)) }
+        // ZOUKAN -->
+        // Read once: every reader composable below follows the system's "reduce motion" setting
+        val reduceMotion by reducedMotion()
+        CompositionLocalProvider(LocalReducedMotion provides reduceMotion) {
+            // ZOUKAN <--
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(background)
+                    // ZOUKAN -->
+                    // Any click hides the tap zones overlay, and still reaches the reader
+                    .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { tapZones.hide() }
+                    // ZOUKAN <--
+                    // Bubbling pass: a focused button, slider or menu gets its keys first
+                    .onKeyEvent(::onKey)
+                    .focusRequester(focus)
+                    .focusable(),
+            ) {
+                when {
+                    state.loading -> PageLoading(state.currentPage + 1, foreground, Modifier.fillMaxSize())
+                    state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(state.error!!, color = foreground)
+                            Row {
+                                TextButton(onClick = model::retryChapter) { Text(localized(MR.strings.action_retry)) }
+                                TextButton(onClick = { navigator.pop() }) { Text(localized(MR.strings.action_close)) }
+                            }
                         }
                     }
-                }
-                else -> key(state.generation) {
-                    // ZOUKAN -->
-                    with(ReaderFilter) {
-                        val pageDescription = localized(DMR.strings.reader_page_description, state.pageNumber)
-                        Box(Modifier.fillMaxSize().readerFilter(filter).semantics { contentDescription = pageDescription }) {
-                            // ZOUKAN <--
-                            if (webtoon) {
-                                WebtoonViewer(model, state, actions, sidePadding, background, foreground, tapZones)
-                            } else {
-                                PagedViewer(model, state, actions, fitMode, background, foreground, tapZones, autoBackground = theme == 3)
+                    else -> key(state.generation) {
+                        // ZOUKAN -->
+                        with(ReaderFilter) {
+                            val pageDescription = localized(DMR.strings.reader_page_description, state.pageNumber)
+                            Box(Modifier.fillMaxSize().readerFilter(filter).semantics { contentDescription = pageDescription }) {
+                                // ZOUKAN <--
+                                if (webtoon) {
+                                    WebtoonViewer(model, state, actions, sidePadding, background, foreground, tapZones)
+                                } else {
+                                    PagedViewer(model, state, actions, fitMode, background, foreground, tapZones, autoBackground = theme == 3)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // ZOUKAN -->
-            ReaderEffects(model, state)
-            // ZOUKAN <--
+                // ZOUKAN -->
+                ReaderEffects(model, state)
+                // ZOUKAN <--
 
-            if (showPageNumber && !menuVisible && state.pages.isNotEmpty()) {
-                Text(
-                    state.pageNumber,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 8.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), Corners.Large)
-                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                if (showPageNumber && !menuVisible && state.pages.isNotEmpty()) {
+                    Text(
+                        state.pageNumber,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), Corners.Large)
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                    )
+                }
+
+                // ZOUKAN -->
+                val buttons by prefs.readerBottomButtons().collectAsState()
+                val forceHorizontal by prefs.forceHorizontalSeekbar().collectAsState()
+                val verticalInLandscape by prefs.landscapeVerticalSeekbar().collectAsState()
+                val leftHanded by prefs.leftVerticalSeekbar().collectAsState()
+                val pageLayout by prefs.pageLayout().collectAsState()
+                ReaderAppBars(
+                    visible = menuVisible,
+                    menu = ReaderMenuState(
+                        mangaTitle = state.manga?.title.orEmpty(),
+                        chapterTitle = state.chapter?.name.orEmpty().let {
+                            when {
+                                !state.fromDisk || state.loading -> it
+                                state.manga?.source == zoukan.desktop.local.LocalSource.ID -> localized(DMR.strings.chapter_local_file, it)
+                                else -> localized(DMR.strings.chapter_downloaded, it)
+                            }
+                        },
+                        bookmarked = state.chapter?.bookmark == true,
+                        autoScroll = autoScroll,
+                        fullscreen = windowState.placement == WindowPlacement.Fullscreen,
+                        readingMode = state.readingMode,
+                        fitMode = fitMode,
+                        cropEnabled = if (webtoon) cropWebtoon else crop,
+                        pageLayout = pageLayout,
+                        buttons = buttons,
+                        forceHorizontalSlider = forceHorizontal,
+                        verticalSliderInLandscape = verticalInLandscape,
+                        leftHandedSlider = leftHanded,
+                        currentPage = state.currentPage,
+                        currentPageText = currentPageText(state),
+                        totalPages = state.pages.size,
+                        hasPrevious = state.previousChapter != null,
+                        hasNext = state.nextChapter != null,
+                        generation = state.generation,
+                    ),
+                    actions = ReaderMenuActions(
+                        onBack = { navigator.pop() },
+                        onToggleBookmark = { model.toggleBookmark() },
+                        onAutoScroll = { autoScroll = !autoScroll },
+                        onKeys = { showKeys = true },
+                        onFullscreen = ::toggleFullscreen,
+                        onChapters = { showChapters = true },
+                        onWebView = model::openChapterInWebView,
+                        onBrowser = model::openChapterInBrowser,
+                        onReadingMode = model::setReadingMode,
+                        onFitMode = { prefs.imageScaleType().set(it) },
+                        onToggleCrop = {
+                            val pref = if (webtoon) prefs.cropBordersWebtoon() else prefs.cropBorders()
+                            pref.set(!pref.get())
+                        },
+                        onPageLayout = { prefs.pageLayout().set(it) },
+                        onSettings = { showSettings = true },
+                        onPreviousChapter = { model.previousChapter() },
+                        onNextChapter = { model.nextChapter() },
+                        onPage = { actions.goTo(it) },
+                        onRetryAll = model::retryAllPages,
+                        onBoostPage = model::boostPage,
+                    ),
                 )
+                // ZOUKAN <--
             }
-
             // ZOUKAN -->
-            val buttons by prefs.readerBottomButtons().collectAsState()
-            val forceHorizontal by prefs.forceHorizontalSeekbar().collectAsState()
-            val verticalInLandscape by prefs.landscapeVerticalSeekbar().collectAsState()
-            val leftHanded by prefs.leftVerticalSeekbar().collectAsState()
-            val pageLayout by prefs.pageLayout().collectAsState()
-            ReaderAppBars(
-                visible = menuVisible,
-                menu = ReaderMenuState(
-                    mangaTitle = state.manga?.title.orEmpty(),
-                    chapterTitle = state.chapter?.name.orEmpty().let {
-                        when {
-                            !state.fromDisk || state.loading -> it
-                            state.manga?.source == zoukan.desktop.local.LocalSource.ID -> localized(DMR.strings.chapter_local_file, it)
-                            else -> localized(DMR.strings.chapter_downloaded, it)
-                        }
-                    },
-                    bookmarked = state.chapter?.bookmark == true,
-                    autoScroll = autoScroll,
-                    fullscreen = windowState.placement == WindowPlacement.Fullscreen,
-                    readingMode = state.readingMode,
-                    fitMode = fitMode,
-                    cropEnabled = if (webtoon) cropWebtoon else crop,
-                    pageLayout = pageLayout,
-                    buttons = buttons,
-                    forceHorizontalSlider = forceHorizontal,
-                    verticalSliderInLandscape = verticalInLandscape,
-                    leftHandedSlider = leftHanded,
-                    currentPage = state.currentPage,
-                    currentPageText = currentPageText(state),
-                    totalPages = state.pages.size,
-                    hasPrevious = state.previousChapter != null,
-                    hasNext = state.nextChapter != null,
-                    generation = state.generation,
-                ),
-                actions = ReaderMenuActions(
-                    onBack = { navigator.pop() },
-                    onToggleBookmark = { model.toggleBookmark() },
-                    onAutoScroll = { autoScroll = !autoScroll },
-                    onKeys = { showKeys = true },
-                    onFullscreen = ::toggleFullscreen,
-                    onChapters = { showChapters = true },
-                    onWebView = model::openChapterInWebView,
-                    onBrowser = model::openChapterInBrowser,
-                    onReadingMode = model::setReadingMode,
-                    onFitMode = { prefs.imageScaleType().set(it) },
-                    onToggleCrop = {
-                        val pref = if (webtoon) prefs.cropBordersWebtoon() else prefs.cropBorders()
-                        pref.set(!pref.get())
-                    },
-                    onPageLayout = { prefs.pageLayout().set(it) },
-                    onSettings = { showSettings = true },
-                    onPreviousChapter = { model.previousChapter() },
-                    onNextChapter = { model.nextChapter() },
-                    onPage = { actions.goTo(it) },
-                    onRetryAll = model::retryAllPages,
-                    onBoostPage = model::boostPage,
-                ),
-            )
-            // ZOUKAN <--
         }
+        // ZOUKAN <--
 
         if (showKeys) KeyboardHelp { showKeys = false }
         if (showSettings) ReaderSettingsDialog(model) { showSettings = false }

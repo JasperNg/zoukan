@@ -3,6 +3,7 @@ package zoukan.desktop.ui.common
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.staticCompositionLocalOf
 import com.sun.jna.Native
 import com.sun.jna.ptr.IntByReference
 import com.sun.jna.win32.StdCallLibrary
@@ -56,6 +57,9 @@ object ReducedMotion {
         }
     }
 }
+
+/** Whether the screen below cuts down on motion; the reader provides [reducedMotion] here once. */
+val LocalReducedMotion = staticCompositionLocalOf { false }
 
 /** [ReducedMotion.enabled], read off the UI thread; false until it is known. */
 @Composable

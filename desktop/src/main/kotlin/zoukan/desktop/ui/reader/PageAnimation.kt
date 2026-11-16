@@ -151,6 +151,8 @@ class PageAnimation private constructor(
 @Composable
 fun PlayAnimation(image: PageImage) {
     val animation = image.animation ?: return
+    // Reduced motion shows the first frame only
+    if (zoukan.desktop.ui.common.LocalReducedMotion.current) return
     LaunchedEffect(animation) { animation.play() }
 }
 

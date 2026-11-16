@@ -1,6 +1,8 @@
 package zoukan.desktop.ui.reader
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -66,10 +68,11 @@ class TapZonesOverlayState(private val preferences: DesktopPreferences) {
 @Composable
 fun TapZonesOverlay(state: TapZonesOverlayState, zones: List<ReaderNavigation.Zone>) {
     LaunchedEffect(zones) { state.onZones(zones) }
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
     AnimatedVisibility(
         visible = state.visible,
-        enter = fadeIn(tween(FADE_MILLIS)),
-        exit = fadeOut(tween(FADE_MILLIS)),
+        enter = if (reduceMotion) EnterTransition.None else fadeIn(tween(FADE_MILLIS)),
+        exit = if (reduceMotion) ExitTransition.None else fadeOut(tween(FADE_MILLIS)),
         modifier = Modifier.fillMaxSize(),
     ) {
         BoxWithConstraints(Modifier.fillMaxSize().testTag("tap-zones-overlay")) {

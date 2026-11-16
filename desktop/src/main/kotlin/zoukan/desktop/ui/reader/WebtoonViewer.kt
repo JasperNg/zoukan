@@ -112,6 +112,7 @@ fun WebtoonViewer(
     val scaleType by prefs.webtoonScaleType().collectAsState()
     val gapScale by prefs.longStripGapSmartScale().collectAsState()
     val smartScaleOn = state.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
     val minZoom = if (noZoomOut) 1f else 0.3f
     LaunchedEffect(minZoom) { if (zoom < minZoom) zoom = minZoom }
     // ZOUKAN <--
@@ -130,7 +131,7 @@ fun WebtoonViewer(
         // ZOUKAN -->
         // Android's "Animate page transitions" (webtoon)
         fun scroll(by: Float) {
-            scope.launch { if (transitions) listState.animateScrollBy(by, tween(200)) else listState.scrollBy(by) }
+            scope.launch { if (transitions && !reduceMotion) listState.animateScrollBy(by, tween(200)) else listState.scrollBy(by) }
         }
         actions.down = { scroll(viewportHeight * 0.8f) }
         actions.up = { scroll(-viewportHeight * 0.8f) }

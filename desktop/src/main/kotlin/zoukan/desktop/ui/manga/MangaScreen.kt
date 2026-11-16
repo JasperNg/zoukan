@@ -333,10 +333,11 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 // Komikku's Start / Resume button, while there is an unread chapter,
                                 // draggable left/right and docking to the dragged side like on Android
                                 val next = state.nextChapter
+                                val reduceMotion by zoukan.desktop.ui.common.reducedMotion()
                                 androidx.compose.animation.AnimatedVisibility(
                                     visible = next != null && state.selected.isEmpty(),
-                                    enter = fadeIn() + scaleIn(),
-                                    exit = fadeOut() + scaleOut(),
+                                    enter = if (reduceMotion) androidx.compose.animation.EnterTransition.None else fadeIn() + scaleIn(),
+                                    exit = if (reduceMotion) androidx.compose.animation.ExitTransition.None else fadeOut() + scaleOut(),
                                     modifier = Modifier
                                         .align(if (fabAtStart) Alignment.BottomStart else Alignment.BottomEnd)
                                         .padding(16.dp),

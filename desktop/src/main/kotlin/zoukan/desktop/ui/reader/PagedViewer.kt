@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import zoukan.desktop.ui.common.FitModes
+import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.collectAsState
 import kotlin.math.abs
@@ -147,6 +148,7 @@ fun PagedViewer(
     val navigateToPan by prefs.navigateToPan().collectAsState()
     val longTap by prefs.readWithLongTap().collectAsState()
     val transitions by prefs.pageTransitionsPager().collectAsState()
+    val reduceMotion = LocalReducedMotion.current
     val doubleTapZoom by prefs.pagedDoubleTapZoomEnabled().collectAsState()
     val disableZoomIn by prefs.pagedDisableZoomIn().collectAsState()
     val zoomStart by prefs.zoomStart().collectAsState()
@@ -182,7 +184,7 @@ fun PagedViewer(
             to == 0 && !showPrevious -> model.previousChapter(atEnd = true)
             to == spreads.size + 1 && !showNext -> model.nextChapter()
             // Android's "Animate page transitions"
-            transitions -> scope.launch { pagerState.animateScrollToPage(to) }
+            transitions && !reduceMotion -> scope.launch { pagerState.animateScrollToPage(to) }
             else -> scope.launch { pagerState.scrollToPage(to) }
             // ZOUKAN <--
         }
