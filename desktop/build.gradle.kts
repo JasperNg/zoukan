@@ -283,7 +283,7 @@ tasks.named<JavaExec>("run") {
 }
 
 /** The tests [wiringTest] runs instead of `test`. */
-val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest", "*ScreenSmokeSmallWindowTest")
+val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest", "*ScreenSmokeSmallWindowTest", "*AppLinkageTest")
 
 /** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
