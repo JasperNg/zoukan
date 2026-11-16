@@ -107,13 +107,7 @@ class CloudflareInterceptor(
         return request.newBuilder().header("User-Agent", userAgent).build()
     }
 
-    private fun isChallenge(response: Response): Boolean {
-        if (response.code !in ERROR_CODES || response.header("Server") !in SERVER_CHECK) return false
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string(), response.request.url.toString())
-        // Solve only captchas, not geo blocks
-        return document.getElementById("challenge-error-title") != null ||
-            document.getElementById("challenge-error-text") != null
-    }
+    private fun isChallenge(response: Response): Boolean = CloudflareChallenge.isChallenge(response)
 
     private fun clearance(request: Request): Cookie? =
         cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }
@@ -180,8 +174,6 @@ class CloudflareInterceptor(
         const val CHALLENGE_COOLDOWN_MINUTES = 5L
         const val CF_CLEARANCE = "cf_clearance"
         const val HEADLESS_TIMEOUT_SECONDS = 30L
-        val ERROR_CODES = listOf(403, 503)
-        val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
         val COOKIE_NAMES = listOf(CF_CLEARANCE)
         val UNSAFE_HEADER_NAMES = listOf(
             "content-length", "host", "trailer", "te", "upgrade", "cookie2", "keep-alive", "transfer-encoding",
@@ -207,6 +199,28 @@ class ChallengeFailures(private val cooldownNanos: Long) {
         val failedAt = lastFailure[host.lowercase(Locale.ENGLISH)] ?: return false
         // Failed while this request waited, or recently enough that the user's refusal still stands
         return failedAt - waitStarted > 0 || now - failedAt < cooldownNanos
+    }
+}
+
+/** Whether a response is a Cloudflare challenge the app should solve (not a geo block). */
+object CloudflareChallenge {
+    private val ERROR_CODES = listOf(403, 503)
+    private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
+
+    // Real challenge pages are tens of KB; the status and Server header come from whoever answers
+    const val MAX_CHALLENGE_BYTES = 1024L * 1024
+
+    fun isChallenge(response: Response): Boolean {
+        if (response.code !in ERROR_CODES || response.header("Server") !in SERVER_CHECK) return false
+        val peeked = response.peekBody(MAX_CHALLENGE_BYTES + 1)
+        if (peeked.contentLength() > MAX_CHALLENGE_BYTES) {
+            logcat(LogPriority.DEBUG) { "Cloudflare: not a challenge, the body of ${response.request.url.host} is too big" }
+            return false
+        }
+        val document = Jsoup.parse(peeked.string(), response.request.url.toString())
+        // Solve only captchas, not geo blocks
+        return document.getElementById("challenge-error-title") != null ||
+            document.getElementById("challenge-error-text") != null
     }
 }
 
