@@ -16,6 +16,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.KcefWebViewProvider
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.AppShutdown
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
@@ -33,7 +34,6 @@ import zoukan.desktop.harness.CompatibilityHarness
 import zoukan.desktop.harness.ExtensionWiringCheck
 import zoukan.desktop.library.LibraryCommand
 import zoukan.desktop.secrets.SecretStore
-import zoukan.desktop.app.AppScope
 import zoukan.desktop.ui.runZoukanApp
 import zoukan.extension.ApkConverter
 import zoukan.extension.DesktopExtensionInstaller

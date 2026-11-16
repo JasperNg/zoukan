@@ -14,11 +14,12 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.model.Manga
-import zoukan.desktop.compat.localized
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
@@ -71,6 +72,8 @@ class MangaScreenModelMissingEntryTest {
             filterChaptersForDownload = mockk(relaxed = true),
             updateErrors = mockk(relaxed = true),
             refreshTracks = mockk(relaxed = true),
+            libraryPreferences = tachiyomi.domain.library.service.LibraryPreferences(InMemoryPreferenceStore()),
+            uiPreferences = eu.kanade.domain.ui.UiPreferences(InMemoryPreferenceStore()),
             chaptersByEntry = mockk(relaxed = true),
             desktopPreferences = lazyOf(preferences),
         ).also { models += it }
