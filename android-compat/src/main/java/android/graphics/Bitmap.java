@@ -26,6 +26,9 @@ public final class Bitmap {
     private final int width;
     private final int height;
     private final BufferedImage image;
+    // ZOUKAN -->
+    private boolean opaque;
+    // ZOUKAN <--
 
     public Bitmap(BufferedImage image) {
         this.image = image;
@@ -445,8 +448,18 @@ public final class Bitmap {
 
     public boolean hasAlpha() {
         // ALPHA_8 is held as TYPE_BYTE_GRAY, its gray samples being the alpha mask
+        // ZOUKAN -->
+        if (opaque) return false;
+        // ZOUKAN <--
         return getConfig() == Config.ALPHA_8 || image.getColorModel().hasAlpha();
     }
+
+    // ZOUKAN -->
+    /** Set by the decoders for a page without transparency: held as ARGB, but hasAlpha() is false. */
+    void markOpaque() {
+        opaque = true;
+    }
+    // ZOUKAN <--
 
     private int bytesPerPixel() {
         Config config = getConfig();

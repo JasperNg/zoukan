@@ -515,9 +515,13 @@ public class BitmapFactory {
             if (opts != null) fillBounds(opts, imageReader, image.getWidth(), image.getHeight());
             // ZOUKAN -->
             // Android decodes every page to ARGB_8888; ImageIO keeps palette, grey and 16-bit types
+            boolean sourceHasAlpha = image.getColorModel().hasAlpha();
             if (image.getType() != BufferedImage.TYPE_INT_ARGB) image = toArgb(image);
+            Bitmap decoded = new Bitmap(image);
+            // A JPEG or opaque PNG reports no alpha, as on Android, though it is held as ARGB
+            if (!sourceHasAlpha) decoded.markOpaque();
+            return decoded;
             // ZOUKAN <--
-            return new Bitmap(image);
         } catch (IOException | RuntimeException ex) {
             resetBounds(opts);
             return null;

@@ -320,6 +320,29 @@ class GraphicsCompatTest {
     }
 
     @Test
+    fun `a greyscale JPEG decodes as opaque ARGB_8888 and getPixels matches drawBitmap`() {
+        val grey = BufferedImage(16, 16, BufferedImage.TYPE_BYTE_GRAY)
+        for (y in 0 until 16) {
+            for (x in 0 until 16) grey.raster.setSample(x, y, 0, if (x < 8) 0x80 else 0)
+        }
+        val jpeg = ByteArrayOutputStream().also { ImageIO.write(grey, "jpg", it) }.toByteArray()
+
+        val decoded = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)!!
+        decoded.config shouldBe Bitmap.Config.ARGB_8888
+        decoded.hasAlpha() shouldBe false
+
+        val target = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+        Canvas(target).drawBitmap(decoded, 0f, 0f, null)
+        for (y in 0 until 16) {
+            for (x in 0 until 16) target.getPixel(x, y) shouldBe decoded.getPixel(x, y)
+        }
+
+        val buffer = ByteBuffer.allocate(decoded.byteCount)
+        decoded.copyPixelsToBuffer(buffer)
+        for (i in 3 until buffer.capacity() step 4) (buffer.get(i).toInt() and 0xFF) shouldBe 0xFF
+    }
+
+    @Test
     fun `ImageDecoder decodes a PNG`() {
         val image = BufferedImage(3, 2, BufferedImage.TYPE_INT_ARGB)
         image.setRGB(0, 0, 0xFFFF0000.toInt())
