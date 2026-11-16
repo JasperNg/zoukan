@@ -241,7 +241,7 @@ private fun TrackerSetting(tracker: Tracker) {
                         // In the app's scope, so leaving Settings doesn't stop the sign-in partway
                         val pasted = address
                         val attempt = AppScope.async {
-                            login.handleRedirect(pasted).also { ok -> if (ok) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
+                            login.handleRedirect(pasted, tracker).also { ok -> if (ok) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
                         }
                         scope.launch {
                             try {

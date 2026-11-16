@@ -4,6 +4,27 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
 class TrackerLoginTest {
+    @Test
+    fun `the AniList window ignores a mangadex-auth redirect`() {
+        val redirect = TrackerLogin.parseRedirect("komikku://mangadex-auth?code=attacker")!!
+        TrackerLogin.decide(redirect, expectedHost = "anilist-auth") shouldBe TrackerLogin.RedirectAction.IGNORE
+    }
+
+    @Test
+    fun `a redirect without a code does not sign out`() {
+        val redirect = TrackerLogin.parseRedirect("komikku://shikimori-auth")!!
+        TrackerLogin.decide(redirect, expectedHost = "shikimori-auth") shouldBe TrackerLogin.RedirectAction.IGNORE
+    }
+
+    @Test
+    fun `the tracker's own redirect with a code or an error is acted on`() {
+        TrackerLogin.decide(TrackerLogin.parseRedirect("komikku://anilist-auth#access_token=t")!!, "anilist-auth") shouldBe
+            TrackerLogin.RedirectAction.SIGN_IN
+        TrackerLogin.decide(TrackerLogin.parseRedirect("komikku://myanimelist-auth?code=c")!!, "myanimelist-auth") shouldBe
+            TrackerLogin.RedirectAction.SIGN_IN
+        TrackerLogin.decide(TrackerLogin.parseRedirect("komikku://bangumi-auth?error=access_denied")!!, "bangumi-auth") shouldBe
+            TrackerLogin.RedirectAction.SIGN_OUT
+    }
 
     @Test
     fun `recognizes the app-scheme redirects`() {

@@ -31,6 +31,11 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
 
     enum class Kind { OAUTH, PASSWORD, ENHANCED }
 
+    /** A sign-in redirect: its host and its query or fragment parameters. */
+    data class Redirect(val host: String, val parameters: Map<String, String?>)
+
+    enum class RedirectAction { SIGN_IN, SIGN_OUT, IGNORE }
+
     fun kindOf(tracker: Tracker): Kind = when (tracker.id) {
         trackerManager.myAnimeList.id, trackerManager.aniList.id, trackerManager.shikimori.id, trackerManager.bangumi.id,
         trackerManager.mdList.id,
@@ -56,6 +61,16 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
         else -> null
     }?.toString()
 
+    /** The host of the redirect address that [tracker]'s sign-in ends on, or null for a tracker without one. */
+    fun redirectHost(tracker: Tracker): String? = when (tracker.id) {
+        trackerManager.myAnimeList.id -> "myanimelist-auth"
+        trackerManager.aniList.id -> "anilist-auth"
+        trackerManager.shikimori.id -> "shikimori-auth"
+        trackerManager.bangumi.id -> "bangumi-auth"
+        trackerManager.mdList.id -> "mangadex-auth"
+        else -> null
+    }
+
     /**
      * Signs in to an OAuth tracker in the built-in browser. Returns true when signed in, false when
      * the user closed the window first. Throws when the browser cannot start or the tracker refuses.
@@ -75,6 +90,7 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
 
     private suspend fun browserLogin(tracker: Tracker): Boolean {
         val url = authUrl(tracker) ?: error("${tracker.name} does not sign in with a browser")
+        val expected = redirectHost(tracker) ?: error("${tracker.name} does not sign in with a browser")
         val redirect = AtomicReference<String?>(null)
         val opened = withContext(Dispatchers.IO) {
             val window = BrowserWindow(
@@ -83,7 +99,8 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
                 message = "Sign in to ${tracker.name}. The window closes by itself when you are done.",
                 interceptNavigation = { target ->
                     if (isRedirect(target)) {
-                        redirect.set(target)
+                        // Stop every app-scheme redirect, but keep only this tracker's own
+                        if (parseRedirect(target)?.host == expected) redirect.set(target)
                         true
                     } else {
                         false
@@ -94,41 +111,36 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
         }
         if (!opened) error("The built-in browser could not start")
         val result = redirect.get() ?: return false
-        return handleRedirect(result)
+        return handleRedirect(result, tracker)
     }
 
     /**
      * Handles a redirect address, as TrackLoginActivity does: the token or code is in the query or
      * the fragment. Also used when the user pastes the address from another browser.
      */
-    suspend fun handleRedirect(address: String): Boolean {
-        val uri = Uri.parse(address.trim())
-        val data = parseParameters(uri.encodedQuery?.takeIf { it.isNotBlank() } ?: uri.encodedFragment)
-        if (uri.host == "mangadex-auth") {
+    suspend fun handleRedirect(address: String, tracker: Tracker): Boolean {
+        val redirect = requireRedirect(address)
+        val expected = redirectHost(tracker) ?: error("${tracker.name} does not sign in with a browser")
+        val action = decide(redirect, expected)
+        if (action == RedirectAction.IGNORE) return false
+        if (redirect.host == "mangadex-auth") {
             val mangaDex = MdUtil.getEnabledMangaDex() ?: error("The MangaDex extension is not installed")
-            val code = data["code"]
+            val code = redirect.parameters["code"]
             return withContext(Dispatchers.IO) {
-                if (code != null) mangaDex.login(code) else mangaDex.logout().let { false }
+                if (action == RedirectAction.SIGN_IN && code != null) mangaDex.login(code) else mangaDex.logout().let { false }
             } && trackerManager.mdList.isLoggedIn
         }
-        val tracker = when (uri.host) {
-            "anilist-auth" -> trackerManager.aniList
-            "bangumi-auth" -> trackerManager.bangumi
-            "myanimelist-auth" -> trackerManager.myAnimeList
-            "shikimori-auth" -> trackerManager.shikimori
-            else -> error("Not a tracker sign-in address: $address")
-        }
-        val value = if (tracker == trackerManager.aniList) data["access_token"] else data["code"]
+        val value = if (redirect.host == "anilist-auth") redirect.parameters["access_token"] else redirect.parameters["code"]
         withContext(Dispatchers.IO) {
             when {
-                value == null -> tracker.logout()
+                action == RedirectAction.SIGN_OUT || value == null -> tracker.logout()
                 tracker == trackerManager.aniList -> trackerManager.aniList.login(value)
                 tracker == trackerManager.bangumi -> trackerManager.bangumi.login(value)
                 tracker == trackerManager.myAnimeList -> trackerManager.myAnimeList.login(value)
                 else -> trackerManager.shikimori.login(value)
             }
         }
-        return value != null && tracker.isLoggedIn
+        return action == RedirectAction.SIGN_IN && tracker.isLoggedIn
     }
 
     suspend fun loginWithPassword(tracker: Tracker, userName: String, password: String) {
@@ -145,6 +157,29 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
             if (scheme !in SCHEMES) return false
             val host = address.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#')
             return host.lowercase() in HOSTS
+        }
+
+        /** The redirect in [address], or null when it is not a tracker sign-in address. */
+        fun parseRedirect(address: String): Redirect? {
+            if (!isRedirect(address.trim())) return null
+            val uri = Uri.parse(address.trim())
+            val host = uri.host ?: return null
+            return Redirect(host, parseParameters(uri.encodedQuery?.takeIf { it.isNotBlank() } ?: uri.encodedFragment))
+        }
+
+        /** The redirect address, or an error when it is not a tracker sign-in address. */
+        fun requireRedirect(address: String): Redirect =
+            parseRedirect(address) ?: error("Not a tracker sign-in address: $address")
+
+        /** What a sign-in for the tracker whose redirect host is [expectedHost] does with [redirect]. */
+        fun decide(redirect: Redirect, expectedHost: String): RedirectAction {
+            if (redirect.host != expectedHost) return RedirectAction.IGNORE
+            val key = if (redirect.host == "anilist-auth") "access_token" else "code"
+            return when {
+                redirect.parameters[key] != null -> RedirectAction.SIGN_IN
+                redirect.parameters["error"] != null -> RedirectAction.SIGN_OUT
+                else -> RedirectAction.IGNORE
+            }
         }
 
         fun parseParameters(encoded: String?): Map<String, String?> = encoded.orEmpty()
