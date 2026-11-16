@@ -3,6 +3,7 @@ package zoukan.desktop.network
 import eu.kanade.tachiyomi.network.interceptor.ClearanceUserAgents
 import io.kotest.matchers.shouldBe
 import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.jupiter.api.Test
 
 /** Which user agent a request to a host with a cf_clearance cookie is sent with. */
@@ -66,6 +67,16 @@ class ClearanceUserAgentsTest {
         agents.record(cookie, chromiumUa)
         agents.recordIfUnknown(cookie, extensionUa)
         agents.userAgentOf(cookie) shouldBe chromiumUa
+    }
+
+    @Test
+    fun `a domain clearance recorded on www applies to api of the same domain`() {
+        val agents = ClearanceUserAgents(MapStore())
+        // As AndroidCookieJar.get parses it: "name=value" against the request URL, so domain = request host
+        val onWww = Cookie.parse("https://www.example.org/".toHttpUrl(), "cf_clearance=shared")!!
+        val onApi = Cookie.parse("https://api.example.org/".toHttpUrl(), "cf_clearance=shared")!!
+        agents.record(onWww, extensionUa)
+        agents.userAgentOf(onApi) shouldBe extensionUa
     }
 
     @Test

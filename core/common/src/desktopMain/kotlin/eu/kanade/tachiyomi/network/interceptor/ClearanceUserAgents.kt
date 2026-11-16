@@ -4,12 +4,13 @@ package eu.kanade.tachiyomi.network.interceptor
 import android.content.Context
 import eu.kanade.tachiyomi.util.lang.Hash
 import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
  * Remembers which user agent each cf_clearance cookie was obtained with. Cloudflare accepts the
  * cookie only with that user agent, so a request is sent with it when its own differs.
  *
- * Records are kept per cookie domain, with a hash of the cookie's value: a record whose hash does
+ * Records are kept per registrable domain, with a hash of the cookie's value: a record whose hash does
  * not match the current cookie (it expired, was cleared or replaced) is ignored.
  */
 class ClearanceUserAgents(private val store: Store) {
@@ -22,7 +23,7 @@ class ClearanceUserAgents(private val store: Store) {
 
     /** Records that [cookie] was obtained with [userAgent]. */
     fun record(cookie: Cookie, userAgent: String) {
-        store.put(cookie.domain, "${fingerprint(cookie)}$SEPARATOR$userAgent")
+        store.put(key(cookie), "${fingerprint(cookie)}$SEPARATOR$userAgent")
     }
 
     /** Records [userAgent] for [clearance] when it has no record yet: a clearance the user got in a browser window. */
@@ -32,12 +33,20 @@ class ClearanceUserAgents(private val store: Store) {
     }
 
     /** The user agent [cookie] was obtained with, or null when it is not known. */
-    fun userAgentOf(cookie: Cookie): String? {
-        val value = store.get(cookie.domain) ?: return null
+    fun userAgentOf(cookie: Cookie): String? =
+        // The old per-host key still reads, so records written by earlier versions keep working
+        userAgentAt(key(cookie), cookie) ?: userAgentAt(cookie.domain, cookie)
+
+    private fun userAgentAt(key: String, cookie: Cookie): String? {
+        val value = store.get(key) ?: return null
         val fingerprint = value.substringBefore(SEPARATOR, missingDelimiterValue = "")
         if (fingerprint != fingerprint(cookie)) return null
         return value.substringAfter(SEPARATOR).takeIf { it.isNotEmpty() }
     }
+
+    // cf_clearance is a domain cookie, but the app's cookie jar reports it under the request's host
+    private fun key(cookie: Cookie): String =
+        "https://${cookie.domain}".toHttpUrlOrNull()?.topPrivateDomain() ?: cookie.domain
 
     private fun fingerprint(cookie: Cookie): String = Hash.sha256(cookie.value)
 
