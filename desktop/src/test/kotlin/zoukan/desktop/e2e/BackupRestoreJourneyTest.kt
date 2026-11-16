@@ -1,7 +1,10 @@
 package zoukan.desktop.e2e
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -128,7 +131,7 @@ class BackupRestoreJourneyTest {
                     // The action turns into Close once the restore ends
                     waitFor(hasTestTag("restore-backup-action") and hasText("Close"), timeout = 120_000)
                     shot("2-restored")
-                    // The "Restored 1 entries" toast sits over the middle of the button for a few
+                    // The "Restored 1 entry" toast sits over the middle of the button for a few
                     // seconds, so click its left end, as a user would
                     onNodeWithTag("restore-backup-action").performMouseInput { click(centerLeft + Offset(24f, 0f)) }
                     waitOrDump("for the restore screen to close") {
@@ -157,6 +160,13 @@ class BackupRestoreJourneyTest {
                         onAllNodes(hasTestTag("manga-item")).fetchSemanticsNodes().size == 1
                     }
                     waitFor(hasText(FixtureCatalog.FORMATS_TITLE))
+                    // A count of one reads "1 entry", never "1 entries" or "1 chapters"
+                    val plainOne = SemanticsMatcher("shows \"1 entries\" or \"1 chapters\"") { node ->
+                        node.config.getOrNull(SemanticsProperties.Text)
+                            ?.any { Regex("""\b1 (entries|chapters)\b""").containsMatchIn(it.text) } == true
+                    }
+                    onAllNodes(plainOne).fetchSemanticsNodes().size shouldBe 0
+                    onAllNodes(hasText("1 entry", substring = true)).fetchSemanticsNodes().isNotEmpty() shouldBe true
                     shot("3-library")
                 }
             }

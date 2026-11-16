@@ -26,6 +26,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.SourceCategoryScreen
 import zoukan.desktop.ui.browse.StoresList
@@ -64,7 +65,7 @@ fun LazyListScope.browseSettings() {
         val categories by preferences.sourcesTabCategories().collectAsState()
         SettingRow(
             localized(MR.strings.action_edit_categories),
-            if (categories.size == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, categories.size),
+            localizedPlural(DMR.plurals.categories, categories.size, categories.size),
             onClick = { navigator.push(SourceCategoryScreen) },
         )
     }

@@ -52,6 +52,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
@@ -291,4 +292,4 @@ data class MigrationListScreen(
     }
 }
 
-private fun entries(count: Int) = if (count == 1) localized(DMR.strings.n_1_entry) else localized(DMR.strings.entries, count)
+private fun entries(count: Int) = localizedPlural(DMR.plurals.entries, count, count)

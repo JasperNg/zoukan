@@ -48,6 +48,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
@@ -269,7 +270,7 @@ private fun ChapterCachePreference() {
         scope.launch {
             try {
                 val deleted = withContext(Dispatchers.IO) { Archives.clearCache() }
-                Toasts.show(localized(DMR.strings.cache_cleared_files_deleted, deleted))
+                Toasts.show(localizedPlural(DMR.plurals.cache_cleared_files_deleted, deleted, deleted))
             } catch (e: Exception) {
                 Toasts.error(localized(MR.strings.cache_delete_error), e)
             }

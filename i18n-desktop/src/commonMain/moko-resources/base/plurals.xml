@@ -4,4 +4,32 @@
         <item quantity="one">%d chapter downloaded</item>
         <item quantity="other">%d chapters downloaded</item>
     </plurals>
+    <plurals name="entries">
+        <item quantity="one">%1$d entry</item>
+        <item quantity="other">%1$d entries</item>
+    </plurals>
+    <plurals name="chapters">
+        <item quantity="one">%1$d chapter</item>
+        <item quantity="other">%1$d chapters</item>
+    </plurals>
+    <plurals name="categories">
+        <item quantity="one">%1$d category</item>
+        <item quantity="other">%1$d categories</item>
+    </plurals>
+    <plurals name="cache_cleared_files_deleted">
+        <item quantity="one">Cache cleared, %1$d file deleted</item>
+        <item quantity="other">Cache cleared, %1$d files deleted</item>
+    </plurals>
+    <plurals name="backed_up_entries_to">
+        <item quantity="one">Backed up %1$d entry to %2$s</item>
+        <item quantity="other">Backed up %1$d entries to %2$s</item>
+    </plurals>
+    <plurals name="restored_entries">
+        <item quantity="one">Restored %1$d entry</item>
+        <item quantity="other">Restored %1$d entries</item>
+    </plurals>
+    <plurals name="restored_entries_with_errors">
+        <item quantity="one">Restored %1$d entry with %2$s errors</item>
+        <item quantity="other">Restored %1$d entries with %2$s errors</item>
+    </plurals>
 </resources>

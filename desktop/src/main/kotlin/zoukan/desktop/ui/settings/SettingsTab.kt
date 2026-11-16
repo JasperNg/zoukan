@@ -95,6 +95,7 @@ import zoukan.desktop.app.AppVersion
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.category.CategoryScreen
@@ -181,7 +182,7 @@ fun SettingsTab() {
                     val count = categories.count { !it.isSystemCategory }
                     SettingRow(
                         localized(MR.strings.action_edit_categories),
-                        if (count == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, count),
+                        localizedPlural(DMR.plurals.categories, count, count),
                         onClick = { navigator.push(CategoryScreen) },
                     )
                 }
@@ -476,7 +477,7 @@ internal fun createBackup(file: File, options: BackupOptions) {
     AppScope.launch {
         try {
             val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, options)
-            Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
+            Toasts.show(localizedPlural(DMR.plurals.backed_up_entries_to, backup.backupManga.size, backup.backupManga.size, file.name))
         } catch (e: Exception) {
             Toasts.error(localized(MR.strings.creating_backup_error), e)
         } finally {
@@ -523,9 +524,9 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                     result = RestoreOutcome.OK
                     Toasts.show(
                         if (errors.isEmpty()) {
-                            localized(DMR.strings.restored_entries, backup.backupManga.size)
+                            localizedPlural(DMR.plurals.restored_entries, backup.backupManga.size, backup.backupManga.size)
                         } else {
-                            localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
+                            localizedPlural(DMR.plurals.restored_entries_with_errors, backup.backupManga.size, backup.backupManga.size, errors.size)
                         },
                     )
                 } catch (e: Exception) {

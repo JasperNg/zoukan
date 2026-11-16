@@ -90,6 +90,7 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
@@ -533,7 +534,7 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             // ZOUKAN -->
             val shown = state.sortedChapters.size
             Text(
-                if (shown == state.chapters.size) localized(DMR.strings.chapters, state.chapters.size) else localized(DMR.strings.of_chapters, shown, state.chapters.size),
+                if (shown == state.chapters.size) localizedPlural(DMR.plurals.chapters, state.chapters.size, state.chapters.size) else localized(DMR.strings.of_chapters, shown, state.chapters.size),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
