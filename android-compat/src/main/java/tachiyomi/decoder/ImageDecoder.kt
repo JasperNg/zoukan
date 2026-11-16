@@ -43,13 +43,20 @@ class ImageDecoder private constructor(
         val bottom = region.bottom.coerceIn(top, height)
         if (right <= left || bottom <= top) return null
         val source = Rectangle(crop.x + left, crop.y + top, right - left, bottom - top)
-        return runCatching {
+        // Only Exceptions are turned into null: an OutOfMemoryError or an interrupt must reach the caller
+        return try {
             if (decodesWhole) {
                 Bitmap(cut(wholeImage(data), source, sampleSize))
             } else {
                 Bitmap(ImageIoDecoding.decode(data, source, sampleSize))
             }
-        }.getOrNull()
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (e: InterruptedException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
     }
 
     @Synchronized
@@ -73,7 +80,7 @@ class ImageDecoder private constructor(
             cropBorders: Boolean = false,
             @Suppress("UNUSED_PARAMETER") displayProfile: ByteArray? = null,
         ): ImageDecoder? =
-            runCatching {
+            try {
                 val bytes = stream.readBytes()
                 val decodesWhole = ImageFormats.sniff(bytes).let { it == Format.Avif || it == Format.Heif }
                 var whole: BufferedImage? = null
@@ -88,7 +95,13 @@ class ImageDecoder private constructor(
                         Rectangle(0, 0, w, h)
                     }
                 if (crop.width <= 0 || crop.height <= 0) null else ImageDecoder(bytes, crop, decodesWhole, whole)
-            }.getOrNull()
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
+            } catch (e: InterruptedException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
 
         /** [source] of [image] as a new ARGB image, keeping one pixel in [sampleSize] each way, as ImageIO subsamples. */
         internal fun cut(

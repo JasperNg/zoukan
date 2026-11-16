@@ -496,6 +496,14 @@ public class BitmapFactory {
                 return null;
             }
 
+            // ZOUKAN -->
+            // Refuse a header claiming too many pixels before anything is allocated
+            if (imageReader.getWidth(0) > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE
+                    || imageReader.getHeight(0) > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE) {
+                throw new IOException("Image too large to decode");
+            }
+            xyz.nulldev.androidcompat.graphics.ImageIoDecoding.checkSize(sampledWidth, sampledHeight);
+            // ZOUKAN <--
             ImageReadParam param = imageReader.getDefaultReadParam();
             if (sampleSize > 1) param.setSourceSubsampling(sampleSize, sampleSize, 0, 0);
             BufferedImage image = imageReader.read(0, param);

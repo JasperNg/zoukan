@@ -1,9 +1,11 @@
 package zoukan.desktop.compat
 
 import android.graphics.Rect
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.decoder.Format
@@ -12,7 +14,12 @@ import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
+import java.util.zip.CRC32
+import java.util.zip.Deflater
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageTypeSpecifier
@@ -157,6 +164,92 @@ class ImageDecoderTest {
             ImageIO.setUseCache(useCache)
             ImageIO.setCacheDirectory(cacheDirectory)
         }
+    }
+
+    private fun int(v: Int) = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
+
+    /** A valid PNG whose IHDR claims [width] x [height] (8-bit RGBA) with a tiny IDAT: a few hundred bytes. */
+    private fun hugePng(width: Int = 100_000, height: Int = 100_000): ByteArray {
+        val out = ByteArrayOutputStream()
+        out.write(byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 0x0D, 0x0A, 0x1A, 0x0A))
+        fun chunk(type: String, data: ByteArray) {
+            val typeBytes = type.toByteArray(Charsets.US_ASCII)
+            out.write(int(data.size))
+            out.write(typeBytes)
+            out.write(data)
+            val crc = CRC32().apply {
+                update(typeBytes)
+                update(data)
+            }
+            out.write(int(crc.value.toInt()))
+        }
+        chunk("IHDR", int(width) + int(height) + byteArrayOf(8, 6, 0, 0, 0))
+        val deflater = Deflater()
+        deflater.setInput(ByteArray(8))
+        deflater.finish()
+        val buffer = ByteArray(64)
+        val idat = ByteArrayOutputStream()
+        while (!deflater.finished()) idat.write(buffer, 0, deflater.deflate(buffer))
+        deflater.end()
+        chunk("IDAT", idat.toByteArray())
+        chunk("IEND", ByteArray(0))
+        return out.toByteArray()
+    }
+
+    private fun <T> quickly(block: () -> T): T = assertTimeoutPreemptively(Duration.ofSeconds(10), block)
+
+    @Test
+    fun `all decoders refuse a PNG whose IHDR claims 100000x100000`() = everyDecoderRefuses(100_000, 100_000)
+
+    // The pixel count fits an int, so the platform does not refuse it by itself: 6 GB as ARGB
+    @Test
+    fun `all decoders refuse a PNG whose IHDR claims 40000x40000`() = everyDecoderRefuses(40_000, 40_000)
+
+    private fun everyDecoderRefuses(width: Int, height: Int) {
+        val bytes = hugePng(width, height)
+        quickly { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }.shouldBeNull()
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        quickly { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds) }.shouldBeNull()
+        bounds.outWidth shouldBe width
+        bounds.outHeight shouldBe height
+
+        quickly {
+            shouldThrow<android.graphics.ImageDecoder.DecodeException> {
+                android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(bytes))
+            }
+        }
+        quickly { ImageDecoder.newInstance(ByteArrayInputStream(bytes))?.decode() }.shouldBeNull()
+        quickly {
+            shouldThrow<IOException> { FrameDecoder.open(ByteArrayInputStream(bytes)).decodeNext() }
+        }
+    }
+
+    @Test
+    fun `refusing a huge page leaves the page file unchanged`(@TempDir dir: Path) {
+        val file = dir.resolve("page.png")
+        Files.write(file, hugePng())
+        val before = Files.readAllBytes(file)
+        val modified = Files.getLastModifiedTime(file)
+        quickly {
+            runCatching { android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(file.toFile())) }
+            android.graphics.BitmapFactory.decodeFile(file.toString())
+        }.shouldBeNull()
+        Files.exists(file) shouldBe true
+        Files.readAllBytes(file).contentEquals(before) shouldBe true
+        Files.size(file) shouldBe before.size.toLong()
+        Files.getLastModifiedTime(file) shouldBe modified
+    }
+
+    @Test
+    fun `a tall strip page still decodes`() {
+        val strip = ByteArrayOutputStream().also {
+            ImageIO.write(BufferedImage(800, 12_000, BufferedImage.TYPE_INT_RGB), "png", it)
+        }.toByteArray()
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(strip, 0, strip.size).shouldNotBeNull()
+        bitmap.width shouldBe 800
+        bitmap.height shouldBe 12_000
+        val decoded = android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(strip))
+        decoded.height shouldBe 12_000
     }
 
     @Test
