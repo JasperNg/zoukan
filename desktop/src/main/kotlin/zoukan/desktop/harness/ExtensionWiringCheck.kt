@@ -114,6 +114,9 @@ class ExtensionWiringCheck(
     private val linkage = ApiLinkage(javaClass.classLoader)
     private val requests = ConcurrentHashMap<String, Map<String, String>>()
 
+    /** The class loaders of the extensions being checked, by package: a timed-out one is closed from outside its worker. */
+    private val loaders = ConcurrentHashMap<String, ExtensionClassLoader>()
+
     /** The stack trace of every failure, for finding what in the app is missing. */
     private val traces = File(dirs.reports, "extensions-wiring-traces-${Platform.id}.txt")
 
@@ -169,6 +172,8 @@ class ExtensionWiringCheck(
                             runInterruptible { work.get(EXTENSION_TIMEOUT.inWholeSeconds, TimeUnit.SECONDS) }
                         } catch (_: TimeoutException) {
                             work.cancel(true)
+                            // The worker may stay blocked and never reach its own finally
+                            loaders.remove(row.pkg)?.close()
                             row.sourceErrors += "timed out after $EXTENSION_TIMEOUT"
                         } catch (e: ExecutionException) {
                             row.sourceErrors += "check failed: ${CompatibilityHarness.describe(e.cause ?: e)}"
@@ -217,6 +222,7 @@ class ExtensionWiringCheck(
             }
         }
         row.load = "ok"
+        success.classLoader?.let { loaders[row.pkg] = it }
         val sources = success.extension.sources
         row.sources = sources.size
         try {
@@ -227,7 +233,8 @@ class ExtensionWiringCheck(
                 if (source is ConfigurableSource) checkSettings(source, row)
             }
         } finally {
-            success.classLoader?.close()
+            // Whoever removes it closes it: not again after the coordinator did
+            loaders.remove(row.pkg)?.close()
         }
     }
 

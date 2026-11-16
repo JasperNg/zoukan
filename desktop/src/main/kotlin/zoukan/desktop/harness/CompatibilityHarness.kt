@@ -88,6 +88,9 @@ class CompatibilityHarness(
         fun allErrors(): String = (required + error).joinToString(" ")
     }
 
+    /** The class loaders of the extensions being run, by package: a timed-out one is closed from outside its worker. */
+    private val loaders = java.util.concurrent.ConcurrentHashMap<String, zoukan.extension.ExtensionClassLoader>()
+
     // Leaves time for a Cloudflare challenge in the browser window (30 s hidden, then 3 min)
     private val timeout = stepTimeout ?: if (options.interactive) INTERACTIVE_TIMEOUT else TIMEOUT
 
@@ -141,7 +144,8 @@ class CompatibilityHarness(
                         if (row.error.isEmpty()) row.error = "timed out after $deadline"
                         row.timedOut = true
                         work.cancel(true)
-                        // The extension's class loader is closed here, once the loaders are tracked
+                        // The worker may stay blocked and never reach its own finally
+                        loaders.remove(row.pkg)?.close()
                     } catch (e: ExecutionException) {
                         val cause = e.cause ?: e
                         if (row.error.isEmpty()) row.error = describe(cause)
@@ -193,8 +197,8 @@ class CompatibilityHarness(
 
     private suspend fun runOne(extension: Extension.Available, store: ExtensionStore, row: Row) {
         val installed = stage(row, "install") { installer.install(extension, options.forceApk) }
-        val sources = when (val result = loader.load(installed.files, listOf(store))) {
-            is LoadResult.Success -> result.extension.sources
+        val success = when (val result = loader.load(installed.files, listOf(store))) {
+            is LoadResult.Success -> result
             is LoadResult.Untrusted -> {
                 row.install = "fail"
                 row.error = "signature: signer ${result.extension.signatureHash.take(16)} is not the store key"
@@ -207,15 +211,23 @@ class CompatibilityHarness(
                 return
             }
         }
-        row.install = "ok (${installed.method.name.lowercase()})"
-        val source = pickSource(sources)
-        row.source = "${source.name} (${source.lang}), ${sources.size} total"
-        if (options.offline) return
-        val catalogue = source as? CatalogueSource ?: run {
-            row.error = "not a CatalogueSource"
-            return
+        // Closed when the extension is done, or by the coordinator if this worker never gets there
+        success.classLoader?.let { loaders[row.pkg] = it }
+        try {
+            val sources = success.extension.sources
+            row.install = "ok (${installed.method.name.lowercase()})"
+            val source = pickSource(sources)
+            row.source = "${source.name} (${source.lang}), ${sources.size} total"
+            if (options.offline) return
+            val catalogue = source as? CatalogueSource ?: run {
+                row.error = "not a CatalogueSource"
+                return
+            }
+            callSource(catalogue, row)
+        } finally {
+            // Whoever removes it closes it: not again after the coordinator did
+            loaders.remove(row.pkg)?.close()
         }
-        callSource(catalogue, row)
     }
 
     private suspend fun callSource(source: CatalogueSource, row: Row) {
