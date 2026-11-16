@@ -8,11 +8,15 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.domain.RefreshManga
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The Android app's UpdateMangaFromRemote, which the shared E-Hentai and merged-source code call,
  * on top of the desktop's [RefreshManga]. Covers, download folders and fetch intervals are the
  * desktop's own business.
+ *
+ * `fetchWindow` is accepted for the Android callers and not used: the desktop's library update
+ * sets fetch intervals itself. Cancellation is passed on; any other failure is logged and returned.
  */
 class UpdateMangaFromRemote(
     private val sourceManager: SourceManager,
@@ -35,6 +39,7 @@ class UpdateMangaFromRemote(
         throttleFunc = throttleFunc,
     )
 
+    @Suppress("UNUSED_PARAMETER")
     suspend operator fun invoke(
         source: Source,
         manga: Manga,
@@ -53,6 +58,8 @@ class UpdateMangaFromRemote(
             throttle = throttleFunc,
         )
         Result.success(RemoteMangaUpdate(result.manga, result.newChapters))
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         logcat(LogPriority.ERROR, e)
         Result.failure(e)
