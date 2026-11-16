@@ -893,7 +893,13 @@
   feature: "Settings search (all pages' rows, highlight)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.SettingsSearchTest, e2e.CookieJourneyTest]
+  tests: [ui.ScreenSmokeTest, ui.settings.SettingsSearchTest, ui.settings.SettingsSearchCoverageTest, e2e.CookieJourneyTest]
+
+- key: settings:search-hidden
+  feature: "Settings search finds settings behind an off switch, theme names and choice labels"
+  tier: smoke
+  smoke: true
+  tests: [ui.ScreenSmokeTest, ui.settings.SettingsSearchCoverageTest]
 
 - key: settings:Appearance
   feature: "Theme mode, app theme, pure black, cover-based theme; entry page, reader navigation, browse; rail buttons, description images"

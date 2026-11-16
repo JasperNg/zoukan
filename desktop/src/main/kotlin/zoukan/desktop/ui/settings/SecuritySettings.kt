@@ -109,6 +109,13 @@ private fun SecuritySettings() {
                 ranges.mapNotNull(AppLock::parseRange).joinToString { localized(DMR.strings.to, hhmm(it.start), hhmm(it.endInclusive)) }.ifEmpty { localized(DMR.strings.all_day) },
                 onClick = { timesDialog = true },
             )
+        } else {
+            SearchTerms(
+                localized(DMR.strings.change_password),
+                localized(MR.strings.lock_when_idle),
+                localized(DMR.strings.lock_on_these_days),
+                localized(DMR.strings.lock_at_these_times),
+            )
         }
         // Leaves the windows out of screenshots and screen sharing (see SecureScreen)
         ChoicePreference(

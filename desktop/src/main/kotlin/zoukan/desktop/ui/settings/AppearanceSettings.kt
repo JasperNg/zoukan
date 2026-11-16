@@ -117,6 +117,13 @@ internal fun ThemeSection() {
     val shownTheme = if (theme == AppTheme.MONET) AppTheme.DEFAULT else theme
 
     Column {
+        // The theme names and modes are not rows, so search finds them by these terms
+        SearchTerms(
+            *pickableThemes.map(::themeLabel).toTypedArray(),
+            localized(MR.strings.theme_system),
+            localized(MR.strings.theme_light),
+            localized(MR.strings.theme_dark),
+        )
         SettingRow(localized(MR.strings.pref_app_theme))
         Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(ThemeMode.SYSTEM to localized(MR.strings.theme_system), ThemeMode.LIGHT to localized(MR.strings.theme_light), ThemeMode.DARK to localized(MR.strings.theme_dark)).forEach { (value, label) ->

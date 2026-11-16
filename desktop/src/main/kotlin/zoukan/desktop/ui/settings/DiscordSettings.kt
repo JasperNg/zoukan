@@ -74,6 +74,16 @@ private fun DiscordSettingsSection() {
                 SwitchPreference(localized(DMR.strings.download_button), presence.showDownloadButton())
                 SwitchPreference(localized(DMR.strings.discord_server_button), presence.showDiscordButton())
             }
+        } else {
+            SearchTerms(
+                localized(DMR.strings.hide_what_i_read),
+                localized(DMR.strings.hide_these_categories),
+                localized(DMR.strings.show_progress),
+                localized(DMR.strings.use_chapter_titles),
+                localized(DMR.strings.show_elapsed_time),
+                localized(DMR.strings.custom_message),
+                localized(DMR.strings.show_buttons),
+            )
         }
     }
 

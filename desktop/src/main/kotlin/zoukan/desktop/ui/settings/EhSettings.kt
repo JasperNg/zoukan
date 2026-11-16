@@ -72,7 +72,24 @@ private fun EhSettings() {
             preferences.isHentaiEnabled(),
             localized(DMR.strings.adds_the_built_in_e_hentai),
         )
-        if (!enabled) return@Column
+        if (!enabled) {
+            // Search finds the settings behind the switch, which opens the page at it
+            SearchTerms(
+                "ExHentai",
+                localized(DMR.strings.use_japanese_titles),
+                localized(DMR.strings.original_images),
+                localized(DMR.strings.watched_list_by_default),
+                localized(DMR.strings.enhanced_e_hentai_view),
+                localized(DMR.strings.incognito),
+                localized(SYMR.strings.eh_image_quality),
+                "Hentai@Home",
+                localized(DMR.strings.tag_filtering_threshold),
+                localized(DMR.strings.tag_watching_threshold),
+                localized(DMR.strings.language_filtering),
+                localized(DMR.strings.front_page_categories),
+            )
+            return@Column
+        }
         SettingRow(
             "ExHentai",
             if (exhentai) localized(DMR.strings.signed_in_exhentai_sources_are_in) else localized(DMR.strings.sign_in_with_an_e_hentai),

@@ -54,11 +54,13 @@ fun SettingRow(
     subtitle: String? = null,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
+    searchTerms: List<String> = emptyList(),
     trailing: @Composable () -> Unit = {},
 ) {
-    // Settings search matches the title and the summary; in its results only matching rows show
-    LocalSearchTexts.current?.add(title, subtitle)
-    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOfNotNull(title, subtitle))) return }
+    // Settings search matches the title, the summary and [searchTerms] (such as the choices of a
+    // setting); in its results only matching rows show
+    LocalSearchTexts.current?.add(title, subtitle, *searchTerms.toTypedArray())
+    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOfNotNull(title, subtitle) + searchTerms)) return }
     Row(
         Modifier
             .fillMaxWidth()
@@ -104,7 +106,7 @@ fun <T> ChoiceSetting(
     onChoose: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    SettingRow(title, subtitle ?: choices.firstOrNull { it.first == value }?.second, enabled, onClick = { open = true })
+    SettingRow(title, subtitle ?: choices.firstOrNull { it.first == value }?.second, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
     // A dialog of choices, as Android's ListPreference
     if (open) {
         AlertDialog(
@@ -178,7 +180,7 @@ fun MultiSelectPreference(
     val value by preference.collectAsState()
     var open by remember { mutableStateOf(false) }
     val summary = subtitle ?: choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { localized(MR.strings.none) }
-    SettingRow(title, summary, enabled, onClick = { open = true })
+    SettingRow(title, summary, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
     if (open) {
         var chosen by remember { mutableStateOf(value) }
         AlertDialog(
