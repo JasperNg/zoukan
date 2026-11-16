@@ -54,7 +54,9 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.LocalReducedMotion
+import zoukan.desktop.ui.common.OverlayColors
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.reducedMotion
 import zoukan.i18n.desktop.DMR
@@ -243,12 +245,12 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 if (showPageNumber && !menuVisible && state.pages.isNotEmpty()) {
                     Text(
                         state.pageNumber,
-                        color = Color.White,
+                        color = OverlayColors.OnScrim,
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 8.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), Corners.Large)
+                            .padding(bottom = Spacing.Small)
+                            .background(OverlayColors.Scrim, Corners.Large)
                             .padding(horizontal = 10.dp, vertical = 3.dp),
                     )
                 }

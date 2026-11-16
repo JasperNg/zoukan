@@ -791,7 +791,7 @@
   feature: "Reader settings dialog (shift double pages, bottom bar buttons, auto scroll)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ReaderSettingsJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.ReaderSettingsJourneyTest, ui.reader.ReaderSettingsParityTest]
 
 - key: flow:reader.tap-zones
   feature: "Tap zones overlay"
