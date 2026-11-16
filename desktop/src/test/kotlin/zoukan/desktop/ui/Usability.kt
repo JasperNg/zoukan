@@ -46,19 +46,19 @@ class DismissProbe {
     val dismiss: () -> Unit = { called = true }
 }
 
+/** The node of a finding that says a rule threw: never allowlisted (see [classify]), so an error always shows as new. */
+const val RULE_ERROR_NODE = "(rule error)"
+
 /** Tab presses before Tab traversal gives up: a dialog or settings page has far fewer controls. */
 private const val MAX_TABS = 30
 
 /**
- * Keys whose dialog blocks dismissal on purpose, so Escape must not dismiss it: the recommendation
- * search's progress (dismissOnBackPress = false), the migration's progress (onDismissRequest = {}),
- * the first-run setup and the app lock. For these a dismiss is the finding.
+ * Dialog keys whose dialog blocks dismissal on purpose, so Escape must not dismiss it: the
+ * recommendation search's progress (dismissOnBackPress = false). For these a dismiss is the finding.
+ * The Escape rule runs only for "dialog:" keys, so only those belong here.
  */
 val ESCAPE_BLOCKED_ON_PURPOSE = setOf(
     "dialog:recs.RecommendationSearchProgressDialog",
-    "screen:migration.MigrationListScreen",
-    "state:first-run",
-    "state:app-lock",
 )
 
 /** The roles whose text must fit: a clipped or cut-off label there hides what the control does. */
@@ -103,7 +103,7 @@ private fun findings(
         try {
             check().forEach { (node, detail) -> findings += UsabilityFinding(variant, key, rule, node, detail) }
         } catch (e: Throwable) {
-            findings += UsabilityFinding(variant, key, rule, "-", "rule error: $e")
+            findings += UsabilityFinding(variant, key, rule, RULE_ERROR_NODE, "rule error: $e")
         }
     }
     return findings
@@ -377,8 +377,9 @@ object UsabilityAllowlist {
 /** A finding with the first allowlist entry that matches it, or null for a new finding. */
 data class ClassifiedFinding(val finding: UsabilityFinding, val allowedBy: AllowEntry?)
 
+/** Pairs each finding with its allowlist entry; a rule error is always new, whatever the entries say. */
 fun classify(findings: List<UsabilityFinding>, entries: List<AllowEntry>): List<ClassifiedFinding> =
-    findings.map { f -> ClassifiedFinding(f, entries.firstOrNull { it.matches(f) }) }
+    findings.map { f -> ClassifiedFinding(f, if (f.node == RULE_ERROR_NODE) null else entries.firstOrNull { it.matches(f) }) }
 
 /** The rules that fail the smoke test when enforcing; Tab traversal never does (it cannot tell a real trap from a text field). */
 val ENFORCED_RULES = setOf(Rule.UNLABELLED_CLICKABLE, Rule.TEXT_OVERFLOW, Rule.ESCAPE_NOT_DISMISSING)

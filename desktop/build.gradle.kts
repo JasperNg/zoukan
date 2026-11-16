@@ -337,6 +337,9 @@ val wiringTest by tasks.registering(Test::class) {
     // Fails the smoke test on usability findings that are not allowlisted (off until they are fixed)
     providers.gradleProperty("zoukan.usability.enforce").orNull?.let { systemProperty("zoukan.usability.enforce", it) }
     shouldRunAfter(tasks.test)
+    // Each run starts without the findings of an earlier one, so usabilityReport merges only this run's
+    val usabilityDir = layout.buildDirectory.dir("reports/usability").get().asFile
+    doFirst { usabilityDir.deleteRecursively() }
     // Written even when a check fails
     finalizedBy("usabilityReport")
 }

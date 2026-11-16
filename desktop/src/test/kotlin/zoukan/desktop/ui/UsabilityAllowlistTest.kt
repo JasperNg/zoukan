@@ -73,6 +73,14 @@ class UsabilityAllowlistTest {
     }
 
     @Test
+    fun `a rule error is never allowlisted, not even by a star`() {
+        val entries = parse("dialog:a.One | ESCAPE_NOT_DISMISSING | * | because\ndialog:a.One | ESCAPE_NOT_DISMISSING | - | because")
+        val error = UsabilityFinding("v", "dialog:a.One", Rule.ESCAPE_NOT_DISMISSING, RULE_ERROR_NODE, "rule error: boom")
+
+        classify(listOf(error), entries).single().allowedBy shouldBe null
+    }
+
+    @Test
     fun `enforce fails only new findings of the first three rules`() {
         val entries = parse("dialog:a.One | UNLABELLED_CLICKABLE | * | because")
         val findings = listOf(
