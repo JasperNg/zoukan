@@ -166,7 +166,8 @@ Residual risk:
 
 ## Secrets at rest
 
-What touches the disk unencrypted is deliberately small.
+What touches the disk unencrypted is deliberately small, with one accepted exception: automatic
+backups (residual risk 4).
 
 Verified and trusted:
 
@@ -192,6 +193,17 @@ Residual risk:
    locked-down) — a known nit, harmless while the lock is enabled and the hash exists. When the
    secret store itself cannot be read and the lock is on, `AppLock.isEnabled` fails closed: the
    app stays locked.
+4. **Automatic backups are not encrypted.** Every 12 hours by default (Settings > Data, "Automatic
+   backup frequency"; off when set to never), `AutoBackup` writes a gzipped `.tachibk` (the Android
+   app's protobuf format) to `<storage>/autobackup` and keeps the newest four that Zoukan wrote.
+   A backup holds the library, chapters and read state, history, tracker bindings, categories and
+   app settings. Private settings (tracker tokens, logins) are left out unless the user ticks
+   "Include sensitive settings" in a manual backup (`BackupOptions().privateSettings` is off by
+   default). Accepted because the Android app must be able to read these files, and they are the
+   way back when the OS secret store loses the database key. Anyone who can read the storage
+   folder (a cloud drive, a NAS, another user with access) can read the library and reading
+   history that the database encryption protects. Users who keep storage on a shared folder can
+   switch automatic backups off. Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
 
 ## Processes
 
