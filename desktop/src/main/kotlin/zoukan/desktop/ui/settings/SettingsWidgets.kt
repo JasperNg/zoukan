@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
@@ -26,6 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
@@ -48,6 +52,17 @@ fun LazyListScope.settingsGroup(title: String) {
     }
 }
 
+/** The colour of a setting's title: [ColorScheme.onSurface], or Material's disabled colour when the row is not [enabled]. */
+internal fun settingTitleColor(enabled: Boolean, scheme: ColorScheme): Color =
+    if (enabled) scheme.onSurface else scheme.onSurface.copy(alpha = DISABLED_ALPHA)
+
+/** The colour of a setting's summary: [ColorScheme.onSurfaceVariant], at the disabled alpha when the row is not [enabled]. */
+internal fun settingSubtitleColor(enabled: Boolean, scheme: ColorScheme): Color =
+    if (enabled) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = DISABLED_ALPHA)
+
+/** Material's alpha for disabled content. */
+private const val DISABLED_ALPHA = 0.38f
+
 @Composable
 fun SettingRow(
     title: String,
@@ -64,7 +79,14 @@ fun SettingRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            // clickable(enabled = false) also reports the row as disabled to accessibility tools
+            .then(
+                when {
+                    onClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
+                    !enabled -> Modifier.semantics(mergeDescendants = true) { disabled() }
+                    else -> Modifier
+                },
+            )
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -72,10 +94,10 @@ fun SettingRow(
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = settingTitleColor(enabled, MaterialTheme.colorScheme),
             )
             if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = settingSubtitleColor(enabled, MaterialTheme.colorScheme))
             }
         }
         Spacer(Modifier.width(16.dp))
