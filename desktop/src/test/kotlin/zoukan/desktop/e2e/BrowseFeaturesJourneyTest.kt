@@ -116,7 +116,7 @@ class BrowseFeaturesJourneyTest {
                     waitFor(hasText("1 selected"))
                     byDescription("Select all").performClick()
                     waitFor(hasText("${catalogue.size} selected"))
-                    shotWithPopups("3-bulk-selection")
+                    shot("3-bulk-selection")
                     onAllNodesWithText("Add to library").onFirst().performClick()
                     waitOrDump("for the titles to become favourites", 10_000) {
                         runBlocking { Injekt.get<GetFavorites>().await() }.count { it.source == source.id } == catalogue.size
@@ -134,7 +134,7 @@ class BrowseFeaturesJourneyTest {
                     runOnUiThread { navigator?.push(SourceScreen(LocalSource.ID)) }
                     waitOrDump("for the two local entries") { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
                     byDescription("Display mode").performClick()
-                    shotWithPopups("4-display-mode-menu")
+                    shot("4-display-mode-menu")
                     onAllNodesWithText("List").onFirst().performClick()
                     waitOrDump("for the list mode", 10_000) { displayMode.get() == LibraryDisplayMode.List }
                     waitOrDump("for the entries in the list", 10_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2 }
@@ -173,7 +173,7 @@ class BrowseFeaturesJourneyTest {
                     onAllNodesWithText("Feed").onFirst().performClick()
                     byDescription("Reorder the feed").performClick()
                     waitFor(hasTestTag("feed-order"))
-                    shotWithPopups("8-feed-order")
+                    shot("8-feed-order")
                     byDescription("Move down").performClick()
                     waitOrDump("for the stored feed order", 10_000) {
                         runBlocking { Injekt.get<GetFeedSavedSearchGlobal>().await() }.first().source == missingSource + 1
@@ -184,7 +184,7 @@ class BrowseFeaturesJourneyTest {
                     val first = onAllNodesWithText("${missingSource + 1}", substring = true).onFirst().fetchSemanticsNode().boundsInRoot.top
                     val second = onAllNodesWithText("$missingSource", substring = true).onFirst().fetchSemanticsNode().boundsInRoot.top
                     first shouldBeLessThan second
-                    shotWithPopups("9-feed-order-moved")
+                    shot("9-feed-order-moved")
                     onAllNodesWithText("Done").onFirst().performClick()
                 }
 
@@ -192,7 +192,7 @@ class BrowseFeaturesJourneyTest {
                     onAllNodesWithText("Sources").onFirst().performClick()
                     byDescription("Open from a URL").performClick()
                     onNodeWithTag("open-url-field").performTextInput("https://example.org/title/123")
-                    shotWithPopups("10-open-url")
+                    shot("10-open-url")
                     onAllNodesWithText("Open").onFirst().performClick()
                     waitFor(hasText("Search: https://example.org/title/123"))
                     runOnUiThread { navigator?.popUntilRoot() }

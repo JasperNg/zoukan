@@ -110,7 +110,7 @@ class MigrationJourneyTest {
                     val detailRequests = server.requests.count { it.startsWith("/manga/") }
                     byDescription("Migrate").performClick()
                     waitFor(hasText("Migrate entries?"))
-                    shotWithPopups("3-migrate-dialog")
+                    shot("3-migrate-dialog")
                     onAllNodesWithText("Migrate").onLast().performClick()
                     waitOrDump("for the match to become a favourite of the target", 60_000) {
                         runBlocking { Injekt.get<GetFavorites>().await() }.any { it.source == target.id }

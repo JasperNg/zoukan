@@ -304,6 +304,8 @@ open class ScreenSmokeTest {
             mustBeEmpty("coverage-matrix rows with smoke: true that no smoke check has", matrix.filter { it.smoke }.map { it.key }.toSet() - keys)
             // A check whose key has no coverage-matrix row
             mustBeEmpty("smoke check keys with no row in coverage-matrix.yaml", keys - matrix.map { it.key }.toSet())
+            // A curated screenshot key that no check has would never be compared
+            mustBeEmpty("screenshot keys (ScreenshotKeys.curated) that no smoke check has", ScreenshotKeys.curated - keys)
             // A malformed allowlist (no reason, unknown rule, a key with no matrix row) is a real failure
             val allowlist = UsabilityAllowlist.load(matrix.map { it.key })
             // -Pzoukan.smoke.only=<regex> runs only the checks whose key or name matches, to debug one
@@ -327,6 +329,8 @@ open class ScreenSmokeTest {
             // Off until the findings are fixed or allowlisted: -Pzoukan.usability.enforce=true
             if (System.getProperty("zoukan.usability.enforce") == "true") failures += enforceFailures(classified)
             screenshots?.let { run ->
+                // A filtered run skips screens on purpose; a full one must take every curated screen
+                if (only == null) screenshotFindings += run.notTaken(ScreenshotKeys.curated, listOf("$size/light", "$size/dark"))
                 run.writeReport(size, screenshotFindings)
                 println("Screenshots: ${screenshotFindings.size} differ, in build/reports/screenshots/report.md")
                 // Collected over the whole run, so one failure here never ended a batch; only verify fails

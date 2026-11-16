@@ -45,7 +45,6 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.util.Collections
-import javax.imageio.ImageIO
 import kotlin.math.abs
 
 /**
@@ -186,24 +185,6 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
     /** Saves what is on screen, dialogs and popups included, as `<journey>-<title>.png`. */
     fun ComposeUiTest.shot(title: String) {
         saveScreenshot(shots, "$name-$title")
-    }
-
-    /**
-     * Like [shot], with the popups on it: a dialog or a menu is a root of its own, which [shot]
-     * leaves out. Every other root is drawn over the window's at its place in the window.
-     */
-    fun ComposeUiTest.shotWithPopups(title: String) {
-        waitForIdle()
-        val roots = onAllNodes(isRoot())
-        val count = roots.fetchSemanticsNodes().size
-        val image = roots[0].captureToImage().toAwtImage()
-        val g = image.createGraphics()
-        (1 until count).forEach { i ->
-            val bounds = roots[i].fetchSemanticsNode().boundsInWindow
-            g.drawImage(roots[i].captureToImage().toAwtImage(), bounds.left.toInt(), bounds.top.toInt(), null)
-        }
-        g.dispose()
-        ImageIO.write(image, "png", File(shots, "$name-$title.png"))
     }
 
     /** The first node with content description [text] (icon buttons have no text). */

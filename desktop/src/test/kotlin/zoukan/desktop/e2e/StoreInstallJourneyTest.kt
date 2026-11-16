@@ -1,10 +1,8 @@
 package zoukan.desktop.e2e
 
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
@@ -12,7 +10,6 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -46,7 +43,6 @@ import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.ExtensionClassLoader
 import zoukan.extension.LoadResult
 import java.io.File
-import javax.imageio.ImageIO
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -223,15 +219,8 @@ class StoreInstallJourneyTest {
         onAllNodes(tab).onFirst().performClick()
     }
 
-    /**
-     * A screenshot of the app's window, like [Journey.shot], but also while a toast or tooltip is
-     * up: those are popups with roots of their own, and the window's root is the first.
-     */
-    private fun ComposeUiTest.snap(title: String) {
-        waitForIdle()
-        val image = onAllNodes(isRoot()).onFirst().captureToImage().toAwtImage()
-        ImageIO.write(image, "png", File("build/reports/journeys").apply { mkdirs() }.resolve("${journey.name}-$title.png"))
-    }
+    /** A screenshot of the app's window, toasts and dialogs included ([Journey.shot]). */
+    private fun ComposeUiTest.snap(title: String) = with(journey) { shot(title) }
 
     /** Types [query] into the Extensions tab's search box, so one row (and one Install button) shows. */
     private fun ComposeUiTest.searchExtensions(query: String) {

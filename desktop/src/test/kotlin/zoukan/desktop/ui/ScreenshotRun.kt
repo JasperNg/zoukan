@@ -62,6 +62,17 @@ class ScreenshotRun(
     }
 
     /**
+     * A finding for each of [keys] in each of [variants] that was never taken, so a golden that
+     * stops being compared (a renamed check, a check that failed before its screenshot) fails verify.
+     */
+    fun notTaken(keys: Collection<String>, variants: Collection<String>): List<ScreenshotFinding> =
+        variants.flatMap { variant ->
+            keys.filter { "$variant|$it" !in taken }.map { key ->
+                ScreenshotFinding(variant, key, "not taken: the smoke run never reached this screen", "")
+            }
+        }
+
+    /**
      * Writes this run's section and rebuilds `build/reports/screenshots/report.md` from the sections of
      * every smoke JVM (the default and the small window run side by side), under a file lock.
      */

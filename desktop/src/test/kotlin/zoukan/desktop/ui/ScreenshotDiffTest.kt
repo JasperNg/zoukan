@@ -95,4 +95,18 @@ class ScreenshotDiffTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `a curated key that was never taken is a finding`() {
+        val dir = kotlin.io.path.createTempDirectory("shot-run").toFile()
+        try {
+            val run = ScreenshotRun(verify = false, os = ScreenshotRun.LINUX, moduleDir = dir)
+            run.check(image(), "1280x820/light", "tab:Library", masks = emptyList())
+            val missing = run.notTaken(listOf("tab:Library", "tab:Updates"), listOf("1280x820/light", "1280x820/dark"))
+            missing.map { "${it.variant} ${it.key}" } shouldBe
+                listOf("1280x820/light tab:Updates", "1280x820/dark tab:Library", "1280x820/dark tab:Updates")
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }

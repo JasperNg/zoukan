@@ -116,7 +116,7 @@ class LocalJourneyTest {
                     readThrough(chapter2.take(1), "5-reader")
                     root().performKeyInput { pressKey(Key.M) }
                     waitFor(hasText("Local file", substring = true))
-                    shotWithPopups("6-reader-menu")
+                    shot("6-reader-menu")
                     runOnUiThread { navigator?.popUntilRoot() }
                 }
 
