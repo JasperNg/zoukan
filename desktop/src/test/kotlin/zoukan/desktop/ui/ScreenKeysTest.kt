@@ -3,13 +3,6 @@ package zoukan.desktop.ui
 import cafe.adriel.voyager.core.screen.Screen
 import io.kotest.matchers.collections.shouldBeEmpty
 import org.junit.jupiter.api.Test
-import zoukan.desktop.ui.browse.GlobalSearchScreen
-import zoukan.desktop.ui.browse.SourceFeedScreen
-import zoukan.desktop.ui.browse.SourceScreen
-import zoukan.desktop.ui.manga.MangaScreen
-import zoukan.desktop.ui.reader.ReaderScreen
-import zoukan.desktop.ui.recs.RecommendsScreen
-import zoukan.desktop.ui.settings.SourceSettingsScreen
 
 /**
  * Voyager disposes every screen model whose key starts with the key of a screen that left. So no
@@ -19,32 +12,14 @@ import zoukan.desktop.ui.settings.SourceSettingsScreen
 class ScreenKeysTest {
 
     @Test
-    fun `no screen key starts with another`() {
-        val screens: List<Screen> = listOf(1L, 12L, 123L).flatMap { id ->
-            listOf(
-                MangaScreen(id),
-                ReaderScreen(id, id),
-                ReaderScreen(id, id * 10 + 2),
-                RecommendsScreen(id),
-                SourceFeedScreen(id),
-                SourceSettingsScreen(id),
-                SourceScreen(id),
-                SourceScreen(id, savedSearch = id),
-                SourceScreen(id, follows = true),
-            )
-        } + listOf(GlobalSearchScreen("one"), GlobalSearchScreen("one piece")) +
-            // ZOUKAN -->
-            listOf(
-                zoukan.desktop.ui.browse.SourcesFilterScreen,
-                zoukan.desktop.ui.browse.SourceCategoryScreen,
-                zoukan.desktop.ui.settings.ExtensionStoresScreen,
-                zoukan.desktop.ui.settings.ClearDatabaseScreen,
-                zoukan.desktop.ui.settings.CreateBackupScreen,
-                zoukan.desktop.ui.settings.MissingExtensionsScreen,
-                zoukan.desktop.ui.settings.RestoreBackupScreen("/backups/a.tachibk"),
-                zoukan.desktop.ui.settings.RestoreBackupScreen("/backups/a.tachibk.old"),
-            )
-        // ZOUKAN <--
+    fun `every screen class has prefix-free keys`() {
+        val variants = ScreenScan.variants()
+        val classes = ScreenScan.screenClasses().filter { it != HomeScreen::class.java }
+        // Every screen that takes arguments has variants here; a new one fails and is named
+        classes.filter { ScreenScan.maker(it) == null }.filter { it !in variants }.map { it.name }.shouldBeEmpty()
+        val screens: List<Screen> = classes.flatMap { type ->
+            variants[type]?.map { it() } ?: listOfNotNull(ScreenScan.maker(type)?.invoke())
+        }
         val clashes = screens.flatMap { a ->
             screens.filter { b -> a !== b && a.key != b.key && b.key.startsWith(a.key) }.map { b -> "${a.key} -> ${b.key}" }
         }

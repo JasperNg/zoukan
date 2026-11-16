@@ -138,7 +138,6 @@ import zoukan.desktop.update.Updates
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
@@ -633,12 +632,12 @@ open class ScreenSmokeTest {
 
     private fun screens(f: Fixture): List<Check> {
         val withArguments = screensWithArguments(f)
-        val classes = UiInventory.screenClasses()
+        val classes = ScreenScan.screenClasses()
         // About 30 when this was written; far fewer means the scan stopped finding them
         classes.size shouldBeGreaterThan 20
         val missing = mutableListOf<String>()
         val checks = classes.filter { it != HomeScreen::class.java }.flatMap { type ->
-            val makers = withArguments[type] ?: listOfNotNull(maker(type)).ifEmpty {
+            val makers = withArguments[type] ?: listOfNotNull(ScreenScan.maker(type)).ifEmpty {
                 missing += type.name
                 emptyList()
             }
@@ -649,18 +648,6 @@ open class ScreenSmokeTest {
         }
         missing.shouldBeEmpty()
         return checks
-    }
-
-    /**
-     * How to get a screen of [type] without arguments: an object's instance, or a new one of a
-     * class without arguments; null for a class that needs arguments. Nothing is made yet.
-     */
-    private fun maker(type: Class<out Screen>): (() -> Screen)? {
-        runCatching { type.getDeclaredField("INSTANCE") }.getOrNull()
-            ?.takeIf { Modifier.isStatic(it.modifiers) }
-            ?.let { field -> return { field.apply { isAccessible = true }.get(null) as Screen } }
-        return type.declaredConstructors.firstOrNull { it.parameterCount == 0 }
-            ?.let { constructor -> { constructor.apply { isAccessible = true }.newInstance() as Screen } }
     }
 
     // Tabs and settings
