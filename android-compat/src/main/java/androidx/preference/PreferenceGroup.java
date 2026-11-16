@@ -18,6 +18,7 @@ public abstract class PreferenceGroup extends Preference {
     @JsonIgnore
     private final List<Preference> preferences = new LinkedList<>();
     private boolean orderingAsAdded = true;
+    private int currentPreferenceOrder = 0;
     private int initialExpandedChildrenCount = Integer.MAX_VALUE;
 
     public PreferenceGroup(Context context) {
@@ -28,11 +29,42 @@ public abstract class PreferenceGroup extends Preference {
         if (preferences.contains(preference)) {
             return true;
         }
+        // A preference has one parent: adding it to a second group moves it there
+        PreferenceGroup previousParent = preference.getParent();
+        if (previousParent != null && previousParent != this) {
+            previousParent.removePreference(preference);
+        }
+        if (orderingAsAdded) {
+            if (preference.getOrder() == Preference.DEFAULT_ORDER) {
+                preference.setOrder(currentPreferenceOrder++);
+            }
+            if (preference instanceof PreferenceGroup group) {
+                group.setOrderingAsAdded(orderingAsAdded);
+            }
+        }
         // propagate own shared preferences
         preference.setSharedPreferences(getSharedPreferences());
         preference.assignParent(this);
-        preferences.add(preference);
+        // Sorted by order, stable: after the last preference whose order is not greater
+        int index = preferences.size();
+        for (int i = 0; i < preferences.size(); i++) {
+            if (compareOrder(preferences.get(i), preference) > 0) {
+                index = i;
+                break;
+            }
+        }
+        preferences.add(index, preference);
         return true;
+    }
+
+    private int compareOrder(Preference existing, Preference added) {
+        if (existing.getOrder() != added.getOrder()) {
+            return Integer.compare(existing.getOrder(), added.getOrder());
+        }
+        if (orderingAsAdded) {
+            return 0;
+        }
+        return String.valueOf(existing.getTitle()).compareToIgnoreCase(String.valueOf(added.getTitle()));
     }
 
     public boolean removePreference(Preference preference) {

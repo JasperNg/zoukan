@@ -23,6 +23,7 @@ import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.ui.settings.flattenPreferences
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -321,6 +322,46 @@ class PreferenceCompatTest {
         prefs.getBoolean("early", false) shouldBe true
         category.removePreference(late) shouldBe true
         late.parent shouldBe null
+    }
+
+    @Test
+    fun `setOrder sorts a group's preferences as on Android`() {
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs("order") }
+        val c = EditTextPreference(null).apply {
+            key = "c"
+            order = 3
+        }
+        val a = EditTextPreference(null).apply {
+            key = "a"
+            order = 1
+        }
+        val plain = EditTextPreference(null).apply { key = "plain" } // no order: placed as added
+        val b = EditTextPreference(null).apply {
+            key = "b"
+            order = 2
+        }
+        listOf(c, a, plain, b).forEach(screen::addPreference)
+
+        screen.preferences.map { it.key } shouldBe listOf("plain", "a", "b", "c")
+        (0 until screen.preferenceCount).map { screen.getPreference(it).key } shouldBe
+            listOf("plain", "a", "b", "c")
+    }
+
+    @Test
+    fun `a preference added to a second group moves there`() {
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs("move") }
+        val x = PreferenceCategory(null).apply { key = "x" }
+        val y = PreferenceCategory(null).apply { key = "y" }
+        screen.addPreference(x)
+        screen.addPreference(y)
+        val pref = SwitchPreferenceCompat(null).apply { key = "moved" }
+        x.addPreference(pref)
+        y.addPreference(pref)
+
+        x.preferenceCount shouldBe 0
+        y.preferenceCount shouldBe 1
+        pref.parent shouldBe y
+        flattenPreferences(screen).count { it === pref } shouldBe 1
     }
 
     @Test
