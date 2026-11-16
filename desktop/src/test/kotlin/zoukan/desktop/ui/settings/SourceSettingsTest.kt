@@ -188,6 +188,67 @@ class SourceSettingsTest {
         looksSecret(null, null) shouldBe false
     }
 
+    @Test
+    fun `a preference whose visibility throws is skipped with an error`() = withRoot {
+        val prefs = JavaSharedPreferences("source_visible_test_${System.nanoTime()}")
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs }
+        screen.addPreference(
+            SwitchPreferenceCompat(null).apply {
+                key = "fine"
+                title = "Fine"
+            },
+        )
+        screen.addPreference(
+            object : SwitchPreferenceCompat(null) {
+                override fun isVisible(): Boolean = throw IllegalStateException("visible bug")
+            }.apply {
+                key = "broken"
+                title = "Broken"
+            },
+        )
+        val toasts = mutableListOf<String>()
+        val collector = CoroutineScope(Dispatchers.Unconfined).launch { Toasts.flow.collect { toasts += it } }
+        try {
+            flattenPreferences(screen).map { it.title?.toString() } shouldBe listOf("Fine")
+            toasts.any { "visible bug" in it } shouldBe true
+        } finally {
+            collector.cancel()
+        }
+    }
+
+    @Test
+    fun `a preference whose title throws still draws`() = withRoot {
+        runDesktopComposeUiTest {
+            val prefs = JavaSharedPreferences("source_title_test_${System.nanoTime()}")
+            val pref = object : SwitchPreferenceCompat(null) {
+                override fun getTitle(): CharSequence = throw IllegalStateException("title bug")
+            }.apply {
+                key = "untitled"
+                sharedPreferences = prefs
+            }
+            val toasts = mutableListOf<String>()
+            val collector = CoroutineScope(Dispatchers.Unconfined).launch { Toasts.flow.collect { toasts += it } }
+            try {
+                setContent { PreferenceItem(pref, 0, onChanged = {}, onOpen = {}) }
+                waitForIdle()
+                toasts.any { "title bug" in it } shouldBe true
+            } finally {
+                collector.cancel()
+            }
+        }
+    }
+
+    @Test
+    fun `a dialog for an unknown preference type is closed after composition`() = withRoot {
+        runDesktopComposeUiTest {
+            var dismissed = 0
+            val pref = androidx.preference.Preference(null).apply { key = "plain" }
+            setContent { PreferenceDialog(pref, onDismiss = { dismissed++ }, onSave = {}) }
+            waitForIdle()
+            dismissed shouldBe 1
+        }
+    }
+
     private fun withRoot(block: () -> Unit) {
         val property = "$CONFIG_PREFIX.server.rootDir"
         val previous = System.getProperty(property)

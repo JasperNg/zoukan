@@ -24,6 +24,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonSkippableComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -126,7 +127,7 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
 internal fun flattenPreferences(group: PreferenceGroup): List<Preference> =
     group.preferences.toList().flatMap { pref ->
         when {
-            !pref.isVisible -> emptyList()
+            !readSafely(pref, false) { pref.isVisible } -> emptyList()
             pref is PreferenceGroup -> listOf(pref) + flattenPreferences(pref)
             else -> listOf(pref)
         }
@@ -147,8 +148,11 @@ private fun save(pref: Preference, value: Any) {
 
 private fun reportFailure(pref: Preference, e: Throwable) {
     pref.logcat(LogPriority.ERROR, e) { "Source preference ${pref.key} failed" }
-    Toasts.error(pref.title?.toString().orEmpty().ifEmpty { pref.key.orEmpty() }, e)
+    // Not readSafely: that reports failures through here, and the title getter may be the one that throws
+    Toasts.error(runCatching { pref.title?.toString() }.getOrNull().orEmpty().ifEmpty { pref.key.orEmpty() }, e)
 }
+
+private fun titleOf(pref: Preference): String = readSafely(pref, "") { pref.title?.toString().orEmpty() }
 
 // Reads run at every redraw: a preference whose reads fail is reported once, not at each redraw
 private val failedReads: MutableSet<Preference> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))
@@ -189,7 +193,7 @@ private fun summaryOf(pref: Preference): String? = readSafely(pref, null) {
 @NonSkippableComposable
 @Composable
 internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") version: Int, onChanged: () -> Unit, onOpen: () -> Unit) {
-    val title = pref.title?.toString().orEmpty()
+    val title = titleOf(pref)
     // As Android: off while the switch it depends on (setDependency) is off, or its group is disabled
     val enabled = readSafely(pref, true) { pref.isEnabled }
     when (pref) {
@@ -221,7 +225,7 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
                 // A password, token or key is never the summary: the extension's own summary, or "Not set"
                 is EditTextPreference -> summaryOf(pref) ?: readSafely(pref, null) { pref.currentValue as? String }.let { value ->
                     when {
-                        !looksSecret(pref.key, pref.title?.toString()) -> value
+                        !looksSecret(pref.key, title) -> value
                         value.isNullOrEmpty() -> localized(DMR.strings.not_set)
                         else -> null
                     }
@@ -339,7 +343,7 @@ internal fun SecretTextField(
 
 @Composable
 internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (Any) -> Unit) {
-    val title = (pref as? DialogPreference)?.dialogTitle?.toString() ?: pref.title?.toString().orEmpty()
+    val title = readSafely(pref, null) { (pref as? DialogPreference)?.dialogTitle?.toString() } ?: titleOf(pref)
     when (pref) {
         is ListPreference -> {
             val entries = pref.entries.orEmpty()
@@ -404,7 +408,7 @@ internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (
                 text = {
                     Column {
                         pref.dialogMessage?.let { Text(it.toString(), Modifier.padding(bottom = 8.dp)) }
-                        if (looksSecret(pref.key, pref.title?.toString())) {
+                        if (looksSecret(pref.key, titleOf(pref))) {
                             SecretTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
                         } else {
                             OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
@@ -415,6 +419,6 @@ internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (
                 dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
-        else -> onDismiss()
+        else -> LaunchedEffect(pref) { onDismiss() }
     }
 }
