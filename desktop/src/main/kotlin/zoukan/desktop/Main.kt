@@ -38,6 +38,8 @@ import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.DesktopExtensionManager
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlin.system.exitProcess
 
 private const val USAGE = """Zoukan desktop
@@ -72,6 +74,7 @@ Commands:
   backup compare <a> <b>  Compare two backups field by field (what b lost or changed from a)
   backup synthetic <file> Write a backup with every field set, for testing
       --legacy              Use older forms of some fields
+      --force               Replace <file> if it exists
   library update [options] Check the library for new chapters, as the app's library update does
       --all-entries         Ignore the skip rules (unread, not started, completed, release period)
       --download <n>        Then download the newest <n> chapters of every updated entry
@@ -399,8 +402,19 @@ private fun backup(args: List<String>): Int {
         }
         "synthetic" -> {
             val file = positional.firstOrNull()?.let(::File) ?: return usage("backup synthetic <file>")
+            if (file.exists() && "--force" !in flags) {
+                System.err.println("$file exists; pass --force to replace it")
+                return 1
+            }
             file.absoluteFile.parentFile?.mkdirs()
-            file.sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
+            // Through a temporary file, as `backup create` does: a failed write leaves the target alone
+            val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
+            try {
+                temp.sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
+                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                temp.delete()
+            }
             println("Wrote $file (${file.length()} bytes)")
             0
         }
