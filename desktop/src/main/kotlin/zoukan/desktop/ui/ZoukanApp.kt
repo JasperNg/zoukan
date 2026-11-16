@@ -1,5 +1,6 @@
 package zoukan.desktop.ui
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,7 +42,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -178,7 +183,6 @@ fun runZoukanApp() {
                     preferences.windowBounds().set(bounds.encode())
                 }
         }
-        var navigatorRef by remember { mutableStateOf<Navigator?>(null) }
         var visible by remember { mutableStateOf(true) }
         val trayState = rememberTrayState()
         val trayAvailable = remember { runCatching { SystemTray.isSupported() }.getOrDefault(false) }
@@ -269,7 +273,6 @@ fun runZoukanApp() {
                 icon = icon,
                 title = "Zoukan",
                 state = windowState,
-                onKeyEvent = { event -> Shortcuts.handle(event, navigatorRef) },
             ) {
                 // Below this size the two-pane screens and the toolbars no longer fit
                 LaunchedEffect(Unit) {
@@ -285,7 +288,7 @@ fun runZoukanApp() {
                     // ZOUKAN <--
                 }
                 CompositionLocalProvider(LocalWindow provides this, LocalWindowState provides windowState) {
-                    ZoukanContent(preferences, onNavigator = { navigatorRef = it }, firstRun = true)
+                    ZoukanContent(preferences, firstRun = true)
                 }
                 LaunchedEffect(Unit) {
                     // Zoukan was opened again: bring this window back
@@ -357,6 +360,16 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
     val appLock = remember { Injekt.get<zoukan.desktop.security.AppLock>() }
     val locked by appLock.locked.collectAsState()
     // ZOUKAN <--
+    // ZOUKAN -->
+    // The app's keyboard shortcuts are handled here, on the content, so the app and the tests share
+    // one handler. The root takes the focus when nothing else has it, so keys reach the handler
+    // with nothing clicked yet; a focused child (a text field, the reader) gets a key first
+    val rootFocus = remember { FocusRequester() }
+    // True while the root or something inside it has the focus. A focused field that leaves the
+    // composition (its screen was closed) drops the focus; the root then takes it back
+    var rootHasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(locked, rootHasFocus) { if (!locked && !rootHasFocus) runCatching { rootFocus.requestFocus() } }
+    // ZOUKAN <--
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(
             Modifier.fillMaxSize().onPointerEvent(PointerEventType.Press) { event ->
@@ -365,7 +378,13 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
                 // Not while the app lock covers the window
                 if (event.button == PointerButton.Back && !appLock.locked.value) navigatorRef?.takeIf { it.canPop }?.pop()
                 // ZOUKAN <--
-            },
+            }
+                // ZOUKAN -->
+                .onKeyEvent { Shortcuts.handle(it, navigatorRef) }
+                .onFocusChanged { rootHasFocus = it.hasFocus }
+                .focusRequester(rootFocus)
+                .focusable(),
+            // ZOUKAN <--
             color = MaterialTheme.colorScheme.background,
         ) {
             val snackbar = remember { SnackbarHostState() }
