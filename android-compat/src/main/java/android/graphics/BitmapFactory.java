@@ -505,6 +505,10 @@ public class BitmapFactory {
                 image = scale(image, sampledWidth, sampledHeight);
             }
             if (opts != null) fillBounds(opts, imageReader, image.getWidth(), image.getHeight());
+            // ZOUKAN -->
+            // Android decodes every page to ARGB_8888; ImageIO keeps palette, grey and 16-bit types
+            if (image.getType() != BufferedImage.TYPE_INT_ARGB) image = toArgb(image);
+            // ZOUKAN <--
             return new Bitmap(image);
         } catch (IOException | RuntimeException ex) {
             resetBounds(opts);
@@ -543,6 +547,20 @@ public class BitmapFactory {
                 ? reader.getOriginatingProvider().getMIMETypes() : null;
         opts.outMimeType = mimeTypes != null && mimeTypes.length > 0 ? mimeTypes[0] : null;
     }
+
+    // ZOUKAN -->
+    private static BufferedImage toArgb(BufferedImage source) {
+        BufferedImage argb = new BufferedImage(
+                source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = argb.createGraphics();
+        try {
+            g.drawImage(source, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        return argb;
+    }
+    // ZOUKAN <--
 
     private static BufferedImage scale(BufferedImage source, int width, int height) {
         int type = source.getColorModel().hasAlpha()

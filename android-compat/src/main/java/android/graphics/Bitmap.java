@@ -211,8 +211,14 @@ public final class Bitmap {
         // Android will make a copy when creating a sub image,
         // so we do the same here
         BufferedImage subImage = source.image.getSubimage(x, y, width, height);
-        BufferedImage newImage = new BufferedImage(subImage.getWidth(), subImage.getHeight(), subImage.getType());
-        newImage.setData(subImage.getData());
+        // ZOUKAN -->
+        // Copy with the source colour model: a type-based copy recolours palette images and
+        // throws for custom types
+        java.awt.image.ColorModel cm = subImage.getColorModel();
+        java.awt.image.WritableRaster raster = cm.createCompatibleWritableRaster(width, height);
+        raster.setRect(subImage.getRaster()); // a subimage's raster starts at (0, 0)
+        BufferedImage newImage = new BufferedImage(cm, raster, cm.isAlphaPremultiplied(), null);
+        // ZOUKAN <--
 
         return new Bitmap(newImage);
     }
@@ -284,6 +290,13 @@ public final class Bitmap {
     }
 
     public Bitmap copy(Config config, boolean isMutable) {
+        // ZOUKAN -->
+        // Android copies to ARGB_8888; a palette, binary or custom type cannot be built by type
+        if (config == Config._TYPE_CUSTOM || config == Config._TYPE_BYTE_INDEXED
+                || config == Config._TYPE_BYTE_BINARY) {
+            config = Config.ARGB_8888;
+        }
+        // ZOUKAN <--
         Bitmap ret = createBitmap(width, height, config);
         ret.image.getGraphics().drawImage(image, 0, 0, null);
         return ret;

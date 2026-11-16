@@ -1,6 +1,7 @@
 package zoukan.desktop.compat
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
@@ -13,11 +14,15 @@ import android.graphics.RectF
 import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import java.awt.color.ColorSpace
 import java.awt.image.BufferedImage
+import java.awt.image.DataBuffer
+import java.awt.image.IndexColorModel
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
 import javax.imageio.ImageIO
+import javax.imageio.ImageTypeSpecifier
 import kotlin.math.abs
 
 /**
@@ -222,6 +227,65 @@ class GraphicsCompatTest {
         result.getPixel(2, 1) shouldBe 0
         canvas.drawColor(0xFF00FF00.toInt())
         result.getPixel(3, 3) shouldBe 0xFF00FF00.toInt()
+    }
+
+    @Test
+    fun `createBitmap cuts a tile of a palette PNG with its colours`() {
+        // Red, green, blue and yellow quadrants in a custom palette (not the JDK default one)
+        val palette = intArrayOf(0xFFE01010.toInt(), 0xFF10E010.toInt(), 0xFF1010E0.toInt(), 0xFFE0E010.toInt())
+        val reds = ByteArray(4) { (palette[it] shr 16).toByte() }
+        val greens = ByteArray(4) { (palette[it] shr 8).toByte() }
+        val blues = ByteArray(4) { palette[it].toByte() }
+        val model = IndexColorModel(8, 4, reds, greens, blues)
+        val indexed = BufferedImage(8, 8, BufferedImage.TYPE_BYTE_INDEXED, model)
+        for (y in 0 until 8) {
+            for (x in 0 until 8) {
+                indexed.raster.setSample(x, y, 0, (if (x >= 4) 1 else 0) + (if (y >= 4) 2 else 0))
+            }
+        }
+        val bytes = ByteArrayOutputStream().also { ImageIO.write(indexed, "png", it) }.toByteArray()
+        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)!!
+
+        val tile = Bitmap.createBitmap(src, 4, 0, 4, 4)
+        tile.pixels().all { it == palette[1] } shouldBe true
+        val lower = Bitmap.createBitmap(src, 4, 4, 4, 4)
+        lower.pixels().all { it == palette[3] } shouldBe true
+        val copy = src.copy(src.config, true)
+        copy.getPixel(0, 0) shouldBe palette[0]
+        copy.getPixel(7, 0) shouldBe palette[1]
+        copy.getPixel(0, 7) shouldBe palette[2]
+        copy.getPixel(7, 7) shouldBe palette[3]
+    }
+
+    @Test
+    fun `createBitmap cuts a tile of a 16-bit PNG`() {
+        val image = ImageTypeSpecifier.createInterleaved(
+            ColorSpace.getInstance(ColorSpace.CS_sRGB),
+            intArrayOf(0, 1, 2),
+            DataBuffer.TYPE_USHORT,
+            false,
+            false,
+        ).createBufferedImage(8, 8)
+        for (y in 0 until 8) {
+            for (x in 0 until 8) {
+                val left = x < 4
+                image.raster.setSample(x, y, 0, if (left) 0xFFFF else 0)
+                image.raster.setSample(x, y, 1, if (left) 0 else 0xFFFF)
+                image.raster.setSample(x, y, 2, 0x8080)
+            }
+        }
+        val bytes = ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray()
+        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)!!
+
+        // The right half is green (0, 255, 128)
+        val tile = Bitmap.createBitmap(src, 4, 0, 4, 4)
+        tile.width shouldBe 4
+        tile.pixels().forEach { p ->
+            (p ushr 24) shouldBe 0xFF
+            (abs(((p shr 16) and 0xFF) - 0x00) <= 1) shouldBe true
+            (abs(((p shr 8) and 0xFF) - 0xFF) <= 1) shouldBe true
+            (abs((p and 0xFF) - 0x80) <= 1) shouldBe true
+        }
     }
 
     @Test
