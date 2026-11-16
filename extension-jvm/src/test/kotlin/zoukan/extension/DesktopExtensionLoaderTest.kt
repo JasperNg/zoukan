@@ -326,6 +326,23 @@ class DesktopExtensionLoaderTest {
     }
 
     @Test
+    fun `a jar recorded for one APK is converted again when another APK sits beside it`() {
+        val files = install(manifest(pkgName, sourceClass))
+        recordHash(files)
+        // The jar and its recorded hash are untouched; only the APK next to them is another one
+        files.apk!!.writeText("another apk")
+        withVerifiedApk(files) {
+            every { ApkConverter.convert(any(), any()) } answers {
+                writeJar(secondArg(), manifest(pkgName, sourceClass))
+            }
+
+            loader().load(files, emptyList()).shouldBeInstanceOf<LoadResult.Success>()
+
+            verify(exactly = 1) { ApkConverter.convert(any(), any()) }
+        }
+    }
+
+    @Test
     fun `a jar whose manifest names another package fails to load`() {
         val files = install(manifest(pkgName, sourceClass))
         writeJar(files.jar, manifest("..", sourceClass))
