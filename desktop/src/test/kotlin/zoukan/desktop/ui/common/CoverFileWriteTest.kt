@@ -41,4 +41,23 @@ class CoverFileWriteTest {
         target.exists() shouldBe false
         dir.list()!!.toList() shouldBe emptyList()
     }
+
+    @Test
+    fun `a cover that is an HTML page is not cached`() {
+        val target = File(dir, "cover")
+        val result = runCatching {
+            Images.writeCoverFile(target, validate = Images::requireImage) { out ->
+                out.write("<!DOCTYPE html><html><body>403 Forbidden</body></html>".toByteArray())
+            }
+        }
+        result.isFailure shouldBe true
+        target.exists() shouldBe false
+        dir.list()!!.toList() shouldBe emptyList()
+
+        val png = java.io.ByteArrayOutputStream().also {
+            javax.imageio.ImageIO.write(java.awt.image.BufferedImage(2, 2, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", it)
+        }.toByteArray()
+        Images.writeCoverFile(target, validate = Images::requireImage) { out -> out.write(png) }
+        target.readBytes().contentEquals(png) shouldBe true
+    }
 }

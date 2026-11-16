@@ -30,6 +30,7 @@ import android.view.autofill.AutofillValue
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.textclassifier.TextClassifier
+import android.webkit.ConsoleMessage
 import android.webkit.DownloadListener
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
@@ -108,9 +109,15 @@ class KcefWebViewProvider(
     private var viewClient = WebViewClient()
     private var chromeClient = WebChromeClient()
     private val renderHandler = RenderHandler()
-    private val mappings: MutableList<FunctionMapping> = mutableListOf()
-    private val urlHttpMapping: MutableMap<String, String> = mutableMapOf()
+    // ZOUKAN -->
+    // Read on Chromium's threads while the WebView's looper changes them
+    private val mappings: MutableList<FunctionMapping> = java.util.concurrent.CopyOnWriteArrayList()
+    private val urlHttpMapping: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+
+    // Set on the looper, consumed on Chromium's IO thread
+    @Volatile
     private var initialRequestData: InitialRequestData? = null
+    // ZOUKAN <--
 
     // ZOUKAN -->
     // Kept in a holder the cleanup of a dropped WebView can reach without reaching this provider
@@ -144,6 +151,7 @@ class KcefWebViewProvider(
     private val loadHandler = LoadHandler()
     private val requestHandler = RequestHandler()
     private val messageRouterHandler = MessageRouterHandler()
+    private val displayHandler = DisplayHandler()
     // ZOUKAN <--
 
     companion object {
@@ -151,8 +159,10 @@ class KcefWebViewProvider(
         const val QUERY_FN = "__\$_suwayomiQuery"
         const val QUERY_CANCEL_FN = "__\$_suwayomiQueryCancel"
 
-        // ZOUKAN: characters per message of a JavaScript-interface call
+        // ZOUKAN -->
+        // Characters per message of a JavaScript-interface call
         private const val CHUNK_CHARS = 16_000
+        // ZOUKAN <--
 
         // ZOUKAN -->
         // The longest call a page can send in chunks (a long chapter list is a few million
@@ -203,6 +213,20 @@ class KcefWebViewProvider(
             pendingDisposals += disposal
             handler.post { javax.swing.SwingUtilities.invokeLater { disposal.run() } }
         }
+        // ZOUKAN <--
+
+        // ZOUKAN -->
+        /** Chromium's severity of a console message as Android's level (console.debug is VERBOSE). */
+        @JvmStatic
+        fun consoleLevel(level: CefSettings.LogSeverity): ConsoleMessage.MessageLevel =
+            when (level) {
+                CefSettings.LogSeverity.LOGSEVERITY_VERBOSE -> ConsoleMessage.MessageLevel.DEBUG
+                CefSettings.LogSeverity.LOGSEVERITY_WARNING -> ConsoleMessage.MessageLevel.WARNING
+                CefSettings.LogSeverity.LOGSEVERITY_ERROR,
+                CefSettings.LogSeverity.LOGSEVERITY_FATAL,
+                -> ConsoleMessage.MessageLevel.ERROR
+                else -> ConsoleMessage.MessageLevel.LOG
+            }
         // ZOUKAN <--
 
         private val initHandler: InitBrowserHandler /* ZOUKAN --> */by injectLazy()/* ZOUKAN <-- */
@@ -324,7 +348,10 @@ class KcefWebViewProvider(
     */
     // ZOUKAN <--
 
-    private class DisplayHandler : CefDisplayHandlerAdapter() {
+    // ZOUKAN -->
+    // Inner, to hand console messages to the WebChromeClient (see WeakDisplayHandler)
+    private inner class DisplayHandler : CefDisplayHandlerAdapter() {
+        // ZOUKAN <--
         override fun onConsoleMessage(
             browser: CefBrowser,
             level: CefSettings.LogSeverity,
@@ -333,6 +360,14 @@ class KcefWebViewProvider(
             line: Int,
         ): Boolean {
             Log.v(TAG, "$source:$line[$level]: $message")
+            // ZOUKAN -->
+            // As on Android, where extensions read results of injected scripts from console.log
+            // in WebChromeClient.onConsoleMessage, which also calls the deprecated 3-argument one
+            val consoleMessage = ConsoleMessage(message, source, line, consoleLevel(level))
+            handler.post {
+                if (!destroyed) chromeClient.onConsoleMessage(consoleMessage)
+            }
+            // ZOUKAN <--
             return true
         }
 
@@ -359,6 +394,11 @@ class KcefWebViewProvider(
             frame: CefFrame,
             httpStatusCode: Int,
         ) {
+            // ZOUKAN -->
+            // Only the main frame ends the page, as on Android: an iframe (Turnstile, an ad) that
+            // finishes must not run onPageFinished, the error callbacks or the cookie copy
+            if (!frame.isMain) return
+            // ZOUKAN <--
             val url = frame.url ?: ""
             Log.v(TAG, "Load end $url")
             handler.post {
@@ -389,7 +429,11 @@ class KcefWebViewProvider(
                 // its onPageStarted, as on Android
                 val finish = PageFinish(url)
                 pendingFinish = finish
-                CefCookieSync.copyFromCef(url) { handler.post { finish.run() } }
+                val userAgent = settings.userAgentString
+                CefCookieSync.copyFromCef(url) {
+                    runCatching { CefCookieSync.onCopiedFromCef?.invoke(url, userAgent) }
+                    handler.post { finish.run() }
+                }
                 // ZOUKAN <--
             }
         }
@@ -403,11 +447,15 @@ class KcefWebViewProvider(
         ) {
             Log.w(TAG, "Load error ($failedUrl) [$errorCode]: $errorText")
             // TODO: translate correctly
-            // ZOUKAN: read the URL now; the frame can be gone when the main looper runs this
+            // ZOUKAN -->
+            // Only the main frame's error reaches the client, as Android's onReceivedError
+            if (!frame.isMain) return
+            // Read the URL now; the frame can be gone when the main looper runs this
             val frameUrl = frame.url ?: failedUrl ?: ""
             handler.post {
                 viewClient.onReceivedError(view, WebViewClient.ERROR_UNKNOWN, errorText, frameUrl)
             }
+            // ZOUKAN <--
         }
 
         override fun onLoadStart(
@@ -453,9 +501,12 @@ class KcefWebViewProvider(
                 browser.executeJavaScript(js, "SUWAYOMI ${it.toNice()}", 0)
             }
 
-            // ZOUKAN: read the URL now; the frame can be gone when the main looper runs this
-            val frameUrl = frame.url ?: ""
             // ZOUKAN -->
+            // The mappings above go to every frame (an iframe's page may call them), but only the
+            // main frame starts the page, as on Android
+            if (!frame.isMain) return
+            // Read the URL now; the frame can be gone when the main looper runs this
+            val frameUrl = frame.url ?: ""
             handler.post {
                 // The last page's onPageFinished first, if its cookie visit has not ended
                 pendingFinish?.run()
@@ -514,7 +565,7 @@ class KcefWebViewProvider(
             // ZOUKAN <--
             val invoke =
                 try {
-                    Json.decodeFromString<FunctionCall>(/* ZOUKAN */ whole)
+                    Json.decodeFromString<FunctionCall>(/* ZOUKAN --> */whole/* ZOUKAN <-- */)
                 } catch (e: Exception) {
                     Log.w(TAG, "Invalid request received (${whole.length} chars) $e")
                     return false
@@ -526,8 +577,10 @@ class KcefWebViewProvider(
                         it.interfaceName == invoke.interfaceName
                 }?.let {
                     handler.post {
-                        // ZOUKAN: destroyed while this waited; the browser is being disposed
+                        // ZOUKAN -->
+                        // Destroyed while this waited; the browser is being disposed
                         if (destroyed) return@post
+                        // ZOUKAN <--
                         try {
                             Log.v(
                                 TAG,
@@ -626,7 +679,13 @@ class KcefWebViewProvider(
         }
     }
 
-    private inner class ResourceRequestHandler : CefResourceRequestHandlerAdapter() {
+    // ZOUKAN -->
+    // isNavigation: whether the request loads a page (the main frame or an iframe) and not a
+    // subresource such as an image or a script
+    private inner class ResourceRequestHandler(
+        private val isNavigation: Boolean,
+    ) : CefResourceRequestHandlerAdapter() {
+        // ZOUKAN <--
         override fun onBeforeResourceLoad(
             browser: CefBrowser?,
             frame: CefFrame?,
@@ -638,18 +697,27 @@ class KcefWebViewProvider(
             // TODO: we should be calling this on the handler, since CEF calls us on its IO thread
             // thus if a client tried to use WebView#loadUrl as the docs suggest, this fails
             val cancel =
-                // ZOUKAN: Android calls it on the WebView's thread, so it may call WebView methods
-                WebView.callClientOffThread {
-                    viewClient.shouldOverrideUrlLoading(
-                        view,
-                        CefWebResourceRequest(request, frame, false),
-                    )
+                // ZOUKAN -->
+                // Asked about navigations only, as on Android, not about every image or script.
+                // Android calls it on the WebView's thread, so it may call WebView methods
+                if (isNavigation) {
+                    WebView.callClientOffThread {
+                        viewClient.shouldOverrideUrlLoading(
+                            view,
+                            CefWebResourceRequest(request, frame, false),
+                        )
+                    }
+                } else {
+                    false
                 }
+            // ZOUKAN <--
             Log.v(TAG, "Resource ${request.url}, result is cancel? $cancel")
 
-            // ZOUKAN: read the URL now; the frame can be gone when the main looper runs this
-            val frameUrl = frame?.url ?: ""
-            handler.post { viewClient.onLoadResource(view, frameUrl) }
+            // ZOUKAN -->
+            // The resource's URL, read now: the request can change when the main looper runs this
+            val resourceUrl = request.url ?: ""
+            handler.post { viewClient.onLoadResource(view, resourceUrl) }
+            // ZOUKAN <--
 
             return cancel || settings.blockNetworkLoads
         }
@@ -693,7 +761,7 @@ class KcefWebViewProvider(
             isDownload: Boolean,
             requestInitiator: String,
             disableDefaultHandling: BoolRef,
-        ): CefResourceRequestHandler = ResourceRequestHandler()
+        ): CefResourceRequestHandler = /* ZOUKAN --> */ResourceRequestHandler(isNavigation)/* ZOUKAN <-- */
 
         override fun onRenderProcessTerminated(
             browser: CefBrowser,
@@ -735,7 +803,7 @@ class KcefWebViewProvider(
     // ZOUKAN <--
 
     private class RenderHandler : CefRenderHandlerAdapter() {
-        override fun getViewRect(browser: CefBrowser): Rectangle = Rectangle(0, 0, 1280, 2856)
+        override fun getViewRect(browser: CefBrowser): Rectangle = /* ZOUKAN --> */Rectangle(0, 0, xyz.nulldev.androidcompat.res.DesktopResources.SCREEN_WIDTH_PIXELS, xyz.nulldev.androidcompat.res.DesktopResources.SCREEN_HEIGHT_PIXELS)/* ZOUKAN <-- */
 
         // ZOUKAN -->
         override fun addOnPaintListener(listener: java.util.function.Consumer<org.cef.browser.CefPaintEvent>) {}
@@ -764,21 +832,25 @@ class KcefWebViewProvider(
         Log.v(TAG, "KcefWebViewProvider: initialize")
         destroy()
         kcefClient =
-            // ZOUKAN: blockingOffEdt, not runBlocking: Chromium's start needs the AWT thread
+            // ZOUKAN -->
+            // blockingOffEdt, not runBlocking: Chromium's start needs the AWT thread
             blockingOffEdt {
+                // ZOUKAN <--
                 CefHelper.createClient().apply {
                     // ZOUKAN -->
                     addLifeSpanHandler(WeakLifeSpanHandler(lifeSpanHandler))
-                    addDisplayHandler(DisplayHandler())
+                    addDisplayHandler(WeakDisplayHandler(displayHandler))
                     addLoadHandler(WeakLoadHandler(loadHandler))
                     addRequestHandler(WeakRequestHandler(requestHandler))
                     // ZOUKAN <--
-                    // ZOUKAN: no addPermissionHandler(PermissionHandler()), see CefPermissionRequest
+                    // ZOUKAN -->
+                    // No addPermissionHandler(PermissionHandler()), see CefPermissionRequest
+                    // ZOUKAN <--
 
                     val config = CefMessageRouter.CefMessageRouterConfig()
                     config.jsQueryFunction = QUERY_FN
                     config.jsCancelFunction = QUERY_CANCEL_FN
-                    addMessageRouter(CefMessageRouter.create(config, /* ZOUKAN */ WeakMessageRouterHandler(messageRouterHandler)))
+                    addMessageRouter(CefMessageRouter.create(config, /* ZOUKAN --> */WeakMessageRouterHandler(messageRouterHandler)/* ZOUKAN <-- */))
                 }
             }
         // ZOUKAN -->
@@ -786,7 +858,9 @@ class KcefWebViewProvider(
         if (cleanable == null) cleanable = cleaner.register(this, UnreachableCleanup(native))
         // ZOUKAN <--
         initHandler.init(this)
-        liveProviders += this // ZOUKAN
+        // ZOUKAN -->
+        liveProviders += this
+        // ZOUKAN <--
     }
 
     // Deprecated - should never be called
@@ -827,6 +901,7 @@ class KcefWebViewProvider(
 
     override fun destroy() {
         // ZOUKAN -->
+        if (postedToLooper { destroy() }) return
         // Disposed after the main looper's queued work: a page's call into a Java object runs
         // there and answers the page (callback.success) after the method returns, and a method
         // that ends the run (Comix's payload) has the extension destroy the WebView meanwhile.
@@ -840,6 +915,28 @@ class KcefWebViewProvider(
         disposeLater(handler, disposal)
         // ZOUKAN <--
     }
+
+    // ZOUKAN -->
+    /**
+     * A client callback that Android runs on the WebView's thread runs on one of Chromium's here,
+     * and the provider is not thread-safe. A WebView call made inside such a callback is posted to
+     * the WebView's looper (in order) and this returns true; any other call returns false.
+     */
+    private fun postedToLooper(call: () -> Unit): Boolean {
+        if (!WebView.isInClientCallback() || android.os.Looper.myLooper() == view.webViewLooper) return false
+        handler.post(call)
+        return true
+    }
+    // ZOUKAN <--
+
+    // ZOUKAN -->
+    // Android ignores calls on a destroyed WebView; the browser and client are gone after destroy()
+    private fun ignoredAfterDestroy(call: String): Boolean {
+        if (!destroyed) return false
+        Log.w(TAG, "WebView.$call after destroy() is ignored")
+        return true
+    }
+    // ZOUKAN <--
 
     override fun setNetworkAvailable(networkUp: Boolean): Unit = throw RuntimeException("Stub!")
 
@@ -861,8 +958,14 @@ class KcefWebViewProvider(
         loadUrl: String,
         additionalHttpHeaders: Map<String, String>,
     ) {
-        // ZOUKAN: after queued work, as in destroy(); a queued answer to the old page needs it
+        // ZOUKAN -->
+        if (postedToLooper { loadUrl(loadUrl, additionalHttpHeaders) }) return
+        if (ignoredAfterDestroy("loadUrl")) return
+        // ZOUKAN <--
+        // ZOUKAN -->
+        // After queued work, as in destroy(); a queued answer to the old page needs it
         disposeLater(handler, browser?.let { PendingDisposal(it, null) })
+        // ZOUKAN <--
         chromeClient.onProgressChanged(view, 0)
         initialRequestData = InitialRequestData(additionalHttpHeaders = additionalHttpHeaders)
         browser =
@@ -885,8 +988,14 @@ class KcefWebViewProvider(
         url: String,
         postData: ByteArray,
     ) {
-        // ZOUKAN: after queued work, as in destroy(); a queued answer to the old page needs it
+        // ZOUKAN -->
+        if (postedToLooper { postUrl(url, postData) }) return
+        if (ignoredAfterDestroy("postUrl")) return
+        // ZOUKAN <--
+        // ZOUKAN -->
+        // After queued work, as in destroy(); a queued answer to the old page needs it
         disposeLater(handler, browser?.let { PendingDisposal(it, null) })
+        // ZOUKAN <--
         chromeClient.onProgressChanged(view, 0)
         initialRequestData = InitialRequestData(myPostData = postData)
         browser =
@@ -916,8 +1025,14 @@ class KcefWebViewProvider(
         encoding: String?,
         historyUrl: String?,
     ) {
-        // ZOUKAN: after queued work, as in destroy(); a queued answer to the old page needs it
+        // ZOUKAN -->
+        if (postedToLooper { loadDataWithBaseURL(baseUrl, data, mimeType, encoding, historyUrl) }) return
+        if (ignoredAfterDestroy("loadDataWithBaseURL")) return
+        // ZOUKAN <--
+        // ZOUKAN -->
+        // After queued work, as in destroy(); a queued answer to the old page needs it
         disposeLater(handler, browser?.let { PendingDisposal(it, null) })
+        // ZOUKAN <--
         chromeClient.onProgressChanged(view, 0)
         val url = baseUrl ?: "about:blank"
         urlHttpMapping[url.trimEnd('/')] = data
@@ -938,6 +1053,10 @@ class KcefWebViewProvider(
         script: String,
         resultCallback: ValueCallback<String>?,
     ) {
+        // ZOUKAN -->
+        if (postedToLooper { evaluateJavaScript(script, resultCallback) }) return
+        if (ignoredAfterDestroy("evaluateJavascript")) return
+        // ZOUKAN <--
         browser!!.evaluateJavaScript(script.removePrefix("javascript:")) {
             Log.v(TAG, "JS returned: $it")
             handler.post { resultCallback?.onReceiveValue(it) }
@@ -953,22 +1072,42 @@ class KcefWebViewProvider(
     ): Unit = throw RuntimeException("Stub!")
 
     override fun stopLoading() {
+        // ZOUKAN -->
+        if (postedToLooper { stopLoading() }) return
+        if (ignoredAfterDestroy("stopLoading")) return
+        // ZOUKAN <--
         browser!!.stopLoad()
     }
 
     override fun reload() {
+        // ZOUKAN -->
+        if (postedToLooper { reload() }) return
+        if (ignoredAfterDestroy("reload")) return
+        // ZOUKAN <--
         browser!!.reload()
     }
 
-    override fun canGoBack(): Boolean = browser!!.canGoBack()
+    // ZOUKAN -->
+    override fun canGoBack(): Boolean = if (ignoredAfterDestroy("canGoBack")) false else browser!!.canGoBack()
+    // ZOUKAN <--
 
     override fun goBack() {
+        // ZOUKAN -->
+        if (postedToLooper { goBack() }) return
+        if (ignoredAfterDestroy("goBack")) return
+        // ZOUKAN <--
         browser!!.goBack()
     }
 
-    override fun canGoForward(): Boolean = browser!!.canGoForward()
+    // ZOUKAN -->
+    override fun canGoForward(): Boolean = if (ignoredAfterDestroy("canGoForward")) false else browser!!.canGoForward()
+    // ZOUKAN <--
 
     override fun goForward() {
+        // ZOUKAN -->
+        if (postedToLooper { goForward() }) return
+        if (ignoredAfterDestroy("goForward")) return
+        // ZOUKAN <--
         browser!!.goForward()
     }
 
@@ -1010,9 +1149,12 @@ class KcefWebViewProvider(
 
     override fun requestImageRef(msg: Message): Unit = throw RuntimeException("Stub!")
 
-    override fun getUrl(): String = browser!!.url
+    // ZOUKAN -->
+    // Null once destroyed or before the first load, as on Android
+    override fun getUrl(): String? = if (destroyed) null else browser?.url
 
-    override fun getOriginalUrl(): String = browser!!.url
+    override fun getOriginalUrl(): String? = if (destroyed) null else browser?.url
+    // ZOUKAN <--
 
     override fun getTitle(): String = throw RuntimeException("Stub!")
 
@@ -1144,6 +1286,33 @@ class KcefWebViewProvider(
 
         override fun onAfterCreated(browser: CefBrowser) {
             ref.get()?.onAfterCreated(browser)
+        }
+    }
+
+    private class WeakDisplayHandler(target: CefDisplayHandlerAdapter) : CefDisplayHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun onConsoleMessage(
+            browser: CefBrowser,
+            level: CefSettings.LogSeverity,
+            message: String,
+            source: String,
+            line: Int,
+        ): Boolean = ref.get()?.onConsoleMessage(browser, level, message, source, line) ?: false
+
+        override fun onAddressChange(
+            browser: CefBrowser,
+            frame: CefFrame,
+            url: String,
+        ) {
+            ref.get()?.onAddressChange(browser, frame, url)
+        }
+
+        override fun onStatusMessage(
+            browser: CefBrowser,
+            value: String,
+        ) {
+            ref.get()?.onStatusMessage(browser, value)
         }
     }
 
@@ -1329,6 +1498,9 @@ class KcefWebViewProvider(
         obj: Any,
         interfaceName: String,
     ) {
+        // ZOUKAN -->
+        if (postedToLooper { addJavascriptInterface(obj, interfaceName) }) return
+        // ZOUKAN <--
         val cls = obj::class
         mappings.addAll(
             cls.declaredMemberFunctions
@@ -1355,6 +1527,9 @@ class KcefWebViewProvider(
     // ZOUKAN <--
 
     override fun removeJavascriptInterface(interfaceName: String) {
+        // ZOUKAN -->
+        if (postedToLooper { removeJavascriptInterface(interfaceName) }) return
+        // ZOUKAN <--
         val removed = mappings.removeAll { it.interfaceName == interfaceName }
         Log.v(TAG, if (removed) "Removed interface mappings for $interfaceName" else "No interface mappings for $interfaceName to remove")
     }

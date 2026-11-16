@@ -1,6 +1,8 @@
 package zoukan.desktop.ui.reader
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -26,8 +28,10 @@ import kotlinx.coroutines.delay
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.common.Corners
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.OverlayColors
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 
 /**
@@ -53,14 +57,20 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
         delay(1500)
         modeShown = false
     }
-    AnimatedVisibility(modeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
+    AnimatedVisibility(
+        modeShown,
+        enter = if (reduceMotion) EnterTransition.None else fadeIn(),
+        exit = if (reduceMotion) ExitTransition.None else fadeOut(),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
         Text(
             ReadingModes.label(state.readingMode),
-            color = Color.White,
+            color = OverlayColors.OnScrim,
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.6f), Corners.Large)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .background(OverlayColors.ToastScrim, Corners.Large)
+                .padding(horizontal = Spacing.Large, vertical = Spacing.Small),
         )
     }
 
@@ -103,24 +113,42 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
 
 /**
  * Keeps the display on while the reader is open ("Keep screen on"): SetThreadExecutionState on
- * Windows, `caffeinate` on macOS.
+ * Windows, `caffeinate` on macOS. With `display = false` it only keeps the system from sleeping,
+ * for background work such as the favorites sync.
  */
 object KeepAwake {
     fun interface Lock {
         fun release()
     }
 
-    fun acquire(): Lock = runCatching {
+    fun acquire(display: Boolean = true): Lock = runCatching {
         when (Platform.current) {
             Platform.WINDOWS -> {
                 val kernel = com.sun.jna.platform.win32.Kernel32.INSTANCE
-                // Set on the UI thread, which lives as long as the app, and cleared from it
-                kernel.SetThreadExecutionState(ES_CONTINUOUS or ES_DISPLAY_REQUIRED or ES_SYSTEM_REQUIRED)
-                Lock { runCatching { kernel.SetThreadExecutionState(ES_CONTINUOUS) } }
+                if (display) {
+                    // Set on the UI thread, which lives as long as the app, and cleared from it
+                    kernel.SetThreadExecutionState(ES_CONTINUOUS or ES_DISPLAY_REQUIRED or ES_SYSTEM_REQUIRED)
+                    Lock { runCatching { kernel.SetThreadExecutionState(ES_CONTINUOUS) } }
+                } else {
+                    // The state is per thread and background work runs on pooled threads, so a
+                    // thread of its own holds it until the lock is released
+                    val done = java.util.concurrent.CountDownLatch(1)
+                    Thread {
+                        kernel.SetThreadExecutionState(ES_CONTINUOUS or ES_SYSTEM_REQUIRED)
+                        runCatching { done.await() }
+                        kernel.SetThreadExecutionState(ES_CONTINUOUS)
+                    }.apply {
+                        name = "zoukan-keep-awake"
+                        isDaemon = true
+                        start()
+                    }
+                    Lock { done.countDown() }
+                }
             }
             Platform.MACOS -> {
                 val pid = ProcessHandle.current().pid()
-                val process = ProcessBuilder("caffeinate", "-d", "-i", "-w", pid.toString())
+                val flags = if (display) arrayOf("-d", "-i") else arrayOf("-i")
+                val process = ProcessBuilder("caffeinate", *flags, "-w", pid.toString())
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .start()

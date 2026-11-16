@@ -1,10 +1,8 @@
 package zoukan.desktop.ui
 
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
@@ -33,12 +31,12 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Toasts
 import zoukan.extension.DesktopExtensionManager
 import java.io.File
 import java.nio.file.Files
-import javax.imageio.ImageIO
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -195,8 +193,6 @@ class EndToEndReadTest {
         }
 
     private fun androidx.compose.ui.test.ComposeUiTest.shot(name: String) {
-        waitForIdle()
-        val image = onRoot().captureToImage().toAwtImage()
-        ImageIO.write(image, "png", File(shots, "$name.png"))
+        saveScreenshot(shots, name)
     }
 }

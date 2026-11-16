@@ -53,6 +53,9 @@ class BackgroundJobs(
         }
     }
 
+    val isRunning: Boolean
+        @Synchronized get() = job?.isActive == true
+
     @Synchronized
     fun stop() {
         job?.cancel()
@@ -75,7 +78,7 @@ class BackgroundJobs(
         val sync = Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>()
         if (sync.isDue(now)) sync.syncData()
         // E-Hentai gallery updates, in place of EHentaiUpdateWorker
-        runCatching { Injekt.get<zoukan.desktop.exh.EhGalleryUpdater>().runIfDue() }
+        zoukan.desktop.app.runCatchingCancellable { Injekt.get<zoukan.desktop.exh.EhGalleryUpdater>().runIfDue() }
             .onFailure {
                 if (it is CancellationException) throw it
                 logcat(LogPriority.WARN, it) { "Updating E-Hentai galleries failed" }
@@ -83,7 +86,7 @@ class BackgroundJobs(
         // Tracker updates that failed (offline, site down), in place of DelayedTrackingUpdateJob
         if (now - lastTrackingRetry >= TRACKING_RETRY_EVERY) {
             lastTrackingRetry = now
-            runCatching { Injekt.get<TrackChapters>().retryDelayed() }
+            zoukan.desktop.app.runCatchingCancellable { Injekt.get<TrackChapters>().retryDelayed() }
                 .onFailure {
                     if (it is CancellationException) throw it
                     logcat(LogPriority.WARN, it) { "Retrying tracker updates failed" }

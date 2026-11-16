@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.recs
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import dev.icerock.moko.resources.StringResource
@@ -64,6 +64,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.checkRow
 import java.net.URI
 import java.util.Collections
 import kotlin.time.Duration.Companion.milliseconds
@@ -326,11 +327,11 @@ fun RecommendationSearchDialog(onDismissRequest: () -> Unit, onSearchRequest: ()
                     modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
                 )
                 Row(
-                    Modifier.fillMaxWidth().clickable { set(SearchFlags.HIDE_LIBRARY_RESULTS, !hideLibrary) }.padding(8.dp),
+                    Modifier.fillMaxWidth().checkRow(hideLibrary, role = Role.Switch) { set(SearchFlags.HIDE_LIBRARY_RESULTS, it) }.padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(localized(SYMR.strings.rec_hide_library_entries), Modifier.weight(1f))
-                    Switch(hideLibrary, onCheckedChange = { set(SearchFlags.HIDE_LIBRARY_RESULTS, it) })
+                    Switch(hideLibrary, onCheckedChange = null)
                 }
             }
         },
@@ -344,8 +345,8 @@ fun RecommendationSearchDialog(onDismissRequest: () -> Unit, onSearchRequest: ()
 
 @Composable
 private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }, verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked, onCheckedChange = onChange)
+    Row(Modifier.fillMaxWidth().checkRow(checked, onChange = onChange), verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked, onCheckedChange = null)
         Text(label)
     }
 }

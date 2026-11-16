@@ -31,7 +31,28 @@ class DesktopExtensionInstaller(
     /** How the extension was installed. */
     enum class Method { JAR, APK }
 
-    data class Installed(val files: DesktopExtensionLoader.InstalledFiles, val method: Method)
+    /**
+     * [keptAside] are the files of a same-version install that this install replaced, kept next to
+     * the new ones until the caller decides: [dropPrevious] once the new files load, [restorePrevious]
+     * when they do not. Empty for a fresh install or a new version.
+     */
+    data class Installed(
+        val files: DesktopExtensionLoader.InstalledFiles,
+        val method: Method,
+        val keptAside: List<File> = emptyList(),
+    )
+
+    /** Puts the files this install replaced back, as they were. Only touches this package's folder. */
+    fun restorePrevious(installed: Installed) {
+        if (installed.keptAside.isEmpty()) return
+        PreviousFiles.restore(checkedPackageDir(extensionsDir, installed.files.pkgName), installed.files.versionCode)
+    }
+
+    /** Deletes the files this install replaced: the new files work. Only touches this package's folder. */
+    fun dropPrevious(installed: Installed) {
+        if (installed.keptAside.isEmpty()) return
+        PreviousFiles.drop(checkedPackageDir(extensionsDir, installed.files.pkgName), installed.files.versionCode)
+    }
 
     /**
      * @param requiredSigner the signing certificate's SHA-256 of the installed version, when this
@@ -77,13 +98,20 @@ class DesktopExtensionInstaller(
                 .also { checkManifest(it, extension, installedVersionCode) }
             val dir = packageDir(extension.pkgName)
             val jar = File(dir, "${manifest.versionCode}.jar")
-            Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            File(dir, "${manifest.versionCode}.apk").delete()
+            // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
+            val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
+            try {
+                Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: Exception) {
+                PreviousFiles.restore(dir, manifest.versionCode)
+                throw e
+            }
             // The hash sidecar earlier versions of Zoukan wrote for an APK-method install
             File(dir, "${manifest.versionCode}.sha256").delete()
             return Installed(
                 DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, null),
                 Method.JAR,
+                kept,
             )
         } finally {
             tmp.delete()
@@ -102,33 +130,46 @@ class DesktopExtensionInstaller(
     ): Installed {
         val tmp = download(extension.apkUrl, extension.pkgName, ".apk")
         var tmpJar: File? = null
+        var tmpApk: File? = null
         try {
-            checkSigner(ExtensionSignatures.verifyApk(tmp), requiredSigner, extension)
-            val manifest = ExtensionManifest.fromApk(tmp).also { checkManifest(it, extension, installedVersionCode) }
+            // The APK is read once (the download is size-capped): the bytes that are verified are
+            // the bytes that are parsed, converted and stored, whatever happens to the file after
+            val apkBytes = tmp.readBytes()
+            checkSigner(ExtensionSignatures.verifyApk(apkBytes), requiredSigner, extension)
+            val manifest = ExtensionManifest.fromApk(apkBytes).also { checkManifest(it, extension, installedVersionCode) }
             val dir = packageDir(extension.pkgName)
             tmpJar = File.createTempFile("${manifest.versionCode}-converting-", ".jar.part", dir)
-            ApkConverter.convert(tmp, tmpJar)
+            ApkConverter.convert(apkBytes, tmpJar)
             val sha256 = ApkConverter.sha256Of(tmpJar)
+            tmpApk = File.createTempFile("${manifest.versionCode}-converting-", ".apk.part", dir)
+            tmpApk.writeBytes(apkBytes)
             val apk = File(dir, "${manifest.versionCode}.apk")
             val jar = File(dir, "${manifest.versionCode}.jar")
-            // The APK first: if the jar's move then fails, the old jar no longer matches its hash
-            // and the loader converts this APK again
-            Files.move(tmp.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
+            val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
+            try {
+                Files.move(tmpApk.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: Exception) {
+                PreviousFiles.restore(dir, manifest.versionCode)
+                throw e
+            }
             File(dir, "${manifest.versionCode}.sha256").delete()
             return Installed(
                 DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, apk, sha256),
                 Method.APK,
+                kept,
             )
         } finally {
             tmp.delete()
             tmpJar?.delete()
+            tmpApk?.delete()
         }
     }
 
     fun uninstall(pkgName: String) {
         // Loaded extensions run from memory (ExtensionClassLoader), so no file is held open
-        File(extensionsDir, pkgName).deleteRecursively()
+        checkedPackageDir(extensionsDir, pkgName).deleteRecursively()
     }
 
     private fun checkManifest(manifest: ExtensionManifest, extension: Extension.Available, installedVersionCode: Long?) {
@@ -167,10 +208,21 @@ class DesktopExtensionInstaller(
         try {
             // Code is downloaded over https only, also after redirects (see awaitSecureStoreResponse)
             client().awaitSecureStoreResponse(url).use { response ->
-                tmp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+                val limit = ExtensionLimits.MAX_DOWNLOAD_BYTES
+                val tooLarge = ExtensionException(
+                    ExtensionException.Stage.DOWNLOAD,
+                    "Download of $url is too large (over ${ExtensionLimits.megabytes(limit)} MB)",
+                )
+                if (response.body.contentLength() > limit) throw tooLarge
+                tmp.outputStream().use { out ->
+                    response.body.byteStream().copyAtMost(out, limit, ExtensionException.Stage.DOWNLOAD, url)
+                }
             }
         } catch (e: CancellationException) {
             // Cancelled, not failed: the caller's cancellation must go on
+            tmp.delete()
+            throw e
+        } catch (e: ExtensionException) {
             tmp.delete()
             throw e
         } catch (e: Exception) {
@@ -178,9 +230,5 @@ class DesktopExtensionInstaller(
             throw ExtensionException(ExtensionException.Stage.DOWNLOAD, "Download of $url failed: ${e.message}", e)
         }
         return tmp
-    }
-
-    companion object {
-        private val PACKAGE_NAME = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
     }
 }

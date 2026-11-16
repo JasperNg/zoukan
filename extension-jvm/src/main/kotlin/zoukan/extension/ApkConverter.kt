@@ -18,7 +18,7 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
-import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 /**
  * The fallback for stores that publish only APKs: converts an APK's dex code to a JVM jar with
@@ -33,12 +33,22 @@ import java.util.zip.ZipFile
  */
 object ApkConverter {
 
-    fun convert(apk: File, jar: File) {
+    /**
+     * Converts [apk], the bytes whose signature was verified; the file is never read again, so a
+     * swap on disk after the check cannot change what is converted.
+     */
+    fun convert(apk: ByteArray, jar: File) {
         val tmp = File(jar.path + ".tmp").apply { delete() }
         try {
+            if (apk.size > ExtensionLimits.MAX_DOWNLOAD_BYTES) {
+                throw ExtensionException(
+                    ExtensionException.Stage.CONVERT,
+                    "${jar.name}'s APK is too large (over ${ExtensionLimits.megabytes(ExtensionLimits.MAX_DOWNLOAD_BYTES)} MB)",
+                )
+            }
             val handler = BaksmaliBaseDexExceptionHandler()
             // MultiDexFileReader accepts the whole APK and reads every classes*.dex in it
-            Dex2jar.from(MultiDexFileReader.open(apk.readBytes()))
+            Dex2jar.from(MultiDexFileReader.open(apk))
                 .withExceptionHandler(handler)
                 .reUseReg(false)
                 .topoLogicalSort()
@@ -70,24 +80,51 @@ object ApkConverter {
         }
     }
 
-    private fun copyAssetsAndManifest(apk: File, jar: File) {
+    private fun copyAssetsAndManifest(apk: ByteArray, jar: File) {
         val manifest = ExtensionManifest.manifestXmlOfApk(apk)
         FileSystems.newFileSystem(URI.create("jar:" + jar.toURI()), emptyMap<String, Any>()).use { fs ->
             Files.writeString(fs.getPath("/AndroidManifest.xml"), manifest)
-            ZipFile(apk).use { zip ->
-                zip.entries().asSequence()
-                    .filter { it.name.startsWith("assets/") && !it.isDirectory }
-                    .forEach { entry ->
-                        val target = fs.getPath("/" + entry.name)
-                        target.parent?.let { Files.createDirectories(it) }
-                        zip.getInputStream(entry).use { Files.copy(it, target, StandardCopyOption.REPLACE_EXISTING) }
+            var count = 0
+            var entries = 0
+            var copied = 0L
+            ZipInputStream(apk.inputStream()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (++entries > ExtensionLimits.MAX_ENTRIES * 4) {
+                        throw ExtensionException(ExtensionException.Stage.CONVERT, "The APK has too many entries")
                     }
+                    if (!entry.name.startsWith("assets/") || entry.isDirectory) continue
+                    if (++count > ExtensionLimits.MAX_ENTRIES) {
+                        throw ExtensionException(
+                            ExtensionException.Stage.CONVERT,
+                            "The APK has too many assets (over ${ExtensionLimits.MAX_ENTRIES})",
+                        )
+                    }
+                    val target = fs.getPath("/" + entry.name)
+                    target.parent?.let { Files.createDirectories(it) }
+                    // The zipfs of the jar is in memory until it closes, so the copy is capped
+                    val limit = minOf(ExtensionLimits.MAX_ENTRY_BYTES, ExtensionLimits.MAX_TOTAL_BYTES - copied)
+                    Files.newOutputStream(target).use { out ->
+                        copied += zip.copyAtMost(out, limit, ExtensionException.Stage.CONVERT, entry.name)
+                    }
+                }
             }
         }
     }
 
     /** The hex SHA-256 of [file], like the certificate fingerprints in ExtensionSignatures. */
-    fun sha256Of(file: File): String = sha256Of(file.readBytes())
+    fun sha256Of(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     fun sha256Of(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

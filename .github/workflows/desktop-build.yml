@@ -2,11 +2,13 @@
 # Windows x64 MSI and the Apple Silicon DMG, and publishes them as a GitHub release, which the
 # in-app update check finds (tag desktop-v<version>).
 #
-# Each release bumps PATCH over the newest desktop-v* tag. zoukanVersion in desktop/build.gradle.kts
+# Each release bumps PATCH over the newest desktop-v* tag. zoukan.versionFloor in gradle.properties
 # is the floor: raise it there for a new MINOR or MAJOR and the next merge releases that version.
 # The installers are unsigned on purpose: the project does not sign its builds.
-# Before anything is published, each job starts the packaged app (`Zoukan selftest --ui`), so a
-# build that crashes on startup is never released.
+# Before anything is published, each job installs the installer it built (the MSI, or the app
+# copied out of the mounted DMG) and runs the installed app's self-test, so an installer that
+# fails to install or an app that crashes on startup is never released. The release is also published only after the
+# CI check (ci.yml, called as the tests job) passed on the same commit.
 name: Desktop installers
 
 on:
@@ -20,11 +22,15 @@ on:
       - 'desktop/reports/**'
       - 'LICENSE'
   pull_request:
-    paths: [.github/workflows/desktop-build.yml]
+    paths:
+      - .github/workflows/desktop-build.yml
+      - desktop/packaging/**
+      - desktop/packaging.gradle.kts
   workflow_dispatch:
 
 # Pull requests cancel their older runs. Runs on master queue instead, so each release sees the
-# tag of the one before it and no two releases pick the same version.
+# tag of the one before it and no two releases pick the same version. GitHub keeps one waiting run
+# per group: a newer merge replaces a waiting run, and that commit ships in the next release.
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -33,14 +39,20 @@ permissions:
   contents: read
 
 jobs:
+  # The installers build beside the tests; only publishing waits for them
+  tests:
+    name: Tests of this commit
+    uses: ./.github/workflows/ci.yml
+
   version:
     name: Pick the version
-    runs-on: ubuntu-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.pick.outputs.version }}
       release: ${{ steps.pick.outputs.release }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -49,8 +61,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          floor=$(sed -nE 's/^[[:space:]]*\?: "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' desktop/build.gradle.kts | head -n1)
-          [ -n "$floor" ] || { echo "No zoukanVersion found in desktop/build.gradle.kts"; exit 1; }
+          floor=$(sed -nE 's/^zoukan\.versionFloor=([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$/\1/p' gradle.properties)
+          if [ "$(printf '%s' "$floor" | grep -c '^')" != 1 ]; then
+            echo "::error::gradle.properties must hold exactly one zoukan.versionFloor=MAJOR.MINOR.PATCH line (found: '$floor')"
+            exit 1
+          fi
+          echo "Version floor from gradle.properties: $floor"
           latest=$(git tag --list 'desktop-v*' | sed 's/^desktop-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           if [ -z "$latest" ]; then
             version=$floor
@@ -73,10 +89,11 @@ jobs:
   windows:
     name: Windows x64 MSI
     needs: version
-    runs-on: windows-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: windows-2025-vs2026
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # The installer bundles a runtime made with jlink from this JDK, so it must be a full JDK 21
       # with jmods: JetBrains Runtime, the plan's choice
@@ -85,35 +102,42 @@ jobs:
       # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file.
       - name: Download JetBrains Runtime
         shell: bash
-        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-windows-x64-b1163.125.zip" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-windows-x64-b1163.125.zip"
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-windows-x64-b1163.125.zip" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-windows-x64-b1163.125.zip"
+          # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
+          echo "9d244c480cc3b5b77c06753ad8f32e2f40ded94ee02fc3ff6c2bee06fac3d5f1cc42cb1f7b7fa8f8a6e0b14a7dafa2451cd2781d6d5f1c2f598c511f53e2ffe9  jbrsdk-21.0.11-windows-x64-b1163.125.zip" | sha512sum -c -
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: jdkfile
           jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-windows-x64-b1163.125.zip
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
 
       - name: Build the MSI
         shell: pwsh
         run: .\gradlew.bat :desktop:packageMsi "-Pzoukan.version=${{ needs.version.outputs.version }}"
 
-      # Start the packaged app (the folder the MSI installs) before it can be released: its
-      # self-test starts the runtime in a throwaway profile, opens the encrypted database, loads
-      # extensions and draws the main window, so a build that crashes on startup fails here.
-      # The launcher has no console on Windows, so the result comes from the report and exit code.
-      - name: Start the packaged app
+      # Install the MSI it will publish (per user, silently) and run the installed app's self-test
+      # (throwaway profile, database, extensions, main window, network), then uninstall. A broken
+      # installer or a build that crashes on startup fails here and is never released.
+      - name: Install the MSI and start the installed app
         shell: pwsh
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
-          $report = Join-Path $env:RUNNER_TEMP "selftest-windows.md"
-          $app = Start-Process -FilePath "desktop\build\packaging\app\Zoukan\Zoukan.exe" `
-            -ArgumentList "selftest", "--ui", "--report", "`"$report`"" -Wait -PassThru
-          if (Test-Path $report) { Get-Content $report } else { Write-Host "No self-test report was written" }
-          if ($app.ExitCode -ne 0) { Write-Error "The packaged app's self-test failed (exit code $($app.ExitCode))"; exit 1 }
+          & desktop\packaging\check\install-check-windows.ps1 -SkipBuild
+          if ($LASTEXITCODE -ne 0) { Write-Error "The installed app's check failed"; exit 1 }
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: install-check-windows
+          path: desktop/build/reports/install/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: zoukan-windows-x64
           path: desktop/build/packaging/installers/*.msi
@@ -122,43 +146,47 @@ jobs:
   macos:
     name: macOS arm64 DMG
     needs: version
-    runs-on: macos-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: macos-26
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # setup-java's jetbrains distribution looks the release up through the GitHub API without a
       # token, which the shared hosted-runner IPs often hit the rate limit on. Download a pinned
       # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file.
       - name: Download JetBrains Runtime
         shell: bash
-        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz"
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz"
+          # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
+          echo "4b2769d097547b70df3cd8ff49d137579acb7fea874419052ec3450565665dc3262caa9a7a9f7e9ca611fd02650eb002845b3cd029cebc300eb00dd00ef45c43  jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" | shasum -a 512 -c -
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: jdkfile
           jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
 
       - name: Build the DMG
         run: ./gradlew :desktop:packageDmg "-Pzoukan.version=${{ needs.version.outputs.version }}"
 
-      # Start the packaged app (the one inside the DMG) before it can be released, as on Windows
-      - name: Start the packaged app
-        timeout-minutes: 10
-        run: |
-          report="$RUNNER_TEMP/selftest-macos.md"
-          status=0
-          desktop/build/packaging/app/Zoukan.app/Contents/MacOS/Zoukan selftest --ui --report "$report" || status=$?
-          if [ "$status" -ne 0 ]; then
-            [ -f "$report" ] || echo "No self-test report was written"
-            echo "::error::The packaged app's self-test failed (exit code $status)"
-            exit 1
-          fi
+      # Mount the DMG it will publish, copy the app out and run its self-test, as on Windows
+      - name: Mount the DMG and start the app from it
+        timeout-minutes: 15
+        run: desktop/packaging/check/install-check-macos.sh --skip-build
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: install-check-macos
+          path: desktop/build/reports/install/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: zoukan-macos-arm64
           path: desktop/build/packaging/installers/*.dmg
@@ -166,18 +194,19 @@ jobs:
 
   release:
     name: Publish the release
-    needs: [version, windows, macos]
+    needs: [version, tests, windows, macos]
     if: needs.version.outputs.release == 'true'
-    runs-on: ubuntu-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           path: installers
           merge-multiple: true
@@ -187,9 +216,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
+          ZOUKAN_RELEASE_SIGNING_KEY: ${{ secrets.ZOUKAN_RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
           ls -l installers
+          # Every installer gets a detached Ed25519 signature that the app checks; with no key
+          # nothing is published, so an unsigned release cannot go out
+          [ -n "$ZOUKAN_RELEASE_SIGNING_KEY" ] || { echo "release signing key missing"; exit 1; }
+          umask 077
+          # The private key is removed even when signing or checking fails
+          trap 'rm -f "$RUNNER_TEMP/release-key.pem"' EXIT
+          printf '%s\n' "$ZOUKAN_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-key.pem"
+          for f in installers/*.msi installers/*.dmg; do
+            name=$(basename "$f")
+            sum=$(sha256sum "$f" | cut -d' ' -f1)
+            printf 'zoukan-release-v1\n%s\n%s\n' "$name" "$sum" > "$RUNNER_TEMP/statement"
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/release-key.pem" -rawin -in "$RUNNER_TEMP/statement" -out "$f.sig"
+            openssl pkeyutl -verify -pubin -inkey desktop/src/main/resources/zoukan-release-key.pem -rawin -in "$RUNNER_TEMP/statement" -sigfile "$f.sig"
+          done
+          rm -f "$RUNNER_TEMP/release-key.pem"
           previous=$(git tag --list 'desktop-v*' | sed 's/^desktop-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           cat > notes.md <<'EOF'
           Built by GitHub Actions from the merge to master.
@@ -198,4 +243,4 @@ jobs:
           EOF
           args=(--target "$GITHUB_SHA" --title "Zoukan $VERSION" --notes-file notes.md --generate-notes --latest)
           if [ -n "$previous" ]; then args+=(--notes-start-tag "desktop-v$previous"); fi
-          gh release create "desktop-v$VERSION" installers/*.msi installers/*.dmg "${args[@]}"
+          gh release create "desktop-v$VERSION" installers/*.msi installers/*.dmg installers/*.sig "${args[@]}"

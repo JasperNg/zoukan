@@ -1,24 +1,11 @@
 // ZOUKAN -->
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // Desktop extension runtime: installs extensions from extension stores (an extension store's signed JVM
 // jars, or an APK converted with dex2jar when a store has no jar), checks their signatures, and
 // loads their sources in a child-first class loader.
 plugins {
-    kotlin("jvm")
+    id("zoukan.jvm")
     kotlin("plugin.serialization")
     id("mihon.code.lint")
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
-    }
 }
 
 dependencies {

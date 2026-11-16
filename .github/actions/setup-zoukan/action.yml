@@ -1,0 +1,47 @@
+# Downloads the pinned JetBrains Runtime for this runner's OS from JetBrains' CDN (setup-java's
+# jetbrains distribution hits GitHub API rate limits), hands it to setup-java as a local file and
+# sets up Gradle. Keep the version in step with desktop-build.yml, which still has its own copy.
+name: Set up JDK and Gradle
+description: Pinned JetBrains Runtime 21 plus gradle/actions/setup-gradle
+inputs:
+  cache-read-only:
+    description: "'true' to only read the Gradle cache (PRs, nightly); 'false' on master pushes"
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Download JetBrains Runtime
+      id: jbr
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Pinned SHA-512 of each exact JetBrains Runtime build; change it together with the file name.
+        case "$RUNNER_OS" in
+          Linux)
+            file=jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz
+            sha=690fbea6224aeb57478f98ad56671fdbb6e927b3513555e78088f276552c554fe672705e9c6da4a65ed8279846f42e0756bae539d8282bee01f78d2fd68f846a ;;
+          Windows)
+            file=jbrsdk-21.0.11-windows-x64-b1163.125.zip
+            sha=9d244c480cc3b5b77c06753ad8f32e2f40ded94ee02fc3ff6c2bee06fac3d5f1cc42cb1f7b7fa8f8a6e0b14a7dafa2451cd2781d6d5f1c2f598c511f53e2ffe9 ;;
+          macOS)
+            file=jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz
+            sha=4b2769d097547b70df3cd8ff49d137579acb7fea874419052ec3450565665dc3262caa9a7a9f7e9ca611fd02650eb002845b3cd029cebc300eb00dd00ef45c43 ;;
+          *) echo "::error::No JetBrains Runtime pinned for $RUNNER_OS"; exit 1 ;;
+        esac
+        cd "$RUNNER_TEMP"
+        curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/$file" "https://cache-redirector.jetbrains.com/intellij-jbr/$file"
+        if command -v sha512sum > /dev/null; then
+          echo "$sha  $file" | sha512sum -c -
+        else
+          echo "$sha  $file" | shasum -a 512 -c -
+        fi
+        echo "file=$RUNNER_TEMP/$file" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      with:
+        distribution: jdkfile
+        jdkFile: ${{ steps.jbr.outputs.file }}
+        java-version: 21
+    - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      with:
+        cache-read-only: ${{ inputs.cache-read-only }}

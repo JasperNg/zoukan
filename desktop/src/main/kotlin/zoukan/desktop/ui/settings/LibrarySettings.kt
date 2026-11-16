@@ -16,9 +16,9 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
@@ -191,6 +191,6 @@ private fun CategorizedDisplayPreference() {
     val scope = rememberCoroutineScope()
     SwitchSetting(localized(MR.strings.categorized_display_settings), checked = value) { on ->
         preferences.categorizedDisplaySettings().set(on)
-        if (!on) scope.launch { runCatching { Injekt.get<tachiyomi.domain.category.interactor.ResetCategoryFlags>().await() } }
+        if (!on) scope.launch { zoukan.desktop.app.runCatchingCancellable { Injekt.get<tachiyomi.domain.category.interactor.ResetCategoryFlags>().await() } }
     }
 }

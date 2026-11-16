@@ -128,7 +128,7 @@ fun PageActionsDialog(
                     onSetAsCover(index)
                     coverOf = null
                     onDismiss()
-                }) { Text("OK") }
+                }) { Text(localized(MR.strings.action_ok)) }
             },
             dismissButton = { TextButton(onClick = { coverOf = null }) { Text(localized(MR.strings.action_cancel)) } },
         )

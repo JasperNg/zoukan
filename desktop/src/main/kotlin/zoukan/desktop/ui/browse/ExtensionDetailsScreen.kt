@@ -54,21 +54,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import mihon.domain.extension.interactor.GetExtensionStores
+import mihon.domain.extension.model.ExtensionStore
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.security.Incognito
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.extension.DesktopExtensionManager
@@ -84,6 +86,7 @@ class ExtensionDetailsScreenModel(
     private val sourceManager: SourceManager = Injekt.get(),
     private val preferences: SourcePreferences = Injekt.get(),
     private val incognito: Incognito = Injekt.get(),
+    private val getStores: GetExtensionStores = Injekt.get(),
 ) : StateScreenModel<ExtensionDetailsScreenModel.State>(State()) {
 
     data class SourceItem(val source: Source, val enabled: Boolean, val configurable: Boolean)
@@ -94,6 +97,8 @@ class ExtensionDetailsScreenModel(
         val sources: List<SourceItem> = emptyList(),
         val incognito: Boolean = false,
         val uninstalled: Boolean = false,
+        /** The extension stores, to show the extension's store under the name the Stores tab uses */
+        val stores: List<ExtensionStore> = emptyList(),
     )
 
     init {
@@ -103,7 +108,8 @@ class ExtensionDetailsScreenModel(
                 extensionManager.availableExtensionsFlow,
                 preferences.disabledSources().changes(),
                 preferences.incognitoExtensions().changes(),
-            ) { installed, available, disabled, incognitoPkgs ->
+                getStores.subscribe(),
+            ) { installed, available, disabled, incognitoPkgs, stores ->
                 val extension = installed[pkgName]
                 State(
                     extension = extension,
@@ -118,6 +124,7 @@ class ExtensionDetailsScreenModel(
                         .sortedWith(compareBy({ !it.enabled }, { languageName(it.source.lang).lowercase() }, { it.source.name.lowercase() })),
                     incognito = pkgName in incognitoPkgs,
                     uninstalled = extension == null && state.value.extension != null,
+                    stores = stores,
                 )
             }.collect { new -> mutableState.update { new } }
         }
@@ -223,7 +230,7 @@ data class ExtensionDetailsScreen(val pkgName: String) : Screen {
                         InfoText(extension.versionName, localized(MR.strings.version))
                         InfoText(languageName(extension.lang), localized(MR.strings.action_display_language_badge))
                         if (extension.isNsfw) InfoText("18+", localized(MR.strings.ext_info_age_rating), error = true)
-                        extension.storeName?.let { InfoText(it, localized(DMR.strings.store)) }
+                        storeLabel(extension, state.stores)?.let { InfoText(it, localized(DMR.strings.store)) }
                     }
                 }
                 item(key = "actions") {

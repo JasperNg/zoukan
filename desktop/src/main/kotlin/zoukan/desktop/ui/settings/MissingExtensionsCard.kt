@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.settings.MissingExtensionsInstall.State

@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import exh.log.EHLogLevel
 import logcat.LogPriority
 import okhttp3.Cache
+import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -59,12 +60,15 @@ import kotlin.random.Random
                 // ZOUKAN -->
                 // Logs get shared; sessions and tokens must not be in them
                 listOf("Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie").forEach(::redactHeader)
+                // URLs are logged as upstream does, without the values of query parameters that
+                // commonly carry credentials
+                redactQueryParams(*REDACTED_QUERY_PARAMS)
                 // ZOUKAN <--
             }
             builder.addNetworkInterceptor(httpLoggingInterceptor)
         }
 
-        when (preferences.dohProvider().get()) {
+        when (/* ZOUKAN --> */supportedDohProvider(/* ZOUKAN <-- */preferences.dohProvider().get()/* ZOUKAN --> */)/* ZOUKAN <-- */) {
             PREF_DOH_CLOUDFLARE -> builder.dohCloudflare()
             PREF_DOH_GOOGLE -> builder.dohGoogle()
             PREF_DOH_ADGUARD -> builder.dohAdGuard()
@@ -72,11 +76,11 @@ import kotlin.random.Random
             PREF_DOH_ALIDNS -> builder.dohAliDNS()
             PREF_DOH_DNSPOD -> builder.dohDNSPod()
             PREF_DOH_360 -> builder.doh360()
-            PREF_DOH_QUAD101 -> builder.dohQuad101()
+            // ZOUKAN: Quad101 removed (read as Cloudflare)
             PREF_DOH_MULLVAD -> builder.dohMullvad()
             PREF_DOH_CONTROLD -> builder.dohControlD()
             PREF_DOH_NJALLA -> builder.dohNajalla()
-            PREF_DOH_SHECAN -> builder.dohShecan()
+            // ZOUKAN: Shecan removed (read as Cloudflare)
             else -> builder
         }
     }
@@ -88,6 +92,30 @@ import kotlin.random.Random
             )
             .build()
     }
+
+    // ZOUKAN -->
+    /**
+     * [client] without its cookies, cache, user agent, logging or Cloudflare solver, and with
+     * OkHttp's default timeouts: what `OkHttpClient()` gives, but with this client's DNS (over
+     * HTTPS when it is set) and connection pool. For services that are not sources (sync, E-Hentai's
+     * settings) and send their own headers. A client of its own would resolve names through the
+     * system's DNS, and leak them when DNS over HTTPS is on.
+     */
+    val plainClient: OkHttpClient by lazy {
+        client.newBuilder()
+            .apply {
+                interceptors().clear()
+                networkInterceptors().clear()
+            }
+            .cookieJar(CookieJar.NO_COOKIES)
+            .cache(null)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.SECONDS)
+            .build()
+    }
+    // ZOUKAN <--
 
     // KMK -->
     /**
@@ -204,5 +232,13 @@ import kotlin.random.Random
         // KMK -->
         private const val MAX_RETRY = 5
         // KMK <--
+
+        // ZOUKAN -->
+        /** Query parameters whose values verbose network logging leaves out. */
+        internal val REDACTED_QUERY_PARAMS = arrayOf(
+            "token", "access_token", "refresh_token", "id_token", "key", "api_key", "apikey",
+            "password", "pass", "sid", "session", "sessionid", "auth", "signature", "sig",
+        )
+        // ZOUKAN <--
     }
 }

@@ -6,6 +6,7 @@ import com.sun.jna.win32.StdCallLibrary
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -33,18 +34,28 @@ object PowerStatus {
         }
     }
 
-    private fun mac(): Boolean? {
-        val process = ProcessBuilder("pmset", "-g", "ps").redirectErrorStream(true).start()
-        val out = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(5, TimeUnit.SECONDS)) {
-            process.destroy()
+    private fun mac(): Boolean? =
+        parsePmset(readOutput(ProcessBuilder("pmset", "-g", "ps").redirectErrorStream(true).start(), timeoutMillis = 5_000))
+
+    /** The process's output, or null when it does not end within the timeout. */
+    internal fun readOutput(process: Process, timeoutMillis: Long): String? {
+        // Read on another thread: a read on this one blocks until the process ends, so the wait
+        // below would never get to apply its timeout.
+        val output = CompletableFuture.supplyAsync { process.inputStream.bufferedReader().readText() }
+        if (!process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
+            logcat(LogPriority.WARN) { "Reading the power status timed out" }
+            process.destroyForcibly()
+            output.cancel(true)
             return null
         }
-        return when {
-            "AC Power" in out -> true
-            "Battery Power" in out -> false
-            else -> null
-        }
+        return runCatching { output.get(1, TimeUnit.SECONDS) }.getOrNull()
+    }
+
+    internal fun parsePmset(out: String?): Boolean? = when {
+        out == null -> null
+        "AC Power" in out -> true
+        "Battery Power" in out -> false
+        else -> null
     }
 
     private fun linux(): Boolean? {

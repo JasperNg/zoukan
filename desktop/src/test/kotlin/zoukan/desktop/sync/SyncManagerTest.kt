@@ -5,6 +5,7 @@ import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -55,5 +56,49 @@ class SyncManagerTest {
         manager.isDue(now + 60_000) shouldBe false
         // It retries after the interval (30 minutes, shorter than an hour)
         manager.isDue(now + 31 * 60_000) shouldBe true
+    }
+
+    @Test
+    fun `plain http is allowed only for this computer and the local network`() {
+        listOf(
+            "https://example.com",
+            "http://localhost:8080",
+            "http://127.0.0.1",
+            "http://[::1]",
+            "http://192.168.1.10",
+            "http://10.0.0.2",
+            "http://172.16.5.1",
+            "http://nas.local",
+        ).forEach { SyncManager.isAllowedSyncUrl(it) shouldBe true }
+        listOf(
+            "http://example.com",
+            "http://8.8.8.8",
+            "http://172.32.0.1",
+            "ftp://example.com",
+            "",
+        ).forEach { SyncManager.isAllowedSyncUrl(it) shouldBe false }
+    }
+
+    @Test
+    fun `a default sync uploads no private settings`() {
+        preferences.getSyncSettings().privateSettings shouldBe false
+    }
+
+    @Test
+    fun `a sync to a public host over plain http is refused before anything is sent`() {
+        preferences.syncInterval().set(30)
+        preferences.syncService().set(SyncManager.SyncService.WEB_DAV.value)
+        preferences.webDavUrl().set("http://example.com/dav")
+        preferences.webDavUsername().set("user")
+        preferences.webDavPassword().set("secret")
+        runBlocking { manager.syncData() }
+        coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
+        manager.isDue(System.currentTimeMillis() + 60_000) shouldBe false
+
+        preferences.syncService().set(SyncManager.SyncService.SYNCYOMI.value)
+        preferences.clientHost().set("http://sync.example.com")
+        runBlocking { manager.syncData() }
+        coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
+        manager.isDue(System.currentTimeMillis() + 60_000) shouldBe false
     }
 }

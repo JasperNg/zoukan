@@ -63,7 +63,11 @@ class SyncPreferences(
             appSettings = preferenceStore.getBoolean("sync_appSettings", true).get(),
             extensionStores = preferenceStore.getBoolean("sync_extensionStores", true).get(),
             sourceSettings = preferenceStore.getBoolean("sync_sourceSettings", true).get(),
-            privateSettings = preferenceStore.getBoolean("sync_privateSettings", true).get(),
+            // ZOUKAN -->
+            // Off by default on desktop (Android keeps it on): tracker tokens and logins leave
+            // this computer only when the user ticks it
+            privateSettings = preferenceStore.getBoolean("sync_privateSettings", false).get(),
+            // ZOUKAN <--
 
             // SY -->
             customInfo = preferenceStore.getBoolean("sync_customInfo", true).get(),

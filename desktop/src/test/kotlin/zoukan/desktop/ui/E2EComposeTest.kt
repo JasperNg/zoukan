@@ -7,11 +7,11 @@ import kotlin.coroutines.CoroutineContext
 /**
  * The effect context for end-to-end UI tests. By default the Compose test runs effects on an
  * UnconfinedTestDispatcher, so a collector (collectAsState, produceState) resumes on whichever
- * thread emitted: in these tests the Android main looper, which is Dispatchers.Main here. Its
- * state write then races the composition on the test thread, and about one run in ten on Windows
- * the screen never recomposed for it. In the app, effects and composition share the Swing thread.
- * A StandardTestDispatcher queues every resumption and runs it on the test thread between frames,
- * as the app does.
+ * thread emitted: a collector that emits on Dispatchers.Main (the Swing event thread, as in the
+ * app) writes its state on that thread, which then races the composition on the test thread, and
+ * about one run in ten on Windows the screen never recomposed for it. In the app, effects and
+ * composition share the Swing thread. A StandardTestDispatcher queues every resumption and runs it
+ * on the test thread between frames, as before.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 fun e2eEffectContext(): CoroutineContext = StandardTestDispatcher()

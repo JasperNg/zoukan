@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
@@ -43,7 +45,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.settings.CategoriesIncludeExcludeDialog
 import zoukan.i18n.desktop.DMR
@@ -105,18 +109,19 @@ fun LibrarySettingsDialog(model: LibraryScreenModel, onDismiss: () -> Unit) {
 @Composable
 internal fun TriStateRow(label: String, preference: Preference<TriState>, notLabel: String? = null) {
     val value by preference.collectAsState()
+    val state = when (value) {
+        TriState.DISABLED -> ToggleableState.Off
+        TriState.ENABLED_IS -> ToggleableState.On
+        TriState.ENABLED_NOT -> ToggleableState.Indeterminate
+    }
     Row(
-        Modifier.fillMaxWidth().clickable { preference.set(value.next()) }.padding(vertical = 2.dp),
+        Modifier
+            .fillMaxWidth()
+            .triStateToggleable(state = state, role = Role.Checkbox) { preference.set(value.next()) }
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TriStateCheckbox(
-            state = when (value) {
-                TriState.DISABLED -> ToggleableState.Off
-                TriState.ENABLED_IS -> ToggleableState.On
-                TriState.ENABLED_NOT -> ToggleableState.Indeterminate
-            },
-            onClick = { preference.set(value.next()) },
-        )
+        TriStateCheckbox(state = state, onClick = null)
         Text(if (value == TriState.ENABLED_NOT) notLabel ?: localized(DMR.strings.not, label).replaceFirstChar { it.uppercase() } else label)
     }
 }
@@ -185,10 +190,10 @@ private fun SortPage(model: LibraryScreenModel, sort: LibrarySort) {
 private fun CheckRow(label: String, preference: Preference<Boolean>) {
     val value by preference.collectAsState()
     Row(
-        Modifier.fillMaxWidth().clickable { preference.set(!value) }.padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().checkRow(value) { preference.set(it) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(value, onCheckedChange = { preference.set(it) })
+        Checkbox(value, onCheckedChange = null)
         Text(label)
     }
 }
@@ -200,10 +205,10 @@ private fun DisplayPage(model: LibraryScreenModel) {
     Text(localized(MR.strings.action_display_mode), style = MaterialTheme.typography.labelLarge)
     DISPLAY_MODES.forEach { (value, label) ->
         Row(
-            Modifier.fillMaxWidth().clickable { p.displayMode().set(value) },
+            Modifier.fillMaxWidth().radioRow(mode == value) { p.displayMode().set(value) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(mode == value, onClick = { p.displayMode().set(value) })
+            RadioButton(mode == value, onClick = null)
             Text(label)
         }
     }
@@ -257,10 +262,10 @@ private fun GroupPage(model: LibraryScreenModel) {
     val group by p.collectAsState()
     GROUPS.forEach { (value, label) ->
         Row(
-            Modifier.fillMaxWidth().clickable { p.set(value) },
+            Modifier.fillMaxWidth().radioRow(group == value) { p.set(value) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(group == value, onClick = { p.set(value) })
+            RadioButton(group == value, onClick = null)
             Text(label)
         }
     }
@@ -281,10 +286,10 @@ private fun CategoriesFilter(model: LibraryScreenModel) {
     val categories = model.state.collectAsState().value.categories.filterNot { it.isSystemCategory }
     var dialog by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().clickable { p.filterCategories().set(!enabled) }.padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().checkRow(enabled) { p.filterCategories().set(it) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(enabled, onCheckedChange = { p.filterCategories().set(it) })
+        Checkbox(enabled, onCheckedChange = null)
         Text(localized(MR.strings.categories), Modifier.weight(1f))
         TextButton(onClick = { dialog = true }) { Text(localized(MR.strings.action_edit)) }
     }

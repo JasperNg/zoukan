@@ -27,8 +27,11 @@ kotlin {
                 implementation(projects.core.common)
 
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
-                implementation(kotlinx.bundles.coroutines)
-                implementation(kotlinx.bundles.serialization)
+                implementation(kotlinx.coroutines.core)
+                implementation(kotlinx.serialization.json)
+                implementation(kotlinx.serialization.json.okio)
+                implementation(kotlinx.serialization.protobuf)
+                implementation(kotlinx.serialization.xml)
 
                 api(libs.sqldelight.android.paging)
 
@@ -42,6 +45,12 @@ kotlin {
         androidMain {
             dependencies {
                 implementation(libs.unifile)
+
+                // Android only: the desktop app uses Swing's main dispatcher and the JVM XML core
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.coroutines.android)
+                implementation(kotlinx.coroutines.guava)
+                implementation(kotlinx.serialization.xml.core)
             }
         }
         androidUnitTest {

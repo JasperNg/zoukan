@@ -1,6 +1,7 @@
 package zoukan.extension
 
 import eu.kanade.tachiyomi.extension.model.Extension
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -19,7 +20,10 @@ import mihon.domain.extension.model.ExtensionStore
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.buffer
+import okio.source
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -28,6 +32,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import kotlin.random.Random
 
 /**
  * Updates are pinned to the installed signer, as on Android: a build signed with another key is
@@ -134,7 +139,7 @@ class DesktopExtensionManagerTest {
         )
     }
 
-    private fun manager(): DesktopExtensionManager {
+    private fun manager(extensionsDir: File = this.extensionsDir): DesktopExtensionManager {
         val trust = mockk<ExtensionTrust> { every { isTrusted(any(), any(), any(), any()) } returns true }
         return DesktopExtensionManager(
             loader = DesktopExtensionLoader(extensionsDir, trust, FakeConvertedJarHashes()),
@@ -157,6 +162,69 @@ class DesktopExtensionManagerTest {
 
     private fun installedVersions(): List<String> =
         File(extensionsDir, pkgName).listFiles().orEmpty().map { it.name }.sorted()
+
+    @Test
+    fun `uninstall refuses a package name outside the extensions folder`() = withStubbedSignatures {
+        // The data root lives inside the test's temp folder, so only test files can be lost
+        val dataRoot = File(extensionsDir, "data-root")
+        val extDir = File(dataRoot, "extensions").apply { mkdirs() }
+        val random = Random(1)
+        val survivors = listOf(
+            File(dataRoot, "backups/zoukan_2026-11-15.tachibk"),
+            File(dataRoot, "zoukan.db"),
+            File(dataRoot, "downloads/Source/Manga/Chapter 1.cbz"),
+            File(extDir, "$pkgName/3.jar"),
+        ).associateWith { random.nextBytes(4096) }
+        survivors.forEach { (file, bytes) ->
+            file.parentFile.mkdirs()
+            file.writeBytes(bytes)
+        }
+        val manager = manager(extDir)
+
+        listOf("..", ".", "", "../backups", "a/../..").forEach { name ->
+            shouldThrow<IllegalArgumentException> { manager.uninstall(name) }
+        }
+
+        extDir.isDirectory shouldBe true
+        survivors.forEach { (file, bytes) ->
+            file.isFile shouldBe true
+            file.readBytes().contentEquals(bytes) shouldBe true
+        }
+    }
+
+    @Test
+    fun `start removes leftover temp files and keeps the installed files`() = withStubbedSignatures {
+        manager().installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
+        File(extensionsDir, "$pkgName/notes.txt").writeText("my notes")
+        File(extensionsDir, "readme.txt").writeText("readme")
+        val kept = extensionsDir.walkTopDown().filter { it.isFile }
+            .associate { it.relativeTo(extensionsDir).path to it.readBytes() }
+        // What a killed install leaves behind, named as the installer and converter name them
+        val leftovers = listOf(
+            File(extensionsDir, "$pkgName-123456789.jar"),
+            File(extensionsDir, "$pkgName-987654321.apk"),
+            File(extensionsDir, "$pkgName/3-converting-42.jar.part"),
+            File(extensionsDir, "$pkgName/3-converting-42.jar.part.tmp"),
+            File(extensionsDir, "$pkgName/3-converting-42.jar.part-dex2jar-error.txt"),
+            File(extensionsDir, "$pkgName/3-converting-43.apk.part"),
+            File(extensionsDir, "$pkgName/3.jar.tmp"),
+            File(extensionsDir, "$pkgName/3.jar-dex2jar-error.txt"),
+        )
+        leftovers.forEach {
+            it.writeText("leftover")
+            it.setLastModified(System.currentTimeMillis() - 3_600_000)
+        }
+
+        val restarted = manager()
+        restarted.init()
+
+        leftovers.forEach { it.exists() shouldBe false }
+        kept.forEach { (path, bytes) ->
+            File(extensionsDir, path).readBytes().contentEquals(bytes) shouldBe true
+        }
+        restarted.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>()
+            .versionCode shouldBe 3
+    }
 
     @Test
     fun `an update signed by another key stays refused after a failed attempt`() = withStubbedSignatures {
@@ -219,6 +287,34 @@ class DesktopExtensionManagerTest {
     }
 
     @Test
+    fun `a store download over the size limit is refused and leaves no file`() {
+        val big = File(storeDir, "big.jar")
+        big.outputStream().use { out ->
+            val chunk = ByteArray(1024 * 1024)
+            repeat(60) { out.write(chunk) }
+        }
+        // Streams the body, so the test does not hold 60 MB in memory
+        val streamingClient = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(big.source().buffer().asResponseBody(null, big.length()))
+                    .build()
+            }
+            .build()
+        val installer = DesktopExtensionInstaller(extensionsDir) { streamingClient }
+        val offer = offer(3, "key-a").copy(jarUrl = "https://store-key-a.example/big.jar")
+
+        val error = shouldThrow<ExtensionException> { runBlocking { installer.install(offer) } }
+
+        error.stage shouldBe ExtensionException.Stage.DOWNLOAD
+        extensionsDir.listFiles().orEmpty().filter { it.isFile }.shouldBeEmpty()
+    }
+
+    @Test
     fun `an update that fails to load keeps the working version`() = withStubbedSignatures {
         val manager = manager()
         manager.installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
@@ -230,6 +326,42 @@ class DesktopExtensionManagerTest {
         manager.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>().versionCode shouldBe 3
         manager.loadErrorsFlow.value[pkgName] shouldBe null
         // The broken files are gone, so the next start loads version 3 again
+        installedVersions() shouldBe listOf("3.jar")
+    }
+
+    @Test
+    fun `a same-version reinstall that fails to load keeps the working files`() = withStubbedSignatures {
+        val manager = manager()
+        manager.installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
+        val before = File(extensionsDir, pkgName).listFiles()!!.associate { it.name to it.readBytes() }
+
+        val result = manager.installExtension(offer(3, "key-a", sourceClass = "zoukan.extension.Missing"))
+
+        result.shouldBeInstanceOf<LoadResult.Error>().error.stage shouldBe ExtensionException.Stage.LOAD
+        manager.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>().versionCode shouldBe 3
+        manager.loadErrorsFlow.value[pkgName] shouldBe null
+        before.forEach { (name, bytes) ->
+            File(extensionsDir, "$pkgName/$name").readBytes().contentEquals(bytes) shouldBe true
+        }
+        installedVersions() shouldBe before.keys.sorted()
+
+        // The next start loads the working jar, not the broken one
+        manager().also { it.init() }.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>()
+    }
+
+    @Test
+    fun `start puts back the files of a reinstall that never confirmed`() = withStubbedSignatures {
+        val first = manager()
+        first.installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
+        val dir = File(extensionsDir, pkgName)
+        val working = File(dir, "3.jar").readBytes()
+        // The app stopped after the working jar was moved aside and a broken one put in its place
+        File(dir, "3.jar").renameTo(File(dir, "3.jar.previous"))
+        File(dir, "3.jar").writeBytes(byteArrayOf(1, 2, 3))
+
+        manager().also { it.init() }.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>()
+
+        File(dir, "3.jar").readBytes().contentEquals(working) shouldBe true
         installedVersions() shouldBe listOf("3.jar")
     }
 

@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -279,6 +281,7 @@ private fun InfoHeader(
                 Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                val coverLabel = localized(MR.strings.manga_cover)
                 CoverImage(
                     cover,
                     Modifier
@@ -286,7 +289,13 @@ private fun InfoHeader(
                         .aspectRatio(EntryCover.aspectRatio(usePanoramaCover, coverRatio))
                         .clip(Corners.Medium)
                         .coverOutline(Corners.Medium)
-                        .then(if (onCoverClick != null) Modifier.clickable(onClick = onCoverClick) else Modifier),
+                        .then(
+                            if (onCoverClick != null) {
+                                Modifier.clickable(onClick = onCoverClick).semantics { contentDescription = coverLabel }
+                            } else {
+                                Modifier
+                            },
+                        ),
                     onLoaded = { width, height -> if (width > 0) coverRatio = height.toFloat() / width },
                 )
                 Spacer(Modifier.height(16.dp))
@@ -400,7 +409,7 @@ private fun ActionRow(
             if (trackCount == 0) inactive else active,
             onTracking,
         )
-        if (onWebView != null) ActionButton("WebView", Icons.Outlined.Public, active, onWebView, onSecondaryClick = onCopyLink)
+        if (onWebView != null) ActionButton(localized(MR.strings.action_web_view), Icons.Outlined.Public, active, onWebView, onSecondaryClick = onCopyLink)
     }
 }
 

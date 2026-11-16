@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.secrets.SecretStoreUnavailableException
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.io.File
@@ -108,7 +109,8 @@ object CrashReporter {
         appendLine("Thread: ${thread.name}")
         appendLine()
         appendLine("Stack trace:")
-        appendLine(stackTrace(e))
+        // Exception messages can carry a sign-in address or a header, like the log
+        appendLine(redact(stackTrace(e)))
         val tail = logTail()
         if (tail.isNotBlank()) {
             appendLine("End of the log (${dirs?.logs?.resolve("zoukan.log")}):")
@@ -146,9 +148,48 @@ object CrashReporter {
                 raf.seek(start)
                 val bytes = ByteArray((raf.length() - start).toInt())
                 raf.readFully(bytes)
-                String(bytes).let { if (start > 0) it.substringAfter('\n') else it }
+                redact(String(bytes).let { if (start > 0) it.substringAfter('\n') else it })
             }
         }.getOrDefault("")
+    }
+
+    // Same names as the network logger's redacted query parameters where they overlap (that list is
+    // internal to the network module), plus the sign-in ones
+    private val SECRET_PARAMS = listOf(
+        "code", "access_token", "refresh_token", "id_token", "token", "client_secret", "password",
+        "api_key", "apikey", "sid", "sessionid", "signature",
+    )
+    private val SECRET_PAIR = Regex("""(?<![A-Za-z0-9_])(${SECRET_PARAMS.joinToString("|")})=[^&\s"'<>]*""", RegexOption.IGNORE_CASE)
+    private val BEARER = Regex("""(Bearer\s+)[A-Za-z0-9._~+/=-]+""", RegexOption.IGNORE_CASE)
+
+    /** Removes the values of sign-in codes, tokens and passwords, and Bearer tokens, from log text. */
+    internal fun redact(text: String): String = text
+        .replace(SECRET_PAIR) { "${it.groupValues[1]}=<redacted>" }
+        .replace(BEARER) { "${it.groupValues[1]}<redacted>" }
+
+    /** A copy of the JVM crash file without the values of environment variables, and with secrets redacted. */
+    private fun copyRedacted(src: File, dest: File) {
+        var inEnvironment = false
+        dest.bufferedWriter().use { out ->
+            src.useLines { lines ->
+                lines.forEach { line ->
+                    val outLine = when {
+                        line.trim() == "Environment Variables:" -> {
+                            inEnvironment = true
+                            line
+                        }
+                        inEnvironment && line.isBlank() -> {
+                            inEnvironment = false
+                            line
+                        }
+                        inEnvironment -> line.substringBefore('=') + if ('=' in line) "=<redacted>" else ""
+                        else -> redact(line)
+                    }
+                    out.write(outLine)
+                    out.newLine()
+                }
+            }
+        }
     }
 
     /** Keeps the newest reports; background errors are pruned apart, so they never push out a crash. */
@@ -196,7 +237,7 @@ object CrashReporter {
             .flatMap { it.listFiles { f -> f.name == "hs_err_pid$pid.log" }.orEmpty().toList() }
             .firstOrNull { it.lastModified() >= since }
         jvmCrash?.let { src ->
-            return File(dirs.crashes, "jvm-crash-${src.name}").also { src.copyTo(it, overwrite = true) }
+            return File(dirs.crashes, "jvm-crash-${src.name}").also { copyRedacted(src, it) }
         }
         // A fatal report from that run is already there; otherwise note the unclean end
         dirs.crashes.listFiles { f -> f.name.startsWith("crash-") && f.lastModified() >= since }
@@ -251,11 +292,18 @@ object CrashReporter {
             return
         }
         val show = {
+            val unavailable = generateSequence(e) { it.cause }.take(10).filterIsInstance<SecretStoreUnavailableException>().firstOrNull()
             val message = buildString {
-                appendLine("Zoukan ran into a problem and has to close.")
-                appendLine()
-                appendLine("${e::class.simpleName}: ${e.message.orEmpty().take(300)}")
+                if (unavailable != null) {
+                    appendLine(unavailable.message.orEmpty())
+                } else {
+                    appendLine("Zoukan ran into a problem and has to close.")
+                    appendLine()
+                    appendLine("${e::class.simpleName}: ${redact(e.message.orEmpty()).take(300)}")
+                }
                 if (report != null) {
+                    appendLine()
+                    appendLine("The log can include titles you read and file paths. Check it before you share it.")
                     appendLine()
                     appendLine("The crash log is saved at")
                     append(report.absolutePath)

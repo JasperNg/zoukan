@@ -138,11 +138,27 @@ class DownloadSafetyTest {
     }
 
     @Test
-    fun `no encryption when protection is off or no password is set`() {
+    fun `no encryption when protection is off, and the password when it is on`() {
         CbzPassword(MapStore(failing = true), security(protect = false)).encryption() shouldBe null
-        CbzPassword(MapStore(failing = false), security(protect = true)).encryption() shouldBe null
         val store = MapStore(failing = false).apply { values[CbzPassword.KEY] = "pw" }
         CbzPassword(store, security(protect = true)).encryption()!!.password.concatToString() shouldBe "pw"
+    }
+
+    @Test
+    fun `protection on without a password fails instead of writing plain archives`() {
+        shouldThrow<CbzPasswordMissingException> { CbzPassword(MapStore(failing = false), security(protect = true)).encryption() }
+        val empty = MapStore(failing = false).apply { values[CbzPassword.KEY] = "" }
+        shouldThrow<CbzPasswordMissingException> { CbzPassword(empty, security(protect = true)).encryptDownloads() }
+    }
+
+    @Test
+    fun `a CBZ download with protection on but no password fails with an error and writes nothing`() = runBlocking<Unit> {
+        val manager = manager(password = CbzPassword(MapStore(failing = false), security(protect = true)))
+        manager.enqueue(manga, listOf(chapter(1)))
+        val download = manager.queue.value.single()
+        withTimeout(10_000) { download.state.first { it == Download.State.ERROR } }
+        download.error!! shouldContain "no download password is set"
+        File(temp, "downloads").walkTopDown().filter { it.isFile }.toList().shouldBeEmpty()
     }
 
     @Test

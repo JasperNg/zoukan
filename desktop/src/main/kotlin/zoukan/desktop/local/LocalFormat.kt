@@ -25,7 +25,7 @@ sealed interface LocalFormat : AutoCloseable {
     class Directory(dir: File) : LocalFormat {
         private val files = ChapterDownloader.imageFiles(dir)
         override val pageCount get() = files.size
-        override fun page(index: Int): ByteArray = files[index].readBytes()
+        override fun page(index: Int): ByteArray = Archives.readPage(files[index])
     }
 
     /** A RAR, 7z or TAR chapter, read from its unpacked copy, which stays cached until closed. */

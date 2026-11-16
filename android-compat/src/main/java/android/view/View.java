@@ -1163,6 +1163,15 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     int mUserPaddingRightInitial;
 
+    // ZOUKAN -->
+    // State AOSP keeps elsewhere (mAttachInfo, mScrollCache, ...), which desktop views lack
+    private boolean mZoukanLaidOut;
+    private boolean mZoukanHorizontalScrollBar = true;
+    private boolean mZoukanVerticalScrollBar = true;
+    private int mZoukanMinWidth;
+    private int mZoukanMinHeight;
+    // ZOUKAN <--
+
     int mOldWidthMeasureSpec = Integer.MIN_VALUE;
     int mOldHeightMeasureSpec = Integer.MIN_VALUE;
 
@@ -2517,7 +2526,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public boolean isLaidOut() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanLaidOut;
+        // ZOUKAN <--
     }
 
     boolean isLayoutValid() {
@@ -2953,8 +2964,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public boolean dispatchTouchEvent(MotionEvent event) {
-        // ZOUKAN: no listeners or child views to route to on desktop
+        // ZOUKAN -->
+        // No listeners or child views to route to on desktop
         return onTouchEvent(event);
+        // ZOUKAN <--
     }
 
     boolean isAccessibilityFocusedViewOrHost() {
@@ -3241,8 +3254,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public final ViewParent getParent() {
-        // ZOUKAN: views are parented by ViewGroup.addView (an offscreen host for extension WebViews)
+        // ZOUKAN -->
+        // Views are parented by ViewGroup.addView (an offscreen host for extension WebViews)
         return mParent;
+        // ZOUKAN <--
     }
 
     public void setScrollX(int value) {
@@ -3263,14 +3278,20 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @ViewDebug.ExportedProperty(category = "layout")
     public final int getWidth() {
-        // ZOUKAN: views fill the display (the extension WebView's size)
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until laid out
+        if (mZoukanLaidOut) return mRight - mLeft;
         return getResources().getDisplayMetrics().widthPixels;
+        // ZOUKAN <--
     }
 
     @ViewDebug.ExportedProperty(category = "layout")
     public final int getHeight() {
-        // ZOUKAN: views fill the display (the extension WebView's size)
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until laid out
+        if (mZoukanLaidOut) return mBottom - mTop;
         return getResources().getDisplayMetrics().heightPixels;
+        // ZOUKAN <--
     }
 
     public void getDrawingRect(Rect outRect) {
@@ -3278,25 +3299,39 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public final int getMeasuredWidth() {
-        // ZOUKAN: views fill the display (the extension WebView's size)
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until measured
+        if ((mPrivateFlags & PFLAG_MEASURED_DIMENSION_SET) != 0) return mMeasuredWidth & MEASURED_SIZE_MASK;
         return getResources().getDisplayMetrics().widthPixels;
+        // ZOUKAN <--
     }
 
     public final int getMeasuredWidthAndState() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mMeasuredWidth;
+        // ZOUKAN <--
     }
 
     public final int getMeasuredHeight() {
-        // ZOUKAN: views fill the display (the extension WebView's size)
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until measured
+        if ((mPrivateFlags & PFLAG_MEASURED_DIMENSION_SET) != 0) return mMeasuredHeight & MEASURED_SIZE_MASK;
         return getResources().getDisplayMetrics().heightPixels;
+        // ZOUKAN <--
     }
 
     public final int getMeasuredHeightAndState() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mMeasuredHeight;
+        // ZOUKAN <--
     }
 
     public final int getMeasuredState() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return (mMeasuredWidth&MEASURED_STATE_MASK)
+                | ((mMeasuredHeight>>MEASURED_HEIGHT_STATE_SHIFT)
+                        & (MEASURED_STATE_MASK>>MEASURED_HEIGHT_STATE_SHIFT));
+        // ZOUKAN <--
     }
 
     public Matrix getMatrix() {
@@ -3444,16 +3479,22 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @ViewDebug.CapturedViewProperty
     public final int getTop() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mTop;
+        // ZOUKAN <--
     }
 
     public final void setTop(int top) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFrame(mLeft, top, mRight, mBottom);
+        // ZOUKAN <--
     }
 
     @ViewDebug.CapturedViewProperty
     public final int getBottom() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mBottom;
+        // ZOUKAN <--
     }
 
     public boolean isDirty() {
@@ -3461,25 +3502,35 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public final void setBottom(int bottom) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFrame(mLeft, mTop, mRight, bottom);
+        // ZOUKAN <--
     }
 
     @ViewDebug.CapturedViewProperty
     public final int getLeft() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mLeft;
+        // ZOUKAN <--
     }
 
     public final void setLeft(int left) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFrame(left, mTop, mRight, mBottom);
+        // ZOUKAN <--
     }
 
     @ViewDebug.CapturedViewProperty
     public final int getRight() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mRight;
+        // ZOUKAN <--
     }
 
     public final void setRight(int right) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFrame(mLeft, mTop, right, mBottom);
+        // ZOUKAN <--
     }
 
     @ViewDebug.ExportedProperty(category = "drawing")
@@ -3648,11 +3699,19 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @ViewDebug.ExportedProperty(deepExport = true, prefix = "layout_")
     public ViewGroup.LayoutParams getLayoutParams() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mLayoutParams;
+        // ZOUKAN <--
     }
 
     public void setLayoutParams(ViewGroup.LayoutParams params) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        if (params == null) {
+            throw new NullPointerException("Layout parameters cannot be null");
+        }
+        mLayoutParams = params;
+        requestLayout();
+        // ZOUKAN <--
     }
 
     public void resolveLayoutParams() {
@@ -3681,20 +3740,28 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @Deprecated
     public void invalidate(Rect dirty) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     @Deprecated
     public void invalidate(int l, int t, int r, int b) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     public void invalidate() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     public void invalidate(boolean invalidateCache) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     void invalidateInternal(int l, int t, int r, int b, boolean invalidateCache,
@@ -3836,19 +3903,27 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public boolean isHorizontalScrollBarEnabled() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanHorizontalScrollBar;
+        // ZOUKAN <--
     }
 
     public void setHorizontalScrollBarEnabled(boolean horizontalScrollBarEnabled) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        mZoukanHorizontalScrollBar = horizontalScrollBarEnabled;
+        // ZOUKAN <--
     }
 
     public boolean isVerticalScrollBarEnabled() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanVerticalScrollBar;
+        // ZOUKAN <--
     }
 
     public void setVerticalScrollBarEnabled(boolean verticalScrollBarEnabled) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        mZoukanVerticalScrollBar = verticalScrollBarEnabled;
+        // ZOUKAN <--
     }
 
     protected void recomputePadding() {
@@ -3958,8 +4033,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * (This allows addViewInLayout to not request a new layout.)
      */
     void assignParent(ViewParent parent) {
-        // ZOUKAN
+        // ZOUKAN -->
         mParent = parent;
+        // ZOUKAN <--
     }
 
     @CallSuper
@@ -4321,7 +4397,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public boolean isLayoutRequested() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return (mPrivateFlags & PFLAG_FORCE_LAYOUT) == PFLAG_FORCE_LAYOUT;
+        // ZOUKAN <--
     }
 
     public static boolean isLayoutModeOptical(Object o) {
@@ -4338,18 +4416,46 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @SuppressWarnings({"unchecked"})
     public void layout(int l, int t, int r, int b) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // AOSP's layout without the layout listeners, optical insets or transitions
+        boolean changed = setFrame(l, t, r, b);
+        if (changed || (mPrivateFlags & PFLAG_LAYOUT_REQUIRED) == PFLAG_LAYOUT_REQUIRED) {
+            onLayout(changed, l, t, r, b);
+            mPrivateFlags &= ~PFLAG_LAYOUT_REQUIRED;
+        }
+        mPrivateFlags &= ~PFLAG_FORCE_LAYOUT;
+        mZoukanLaidOut = true;
+        // ZOUKAN <--
     }
 
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
     }
 
     protected boolean setFrame(int left, int top, int right, int bottom) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        boolean changed = false;
+        if (mLeft != left || mRight != right || mTop != top || mBottom != bottom) {
+            changed = true;
+            int oldWidth = mRight - mLeft;
+            int oldHeight = mBottom - mTop;
+            int newWidth = right - left;
+            int newHeight = bottom - top;
+            mLeft = left;
+            mTop = top;
+            mRight = right;
+            mBottom = bottom;
+            if (newWidth != oldWidth || newHeight != oldHeight) {
+                onSizeChanged(newWidth, newHeight, oldWidth, oldHeight);
+            }
+        }
+        return changed;
+        // ZOUKAN <--
     }
 
     public final void setLeftTopRightBottom(int left, int top, int right, int bottom) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setFrame(left, top, right, bottom);
+        // ZOUKAN <--
     }
 
     @CallSuper
@@ -4795,63 +4901,137 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @CallSuper
     public void requestLayout() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // No layout pass runs on desktop: the next layout() call lays the view out
+        mPrivateFlags |= PFLAG_FORCE_LAYOUT;
+        // ZOUKAN <--
     }
 
     public void forceLayout() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        mPrivateFlags |= PFLAG_FORCE_LAYOUT;
+        // ZOUKAN <--
     }
 
     public final void measure(int widthMeasureSpec, int heightMeasureSpec) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // AOSP's measure without the measure cache or optical insets
+        mPrivateFlags &= ~PFLAG_MEASURED_DIMENSION_SET;
+        onMeasure(widthMeasureSpec, heightMeasureSpec);
+        if ((mPrivateFlags & PFLAG_MEASURED_DIMENSION_SET) != PFLAG_MEASURED_DIMENSION_SET) {
+            throw new IllegalStateException(getClass().getName() + "#onMeasure() did not set the"
+                    + " measured dimension by calling setMeasuredDimension()");
+        }
+        mPrivateFlags |= PFLAG_LAYOUT_REQUIRED;
+        mOldWidthMeasureSpec = widthMeasureSpec;
+        mOldHeightMeasureSpec = heightMeasureSpec;
+        // ZOUKAN <--
     }
 
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        setMeasuredDimension(getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec),
+                getDefaultSize(getSuggestedMinimumHeight(), heightMeasureSpec));
+        // ZOUKAN <--
     }
 
     protected final void setMeasuredDimension(int measuredWidth, int measuredHeight) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        mMeasuredWidth = measuredWidth;
+        mMeasuredHeight = measuredHeight;
+        mPrivateFlags |= PFLAG_MEASURED_DIMENSION_SET;
+        // ZOUKAN <--
     }
 
     public static int combineMeasuredStates(int curState, int newState) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return curState | newState;
+        // ZOUKAN <--
     }
 
     public static int resolveSize(int size, int measureSpec) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return resolveSizeAndState(size, measureSpec, 0) & MEASURED_SIZE_MASK;
+        // ZOUKAN <--
     }
 
     public static int resolveSizeAndState(int size, int measureSpec, int childMeasuredState) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        final int specMode = MeasureSpec.getMode(measureSpec);
+        final int specSize = MeasureSpec.getSize(measureSpec);
+        final int result;
+        switch (specMode) {
+            case MeasureSpec.AT_MOST:
+                if (specSize < size) {
+                    result = specSize | MEASURED_STATE_TOO_SMALL;
+                } else {
+                    result = size;
+                }
+                break;
+            case MeasureSpec.EXACTLY:
+                result = specSize;
+                break;
+            case MeasureSpec.UNSPECIFIED:
+            default:
+                result = size;
+        }
+        return result | (childMeasuredState & MEASURED_STATE_MASK);
+        // ZOUKAN <--
     }
 
     public static int getDefaultSize(int size, int measureSpec) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        int result = size;
+        int specMode = MeasureSpec.getMode(measureSpec);
+        int specSize = MeasureSpec.getSize(measureSpec);
+
+        switch (specMode) {
+        case MeasureSpec.UNSPECIFIED:
+            result = size;
+            break;
+        case MeasureSpec.AT_MOST:
+        case MeasureSpec.EXACTLY:
+            result = specSize;
+            break;
+        }
+        return result;
+        // ZOUKAN <--
     }
 
     protected int getSuggestedMinimumHeight() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanMinHeight;
+        // ZOUKAN <--
     }
 
     protected int getSuggestedMinimumWidth() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanMinWidth;
+        // ZOUKAN <--
     }
 
     public int getMinimumHeight() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanMinHeight;
+        // ZOUKAN <--
     }
 
     public void setMinimumHeight(int minHeight) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        mZoukanMinHeight = minHeight;
+        // ZOUKAN <--
     }
 
     public int getMinimumWidth() {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        return mZoukanMinWidth;
+        // ZOUKAN <--
     }
 
     public void setMinimumWidth(int minWidth) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        mZoukanMinWidth = minWidth;
+        // ZOUKAN <--
     }
 
     public Animation getAnimation() {
@@ -5270,6 +5450,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     public static class MeasureSpec {
         private static final int MODE_SHIFT = 30;
+        // ZOUKAN -->
+        private static final int MODE_MASK  = 0x3 << MODE_SHIFT;
+        // ZOUKAN <--
 
         /** @hide */
         @Retention(RetentionPolicy.SOURCE)
@@ -5283,28 +5466,72 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         public static int makeMeasureSpec(@IntRange(from = 0, to = (1 << MeasureSpec.MODE_SHIFT) - 1) int size,
                                           @MeasureSpecMode int mode) {
-            throw new RuntimeException("Stub!");
+            // ZOUKAN -->
+            // AOSP's, as for apps targeting API 17 and later
+            return (size & ~MODE_MASK) | (mode & MODE_MASK);
+            // ZOUKAN <--
         }
 
         public static int makeSafeMeasureSpec(int size, int mode) {
-            throw new RuntimeException("Stub!");
+            // ZOUKAN -->
+            // AOSP's, as for apps targeting API 23 and later
+            return makeMeasureSpec(size, mode);
+            // ZOUKAN <--
         }
 
         @MeasureSpecMode
         public static int getMode(int measureSpec) {
-            throw new RuntimeException("Stub!");
+            // ZOUKAN -->
+            // AOSP's
+            //noinspection ResourceType
+            return (measureSpec & MODE_MASK);
+            // ZOUKAN <--
         }
 
         public static int getSize(int measureSpec) {
-            throw new RuntimeException("Stub!");
+            // ZOUKAN -->
+            // AOSP's
+            return (measureSpec & ~MODE_MASK);
+            // ZOUKAN <--
         }
 
         static int adjust(int measureSpec, int delta) {
-            throw new RuntimeException("Stub!");
+            // ZOUKAN -->
+            // AOSP's
+            final int mode = getMode(measureSpec);
+            int size = getSize(measureSpec);
+            if (mode == UNSPECIFIED) {
+                // No need to adjust size for UNSPECIFIED mode.
+                return makeMeasureSpec(size, UNSPECIFIED);
+            }
+            size += delta;
+            if (size < 0) {
+                size = 0;
+            }
+            return makeMeasureSpec(size, mode);
+            // ZOUKAN <--
         }
 
         public static String toString(int measureSpec) {
-            throw new RuntimeException("Stub!");
+            // ZOUKAN -->
+            // AOSP's
+            int mode = getMode(measureSpec);
+            int size = getSize(measureSpec);
+
+            StringBuilder sb = new StringBuilder("MeasureSpec: ");
+
+            if (mode == UNSPECIFIED)
+                sb.append("UNSPECIFIED ");
+            else if (mode == EXACTLY)
+                sb.append("EXACTLY ");
+            else if (mode == AT_MOST)
+                sb.append("AT_MOST ");
+            else
+                sb.append(mode).append(" ");
+
+            sb.append(size);
+            return sb.toString();
+            // ZOUKAN <--
         }
     }
 

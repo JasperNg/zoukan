@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
@@ -26,27 +28,44 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
-fun LazyListScope.settingsGroup(title: String) {
-    item(key = "$GROUP_KEY_PREFIX$title") {
+/** A group header. Its list key is [id]; give a group an id of its own when another on the page has its title. */
+fun LazyListScope.settingsGroup(title: String, id: String = title) {
+    item(key = "$GROUP_KEY_PREFIX$id", contentType = SettingsGroupHeader(title)) {
         Text(
             title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = Spacing.SettingsRowInset, end = Spacing.SettingsRowInset, top = Spacing.SettingsGroupGap, bottom = 8.dp),
         )
     }
 }
+
+/** The colour of a setting's title: [ColorScheme.onSurface], or Material's disabled colour when the row is not [enabled]. */
+internal fun settingTitleColor(enabled: Boolean, scheme: ColorScheme): Color =
+    if (enabled) scheme.onSurface else scheme.onSurface.copy(alpha = DISABLED_ALPHA)
+
+/** The colour of a setting's summary: [ColorScheme.onSurfaceVariant], at the disabled alpha when the row is not [enabled]. */
+internal fun settingSubtitleColor(enabled: Boolean, scheme: ColorScheme): Color =
+    if (enabled) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = DISABLED_ALPHA)
+
+/** Material's alpha for disabled content. */
+private const val DISABLED_ALPHA = 0.38f
 
 @Composable
 fun SettingRow(
@@ -54,26 +73,39 @@ fun SettingRow(
     subtitle: String? = null,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
+    searchTerms: List<String> = emptyList(),
+    /** The state of a switch in [trailing]: the row then is the switch (one node with the title), and the switch has no handler of its own. */
+    switched: Boolean? = null,
     trailing: @Composable () -> Unit = {},
 ) {
-    // Settings search matches the title and the summary; in its results only matching rows show
-    LocalSearchTexts.current?.add(title, subtitle)
-    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOfNotNull(title, subtitle))) return }
+    // Settings search matches the title, the summary and [searchTerms] (such as the choices of a
+    // setting); in its results only matching rows show
+    LocalSearchTexts.current?.add(title, subtitle, *searchTerms.toTypedArray())
+    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOfNotNull(title, subtitle) + searchTerms)) return }
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            // clickable(enabled = false) also reports the row as disabled to accessibility tools
+            .then(
+                when {
+                    onClick != null && switched != null ->
+                        Modifier.toggleable(value = switched, enabled = enabled, role = Role.Switch, onValueChange = { onClick() })
+                    onClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
+                    !enabled -> Modifier.semantics(mergeDescendants = true) { disabled() }
+                    else -> Modifier
+                },
+            )
+            .padding(horizontal = Spacing.SettingsRowInset, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = settingTitleColor(enabled, MaterialTheme.colorScheme),
             )
             if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = settingSubtitleColor(enabled, MaterialTheme.colorScheme))
             }
         }
         Spacer(Modifier.width(16.dp))
@@ -83,15 +115,15 @@ fun SettingRow(
 
 @Composable
 fun SwitchSetting(title: String, subtitle: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    SettingRow(title, subtitle, enabled, onClick = { onChange(!checked) }) {
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+    SettingRow(title, subtitle, enabled, onClick = { onChange(!checked) }, switched = checked) {
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
 @Composable
-fun SwitchPreference(title: String, preference: Preference<Boolean>, subtitle: String? = null) {
+fun SwitchPreference(title: String, preference: Preference<Boolean>, subtitle: String? = null, enabled: Boolean = true) {
     val value by preference.collectAsState()
-    SwitchSetting(title, subtitle, value) { preference.set(it) }
+    SwitchSetting(title, subtitle, value, enabled) { preference.set(it) }
 }
 
 @Composable
@@ -104,7 +136,7 @@ fun <T> ChoiceSetting(
     onChoose: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    SettingRow(title, subtitle ?: choices.firstOrNull { it.first == value }?.second, enabled, onClick = { open = true })
+    SettingRow(title, subtitle ?: choices.firstOrNull { it.first == value }?.second, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
     // A dialog of choices, as Android's ListPreference
     if (open) {
         AlertDialog(
@@ -144,7 +176,7 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
     LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOf(title))) return }
     val saved by preference.collectAsState()
     var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row {
             Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(label(value.roundToInt()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -178,7 +210,7 @@ fun MultiSelectPreference(
     val value by preference.collectAsState()
     var open by remember { mutableStateOf(false) }
     val summary = subtitle ?: choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { localized(MR.strings.none) }
-    SettingRow(title, summary, enabled, onClick = { open = true })
+    SettingRow(title, summary, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
     if (open) {
         var chosen by remember { mutableStateOf(value) }
         AlertDialog(
@@ -202,7 +234,7 @@ fun MultiSelectPreference(
                 TextButton(onClick = {
                     preference.set(chosen)
                     open = false
-                }) { Text("OK") }
+                }) { Text(localized(MR.strings.action_ok)) }
             },
             dismissButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
@@ -293,7 +325,7 @@ fun CategoriesIncludeExcludeDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(inc, exc) }) { Text("OK") } },
+        confirmButton = { TextButton(onClick = { onConfirm(inc, exc) }) { Text(localized(MR.strings.action_ok)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }

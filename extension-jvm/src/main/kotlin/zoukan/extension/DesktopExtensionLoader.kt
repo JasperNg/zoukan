@@ -9,7 +9,10 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.pm.ExternalPackages
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
 
 sealed interface LoadResult {
     val pkgName: String
@@ -39,25 +42,35 @@ sealed interface LoadResult {
  * runs, and `<versionCode>.apk` is kept next to it when the jar was converted from an APK (its
  * signature is then checked on the APK). The APK's signature does not cover the converted jar, so
  * it only runs while it matches the SHA-256 recorded in [hashes] when it was converted, which is
- * kept outside the extensions folder; a stale or missing hash converts the verified APK again
- * before the load.
+ * kept outside the extensions folder. The record also holds the SHA-256 of the APK the jar was
+ * converted from, so a jar is tied to its APK: under any other APK it is converted again. A stale
+ * or missing hash converts the verified APK again before the load. Nothing is recorded for a jar
+ * that is untrusted or refused; it is converted again on each load until it is trusted.
  *
  * The jar is read into memory once: the signature or hash is checked on those bytes, and the same
  * bytes are what [ExtensionClassLoader] runs, so a jar swapped on disk after the check never runs,
  * and no jar stays open (or locked, on Windows) while its extension is loaded. Classes the host
  * provides (extensions-lib, OkHttp, the Android compatibility layer) come from the app's class path.
+ *
+ * As in ExtensionLoader, an NSFW extension is not loaded while [showNsfwSources] is off. It is read
+ * once, at the first load, so changing the setting takes effect after a restart, as in Komikku.
  */
 class DesktopExtensionLoader(
     private val extensionsDir: File,
     private val trust: ExtensionTrust,
     private val hashes: ConvertedJarHashes,
+    private val showNsfwSources: () -> Boolean = { true },
 ) {
     /** The hashes go in the app's (encrypted) preferences. */
-    constructor(extensionsDir: File, trust: ExtensionTrust) :
-        this(extensionsDir, trust, PreferenceConvertedJarHashes(Injekt.get<PreferenceStore>()))
+    constructor(extensionsDir: File, trust: ExtensionTrust, showNsfwSources: () -> Boolean = { true }) :
+        this(extensionsDir, trust, PreferenceConvertedJarHashes(Injekt.get<PreferenceStore>()), showNsfwSources)
+
+    private val loadNsfwSource by lazy { showNsfwSources() }
 
     init {
         extensionsDir.mkdirs()
+        // Android's package manager knows the installed extensions: getPackageInfo(own package)
+        ExternalPackages.provider = InstalledExtensionPackages(extensionsDir)
     }
 
     data class InstalledFiles(
@@ -76,9 +89,9 @@ class DesktopExtensionLoader(
     /** The newest installed version of each package. Older versions left behind are deleted. */
     fun installedPackages(): List<InstalledFiles> = installedPackageNames().mapNotNull { installedPackage(it) }
 
-    /** The names of the package folders, without reading them. */
+    /** The names of the package folders, without reading them. A folder that is no package name is left alone. */
     fun installedPackageNames(): List<String> = extensionsDir.listFiles().orEmpty()
-        .filter { it.isDirectory }
+        .filter { it.isDirectory && it.name.matches(PACKAGE_NAME) }
         .map { it.name }
 
     fun installedPackage(pkgName: String): InstalledFiles? {
@@ -87,7 +100,8 @@ class DesktopExtensionLoader(
             .mapNotNull { f -> f.nameWithoutExtension.toLongOrNull()?.let { it to f } }
             .sortedByDescending { it.first }
         val (versionCode, jar) = jars.firstOrNull() ?: return null
-        // A jar that was loaded stays locked on Windows until the app exits; it goes on a later start
+        // Older versions left behind are deleted now: loaded extensions run from memory
+        // (ExtensionClassLoader), so no jar is held open, also on Windows
         jars.drop(1).forEach { (code, _) -> deleteVersion(pkgName, code) }
         val apk = File(dir, "$versionCode.apk").takeIf { it.isFile }
         return InstalledFiles(pkgName, versionCode, jar, apk)
@@ -99,10 +113,50 @@ class DesktopExtensionLoader(
      * failed to load, so the next start loads the version that worked.
      */
     fun deleteVersion(pkgName: String, versionCode: Long) {
-        val dir = File(extensionsDir, pkgName)
+        val dir = checkedPackageDir(extensionsDir, pkgName)
         File(dir, "$versionCode.jar").delete()
         File(dir, "$versionCode.apk").delete()
         File(dir, "$versionCode.sha256").delete()
+    }
+
+    /**
+     * Deletes the installer's and converter's own stray files, which a crash or kill leaves
+     * behind: download temp files directly in the extensions folder, and temp files and dex2jar
+     * error reports in a package folder. Only files last changed before [olderThan] (milliseconds
+     * since the epoch) go, so a download or conversion that is running now keeps its files.
+     * Installed files (`N.jar`, `N.apk`) and every other name are never touched, and nothing
+     * outside the extensions folder can be reached. A file that cannot be deleted is skipped.
+     */
+    fun removeLeftovers(olderThan: Long) {
+        val root = extensionsDir.canonicalFile
+        fun removeIf(dir: File, matches: (String) -> Boolean) {
+            dir.listFiles().orEmpty().forEach { file ->
+                if (!matches(file.name) || file.lastModified() >= olderThan) return@forEach
+                try {
+                    val path = file.toPath()
+                    // Regular files only: never a folder or a link, and never outside the extensions folder
+                    if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) return@forEach
+                    if (!file.canonicalFile.startsWith(root)) return@forEach
+                    Files.deleteIfExists(path)
+                } catch (e: Exception) {
+                    logcat(LogPriority.WARN, e) { "Could not remove the leftover file ${file.name}" }
+                }
+            }
+        }
+        removeIf(root) { DOWNLOAD_TEMP.matches(it) }
+        installedPackageNames().forEach { pkg ->
+            val dir = File(root, pkg)
+            if (Files.isSymbolicLink(dir.toPath())) return@forEach
+            removeIf(dir) { name -> PACKAGE_TEMP_SUFFIXES.any { name.endsWith(it) } }
+        }
+    }
+
+    /**
+     * Puts back the files a same-version reinstall kept aside when the app stopped before it knew
+     * whether the new files load. Only renames inside the package's own folder.
+     */
+    fun restoreInterruptedReinstall(pkgName: String) {
+        PreviousFiles.restoreAll(checkedPackageDir(extensionsDir, pkgName))
     }
 
     /** Forgets what is recorded about an uninstalled package. */
@@ -133,26 +187,35 @@ class DesktopExtensionLoader(
         // The converted jar's hash to record once the load succeeds. There is one hash per
         // package: an update that fails to load must not replace the working version's hash
         var hashToRecord: String? = null
+        var apkSha256 = ""
         val (signatures, contents) = if (files.apk != null) {
-            val signers = ExtensionSignatures.verifyApk(files.apk)
+            // The APK is read once: the signature, its digest and a new conversion all use these bytes
+            val apkBytes = readInstalledApk(files.apk)
+            val signers = ExtensionSignatures.verifyApk(apkBytes)
+            apkSha256 = ApkConverter.sha256Of(apkBytes)
             // The manifest is read only after the checks that decide whether the jar may run at
             // all: a swapped jar must not fail the load before it was converted again, and then the
             // manifest of the healed jar is the one that counts
-            val jar = verifiedConvertedJar(files)
+            val jar = verifiedConvertedJar(files, apkBytes, apkSha256)
             hashToRecord = jar.hashToRecord
             signers to JarContents.fromBytes(jar.bytes)
         } else {
             ExtensionSignatures.verifyJar(files.jar).let { it.signers to it.contents }
         }
         val manifest = ExtensionManifest.fromContents(contents, files.jar.name)
+        if (manifest.packageName != files.pkgName) {
+            throw ExtensionException(
+                ExtensionException.Stage.MANIFEST,
+                "${files.jar.name} declares package ${manifest.packageName}, not ${files.pkgName}",
+            )
+        }
         val libVersion = manifest.validate()
         val storeName = stores.firstOrNull { store -> signatures.all { it == store.signingKey } }
             ?.let { store -> store.badgeLabel.takeIf(String::isNotBlank) ?: store.name }
 
         if (!trust.isTrusted(manifest.packageName, manifest.versionCode, signatures, stores)) {
             logcat(LogPriority.WARN) { "Extension ${manifest.packageName} isn't trusted" }
-            // The jar itself is fine and is the installed version now; only the user's trust is missing
-            hashToRecord?.let { record(files, it) }
+            // Nothing is recorded: an untrusted jar is converted again on each load until it is trusted
             return LoadResult.Untrusted(
                 Extension.Untrusted(
                     name = manifest.name,
@@ -166,10 +229,23 @@ class DesktopExtensionLoader(
             )
         }
 
+        if (!loadNsfwSource && manifest.isNsfw) {
+            logcat(LogPriority.WARN) { "NSFW extension ${manifest.packageName} not allowed" }
+            // Like an untrusted one, nothing is recorded: the jar is converted again on each load
+            return LoadResult.Error(
+                manifest.packageName,
+                ExtensionException(
+                    ExtensionException.Stage.LOAD,
+                    "NSFW extensions are not loaded while NSFW sources are hidden. Show NSFW sources " +
+                        "in Browse settings and restart the app to load it.",
+                ),
+            )
+        }
+
         val classLoader = ExtensionClassLoader(contents, manifest.packageName)
         try {
             val extension = installedExtension(manifest, libVersion, signatures, storeName, classLoader)
-            hashToRecord?.let { record(files, it) }
+            hashToRecord?.let { record(files, apkSha256, it) }
             return LoadResult.Success(extension, classLoader)
         } catch (e: Throwable) {
             // A failed load keeps nothing: its sources were never handed out
@@ -219,17 +295,17 @@ class DesktopExtensionLoader(
      * failure fails the load. Nothing is deleted on the way. A hash to record is returned, not
      * recorded: the caller records it only once the extension loaded.
      */
-    private fun verifiedConvertedJar(files: InstalledFiles): VerifiedJar {
+    private fun verifiedConvertedJar(files: InstalledFiles, apkBytes: ByteArray, apkSha256: String): VerifiedJar {
         val apk = checkNotNull(files.apk)
         val jar = files.jar
         val bytes = jar.readBytes()
         val sha256 = ApkConverter.sha256Of(bytes)
         if (files.convertedSha256 == sha256) return VerifiedJar(bytes, sha256)
-        if (hashes.matches(files.pkgName, files.versionCode, sha256)) return VerifiedJar(bytes, null)
+        if (hashes.matches(files.pkgName, files.versionCode, apkSha256, sha256)) return VerifiedJar(bytes, null)
         logcat(LogPriority.WARN) {
             "Extension ${files.pkgName}: ${jar.name} has no matching recorded hash, converting ${apk.name} again"
         }
-        ApkConverter.convert(apk, jar)
+        ApkConverter.convert(apkBytes, jar)
         val converted = jar.readBytes()
         return VerifiedJar(converted, ApkConverter.sha256Of(converted))
     }
@@ -237,10 +313,18 @@ class DesktopExtensionLoader(
     /** A converted jar's bytes, and the hash to record for them once the load succeeds (null: already recorded). */
     private class VerifiedJar(val bytes: ByteArray, val hashToRecord: String?)
 
-    private fun record(files: InstalledFiles, sha256: String) {
-        hashes.record(files.pkgName, files.versionCode, sha256)
+    private fun record(files: InstalledFiles, apkSha256: String, jarSha256: String) {
+        hashes.record(files.pkgName, files.versionCode, apkSha256, jarSha256)
         // The sidecar earlier versions wrote next to the jar; it is not read any more
         File(files.jar.parentFile, "${files.versionCode}.sha256").delete()
+    }
+
+    private companion object {
+        /** The installer's download temp files: `<package>-<number>.jar` or `.apk`. */
+        val DOWNLOAD_TEMP = Regex("[A-Za-z0-9_.]+-\\d+\\.(jar|apk)")
+
+        /** The installer's and converter's temp and error files in a package folder. */
+        val PACKAGE_TEMP_SUFFIXES = listOf(".part", ".part.tmp", ".jar.tmp", "-dex2jar-error.txt")
     }
 
     /** Instantiates the classes in tachiyomi.extension.class, the same way ExtensionLoader does. */

@@ -31,6 +31,7 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import exh.ui.batchadd.BatchAddScreenModel
+import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
@@ -121,7 +122,7 @@ object BatchAddScreen : Screen {
         if (state.dialog == BatchAddScreenModel.Dialog.NoGalleriesSpecified) {
             AlertDialog(
                 onDismissRequest = model::dismissDialog,
-                confirmButton = { TextButton(onClick = model::dismissDialog) { Text("OK") } },
+                confirmButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_ok)) } },
                 title = { Text(localized(SYMR.strings.batch_add_no_valid_galleries)) },
                 text = { Text(localized(SYMR.strings.batch_add_no_valid_galleries_message)) },
             )

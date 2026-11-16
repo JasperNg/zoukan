@@ -19,11 +19,34 @@ public class TwoStatePreference extends Preference {
         setDefaultValue(false);
     }
 
+    // ZOUKAN -->
+    // As Android: the checked state is the stored one; setChecked persists it (once the preference
+    // has its SharedPreferences) without calling the change listener.
     @JsonIgnore
-    public boolean isChecked() { throw new RuntimeException("Stub!"); }
+    private Boolean checked;
 
     @JsonIgnore
-    public void setChecked(boolean checked) { throw new RuntimeException("Stub!"); }
+    private boolean disableDependentsState;
+
+    @JsonIgnore
+    public boolean isChecked() {
+        if (shouldPersist()) {
+            return Boolean.TRUE.equals(getCurrentValue());
+        }
+        if (checked != null) {
+            return checked;
+        }
+        return Boolean.TRUE.equals(getDefaultValue());
+    }
+
+    @JsonIgnore
+    public void setChecked(boolean checked) {
+        this.checked = checked;
+        if (shouldPersist()) {
+            saveNewValue(checked);
+        }
+    }
+    // ZOUKAN <--
 
     @JsonIgnore
     public CharSequence getSummaryOn() {
@@ -47,26 +70,43 @@ public class TwoStatePreference extends Preference {
 
     @Override
     public CharSequence getSummary() {
-        final CharSequence summary = super.getSummary();
-        if (summary != null) {
-            return summary;
+        // ZOUKAN -->
+        // As Android: a summary provider wins, then summaryOn/summaryOff for the current
+        // state (when not empty), then the plain summary.
+        if (getSummaryProvider() != null) {
+            return super.getSummary();
         }
 
-        final boolean checked = (Boolean) getCurrentValue();
-        if (checked && mSummaryOn != null) {
+        final boolean checked = isChecked();
+        if (checked && mSummaryOn != null && mSummaryOn.length() > 0) {
             return mSummaryOn;
-        } else if (!checked && mSummaryOff != null) {
+        } else if (!checked && mSummaryOff != null && mSummaryOff.length() > 0) {
             return mSummaryOff;
         }
 
-        return null;
+        return super.getSummary();
+        // ZOUKAN <--
     }
 
     @JsonIgnore
-    public boolean getDisableDependentsState() { throw new RuntimeException("Stub!"); }
+    public boolean getDisableDependentsState() {
+        return disableDependentsState;
+    }
 
     @JsonIgnore
-    public void setDisableDependentsState(boolean disableDependentsState) { throw new RuntimeException("Stub!"); }
+    public void setDisableDependentsState(boolean disableDependentsState) {
+        this.disableDependentsState = disableDependentsState;
+    }
+
+    // ZOUKAN -->
+    /** As Android: off disables the dependents (on, with setDisableDependentsState(true)). */
+    @Override
+    public boolean shouldDisableDependents() {
+        boolean checked = isChecked();
+        boolean shouldDisable = disableDependentsState ? checked : !checked;
+        return shouldDisable || super.shouldDisableDependents();
+    }
+    // ZOUKAN <--
 
     /** Tachidesk specific API */
     @Override

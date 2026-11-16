@@ -1,6 +1,6 @@
 package zoukan.extension
 
-import net.dongliu.apk.parser.ApkFile
+import net.dongliu.apk.parser.ByteArrayApkFile
 import org.w3c.dom.Element
 import java.io.File
 import java.util.zip.ZipFile
@@ -88,10 +88,10 @@ data class ExtensionManifest(
         }
 
         /** Decodes the binary AndroidManifest.xml of an APK. */
-        fun fromApk(apk: File): ExtensionManifest = ApkFile(apk).use { parse(it.manifestXml) }
+        fun fromApk(apk: ByteArray): ExtensionManifest = ByteArrayApkFile(apk).use { parse(it.manifestXml) }
 
         /** The text of an APK's manifest, to store in a converted jar. */
-        fun manifestXmlOfApk(apk: File): String = ApkFile(apk).use { it.manifestXml }
+        fun manifestXmlOfApk(apk: ByteArray): String = ByteArrayApkFile(apk).use { it.manifestXml }
 
         fun parse(xml: String): ExtensionManifest {
             val factory = DocumentBuilderFactory.newInstance().apply {

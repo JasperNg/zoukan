@@ -27,12 +27,12 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.i18n.MR
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.app.Version
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.InfoScreen
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
@@ -57,7 +57,7 @@ class WhatsNewScreen : cafe.adriel.voyager.core.screen.Screen {
             headingText = localized(MR.strings.whats_new),
             subtitleText = loaded?.name?.takeIf { it != "Zoukan ${AppVersion.name}" }?.let { localized(DMR.strings.zoukan_2, it, AppVersion.name) }
                 ?: localized(DMR.strings.zoukan, AppVersion.name),
-            acceptText = "OK",
+            acceptText = localized(MR.strings.action_ok),
             onAcceptClick = { navigator.pop() },
             secondaryButton = {
                 val page = loaded?.pageUrl?.takeIf { it.isNotBlank() }
@@ -108,7 +108,7 @@ fun UpdatedDialog(onDismiss: () -> Unit, onOpenWhatsNew: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text(localized(DMR.strings.updated_to_zoukan, AppVersion.name)) },
         text = { Text(localized(DMR.strings.see_what_changed_in_this_version)) },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_ok)) } },
         dismissButton = { TextButton(onClick = onOpenWhatsNew) { Text(localized(MR.strings.whats_new)) } },
     )
 }

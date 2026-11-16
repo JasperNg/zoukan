@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
@@ -40,6 +41,11 @@ import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
 import java.io.File
+import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -100,6 +106,13 @@ class DownloadManager(
     private var job: Job? = null
     private var stopping: Job? = null
 
+    /**
+     * One lock per entry, shared by the clean-up and the download writer, so clean-up never deletes the
+     * files of a download that is starting or running. Never held for two entries at once.
+     */
+    private val entryLocks = ConcurrentHashMap<Long, Mutex>()
+    private fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
+
     /** The file names in each manga folder, read once and kept up to date by this class */
     private val cache = ConcurrentHashMap<File, Set<String>>()
 
@@ -128,24 +141,30 @@ class DownloadManager(
         _changes.update { it + 1 }
     }
 
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun isDownloaded(manga: Manga, chapter: Chapter): Boolean {
         val names = namesIn(paths.mangaDir(manga))
         if (names.isEmpty()) return false
         return paths.validChapterNames(chapter).any { it in names }
     }
 
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun downloadedIds(manga: Manga, chapters: List<Chapter>): Set<Long> {
         val names = namesIn(paths.mangaDir(manga))
         if (names.isEmpty()) return emptySet()
         return chapters.filter { c -> paths.validChapterNames(c).any { it in names } }.mapTo(HashSet()) { it.id }
     }
 
-    /** How many chapters of [manga] are downloaded, for the library's download badge and filter. */
+    /**
+     * How many chapters of [manga] are downloaded, for the library's download badge and filter.
+     * Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models).
+     */
     fun downloadCount(manga: Manga): Int =
         namesIn(paths.mangaDir(manga)).count { name ->
             !name.endsWith(DownloadPaths.TMP_SUFFIX) && !name.startsWith(".") && NOT_CHAPTER.none { name.endsWith(it, ignoreCase = true) }
         }
 
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun findChapter(manga: Manga, chapter: Chapter): File? =
         if (isDownloaded(manga, chapter)) paths.findChapter(manga, chapter) else null
 
@@ -153,25 +172,74 @@ class DownloadManager(
      * Gives a downloaded chapter the name its new name or scanlator calls for, as Android's
      * renameChapter after a source sync, so the download keeps showing and Clean up downloaded
      * chapters does not take it for an unknown file.
+     *
+     * Never replaces anything: when a download of the new name exists, or the move fails, the
+     * download keeps its old name and this returns false. True when renamed or nothing to rename.
      */
-    fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter) {
+    fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter): Boolean {
         val dir = paths.mangaDir(manga)
-        if (!dir.isDirectory) return
+        if (!dir.isDirectory) return true
         // Assume there's only 1 version of the chapter name formats present
         val oldDownload = paths.validChapterNames(oldChapter).asSequence()
             .map { File(dir, it) }
-            .firstOrNull { it.exists() } ?: return
+            .firstOrNull { it.exists() } ?: return true
 
         var newName = paths.chapterDirName(newChapter)
         if (oldDownload.isFile && oldDownload.extension == "cbz") newName += ".cbz"
-        if (oldDownload.name == newName) return
+        if (oldDownload.name == newName) return true
 
-        if (oldDownload.renameTo(File(dir, newName))) {
+        val target = File(dir, newName)
+        if (target.exists()) {
+            logcat(LogPriority.WARN) { "Not renaming ${oldDownload.name} to $newName: a download of that name exists" }
+            return false
+        }
+        return try {
+            // No REPLACE_EXISTING: a target created in between makes the move fail
+            Files.move(oldDownload.toPath(), target.toPath())
             invalidate(dir)
-        } else {
-            logcat(LogPriority.ERROR) { "Could not rename downloaded chapter: ${oldDownload.name}" }
+            true
+        } catch (e: IOException) {
+            logcat(LogPriority.ERROR, e) { "Could not rename downloaded chapter: ${oldDownload.name}" }
+            false
         }
     }
+
+    /**
+     * Moves an entry's download folder to the name [newTitle] gives it, as Android's renameManga.
+     * Never replaces anything: returns false, and moves nothing, when a folder of that name exists
+     * or a chapter of the entry is in the queue. True when there is nothing to move.
+     */
+    suspend fun renameManga(manga: Manga, newTitle: String): Boolean =
+        renameManga(manga.id, manga.source, manga.ogTitle, newTitle)
+
+    suspend fun renameManga(mangaId: Long, sourceId: Long, fromTitle: String, toTitle: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val old = File(paths.sourceDir(sourceId), paths.mangaDirName(fromTitle))
+            val target = File(old.parentFile, paths.mangaDirName(toTitle))
+            if (old.name == target.name || !old.exists()) return@withContext true
+            if (_queue.value.any { it.manga.id == mangaId }) {
+                logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: chapters of the entry are queued" }
+                return@withContext false
+            }
+            if (target.exists()) {
+                // A case-only change on a case-insensitive disk names the same folder
+                if (runCatching { Files.isSameFile(old.toPath(), target.toPath()) }.getOrDefault(false)) {
+                    return@withContext true
+                }
+                logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: a folder named ${target.name} exists" }
+                return@withContext false
+            }
+            try {
+                // No REPLACE_EXISTING: nothing already on disk is ever overwritten
+                Files.move(old.toPath(), target.toPath())
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not rename the download folder ${old.name} to ${target.name}" }
+                return@withContext false
+            }
+            invalidate(old)
+            invalidate(target)
+            true
+        }
 
     /** Forgets what was read from disk, for example after the storage folder moved. */
     fun invalidateCache() {
@@ -260,7 +328,9 @@ class DownloadManager(
 
     /**
      * SY's "Clean up downloaded chapters" (Settings > Advanced). In each installed source's
-     * folder it deletes entry folders that belong to no entry, then, per entry: everything when
+     * folder it deletes entry folders that belong to no entry and hold no chapter download that an
+     * entry of that source lacks in its own folder (a folder left under an old title is kept), then,
+     * per entry: everything when
      * [removeNonFavorite] and the entry left the library, files that are no chapter of the entry
      * and unfinished downloads, the read chapters when [removeRead], and the folder once no
      * chapter is left. Entries with chapters in the queue are left alone.
@@ -275,26 +345,65 @@ class DownloadManager(
     ): Int = withContext(Dispatchers.IO) {
         val mangas = allManga()
         val busy = _queue.value.mapTo(HashSet()) { it.manga.id }
+        // Each entry's chapters read once for the folder-owner checks
+        val chapterCache = HashMap<Long, List<Chapter>>()
+        val knownChapters: suspend (Long) -> List<Chapter> = { id -> chapterCache.getOrPut(id) { chaptersOf(id) } }
         var cleared = 0
         sourceManager.getOnlineSources().forEach { source ->
             val sourceDir = paths.sourceDir(source.id)
             val folders = sourceDir.listFiles()?.filter { it.isDirectory }.orEmpty()
             if (folders.isEmpty()) return@forEach
-            val byFolder = mangas.filter { it.source == source.id }.associateBy { paths.mangaDirName(it.ogTitle) }
-            folders.forEach folder@{ folder ->
+            val sourceMangas = mangas.filter { it.source == source.id }
+            val byFolder = sourceMangas.associateBy { paths.mangaDirName(it.ogTitle) }
+            // Folders of no entry first, so their checks see each entry's folder before it is cleaned
+            folders.sortedBy { it.name in byFolder }.forEach folder@{ folder ->
                 val manga = byFolder[folder.name]
                 if (manga == null) {
+                    // Not orphaned when it holds chapters of an entry whose folder has another name (the
+                    // source changed the title, and a download may have used the old one since)
+                    val owner = renamedOwner(folder, sourceMangas, knownChapters)
+                    if (owner != null) {
+                        logcat(LogPriority.WARN) { "Kept ${folder.name}: its chapters belong to ${owner.ogTitle}, whose folder has another name" }
+                        return@folder
+                    }
                     // Orphaned: no entry of this source has this folder
                     cleared += 1 + (folder.list()?.size ?: 0)
                     folder.deleteRecursively()
                     invalidate(folder)
                     return@folder
                 }
+                // The queue is read for this entry under its lock, right before deleting: an entry queued
+                // since the walk began is left alone, and a download of it waits for this to finish
                 if (manga.id in busy) return@folder
-                cleared += cleanupEntry(folder, manga, chaptersOf(manga.id), removeRead, removeNonFavorite)
+                entryLock(manga.id).withLock {
+                    if (_queue.value.none { it.manga.id == manga.id }) {
+                        cleared += cleanupEntry(folder, manga, chaptersOf(manga.id), removeRead, removeNonFavorite)
+                    }
+                }
             }
         }
         cleared
+    }
+
+    /**
+     * An entry of the source that has a chapter's download in [folder], which is not the folder its
+     * title names, and not in its own folder (which may or may not exist).
+     */
+    private suspend fun renamedOwner(
+        folder: File,
+        sourceMangas: List<Manga>,
+        chaptersOf: suspend (Long) -> List<Chapter>,
+    ): Manga? {
+        val names = folder.list()?.toHashSet().orEmpty()
+        if (names.isEmpty()) return null
+        return sourceMangas.firstOrNull { manga ->
+            val own = paths.mangaDir(manga)
+            // A copy of a chapter the entry's own folder also has is a leftover, not the only download
+            chaptersOf(manga.id).any { chapter ->
+                val valid = paths.validChapterNames(chapter)
+                valid.any { it in names } && valid.none { File(own, it).exists() }
+            }
+        }
     }
 
     private fun cleanupEntry(
@@ -338,7 +447,17 @@ class DownloadManager(
 
     // Queue -----------------------------------------------------------------------------------
 
-    /** Adds [chapters] to the queue, unless downloaded or queued already. */
+    /** Queues each entry's chapters that are not downloaded or queued yet. Safe to call from the UI thread. */
+    suspend fun enqueueAll(entries: List<Pair<Manga, List<Chapter>>>, start: Boolean = true) {
+        withContext(Dispatchers.IO) {
+            entries.forEach { (manga, chapters) -> enqueue(manga, chapters, start) }
+        }
+    }
+
+    /**
+     * Adds [chapters] to the queue, unless downloaded or queued already.
+     * Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models).
+     */
     fun enqueue(manga: Manga, chapters: List<Chapter>, start: Boolean = true) {
         if (chapters.isEmpty()) return
         val candidates = chapters
@@ -548,45 +667,51 @@ class DownloadManager(
             val source = sourceManager.get(manga.source) as? HttpSource
                 ?: error("The source of ${manga.title} is not installed")
             val dir = paths.mangaDir(manga)
-            if (!isDownloaded(manga, chapter)) {
-                val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
-                if (freeSpace != null && freeSpace in 1 until MIN_FREE_SPACE) error("Not enough free disk space")
-                val downloader = ChapterDownloader(
-                    pageList = { source.getPageList(chapter.toSChapter()) },
-                    imageUrl = { source.getImageUrl(it) },
-                    image = { page ->
-                        // ZOUKAN -->
-                        // The SY data saver, when it applies to downloads, as Android's Downloader
-                        val prefs = sourcePreferences
-                        val dataSaver =
-                            if (prefs != null && prefs.dataSaverDownloader().get()) {
-                                exh.util.DataSaver(source, prefs)
-                            } else {
-                                exh.util.DataSaver.NoOp
+            // The gate is the disk, not the cache: a chapter copied in since the folder was listed
+            // is kept as it is. The entry's lock keeps a clean-up away from the files being written.
+            entryLock(manga.id).withLock {
+                if (paths.findChapter(manga, chapter) != null) {
+                    invalidate(dir)
+                } else {
+                    val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
+                    if (!hasRoom(freeSpace)) error(localized(DMR.strings.download_disk_full))
+                    val downloader = ChapterDownloader(
+                        pageList = { source.getPageList(chapter.toSChapter()) },
+                        imageUrl = { source.getImageUrl(it) },
+                        image = { page ->
+                            // ZOUKAN -->
+                            // The SY data saver, when it applies to downloads, as Android's Downloader
+                            val prefs = sourcePreferences
+                            val dataSaver =
+                                if (prefs != null && prefs.dataSaverDownloader().get()) {
+                                    exh.util.DataSaver(source, prefs)
+                                } else {
+                                    exh.util.DataSaver.NoOp
+                                }
+                            with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
+                                // ZOUKAN <--
+                                if (!response.isSuccessful) error("HTTP ${response.code}")
+                                response.body.bytes()
                             }
-                        with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
-                            // ZOUKAN <--
-                            if (!response.isSuccessful) error("HTTP ${response.code}")
-                            response.body.bytes()
-                        }
-                    },
-                    parallelPages = preferences.parallelPageLimit().get(),
-                )
-                // Only a CBZ is encrypted: a folder download never reads the secret store
-                val asCbz = preferences.saveChaptersAsCBZ().get()
-                val encryption = if (asCbz) password.encryption() else null
-                val options = ChapterDownloader.Options(
-                    asCbz = asCbz,
-                    encryption = encryption,
-                    comicInfo = comicInfo(manga, chapter, source, encryption),
-                    // ZOUKAN -->
-                    splitTallImages = preferences.splitTallImages().get(),
-                    // ZOUKAN <--
-                )
-                downloader.download(dir, paths.chapterDirName(chapter), options) { done, total ->
-                    download.progress.value = done to total
+                        },
+                        parallelPages = preferences.parallelPageLimit().get(),
+                    )
+                    // Only a CBZ is encrypted: a folder download never reads the secret store
+                    val asCbz = preferences.saveChaptersAsCBZ().get()
+                    val encryption = if (asCbz) password.encryption() else null
+                    val options = ChapterDownloader.Options(
+                        asCbz = asCbz,
+                        encryption = encryption,
+                        comicInfo = comicInfo(manga, chapter, source, encryption),
+                        // ZOUKAN -->
+                        splitTallImages = preferences.splitTallImages().get(),
+                        // ZOUKAN <--
+                    )
+                    downloader.download(dir, paths.chapterDirName(chapter), options) { done, total ->
+                        download.progress.value = done to total
+                    }
+                    invalidate(dir)
                 }
-                invalidate(dir)
             }
             download.state.value = Download.State.DOWNLOADED
             _queue.update { it - download }
@@ -597,7 +722,7 @@ class DownloadManager(
             throw e
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Downloading ${manga.title} / ${chapter.name} failed" }
-            download.error = e.message ?: e::class.simpleName
+            download.error = errorText(e)
             download.state.value = Download.State.ERROR
             Notifications.post(localized(DMR.strings.download_failed), "${manga.title}: ${chapter.name}\n${download.error}", Notifications.Kind.ERROR)
             false
@@ -605,7 +730,7 @@ class DownloadManager(
     }
 
     private suspend fun comicInfo(manga: Manga, chapter: Chapter, source: HttpSource, encryption: CbzEncryption?): ComicInfoXml {
-        val categories = runCatching { getCategories.await(manga.id) }.getOrDefault(emptyList())
+        val categories = zoukan.desktop.app.runCatchingCancellable { getCategories.await(manga.id) }.getOrDefault(emptyList())
             .map { it.name.trim() }.filter { it.isNotEmpty() }
         val url = runCatching { source.getChapterUrl(chapter.toSChapter()).trim() }.getOrNull()
         return ComicInfoXml(
@@ -643,15 +768,61 @@ class DownloadManager(
                     val saved = _queue.value.map { SavedDownload(it.manga.id, it.chapter.id) }
                     val tmp = File(queueFile.path + ".tmp")
                     tmp.writeText(json.encodeToString(saved))
-                    java.nio.file.Files.move(tmp.toPath(), queueFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    try {
+                        Files.move(tmp.toPath(), queueFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                    } catch (_: AtomicMoveNotSupportedException) {
+                        Files.move(tmp.toPath(), queueFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
                 }.onFailure { logcat(LogPriority.WARN, it) { "Saving the download queue failed" } }
             }
         }
     }
 
+    /**
+     * The saved queue, or null when there is none (first start) or it cannot be read. A file that
+     * cannot be read is moved to `downloads-queue.unreadable-<time>.json`, never replaced or
+     * deleted, so the next save does not overwrite it, and the user is told.
+     */
+    private fun readSavedQueue(): List<SavedDownload>? {
+        val file = queueFile
+        if (!file.exists()) return null
+        return try {
+            json.decodeFromString<List<SavedDownload>>(file.readText())
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (e !is SerializationException && e !is IllegalArgumentException && e !is IOException) throw e
+            val keptName = keepUnreadableQueue(file)
+            logcat(LogPriority.WARN, e) { "The saved download queue could not be read; kept as $keptName" }
+            Notifications.post(
+                localized(DMR.strings.download_queue_unreadable),
+                localized(DMR.strings.download_queue_unreadable_kept, keptName.orEmpty()),
+                Notifications.Kind.WARNING,
+            )
+            null
+        }
+    }
+
+    private fun keepUnreadableQueue(file: File): String? {
+        val stamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+        for (n in 0..99) {
+            val name = "downloads-queue.unreadable-$stamp${if (n == 0) "" else "-$n"}.json"
+            try {
+                // No REPLACE_EXISTING: a kept file is never overwritten
+                Files.move(file.toPath(), File(file.parentFile, name).toPath())
+                return name
+            } catch (_: FileAlreadyExistsException) {
+                continue
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not keep the unreadable download queue aside" }
+                return null
+            }
+        }
+        return null
+    }
+
     /** Loads the saved queue and starts it. Called once at start-up. */
     suspend fun restore(start: Boolean = true) {
-        val saved = runCatching { json.decodeFromString<List<SavedDownload>>(queueFile.readText()) }.getOrNull() ?: return
+        val saved = readSavedQueue() ?: return
         val mangas = HashMap<Long, Manga?>()
         val downloads = saved.mapNotNull { s ->
             val manga = mangas.getOrPut(s.mangaId) { getManga.await(s.mangaId) } ?: return@mapNotNull null
@@ -666,7 +837,20 @@ class DownloadManager(
     }
 
     companion object {
-        private const val MIN_FREE_SPACE = 200L * 1024 * 1024
+        internal const val MIN_FREE_SPACE = 200L * 1024 * 1024
+
+        /** A disk that reports 0 bytes free is full. */
+        internal fun hasRoom(freeSpace: Long?): Boolean = freeSpace == null || freeSpace >= MIN_FREE_SPACE
+
+        internal fun errorText(e: Throwable): String {
+            val full = generateSequence(e) { it.cause?.takeIf { c -> c !== it } }.take(8).any {
+                it is java.io.IOException && it.message?.let { m ->
+                    m.contains("No space left", ignoreCase = true) || m.contains("not enough space", ignoreCase = true)
+                } == true
+            }
+            return if (full) localized(DMR.strings.download_disk_full) else e.message ?: e::class.simpleName.orEmpty()
+        }
+
         private val NOT_CHAPTER = listOf(".xml", ".json", ".jpg", ".jpeg", ".png", ".webp", ".txt")
     }
 }

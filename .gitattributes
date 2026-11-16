@@ -9,6 +9,7 @@
 
 # Images
 *.webp binary
+*.avif binary
 *.png binary
 *.jpg binary
 *.jpeg binary
@@ -23,3 +24,6 @@
 *.woff binary
 *.pyc binary
 *.swp binary
+*.avif binary
+*.heif binary
+*.heic binary

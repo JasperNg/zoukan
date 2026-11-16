@@ -241,6 +241,28 @@ public class PackageInfo implements Parcelable {
     public String overlayTarget;
     public PackageInfo() {
     }
+    // ZOUKAN -->
+    /**
+     * The upper 32 bits of the long version code (API 28), as on Android.
+     * @hide
+     */
+    public int versionCodeMajor;
+
+    /** The version code with its major part (API 28), as on Android; extensions read it on SDK 28+. */
+    public long getLongVersionCode() {
+        return composeLongVersionCode(versionCodeMajor, versionCode);
+    }
+
+    public void setLongVersionCode(long longVersionCode) {
+        versionCodeMajor = (int) (longVersionCode >> 32);
+        versionCode = (int) longVersionCode;
+    }
+
+    /** @hide */
+    public static long composeLongVersionCode(int major, int minor) {
+        return (((long) major) << 32) | (((long) minor) & 0xffffffffL);
+    }
+    // ZOUKAN <--
     @Override
     public String toString() {
         return "PackageInfo{"

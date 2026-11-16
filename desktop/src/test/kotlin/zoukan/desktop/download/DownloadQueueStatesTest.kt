@@ -6,13 +6,20 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
@@ -28,6 +35,7 @@ import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.tray.Notifications
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -112,7 +120,7 @@ class DownloadQueueStatesTest {
         }
     }
 
-    private fun manager(): DownloadManager {
+    private fun manager(asCbz: Boolean = true): DownloadManager {
         val sourceManager = mockk<SourceManager> {
             every { get(source.id) } returns source
             every { getOrStub(source.id) } returns source
@@ -121,7 +129,7 @@ class DownloadQueueStatesTest {
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)
-            every { saveChaptersAsCBZ() } returns pref(true)
+            every { saveChaptersAsCBZ() } returns pref(asCbz)
             every { parallelSourceLimit() } returns pref(1)
             every { parallelPageLimit() } returns pref(1)
             every { splitTallImages() } returns pref(false)
@@ -135,6 +143,43 @@ class DownloadQueueStatesTest {
         val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
         return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, password, mockk(), mockk(), mockk(relaxed = true))
             .also { managers += it }
+    }
+
+    @Test
+    fun `a chapter copied into the folder after it was listed keeps its bytes when the same chapter downloads`() = runBlocking<Unit> {
+        val manager = manager()
+        val chapter = chapter(1, pages = 3)
+        manager.isDownloaded(manga, chapter) shouldBe false // lists the (empty) folder into the cache
+        val dir = File(temp, "downloads/$source/Manga").apply { mkdirs() }
+        val bytes = kotlin.random.Random(2).nextBytes(8192)
+        File(dir, "Chapter 1.cbz").writeBytes(bytes) // a synced copy, written outside the manager
+
+        manager.enqueue(manga, listOf(chapter))
+        withTimeout(30_000) { manager.awaitIdle() }
+
+        File(dir, "Chapter 1.cbz").readBytes() shouldBe bytes
+        dir.list()!!.toList() shouldBe listOf("Chapter 1.cbz")
+        manager.isDownloaded(manga, chapter) shouldBe true
+        manager.queue.value.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a chapter folder copied in after it was listed keeps its files when the same chapter downloads`() = runBlocking<Unit> {
+        val manager = manager(asCbz = false)
+        val chapter = chapter(1, pages = 3)
+        manager.isDownloaded(manga, chapter) shouldBe false
+        val dir = File(temp, "downloads/$source/Manga").apply { mkdirs() }
+        val bytes = kotlin.random.Random(3).nextBytes(8192)
+        File(dir, "Chapter 1").mkdirs()
+        File(dir, "Chapter 1/001.png").writeBytes(bytes)
+
+        manager.enqueue(manga, listOf(chapter))
+        withTimeout(30_000) { manager.awaitIdle() }
+
+        File(dir, "Chapter 1").list()!!.toList() shouldBe listOf("001.png")
+        File(dir, "Chapter 1/001.png").readBytes() shouldBe bytes
+        manager.isDownloaded(manga, chapter) shouldBe true
+        manager.queue.value.shouldBeEmpty()
     }
 
     @Test
@@ -210,6 +255,25 @@ class DownloadQueueStatesTest {
             saved.substringAfter("chapterId\":").substringBefore('}').trim() shouldBe
                 manager.queue.value.first().chapter.id.toString()
         }
+    }
+
+    @Test
+    fun `a saved queue that does not parse is kept aside with a warning`() = runBlocking<Unit> {
+        val garbage = "[{\"mangaId\":1,\"chap".toByteArray()
+        File(temp, "downloads-queue.json").writeBytes(garbage)
+        val posted = mutableListOf<Notifications.Message>()
+        val collector = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) { Notifications.flow.toList(posted) }
+        yield()
+
+        val manager = manager()
+        manager.restore(start = false)
+        manager.enqueue(manga, listOf(chapter(1, 1)), start = false) // a save after the restore
+        manager.awaitBackgroundWork()
+        collector.cancelAndJoin()
+
+        val kept = temp.listFiles()!!.filter { it.name.startsWith("downloads-queue") && it.name.contains("unreadable") }
+        kept.single().readBytes() shouldBe garbage
+        posted.filter { it.kind == Notifications.Kind.WARNING }.shouldHaveSize(1)
     }
 
     @Test

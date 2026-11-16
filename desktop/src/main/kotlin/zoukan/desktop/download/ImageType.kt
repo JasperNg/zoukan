@@ -1,5 +1,8 @@
 package zoukan.desktop.download
 
+import tachiyomi.decoder.Format
+import tachiyomi.decoder.ImageFormats
+
 /** Image types by their first bytes, for page file extensions (Android's ImageUtil.findImageType). */
 enum class ImageType(val extension: String, val mime: String) {
     AVIF("avif", "image/avif"),
@@ -14,21 +17,40 @@ enum class ImageType(val extension: String, val mime: String) {
     companion object {
         private val extensions = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "heif", "heic", "jxl", "bmp")
 
-        fun fromBytes(bytes: ByteArray): ImageType? {
-            fun at(offset: Int, vararg values: Int) =
-                bytes.size >= offset + values.size && values.indices.all { (bytes[offset + it].toInt() and 0xFF) == values[it] }
-            fun ascii(offset: Int, text: String) =
-                bytes.size >= offset + text.length && text.indices.all { bytes[offset + it].toInt().toChar() == text[it] }
-            return when {
-                at(0, 0xFF, 0xD8, 0xFF) -> JPEG
-                at(0, 0x89, 0x50, 0x4E, 0x47) -> PNG
-                ascii(0, "GIF8") -> GIF
-                ascii(0, "RIFF") && ascii(8, "WEBP") -> WEBP
-                at(0, 0xFF, 0x0A) || at(0, 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20) -> JXL
-                ascii(4, "ftyp") && (ascii(8, "avif") || ascii(8, "avis")) -> AVIF
-                ascii(4, "ftyp") && (ascii(8, "heic") || ascii(8, "heix") || ascii(8, "mif1") || ascii(8, "msf1")) -> HEIF
-                else -> null
+        /** The type of the image in [bytes] by the app's one sniffer (AVIF with the mif1 major brand is AVIF). */
+        fun fromBytes(bytes: ByteArray): ImageType? =
+            when (ImageFormats.sniff(bytes)) {
+                Format.Avif -> AVIF
+                Format.Gif -> GIF
+                Format.Heif -> HEIF
+                Format.Jpeg -> JPEG
+                Format.Jxl -> JXL
+                Format.Png -> PNG
+                Format.Webp -> WEBP
+                null -> null
             }
+
+        /**
+         * Whether [bytes], which are no known image, look like text: an HTML error or login page, or
+         * JSON, that a server sent with status 200. Image formats have control bytes in their first
+         * bytes; text has none.
+         */
+        fun looksLikeText(bytes: ByteArray): Boolean {
+            if (bytes.isEmpty()) return false
+            val bom = if (bytes.size >= 3 && (bytes[0].toInt() and 0xFF) == 0xEF && (bytes[1].toInt() and 0xFF) == 0xBB &&
+                (bytes[2].toInt() and 0xFF) == 0xBF
+            ) {
+                3
+            } else {
+                0
+            }
+            val end = minOf(bytes.size, bom + 512)
+            if (end == bom) return false
+            for (i in bom until end) {
+                val b = bytes[i].toInt() and 0xFF
+                if (b < 0x09 || b in 0x0E..0x1F || b == 0x7F) return false
+            }
+            return true
         }
 
         /** Whether [name] looks like an image file by its extension. */

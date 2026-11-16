@@ -6,6 +6,7 @@ import exh.source.EH_PACKAGE
 import exh.source.EH_SOURCE_ID
 import exh.source.EXHENTAI_EXT_SOURCES
 import exh.source.EXH_SOURCE_ID
+import exh.source.ExhPreferences
 import exh.source.LOCAL_SOURCE_PACKAGE
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
@@ -15,11 +16,17 @@ import zoukan.extension.DesktopExtensionManager
 /**
  * Incognito mode, as Android's GetIncognitoState: reading adds no history while it is on, for the
  * whole app or for the extensions picked under Browse (Komikku's per-extension incognito).
+ *
+ * The E-Hentai settings' "Incognito" also turns it on for the E-Hentai and ExHentai galleries; SY
+ * keeps that setting but reads it nowhere.
  */
 class Incognito(
     private val preferenceStore: PreferenceStore,
     private val sourcePreferences: SourcePreferences,
     private val extensionManager: DesktopExtensionManager,
+    // ZOUKAN -->
+    private val exhPreferences: ExhPreferences = ExhPreferences(preferenceStore),
+    // ZOUKAN <--
 ) {
     /** BasePreferences.incognitoMode() on Android. */
     fun mode() = preferenceStore.getBoolean(Preference.appStateKey("incognito_mode"), false)
@@ -28,6 +35,9 @@ class Incognito(
         if (mode().get()) return true
         if (sourceId == null) return false
         val pkg = packageOf(sourceId) ?: return false
+        // ZOUKAN -->
+        if (pkg == EH_PACKAGE && exhPreferences.ehIncognitoMode().get()) return true
+        // ZOUKAN <--
         return pkg in sourcePreferences.incognitoExtensions().get()
     }
 

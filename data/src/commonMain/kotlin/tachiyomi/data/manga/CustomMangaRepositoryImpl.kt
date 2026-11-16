@@ -8,13 +8,18 @@ import kotlinx.serialization.json.Json
 import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.repository.CustomMangaRepository
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 class CustomMangaRepositoryImpl(context: Context) : CustomMangaRepository {
     private val editJson = File(context.getExternalFilesDir(null), "edits.json")
 
+    private val lock = Any()
+
     private val customMangaMap = fetchCustomData()
 
-    override fun get(mangaId: Long) = customMangaMap[mangaId]
+    override fun get(mangaId: Long) = synchronized(lock) { customMangaMap[mangaId] }
 
     private fun fetchCustomData(): MutableMap<Long, CustomMangaInfo> {
         if (!editJson.exists() || !editJson.isFile) return mutableMapOf()
@@ -37,7 +42,7 @@ class CustomMangaRepositoryImpl(context: Context) : CustomMangaRepository {
             .toMutableMap()
     }
 
-    override fun set(mangaInfo: CustomMangaInfo) {
+    override fun set(mangaInfo: CustomMangaInfo) = synchronized(lock) {
         if (
             mangaInfo.title == null &&
             mangaInfo.author == null &&
@@ -56,9 +61,21 @@ class CustomMangaRepositoryImpl(context: Context) : CustomMangaRepository {
 
     private fun saveCustomInfo() {
         val jsonElements = customMangaMap.values.map { it.toJson() }
-        if (jsonElements.isNotEmpty()) {
-            editJson.delete()
-            editJson.writeText(Json.encodeToString(MangaList(jsonElements)))
+        val tmp = File(editJson.parentFile, "edits.json.tmp")
+        try {
+            tmp.writeText(Json.encodeToString(MangaList(jsonElements)))
+            try {
+                Files.move(
+                    tmp.toPath(),
+                    editJson.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (e: AtomicMoveNotSupportedException) {
+                Files.move(tmp.toPath(), editJson.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            if (tmp.exists()) tmp.delete()
         }
     }
 

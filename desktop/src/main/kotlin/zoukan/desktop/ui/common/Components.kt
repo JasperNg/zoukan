@@ -67,7 +67,7 @@ fun CoverImage(
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         loading = { Box(Modifier.fillMaxSize()) },
         error = {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().testTag("cover-error"), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.BrokenImage, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },

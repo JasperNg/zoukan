@@ -3,6 +3,8 @@
 #.vscode
 .kotlin
 build
+# The build-settings tests live in a package called build
+!desktop/src/test/kotlin/zoukan/desktop/build/
 
 # IDE files
 *.iml
@@ -21,6 +23,10 @@ local.properties
 /app/google-services.json
 *.jks
 app/standard/preview/*
+
+# Screenshot goldens are recorded on Linux only (see .github/workflows/screenshots-record.yml)
+desktop/src/test/screenshots/windows/
+desktop/src/test/screenshots/macos/
 
 # Editor, OS and scratch files
 .vscode/

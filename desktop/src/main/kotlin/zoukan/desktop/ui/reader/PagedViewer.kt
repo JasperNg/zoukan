@@ -36,14 +36,16 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import zoukan.desktop.ui.common.FitModes
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.collectAsState
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -114,10 +116,15 @@ class PageZoom {
     }
 }
 
+/** Test hook with no effect in the app: how often each pager page recomposed after its first composition. */
+internal object ReaderCompositionProbe {
+    val pageRecompositions = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+}
+
 @Composable
 fun PagedViewer(
     model: ReaderScreenModel,
-    state: ReaderScreenModel.State,
+    content: ViewerContent,
     actions: ReaderActions,
     fitMode: Int,
     background: Color,
@@ -127,7 +134,7 @@ fun PagedViewer(
     autoBackground: Boolean = false,
     // ZOUKAN <--
 ) {
-    val pages = state.pages
+    val pages = content.pages
     // ZOUKAN -->
     // Double pages, as Android's page layout: the first page alone (the cover), then pairs
     val layout by model.preferences.pageLayout().collectAsState()
@@ -146,22 +153,29 @@ fun PagedViewer(
     val navigateToPan by prefs.navigateToPan().collectAsState()
     val longTap by prefs.readWithLongTap().collectAsState()
     val transitions by prefs.pageTransitionsPager().collectAsState()
+    val reduceMotion = LocalReducedMotion.current
     val doubleTapZoom by prefs.pagedDoubleTapZoomEnabled().collectAsState()
     val disableZoomIn by prefs.pagedDisableZoomIn().collectAsState()
     val zoomStart by prefs.zoomStart().collectAsState()
     // Wide pages stand alone in double page mode, and split or turn when those settings are on
-    val wide = state.widePages
-    val spreads: List<Spread> = remember(pages.size, double, wide, split, state.shiftDoublePages) {
-        ReaderSpreads.build(pages.size, double, wide, split, state.shiftDoublePages)
+    val wide = content.widePages
+    val spreads: List<Spread> = remember(pages.size, double, wide, split, content.shiftDoublePages) {
+        ReaderSpreads.build(pages.size, double, wide, split, content.shiftDoublePages)
     }
     fun spreadOf(page: Int) = spreads.indexOfFirst { page in it.pages }.coerceAtLeast(0)
-    // Pager index 0 and spreads.size + 1 are the chapter transitions
-    val pagerState = rememberPagerState(initialPage = spreadOf(state.startPage) + 1) { spreads.size + 2 }
+    // Pager index 0 and spreads.size + 1 are the chapter transitions. With "Always show chapter
+    // transition" off, the one between back-to-back chapters is skipped: turning onto it, or a drag
+    // settling on it, opens that chapter, as Android shows its pages there instead
+    val alwaysTransition by prefs.alwaysShowChapterTransition().collectAsState()
+    val showPrevious = ChapterTransitions.shown(alwaysTransition, content.chapter, content.previousChapter, next = false, hasPages = pages.isNotEmpty())
+    val showNext = ChapterTransitions.shown(alwaysTransition, content.chapter, content.nextChapter, next = true, hasPages = pages.isNotEmpty())
+    val latestShown by rememberUpdatedState(showPrevious to showNext)
+    val pagerState = rememberPagerState(initialPage = spreadOf(content.startPage) + 1) { spreads.size + 2 }
     // ZOUKAN <--
     val scope = rememberCoroutineScope()
     val zooms = remember { mutableMapOf<Int, PageZoom>() }
-    val rtl = state.readingMode == ReadingModes.RIGHT_TO_LEFT
-    val vertical = state.readingMode == ReadingModes.VERTICAL
+    val rtl = content.readingMode == ReadingModes.RIGHT_TO_LEFT
+    val vertical = content.readingMode == ReadingModes.VERTICAL
     var lastTurn by remember { mutableStateOf(0L) }
 
     fun current() = zooms.getOrPut(pagerState.currentPage) { PageZoom() }.also { it.maxZoom = if (disableZoomIn) 1f else PageZoom.MAX_ZOOM }
@@ -172,8 +186,10 @@ fun PagedViewer(
             to < 0 -> model.previousChapter(atEnd = true)
             to > spreads.size + 1 -> model.nextChapter()
             // ZOUKAN -->
+            to == 0 && !showPrevious -> model.previousChapter(atEnd = true)
+            to == spreads.size + 1 && !showNext -> model.nextChapter()
             // Android's "Animate page transitions"
-            transitions -> scope.launch { pagerState.animateScrollToPage(to) }
+            transitions && !reduceMotion -> scope.launch { pagerState.animateScrollToPage(to) }
             else -> scope.launch { pagerState.scrollToPage(to) }
             // ZOUKAN <--
         }
@@ -195,23 +211,27 @@ fun PagedViewer(
     }
     // ZOUKAN <--
 
-    actions.next = { turn(pagerState.currentPage + 1) }
-    actions.previous = { turn(pagerState.currentPage - 1) }
-    actions.down = {
-        val zoom = current()
-        if (zoom.overflowsY && zoom.panBy(Offset(0f, -zoom.viewport.height * 0.8f)).y == 0f) Unit else actions.next()
+    // Set after every successful composition, not during it, so a discarded composition leaves
+    // the keys on the last committed one
+    SideEffect {
+        actions.next = { turn(pagerState.currentPage + 1) }
+        actions.previous = { turn(pagerState.currentPage - 1) }
+        actions.down = {
+            val zoom = current()
+            if (zoom.overflowsY && zoom.panBy(Offset(0f, -zoom.viewport.height * 0.8f)).y == 0f) Unit else actions.next()
+        }
+        actions.up = {
+            val zoom = current()
+            if (zoom.overflowsY && zoom.panBy(Offset(0f, zoom.viewport.height * 0.8f)).y == 0f) Unit else actions.previous()
+        }
+        actions.first = { scope.launch { pagerState.scrollToPage(1) } }
+        actions.last = { scope.launch { pagerState.scrollToPage(spreads.size) } }
+        actions.goTo = { index -> scope.launch { pagerState.scrollToPage(spreadOf(index) + 1) } }
+        actions.zoomIn = { current().let { it.zoomTo(it.zoom * 1.25f) } }
+        actions.zoomOut = { current().let { it.zoomTo(it.zoom / 1.25f) } }
+        actions.zoomReset = { current().reset() }
+        actions.smoothScroll = null
     }
-    actions.up = {
-        val zoom = current()
-        if (zoom.overflowsY && zoom.panBy(Offset(0f, zoom.viewport.height * 0.8f)).y == 0f) Unit else actions.previous()
-    }
-    actions.first = { scope.launch { pagerState.scrollToPage(1) } }
-    actions.last = { scope.launch { pagerState.scrollToPage(spreads.size) } }
-    actions.goTo = { index -> scope.launch { pagerState.scrollToPage(spreadOf(index) + 1) } }
-    actions.zoomIn = { current().let { it.zoomTo(it.zoom * 1.25f) } }
-    actions.zoomOut = { current().let { it.zoomTo(it.zoom / 1.25f) } }
-    actions.zoomReset = { current().reset() }
-    actions.smoothScroll = null
 
     // ZOUKAN -->
     // The spreads the pager was last laid out with, to read its position through them
@@ -234,7 +254,7 @@ fun PagedViewer(
         laidOutDouble[0] = double
         val heading = pagerState.targetPage
         val target = when {
-            old == null -> spreadOf(state.currentPage) + 1
+            old == null -> spreadOf(model.state.value.currentPage) + 1
             heading <= 0 -> 0
             heading > old.size -> spreads.size + 1
             layoutSwitched -> spreadOf(old[heading - 1].last) + 1
@@ -246,6 +266,12 @@ fun PagedViewer(
             // Leaving a page resets its zoom, as on Android
             zooms.keys.filter { it != index }.forEach { zooms.remove(it) }
             if (index in 1..spreads.size) spreads[index - 1].let { model.onPageChanged(it.last, first = it.first) }
+            // ZOUKAN -->
+            // A drag onto a skipped transition opens that chapter
+            val (previousShown, nextShown) = latestShown
+            if (index == 0 && !previousShown) model.previousChapter(atEnd = true)
+            if (index == spreads.size + 1 && !nextShown) model.nextChapter()
+            // ZOUKAN <--
         }
     }
 
@@ -265,9 +291,12 @@ fun PagedViewer(
     // ZOUKAN <--
 
     val pageContent: @Composable (Int) -> Unit = { index ->
+        // Counts recompositions after the first, for tests
+        val first = remember { booleanArrayOf(true) }
+        SideEffect { if (first[0]) first[0] = false else ReaderCompositionProbe.pageRecompositions.merge(index, 1, Int::plus) }
         when (index) {
-            0 -> ChapterTransition(state.chapter, state.previousChapter, next = false, color = foreground, onGo = { model.previousChapter(atEnd = true) })
-            spreads.size + 1 -> ChapterTransition(state.chapter, state.nextChapter, next = true, color = foreground, onGo = { model.nextChapter() })
+            0 -> ChapterTransition(content.chapter, content.previousChapter, next = false, color = foreground, onGo = { model.previousChapter(atEnd = true) })
+            spreads.size + 1 -> ChapterTransition(content.chapter, content.nextChapter, next = true, color = foreground, onGo = { model.nextChapter() })
             else -> {
                 val spread = spreads[index - 1]
                 if (spread.pages.size == 2) {
@@ -317,6 +346,7 @@ fun PagedViewer(
     Box(
         Modifier
             .fillMaxSize()
+            .onSizeChanged { model.onViewport(it.width) }
             .onPointerEvent(PointerEventType.Scroll) { event ->
                 val change = event.changes.firstOrNull() ?: return@onPointerEvent
                 val delta = change.scrollDelta
@@ -417,7 +447,7 @@ fun PagedViewer(
         }
         // ZOUKAN -->
         if (tapZones != null) {
-            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, vertical, ReaderNavigation.Invert.of(navInvert), smallerZones))
+            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, vertical, ReaderNavigation.Invert.of(navInvert), smallerZones), rtl = rtl, vertical = vertical)
         }
         // ZOUKAN <--
     }

@@ -42,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -67,13 +69,13 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
@@ -169,11 +171,13 @@ object CategoryScreen : Screen {
                     }
                 }
             }
+            val addLabel = localized(MR.strings.action_add)
             ExtendedFloatingActionButton(
-                text = { Text(localized(MR.strings.action_add)) },
+                text = { Text(addLabel) },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 onClick = { model.showDialog(CategoryDialog.Create) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("category-add"),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("category-add")
+                    .semantics { contentDescription = addLabel },
             )
         }
 
@@ -190,7 +194,7 @@ object CategoryScreen : Screen {
             )
             is CategoryDialog.Rename -> CategoryNameDialog(
                 title = localized(MR.strings.action_rename_category),
-                confirmLabel = "OK",
+                confirmLabel = localized(MR.strings.action_ok),
                 initial = dialog.category.name,
                 existing = names,
                 onDismiss = model::dismissDialog,
@@ -207,7 +211,7 @@ object CategoryScreen : Screen {
                             model.dismissDialog()
                         },
                         modifier = Modifier.testTag("category-confirm"),
-                    ) { Text("OK") }
+                    ) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )

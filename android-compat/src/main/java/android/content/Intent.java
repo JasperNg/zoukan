@@ -31,6 +31,7 @@ import android.util.ArraySet;
 
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.URISyntaxException;
@@ -5525,6 +5526,25 @@ public class Intent implements Parcelable, Cloneable {
     public Serializable getSerializableExtra(String name) {
         return mExtras == null ? null : mExtras.getSerializable(name);
     }
+
+    // ZOUKAN -->
+    /** As Android (API 33): the extra when it is a [clazz], else null. */
+    public <T> T getParcelableExtra(String name, Class<T> clazz) {
+        return mExtras == null ? null : mExtras.getParcelable(name, clazz);
+    }
+
+    public <T> ArrayList<T> getParcelableArrayListExtra(String name, Class<? extends T> clazz) {
+        return mExtras == null ? null : mExtras.<T>getParcelableArrayList(name, clazz);
+    }
+
+    public <T> T[] getParcelableArrayExtra(String name, Class<T> clazz) {
+        return mExtras == null ? null : mExtras.getParcelableArray(name, clazz);
+    }
+
+    public <T extends Serializable> T getSerializableExtra(String name, Class<T> clazz) {
+        return mExtras == null ? null : mExtras.getSerializable(name, clazz);
+    }
+    // ZOUKAN <--
     /**
      * Retrieve extended data from the intent.
      *

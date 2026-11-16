@@ -42,7 +42,8 @@ class AndroidCookieJar : CookieJar {
         }
 
         return cookies.split(";")
-            .map { it.substringBefore("=") }
+            // ZOUKAN: trimmed, so a named removal (cf_clearance) also finds cookies after the first
+            .map { it.substringBefore("=").trim() }
             .filterNames()
             .onEach { manager.setCookie(urlString, "$it=;Max-Age=$maxAge") }
             .count()

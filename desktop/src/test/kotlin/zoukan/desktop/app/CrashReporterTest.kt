@@ -3,6 +3,7 @@ package zoukan.desktop.app
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -40,6 +41,50 @@ class CrashReporterTest {
         report!!.name shouldStartWith "unclean-exit-"
         report.readText() shouldContain "last thing logged"
         CrashReporter.checkPreviousRun(dirs) shouldBe null
+    }
+
+    @Test
+    fun `a report does not contain a token that was logged`() {
+        val dirs = ZoukanDirs(root)
+        dirs.logs.mkdirs()
+        File(dirs.logs, ".running-$DEAD_PID").writeText("$DEAD_PID")
+        File(dirs.logs, "zoukan.log").writeText(
+            "first line\n" +
+                "ERROR Not a tracker sign-in address: komikku://anilist-auth#access_token=SECRETTOKEN1&token_type=Bearer\n" +
+                "WARN redirect komikku://myanimelist-auth?code=SECRETCODE2\n" +
+                "last thing logged\n",
+        )
+        val text = CrashReporter.checkPreviousRun(dirs)!!.readText()
+        text shouldContain "last thing logged"
+        text shouldNotContain "SECRETTOKEN1"
+        text shouldNotContain "SECRETCODE2"
+    }
+
+    @Test
+    fun `a report does not contain a token from the exception message`() {
+        val e = IllegalStateException("Sign-in failed for komikku://myanimelist-auth?code=SECRETCODE4 with Bearer SECRETBEARER5")
+        val text = CrashReporter.report(Thread.currentThread(), e, fatal = true)
+        text shouldContain "IllegalStateException"
+        text shouldNotContain "SECRETCODE4"
+        text shouldNotContain "SECRETBEARER5"
+    }
+
+    @Test
+    fun `a copied JVM crash file has no environment values`() {
+        val dirs = ZoukanDirs(root)
+        dirs.logs.mkdirs()
+        val pid = DEAD_PID + 2
+        File(dirs.logs, ".running-$pid").writeText("")
+        File(dirs.logs, ".running-$pid").setLastModified(System.currentTimeMillis() - 60_000)
+        File(root, "hs_err_pid$pid.log").writeText(
+            "# A fatal error has been detected by the Java Runtime Environment\n\n" +
+                "Environment Variables:\nGITHUB_TOKEN=ghp_SECRETENV3\nPATH=/usr/bin\n\n" +
+                "Signal Handlers:\n",
+        )
+        val copy = CrashReporter.checkPreviousRun(dirs)!!
+        copy.readText() shouldContain "fatal error"
+        copy.readText() shouldNotContain "ghp_SECRETENV3"
+        File(root, "hs_err_pid$pid.log").readText() shouldContain "ghp_SECRETENV3"
     }
 
     @Test

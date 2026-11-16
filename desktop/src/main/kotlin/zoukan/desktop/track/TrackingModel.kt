@@ -4,20 +4,26 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
+import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.track.DeletableTracker
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
+import eu.kanade.tachiyomi.source.online.MetadataSource
+import exh.metadata.metadata.base.TrackerIdMetadata
+import exh.source.getMainSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.DeleteTrack
@@ -26,7 +32,7 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 
 /** One manga's tracking: the logged-in trackers, its tracks, search and binding, and edits. */
 class TrackingModel(
@@ -36,6 +42,10 @@ class TrackingModel(
     private val deleteTrack: DeleteTrack = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
     private val insertTrack: InsertTrack = Injekt.get(),
+    // SY -->
+    private val trackPreferences: TrackPreferences = Injekt.get(),
+    private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
+    // SY <--
 ) : StateScreenModel<TrackingModel.State>(State()) {
 
     data class Item(val tracker: Tracker, val track: Track?)
@@ -70,9 +80,62 @@ class TrackingModel(
         mutableState.update {
             it.copy(searching = tracker, query = track?.title ?: manga.ogTitle, results = null, loading = false, error = null)
         }
-        // Enhanced trackers match by the source's ids instead of a search
-        if (tracker is EnhancedTracker) matchEnhanced(tracker) else search()
+        when {
+            // Enhanced trackers match by the source's ids instead of a search
+            tracker is EnhancedTracker -> matchEnhanced(tracker)
+            // SY's "Resolve with source metadata": the tracker's id in the entry's metadata. Only
+            // for a new track: tracking a different entry would find the same one again
+            track == null && trackPreferences.resolveUsingSourceMetadata().get() -> resolveFromMetadata(tracker)
+            else -> search()
+        }
     }
+
+    // SY -->
+    /**
+     * Registers the tracker's entry whose id the manga's source metadata holds, as SY's
+     * TrackInfoDialog newSearch; without one, or when it cannot be registered, searches instead.
+     */
+    private fun resolveFromMetadata(tracker: Tracker) {
+        searchJob?.cancel()
+        mutableState.update { it.copy(loading = true) }
+        searchJob = screenModelScope.launch {
+            val registered = withContext(Dispatchers.IO) {
+                val remoteId = trackerIdFromMetadata(tracker.id) ?: return@withContext false
+                registerTrackingById(tracker, remoteId)
+            }
+            if (registered) {
+                applyResult(tracker) { it.copy(searching = null, results = null, loading = false, error = null) }
+            } else if (state.value.searching === tracker) {
+                mutableState.update { it.copy(loading = false) }
+                search()
+            }
+        }
+    }
+
+    /** The id of the entry on [trackerId] in the manga's source metadata, as SY's getTrackerIdFromMetadata. */
+    private suspend fun trackerIdFromMetadata(trackerId: Long): String? = try {
+        val metadataSource = sourceManager.get(manga.source)?.getMainSource<MetadataSource<*, *>>()
+        val metadata = metadataSource?.let { getFlatMetadataById.await(manga.id)?.raise(it.metaClass) }
+        TrackerMetadataIds.idFor(trackerId, metadata as? TrackerIdMetadata)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        logcat(LogPriority.ERROR, e) { "Failed to get tracker ID from metadata" }
+        null
+    }
+
+    /** As SY's registerTrackingById; the registration finishes even when the search closes. */
+    private suspend fun registerTrackingById(tracker: Tracker, remoteId: String): Boolean = try {
+        val found = tracker.searchById(remoteId)
+        if (found != null) withContext(NonCancellable) { tracker.register(found, manga.id) }
+        found != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        logcat(LogPriority.ERROR, e) { "Failed to register tracking by id" }
+        false
+    }
+    // SY <--
 
     fun setQuery(query: String) = mutableState.update { it.copy(query = query) }
 

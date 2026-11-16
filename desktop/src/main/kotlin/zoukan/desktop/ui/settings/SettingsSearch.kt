@@ -24,6 +24,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.reducedMotion
 
 /**
  * Settings search, as the Android app's SettingsSearchScreen: what is typed is matched against
@@ -83,7 +86,7 @@ internal class SearchScope(
     override fun item(key: Any?, contentType: Any?, content: @Composable LazyItemScope.() -> Unit) {
         val id = SettingsSearch.itemId(key, index++)
         if (key is String && key.startsWith(GROUP_KEY_PREFIX)) {
-            group = key.removePrefix(GROUP_KEY_PREFIX).trim()
+            group = (contentType as? SettingsGroupHeader)?.title ?: key.removePrefix(GROUP_KEY_PREFIX)
             return
         }
         val shownGroup = group
@@ -153,14 +156,24 @@ internal class HighlightScope(
 /** The key prefix of [settingsGroup] headers. */
 internal const val GROUP_KEY_PREFIX = "group-"
 
-/** Fades a highlight behind [content] in and out, twice. */
+/** The content type of a [settingsGroup] header: it carries the title, which the key (an id) may not. */
+internal data class SettingsGroupHeader(val title: String)
+
+/** Fades a highlight behind [content] in and out, twice; a static tint for as long when motion is reduced. */
 @Composable
 private fun Highlighted(content: @Composable () -> Unit) {
     val alpha = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        repeat(2) {
-            alpha.animateTo(0.35f, tween(300))
-            alpha.animateTo(0f, tween(500))
+    val reduced by reducedMotion()
+    LaunchedEffect(reduced) {
+        if (reduced) {
+            alpha.snapTo(0.35f)
+            delay(1600)
+            alpha.snapTo(0f)
+        } else {
+            repeat(2) {
+                alpha.animateTo(0.35f, tween(300))
+                alpha.animateTo(0f, tween(500))
+            }
         }
     }
     val color = MaterialTheme.colorScheme.primary
@@ -193,7 +206,7 @@ private fun SearchResult(
                             opened = true
                             onOpen()
                         }
-                    }.padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 0.dp),
+                    }.padding(start = Spacing.SettingsRowInset, end = Spacing.SettingsRowInset, top = 12.dp, bottom = 0.dp),
                 )
                 CompositionLocalProvider(LocalSearchTexts provides texts, LocalSearchQuery provides query) { content() }
             }

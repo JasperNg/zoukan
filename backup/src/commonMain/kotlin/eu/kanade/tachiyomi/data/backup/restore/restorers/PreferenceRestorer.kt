@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.data.backup.models.StringSetPreferenceValue
 import eu.kanade.tachiyomi.source.sourcePreferences
 import exh.EXHMigrations
 import exh.log.xLogE
+import kotlinx.coroutines.CancellationException
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.plusAssign
 import tachiyomi.domain.category.interactor.GetCategories
@@ -32,11 +33,14 @@ class PreferenceRestorer(
     private val getCategories: GetCategories = Injekt.get(),
     private val preferenceStore: PreferenceStore = Injekt.get(),
 ) {
+    // ZOUKAN -->
+    /** @return a message for each setting that was not restored. */
+    // ZOUKAN <--
     suspend fun restoreApp(
         preferences: List<BackupPreference>,
         backupCategories: List<BackupCategory>?,
-    ) {
-        restorePreferences(
+    ): List<String> {
+        val problems = restorePreferences(
             preferences,
             preferenceStore,
             backupCategories,
@@ -44,23 +48,30 @@ class PreferenceRestorer(
 
         // ZOUKAN -->
         onAppPreferencesRestored()
+        return problems
         // ZOUKAN <--
     }
 
-    suspend fun restoreSource(preferences: List<BackupSourcePreferences>) {
-        preferences.forEach {
-            // ZOUKAN -->
+    // ZOUKAN -->
+    /** @return a message for each setting that was not restored. */
+    // ZOUKAN <--
+    suspend fun restoreSource(preferences: List<BackupSourcePreferences>): List<String> {
+        // ZOUKAN -->
+        return preferences.flatMap {
             val sourcePrefs = sourcePreferenceStore(sourcePreferences(it.sourceKey))
-            // ZOUKAN <--
             restorePreferences(it.prefs, sourcePrefs)
         }
+        // ZOUKAN <--
     }
 
     private suspend fun restorePreferences(
         toRestore: List<BackupPreference>,
         preferenceStore: PreferenceStore,
         backupCategories: List<BackupCategory>? = null,
-    ) {
+    ): List<String> {
+        // ZOUKAN -->
+        val problems = mutableListOf<String>()
+        // ZOUKAN <--
         val allCategories = if (backupCategories != null) getCategories.await() else emptyList()
         val categoriesByName = allCategories.associateBy { it.name }
         val backupCategoriesById = backupCategories?.associateBy { it.id.toString() }.orEmpty()
@@ -69,7 +80,9 @@ class PreferenceRestorer(
             try {
                 when (value) {
                     is IntPreferenceValue -> {
-                        if (prefs[key] is Int?) {
+                        // ZOUKAN -->
+                        if (prefs[key] is Int? || prefs[key].parsesAs(String::toIntOrNull)) {
+                            // ZOUKAN <--
                             val newValue = if (key == LibraryPreferences.DEFAULT_CATEGORY_PREF_KEY) {
                                 backupCategoriesById[value.value.toString()]
                                     ?.let { categoriesByName[it.name]?.id?.toInt() }
@@ -78,26 +91,52 @@ class PreferenceRestorer(
                             }
 
                             newValue?.let { preferenceStore.getInt(key).set(it) }
+                            // ZOUKAN -->
+                        } else {
+                            problems += notRestored(key)
+                            // ZOUKAN <--
                         }
                     }
                     is LongPreferenceValue -> {
-                        if (prefs[key] is Long?) {
+                        // ZOUKAN -->
+                        if (prefs[key] is Long? || prefs[key].parsesAs(String::toLongOrNull)) {
+                            // ZOUKAN <--
                             preferenceStore.getLong(key).set(value.value)
+                            // ZOUKAN -->
+                        } else {
+                            problems += notRestored(key)
+                            // ZOUKAN <--
                         }
                     }
                     is FloatPreferenceValue -> {
-                        if (prefs[key] is Float?) {
+                        // ZOUKAN -->
+                        if (prefs[key] is Float? || prefs[key].parsesAs(String::toFloatOrNull)) {
+                            // ZOUKAN <--
                             preferenceStore.getFloat(key).set(value.value)
+                            // ZOUKAN -->
+                        } else {
+                            problems += notRestored(key)
+                            // ZOUKAN <--
                         }
                     }
                     is StringPreferenceValue -> {
                         if (prefs[key] is String?) {
                             preferenceStore.getString(key).set(value.value)
+                            // ZOUKAN -->
+                        } else {
+                            problems += notRestored(key)
+                            // ZOUKAN <--
                         }
                     }
                     is BooleanPreferenceValue -> {
-                        if (prefs[key] is Boolean?) {
+                        // ZOUKAN -->
+                        if (prefs[key] is Boolean? || prefs[key].parsesAs(String::toBooleanStrictOrNull)) {
+                            // ZOUKAN <--
                             preferenceStore.getBoolean(key).set(value.value)
+                            // ZOUKAN -->
+                        } else {
+                            problems += notRestored(key)
+                            // ZOUKAN <--
                         }
                     }
                     is StringSetPreferenceValue -> {
@@ -123,16 +162,37 @@ class PreferenceRestorer(
                                         preferenceStore.getStringSet(key).set(value.value)
                                 }
                             }
+                            // ZOUKAN -->
+                        } else {
+                            problems += notRestored(key)
+                            // ZOUKAN <--
                         }
                     }
                 }
+                // ZOUKAN -->
+            } catch (e: CancellationException) {
+                throw e
+                // ZOUKAN <--
             } catch (e: Exception) {
                 // KMK -->
                 xLogE("Failed to restore preference <$key>", e)
                 // KMK <--
+                // ZOUKAN -->
+                problems += "Setting $key was not restored: ${e.message}"
+                // ZOUKAN <--
             }
         }
+        // ZOUKAN -->
+        return problems
+        // ZOUKAN <--
     }
+
+    // ZOUKAN -->
+    private fun notRestored(key: String) = "Setting $key was not restored: it is stored as another type"
+
+    /** A value saved as plain text by an older version, which reads as [parse]'s type. */
+    private fun Any?.parsesAs(parse: (String) -> Any?): Boolean = this is String && parse(this) != null
+    // ZOUKAN <--
 
     private fun restoreCategoriesPreference(
         key: String,

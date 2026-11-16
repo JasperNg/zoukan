@@ -68,6 +68,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -76,11 +77,10 @@ import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import exh.md.utils.MdUtil
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,28 +91,39 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.Toasts
+import zoukan.desktop.backup.BackupJobs
 import zoukan.desktop.backup.DesktopBackups
-import zoukan.desktop.backup.RestoreGate
+import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.CbzPassword
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.Corners
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
-import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
 import java.awt.Desktop
 import java.awt.FileDialog
 import java.io.File
 
+/** The backups and restores started from Settings; the screens and the settings pages share this one. */
+internal val backupJobs = BackupJobs(
+    scope = AppScope,
+    backups = { DesktopBackups(ZoukanRuntime.dirs.android) },
+    sensitivePrompt = { count -> sensitiveSettingsChoice(count) },
+    storePrompt = SwingStorePrompt,
+)
+
 /** What a backup or restore started from Settings is doing, shown in place of its buttons. */
-internal val backupStatusFlow = MutableStateFlow<String?>(null)
+internal val backupStatusFlow: StateFlow<String?> get() = backupJobs.status
 
 /**
  * The settings pages, in the order and with the names of the Android app's settings list. Desktop
@@ -149,9 +160,17 @@ fun openSettingsCategory(category: SettingsCategory) {
     selectedCategory = category
 }
 
+/** How wide the list of pages is when [available] width is shared with the open page. */
+internal fun settingsListWidth(available: Dp): Dp =
+    if (available < Spacing.TwoPaneBreakpoint) {
+        Spacing.SettingsListNarrowWidth.coerceAtMost(available / 2)
+    } else {
+        (available / 2).coerceAtMost(Spacing.SettingsListMaxWidth)
+    }
+
 /**
  * Settings, laid out as the Android app's tablet settings: the list of pages on the left (half the
- * width, at most 450dp) and the open page on the right.
+ * width, at most 450dp; a fixed narrower width in small windows) and the open page on the right.
  */
 @Composable
 fun SettingsTab() {
@@ -181,7 +200,7 @@ fun SettingsTab() {
                     val count = categories.count { !it.isSystemCategory }
                     SettingRow(
                         localized(MR.strings.action_edit_categories),
-                        if (count == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, count),
+                        localizedPlural(DMR.plurals.categories, count, count),
                         onClick = { navigator.push(CategoryScreen) },
                     )
                 }
@@ -228,7 +247,7 @@ fun SettingsTab() {
         // Every item but the end spacer has no height when nothing matches
         val nothing by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.none { it.size > 0 && it.key != "search-end" } } }
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+            LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
                 pages.forEach { SearchScope(this, it, query, onOpen).settingsPage(it) }
                 item(key = "search-end") { Spacer(Modifier.height(24.dp)) }
             }
@@ -244,7 +263,7 @@ fun SettingsTab() {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val listWidth = (maxWidth / 2).coerceAtMost(450.dp)
+        val listWidth = settingsListWidth(maxWidth)
         Row(Modifier.fillMaxSize()) {
             Surface(color = palerSurface(), modifier = Modifier.width(listWidth).fillMaxHeight()) {
                 SettingsCategoryList(pages, if (searching) null else selected) {
@@ -267,7 +286,7 @@ fun SettingsTab() {
                         val state = rememberLazyListState()
                         val ids = remember { mutableListOf<Any>() }
                         val highlight = highlightedItem?.takeIf { it.first == selected }?.second
-                        LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+                        LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
                             ids.clear()
                             HighlightScope(this, highlight, ids).settingsPage(selected)
                             item { Spacer(Modifier.height(24.dp)) }
@@ -289,41 +308,9 @@ fun SettingsTab() {
     }
 
     if (passwordDialog) {
-        var password by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { passwordDialog = false },
-            title = { Text(localized(DMR.strings.download_password)) },
-            text = {
-                OutlinedTextField(
-                    password,
-                    { password = it },
-                    singleLine = true,
-                    label = { Text(localized(MR.strings.password)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                )
-            },
-            confirmButton = {
-                TextButton(enabled = password.isNotEmpty(), onClick = {
-                    cbzPassword.set(password)
-                    hasPassword = true
-                    passwordDialog = false
-                    Toasts.show(localized(DMR.strings.download_password_saved))
-                }) { Text(localized(MR.strings.action_save)) }
-            },
-            dismissButton = {
-                Row {
-                    if (hasPassword) {
-                        TextButton(onClick = {
-                            cbzPassword.set("")
-                            securityPreferences.passwordProtectDownloads().set(false)
-                            hasPassword = false
-                            passwordDialog = false
-                        }) { Text(localized(MR.strings.action_remove)) }
-                    }
-                    TextButton(onClick = { passwordDialog = false }) { Text(localized(MR.strings.action_cancel)) }
-                }
-            },
-        )
+        DownloadPasswordDialog(cbzPassword, securityPreferences.passwordProtectDownloads(), hasPassword, { hasPassword = it }) {
+            passwordDialog = false
+        }
     }
 }
 
@@ -444,13 +431,16 @@ private fun LazyListScope.downloadSettings(
         SwitchPreference(
             localized(DMR.strings.password_protect_downloads),
             securityPreferences.passwordProtectDownloads(),
-            if (hasPassword) localized(DMR.strings.new_cbz_downloads_are_encrypted_with) else localized(DMR.strings.set_a_password_first),
+            if (hasPassword) localized(DMR.strings.new_cbz_downloads_are_encrypted_with) else localized(DMR.strings.set_a_download_password_first_only_cbz),
+            // As Android: nothing to encrypt with until a password is set
+            enabled = hasPassword,
         )
     }
     item {
         SettingRow(
             if (hasPassword) localized(DMR.strings.change_the_download_password) else localized(DMR.strings.set_the_download_password),
-            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name),
+            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name) +
+                if (hasPassword) " " + localized(DMR.strings.existing_downloads_keep_their_password) else "",
             onClick = onEditPassword,
         )
     }
@@ -468,88 +458,23 @@ private fun LazyListScope.downloadSettings(
 }
 
 /** Writes a backup of what [options] picks (Create backup's choices) to [file]. */
-internal fun createBackup(file: File, options: BackupOptions) {
-    if (backupStatusFlow.value != null) return
-    backupStatusFlow.value = localized(DMR.strings.backing_up)
-    AppScope.launch {
-        try {
-            val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, options)
-            Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
-        } catch (e: Exception) {
-            Toasts.error(localized(MR.strings.creating_backup_error), e)
-        } finally {
-            backupStatusFlow.value = null
-        }
-    }
-}
-
-/** How a restore that [restoreBackup] started ended. */
-enum class RestoreOutcome { OK, FAILED, CANCELLED }
+internal fun createBackup(file: File, options: BackupOptions) = backupJobs.create(file, options)
 
 /**
  * Restores what [options] picks (Restore backup's choices) from [file]. Returns null, and does
  * nothing, while another backup or restore runs; otherwise how the restore ends.
  */
-internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<RestoreOutcome>? {
-    if (!backupStatusFlow.compareAndSet(null, localized(DMR.strings.restoring, file.name))) return null
-    val outcome = CompletableDeferred<RestoreOutcome>()
-    AppScope.launch {
-        var result = RestoreOutcome.FAILED
-        try {
-            // The gate holds the background jobs off while the library is half-restored
-            RestoreGate.whileRestoring {
-                try {
-                    val backups = DesktopBackups(ZoukanRuntime.dirs.android)
-                    val backup = backups.read(file)
-                    // Extension stores decide whose code runs, so a backup adds them only when the user
-                    // has seen which ones
-                    val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
-                    val chosen = when {
-                        newStores.isEmpty() -> options
-                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
-                            true -> options
-                            false -> options.copy(extensionStores = false)
-                            null -> {
-                                result = RestoreOutcome.CANCELLED
-                                return@launch
-                            }
-                        }
-                    }
-                    val errors = backups.restore(backup, chosen) { _, progress, total ->
-                        backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
-                    }
-                    result = RestoreOutcome.OK
-                    Toasts.show(
-                        if (errors.isEmpty()) {
-                            localized(DMR.strings.restored_entries, backup.backupManga.size)
-                        } else {
-                            localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
-                        },
-                    )
-                } catch (e: Exception) {
-                    Toasts.error(localized(DMR.strings.restore_failed), e)
-                } finally {
-                    backupStatusFlow.value = null
-                }
-            }
-        } finally {
-            outcome.complete(result)
-        }
-    }
-    return outcome
-}
+internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<RestoreOutcome>? = backupJobs.restore(file, options)
+
+/** How a restore decides about security settings and logins; tests replace the native dialog. */
+internal var sensitiveSettingsChoice: (count: Int) -> Boolean? = ::confirmSensitive
 
 /**
- * Asks whether a restore may add the extension stores a backup lists. True adds them, false
- * restores without them, null cancels the restore.
+ * Asks whether a restore may also write the [count] security settings and logins a backup holds.
+ * True writes them, false restores without them, null cancels the restore.
  */
-private fun confirmStores(stores: List<String>): Boolean? {
-    val shown = stores.take(8).map { it.take(140) } + listOfNotNull(localized(DMR.strings.and_more, stores.size - 8).takeIf { stores.size > 8 })
-    val message = if (stores.size == 1) {
-        localized(DMR.strings.backup_adds_one_store, shown.joinToString("\n"))
-    } else {
-        localized(DMR.strings.backup_adds_stores, stores.size, shown.joinToString("\n"))
-    }
+private fun confirmSensitive(count: Int): Boolean? {
+    val message = localized(DMR.strings.restore_sensitive_settings, count)
     var choice = javax.swing.JOptionPane.CANCEL_OPTION
     val ask = Runnable {
         choice = javax.swing.JOptionPane.showOptionDialog(
@@ -559,7 +484,7 @@ private fun confirmStores(stores: List<String>): Boolean? {
             javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
             javax.swing.JOptionPane.WARNING_MESSAGE,
             null,
-            arrayOf(localized(MR.strings.action_add), localized(DMR.strings.restore_without), localized(MR.strings.action_cancel)),
+            arrayOf(localized(MR.strings.action_restore), localized(DMR.strings.restore_without), localized(MR.strings.action_cancel)),
             localized(DMR.strings.restore_without),
         )
     }

@@ -4,8 +4,8 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.Version
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.whatsnew.ReleaseNotes.Block
 import zoukan.desktop.ui.whatsnew.ReleaseNotes.Span
 

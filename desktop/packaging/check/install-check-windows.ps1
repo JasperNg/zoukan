@@ -65,7 +65,7 @@ Add-Result 'Desktop shortcut' ($null -ne $desktopLink) $(if ($desktopLink) { $de
 foreach ($file in @($msi.FullName, $exe) | Where-Object { $_ }) {
     $sig = Get-AuthenticodeSignature $file
     # Unsigned is allowed until a certificate is set up; a broken signature is not
-    $ok = $sig.Status -in @('Valid', 'NotSigned', 'UnknownError')
+    $ok = $sig.Status -in @('Valid', 'NotSigned')
     Add-Result ("Signature of " + (Split-Path $file -Leaf)) $ok ("{0}{1}" -f $sig.Status, $(if ($sig.SignerCertificate) { ", " + $sig.SignerCertificate.Subject } else { '' }))
 }
 
@@ -93,3 +93,6 @@ if (Test-Path (Join-Path $out 'selftest-windows.md')) { $md += "`n" + (Get-Conte
 Set-Content -Path (Join-Path $out 'install-check-windows.md') -Value $md -Encoding UTF8
 Write-Host "Report: $out\install-check-windows.md"
 if ($failed) { exit 1 }
+# An explicit 0: a script that ends without exit leaves $LASTEXITCODE as it was, and the release
+# workflow reads $LASTEXITCODE after calling this script
+exit 0

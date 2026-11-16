@@ -9,28 +9,12 @@ package androidx.preference;
 
 import android.content.Context;
 
-import java.util.LinkedList;
-import java.util.List;
-
-public class PreferenceScreen extends Preference {
-    /** Tachidesk specific API */
-    private List<Preference> preferences = new LinkedList<>();
-
+// ZOUKAN: whole file -->
+// A PreferenceGroup, as on Android; addPreference and getPreferences (the direct children)
+// are PreferenceGroup's
+public class PreferenceScreen extends PreferenceGroup {
     public PreferenceScreen(Context context) {
         super(context);
     }
-
-    public boolean addPreference(Preference preference) {
-        // propagate own shared preferences
-        preference.setSharedPreferences(getSharedPreferences());
-
-        preferences.add(preference);
-
-        return true;
-    }
-
-    /** Tachidesk specific API */
-    public List<Preference> getPreferences(){
-        return preferences;
-    }
 }
+// ZOUKAN: whole file <--

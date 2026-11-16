@@ -1,13 +1,11 @@
 package zoukan.desktop.ui
 
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -45,6 +43,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.download.CbzWriter
@@ -53,8 +54,6 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.browse.BrowseScreenModel
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.extension.DesktopExtensionManager
 import java.awt.image.BufferedImage
@@ -286,8 +285,6 @@ class EndToEndDownloadTest {
         }
 
     private fun ComposeUiTest.shot(name: String) {
-        waitForIdle()
-        val image = onRoot().captureToImage().toAwtImage()
-        ImageIO.write(image, "png", File(shots, "$name.png"))
+        saveScreenshot(shots, name)
     }
 }

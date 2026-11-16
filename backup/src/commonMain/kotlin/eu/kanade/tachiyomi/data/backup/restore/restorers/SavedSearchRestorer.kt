@@ -33,7 +33,9 @@ class SavedSearchRestorer(
                         currentSavedSearch.name == backupSavedSearch.name &&
                         // KMK -->
                         currentSavedSearch.query.orEmpty() == backupSavedSearch.query &&
-                        (currentSavedSearch.filters_json ?: "[]") == backupSavedSearch.filterList
+                        // ZOUKAN -->
+                        (currentSavedSearch.filters_json ?: "[]") == backupSavedSearch.filterList.ifBlank { "[]" }
+                    // ZOUKAN <--
                     // KMK <--
                 }
             }.forEach { backupSavedSearch ->

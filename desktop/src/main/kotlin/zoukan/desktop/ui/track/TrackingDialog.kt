@@ -40,8 +40,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.data.track.DeletableTracker
@@ -227,7 +229,7 @@ private fun ChapterField(lastRead: Double, total: Long, onSet: (Int) -> Unit) {
         label = { Text(if (total > 0) localized(DMR.strings.chapter_of, total) else localized(DMR.strings.chapter)) },
         modifier = Modifier.width(150.dp).onPreviewKeyEvent {
             if (it.key == Key.Enter) {
-                commit()
+                if (it.type == KeyEventType.KeyDown) commit()
                 true
             } else {
                 false
@@ -266,7 +268,7 @@ private fun DateField(label: String, epochMillis: Long, onSet: (Long) -> Unit) {
         supportingText = if (epochMillis > 0) ({ Text(formatDate(epochMillis)) }) else null,
         modifier = Modifier.width(220.dp).onPreviewKeyEvent {
             if (it.key == Key.Enter) {
-                commit()
+                if (it.type == KeyEventType.KeyDown) commit()
                 true
             } else {
                 false
@@ -286,7 +288,7 @@ private fun SearchPane(state: TrackingModel.State, model: TrackingModel) {
             label = { Text(localized(MR.strings.title)) },
             modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
                 if (it.key == Key.Enter) {
-                    model.search()
+                    if (it.type == KeyEventType.KeyDown) model.search()
                     true
                 } else {
                     false

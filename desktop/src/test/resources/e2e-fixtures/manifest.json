@@ -1,0 +1,140 @@
+{
+  "pages": {
+    "jpeg": [
+      {
+        "file": "jpeg-1.jpg",
+        "rgb": [
+          200,
+          40,
+          40
+        ]
+      },
+      {
+        "file": "jpeg-2.jpg",
+        "rgb": [
+          160,
+          30,
+          90
+        ]
+      },
+      {
+        "file": "jpeg-3.jpg",
+        "rgb": [
+          220,
+          110,
+          30
+        ]
+      }
+    ],
+    "png": [
+      {
+        "file": "png-1.png",
+        "rgb": [
+          40,
+          170,
+          60
+        ]
+      },
+      {
+        "file": "png-2.png",
+        "rgb": [
+          20,
+          120,
+          120
+        ]
+      },
+      {
+        "file": "png-3.png",
+        "rgb": [
+          120,
+          180,
+          40
+        ]
+      }
+    ],
+    "webp": [
+      {
+        "file": "webp-1.webp",
+        "rgb": [
+          40,
+          70,
+          200
+        ]
+      },
+      {
+        "file": "webp-2.webp",
+        "rgb": [
+          90,
+          40,
+          180
+        ]
+      },
+      {
+        "file": "webp-3.webp",
+        "rgb": [
+          30,
+          140,
+          210
+        ]
+      }
+    ],
+    "avif": [
+      {
+        "file": "avif-1.avif",
+        "rgb": [
+          230,
+          150,
+          20
+        ]
+      },
+      {
+        "file": "avif-2.avif",
+        "rgb": [
+          200,
+          200,
+          40
+        ]
+      },
+      {
+        "file": "avif-3.avif",
+        "rgb": [
+          240,
+          100,
+          120
+        ]
+      }
+    ],
+    "scrambled": [
+      {
+        "file": "scrambled-1.jpg",
+        "rgb": [
+          60,
+          180,
+          170
+        ]
+      },
+      {
+        "file": "scrambled-2.png",
+        "rgb": [
+          170,
+          60,
+          160
+        ]
+      },
+      {
+        "file": "scrambled-3.avif",
+        "rgb": [
+          100,
+          100,
+          220
+        ]
+      }
+    ]
+  },
+  "covers": [
+    "cover-1.png",
+    "cover-2.png",
+    "cover-3.png",
+    "cover-4.png"
+  ]
+}

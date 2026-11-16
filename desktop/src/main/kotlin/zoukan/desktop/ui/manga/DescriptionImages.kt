@@ -42,14 +42,18 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.size.Dimension
+import coil3.size.Precision
 import coil3.size.Size
 import eu.kanade.domain.ui.UiPreferences
+import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.manga.DescriptionImages.Part
 import zoukan.i18n.desktop.DMR
@@ -250,6 +254,7 @@ internal fun DescriptionImagesText(
     val annotated = remember(parts, loadImages, linkColor) { DescriptionImages.annotate(parts, loadImages, linkColor) }
     // The width the text has is the widest an image shows
     BoxWithConstraints {
+        val requestWidth = constraints.maxWidth.coerceIn(1, MAX_DESCRIPTION_IMAGE_PX)
         val iconSize = style.fontSize * 1.25
         val icon = Placeholder(iconSize, iconSize, PlaceholderVerticalAlign.TextCenter)
         val density = LocalDensity.current
@@ -293,9 +298,13 @@ internal fun DescriptionImagesText(
                             FailedImage(image, labelStyle, linkColor, iconSize, maxLines)
                         } else {
                             AsyncImage(
-                                // The whole image: its size is the room it takes in the text
+                                // Decoded no wider than the text, never larger than the image itself;
+                                // the loaded size keeps the image's ratio, which is the room it takes
                                 model = remember(image.url) {
-                                    ImageRequest.Builder(PlatformContext.INSTANCE).data(image.url).size(Size.ORIGINAL).build()
+                                    ImageRequest.Builder(PlatformContext.INSTANCE).data(image.url)
+                                        .size(Size(Dimension(requestWidth), Dimension.Undefined))
+                                        .precision(Precision.INEXACT)
+                                        .build()
                                 },
                                 imageLoader = loader,
                                 contentDescription = image.label.ifEmpty { null },
@@ -347,9 +356,18 @@ private fun FailedImage(image: Part.Image, labelStyle: TextStyle, color: Color, 
     }
 }
 
+internal object DescriptionImageLinks {
+    /** Opens an address in the system browser; a test replaces it. */
+    internal var browse: (String) -> Unit = ExternalLinks::browse
+}
+
 /** Opens an image's address; a page that cannot open says so, as any link's page does. */
 private fun openImage(url: String) {
-    runCatching { ExternalLinks.browse(url) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
+    // Off the UI thread: starting a cold browser can take seconds. AppScope runs on Dispatchers.IO
+    AppScope.launch {
+        runCatching { DescriptionImageLinks.browse(url) }
+            .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
+    }
 }
 
 /** A link to an image, as Android's description links: bold, in the primary color. Only web addresses are images. */
@@ -360,6 +378,9 @@ private fun imageLink(url: String, color: Color) = LinkAnnotation.Clickable(
 
 /** The inline content of the image icon before a label, as Android's MARKDOWN_INLINE_IMAGE_TAG. */
 private const val IMAGE_ICON = "image-icon"
+
+/** The widest a description image is decoded, however wide the text is. */
+private const val MAX_DESCRIPTION_IMAGE_PX = 2048
 
 /** In place of a size, for an image that did not load. */
 private val FAILED = IntSize.Zero

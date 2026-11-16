@@ -40,14 +40,15 @@ import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetReadMangaNotInLibraryView
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LoadingScreen
@@ -55,7 +56,6 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
-import java.io.File
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -81,7 +81,7 @@ class StatsScreenModel(
     private val getTracks: GetTracks = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
     private val preferences: LibraryPreferences = Injekt.get(),
-    private val storage: ZoukanStorage = Injekt.get(),
+    private val downloadManager: DownloadManager = Injekt.get(),
     // SY -->
     private val getReadMangaNotInLibraryView: GetReadMangaNotInLibraryView = Injekt.get(),
     // SY <--
@@ -125,7 +125,7 @@ class StatsScreenModel(
             localCount = library.count { it.manga.source == LocalSource.ID },
             totalChapters = library.sumOf { it.totalChapters }.toInt(),
             readChapters = library.sumOf { it.readCount }.toInt(),
-            downloadedChapters = countDownloads(storage.downloads),
+            downloadedChapters = countDownloadedChapters(library.map { it.manga }, downloadManager),
             trackedCount = tracks.count { it.value.isNotEmpty() },
             meanScore = if (scores.isEmpty()) Double.NaN else scores.average(),
             trackerCount = loggedIn.size,
@@ -147,15 +147,11 @@ class StatsScreenModel(
                 )
         }
     }
-
-    /** Downloaded chapters: `downloads/<source>/<entry>/<chapter>` (a CBZ or a folder). */
-    private fun countDownloads(root: File): Int =
-        root.listFiles().orEmpty().filter { it.isDirectory }.sumOf { source ->
-            source.listFiles().orEmpty().filter { it.isDirectory }.sumOf { entry ->
-                entry.listFiles().orEmpty().count { (it.isDirectory || it.extension == "cbz") && !it.name.startsWith("_tmp") }
-            }
-        }
 }
+
+/** Downloaded chapters of [library]. */
+internal fun countDownloadedChapters(library: List<Manga>, downloadManager: DownloadManager): Int =
+    library.sumOf { downloadManager.downloadCount(it) }
 
 object StatsScreen : Screen {
     private fun readResolve(): Any = StatsScreen
@@ -242,13 +238,13 @@ private fun Stat(value: String, label: String) {
 }
 
 internal fun formatDuration(ms: Long): String {
-    if (ms <= 0) return "0m"
+    if (ms <= 0) return localized(DMR.strings.duration_minutes, 0)
     val d = ms.milliseconds
     return d.toComponents { days, hours, minutes, _, _ ->
         listOfNotNull(
-            days.takeIf { it > 0 }?.let { "${it}d" },
-            hours.takeIf { it > 0 }?.let { "${it}h" },
-            "${minutes}m".takeIf { days == 0L },
+            days.takeIf { it > 0 }?.let { localized(DMR.strings.duration_days, it) },
+            hours.takeIf { it > 0 }?.let { localized(DMR.strings.duration_hours, it) },
+            localized(DMR.strings.duration_minutes, minutes).takeIf { days == 0L },
         ).joinToString(" ")
     }
 }

@@ -31,12 +31,19 @@ class PersistentCookieStore(
     private val file: File,
     /** Encrypts the file; a plain file from an earlier version is still read, then written encrypted. */
     private val cipher: SettingsFileCodec? = null,
+    /** How long after a change the file is written. */
+    private val saveDelayMillis: Long = 2_000,
+    /** How long after a failed write it is tried again, times the failures so far. */
+    private val retryDelayMillis: Long = 500,
 ) : CookieStore, CookieExpirySource {
     private val delegate: CookieStore = CookieManager().cookieStore
     private val saver = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "cookie-store").apply { isDaemon = true }
     }
     private var pendingSave: ScheduledFuture<*>? = null
+
+    /** Saves failed in a row since the last change; each failure tries again a little later. */
+    private var failedSaves = 0
 
     // HttpCookie keeps its max age relative to when it was created, which it does not expose
     private val expiresAt = Collections.synchronizedMap(IdentityHashMap<HttpCookie, Long>())
@@ -50,6 +57,7 @@ class PersistentCookieStore(
     }
 
     override fun add(uri: URI?, cookie: HttpCookie) {
+        normalize(cookie)
         val expires = System.currentTimeMillis() + cookie.maxAge * 1000
         delegate.add(uri, cookie)
         // After the add and under the prune's lock: a prune either sees the stored cookie in its
@@ -75,7 +83,18 @@ class PersistentCookieStore(
 
     internal fun trackedExpiryCount(): Int = expiresAt.size
 
-    override fun get(uri: URI): List<HttpCookie> = delegate.get(uri)
+    /**
+     * The delegate matches a domain by suffix alone, which would send a cookie for toon.com to
+     * webtoon.com; a domain cookie goes only to its domain and the hosts under it, as in Chromium.
+     */
+    override fun get(uri: URI): List<HttpCookie> {
+        val host = uri.host?.lowercase() ?: return delegate.get(uri)
+        return delegate.get(uri).filter { cookie ->
+            // Without a domain it is host-only, which the delegate matches by the exact host
+            val domain = cookie.domain?.trimStart('.')?.lowercase() ?: return@filter true
+            host == domain || host.endsWith(".$domain")
+        }
+    }
 
     override fun getCookies(): List<HttpCookie> = delegate.cookies
 
@@ -85,10 +104,17 @@ class PersistentCookieStore(
 
     override fun removeAll(): Boolean = delegate.removeAll().also { scheduleSave() }
 
+    /** A change: saved a moment later, so a burst of Set-Cookie headers is written once. */
     @Synchronized
     private fun scheduleSave() {
+        failedSaves = 0
+        scheduleSaveIn(saveDelayMillis)
+    }
+
+    @Synchronized
+    private fun scheduleSaveIn(delayMillis: Long) {
         pendingSave?.cancel(false)
-        pendingSave = saver.schedule(::save, 2, TimeUnit.SECONDS)
+        pendingSave = saver.schedule(::save, delayMillis, TimeUnit.MILLISECONDS)
     }
 
     @Synchronized
@@ -111,7 +137,18 @@ class PersistentCookieStore(
             } catch (_: AtomicMoveNotSupportedException) {
                 Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
-        }.onFailure { logcat(LogPriority.ERROR, it) { "Saving cookies failed" } }
+        }
+            .onSuccess { failedSaves = 0 }
+            .onFailure {
+                logcat(LogPriority.ERROR, it) { "Saving cookies failed" }
+                // On Windows the replace fails while another program has the file open (a virus
+                // scanner, a backup or indexing tool); without another try the file would keep the
+                // old cookies, cleared ones included, until the next change
+                if (failedSaves < MAX_SAVE_RETRIES) {
+                    failedSaves++
+                    scheduleSaveIn(retryDelayMillis * failedSaves)
+                }
+            }
     }
 
     private fun load() {
@@ -124,11 +161,17 @@ class PersistentCookieStore(
             wasPlain = cipher != null && plain === stored
             json.decodeFromString<List<StoredCookie>>(plain.decodeToString())
         }
-            .onFailure { logcat(LogPriority.ERROR, it) { "Reading cookies failed" } }
+            .onFailure {
+                logcat(LogPriority.ERROR, it) { "Reading cookies failed" }
+                // The next save would replace a file that could not be read (a lost key, a damaged
+                // file) and every session in it; keep it beside the new one, as settings files do
+                runCatching { file.copyTo(File(file.path + ".unreadable"), overwrite = true) }
+                    .onFailure { e -> logcat(LogPriority.ERROR, e) { "Keeping the unreadable cookie file failed" } }
+            }
             .getOrDefault(emptyList())
             .filter { it.expiresAt > now }
             .forEach { stored ->
-                val cookie = stored.toHttpCookie(now)
+                val cookie = stored.toHttpCookie(now).also(::normalize)
                 expiresAt[cookie] = stored.expiresAt
                 delegate.add(URI(stored.uri), cookie)
             }
@@ -171,7 +214,21 @@ class PersistentCookieStore(
     }
 
     private companion object {
+        /**
+         * Chromium's semantics for every cookie, however it came: no leading dot on the domain
+         * (OkHttp writes domain=example.com and Chromium .example.com for the same cookie, which
+         * java.net would keep and send twice), and Netscape (version 0) domain matching, which a
+         * Max-Age attribute would otherwise turn into RFC 2965's.
+         */
+        fun normalize(cookie: HttpCookie) {
+            cookie.domain?.let { if (it.startsWith('.')) cookie.domain = it.trimStart('.') }
+            cookie.version = 0
+        }
+
         val json = Json { ignoreUnknownKeys = true }
         const val MIN_PRUNE_AT = 256
+
+        /** Tries after a failed save, 0.5 s to 2.5 s apart: 7.5 s in all. */
+        const val MAX_SAVE_RETRIES = 5
     }
 }

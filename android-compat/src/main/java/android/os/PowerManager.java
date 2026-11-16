@@ -65,6 +65,15 @@ public final class PowerManager {
 
     public final class WakeLock {
         int count = 0;
+        // ZOUKAN -->
+        private java.util.function.Supplier<Runnable> holder;
+        private Runnable letGo;
+
+        /** Desktop: what keeps the computer awake while this lock is held. */
+        public void setHolder(java.util.function.Supplier<Runnable> holder) {
+            this.holder = holder;
+        }
+        // ZOUKAN <--
 
         public void setReferenceCounted(boolean value) {
             count = -1;
@@ -73,6 +82,9 @@ public final class PowerManager {
         public void acquire() {
             if(count != -1 && count != -2)
                 count++;
+            // ZOUKAN -->
+            if (isHeld() && letGo == null && holder != null) letGo = holder.get();
+            // ZOUKAN <--
         }
 
         public void acquire(long timeout) {
@@ -82,6 +94,12 @@ public final class PowerManager {
         public void release() {
             if(count > 0 || count == -1)
                 count--;
+            // ZOUKAN -->
+            if (!isHeld() && letGo != null) {
+                letGo.run();
+                letGo = null;
+            }
+            // ZOUKAN <--
         }
 
         public void release(int flags) {

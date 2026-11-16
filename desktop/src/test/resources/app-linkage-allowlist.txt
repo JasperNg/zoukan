@@ -1,0 +1,13 @@
+# Symbols the app-code linkage check may report: reviewed, and not reachable on desktop.
+# One symbol or class prefix per line (as the gap prints it), never a package prefix such as "android.".
+# Put the reason in a "#" line above each entry.
+
+# exh.util.createWifiLock always throws on desktop and callers wrap it in ignore {}, so the lock they
+# release() is always null
+android.net.wifi.WifiManager$WifiLock.release()V
+
+# androidx.core.util's SparseArray.forEach (AndroidxUtilCompat.kt) is never applied to android.util.SparseArray:
+# the shared E-Hentai code that used one is rewritten at build time to the desktop SparseArray, which has its own forEach
+android.util.SparseArray.keyAt(I)I
+android.util.SparseArray.size()I
+android.util.SparseArray.valueAt(I)Ljava/lang/Object;

@@ -42,18 +42,13 @@ class CloudflareInterceptor(
 
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
+    private val clearanceUserAgents by lazy { ClearanceUserAgents.forContext(context) }
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        // Challenges are solved in Chromium, and Cloudflare only accepts the cf_clearance cookie with
-        // the user agent that solved it. The cookie store keeps cf_clearance across restarts, so a
-        // host that has one gets Chromium's user agent, in this run or a later one.
-        val request = chain.request().let { original ->
-            val browserUserAgent = DesktopBrowser.userAgent
-            if (browserUserAgent != null && hasClearance(original)) {
-                original.newBuilder().header("User-Agent", browserUserAgent).build()
-            } else {
-                original
-            }
-        }
+        val original = chain.request()
+        // Cloudflare only accepts the cf_clearance cookie with the user agent that solved it. The
+        // cookie store keeps cf_clearance across restarts, and so is the user agent recorded for it
+        val request = withClearanceUserAgent(original)
         val sentClearance = clearance(request)
         val response = chain.proceed(request)
         if (!isChallenge(response)) return response
@@ -69,22 +64,30 @@ class CloudflareInterceptor(
                 if (current != null && current != sentClearance) return@withLock true
                 // An attempt that ended while this one waited failed (the user closed its window,
                 // say): failing too, not showing the challenge again for each queued request
-                val failedAt = lastFailure[host]
-                if (failedAt != null && failedAt - waitStarted > 0) return@withLock false
+                if (failures.shouldFailFast(host, waitStarted, System.nanoTime())) return@withLock false
                 cookieManager.remove(request.url, COOKIE_NAMES, 0)
                 val oldCookie = clearance(request)
-                // Cloudflare rejects a user agent that does not match the browser (for example the
-                // default Android one on desktop Chromium), so the challenge runs with Chromium's own
-                val userAgent = DesktopBrowser.userAgent ?: request.header("User-Agent") ?: defaultUserAgentProvider()
-                solveHeadless(request, userAgent, oldCookie) || run {
+                // Solved with the request's own user agent when Cloudflare accepts it, so the request
+                // keeps it; else with Chromium's, which the host's requests then get
+                val requestUserAgent = original.header("User-Agent") ?: defaultUserAgentProvider()
+                val userAgents = ClearanceUserAgents.solveOrder(requestUserAgent, DesktopBrowser.userAgent)
+                val solvedWith = userAgents.firstOrNull { solveHeadless(original, it, oldCookie) } ?: run {
                     // The user may take minutes; the call timeout (2 min) would end the call first
                     (chain.call().timeout() as? AsyncTimeout)?.exit()
-                    DesktopBrowser.solveChallenge(request.url.toString(), userAgent) { isSolved(request, oldCookie) }
-                }.also { if (it) lastFailure.remove(host) else lastFailure[host] = System.nanoTime() }
+                    val userAgent = userAgents.last()
+                    userAgent.takeIf {
+                        DesktopBrowser.solveChallenge(request.url.toString(), it) { isSolved(request, oldCookie) }
+                    }
+                }
+                // A clearance someone else's window got already has its record
+                if (solvedWith != null) {
+                    clearance(request)?.takeIf { clearanceUserAgents.userAgentOf(it) == null }
+                        ?.let { clearanceUserAgents.record(it, solvedWith) }
+                }
+                (solvedWith != null).also { if (it) failures.solved(host) else failures.failed(host, System.nanoTime()) }
             }
             if (!solved) throw IOException("Failed to bypass Cloudflare on ${request.url.host}")
-            val browserUserAgent = DesktopBrowser.userAgent ?: return chain.proceed(request)
-            return chain.proceed(request.newBuilder().header("User-Agent", browserUserAgent).build())
+            return chain.proceed(withClearanceUserAgent(original))
         } catch (e: IOException) {
             throw e
         } catch (e: Exception) {
@@ -93,15 +96,18 @@ class CloudflareInterceptor(
         }
     }
 
-    private fun isChallenge(response: Response): Boolean {
-        if (response.code !in ERROR_CODES || response.header("Server") !in SERVER_CHECK) return false
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string(), response.request.url.toString())
-        // Solve only captchas, not geo blocks
-        return document.getElementById("challenge-error-title") != null ||
-            document.getElementById("challenge-error-text") != null
+    /** [request] with the user agent its host's clearance was obtained with, when that differs. */
+    private fun withClearanceUserAgent(request: Request): Request {
+        val clearance = clearance(request) ?: return request
+        val userAgent = ClearanceUserAgents.overrideFor(
+            requestUserAgent = request.header("User-Agent"),
+            clearanceUserAgent = clearanceUserAgents.userAgentOf(clearance),
+            browserUserAgent = DesktopBrowser.userAgent,
+        ) ?: return request
+        return request.newBuilder().header("User-Agent", userAgent).build()
     }
 
-    private fun hasClearance(request: Request): Boolean = clearance(request) != null
+    private fun isChallenge(response: Response): Boolean = CloudflareChallenge.isChallenge(response)
 
     private fun clearance(request: Request): Cookie? =
         cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }
@@ -155,6 +161,8 @@ class CloudflareInterceptor(
     private fun isRequestHeaderSafe(name: String, value: String): Boolean {
         val lowerName = name.lowercase(Locale.ENGLISH)
         if (lowerName in UNSAFE_HEADER_NAMES || lowerName.startsWith("proxy-")) return false
+        // The WebView's user agent setting is the one solving; a header would contradict it
+        if (lowerName == "user-agent") return false
         return !(lowerName == "connection" && value.lowercase(Locale.ENGLISH) == "upgrade")
     }
 
@@ -162,16 +170,57 @@ class CloudflareInterceptor(
         val hostLocks = HostLocks()
 
         // When the last attempt to solve each host's challenge failed; a success removes it
-        val lastFailure = ConcurrentHashMap<String, Long>()
+        val failures = ChallengeFailures(TimeUnit.MINUTES.toNanos(CHALLENGE_COOLDOWN_MINUTES))
+        const val CHALLENGE_COOLDOWN_MINUTES = 5L
         const val CF_CLEARANCE = "cf_clearance"
         const val HEADLESS_TIMEOUT_SECONDS = 30L
-        val ERROR_CODES = listOf(403, 503)
-        val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
         val COOKIE_NAMES = listOf(CF_CLEARANCE)
         val UNSAFE_HEADER_NAMES = listOf(
             "content-length", "host", "trailer", "te", "upgrade", "cookie2", "keep-alive", "transfer-encoding",
             "set-cookie",
         )
+    }
+}
+
+/** When a host's last challenge failed, and whether a new challenge for it should fail at once. */
+class ChallengeFailures(private val cooldownNanos: Long) {
+    private val lastFailure = ConcurrentHashMap<String, Long>()
+
+    fun failed(host: String, now: Long) {
+        lastFailure[host.lowercase(Locale.ENGLISH)] = now
+    }
+
+    fun solved(host: String) {
+        lastFailure.remove(host.lowercase(Locale.ENGLISH))
+    }
+
+    /** Whether a request that started waiting at [waitStarted] should fail without a new attempt. */
+    fun shouldFailFast(host: String, waitStarted: Long, now: Long): Boolean {
+        val failedAt = lastFailure[host.lowercase(Locale.ENGLISH)] ?: return false
+        // Failed while this request waited, or recently enough that the user's refusal still stands
+        return failedAt - waitStarted > 0 || now - failedAt < cooldownNanos
+    }
+}
+
+/** Whether a response is a Cloudflare challenge the app should solve (not a geo block). */
+object CloudflareChallenge {
+    private val ERROR_CODES = listOf(403, 503)
+    private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
+
+    // Real challenge pages are tens of KB; the status and Server header come from whoever answers
+    const val MAX_CHALLENGE_BYTES = 1024L * 1024
+
+    fun isChallenge(response: Response): Boolean {
+        if (response.code !in ERROR_CODES || response.header("Server") !in SERVER_CHECK) return false
+        val peeked = response.peekBody(MAX_CHALLENGE_BYTES + 1)
+        if (peeked.contentLength() > MAX_CHALLENGE_BYTES) {
+            logcat(LogPriority.DEBUG) { "Cloudflare: not a challenge, the body of ${response.request.url.host} is too big" }
+            return false
+        }
+        val document = Jsoup.parse(peeked.string(), response.request.url.toString())
+        // Solve only captchas, not geo blocks
+        return document.getElementById("challenge-error-title") != null ||
+            document.getElementById("challenge-error-text") != null
     }
 }
 
@@ -192,8 +241,8 @@ object DesktopBrowser {
     var challengeSolver: ChallengeSolver? = null
 
     /**
-     * The user agent of the app's Chromium, set by the app at start. Challenges are solved with it,
-     * and requests to hosts that hold a cf_clearance cookie use it.
+     * The user agent of the app's Chromium, set by the app at start. A challenge that the request's
+     * own user agent cannot solve is solved with it, and that host's requests then use it.
      */
     @Volatile
     var userAgent: String? = null

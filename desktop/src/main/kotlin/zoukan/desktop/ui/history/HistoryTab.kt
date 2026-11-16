@@ -45,6 +45,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,8 +55,10 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -75,6 +80,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
@@ -87,10 +93,12 @@ import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
+import zoukan.desktop.ui.common.RATIO_SWITCH_TO_PANORAMA
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.library.ClickKind
@@ -167,7 +175,13 @@ class HistoryScreenModel(
         // ZOUKAN <--
     ) {
         val selecting: Boolean get() = selectionMode || selected.isNotEmpty()
-        val selectedItems: List<HistoryWithRelations> get() = items.filter { it.chapterId in selected }
+        // Built once per state, not on every recomposition
+        val selectedItems: List<HistoryWithRelations> by lazy { items.filter { it.chapterId in selected } }
+
+        /** The rows by the day they were read (null: unknown), in list order. */
+        val groups: List<Pair<java.time.LocalDate?, List<HistoryWithRelations>>> by lazy {
+            items.groupBy { it.readAt?.time?.let(zoukan.desktop.ui.common.Dates::toLocalDate) }.toList()
+        }
     }
 
     private val query = MutableStateFlow("")
@@ -198,10 +212,14 @@ class HistoryScreenModel(
                             selected = it.selected.filterTo(HashSet()) { id -> id in ids },
                         )
                     }
-                    loadChapterNames(items)
+                    // Off the collecting coroutine, so the next search is not held up by these lookups
+                    namesJob?.cancel()
+                    namesJob = screenModelScope.launch(Dispatchers.IO) { loadChapterNames(items) }
                 }
         }
     }
+
+    private var namesJob: Job? = null
 
     // History rows only carry the chapter number; sources name chapters like "Group 2 Chapter 1"
     private suspend fun loadChapterNames(items: List<HistoryWithRelations>) {
@@ -311,8 +329,8 @@ fun HistoryTab(model: HistoryScreenModel) {
             state.items.isEmpty() && state.filters.active -> EmptyScreen(localized(DMR.strings.no_history_matches_the_filters))
             state.items.isEmpty() -> EmptyScreen(localized(DMR.strings.nothing_read_yet))
             else -> LazyColumn(Modifier.fillMaxSize()) {
-                state.items.groupBy { it.readAt?.time?.let(zoukan.desktop.ui.common.Dates::relative) ?: localized(MR.strings.unknown) }.forEach { (date, items) ->
-                    sectionHeader(date)
+                state.groups.forEach { (_, items) ->
+                    sectionHeader(items.first().readAt?.time?.let(zoukan.desktop.ui.common.Dates::relative) ?: localized(MR.strings.unknown))
                     items(items, key = { it.id }) { item ->
                         val chapter = state.chapterNames[item.chapterId]?.takeIf { it.isNotBlank() }
                             ?: if (item.chapterNumber > -1) localized(MR.strings.display_mode_chapter, formatNumber(item.chapterNumber)) else localized(DMR.strings.chapter)
@@ -378,15 +396,13 @@ fun HistoryTab(model: HistoryScreenModel) {
 /** The toolbar while rows are selected, as Komikku's: the count, select all, invert and remove. */
 @Composable
 private fun SelectionHeader(state: HistoryScreenModel.State, model: HistoryScreenModel, onRemove: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp)
-            .testTag("history-selection"),
-        verticalAlignment = Alignment.CenterVertically,
+    SelectionBar(
+        count = state.selected.size,
+        onClear = model::clearSelection,
+        onSelectAll = model::selectAll,
+        onInvert = model::invertSelection,
+        modifier = Modifier.testTag("history-selection"),
     ) {
-        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
-        Text(localized(DMR.strings.selected, state.selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
-        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
         TooltipIconButton(Icons.Outlined.DeleteSweep, localized(DMR.strings.remove_from_history), onClick = onRemove, enabled = state.selected.isNotEmpty())
     }
 }
@@ -409,7 +425,7 @@ private fun HistoryRow(
 ) {
     // Height over width of the loaded cover; Komikku shows a cover this wide as a panorama
     var ratio by remember(item.mangaId) { mutableFloatStateOf(1.5f) }
-    val wide = panorama && ratio <= PANORAMA_RATIO
+    val wide = panorama && ratio <= RATIO_SWITCH_TO_PANORAMA
     Row(
         Modifier.fillMaxWidth()
             .testTag("history-item")
@@ -421,7 +437,7 @@ private fun HistoryRow(
         val shape = Corners.Medium
         CoverImage(
             Cover.of(item.coverData),
-            Modifier.size(if (wide) 107.dp else 44.dp, 60.dp).clip(shape).coverOutline(shape).clickable(onClick = onOpenManga),
+            Modifier.size(if (wide) 107.dp else 44.dp, 60.dp).clip(shape).coverOutline(shape).clickable(onClick = onOpenManga).semantics { contentDescription = item.title },
             onLoaded = { w, h -> if (w > 0) ratio = h.toFloat() / w },
         )
         Spacer(Modifier.width(12.dp))
@@ -455,7 +471,7 @@ private fun HistoryRow(
 
 /** Komikku's remove dialog: the read date of these chapters, or every chapter of their entries. */
 @Composable
-private fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntry: Boolean) -> Unit, onDismiss: () -> Unit) {
+internal fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntry: Boolean) -> Unit, onDismiss: () -> Unit) {
     var wholeEntry by remember { mutableStateOf(false) }
     val one = items.size == 1
     AlertDialog(
@@ -468,10 +484,10 @@ private fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntr
                     if (one) localized(DMR.strings.this_removes_the_read_date_of) else localized(DMR.strings.this_removes_the_read_date_of_2),
                 )
                 Row(
-                    Modifier.fillMaxWidth().clickable { wholeEntry = !wholeEntry },
+                    Modifier.fillMaxWidth().checkRow(wholeEntry) { wholeEntry = it },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = wholeEntry, onCheckedChange = { wholeEntry = it })
+                    Checkbox(checked = wholeEntry, onCheckedChange = null)
                     Text(if (one) localized(DMR.strings.remove_every_chapter_of_this_entry) else localized(DMR.strings.remove_every_chapter_of_these_entries))
                 }
             }
@@ -510,19 +526,16 @@ private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -
                 val panorama = preferences.usePanoramaCover()
                 val on by panorama.collectAsState()
                 Row(
-                    Modifier.fillMaxWidth().clickable { panorama.set(!on) }.padding(vertical = 2.dp),
+                    Modifier.fillMaxWidth().checkRow(on, role = Role.Switch) { panorama.set(it) }.padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(localized(KMR.strings.action_panorama_cover), modifier = Modifier.weight(1f))
-                    Switch(checked = on, onCheckedChange = { panorama.set(it) })
+                    Switch(checked = on, onCheckedChange = null)
                 }
             }
         },
     )
 }
-
-/** Komikku's RatioSwitchToPanorama: covers this wide or wider show as panoramas. */
-private const val PANORAMA_RATIO = 0.75f
 
 private fun HistoryScreenModel.screenModelScopeLaunch(block: suspend () -> Unit) {
     screenModelScope.launch { block() }

@@ -39,15 +39,15 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.manga.EditManga
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice
@@ -167,10 +167,10 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                         OutlinedButton(onClick = {
                             scope.launch {
                                 val tracks = withContext(Dispatchers.IO) { trackersOf(manga) }
-                                when {
-                                    tracks.isEmpty() -> Toasts.show(localized(SYMR.strings.entry_not_tracked))
-                                    tracks.size > 1 -> trackerChoice = tracks
-                                    else -> fillFromTracker(tracks.first().first, tracks.first().second)
+                                when (val fill = trackerFill(tracks)) {
+                                    TrackerFill.NotTracked -> Toasts.show(localized(SYMR.strings.entry_not_tracked))
+                                    is TrackerFill.Choose -> trackerChoice = fill.tracks
+                                    is TrackerFill.Fill -> fillFromTracker(fill.track.first, fill.track.second)
                                 }
                             }
                         }) { Text(localized(SYMR.strings.fill_from_tracker)) }
@@ -228,6 +228,19 @@ private suspend fun trackersOf(manga: Manga): List<Pair<Track, Tracker>> {
         track to (trackerManager.get(track.trackerId) ?: return@mapNotNull null)
     }
         .filterNot { (_, tracker) -> tracker is EnhancedTracker }
+}
+
+/** What Fill from tracker does: says the entry is not tracked, fills from its one tracker, or asks which one */
+internal sealed interface TrackerFill<out T> {
+    data object NotTracked : TrackerFill<Nothing>
+    data class Fill<T>(val track: T) : TrackerFill<T>
+    data class Choose<T>(val tracks: List<T>) : TrackerFill<T>
+}
+
+internal fun <T> trackerFill(tracks: List<T>): TrackerFill<T> = when {
+    tracks.isEmpty() -> TrackerFill.NotTracked
+    tracks.size > 1 -> TrackerFill.Choose(tracks)
+    else -> TrackerFill.Fill(tracks.first())
 }
 
 /** SY's "Select a tracker" when more than one tracker tracks the entry */

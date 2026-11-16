@@ -34,6 +34,28 @@ They catch code that compiles but crashes when it runs: `InjektRegistrationsTest
 type the code gets from Injekt, and `ScreenSmokeTest` opens every screen and dialog. They need no
 network and use a throwaway data folder.
 
+### Changing a dependency
+
+Every downloaded library and build plugin is checked against a SHA-256 checksum in
+`gradle/verification-metadata.xml`, and the Gradle wrapper against `distributionSha256Sum`. After you
+add or update a dependency, refresh the checksums for all three operating systems (the desktop runtime
+and its native libraries differ per OS) and commit the changed file with the dependency change:
+
+```
+./gradlew --write-verification-metadata sha256 spotlessCheck :desktop:build :desktop:createDistributable --continue
+./gradlew -I gradle/resolve-desktop-classpaths.init.gradle.kts --write-verification-metadata sha256 -Pzoukan.targetPlatform=linux-x64 :desktop:resolveDesktopClasspaths
+./gradlew -I gradle/resolve-desktop-classpaths.init.gradle.kts --write-verification-metadata sha256 -Pzoukan.targetPlatform=macos-arm64 :desktop:resolveDesktopClasspaths
+```
+
+The init script in the last two registers `:desktop:resolveDesktopClasspaths`, a task that resolves the
+`runtimeClasspath`, `testRuntimeClasspath`, `compileClasspath` and `testCompileClasspath`
+configurations of `:desktop`. The `zoukan.targetPlatform` property
+(`windows-x64`, `macos-arm64` or `linux-x64`) exists only for this; it does not build another OS's app.
+
+A build that fails with "Dependency verification failed" means a checksum is missing or an artifact
+changed. If a checksum is missing, regenerate as above. If an artifact changed under the same version,
+find out why before touching the file: regenerating the checksum would accept the changed artifact.
+
 ## Getting help
 
 - Open an [issue](https://github.com/JasperNg/zoukan/issues) or a draft pull request with your question.

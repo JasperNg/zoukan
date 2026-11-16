@@ -13,9 +13,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -27,13 +31,12 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
-import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.migration.MigrateManga
-import zoukan.desktop.ui.common.Toasts
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -86,8 +89,6 @@ class MigrationListScreenModel(
         val loading: Boolean = true,
         val items: List<Item> = emptyList(),
         val dialog: Dialog? = null,
-        /** Set when every entry left the list, or the migration finished: the screen closes */
-        val finished: Boolean = false,
     ) {
         val finishedCount: Int get() = items.count { it.result != SearchResult.Searching }
         val migrationComplete: Boolean
@@ -95,6 +96,24 @@ class MigrationListScreenModel(
                 items.all { it.result != SearchResult.Searching } &&
                 items.any { it.result is SearchResult.Success }
     }
+
+    /** One-off events for the screen, which collects them on the UI thread; each is delivered once. */
+    sealed interface Effect {
+        /** Every entry left the list, or the migration finished: the screen closes. */
+        data object Close : Effect
+
+        /** A migration of all entries ended (also when cancelled partway). */
+        data class Done(val copy: Boolean, val migrated: Int, val failed: Int) : Effect
+
+        /** Migrating one entry failed. */
+        data class Failed(val error: Throwable) : Effect
+
+        /** A picked entry has no chapters to migrate to. */
+        data object MissingChapters : Effect
+    }
+
+    private val _effects = Channel<Effect>(Channel.BUFFERED)
+    val effects: Flow<Effect> = _effects.receiveAsFlow()
 
     private val smartSearchEngine = SmartSourceSearchEngine(extraSearchQuery)
     private val throttleManager = ThrottleManager()
@@ -119,14 +138,13 @@ class MigrationListScreenModel(
                     result = if (runManually) SearchResult.NotFound else SearchResult.Searching,
                 )
             }
-            mutableState.update { it.copy(loading = false, items = items, finished = items.isEmpty()) }
+            mutableState.update { it.copy(loading = false, items = items) }
+            if (items.isEmpty()) _effects.trySend(Effect.Close)
             if (!runManually) runSearches(items.map { it.manga.id })
         }
         screenModelScope.launch {
             MigrationPicks.picks.collect { pick ->
-                useMangaForMigration(pick.current, pick.target) {
-                    Toasts.show(localized(MR.strings.migrationListScreen_matchWithoutChapterToast))
-                }
+                useMangaForMigration(pick.current, pick.target)
             }
         }
     }
@@ -179,10 +197,8 @@ class MigrationListScreenModel(
     }
 
     private fun removeItem(mangaId: Long) {
-        mutableState.update { s ->
-            val items = s.items.filterNot { it.manga.id == mangaId }
-            s.copy(items = items, finished = items.isEmpty())
-        }
+        val items = mutableState.updateAndGet { s -> s.copy(items = s.items.filterNot { it.manga.id == mangaId }) }.items
+        if (items.isEmpty()) _effects.trySend(Effect.Close)
     }
 
     private suspend fun runSearches(ids: List<Long>) = coroutineScope {
@@ -209,7 +225,7 @@ class MigrationListScreenModel(
             }
 
             if (found != null && found.first.thumbnailUrl == null) {
-                runCatching { refreshManga(found.first, fetchDetails = true, fetchChapters = false) }
+                zoukan.desktop.app.runCatchingCancellable { refreshManga(found.first, fetchDetails = true, fetchChapters = false) }
             }
             val result = found?.let { (manga, chapters) -> success(getManga.await(manga.id) ?: manga, chapters) }
             // A pick or Stop searching since the search began wins
@@ -276,8 +292,8 @@ class MigrationListScreenModel(
         null
     }
 
-    /** Uses an entry picked in a manual search as [current]'s target; [onMissingChapters] when it has none. */
-    fun useMangaForMigration(current: Long, target: Long, onMissingChapters: () -> Unit) {
+    /** Uses an entry picked in a manual search as [current]'s target; [Effect.MissingChapters] when it has none. */
+    fun useMangaForMigration(current: Long, target: Long) {
         if (item(current) == null) return
         cancelJobs(current)
         val attempt = startAttempt(current, SearchResult.Searching)
@@ -297,7 +313,7 @@ class MigrationListScreenModel(
             }
             val chapters = refreshed?.let { chapterInfo(it.id) }
             if (refreshed == null || chapters == null || chapters.chapterCount == 0) {
-                if (setResult(current, attempt, SearchResult.NotFound)) onMissingChapters()
+                if (setResult(current, attempt, SearchResult.NotFound)) _effects.trySend(Effect.MissingChapters)
             } else {
                 setResult(current, attempt, success(refreshed, chapters))
             }
@@ -319,13 +335,13 @@ class MigrationListScreenModel(
         removeItem(mangaId)
     }
 
-    fun migrateNow(mangaId: Long, replace: Boolean, onError: (Throwable) -> Unit) {
+    fun migrateNow(mangaId: Long, replace: Boolean) {
         val item = item(mangaId) ?: return
         val target = (item.result as? SearchResult.Success)?.manga ?: return
         screenModelScope.launch(Dispatchers.IO) {
             runCatching { migrateManga(item.manga, target, replace) }
                 .onSuccess { removeItem(mangaId) }
-                .onFailure { if (it is CancellationException) throw it else onError(it) }
+                .onFailure { if (it is CancellationException) throw it else _effects.trySend(Effect.Failed(it)) }
         }
     }
 
@@ -344,13 +360,14 @@ class MigrationListScreenModel(
     fun dismissDialog() = mutableState.update { it.copy(dialog = null) }
 
     /** Migrates (or with [replace] off, copies) every entry that has a match, as the Android app. */
-    fun migrateAll(replace: Boolean, onDone: (migrated: Int, failed: Int) -> Unit) {
+    fun migrateAll(replace: Boolean) {
         // A double click on the confirm button starts one migration
         if (migrateJob?.isActive == true) return
         migrateJob = screenModelScope.launch(Dispatchers.IO) {
             val items = state.value.items
             var migrated = 0
             var failed = 0
+            var completed = false
             mutableState.update { it.copy(dialog = Dialog.Progress(0, items.size)) }
             try {
                 items.forEachIndexed { index, item ->
@@ -371,11 +388,13 @@ class MigrationListScreenModel(
                     }
                     mutableState.update { it.copy(dialog = Dialog.Progress(index + 1, items.size)) }
                 }
-                mutableState.update { it.copy(finished = true) }
+                completed = true
             } finally {
                 mutableState.update { it.copy(dialog = null) }
                 migrateJob = null
-                onDone(migrated, failed)
+                // The summary (also after a cancel) comes before the close, so the screen shows it, then closes
+                _effects.trySend(Effect.Done(copy = !replace, migrated = migrated, failed = failed))
+                if (completed) _effects.trySend(Effect.Close)
             }
         }
     }

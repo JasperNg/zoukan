@@ -46,13 +46,16 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
@@ -143,6 +146,8 @@ fun LazyListScope.dataSettings() {
         SettingRow(localized(DMR.strings.clear_cover_cache), localized(DMR.strings.covers_download_again_when_shown), onClick = {
             scope.launch(Dispatchers.IO) {
                 dirs.covers.listFiles()?.forEach { it.delete() }
+                // ZOUKAN: and the other images kept on disk (extension icons, tracker covers, ...)
+                runCatching { Images.clearDiskCache() }
                 Toasts.show(localized(DMR.strings.cover_cache_cleared))
             }
         })
@@ -162,24 +167,79 @@ internal fun StorageLocationPreference() {
     val storage = remember { Injekt.get<ZoukanStorage>() }
     val window = LocalWindow.current?.window
     val folder by storage.folderPreference.collectAsState()
+    val scope = rememberCoroutineScope()
+    // The folder asked for ("" for the data folder) and what is in it, waiting for the user's answer
+    var pending by remember { mutableStateOf<Pair<String, StorageLocation.Verdict.Ok>?>(null) }
     SettingRow(
         localized(MR.strings.pref_storage_location),
         // Read again when the setting changes
         remember(folder) { storage.root.path },
         onClick = {
-            chooseFolder(window, storage.root)?.let {
-                storage.folderPreference.set(it.path)
-                Injekt.get<DownloadManager>().invalidateCache()
+            chooseFolder(window, storage.root)?.let { picked ->
+                scope.launch {
+                    // The folder may be on a network drive
+                    when (val verdict = withContext(Dispatchers.IO) { StorageLocation.check(picked) }) {
+                        is StorageLocation.Verdict.Ok -> pending = picked.path to verdict
+                        StorageLocation.Verdict.NotWritable -> Toasts.show(localized(DMR.strings.storage_folder_not_writable, picked.path))
+                    }
+                }
             }
         },
     ) {
         if (folder.isNotBlank()) {
             TextButton(onClick = {
-                storage.folderPreference.set("")
-                Injekt.get<DownloadManager>().invalidateCache()
+                scope.launch {
+                    val hasDownloads = withContext(Dispatchers.IO) { File(Injekt.get<ZoukanDirs>().root, ZoukanStorage.DOWNLOADS).listFiles()?.isNotEmpty() == true }
+                    pending = "" to StorageLocation.Verdict.Ok(hasDownloads)
+                }
             }) { Text(localized(MR.strings.action_reset)) }
         }
     }
+    pending?.let { (path, verdict) ->
+        StorageChangeDialog(
+            oldRoot = storage.root,
+            newRoot = if (path.isBlank()) Injekt.get<ZoukanDirs>().root else File(path),
+            hasDownloads = verdict.hasDownloads,
+            onOpenOld = { openFolder(storage.root) },
+            onConfirm = { StorageLocation.apply(storage, path) { Injekt.get<DownloadManager>().invalidateCache() } },
+            onDismiss = { pending = null },
+        )
+    }
+}
+
+/**
+ * Asked before the storage folder changes: nothing in the old folder is moved, so its downloads,
+ * local entries and automatic backups stay there and show as not downloaded until the user moves
+ * them or switches back. A button opens the old folder.
+ */
+@Composable
+internal fun StorageChangeDialog(
+    oldRoot: File,
+    newRoot: File,
+    hasDownloads: Boolean,
+    onOpenOld: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(MR.strings.pref_storage_location)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(newRoot.path, style = MaterialTheme.typography.bodySmall)
+                Text(localized(DMR.strings.storage_change_warning, oldRoot.path))
+                if (hasDownloads) Text(localized(DMR.strings.storage_folder_has_downloads))
+                TextButton(onClick = onOpenOld) { Text(localized(DMR.strings.open_the_old_folder)) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss()
+                onConfirm()
+            }) { Text(localized(MR.strings.action_ok)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
 }
 
 /** Android's Create backup and Restore backup buttons, side by side. */
@@ -190,7 +250,7 @@ private fun BackupButtons() {
     val status by backupStatusFlow.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
     SearchTerms(localized(MR.strings.pref_create_backup), localized(MR.strings.pref_restore_backup))
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { navigator.push(CreateBackupScreen) }, enabled = status == null, modifier = Modifier.weight(1f)) {
                 Text(localized(MR.strings.pref_create_backup))
@@ -239,7 +299,7 @@ private fun StorageUsage() {
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }
     SearchTerms(localized(MR.strings.pref_storage_usage), localized(DMR.strings.disk_space))
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(root.absolutePath, style = MaterialTheme.typography.bodyMedium)
         LinearProgressIndicator(
             progress = { if (total > 0) 1 - available / total.toFloat() else 0f },
@@ -266,7 +326,9 @@ private fun ChapterCachePreference() {
         scope.launch {
             try {
                 val deleted = withContext(Dispatchers.IO) { Archives.clearCache() }
-                Toasts.show(localized(DMR.strings.cache_cleared_files_deleted, deleted))
+                Toasts.show(localizedPlural(DMR.plurals.cache_cleared_files_deleted, deleted, deleted))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toasts.error(localized(MR.strings.cache_delete_error), e)
             }
@@ -312,6 +374,8 @@ private fun ExportLibraryPreference() {
                             target.writeText(LibraryCsv.generate(Injekt.get<GetFavorites>().await(), options))
                         }
                         Toasts.show(localized(MR.strings.library_exported))
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Toasts.error(localized(DMR.strings.could_not_export_the_library), e)
                     }
