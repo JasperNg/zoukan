@@ -17,10 +17,13 @@ on:
     branches: [master]
     paths-ignore: *docs
   workflow_dispatch:
+  # desktop-build.yml calls this workflow, so a release waits for the check of its own commit
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Pull requests cancel their older runs; master runs queue, so every merged commit is tested
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

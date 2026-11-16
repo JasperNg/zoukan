@@ -51,6 +51,34 @@ class ReleaseWorkflowTest {
     }
 
     @Test
+    fun `the release waits for the tests of the commit it ships`() {
+        val ci = text(".github/workflows/ci.yml")
+        val build = text(".github/workflows/desktop-build.yml")
+        val problems = mutableListOf<String>()
+        if (!Regex("""(?m)^on:(?:\n(?:[ \t].*)?)*?^ {2}workflow_call:""").containsMatchIn(ci)) {
+            problems += "ci.yml: no workflow_call trigger, so the release workflow cannot run it"
+        }
+        if (!Regex("""(?m)^ {2}\w+:\n(?: {4}.*\n)*? {4}uses: \./\.github/workflows/ci\.yml\s*$""").containsMatchIn(build)) {
+            problems += "desktop-build.yml: no job that calls ./.github/workflows/ci.yml"
+        }
+        val callerJob = Regex("""(?m)^ {2}(\w+):\n(?: {4}.*\n)*? {4}uses: \./\.github/workflows/ci\.yml""")
+            .find(build)?.groupValues?.get(1)
+        val releaseNeeds = Regex("""(?m)^ {2}release:\n(?: {4}.*\n)*? {4}needs: \[([^\]]*)]""")
+            .find(build)?.groupValues?.get(1).orEmpty().split(",").map { it.trim() }
+        if (callerJob == null || callerJob !in releaseNeeds) {
+            problems += "desktop-build.yml: the release job does not need the job that calls ci.yml (needs: $releaseNeeds)"
+        }
+        if (Regex("""cancel-in-progress:\s*true\s*$""", RegexOption.MULTILINE).containsMatchIn(ci)) {
+            problems += "ci.yml: cancel-in-progress is true, so a later merge cancels the master run of an earlier one"
+        }
+        val group = Regex("""(?m)^ {2}group:\s*(.*)$""").find(ci)?.groupValues?.get(1).orEmpty()
+        if ("github.workflow" !in group) {
+            problems += "ci.yml: the concurrency group has no github.workflow, so the called run shares a group with the stand-alone run"
+        }
+        problems.shouldBeEmpty()
+    }
+
+    @Test
     fun `the update bots take no policy from another repository`() {
         val file = File(root, "renovate.json")
         if (!file.isFile) return
