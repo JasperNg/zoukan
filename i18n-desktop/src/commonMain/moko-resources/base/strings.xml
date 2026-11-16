@@ -866,4 +866,5 @@
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
     <string name="download_queue_unreadable">The download queue could not be read</string>
     <string name="download_queue_unreadable_kept">It was kept as %1$s; queue the chapters again.</string>
+    <string name="download_disk_full">Not enough free disk space for the download</string>
 </resources>

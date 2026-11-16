@@ -57,6 +57,26 @@ class ChapterDownloaderTest {
     }
 
     @Test
+    fun `a CBZ write that fails leaves no partial archive, keeps the pages and every other download`() = runBlocking<Unit> {
+        val other = kotlin.random.Random(5).nextBytes(4096)
+        File(temp, "Chapter 0.cbz").writeBytes(other) // an existing download in the same folder
+        var calls = 0
+        val failing = ChapterDownloader(
+            pageList = { pages.indices.map { Page(it, url = "p$it") } },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { pages[it.index] },
+            parallelPages = 4,
+            writeEntry = { writer, name, bytes -> if (++calls == 2) throw java.io.IOException("No space left on device") else writer.write(name, bytes) },
+        )
+        shouldThrow<java.io.IOException> { failing.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> } }
+
+        File(temp, "Chapter 1.cbz_tmp").exists() shouldBe false
+        File(temp, "Chapter 1.cbz").exists() shouldBe false
+        ChapterDownloader.imageFiles(File(temp, "Chapter 1_tmp")).size shouldBe 12
+        File(temp, "Chapter 0.cbz").readBytes() shouldBe other
+    }
+
+    @Test
     fun `downloads a folder`() = runBlocking<Unit> {
         val dir = downloader().download(temp, "Chapter 2", ChapterDownloader.Options(false, null, null)) { _, _ -> }
         dir.isDirectory shouldBe true

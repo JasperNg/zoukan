@@ -630,7 +630,7 @@ class DownloadManager(
                 invalidate(dir)
             } else {
                 val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
-                if (freeSpace != null && freeSpace in 1 until MIN_FREE_SPACE) error("Not enough free disk space")
+                if (!hasRoom(freeSpace)) error(localized(DMR.strings.download_disk_full))
                 val downloader = ChapterDownloader(
                     pageList = { source.getPageList(chapter.toSChapter()) },
                     imageUrl = { source.getImageUrl(it) },
@@ -677,7 +677,7 @@ class DownloadManager(
             throw e
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Downloading ${manga.title} / ${chapter.name} failed" }
-            download.error = e.message ?: e::class.simpleName
+            download.error = errorText(e)
             download.state.value = Download.State.ERROR
             Notifications.post(localized(DMR.strings.download_failed), "${manga.title}: ${chapter.name}\n${download.error}", Notifications.Kind.ERROR)
             false
@@ -792,7 +792,20 @@ class DownloadManager(
     }
 
     companion object {
-        private const val MIN_FREE_SPACE = 200L * 1024 * 1024
+        internal const val MIN_FREE_SPACE = 200L * 1024 * 1024
+
+        /** A disk that reports 0 bytes free is full. */
+        internal fun hasRoom(freeSpace: Long?): Boolean = freeSpace == null || freeSpace >= MIN_FREE_SPACE
+
+        internal fun errorText(e: Throwable): String {
+            val full = generateSequence(e) { it.cause?.takeIf { c -> c !== it } }.take(8).any {
+                it is java.io.IOException && it.message?.let { m ->
+                    m.contains("No space left", ignoreCase = true) || m.contains("not enough space", ignoreCase = true)
+                } == true
+            }
+            return if (full) localized(DMR.strings.download_disk_full) else e.message ?: e::class.simpleName.orEmpty()
+        }
+
         private val NOT_CHAPTER = listOf(".xml", ".json", ".jpg", ".jpeg", ".png", ".webp", ".txt")
     }
 }
