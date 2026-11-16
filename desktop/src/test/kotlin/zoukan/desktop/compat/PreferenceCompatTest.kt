@@ -537,4 +537,34 @@ class PreferenceCompatTest {
         text.text = "abc"
         text.summary shouldBe "abc"
     }
+
+    @Test
+    fun `summaryOn and summaryOff take precedence over the summary for a switch`() {
+        val prefs = prefs("switch_summary")
+        val switch = SwitchPreferenceCompat(null).apply {
+            key = "mode"
+            sharedPreferences = prefs
+            summary = "Plain"
+            summaryOn = "On text"
+            summaryOff = "Off text"
+        }
+        switch.summary shouldBe "Off text"
+        switch.isChecked = true
+        switch.summary shouldBe "On text"
+        // An empty on text falls back to the plain summary, as Android's TextUtils.isEmpty check
+        switch.summaryOn = ""
+        switch.summary shouldBe "Plain"
+        // Only a plain summary: it is shown in both states
+        val plainOnly = CheckBoxPreference(null).apply {
+            key = "box"
+            summary = "Plain"
+        }
+        plainOnly.summary shouldBe "Plain"
+        // A summary provider still wins
+        val provided = SwitchPreferenceCompat(null).apply {
+            summaryOn = "On text"
+            summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { "Provided" }
+        }
+        provided.summary shouldBe "Provided"
+    }
 }
