@@ -143,6 +143,10 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
                 Tab(
                     selected = current == page,
                     onClick = { tab = page },
+                    // ZOUKAN -->
+                    // The smoke test opens each page by name
+                    modifier = Modifier.testTag("browse-page-${page.name}"),
+                    // ZOUKAN <--
                     text = {
                         Text(
                             when (page) {

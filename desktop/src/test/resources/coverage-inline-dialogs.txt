@@ -1,0 +1,33 @@
+# Inline AlertDialog/Dialog sites outside a *Dialog function, counted per function: "<key>"
+# for one site, "<key> <count>" for more. The counts may only shrink: a new dialog goes in a
+# function named ...Dialog (so the coverage matrix sees it), and extracting an old one lowers
+# its count here. Checked by CoverageMatrixTest.
+dialog-inline:AboutSettings.kt:TokenRow
+dialog-inline:AdvancedSettings.kt:UserAgentPreference
+dialog-inline:BatchAddScreen.kt:Content
+dialog-inline:CategoryScreen.kt:Content
+dialog-inline:ClearDatabaseScreen.kt:Content
+dialog-inline:DataSaverSettings.kt:DataSaverSettings 2
+dialog-inline:DataSettings.kt:ExportLibraryPreference
+dialog-inline:DiscordSettings.kt:DiscordSettingsSection
+dialog-inline:EhSettings.kt:EhFavoritesSync
+dialog-inline:EhSettings.kt:EhSettings
+dialog-inline:EntryInfoMenus.kt:MergedEntryPicker
+dialog-inline:ExtensionDetailsScreen.kt:Content
+dialog-inline:HistoryTab.kt:HistoryTab
+dialog-inline:LibraryTab.kt:LibraryTab
+dialog-inline:MangaDexSettings.kt:MangaDexSettings
+dialog-inline:MangaScreen.kt:Content
+dialog-inline:MigrationListScreen.kt:Content 3
+dialog-inline:MissingExtensionsCard.kt:ReadyPlan
+dialog-inline:ReaderScreen.kt:KeyboardHelp
+dialog-inline:SettingsTab.kt:SettingsTab
+dialog-inline:SettingsWidgets.kt:ChoiceSetting
+dialog-inline:SettingsWidgets.kt:MultiSelectPreference
+dialog-inline:SortTagScreen.kt:Content
+dialog-inline:SourceFilters.kt:Content 2
+dialog-inline:SourceScreen.kt:Content
+dialog-inline:SourceScreen.kt:FilterPanel
+dialog-inline:TrackingDialog.kt:RemoveButton
+dialog-inline:TrackingSettings.kt:TrackerSetting 3
+dialog-inline:UpdatesTab.kt:SelectionHeader
