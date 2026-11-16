@@ -155,23 +155,35 @@ class DownloadManager(
      * Gives a downloaded chapter the name its new name or scanlator calls for, as Android's
      * renameChapter after a source sync, so the download keeps showing and Clean up downloaded
      * chapters does not take it for an unknown file.
+     *
+     * Never replaces anything: when a download of the new name exists, or the move fails, the
+     * download keeps its old name and this returns false. True when renamed or nothing to rename.
      */
-    fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter) {
+    fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter): Boolean {
         val dir = paths.mangaDir(manga)
-        if (!dir.isDirectory) return
+        if (!dir.isDirectory) return true
         // Assume there's only 1 version of the chapter name formats present
         val oldDownload = paths.validChapterNames(oldChapter).asSequence()
             .map { File(dir, it) }
-            .firstOrNull { it.exists() } ?: return
+            .firstOrNull { it.exists() } ?: return true
 
         var newName = paths.chapterDirName(newChapter)
         if (oldDownload.isFile && oldDownload.extension == "cbz") newName += ".cbz"
-        if (oldDownload.name == newName) return
+        if (oldDownload.name == newName) return true
 
-        if (oldDownload.renameTo(File(dir, newName))) {
+        val target = File(dir, newName)
+        if (target.exists()) {
+            logcat(LogPriority.WARN) { "Not renaming ${oldDownload.name} to $newName: a download of that name exists" }
+            return false
+        }
+        return try {
+            // No REPLACE_EXISTING: a target created in between makes the move fail
+            Files.move(oldDownload.toPath(), target.toPath())
             invalidate(dir)
-        } else {
-            logcat(LogPriority.ERROR) { "Could not rename downloaded chapter: ${oldDownload.name}" }
+            true
+        } catch (e: IOException) {
+            logcat(LogPriority.ERROR, e) { "Could not rename downloaded chapter: ${oldDownload.name}" }
+            false
         }
     }
 

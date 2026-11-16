@@ -205,7 +205,7 @@ class DesktopDomainModule : InjektModule {
         addFactory { GetUpcomingManga(get()) }
         addFactory { RemoveExtensionStore(get()) }
         addFactory { GetExcludedScanlators(get()) }
-        addFactory { SyncChapters(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        addFactory { SyncChapters(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         addFactory { RefreshManga(get(), get(), get(), get(), get(), get()) }
 
         // Downloads, library updates and background work (Phase 5)
