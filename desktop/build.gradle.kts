@@ -1,6 +1,4 @@
 // ZOUKAN -->
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // Zoukan, the desktop app: the Compose UI and reader (Phase 4 of the desktop port) on top of the
 // runtime (the Android compatibility layer, Injekt wiring, the encrypted database, preferences,
 // networking, the extension runtime, the built-in browser) and the command-line tools.
@@ -11,7 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 //   ./gradlew :desktop:packageMsi                       # Windows installer (Phase 7, see RELEASING.md)
 //   ./gradlew :desktop:packageDmg                       # macOS disk image (notarizeDmg to notarize)
 plugins {
-    kotlin("jvm")
+    id("zoukan.jvm")
     kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
     id("mihon.code.lint")
@@ -34,14 +32,8 @@ val zoukanVersion: String = providers.gradleProperty("zoukan.version").orNull?.t
     }
     ?: "1.0.2"
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
             "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
@@ -114,15 +106,17 @@ sourceSets.main {
 }
 
 // The version and the repository releases come from, for the update check and crash logs
+val zoukanSignedRelease = objects.property<Boolean>().convention(false)
 val zoukanBuildInfo by tasks.registering {
     val output = layout.buildDirectory.dir("generated/zoukan-build-info")
     val version = zoukanVersion
     val repo = providers.gradleProperty("zoukan.releaseRepo").orElse("JasperNg/zoukan")
     // Whether this OS's packaging signs the app (packaging.gradle.kts, applied below, decides);
     // the update check reads it to tell an unsigned release from a signed one that lost its
-    // signature. Read through a provider because packaging.gradle.kts sets it later in the
-    // configuration than this registration, on the project's extras, not this task's.
-    val signedRelease = provider { project.extra["zoukanSignedRelease"] == true }
+    // signature. packaging.gradle.kts sets it later in the configuration than this registration,
+    // on the project's extras: it is copied into this property right after that script is applied
+    // (below), and the task itself never reads the project.
+    val signedRelease = zoukanSignedRelease
     inputs.property("version", version)
     inputs.property("repo", repo)
     inputs.property("signedRelease", signedRelease)
@@ -285,6 +279,7 @@ application {
 extra["zoukanVersion"] = zoukanVersion
 extra["zoukanJvmFlags"] = jvmFlags
 apply(from = "packaging.gradle.kts")
+zoukanSignedRelease.set(extra["zoukanSignedRelease"] == true)
 
 tasks.named<JavaExec>("run") {
     workingDir = rootDir
@@ -322,6 +317,10 @@ tasks.test {
         rootProject.file("settings.gradle.kts"),
         rootProject.file("gradle/wrapper/gradle-wrapper.properties"),
         rootProject.file("gradle/verification-metadata.xml"),
+        rootProject.file("gradle.properties"),
+        rootProject.file("extension-jvm/build.gradle.kts"),
+        rootProject.file("android-compat/build.gradle.kts"),
+        file("build.gradle.kts"),
         rootProject.fileTree("gradle") { include("*.versions.toml") },
     ).withPropertyName("releaseFiles")
     // The UI text comes from string resources in the system language; the tests check the English text
@@ -339,9 +338,8 @@ tasks.test {
 val wiringTest by tasks.registering(Test::class) {
     group = "verification"
     description = "Checks every Injekt lookup has a registration and every screen and dialog opens"
-    val test = tasks.test.get()
-    testClassesDirs = test.testClassesDirs
-    classpath = test.classpath
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
     filter {
         wiringTests.forEach { includeTestsMatching(it) }
@@ -489,9 +487,8 @@ tasks.register<UsabilityReport>("usabilityReport") {
 val extensionWiringTest by tasks.registering(Test::class) {
     group = "verification"
     description = "Installs every Keiyoushi extension and checks it is wired up on the desktop"
-    val test = tasks.test.get()
-    testClassesDirs = test.testClassesDirs
-    classpath = test.classpath
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
     filter { includeTestsMatching("*ExtensionWiringTest") }
     systemProperty("zoukan.e2e", "true")
@@ -513,9 +510,8 @@ val extensionWiringTest by tasks.registering(Test::class) {
 val journeyTest by tasks.registering(Test::class) {
     group = "verification"
     description = "Runs the offline user journeys against the fixture source"
-    val test = tasks.test.get()
-    testClassesDirs = test.testClassesDirs
-    classpath = test.classpath
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
     filter { journeyTests.forEach { includeTestsMatching(it) } }
     // Only the journey classes themselves, not their nested and lambda classes: Gradle hands the

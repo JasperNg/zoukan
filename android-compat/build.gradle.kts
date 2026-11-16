@@ -1,5 +1,4 @@
 // ZOUKAN -->
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.security.MessageDigest
 
 /**
@@ -11,19 +10,14 @@ import java.security.MessageDigest
  * this module is not formatted by Spotless.
  */
 plugins {
-    kotlin("jvm")
+    id("zoukan.jvm")
     kotlin("plugin.serialization")
 }
 
-// The desktop app runs on JDK 21 (JetBrains Runtime); AndroidCompat needs Java 21 language features
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
+// Java 21 (JetBrains Runtime, which the desktop app runs on) comes from the zoukan.jvm convention;
+// AndroidCompat needs its language features
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.add("-Xcontext-parameters")
         optIn.add("kotlin.concurrent.atomics.ExperimentalAtomicApi")
     }

@@ -6,6 +6,7 @@ import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import java.io.File
 
@@ -48,5 +49,20 @@ class BuildSettingsTest {
             .filter { m -> m.groupValues[2] in upstreamGroups || "${m.groupValues[2]}:${m.groupValues[3]}" in upstreamModules }
             .map { it.groupValues[1] }.toList()
         withClue("Zoukan catalog entries that pin a version an upstream catalog owns") { pinned.shouldBeEmpty() }
+    }
+
+    @Test
+    fun `the JVM modules take their Java version from one convention`() {
+        for (module in listOf("desktop", "extension-jvm", "android-compat")) {
+            val build = text("$module/build.gradle.kts")
+            withClue("$module sets its own Java version") {
+                build shouldNotContain "JavaVersion.VERSION_"
+                build shouldNotContain "JvmTarget.JVM_"
+                build shouldContain "id(\"zoukan.jvm\")"
+            }
+        }
+        withClue("configure-on-demand is on") {
+            text("gradle.properties") shouldNotContain "org.gradle.configureondemand=true"
+        }
     }
 }
