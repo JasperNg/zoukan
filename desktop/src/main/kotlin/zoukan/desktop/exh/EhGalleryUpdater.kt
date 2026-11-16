@@ -23,6 +23,7 @@ import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.InsertFlatMetadata
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.PowerStatus
 import zoukan.desktop.tray.Notifications
@@ -137,31 +138,41 @@ class EhGalleryUpdater(
                     logcat(LogPriority.WARN) { "Too many E-Hentai update failures, stopping" }
                     break
                 }
-                if (manga.id in modified) {
-                    updated++
-                    continue
-                }
-                val (new, chapters) = try {
-                    updateEntryAndGetChapters(manga)
-                } catch (e: GalleryNotUpdatedException) {
-                    if (e.network) {
-                        failures++
-                        logcat(LogPriority.ERROR, e) { "Network error while updating gallery ${manga.id}" }
+                // One gallery at a time under the restore gate, so a backup restore never overlaps
+                // a gallery's writes; a restore that is asked for ends the round
+                val result = RestoreGate.unlessRestoring {
+                    if (manga.id in modified) {
+                        updated++
+                        return@unlessRestoring GalleryResult.DONE
                     }
-                    continue
+                    val (new, chapters) = try {
+                        updateEntryAndGetChapters(manga)
+                    } catch (e: GalleryNotUpdatedException) {
+                        if (e.network) {
+                            logcat(LogPriority.ERROR, e) { "Network error while updating gallery ${manga.id}" }
+                            return@unlessRestoring GalleryResult.NETWORK_FAILURE
+                        }
+                        return@unlessRestoring GalleryResult.DONE
+                    }
+                    if (chapters.isEmpty()) return@unlessRestoring GalleryResult.DONE
+                    val (acceptedRoot, discardedRoots, exhNew) = updateHelper.findAcceptedRootAndDiscardOthers(manga.source, chapters)
+                    if (new.isNotEmpty() && manga.id == acceptedRoot.manga.id) {
+                        libraryPreferences.newUpdatesCount().getAndSet { it + new.size }
+                        updatedManga += acceptedRoot.manga to new
+                    } else if (exhNew.isNotEmpty() && updatedManga.none { it.first.id == acceptedRoot.manga.id }) {
+                        libraryPreferences.newUpdatesCount().getAndSet { it + exhNew.size }
+                        updatedManga += acceptedRoot.manga to exhNew
+                    }
+                    modified += acceptedRoot.manga.id
+                    modified += discardedRoots.map { it.manga.id }
+                    updated++
+                    GalleryResult.DONE
                 }
-                if (chapters.isEmpty()) continue
-                val (acceptedRoot, discardedRoots, exhNew) = updateHelper.findAcceptedRootAndDiscardOthers(manga.source, chapters)
-                if (new.isNotEmpty() && manga.id == acceptedRoot.manga.id) {
-                    libraryPreferences.newUpdatesCount().getAndSet { it + new.size }
-                    updatedManga += acceptedRoot.manga to new
-                } else if (exhNew.isNotEmpty() && updatedManga.none { it.first.id == acceptedRoot.manga.id }) {
-                    libraryPreferences.newUpdatesCount().getAndSet { it + exhNew.size }
-                    updatedManga += acceptedRoot.manga to exhNew
+                if (result == null) {
+                    logcat { "A backup restore is waiting; stopping the E-Hentai update round" }
+                    break
                 }
-                modified += acceptedRoot.manga.id
-                modified += discardedRoots.map { it.manga.id }
-                updated++
+                if (result == GalleryResult.NETWORK_FAILURE) failures++
             }
         } finally {
             exhPreferences.exhAutoUpdateStats().set(Json.encodeToString(EHentaiUpdaterStats(startTime, allMeta.size, updated)))
@@ -193,6 +204,9 @@ class EhGalleryUpdater(
             throw GalleryNotUpdatedException(true, t)
         }
     }
+
+    /** How one gallery's turn ended; only a network failure counts toward stopping the round. */
+    private enum class GalleryResult { DONE, NETWORK_FAILURE }
 
     companion object {
         private const val MAX_UPDATE_FAILURES = 5

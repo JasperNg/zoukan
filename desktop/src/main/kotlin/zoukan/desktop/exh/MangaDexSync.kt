@@ -25,6 +25,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
+import zoukan.desktop.backup.RestoreGate
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -70,23 +71,27 @@ class MangaDexSync(
         follows.forEachIndexed { index, (networkManga, metadata) ->
             ensureActive()
             _progress.value = Progress(networkManga.title, index, follows.size)
-            var dbManga = getManga.await(networkManga.url, mangaDex.id)
-            if (dbManga == null) {
-                dbManga = networkToLocalManga(
-                    Manga.create().copy(
-                        url = networkManga.url,
-                        ogTitle = networkManga.title,
-                        source = mangaDex.id,
-                        favorite = true,
-                        dateAdded = System.currentTimeMillis(),
-                    ),
-                )
-            } else if (!dbManga.favorite) {
-                updateManga.awaitUpdateFavorite(dbManga.id, true)
-            }
-            updateMangaFromRemote(manga = dbManga, manualFetch = true)
-            metadata.mangaId = dbManga.id
-            insertFlatMetadata.await(metadata)
+            // One follow at a time under the restore gate, so a backup restore never overlaps a
+            // follow's writes; the follows already added stay, the rest wait for the next sync
+            RestoreGate.unlessRestoring {
+                var dbManga = getManga.await(networkManga.url, mangaDex.id)
+                if (dbManga == null) {
+                    dbManga = networkToLocalManga(
+                        Manga.create().copy(
+                            url = networkManga.url,
+                            ogTitle = networkManga.title,
+                            source = mangaDex.id,
+                            favorite = true,
+                            dateAdded = System.currentTimeMillis(),
+                        ),
+                    )
+                } else if (!dbManga.favorite) {
+                    updateManga.awaitUpdateFavorite(dbManga.id, true)
+                }
+                updateMangaFromRemote(manga = dbManga, manualFetch = true)
+                metadata.mangaId = dbManga.id
+                insertFlatMetadata.await(metadata)
+            } ?: error("A backup restore is running; try again when it is done")
         }
         follows.size
     }
