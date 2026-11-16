@@ -34,11 +34,13 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -183,7 +185,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         }
 
         LaunchedEffect(Unit) { focus.requestFocus() }
-        LaunchedEffect(menuVisible, state.generation) { focus.requestFocus() }
+        // While the menu is open the focus stays where the user put it, so its buttons and slider work
+        LaunchedEffect(menuVisible, state.generation) { if (!menuVisible) focus.requestFocus() }
 
         Box(
             Modifier
@@ -193,7 +196,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 // Any click hides the tap zones overlay, and still reaches the reader
                 .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { tapZones.hide() }
                 // ZOUKAN <--
-                .onPreviewKeyEvent(::onKey)
+                // Bubbling pass: a focused button, slider or menu gets its keys first
+                .onKeyEvent(::onKey)
                 .focusRequester(focus)
                 .focusable(),
         ) {
@@ -211,7 +215,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 else -> key(state.generation) {
                     // ZOUKAN -->
                     with(ReaderFilter) {
-                        Box(Modifier.fillMaxSize().readerFilter(filter)) {
+                        val pageDescription = localized(DMR.strings.reader_page_description, state.pageNumber)
+                        Box(Modifier.fillMaxSize().readerFilter(filter).semantics { contentDescription = pageDescription }) {
                             // ZOUKAN <--
                             if (webtoon) {
                                 WebtoonViewer(model, state, actions, sidePadding, background, foreground, tapZones)
