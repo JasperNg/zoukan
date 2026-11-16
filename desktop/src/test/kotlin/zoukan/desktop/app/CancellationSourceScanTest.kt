@@ -86,6 +86,7 @@ class CancellationSourceScanTest {
             Site("ui/common/ReducedMotion.kt", "runCatching {", "reads the system's motion setting"),
             Site("ui/common/SearchField.kt", "focus.requestFocus()", FOCUS),
             Site("ui/common/WindowBounds.kt", "fun screens()", "asks AWT for the screens"),
+            Site("ui/common/WindowBounds.kt", "runCatching {", "asks AWT for a screen's insets, no suspension point"),
             Site("ui/library/LibraryScreenModel.kt", "downloadManager.downloadCount", "counts folders, plain call"),
             Site("ui/library/LibrarySearch.kt", "runCatching {", FILE),
             Site("ui/manga/DescriptionImages.kt", "ExternalLinks.browse", LINK),

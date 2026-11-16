@@ -480,7 +480,7 @@ private fun ColumnWithAction(
 ) {
     // Kept to the width the settings pages use, centred in wide windows
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 900.dp).fillMaxHeight().testTag("restore-backup-content")) {
+        Column(Modifier.widthIn(max = zoukan.desktop.ui.common.Spacing.SettingsPageMaxWidth).fillMaxHeight().testTag("restore-backup-content")) {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 content = content,

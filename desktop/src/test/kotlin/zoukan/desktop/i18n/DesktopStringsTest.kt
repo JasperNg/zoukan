@@ -3,8 +3,8 @@ package zoukan.desktop.i18n
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.w3c.dom.Element
-import zoukan.desktop.compat.localized
 import zoukan.desktop.backup.restoredMessage
+import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
