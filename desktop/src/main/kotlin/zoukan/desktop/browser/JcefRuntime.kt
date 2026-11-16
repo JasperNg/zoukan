@@ -78,6 +78,24 @@ object JcefRuntime {
         }
     }
 
+    internal fun applySettings(settings: CefSettings, browserCache: java.io.File, browserDir: java.io.File, debugLogging: Boolean) {
+        settings.apply {
+            // Extensions' WebViews are windowless
+            windowless_rendering_enabled = true
+            // CEF refuses a cache_path outside root_cache_path
+            root_cache_path = browserCache.absolutePath
+            cache_path = browserCache.absolutePath
+            // Session cookies stay in memory: Chromium's own cookie database is outside FileCipher
+            persist_session_cookies = false
+            if (debugLogging) log_file = java.io.File(browserDir, "chromium.log").absolutePath
+            log_severity = if (debugLogging) {
+                CefSettings.LogSeverity.LOGSEVERITY_VERBOSE
+            } else {
+                CefSettings.LogSeverity.LOGSEVERITY_WARNING
+            }
+        }
+    }
+
     private fun start(): CefApp {
         if (CefApp.getState() != CefApp.CefAppState.NONE) return CefApp.getInstance()
         // Downloads Chromium when it is missing, and installs it only when its checksum is the
@@ -95,20 +113,7 @@ object JcefRuntime {
                     logcat { "Chromium: $state" }
                 }
             }
-            cefSettings.apply {
-                // Extensions' WebViews are windowless
-                windowless_rendering_enabled = true
-                // CEF refuses a cache_path outside root_cache_path
-                root_cache_path = dirs.browserCache.absolutePath
-                cache_path = dirs.browserCache.absolutePath
-                persist_session_cookies = true
-                if (debugLogging) log_file = java.io.File(dirs.browser, "chromium.log").absolutePath
-                log_severity = if (debugLogging) {
-                    CefSettings.LogSeverity.LOGSEVERITY_VERBOSE
-                } else {
-                    CefSettings.LogSeverity.LOGSEVERITY_WARNING
-                }
-            }
+            applySettings(cefSettings, dirs.browserCache, dirs.browser, debugLogging)
             // Chromium refuses to run as root with its sandbox (Linux containers used for development)
             if (System.getProperty("os.name").startsWith("Linux") && System.getProperty("user.name") == "root") {
                 addJcefArgs("--no-sandbox")
