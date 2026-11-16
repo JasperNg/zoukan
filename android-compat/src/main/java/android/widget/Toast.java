@@ -106,7 +106,7 @@ public class Toast {
         try {
             return context.getResources().getText(resId);
         } catch (RuntimeException e) {
-            System.out.printf("Toast: no text for resource %d (%s)%n", resId, e);
+            android.util.Log.w("Toast", "No text for string resource " + resId, e);
             return null;
         }
     }
