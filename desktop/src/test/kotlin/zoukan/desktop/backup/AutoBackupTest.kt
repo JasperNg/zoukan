@@ -1,15 +1,27 @@
 package zoukan.desktop.backup
 
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import eu.kanade.tachiyomi.data.backup.create.BackupOptions
+import eu.kanade.tachiyomi.data.backup.create.creators.MangaBackupCreator
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.data.AndroidDatabaseHandler
+import tachiyomi.data.Database
 import tachiyomi.domain.backup.service.BackupPreferences
+import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.history.interactor.GetHistory
+import tachiyomi.domain.history.model.History
+import tachiyomi.domain.manga.model.Manga
+import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.storage.ZoukanStorage
 import java.io.File
 import java.io.IOException
@@ -17,6 +29,8 @@ import java.nio.file.FileAlreadyExistsException
 import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Date
+import java.util.concurrent.Executors
 import kotlin.random.Random
 
 class AutoBackupTest {
@@ -191,6 +205,105 @@ class AutoBackupTest {
         // A name that is not in the record is not rotated out either
         AutoBackup.prune(folder, emptyList(), File(folder, "zoukan_2024-01-06_10-00.tachibk"))
         File(folder, "zoukan_2099-13-45_99-99.tachibk").exists() shouldBe true
+    }
+
+    @Test
+    fun `a backup skips history whose chapter was removed meanwhile and completes`(@TempDir folder: File) {
+        val driver = JdbcSqliteDriver(
+            url = "jdbc:sqlite:${File(folder, "zoukan.db").absolutePath}",
+            properties = DesktopDatabase.properties(ByteArray(32) { it.toByte() }),
+            schema = Database.Schema,
+        )
+        val db = DesktopDatabase.createDatabase(driver)
+        val executor = Executors.newSingleThreadExecutor { Thread(it, "zoukan-database").apply { isDaemon = true } }
+        val dispatcher = executor.asCoroutineDispatcher()
+        val handler = AndroidDatabaseHandler(db, driver, queryDispatcher = dispatcher, transactionDispatcher = dispatcher)
+        try {
+            runBlocking {
+                val manga = Manga.create().copy(source = 1L, url = "/m", ogTitle = "m")
+                val mangaId = handler.awaitOneExecutable(true) {
+                    mangasQueries.insert(
+                        source = manga.source,
+                        url = manga.url,
+                        artist = null,
+                        author = null,
+                        description = null,
+                        genre = null,
+                        title = manga.ogTitle,
+                        status = 0L,
+                        thumbnailUrl = null,
+                        favorite = true,
+                        lastUpdate = 0L,
+                        nextUpdate = 0L,
+                        calculateInterval = 0L,
+                        initialized = true,
+                        viewerFlags = 0L,
+                        chapterFlags = 0L,
+                        coverLastModified = 0L,
+                        dateAdded = 0L,
+                        updateStrategy = manga.updateStrategy,
+                        version = 0L,
+                        notes = "",
+                        memo = manga.memo,
+                    )
+                    mangasQueries.selectLastInsertedRowId()
+                }
+                val keptChapterId = handler.awaitOneExecutable(true) {
+                    chaptersQueries.insert(
+                        mangaId, "/kept", "Kept", null, false, false, 0L, 1.0, 0L, 0L, 0L, 0L, Chapter.create().memo,
+                    )
+                    chaptersQueries.selectLastInsertedRowId()
+                }
+                // The second row's chapter is gone, as after a library update deleted it
+                val getHistory = mockk<GetHistory> {
+                    coEvery { await(mangaId) } returns listOf(
+                        History(id = 1, chapterId = keptChapterId, readAt = Date(1000), readDuration = 5),
+                        History(id = 2, chapterId = 999_999L, readAt = Date(2000), readDuration = 5),
+                    )
+                }
+                val creator = MangaBackupCreator(
+                    handler = handler,
+                    getCategories = mockk(relaxed = true),
+                    getHistory = getHistory,
+                    sourceManager = mockk(relaxed = true),
+                    getCustomMangaInfo = mockk(relaxed = true),
+                    getFlatMetadataById = mockk(relaxed = true),
+                    requireMetadataSource = false,
+                )
+
+                val result = creator(listOf(manga.copy(id = mangaId)), BackupOptions())
+
+                result.single().history.map { it.url } shouldBe listOf("/kept")
+            }
+        } finally {
+            driver.close()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `a failed automatic backup leaves the existing backups byte for byte`(@TempDir folder: File) = runBlocking<Unit> {
+        val names = listOf(
+            "zoukan_2024-01-01_10-00.tachibk",
+            "zoukan_2024-01-02_10-00.tachibk",
+            "app.komikku_2024-01-03_10-00.tachibk",
+        )
+        val files = names.map { File(folder, it).apply { writeBytes(Random.nextBytes(256)) } }
+        val hashes = files.associateWith { sha(it) }
+        val storage = mockk<ZoukanStorage> { every { autoBackups } returns folder }
+        val preferences = mockk<BackupPreferences> {
+            every { backupInterval() } returns pref(12)
+            every { lastAutoBackupTimestamp() } returns pref(0L)
+        }
+
+        // The runtime is not started, so the backup itself fails
+        AutoBackup(storage, File("."), preferences, pref("")).run() shouldBe null
+
+        files.forEach {
+            it.exists() shouldBe true
+            sha(it) shouldBe hashes.getValue(it)
+        }
+        folder.listFiles().orEmpty().map { it.name }.sorted() shouldBe names.sorted()
     }
 
     @Test
