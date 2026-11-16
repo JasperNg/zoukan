@@ -9,6 +9,22 @@ import org.junit.jupiter.api.Test
  */
 class BrowserWindowRegistryTest {
     @Test
+    fun `a pop-up request is loaded in the window's own browser and never creates a native window`() {
+        val loaded = mutableListOf<String>()
+        BrowserPopups.onPopup("https://accounts.example/signin") { loaded += it } shouldBe true
+        loaded shouldBe listOf("https://accounts.example/signin")
+    }
+
+    @Test
+    fun `a pop-up to a non-web address is refused and not loaded`() {
+        val loaded = mutableListOf<String>()
+        listOf("file:///C:/Windows/win.ini", "javascript:alert(1)", null).forEach { url ->
+            BrowserPopups.onPopup(url) { loaded += it } shouldBe true
+        }
+        loaded shouldBe emptyList()
+    }
+
+    @Test
     fun `disposeAll disposes every window once and a second call does nothing`() {
         val registry = BrowserWindowRegistry()
         val disposed = mutableListOf<String>()

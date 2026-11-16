@@ -124,6 +124,13 @@ class BrowserWindow(
                 })
             }
             client.addLifeSpanHandler(object : CefLifeSpanHandlerAdapter() {
+                override fun onBeforePopup(
+                    browser: CefBrowser,
+                    frame: CefFrame,
+                    targetUrl: String?,
+                    targetFrameName: String?,
+                ): Boolean = BrowserPopups.onPopup(targetUrl) { browser.loadURL(it) }
+
                 override fun onAfterCreated(browser: CefBrowser) {
                     // Cloudflare ties cf_clearance to the user agent, so the page must see the app's.
                     // The browser starts blank and loads the page once the user agent is set.
@@ -347,6 +354,27 @@ class BrowserWindow(
             )
             return window.open() && window.await(timeoutMs, isSolved)
         }
+    }
+}
+
+/**
+ * What the built-in browser does with a page's request for a pop-up window. Kept free of
+ * Chromium types, so tests can drive it without JCEF.
+ */
+object BrowserPopups {
+    /**
+     * Called for a pop-up to [targetUrl]. Returns true to stop Chromium from creating its own
+     * window; [loadHere] loads an address in the window's own browser.
+     */
+    fun onPopup(targetUrl: String?, loadHere: (String) -> Unit): Boolean {
+        // A native pop-up window would escape the app lock and the secure screen setting, which
+        // act only on the windows the app made; the address loads in this window instead
+        if (targetUrl != null && zoukan.desktop.app.ExternalLinks.isWebUrl(targetUrl)) {
+            loadHere(targetUrl)
+        } else {
+            logcat(LogPriority.WARN) { "The browser does not open a pop-up to ${targetUrl?.take(100)}: not a web address" }
+        }
+        return true
     }
 }
 
