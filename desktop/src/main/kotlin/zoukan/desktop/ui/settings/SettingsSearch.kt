@@ -83,7 +83,7 @@ internal class SearchScope(
     override fun item(key: Any?, contentType: Any?, content: @Composable LazyItemScope.() -> Unit) {
         val id = SettingsSearch.itemId(key, index++)
         if (key is String && key.startsWith(GROUP_KEY_PREFIX)) {
-            group = key.removePrefix(GROUP_KEY_PREFIX).trim()
+            group = (contentType as? SettingsGroupHeader)?.title ?: key.removePrefix(GROUP_KEY_PREFIX)
             return
         }
         val shownGroup = group
@@ -152,6 +152,9 @@ internal class HighlightScope(
 
 /** The key prefix of [settingsGroup] headers. */
 internal const val GROUP_KEY_PREFIX = "group-"
+
+/** The content type of a [settingsGroup] header: it carries the title, which the key (an id) may not. */
+internal data class SettingsGroupHeader(val title: String)
 
 /** Fades a highlight behind [content] in and out, twice. */
 @Composable

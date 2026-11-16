@@ -38,9 +38,10 @@ import zoukan.i18n.desktop.DMR
  * categories, the latest button, local hidden folders), the feed, hiding library entries,
  * extension stores and NSFW sources.
  *
- * Android's "Expand related titles", "Related titles in the overflow menu" and "Show home on
- * related titles" lay out a related-titles row inside the entry screen; the desktop shows related
- * titles from the entry's More > Similar titles, so they are not shown (see PARITY.md).
+ * Android's related-titles options lay out a related-titles row inside the entry screen. The
+ * desktop shows "Expand related titles" and "Related titles in the overflow menu" for that row.
+ * "Show home on related titles" is not shown: the desktop lists related titles from the entry's
+ * More > Similar titles instead (see PARITY.md).
  */
 fun LazyListScope.browseSettings() {
     settingsGroup(localized(MR.strings.label_sources))
@@ -114,8 +115,8 @@ fun LazyListScope.browseSettings() {
         SwitchPreference(localized(MR.strings.pref_hide_in_library_items), preferences.hideInLibraryFeedItems())
     }
 
-    // Android has a second "Sources" group here; the space keeps the list keys apart
-    settingsGroup(localized(MR.strings.label_sources) + " ")
+    // Android has a second "Sources" group here; its own id keeps the list keys apart
+    settingsGroup(localized(MR.strings.label_sources), id = "browse-sources-library")
     item(key = "browse-hide-library") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         SwitchPreference(localized(MR.strings.pref_hide_in_library_items), preferences.hideInLibraryItems())

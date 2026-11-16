@@ -54,6 +54,7 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.backup.BackupValidator
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
