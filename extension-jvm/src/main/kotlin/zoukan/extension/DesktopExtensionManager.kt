@@ -242,7 +242,7 @@ class DesktopExtensionManager(
         val files = loader.installedPackage(pkgName) ?: return null
         return try {
             val signers = if (files.apk != null) {
-                ExtensionSignatures.verifyApk(files.apk)
+                ExtensionSignatures.verifyApk(files.apk.readBytes())
             } else {
                 ExtensionSignatures.verifyJar(files.jar).signers
             }

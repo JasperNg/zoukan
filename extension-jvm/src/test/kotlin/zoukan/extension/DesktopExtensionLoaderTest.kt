@@ -146,7 +146,7 @@ class DesktopExtensionLoaderTest {
     private fun withVerifiedApk(files: DesktopExtensionLoader.InstalledFiles, block: () -> Unit) {
         val apk = files.apk!!
         mockkObject(ExtensionSignatures) {
-            every { ExtensionSignatures.verifyApk(apk) } returns listOf("store-key")
+            every { ExtensionSignatures.verifyApk(apk.readBytes()) } returns listOf("store-key")
             mockkObject(ApkConverter) { block() }
         }
     }
@@ -161,13 +161,13 @@ class DesktopExtensionLoaderTest {
         val apk = files.apk!!
         val jar = files.jar
         withVerifiedApk(files) {
-            every { ApkConverter.convert(apk, jar) } answers { writeJar(jar, goodManifest) }
+            every { ApkConverter.convert(apk.readBytes(), jar) } answers { writeJar(jar, goodManifest) }
 
             val result = loader().load(files, emptyList())
 
             // The tampered manifest is not the one that loaded: the healed jar's is
             result.shouldBeInstanceOf<LoadResult.Success>().extension.pkgName shouldBe pkgName
-            verify(exactly = 1) { ApkConverter.convert(apk, jar) }
+            verify(exactly = 1) { ApkConverter.convert(apk.readBytes(), jar) }
             recordedHash(files) shouldBe expectedHash(files)
         }
     }
@@ -193,12 +193,12 @@ class DesktopExtensionLoaderTest {
         val apk = files.apk!!
         val jar = files.jar
         withVerifiedApk(files) {
-            every { ApkConverter.convert(apk, jar) } just runs
+            every { ApkConverter.convert(apk.readBytes(), jar) } just runs
 
             val result = loader().load(files, emptyList())
 
             result.shouldBeInstanceOf<LoadResult.Success>()
-            verify(exactly = 1) { ApkConverter.convert(apk, jar) }
+            verify(exactly = 1) { ApkConverter.convert(apk.readBytes(), jar) }
             recordedHash(files) shouldBe expectedHash(files)
         }
     }
@@ -214,11 +214,11 @@ class DesktopExtensionLoaderTest {
         val apk = files.apk!!
         val jar = files.jar
         withVerifiedApk(files) {
-            every { ApkConverter.convert(apk, jar) } answers { writeJar(jar, goodManifest) }
+            every { ApkConverter.convert(apk.readBytes(), jar) } answers { writeJar(jar, goodManifest) }
 
             loader().load(files, emptyList()).shouldBeInstanceOf<LoadResult.Success>().extension.pkgName shouldBe pkgName
 
-            verify(exactly = 1) { ApkConverter.convert(apk, jar) }
+            verify(exactly = 1) { ApkConverter.convert(apk.readBytes(), jar) }
             sidecar.exists() shouldBe false
         }
     }
@@ -280,7 +280,7 @@ class DesktopExtensionLoaderTest {
         val apk4 = File(dir, "4.apk").apply { writeText("apk 4 bytes") }
         val update = DesktopExtensionLoader.InstalledFiles(pkgName, 4, jar4, apk4, convertedSha256 = ApkConverter.sha256Of(jar4))
         mockkObject(ExtensionSignatures) {
-            every { ExtensionSignatures.verifyApk(apk4) } returns listOf("store-key")
+            every { ExtensionSignatures.verifyApk(apk4.readBytes()) } returns listOf("store-key")
 
             loader().load(update, emptyList()).shouldBeInstanceOf<LoadResult.Error>()
 
@@ -305,13 +305,13 @@ class DesktopExtensionLoaderTest {
         val files = installed.copy(convertedSha256 = ApkConverter.sha256Of(installed.jar))
         mockkObject(ExtensionSignatures) {
             mockkObject(ApkConverter) {
-                every { ExtensionSignatures.verifyApk(files.apk!!) } returns listOf("attacker-key")
+                every { ExtensionSignatures.verifyApk(files.apk!!.readBytes()) } returns listOf("attacker-key")
                 loader(trust).load(files, emptyList()).shouldBeInstanceOf<LoadResult.Untrusted>()
                 recordedHash(files) shouldBe null
 
                 // A genuine, store-signed APK replaces the attacker's
                 files.apk!!.writeText("genuine store apk")
-                every { ExtensionSignatures.verifyApk(files.apk) } returns listOf("store-key")
+                every { ExtensionSignatures.verifyApk(files.apk.readBytes()) } returns listOf("store-key")
                 every { ApkConverter.convert(any(), any()) } answers {
                     writeJar(secondArg(), manifest(pkgName, sourceClass))
                 }

@@ -1,7 +1,9 @@
 package zoukan.extension
 
 import com.android.apksig.ApkVerifier
+import com.android.apksig.util.DataSources
 import java.io.File
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.cert.Certificate
 import java.util.Locale
@@ -72,8 +74,8 @@ object ExtensionSignatures {
     private val SIGNATURE_SUFFIXES = listOf(".SF", ".RSA", ".DSA", ".EC")
 
     /** Checks an APK's v1, v2 and v3 signatures with apksig, as Android's package manager would. */
-    fun verifyApk(apk: File): List<String> {
-        val result = ApkVerifier.Builder(apk).build().verify()
+    fun verifyApk(apk: ByteArray): List<String> {
+        val result = ApkVerifier.Builder(DataSources.asDataSource(ByteBuffer.wrap(apk))).build().verify()
         if (!result.isVerified) {
             val errors = result.errors +
                 result.v1SchemeSigners.flatMap { it.errors } +

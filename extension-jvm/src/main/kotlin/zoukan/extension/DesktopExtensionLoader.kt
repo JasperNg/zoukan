@@ -146,12 +146,14 @@ class DesktopExtensionLoader(
         var hashToRecord: String? = null
         var apkSha256 = ""
         val (signatures, contents) = if (files.apk != null) {
-            val signers = ExtensionSignatures.verifyApk(files.apk)
-            apkSha256 = ApkConverter.sha256Of(files.apk)
+            // The APK is read once: the signature, its digest and a new conversion all use these bytes
+            val apkBytes = files.apk.readBytes()
+            val signers = ExtensionSignatures.verifyApk(apkBytes)
+            apkSha256 = ApkConverter.sha256Of(apkBytes)
             // The manifest is read only after the checks that decide whether the jar may run at
             // all: a swapped jar must not fail the load before it was converted again, and then the
             // manifest of the healed jar is the one that counts
-            val jar = verifiedConvertedJar(files, apkSha256)
+            val jar = verifiedConvertedJar(files, apkBytes, apkSha256)
             hashToRecord = jar.hashToRecord
             signers to JarContents.fromBytes(jar.bytes)
         } else {
@@ -250,7 +252,7 @@ class DesktopExtensionLoader(
      * failure fails the load. Nothing is deleted on the way. A hash to record is returned, not
      * recorded: the caller records it only once the extension loaded.
      */
-    private fun verifiedConvertedJar(files: InstalledFiles, apkSha256: String): VerifiedJar {
+    private fun verifiedConvertedJar(files: InstalledFiles, apkBytes: ByteArray, apkSha256: String): VerifiedJar {
         val apk = checkNotNull(files.apk)
         val jar = files.jar
         val bytes = jar.readBytes()
@@ -260,7 +262,7 @@ class DesktopExtensionLoader(
         logcat(LogPriority.WARN) {
             "Extension ${files.pkgName}: ${jar.name} has no matching recorded hash, converting ${apk.name} again"
         }
-        ApkConverter.convert(apk, jar)
+        ApkConverter.convert(apkBytes, jar)
         val converted = jar.readBytes()
         return VerifiedJar(converted, ApkConverter.sha256Of(converted))
     }

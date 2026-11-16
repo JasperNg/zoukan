@@ -102,18 +102,24 @@ class DesktopExtensionInstaller(
     ): Installed {
         val tmp = download(extension.apkUrl, extension.pkgName, ".apk")
         var tmpJar: File? = null
+        var tmpApk: File? = null
         try {
-            checkSigner(ExtensionSignatures.verifyApk(tmp), requiredSigner, extension)
-            val manifest = ExtensionManifest.fromApk(tmp).also { checkManifest(it, extension, installedVersionCode) }
+            // The APK is read once (the download is size-capped): the bytes that are verified are
+            // the bytes that are parsed, converted and stored, whatever happens to the file after
+            val apkBytes = tmp.readBytes()
+            checkSigner(ExtensionSignatures.verifyApk(apkBytes), requiredSigner, extension)
+            val manifest = ExtensionManifest.fromApk(apkBytes).also { checkManifest(it, extension, installedVersionCode) }
             val dir = packageDir(extension.pkgName)
             tmpJar = File.createTempFile("${manifest.versionCode}-converting-", ".jar.part", dir)
-            ApkConverter.convert(tmp, tmpJar)
+            ApkConverter.convert(apkBytes, tmpJar)
             val sha256 = ApkConverter.sha256Of(tmpJar)
+            tmpApk = File.createTempFile("${manifest.versionCode}-converting-", ".apk.part", dir)
+            tmpApk.writeBytes(apkBytes)
             val apk = File(dir, "${manifest.versionCode}.apk")
             val jar = File(dir, "${manifest.versionCode}.jar")
             // The APK first: if the jar's move then fails, the old jar no longer matches its hash
             // and the loader converts this APK again
-            Files.move(tmp.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            Files.move(tmpApk.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
             Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
             File(dir, "${manifest.versionCode}.sha256").delete()
             return Installed(
@@ -123,6 +129,7 @@ class DesktopExtensionInstaller(
         } finally {
             tmp.delete()
             tmpJar?.delete()
+            tmpApk?.delete()
         }
     }
 
