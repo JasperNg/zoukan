@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.online.all.MangaDex
 import exh.md.utils.MdUtil
 import exh.metadata.metadata.MangaDexSearchMetadata
 import exh.metadata.metadata.RaisedSearchMetadata
+import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -86,6 +87,30 @@ class MangaDexSyncTest {
             getTracks = mockk<GetTracks>(),
             insertTrack = mockk<InsertTrack>(),
         )
+    }
+
+    @Test
+    fun `a follow whose refresh fails is reported and not counted as added`() = runBlocking<Unit> {
+        val sync = sync()
+        val first = mockk<Manga>(relaxed = true) {
+            every { id } returns 5L
+            every { favorite } returns true
+        }
+        val second = mockk<Manga>(relaxed = true) {
+            every { id } returns 6L
+            every { favorite } returns true
+        }
+        coEvery { getManga.await("/title/1", any()) } returns first
+        coEvery { getManga.await("/title/2", any()) } returns second
+        // The follows are refreshed in order: the first fails, the second works
+        coEvery {
+            updateMangaFromRemote.invoke(any<Manga>(), any(), any(), any(), any(), any())
+        } returnsMany listOf(
+            Result.failure(java.io.IOException("offline")),
+            Result.success(RemoteMangaUpdate(second, emptyList())),
+        )
+
+        sync.syncFollows() shouldBe MangaDexSync.FollowSyncResult(added = 1, failed = listOf("Follow 1"))
     }
 
     @Test
