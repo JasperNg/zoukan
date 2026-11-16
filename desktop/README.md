@@ -139,12 +139,12 @@ Each release also starts the packaged app before publishing it: the release work
 `EndToEndDownloadTest` is the Phase 5 gate: it installs an extension, adds three entries, updates the
 library from the Updates tab, downloads chapters from an entry (as a CBZ, then an encrypted one),
 reads the download, downloads every entry's newest chapter, reads from the local source and makes
-an automatic backup. `EndToEndLocalTest` needs no network: it reads the local source, updates the
-library and opens the new screens.
+an automatic backup. The offline flows (the local source, browsing, migration, upcoming updates,
+metadata) are journeys that need no network and run in `journeyTest`.
 
 ```bash
 ./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndDownloadTest"
-./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndLocalTest"
+./gradlew :desktop:journeyTest
 ```
 
 `EndToEndReadTest` drives the real UI: it adds the Keiyoushi store, installs an extension, browses

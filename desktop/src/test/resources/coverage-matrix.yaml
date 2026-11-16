@@ -166,8 +166,8 @@
   feature: "Selection bar: clear, select all, invert, change categories, mark read/unread, download, delete downloads, update, migrate, remove"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Only the gated EndToEndParityTest and EndToEndMigrationTest; planned: LibrarySelectionJourneyTest"
+  tests: [e2e.MigrationJourneyTest]
+  gap: "Only selecting and migrating is driven (MigrationJourneyTest); the rest only in the gated EndToEndParityTest; planned: LibrarySelectionJourneyTest"
 
 - key: flow:library.selection-overflow
   feature: "Selection overflow: merge, clean titles, recommendation search, MangaDex follows, reset info"
@@ -248,8 +248,8 @@
   feature: "Recent updates list"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.updates.UpdatesUiModelTest]
-  gap: "Grouping and reading from it only in the gated EndToEndParityTest and EndToEndLocalTest; planned: UpdatesJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.updates.UpdatesUiModelTest, e2e.LocalJourneyTest]
+  gap: "Grouping only in the gated EndToEndParityTest; reading from it is driven by LocalJourneyTest; planned: UpdatesJourneyTest"
 
 - key: flow:updates.header
   feature: "View upcoming / update library buttons"
@@ -366,15 +366,15 @@
   feature: "Feed page"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Feed content only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
+  gap: "Only the feed order is driven; feed content is not; planned: a feed content journey"
 
 - key: dialog:browse.AddFeedDialog
   feature: "Feed page: add feed"
   tier: journey
   smoke: false
   tests: []
-  gap: "Not opened by any test (the gated EndToEndBrowseTest seeds feeds directly); planned: BrowseFeaturesJourneyTest"
+  gap: "Not opened by any test (BrowseFeaturesJourneyTest seeds feeds directly); planned: a feed content journey"
 
 - key: dialog:browse.FeedOrderDialog
   feature: "Feed page: reorder"

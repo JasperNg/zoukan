@@ -316,7 +316,7 @@ Not added yet. This section will explain the golden images and how to update the
 
 The `EndToEnd*Test` classes in `desktop/src/test/kotlin/zoukan/desktop/ui/` skip themselves
 unless you pass `-Pzoukan.e2e=true`. Most of them install a real extension and use its site, so
-they need the network. `EndToEndLocalTest` does not. They use a throwaway data folder and save
+they need the network; the offline flows are journeys (`./gradlew :desktop:journeyTest`). They use a throwaway data folder and save
 screenshots to `desktop/build/reports/e2e/`.
 
 ```bash
