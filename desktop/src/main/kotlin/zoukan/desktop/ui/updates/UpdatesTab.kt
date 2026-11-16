@@ -46,7 +46,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -121,6 +120,7 @@ import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.downloads.DownloadsButton
 import zoukan.desktop.ui.library.ClickKind
 import zoukan.desktop.ui.library.LibraryUpdateProgress
+import zoukan.desktop.ui.library.rememberLibraryUpdateRunning
 import zoukan.desktop.ui.library.selectableClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
@@ -414,8 +414,7 @@ class UpdatesScreenModel(
 fun UpdatesTab(model: UpdatesScreenModel) {
     val state by model.state.collectAsState()
     // Only whether an update runs, so each progress tick doesn't recompose the whole list
-    val progress = Injekt.get<LibraryUpdater>().progress.collectAsState()
-    val updating by remember(progress) { derivedStateOf { progress.value != null } }
+    val updating by rememberLibraryUpdateRunning()
     val navigator = LocalNavigator.currentOrThrow
     // ZOUKAN -->
     // The chapters a delete-downloads question is for: from the selection bar or a right-click

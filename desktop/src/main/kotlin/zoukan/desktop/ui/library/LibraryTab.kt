@@ -43,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -56,6 +57,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.manga.model.Manga
@@ -102,8 +104,7 @@ import zoukan.i18n.desktop.DMR
 fun LibraryTab(model: LibraryScreenModel) {
     val state by model.state.collectAsState()
     // Only whether an update runs, so each progress tick doesn't recompose the whole library
-    val progress = Injekt.get<LibraryUpdater>().progress.collectAsState()
-    val updating by remember(progress) { derivedStateOf { progress.value != null } }
+    val updating by rememberLibraryUpdateRunning()
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
     var settingsDialog by remember { mutableStateOf(false) }
@@ -673,6 +674,15 @@ private fun RemoveDialog(count: Int, onConfirm: (Boolean) -> Unit, onDismiss: ()
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
+}
+
+/** Whether a library update runs, without recomposing the caller on every progress tick. */
+@Composable
+internal fun rememberLibraryUpdateRunning(
+    progress: StateFlow<LibraryUpdater.Progress?> = remember { Injekt.get<LibraryUpdater>().progress },
+): State<Boolean> {
+    val state = progress.collectAsState()
+    return remember(state) { derivedStateOf { state.value != null } }
 }
 
 /** The running library update's progress, under a screen's header. */

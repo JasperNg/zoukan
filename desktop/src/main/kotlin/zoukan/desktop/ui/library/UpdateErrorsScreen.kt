@@ -227,7 +227,7 @@ object UpdateErrorsScreen : Screen {
     override fun Content() {
         val model = rememberScreenModel { UpdateErrorsScreenModel() }
         val state by model.state.collectAsState()
-        val updating by remember { Injekt.get<LibraryUpdater>().progress }.collectAsState()
+        val updating by rememberLibraryUpdateRunning()
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
         val listState = rememberLazyListState()
@@ -254,7 +254,7 @@ object UpdateErrorsScreen : Screen {
                         )
                         TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
                         TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
-                        TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_retry), onClick = { model.retry() }, enabled = updating == null)
+                        TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_retry), onClick = { model.retry() }, enabled = !updating)
                         TooltipIconButton(
                             Icons.Outlined.FindReplace,
                             if (state.selection.size == 1) localized(MR.strings.action_migrate) else localized(DMR.strings.migrate_one_entry_at_a_time),
@@ -270,7 +270,7 @@ object UpdateErrorsScreen : Screen {
                         Icons.Outlined.Refresh,
                         localized(SYMR.strings.eh_retry_all),
                         onClick = { model.retry() },
-                        enabled = updating == null && state.items.isNotEmpty(),
+                        enabled = !updating && state.items.isNotEmpty(),
                     )
                     if (state.items.isNotEmpty()) TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
                 }
@@ -294,7 +294,7 @@ object UpdateErrorsScreen : Screen {
                         onMigrate = ::migrate,
                         onRetry = { model.retry(it) },
                         onDelete = { model.delete(it) },
-                        retryEnabled = updating == null,
+                        retryEnabled = !updating,
                     )
                     ScrollBar(state, listState)
                 }
