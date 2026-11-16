@@ -541,8 +541,8 @@
   feature: "Add to library, tracking, WebView (copy link on secondary click)"
   tier: journey
   smoke: false
-  tests: [e2e.BrowseAndReadJourneyTest]
-  gap: "Only Add to library is driven; tracking, planned: KomgaTrackingJourneyTest; WebView opens the Chromium window (manual)"
+  tests: [e2e.BrowseAndReadJourneyTest, e2e.KomgaTrackingJourneyTest]
+  gap: "Add to library and the Komga tracking dialog are driven; WebView opens the Chromium window (manual)"
 
 - key: flow:manga.info
   feature: "Description, notes, cover-based theme"
@@ -701,10 +701,10 @@
 
 - key: dialog:track.TrackingDialog
   feature: "Tracking dialog"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, track.TrackingSearchTest]
-  gap: "Binding a tracker is not driven; planned: KomgaTrackingJourneyTest; hosted trackers are manual (hard-coded hosts)"
+  tests: [ui.ScreenSmokeTest, e2e.KomgaTrackingJourneyTest, track.TrackingSearchTest, track.TrackChaptersTest]
+  gap: "Komga bind, progress sync, error and unbind are driven offline; hosted trackers (AniList, MyAnimeList, Kitsu, MangaUpdates, Shikimori, Bangumi) are accepted gaps: their hosts are hard-coded, covered by unit tests (TrackerLoginTest, TrackingSearchTest, TrackChaptersTest) and smoke"
 
 - key: screen:manga.PagePreviewScreen
   feature: "Page previews screen"
@@ -981,15 +981,15 @@
   feature: "Trackers, login dialogs, auto update"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest; hosted tracker logins are manual (hard-coded hosts)"
+  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest, track.TrackingSearchTest, track.TrackChaptersTest]
+  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest; hosted trackers (AniList, MyAnimeList and the others) are accepted gaps: hosts are hard-coded, covered by unit tests (TrackerLoginTest, TrackingSearchTest, TrackChaptersTest) and smoke"
 
 - key: dialog-inline:TrackingSettings.kt:TrackerSetting
   feature: "Tracker login dialogs"
   tier: unit
   smoke: false
-  tests: [track.TrackerLoginTest]
-  gap: "manual: hosted tracker logins need the tracker's own site (hosts are hard-coded); the redirect parsing is unit tested"
+  tests: [track.TrackerLoginTest, track.TrackingSearchTest, track.TrackChaptersTest]
+  gap: "manual: hosted tracker logins need the tracker's own site (hosts are hard-coded); covered by unit tests (TrackerLoginTest, TrackingSearchTest, TrackChaptersTest) and smoke"
 
 - key: settings:Connections
   feature: "Discord Rich Presence options"
