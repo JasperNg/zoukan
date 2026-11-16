@@ -52,6 +52,7 @@ import coil3.fetch.SourceFetchResult
 import coil3.key.Keyer
 import coil3.request.Options
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.PagePreviewInfo
 import eu.kanade.tachiyomi.source.PagePreviewSource
 import exh.source.getMainSource
@@ -60,7 +61,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import okio.Buffer
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
@@ -76,6 +79,7 @@ import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.i18n.desktop.DMR
 import java.io.IOException
@@ -130,7 +134,7 @@ internal class PagePreviewFetcher(private val image: PagePreviewImage) : Fetcher
         val source = Injekt.get<SourceManager>().get(image.sourceId)?.getMainSource<PagePreviewSource>()
             ?: throw IOException(localized(DMR.strings.the_source_of_this_preview_is))
         val bytes = source.fetchPreviewImage(PagePreviewInfo(image.index, image.imageUrl)).use { response ->
-            if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${image.imageUrl}")
+            if (!response.isSuccessful) throw HttpException(response.code)
             response.body.bytes()
         }
         return SourceFetchResult(
@@ -200,7 +204,7 @@ fun PagePreviewSection(manga: Manga, modifier: Modifier = Modifier) {
                 CircularProgressIndicator(Modifier.size(32.dp))
             }
             result.isFailure -> Text(
-                localized(DMR.strings.couldnt_load_page_previews, result.exceptionOrNull()?.message ?: localized(DMR.strings.unknown_error)),
+                localized(DMR.strings.couldnt_load_page_previews, result.exceptionOrNull()?.let(::sourceErrorText) ?: localized(DMR.strings.unknown_error)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -270,7 +274,8 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                     throw e
                 } catch (e: Throwable) {
                     // Throwable: an unloaded extension's Error must not leave the spinner
-                    mutableState.update { it.copy(loading = false, error = e.message ?: localized(DMR.strings.couldnt_load_page_previews_2)) }
+                    logcat(LogPriority.WARN, e) { "Loading the page previews failed" }
+                    mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }
                 }
             }
         }

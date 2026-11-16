@@ -270,7 +270,7 @@ private fun SetAsDefaultDialog(onConfirm: (toLibrary: Boolean) -> Unit, onDismis
             TextButton(onClick = {
                 onConfirm(toLibrary)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

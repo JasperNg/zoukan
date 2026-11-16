@@ -46,6 +46,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -354,7 +355,12 @@ class MangaScreenModel(
                 // LinkageError, which would leave the screen refreshing for good
                 // KMK: the failure is the entry's update error, as a library update's
                 runCatching { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
-                if (e is NoChaptersException) localized(DMR.strings.the_source_lists_no_chapters) else e.message ?: e::class.simpleName
+                if (e is NoChaptersException) {
+                    localized(DMR.strings.the_source_lists_no_chapters)
+                } else {
+                    logcat(LogPriority.WARN, e) { "Refreshing the entry failed" }
+                    sourceErrorText(e)
+                }
             }
             // KMK: a manual refresh also syncs progress from the trackers, as Android's fetchAllFromSource
             if (manualFetch) launch { syncTrackers() }
@@ -622,7 +628,7 @@ class MangaScreenModel(
                     java.awt.Desktop.getDesktop().open(dir)
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e)
-                    Toasts.show(e.message ?: localized(tachiyomi.i18n.kmk.KMR.strings.error_opening_folder))
+                    Toasts.show(localized(tachiyomi.i18n.kmk.KMR.strings.error_opening_folder))
                 }
             }
         }
