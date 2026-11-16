@@ -50,6 +50,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
@@ -96,13 +97,16 @@ import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.tray.Notifications
 import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.BrowseTab
+import zoukan.desktop.ui.common.AppMessages
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.LocalAppMessages
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIf
 import zoukan.desktop.ui.common.WindowBounds
 import zoukan.desktop.ui.common.ZoukanTheme
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.showMessages
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.LibraryScreenModel
@@ -388,49 +392,61 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
             color = MaterialTheme.colorScheme.background,
         ) {
             val snackbar = remember { SnackbarHostState() }
+            val messages = remember { AppMessages() }
             LaunchedEffect(Unit) {
-                Toasts.flow.collect { message ->
-                    // ZOUKAN -->
-                    // Messages wait for the unlock: the lock shows nothing of the app
+                // ZOUKAN -->
+                // Messages wait for the unlock: the lock shows nothing of the app. A screen can hold
+                // them back too (the reader); the newest shows when it lets go
+                showMessages(Toasts.flow, snackbar) {
                     appLock.locked.first { !it }
-                    // ZOUKAN <--
-                    snackbar.showSnackbar(message)
+                    messages.held.first { it == 0 }
                 }
+                // ZOUKAN <--
             }
             // ZOUKAN -->
             LaunchedEffect(locked) { if (locked) snackbar.currentSnackbarData?.dismiss() }
+            // A message already shown when a screen holds them back goes too
+            val held by messages.held.collectAsState()
+            LaunchedEffect(held > 0) { if (held > 0) snackbar.currentSnackbarData?.dismiss() }
             // ZOUKAN <--
-            Box(Modifier.fillMaxSize()) {
-                // ZOUKAN -->
-                // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
-                Column(Modifier.fillMaxSize()) {
-                    if (!locked) AppStateBanners()
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        Navigator(HomeScreen) { navigator ->
-                            navigatorRef = navigator
-                            onNavigator(navigator)
-                            // While locked, the screens leave the composition, so none of their
-                            // controls, dialogs or menus can be clicked or reached with Tab (dialogs
-                            // are layers above the lock). The navigator stays: the back stack, the
-                            // screen models and the screens' saved state (tab, scroll) are kept, and
-                            // the unlock returns to the same screen. Plain `remember` state is not:
-                            // open dialogs, unsaved text, selection mode and coroutines in a
-                            // composable's own scope are lost, where Android keeps the whole activity
-                            // under its unlock screen (see PARITY.md, App lock)
-                            if (!locked) FadeTransition(navigator)
+            CompositionLocalProvider(LocalAppMessages provides messages) {
+                Box(Modifier.fillMaxSize()) {
+                    // ZOUKAN -->
+                    // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
+                    Column(Modifier.fillMaxSize()) {
+                        if (!locked) AppStateBanners()
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            Navigator(HomeScreen) { navigator ->
+                                navigatorRef = navigator
+                                onNavigator(navigator)
+                                // While locked, the screens leave the composition, so none of their
+                                // controls, dialogs or menus can be clicked or reached with Tab (dialogs
+                                // are layers above the lock). The navigator stays: the back stack, the
+                                // screen models and the screens' saved state (tab, scroll) are kept, and
+                                // the unlock returns to the same screen. Plain `remember` state is not:
+                                // open dialogs, unsaved text, selection mode and coroutines in a
+                                // composable's own scope are lost, where Android keeps the whole activity
+                                // under its unlock screen (see PARITY.md, App lock)
+                                if (!locked) FadeTransition(navigator)
+                            }
                         }
                     }
+                    // ZOUKAN <--
+                    // The first-run setup covers the app, but not its messages
+                    if (!locked) {
+                        if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
+                        zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
+                    }
+                    SnackbarHost(
+                        snackbar,
+                        Modifier.align(Alignment.BottomCenter)
+                            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + messages.bottomInset)
+                            .testTag("app-snackbar"),
+                    )
+                    // ZOUKAN -->
+                    zoukan.desktop.ui.security.LockOverlay()
+                    // ZOUKAN <--
                 }
-                // ZOUKAN <--
-                // The first-run setup covers the app, but not its messages
-                if (!locked) {
-                    if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
-                    zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
-                }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
-                // ZOUKAN -->
-                zoukan.desktop.ui.security.LockOverlay()
-                // ZOUKAN <--
             }
         }
     }

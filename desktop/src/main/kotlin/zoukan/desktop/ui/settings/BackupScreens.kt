@@ -21,9 +21,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
@@ -57,6 +62,7 @@ import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.ReserveSnackbarSpace
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
@@ -452,17 +458,23 @@ private fun ColumnWithAction(
             content = content,
         )
 
-        HorizontalDivider()
+        // The app's messages show above this block, not over the button
+        val density = LocalDensity.current
+        var actionHeight by remember { mutableStateOf(0.dp) }
+        ReserveSnackbarSpace(actionHeight)
+        Column(Modifier.onSizeChanged { actionHeight = with(density) { it.height.toDp() } }) {
+            HorizontalDivider()
 
-        Button(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
-                .testTag(actionTag),
-            enabled = actionEnabled,
-            onClick = onClickAction,
-        ) {
-            Text(text = actionLabel)
+            Button(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+                    .testTag(actionTag),
+                enabled = actionEnabled,
+                onClick = onClickAction,
+            ) {
+                Text(text = actionLabel)
+            }
         }
     }
 }

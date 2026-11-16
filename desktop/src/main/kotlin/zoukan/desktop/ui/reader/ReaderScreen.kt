@@ -50,6 +50,7 @@ import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.HoldMessages
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
@@ -61,6 +62,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
 
     @Composable
     override fun Content() {
+        // The app's messages wait until the reader closes; only the newest shows then
+        HoldMessages()
         val model = rememberScreenModel { ReaderScreenModel(mangaId, chapterId, initialPage = page) }
         val state by model.state.collectAsState()
         val menuVisible by model.menuVisible.collectAsState()
