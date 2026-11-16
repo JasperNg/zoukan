@@ -89,7 +89,7 @@
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, ui.whatsnew.WhatsNewTest]
-  gap: "Opening it from Settings is not driven; planned: SettingsPagesJourneyTest"
+  gap: "Accepted gap: the release notes are read from the GitHub release, so an offline journey cannot open it (SettingsPagesJourneyTest leaves What's new alone); manual or nightly only"
 
 - key: flow:app.self-test
   feature: "Self-test window"
@@ -899,10 +899,10 @@
 
 - key: settings:About
   feature: "About (also the More tab's row): what's new, check for updates, test releases, GitHub token"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest; check for updates needs GitHub (manual)"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
+  gap: "The journey flips include test releases (a preference only: it matters when the app checks); What's new and check for updates need GitHub (manual or nightly), the GitHub token row is not driven"
 
 - key: flow:more.help
   feature: "Help row (opens the browser)"
@@ -948,10 +948,10 @@
 
 - key: settings:Reader
   feature: "Reader defaults; display, reading, pager, webtoon, page loading"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "No setting's effect is checked; planned: SettingsPagesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
+  gap: "The journey checks the default reading mode (Webtoon opens a chapter in the webtoon reader); the other reader settings are not driven"
 
 - key: settings:Downloads
   feature: "Download location and password (CBZ); delete chapters, auto download, download ahead, cache renew"
@@ -975,10 +975,10 @@
 
 - key: settings:Tracking
   feature: "Trackers, login dialogs, auto update"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest; hosted tracker logins are manual (hard-coded hosts)"
+  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest, e2e.SettingsPagesJourneyTest]
+  gap: "The journey flips track when adding to the library (a preference; no tracker is signed in, so nothing shows elsewhere offline); hosted tracker logins are an accepted gap (hard-coded hosts, manual)"
 
 - key: dialog-inline:TrackingSettings.kt:TrackerSetting
   feature: "Tracker login dialogs"
@@ -989,10 +989,10 @@
 
 - key: settings:Connections
   feature: "Discord Rich Presence options"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
+  gap: "Accepted gap: turning Rich Presence on reaches for a Discord app on the machine, so the journey only checks it is off with no option rows; the option rows and the connection are manual"
 
 - key: dialog:settings.HiddenCategoriesDialog
   feature: "Discord Rich Presence: hidden categories"
@@ -1085,10 +1085,10 @@
 
 - key: settings:Security
   feature: "Lock, password, days, times, hide notification content, incognito and extensions"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, security.SecureScreenTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: AppLockJourneyTest and SettingsPagesJourneyTest"
+  tests: [ui.ScreenSmokeTest, security.SecureScreenTest, e2e.SettingsPagesJourneyTest]
+  gap: "The journey turns incognito mode on in Settings and sees the banner; the app lock rows are AppLockJourneyTest's"
 
 - key: dialog:settings.PasswordDialog
   feature: "Security: password dialog"
@@ -1120,10 +1120,10 @@
 
 - key: settings:EHentai
   feature: "E-Hentai options, languages, front page categories, favorites sync"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, security.IncognitoTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest; favorites sync needs an E-Hentai account (manual)"
+  tests: [ui.ScreenSmokeTest, security.IncognitoTest, e2e.SettingsPagesJourneyTest]
+  gap: "The journey enables E-Hentai and sees it listed in Browse (never opened: that fetches e-hentai.org); favorites sync needs an E-Hentai account (manual)"
 
 - key: dialog:settings.LanguagesDialog
   feature: "E-Hentai: languages"
@@ -1141,10 +1141,10 @@
 
 - key: settings:MangaDex
   feature: "MangaDex login, sync follows"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: SettingsPagesJourneyTest; login and sync need MangaDex's servers (manual)"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
+  gap: "The journey (with the MangaDex stand-in source) checks the page is signed out and opens and cancels the sync dialog; no setting changes offline; login and sync need MangaDex's servers (accepted gap, manual)"
 
 # Opened by the smoke test's settings:MangaDex check, which clicks the sync row, waits for this
 # dialog and carries its key too
