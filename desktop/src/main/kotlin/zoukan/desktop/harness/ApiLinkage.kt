@@ -36,8 +36,15 @@ class ApiLinkage(private val host: ClassLoader) {
     // Optional, since a ConcurrentHashMap keeps no nulls and most members resolve
     private val memberCache = ConcurrentHashMap<String, Optional<Gap>>()
 
-    /** The unresolved references of the classes in [classes] (internal name to bytes), distinct and sorted. */
-    fun check(classes: Map<String, ByteArray>): List<Gap> {
+    /**
+     * The unresolved references of the classes in [classes] (internal name to bytes), distinct and sorted.
+     *
+     * Besides the references, it reports the abstract methods of the app's types that a class does
+     * not implement (AbstractMethodError), and, when [reportShadowed], classes that the app also
+     * has: the extension's class loader asks the app first, so its bundled copy never runs. Pass
+     * `false` when the classes checked are the app's own.
+     */
+    fun check(classes: Map<String, ByteArray>, reportShadowed: Boolean = true): List<Gap> {
         val jar = Jar(classes.keys)
         // Each reference, with the classes that make it
         val refs = LinkedHashMap<Ref, MutableSet<String>>()
@@ -45,12 +52,68 @@ class ApiLinkage(private val host: ClassLoader) {
         val activities = jar.own.filterTo(HashSet()) { isActivity(it, jar.supers) }
         // Lambdas and inner classes of an activity run only in it
         fun inActivity(caller: String) = caller in activities || activities.any { caller.startsWith("$it$") }
-        return refs.asSequence()
+        val unresolved = refs.asSequence()
             .mapNotNull { (ref, callers) -> resolveFrom(ref, jar)?.let { it to callers.all(::inActivity) } }
             // A symbol is Activity-only when every use of it is
             .groupBy({ it.first }, { it.second })
             .map { (gap, activityOnly) -> gap.copy(activityOnly = activityOnly.all { it }) }
-            .sortedBy { it.symbol }
+        val shadowed = if (reportShadowed) {
+            jar.own.filterNot { it.endsWith("module-info") }.filter { classOf(it).isSuccess }
+                .map { Gap(it.dotted(), "bundled class replaced by the app's copy") }
+        } else {
+            emptyList()
+        }
+        return (unresolved + unimplemented(jar, ::inActivity) + shadowed).sortedBy { it.symbol }
+    }
+
+    /**
+     * The abstract methods of the app's types that the concrete classes of [jar] inherit and
+     * nothing implements: neither the class, its extension superclasses and interfaces, nor an app
+     * superclass or default method. The JVM links such a class, and it fails with AbstractMethodError
+     * only when the method is called.
+     */
+    private fun unimplemented(jar: Jar, inActivity: (String) -> Boolean): List<Gap> {
+        val missing = LinkedHashMap<String, MutableList<String>>()
+        for (name in jar.concrete.sorted()) {
+            val own = LinkedHashSet<String>()
+            val external = LinkedHashSet<String>()
+            val queue = ArrayDeque<String>().apply { add(name) }
+            while (queue.isNotEmpty()) {
+                val current = queue.removeFirst()
+                if (current in own || current in external) continue
+                if (current !in jar.own) {
+                    external += current
+                    continue
+                }
+                own += current
+                jar.supers[current]?.let(queue::add)
+                jar.interfaces[current].orEmpty().forEach(queue::add)
+            }
+            if (external.isEmpty()) continue
+            val types = external.mapNotNull { classOf(it).getOrNull() }
+            try {
+                val provided = own.flatMapTo(HashSet()) { jar.implemented[it].orEmpty() }
+                val inherited = types.flatMapTo(HashSet()) { type -> hierarchy(type).flatMap { it.methodsOf().filter { m -> !m.abstract } }.map { it.key } }
+                types.asSequence().flatMap { type -> hierarchy(type).flatMap { it.methodsOf().filter { m -> m.abstract } } }
+                    .filter { it.key !in provided && it.key !in inherited && it.key !in OBJECT_METHODS }
+                    .forEach { missing.getOrPut("${it.owner}.${it.key}") { mutableListOf() } += name }
+            } catch (_: LinkageError) {
+                // A type in the host class's signatures is missing: already reported where it is used
+            }
+        }
+        return missing.map { (symbol, classes) ->
+            Gap(symbol, "not implemented by ${classes.first().dotted()}", classes.all(inActivity))
+        }
+    }
+
+    private class MethodInfo(val owner: String, val key: String, val abstract: Boolean)
+
+    private val methodCache = ConcurrentHashMap<Class<*>, List<MethodInfo>>()
+
+    // Bridge methods are synthetic, and they are what implements an interface's method with another return type
+    private fun Class<*>.methodsOf(): List<MethodInfo> = methodCache.computeIfAbsent(this) { cls ->
+        cls.declaredMethods
+            .map { MethodInfo(cls.name, it.name + Type.getMethodDescriptor(it), Modifier.isAbstract(it.modifiers)) }
     }
 
     /** The extension's own classes: their superclasses, interfaces and declared members. */
@@ -58,6 +121,10 @@ class ApiLinkage(private val host: ClassLoader) {
         val supers = HashMap<String, String>()
         val interfaces = HashMap<String, List<String>>()
         val declared = HashMap<String, MutableSet<String>>()
+
+        /** The classes that are neither abstract nor interfaces, and the non-abstract methods each declares. */
+        val concrete = HashSet<String>()
+        val implemented = HashMap<String, MutableSet<String>>()
     }
 
     /**
@@ -99,12 +166,19 @@ class ApiLinkage(private val host: ClassLoader) {
     }
 
     private fun isActivity(name: String, supers: Map<String, String>): Boolean {
-        var current: String? = name
+        var current: String = name
         repeat(16) {
             if (current == ACTIVITY) return true
-            current = supers[current] ?: return false
+            // Left the jar: an app class such as an AppCompat-style activity, which the app's own class decides
+            current = supers[current] ?: return isHostActivity(current)
         }
         return false
+    }
+
+    private fun isHostActivity(name: String): Boolean {
+        val cls = classOf(name).getOrNull() ?: return false
+        val activity = classOf(ACTIVITY).getOrNull() ?: return false
+        return activity.isAssignableFrom(cls)
     }
 
     private sealed interface Ref {
@@ -112,8 +186,11 @@ class ApiLinkage(private val host: ClassLoader) {
     }
 
     private data class ClassRef(override val owner: String) : Ref
-    private data class MethodRef(override val owner: String, val name: String, val desc: String) : Ref
-    private data class FieldRef(override val owner: String, val name: String, val desc: String) : Ref
+    /** [static]: used by invokestatic (a static method handle), else as an instance method. */
+    private data class MethodRef(override val owner: String, val name: String, val desc: String, val static: Boolean = false) : Ref
+
+    /** [static]: used by getstatic or putstatic (a static field handle), else as an instance field. */
+    private data class FieldRef(override val owner: String, val name: String, val desc: String, val static: Boolean = false) : Ref
 
     /** The class an owner names: arrays resolve to their element type, primitives to nothing. */
     private fun ownerOf(owner: String): String {
@@ -131,11 +208,11 @@ class ApiLinkage(private val host: ClassLoader) {
             is MethodRef -> if (ref.owner.startsWith("[")) {
                 null
             } else {
-                memberCache.computeIfAbsent("${ref.owner}.${ref.name}${ref.desc}") { Optional.ofNullable(checkMethod(cls, ref)) }
+                memberCache.computeIfAbsent("${ref.owner}.${ref.name}${ref.desc}/${ref.static}") { Optional.ofNullable(checkMethod(cls, ref)) }
                     .orElse(null)
             }
             is FieldRef ->
-                memberCache.computeIfAbsent("${ref.owner}.${ref.name}:${ref.desc}") { Optional.ofNullable(checkField(cls, ref)) }
+                memberCache.computeIfAbsent("${ref.owner}.${ref.name}:${ref.desc}/${ref.static}") { Optional.ofNullable(checkField(cls, ref)) }
                     .orElse(null)
         }
     }
@@ -149,13 +226,21 @@ class ApiLinkage(private val host: ClassLoader) {
         if (cls.name == "java.lang.invoke.MethodHandle" || cls.name == "java.lang.invoke.VarHandle") return null
         val symbol = "${cls.name}.${ref.name}${ref.desc}"
         return try {
+            var member: java.lang.reflect.Method? = null
             val declaring = if (ref.name == "<init>") {
                 cls.takeIf { c -> c.declaredConstructors.any { Type.getConstructorDescriptor(it) == ref.desc } }
             } else {
-                hierarchy(cls).firstOrNull { c -> c.declaredMethods.any { it.name == ref.name && Type.getMethodDescriptor(it) == ref.desc } }
+                hierarchy(cls).firstOrNull { c ->
+                    c.declaredMethods.firstOrNull { it.name == ref.name && Type.getMethodDescriptor(it) == ref.desc }
+                        ?.also { member = it } != null
+                }
             }
+            val found = member
             when {
                 declaring == null -> Gap(symbol, "no such method")
+                found != null && Modifier.isStatic(found.modifiers) != ref.static ->
+                    Gap(symbol, if (ref.static) "static call to an instance method" else "instance call to a static method")
+                found != null && Modifier.isPrivate(found.modifiers) -> Gap(symbol, "not accessible: private")
                 "${ref.name}${ref.desc}" in stubsOf(declaring).methods -> Gap(symbol, "stub: throws \"Stub!\"")
                 else -> null
             }
@@ -168,11 +253,17 @@ class ApiLinkage(private val host: ClassLoader) {
     private fun checkField(cls: Class<*>, ref: FieldRef): Gap? {
         val symbol = "${cls.name}.${ref.name}:${ref.desc}"
         return try {
+            var member: java.lang.reflect.Field? = null
             val declaring = hierarchy(cls).firstOrNull { c ->
-                c.declaredFields.any { it.name == ref.name && Type.getDescriptor(it.type) == ref.desc }
+                c.declaredFields.firstOrNull { it.name == ref.name && Type.getDescriptor(it.type) == ref.desc }
+                    ?.also { member = it } != null
             }
+            val found = member
             when {
                 declaring == null -> Gap(symbol, "no such field")
+                found != null && Modifier.isStatic(found.modifiers) != ref.static ->
+                    Gap(symbol, if (ref.static) "static access to an instance field" else "instance access to a static field")
+                found != null && Modifier.isPrivate(found.modifiers) -> Gap(symbol, "not accessible: private")
                 ref.name in stubsOf(declaring).nullFields -> Gap(symbol, "stub: always null")
                 else -> null
             }
@@ -206,11 +297,58 @@ class ApiLinkage(private val host: ClassLoader) {
 
                 override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor =
                     object : MethodVisitor(Opcodes.ASM9) {
+                        // How far into `throw new RuntimeException("Stub!")` the instructions are:
+                        // 1 NEW, 2 DUP, 3 LDC "Stub!", 4 INVOKESPECIAL <init>(String), then ATHROW.
+                        // Any other instruction starts over, so a method that merely mentions the text is not a stub
+                        private var step = 0
+
+                        override fun visitTypeInsn(opcode: Int, type: String) {
+                            step = if (opcode == Opcodes.NEW && type == "java/lang/RuntimeException") 1 else 0
+                        }
+
+                        override fun visitInsn(opcode: Int) {
+                            when {
+                                opcode == Opcodes.DUP && step == 1 -> step = 2
+                                opcode == Opcodes.ATHROW && step == 4 -> {
+                                    methods += name + descriptor
+                                    step = 0
+                                }
+                                else -> step = 0
+                            }
+                        }
+
                         override fun visitLdcInsn(value: Any?) {
-                            if (value == "Stub!") methods += name + descriptor
+                            step = if (value == "Stub!" && (step == 1 || step == 2)) 3 else 0
+                        }
+
+                        override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, isInterface: Boolean) {
+                            step = if (step == 3 && opcode == Opcodes.INVOKESPECIAL && owner == "java/lang/RuntimeException" &&
+                                name == "<init>" && desc == "(Ljava/lang/String;)V"
+                            ) {
+                                4
+                            } else {
+                                0
+                            }
+                        }
+
+                        override fun visitVarInsn(opcode: Int, varIndex: Int) {
+                            step = 0
+                        }
+
+                        override fun visitIntInsn(opcode: Int, operand: Int) {
+                            step = 0
+                        }
+
+                        override fun visitJumpInsn(opcode: Int, label: org.objectweb.asm.Label?) {
+                            step = 0
+                        }
+
+                        override fun visitInvokeDynamicInsn(name: String?, desc: String?, handle: Handle?, vararg args: Any?) {
+                            step = 0
                         }
 
                         override fun visitFieldInsn(opcode: Int, owner: String, field: String, desc: String) {
+                            step = 0
                             if (opcode == Opcodes.PUTSTATIC) assigned += field
                         }
                     }
@@ -247,11 +385,11 @@ class ApiLinkage(private val host: ClassLoader) {
         }
         val methodVisitor = object : MethodVisitor(Opcodes.ASM9) {
             override fun visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean) {
-                refs += MethodRef(owner, name, descriptor)
+                refs += MethodRef(owner, name, descriptor, static = opcode == Opcodes.INVOKESTATIC)
             }
 
             override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
-                refs += FieldRef(owner, name, descriptor)
+                refs += FieldRef(owner, name, descriptor, static = opcode == Opcodes.GETSTATIC || opcode == Opcodes.PUTSTATIC)
             }
 
             override fun visitTypeInsn(opcode: Int, type: String) {
@@ -270,19 +408,29 @@ class ApiLinkage(private val host: ClassLoader) {
             override fun visitInvokeDynamicInsn(name: String?, descriptor: String?, bsm: Handle, vararg bsmArgs: Any?) {
                 handle(bsm)
                 bsmArgs.filterIsInstance<Handle>().forEach(::handle)
+                // The call site's own types: the interface a lambda implements, and what it captures
+                descriptor?.let { desc ->
+                    (Type.getArgumentTypes(desc).asList() + Type.getReturnType(desc)).forEach { type ->
+                        when (type.sort) {
+                            Type.OBJECT -> refs += ClassRef(type.internalName)
+                            Type.ARRAY -> refs += ClassRef(type.descriptor)
+                        }
+                    }
+                }
             }
 
             private fun handle(h: Handle) {
                 when (h.tag) {
-                    Opcodes.H_GETFIELD, Opcodes.H_GETSTATIC, Opcodes.H_PUTFIELD, Opcodes.H_PUTSTATIC ->
-                        refs += FieldRef(h.owner, h.name, h.desc)
-                    else -> refs += MethodRef(h.owner, h.name, h.desc)
+                    Opcodes.H_GETFIELD, Opcodes.H_PUTFIELD -> refs += FieldRef(h.owner, h.name, h.desc)
+                    Opcodes.H_GETSTATIC, Opcodes.H_PUTSTATIC -> refs += FieldRef(h.owner, h.name, h.desc, static = true)
+                    else -> refs += MethodRef(h.owner, h.name, h.desc, static = h.tag == Opcodes.H_INVOKESTATIC)
                 }
             }
         }
         ClassReader(bytes).accept(
             object : ClassVisitor(Opcodes.ASM9) {
                 override fun visit(version: Int, access: Int, name: String, signature: String?, superName: String?, interfaces: Array<out String>?) {
+                    if (access and (Opcodes.ACC_ABSTRACT or Opcodes.ACC_INTERFACE) == 0) jar.concrete += className
                     superName?.let { jar.supers[className] = it }
                     jar.interfaces[className] = interfaces?.toList().orEmpty()
                     superName?.let { refs += ClassRef(it) }
@@ -291,6 +439,7 @@ class ApiLinkage(private val host: ClassLoader) {
 
                 override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
                     declared += name + descriptor
+                    if (access and Opcodes.ACC_ABSTRACT == 0) jar.implemented.getOrPut(className) { HashSet() } += name + descriptor
                     return methodVisitor
                 }
 
@@ -308,5 +457,8 @@ class ApiLinkage(private val host: ClassLoader) {
     private companion object {
         const val ACTIVITY = "android/app/Activity"
         val STUB_PACKAGES = listOf("android.", "androidx.", "dalvik.")
+
+        /** A class that declares these inherits them from Object, whatever an interface says. */
+        val OBJECT_METHODS = Any::class.java.declaredMethods.map { it.name + Type.getMethodDescriptor(it) }.toSet()
     }
 }

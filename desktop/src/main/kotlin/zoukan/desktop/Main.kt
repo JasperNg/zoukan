@@ -5,9 +5,11 @@ import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.network.NetworkHelper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import mihon.data.extension.service.ExtensionStoreService
 import okio.sink
+import org.slf4j.LoggerFactory
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.data.Database
 import tachiyomi.domain.source.service.SourceManager
@@ -36,6 +38,8 @@ import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.DesktopExtensionManager
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlin.system.exitProcess
 
 private const val USAGE = """Zoukan desktop
@@ -71,6 +75,7 @@ Commands:
   backup compare <a> <b>  Compare two backups field by field (what b lost or changed from a)
   backup synthetic <file> Write a backup with every field set, for testing
       --legacy              Use older forms of some fields
+      --force               Replace <file> if it exists
   library update [options] Check the library for new chapters, as the app's library update does
       --all-entries         Ignore the skip rules (unread, not started, completed, release period)
       --download <n>        Then download the newest <n> chapters of every updated entry
@@ -82,6 +87,9 @@ Only one Zoukan can use a data folder at a time: the commands that start the run
 (status, backup create and restore, library update, browser) refuse while the app is running.
 
 Data folder: -Dzoukan.dataDir=<path> or ZOUKAN_DATA_DIR overrides the default.
+
+Exit codes: 0 success, 1 the command failed, 2 bad usage. harness exits 1 when an extension fails to
+install or load, and with --wiring also when an app API is missing.
 """
 
 fun main(args: Array<String>) {
@@ -89,9 +97,52 @@ fun main(args: Array<String>) {
     // AndroidCompat provides; the service loader instead finds Swing's, so Dispatchers.Main is the
     // AWT event thread the UI runs on. Set before anything touches Dispatchers.Main.
     System.setProperty("kotlinx.coroutines.fast.service.loader", "false")
+    val code = runCommand(args)
+    // Chromium crashes when it shuts down (at exit) with a browser still open: the quit paths
+    // have disposed the built-in browser windows, and this catches anything left over (a CLI
+    // command's window). disposePending then does the same for the extension WebView browsers.
+    BrowserWindow.disposeAllForQuit()
+    runCatching {
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            KcefWebViewProvider.disposePending()
+        } else {
+            javax.swing.SwingUtilities.invokeAndWait { KcefWebViewProvider.disposePending() }
+        }
+    }
+    exitProcess(code)
+}
+
+private class UsageError(message: String) : Exception(message)
+
+private fun Iterator<String>.value(option: String): String =
+    if (hasNext()) next() else throw UsageError("$option needs a value")
+
+private fun Iterator<String>.intValue(option: String): Int =
+    value(option).toIntOrNull() ?: throw UsageError("$option needs a number")
+
+/**
+ * Runs one command line and returns its exit code: 0 success, 1 the command failed, 2 bad usage.
+ * It does not throw for a failing command, so [main] always reaches its shutdown path.
+ */
+internal fun runCommand(args: Array<String>): Int {
     val command = args.firstOrNull() ?: "ui"
     val rest = args.drop(1)
-    val code = when (command) {
+    return try {
+        dispatch(command, rest)
+    } catch (e: UsageError) {
+        System.err.println("${e.message}\n\n$USAGE")
+        2
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        System.err.println("zoukan $command failed: ${CompatibilityHarness.describe(e)}")
+        LoggerFactory.getLogger("zoukan.cli").error("zoukan {} failed", command, e)
+        1
+    }
+}
+
+private fun dispatch(command: String, rest: List<String>): Int {
+    return when (command) {
         "ui" -> {
             try {
                 runZoukanApp()
@@ -122,18 +173,6 @@ fun main(args: Array<String>) {
             2
         }
     }
-    // Chromium crashes when it shuts down (at exit) with a browser still open: the quit paths
-    // have disposed the built-in browser windows, and this catches anything left over (a CLI
-    // command's window). disposePending then does the same for the extension WebView browsers.
-    BrowserWindow.disposeAllForQuit()
-    runCatching {
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
-            KcefWebViewProvider.disposePending()
-        } else {
-            javax.swing.SwingUtilities.invokeAndWait { KcefWebViewProvider.disposePending() }
-        }
-    }
-    exitProcess(code)
 }
 
 private fun selftest(args: List<String>): Int {
@@ -141,7 +180,7 @@ private fun selftest(args: List<String>): Int {
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
-            "--report" -> options = options.copy(report = File(it.next()))
+            "--report" -> options = options.copy(report = File(it.value("--report")))
             "--ui" -> options = options.copy(ui = true)
             "--network" -> options = options.copy(network = true)
             "--keep" -> options = options.copy(keep = true)
@@ -190,10 +229,10 @@ private fun harness(args: List<String>): Int {
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
-            "--store" -> options = options.copy(storeUrl = it.next())
-            "--packages" -> options = options.copy(packages = it.next().split(',').map(String::trim).filter(String::isNotEmpty))
+            "--store" -> options = options.copy(storeUrl = it.value("--store"))
+            "--packages" -> options = options.copy(packages = it.value("--packages").split(',').map(String::trim).filter(String::isNotEmpty))
             "--all" -> options = options.copy(all = true)
-            "--lang" -> options = options.copy(lang = it.next())
+            "--lang" -> options = options.copy(lang = it.value("--lang"))
             "--offline" -> options = options.copy(offline = true)
             "--apk" -> options = options.copy(forceApk = true)
             "--skip-nsfw" -> options = options.copy(skipNsfw = true)
@@ -206,7 +245,26 @@ private fun harness(args: List<String>): Int {
         }
     }
     // A separate profile, so the harness never touches the user's library or trusted extensions
-    val dirs = ZoukanDirs(File(ZoukanDirs.default().root, "harness"))
+    val dirs = harnessDirs()
+    val lock = lockHarness(dirs) ?: return 1
+    try {
+        return runHarness(dirs, options, wiring)
+    } finally {
+        lock.close()
+    }
+}
+
+/** The harness profile: outside the user's data folder, so its jars and browser profile do not roam. */
+internal fun harnessDirs(): ZoukanDirs = ZoukanDirs.harness()
+
+/** Takes the harness profile's lock; null (after saying so) when another harness run holds it. */
+internal fun lockHarness(dirs: ZoukanDirs): AutoCloseable? =
+    SingleInstance.acquireForCommand(dirs.root) ?: run {
+        System.err.println("Another harness run is using ${dirs.root}; wait for it to finish.")
+        null
+    }
+
+private fun runHarness(dirs: ZoukanDirs, options: CompatibilityHarness.Options, wiring: Boolean): Int {
     ZoukanRuntime.start(dirs, interactiveBrowser = options.interactive)
     if (wiring) {
         Injekt.get<NetworkHelper>()
@@ -217,10 +275,10 @@ private fun harness(args: List<String>): Int {
             loader = Injekt.get<DesktopExtensionLoader>(),
             options = ExtensionWiringCheck.Options(options.storeUrl, options.packages, options.skipNsfw),
         )
-        val (report, _) = check.run()
+        val (report, rows) = check.run()
         report.save(check.reportFile())
         println("\nReport saved to ${check.reportFile()}")
-        return 0
+        return wiringExitCode(rows)
     }
     val harness = CompatibilityHarness(
         dirs = dirs,
@@ -231,7 +289,7 @@ private fun harness(args: List<String>): Int {
     )
     // NetworkHelper first, so the cookie store and Chromium hooks are in place
     Injekt.get<NetworkHelper>()
-    val (report, _) = harness.run()
+    val (report, rows) = harness.run()
     val name = buildString {
         append("extensions")
         if (options.forceApk) append("-apk")
@@ -240,8 +298,19 @@ private fun harness(args: List<String>): Int {
     val file = File(dirs.reports, "$name.md")
     report.save(file)
     println("\nReport saved to $file")
-    return 0
+    return harnessExitCode(rows)
 }
+
+/** 1 when an extension failed to load or an app API it needs is missing; 0 for a clean run. */
+internal fun wiringExitCode(rows: List<ExtensionWiringCheck.Row>): Int =
+    if (ExtensionWiringCheck.appGaps(rows).isNotEmpty() || rows.any { !it.loaded }) 1 else 0
+
+/**
+ * 1 when an extension failed to install or load, or is not in the store. The live-site steps
+ * (popular, details, pages) stay in the report only: they depend on the sites, not on the app.
+ */
+internal fun harnessExitCode(rows: List<CompatibilityHarness.Row>): Int =
+    if (rows.any { !it.install.startsWith("ok") }) 1 else 0
 
 private fun browser(args: List<String>): Int {
     val url = args.firstOrNull() ?: run {
@@ -270,6 +339,7 @@ private fun browser(args: List<String>): Int {
 private fun backup(args: List<String>): Int {
     val sub = args.firstOrNull()
     val rest = args.drop(1)
+    if (rest.lastOrNull() == "--report") throw UsageError("--report needs a value")
     val flags = rest.filter { it.startsWith("--") }.toSet()
     val positional = rest.filterIndexed { i, a -> !a.startsWith("--") && rest.getOrNull(i - 1) != "--report" }
     return when (sub) {
@@ -352,8 +422,28 @@ private fun backup(args: List<String>): Int {
         }
         "synthetic" -> {
             val file = positional.firstOrNull()?.let(::File) ?: return usage("backup synthetic <file>")
-            file.absoluteFile.parentFile?.mkdirs()
-            file.sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
+            if (file.exists() && "--force" !in flags) {
+                System.err.println("$file exists; pass --force to replace it")
+                return 1
+            }
+            val parent = file.absoluteFile.parentFile
+            parent?.mkdirs()
+            // Through a temporary file of its own: a failed write leaves the target alone, and no
+            // other file of the folder is written or deleted
+            val temp = Files.createTempFile(parent?.toPath(), "${file.name}.", ".tmp")
+            try {
+                temp.toFile().sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
+                // Without --force, a file that appeared since the check above is not replaced either
+                val options = if ("--force" in flags) arrayOf(StandardCopyOption.REPLACE_EXISTING) else emptyArray()
+                try {
+                    Files.move(temp, file.toPath(), *options)
+                } catch (_: java.nio.file.FileAlreadyExistsException) {
+                    System.err.println("$file exists; pass --force to replace it")
+                    return 1
+                }
+            } finally {
+                Files.deleteIfExists(temp)
+            }
             println("Wrote $file (${file.length()} bytes)")
             0
         }
@@ -368,8 +458,8 @@ private fun library(args: List<String>): Int {
     while (it.hasNext()) {
         when (val arg = it.next()) {
             "--all-entries" -> options = options.copy(ignoreRestrictions = true)
-            "--download" -> options = options.copy(download = it.next().toInt())
-            "--report" -> options = options.copy(report = File(it.next()))
+            "--download" -> options = options.copy(download = it.intValue("--download"))
+            "--report" -> options = options.copy(report = File(it.value("--report")))
             else -> {
                 System.err.println("Unknown option $arg\n\n$USAGE")
                 return 2

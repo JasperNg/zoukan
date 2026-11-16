@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeout
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
@@ -16,6 +17,11 @@ import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.LoadResult
 import java.io.File
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -32,6 +38,8 @@ class CompatibilityHarness(
     private val installer: DesktopExtensionInstaller,
     private val loader: DesktopExtensionLoader,
     private val options: Options,
+    /** Overrides the time one step may take (a test uses one second). */
+    internal val stepTimeout: Duration? = null,
 ) {
     data class Options(
         val storeUrl: String = DEFAULT_STORE,
@@ -64,6 +72,14 @@ class CompatibilityHarness(
         var image: String = "",
         var error: String = "",
     ) {
+        /** The extension ran past its deadline and was cancelled; a late failure of its worker does not change the row. */
+        @Volatile
+        var timedOut = false
+
+        fun fail(message: String) {
+            if (!timedOut) error = message
+        }
+
         private val required get() = listOf(popular, details, chapters, pages)
 
         val passed: Boolean
@@ -72,8 +88,11 @@ class CompatibilityHarness(
         fun allErrors(): String = (required + error).joinToString(" ")
     }
 
+    /** The class loaders of the extensions being run, by package: a timed-out one is closed from outside its worker. */
+    private val loaders = java.util.concurrent.ConcurrentHashMap<String, zoukan.extension.ExtensionClassLoader>()
+
     // Leaves time for a Cloudflare challenge in the browser window (30 s hidden, then 3 min)
-    private val timeout = if (options.interactive) INTERACTIVE_TIMEOUT else TIMEOUT
+    private val timeout = stepTimeout ?: if (options.interactive) INTERACTIVE_TIMEOUT else TIMEOUT
 
     private val traces = File(
         dirs.reports,
@@ -100,20 +119,44 @@ class CompatibilityHarness(
             options.packages.isNotEmpty() -> options.packages.map { it.withPrefix() }
             else -> DEFAULT_PACKAGES
         }
-        val rows = wanted.map { pkg ->
-            val row = Row(pkg.removePrefix(PREFIX))
-            val extension = available.firstOrNull { it.pkgName == pkg }
-            if (extension == null) {
-                row.error = "not in store"
-            } else {
-                row.version = extension.versionName
-                runCatching { runOne(extension, store, row) }.onFailure { e ->
-                    if (row.error.isEmpty()) row.error = describe(e)
-                    trace(row.pkg, row.error.substringBefore(':'), e)
+        // Each extension runs on a worker of its own: withTimeout fires only where a coroutine
+        // suspends, so a source blocked in a network read (an Rx source in OkHttp's execute(), a
+        // Cloudflare wait) would hold the one thread of this run for good. The worker is left behind
+        // at the deadline instead.
+        val workers = Executors.newCachedThreadPool { r -> Thread(r, "harness").apply { isDaemon = true } }
+        // popular, latest, search, details, pages and the image each have `timeout`; the pages step
+        // tries up to three chapters, and an install and a load come on top
+        val deadline = timeout * 6
+        val rows = try {
+            wanted.map { pkg ->
+                val row = Row(pkg.removePrefix(PREFIX))
+                val extension = available.firstOrNull { it.pkgName == pkg }
+                if (extension == null) {
+                    row.error = "not in store"
+                } else {
+                    row.version = extension.versionName
+                    val work = workers.submit { runBlocking { runOne(extension, store, row) } }
+                    try {
+                        runInterruptible { work.get(deadline.inWholeMilliseconds, TimeUnit.MILLISECONDS) }
+                    } catch (_: TimeoutException) {
+                        // Before the cancel: the interrupt makes the worker's step fail, and that
+                        // failure must not replace the verdict
+                        if (row.error.isEmpty()) row.error = "timed out after $deadline"
+                        row.timedOut = true
+                        work.cancel(true)
+                        // The worker may stay blocked and never reach its own finally
+                        loaders.remove(row.pkg)?.close()
+                    } catch (e: ExecutionException) {
+                        val cause = e.cause ?: e
+                        if (row.error.isEmpty()) row.error = describe(cause)
+                        trace(row.pkg, row.error.substringBefore(':'), cause)
+                    }
                 }
+                println("  ${row.pkg}: ${if (row.passed) "PASS" else "FAIL ${row.error}"}")
+                row
             }
-            println("  ${row.pkg}: ${if (row.passed) "PASS" else "FAIL ${row.error}"}")
-            row
+        } finally {
+            workers.shutdownNow()
         }
 
         report.table(
@@ -154,8 +197,8 @@ class CompatibilityHarness(
 
     private suspend fun runOne(extension: Extension.Available, store: ExtensionStore, row: Row) {
         val installed = stage(row, "install") { installer.install(extension, options.forceApk) }
-        val sources = when (val result = loader.load(installed.files, listOf(store))) {
-            is LoadResult.Success -> result.extension.sources
+        val success = when (val result = loader.load(installed.files, listOf(store))) {
+            is LoadResult.Success -> result
             is LoadResult.Untrusted -> {
                 row.install = "fail"
                 row.error = "signature: signer ${result.extension.signatureHash.take(16)} is not the store key"
@@ -168,15 +211,23 @@ class CompatibilityHarness(
                 return
             }
         }
-        row.install = "ok (${installed.method.name.lowercase()})"
-        val source = pickSource(sources)
-        row.source = "${source.name} (${source.lang}), ${sources.size} total"
-        if (options.offline) return
-        val catalogue = source as? CatalogueSource ?: run {
-            row.error = "not a CatalogueSource"
-            return
+        // Closed when the extension is done, or by the coordinator if this worker never gets there
+        success.classLoader?.let { loaders[row.pkg] = it }
+        try {
+            val sources = success.extension.sources
+            row.install = "ok (${installed.method.name.lowercase()})"
+            val source = pickSource(sources)
+            row.source = "${source.name} (${source.lang}), ${sources.size} total"
+            if (options.offline) return
+            val catalogue = source as? CatalogueSource ?: run {
+                row.error = "not a CatalogueSource"
+                return
+            }
+            callSource(catalogue, row)
+        } finally {
+            // Whoever removes it closes it: not again after the coordinator did
+            loaders.remove(row.pkg)?.close()
         }
-        callSource(catalogue, row)
     }
 
     private suspend fun callSource(source: CatalogueSource, row: Row) {
@@ -220,7 +271,7 @@ class CompatibilityHarness(
         if (pages.isEmpty()) {
             lastError?.let { trace(row.pkg, "pages", it) }
             row.pages = "fail"
-            row.error = "pages: " + (lastError?.let(::describe) ?: "empty")
+            row.fail("pages: " + (lastError?.let(::describe) ?: "empty"))
             return
         }
         row.pages = "ok ${pages.size}"
@@ -257,7 +308,7 @@ class CompatibilityHarness(
         block()
     } catch (e: Throwable) {
         row.install = "fail"
-        row.error = "$name: ${describe(e)}"
+        row.fail("$name: ${describe(e)}")
         throw e
     }
 
@@ -268,7 +319,7 @@ class CompatibilityHarness(
             "popular" -> row.popular = "fail"
             "details" -> row.details = "fail"
         }
-        row.error = "$name: ${describe(e)}"
+        row.fail("$name: ${describe(e)}")
         throw e
     }
 

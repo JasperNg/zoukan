@@ -99,9 +99,7 @@ class InjektRegistrationsTest {
 
     private fun lookedUpTypes(): List<Type> {
         val loader = javaClass.classLoader
-        return System.getProperty("java.class.path").split(File.pathSeparator)
-            .map(::File)
-            .filter(::isProjectOutput)
+        return ProjectOutputs.onClassPath()
             .flatMap(::anonymousClassNames)
             .mapNotNull { name -> runCatching { Class.forName(name, false, loader) }.getOrNull() }
             .filter { TypeReference::class.java.isAssignableFrom(it) && it.isAnonymousClass }
@@ -110,14 +108,6 @@ class InjektRegistrationsTest {
             .filter { it is Class<*> || it is ParameterizedType }
             .distinctBy { it.typeName }
             .sortedBy { it.typeName }
-    }
-
-    /** The desktop app's classes and the jars of the project's own modules, not libraries. */
-    private fun isProjectOutput(file: File): Boolean {
-        val root = File(System.getProperty("user.dir")).absoluteFile.parentFile
-        val path = file.absoluteFile
-        return path.startsWith(root) && !path.path.contains("${File.separator}test") &&
-            (path.isDirectory || path.name.endsWith(".jar"))
     }
 
     private fun anonymousClassNames(file: File): List<String> {

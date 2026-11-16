@@ -187,8 +187,17 @@ runs it on a clone of master it keeps for itself and saves the log and reports t
 `%LOCALAPPDATA%\Zoukan-nightly\<date>`; `-Register` adds a scheduled task that runs it every night
 at 03:00 and `-Unregister` removes it.
 
-The harness writes its report to `<data>/harness/reports/extensions-<platform>.md` and uses its own
-profile in `<data>/harness`, so it never touches the app's extensions or database.
+The harness uses its own profile, so it never touches the app's extensions or database, and its
+extension jars and browser profile stay out of the roaming profile. It writes its report to
+`reports/extensions-<platform>.md` in that profile:
+
+- Windows: `%LOCALAPPDATA%\Zoukan\harness`
+- macOS: `~/Library/Application Support/Zoukan-harness`
+- Linux: `$XDG_DATA_HOME/zoukan-harness` or `~/.local/share/zoukan-harness`
+- with `-Dzoukan.dataDir=<path>` or `ZOUKAN_DATA_DIR` set: the sibling folder `<path>-harness`
+
+The profile is locked while a run uses it, so a second harness run says so and exits with 1. Earlier
+versions kept the profile in `<data>/harness`. That folder is no longer used; it can be deleted by hand.
 
 ## Data folder
 
