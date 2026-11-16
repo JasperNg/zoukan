@@ -894,4 +894,7 @@
     <string name="show_value">Show value</string>
     <string name="hide_value">Hide value</string>
     <string name="reset_sync_time_warning">The next sync uploads this library over the copy on the server, as a first sync does. Progress made on other devices since the last sync may be lost.</string>
+    <string name="download_queue_unreadable">The download queue could not be read</string>
+    <string name="download_queue_unreadable_kept">It was kept as %1$s; queue the chapters again.</string>
+    <string name="download_disk_full">Not enough free disk space for the download</string>
 </resources>

@@ -80,6 +80,21 @@ class DownloadRenameTest {
     }
 
     @Test
+    fun `a rename never replaces another chapter's download`() {
+        val (manager, paths) = setup()
+        val dir = paths.mangaDir(manga).apply { mkdirs() }
+        val a = kotlin.random.Random(3).nextBytes(4096)
+        val b = kotlin.random.Random(4).nextBytes(4096)
+        File(dir, "Ch. A.cbz").writeBytes(a)
+        File(dir, "Chapter 10.cbz").writeBytes(b)
+
+        manager.renameChapter(manga, chapter("Ch. A"), chapter("Chapter 10"))
+
+        File(dir, "Chapter 10.cbz").readBytes() shouldBe b
+        File(dir, "Ch. A.cbz").readBytes() shouldBe a
+    }
+
+    @Test
     fun `clearing an entry's downloaded data deletes its folder and the emptied source folder`() {
         val (manager, paths) = setup()
         val dir = File(paths.mangaDir(manga), "Ch. 3").apply { mkdirs() }
