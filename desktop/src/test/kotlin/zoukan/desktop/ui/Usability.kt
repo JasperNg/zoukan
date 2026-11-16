@@ -146,7 +146,7 @@ private fun ComposeUiTest.tabTraversal(key: String): List<Pair<String, String>> 
     val first = focusables.first()
     onNode(byId(first.id)).performSemanticsAction(SemanticsActions.RequestFocus)
     waitForIdle()
-    var current = focused() ?: return listOf(nodeId(first) to "the first control did not take focus")
+    var current = focused(root) ?: return listOf(nodeId(first) to "the first control did not take focus")
     // Where focus went, which may be a field inside the first control: the round ends back there
     val start = current.id
     val reached = mutableSetOf(start)
@@ -154,7 +154,7 @@ private fun ComposeUiTest.tabTraversal(key: String): List<Pair<String, String>> 
     for (press in 1..MAX_TABS) {
         onNode(byId(current.id)).performKeyInput { pressKey(Key.Tab) }
         waitForIdle()
-        val next = focused() ?: return listOf(nodeId(first) to "focus left every control after $press Tab presses")
+        val next = focused(root) ?: return listOf(nodeId(first) to "focus left every control after $press Tab presses")
         if (next.id == current.id) return listOf(nodeId(next) to "focus trap: Tab press $press did not move focus")
         if (next.id == start) {
             cycled = true
@@ -269,7 +269,9 @@ private fun SemanticsNode.descendants(): List<SemanticsNode> {
     return out
 }
 
-private fun ComposeUiTest.focused(): SemanticsNode? = onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull()
+/** The focused node under [root]: each window and dialog keeps a focused node of its own. */
+private fun ComposeUiTest.focused(root: SemanticsNode): SemanticsNode? =
+    onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull { node -> generateSequence(node) { it.parent }.last().id == root.id }
 
 /** A semantics id lives only for this run: used to find a node again now, never in a finding. */
 private fun byId(id: Int) = SemanticsMatcher("semantics id $id") { it.id == id }
