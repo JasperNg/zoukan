@@ -34,16 +34,18 @@ upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink a
 
 ## Releases built on GitHub
 
-`.github/workflows/desktop-build.yml` picks the version and publishes on `ubuntu-latest`, and builds
-the Windows x64 MSI (`windows-latest`) and the Apple Silicon DMG (`macos-latest`, which is Apple
-Silicon) with JetBrains Runtime 21 after every push to
+`.github/workflows/desktop-build.yml` picks the version and publishes on `ubuntu-26.04`, and builds
+the Windows x64 MSI (`windows-2025-vs2026`) and the Apple Silicon DMG (`macos-26`, an arm64 image)
+with JetBrains Runtime 21 after every push to
 `master` that changes more than docs (the same list `ci.yml` ignores), then publishes both as a
 GitHub release tagged `desktop-v<version>`, which the update check finds. Nothing is built on a
 local machine for a release. A release is published only after the CI check of that commit passed.
 Runs on `master` queue in one group, and GitHub keeps at most one waiting run: when a merge lands
 while one release is building and another run is already waiting, the newer run replaces the
 waiting one, and the replaced commit ships in the next release instead of alone. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
-if it has no release yet; a re-run of a released commit only rebuilds.
+if it has no release yet; a re-run of a released commit only rebuilds. The runner images are
+pinned (`ci.yml` runs on `ubuntu-26.04` too); moving to a newer image is a deliberate change made in
+both workflows and here.
 
 The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to
 Gradle as `-Pzoukan.version`. `zoukanVersion` in `desktop/build.gradle.kts` is the floor: raise it

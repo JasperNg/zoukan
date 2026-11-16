@@ -34,7 +34,8 @@ jobs:
     # Linux runners start and build faster than Windows ones; the Compose desktop UI tests get a
     # virtual display from xvfb-run. The installer workflow (desktop-build.yml) builds and
     # self-tests the Windows and macOS installers.
-    runs-on: ubuntu-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0

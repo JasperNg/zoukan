@@ -46,7 +46,8 @@ jobs:
 
   version:
     name: Pick the version
-    runs-on: ubuntu-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.pick.outputs.version }}
       release: ${{ steps.pick.outputs.release }}
@@ -84,7 +85,8 @@ jobs:
   windows:
     name: Windows x64 MSI
     needs: version
-    runs-on: windows-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: windows-2025-vs2026
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -140,7 +142,8 @@ jobs:
   macos:
     name: macOS arm64 DMG
     needs: version
-    runs-on: macos-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: macos-26
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -189,7 +192,8 @@ jobs:
     name: Publish the release
     needs: [version, tests, windows, macos]
     if: needs.version.outputs.release == 'true'
-    runs-on: ubuntu-latest
+    # A fixed image version: move it on purpose, together with RELEASING.md
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:

@@ -141,6 +141,27 @@ class ReleaseWorkflowTest {
     }
 
     @Test
+    fun `every job runs on a pinned runner image`() {
+        val runsOn = Regex("""^\s*runs-on:\s*(\S+)""")
+        val problems = mutableListOf<String>()
+        for (file in workflowFiles()) {
+            file.readLines().forEachIndexed { index, line ->
+                val image = runsOn.find(line)?.groupValues?.get(1) ?: return@forEachIndexed
+                if (image.endsWith("-latest")) {
+                    problems += "${file.name}:${index + 1} $image runs on a moving image; pin a version"
+                }
+            }
+        }
+        val macos = Regex("""^\s*runs-on:\s*(\S+)""", RegexOption.MULTILINE)
+            .find(job(text(".github/workflows/desktop-build.yml"), "macos"))?.groupValues?.get(1).orEmpty()
+        val version = Regex("""^macos-(\d+)$""").find(macos)?.groupValues?.get(1)?.toInt()
+        if (version == null || version < 14) {
+            problems += "desktop-build.yml: the macos job image \"$macos\" is not an Apple Silicon image (macos-14 or newer)"
+        }
+        problems.shouldBeEmpty()
+    }
+
+    @Test
     fun `packaging changes build the installers on pull requests`() {
         val build = text(".github/workflows/desktop-build.yml")
         val paths = Regex("""(?m)^ {2}pull_request:\s*\n {4}paths:\s*(\[[^\]]*]|(?:\n {6}- .*)+)""")
