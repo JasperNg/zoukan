@@ -27,10 +27,30 @@ class AppSharedRewritesTest {
             .map { it.substringBefore('#').trim() }
             .filter { it.isNotEmpty() }
             .map { line ->
-                val parts = line.split(" | ")
+                val parts = line.split("|", limit = 3).map { it.trim() }
                 check(parts.size == 3) { "Bad rewrite line: $line" }
-                Rewrite(parts[0].trim(), parts[1].trim(), parts[2].trim())
+                Rewrite(parts[0], parts[1], parts[2])
             }
+    }
+
+    @Test
+    fun `no synced file uses the SparseArray stub`() {
+        val root = File("build/generated/app-shared")
+        check(root.isDirectory) { "build/generated/app-shared is missing" }
+        val offenders = root.walkTopDown()
+            .filter { it.isFile && (it.extension == "kt" || it.extension == "java") }
+            .filter { "android.util.SparseArray" in it.readText() }
+            .map { it.relativeTo(root).path }
+            .toList()
+        offenders shouldBe emptyList()
+    }
+
+    @Test
+    fun `nothing extends the SparseArray stub`() {
+        val methods = runCatching { Class.forName("androidx.core.util.AndroidxUtilCompat") }
+            .getOrNull()?.methods.orEmpty()
+            .filter { m -> m.parameterTypes.any { it.name == "android.util.SparseArray" } }
+        methods.map { it.toString() } shouldBe emptyList()
     }
 
     @Test

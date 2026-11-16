@@ -5,5 +5,7 @@
 
 # android.util.SparseArray is only a stub on desktop
 exh/eh/MemAutoFlushingLookupTable.kt | import android.util.SparseArray | import zoukan.desktop.compat.SparseArray
+# its androidx.core.util.forEach import is gone; table.forEach is the member of the replacement class
+exh/eh/MemAutoFlushingLookupTable.kt | import androidx.core.util.forEach |
 # moko-resources' JVM StringResource has a key, not Android's resource id
 exh/recs/sources/RecommendationPagingSource.kt | it.category.resourceId | it.category.key

@@ -1,10 +1,9 @@
 // ZOUKAN -->
-// androidx.core.util's AtomicFile and SparseArray.forEach, for the shared E-Hentai code
+// androidx.core.util's AtomicFile, for the shared E-Hentai code
 @file:JvmName("AndroidxUtilCompat")
 
 package androidx.core.util
 
-import android.util.SparseArray
 import zoukan.desktop.Platform
 import java.io.File
 import java.io.FileInputStream
@@ -77,9 +76,5 @@ class AtomicFile internal constructor(
     private companion object {
         const val MOVE_ATTEMPTS = 5
     }
-}
-
-inline fun <T> SparseArray<T>.forEach(action: (key: Int, value: T) -> Unit) {
-    for (index in 0 until size()) action(keyAt(index), valueAt(index))
 }
 // ZOUKAN <--

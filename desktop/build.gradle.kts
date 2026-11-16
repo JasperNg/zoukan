@@ -88,7 +88,8 @@ val appSharedRewrites: List<AppSharedRewrite> = file("app-shared-rewrites.txt").
     .map { it.substringBefore('#').trim() }
     .filter { it.isNotEmpty() }
     .map { line ->
-        val parts = line.split(" | ").map { it.trim() }
+        // limit 3 keeps an empty replacement (the line then ends after the second bar)
+        val parts = line.split("|", limit = 3).map { it.trim() }
         require(parts.size == 3) { "app-shared-rewrites.txt: expected 'path | search | replacement', got '$line'" }
         AppSharedRewrite(parts[0], parts[1], parts[2])
     }
@@ -124,6 +125,16 @@ val syncAppShared by tasks.registering(Sync::class) {
                 )
             }
         }
+        // android.util.SparseArray is only a stub on desktop: no synced file may still use it
+        root.walkTopDown()
+            .filter { it.isFile && (it.extension == "kt" || it.extension == "java") }
+            .firstOrNull { "android.util.SparseArray" in it.readText() }
+            ?.let {
+                throw GradleException(
+                    "syncAppShared: ${it.relativeTo(root).invariantSeparatorsPath} uses android.util.SparseArray, " +
+                        "which is only a stub on desktop; add a rewrite to app-shared-rewrites.txt",
+                )
+            }
     }
 }
 sourceSets.main {
