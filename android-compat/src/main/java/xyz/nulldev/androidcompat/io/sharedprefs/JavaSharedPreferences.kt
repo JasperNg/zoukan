@@ -370,10 +370,12 @@ class JavaSharedPreferences(
                 // ZOUKAN <--
                 when (val value = action.value) {
                     is Set<*> -> {
-                        // ZOUKAN: the old value and Set entries go; a value of its own under
+                        // ZOUKAN -->
+                        // The old value and Set entries go; a value of its own under
                         // key.<name> (domain.custom beside domain) stays
                         preferences.remove(action.key)
                         removeSetEntries(action.key)
+                        // ZOUKAN <--
                         @Suppress("UNCHECKED_CAST")
                         preferences.encodeValue(SetSerializer(String.serializer()), action.key, value as Set<String>)
                     }
@@ -526,15 +528,19 @@ class JavaSharedPreferences(
         val changed = saveActions(actions)
 
         val saved = save()
-        // ZOUKAN: outside the lock, so a listener that reads or writes these preferences cannot
+        // ZOUKAN -->
+        // Outside the lock, so a listener that reads or writes these preferences cannot
         // deadlock, and one that throws does not fail the commit
         notify(changed)
+        // ZOUKAN <--
         return saved
     }
 
-    // ZOUKAN: the snapshot is taken under the file's lock, so a writer holding an older snapshot
+    // ZOUKAN -->
+    // The snapshot is taken under the file's lock, so a writer holding an older snapshot
     // cannot write it over a newer one that commit(), apply() or the shutdown flush already wrote
     private fun save(): Boolean = synchronized(file) { save(getSnapshot()) }
+    // ZOUKAN <--
 
     @OptIn(DelicateCoroutinesApi::class, ExperimentalAtomicApi::class)
     private fun startAsyncSaver() {
@@ -542,15 +548,18 @@ class JavaSharedPreferences(
             return
         }
 
-        // ZOUKAN: the job is kept so tests can wait for it (awaitPendingSaves)
+        // ZOUKAN -->
+        // The job is kept so tests can wait for it (awaitPendingSaves)
         val job = GlobalScope.launch(Dispatchers.IO) {
+            // ZOUKAN <--
             while (true) {
                 dirty.store(false)
 
                 save()
 
                 if (!dirty.load()) {
-                    // ZOUKAN: off the shutdown flush's list before the next apply() can start a
+                    // ZOUKAN -->
+                    // Off the shutdown flush's list before the next apply() can start a
                     // writer, and back on it if this writer carries on
                     unsaved.remove(this@JavaSharedPreferences)
                     pendingAsyncSave.store(false)
@@ -559,6 +568,7 @@ class JavaSharedPreferences(
                         unsaved.add(this@JavaSharedPreferences)
                         continue
                     }
+                    // ZOUKAN <--
 
                     break
                 }
@@ -676,8 +686,10 @@ class JavaSharedPreferences(
     }
 
     override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        // ZOUKAN: the value must not refer to the listener, or the weak key would never go
+        // ZOUKAN -->
+        // The value must not refer to the listener, or the weak key would never go
         synchronized(listeners) { listeners[listener] = Unit }
+        // ZOUKAN <--
     }
 
     override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

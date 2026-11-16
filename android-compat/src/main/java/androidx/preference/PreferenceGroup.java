@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.LinkedList;
 import java.util.List;
 
-// ZOUKAN: whole file
+// ZOUKAN: whole file -->
 
 /**
  * A minimal androidx.preference.PreferenceGroup: a preference that holds others (a screen or a
@@ -126,3 +126,4 @@ public abstract class PreferenceGroup extends Preference {
         return "None";
     }
 }
+// ZOUKAN: whole file <--

@@ -1,6 +1,7 @@
 package android.graphics;
 
 import android.content.res.Resources;
+// ZOUKAN -->
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -15,6 +16,7 @@ import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.MemoryCacheImageInputStream;
+// ZOUKAN <--
 import androidx.annotation.Nullable;
 
 public class BitmapFactory {
@@ -460,6 +462,7 @@ public class BitmapFactory {
         return decodeStream(inputStream, null, null);
     }
 
+    // ZOUKAN -->
     /**
      * Decodes with ImageIO. Like Android, returns null when no reader recognises the data or
      * decoding fails, and on failure leaves outWidth/outHeight at -1 and outMimeType null.
@@ -588,6 +591,7 @@ public class BitmapFactory {
         }
         return scaled;
     }
+    // ZOUKAN <--
 
     public static Bitmap decodeByteArray(byte[] data, int offset, int length) {
         return decodeByteArray(data, offset, length, null);

@@ -989,6 +989,16 @@ public class WebView extends AbsoluteLayout
             depth[0]--;
         }
     }
+
+    /**
+     * Whether the calling thread is inside {@link #callClientOffThread}, so a call it makes belongs
+     * on the WebView's looper.
+     *
+     * @hide
+     */
+    public static boolean isInClientCallback() {
+        return sInClientCallback.get()[0] > 0;
+    }
     // ZOUKAN <--
 
     private void checkThread() {
@@ -1328,8 +1338,10 @@ public class WebView extends AbsoluteLayout
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
-        // ZOUKAN: the offscreen browser keeps its own size (see KcefWebViewProvider.RenderHandler)
+        // ZOUKAN -->
+        // The offscreen browser keeps its own size (see KcefWebViewProvider.RenderHandler)
         if (isKcef()) return;
+        // ZOUKAN <--
         mProvider.getViewDelegate().onSizeChanged(w, h, ow, oh);
     }
 

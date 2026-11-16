@@ -26,20 +26,40 @@ public class HandlerThread extends Thread {
             mLooper = Looper.myLooper();
             notifyAll();
         }
+        // interrupt() sets the flag before it reads mLooper: if it read null, the flag is set now
+        if (isInterrupted()) mLooper.quit();
         onLooperPrepared();
         Looper.loop();
     }
 
+    /**
+     * Interrupting the thread quits its looper. Android's looper ignores interrupts, so on Android
+     * only quit() stops it; here an extension that ends a thread by interrupt would otherwise leak it.
+     */
+    @Override
+    public void interrupt() {
+        // The flag first: run() checks it after publishing the looper, so one of the two quits it
+        super.interrupt();
+        Looper looper;
+        synchronized (this) {
+            looper = mLooper;
+        }
+        if (looper != null) looper.quit();
+    }
+
     public Looper getLooper() {
         if (!isAlive()) return null;
+        boolean wasInterrupted = false;
         synchronized (this) {
             while (isAlive() && mLooper == null) {
                 try {
                     wait();
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException e) {
+                    wasInterrupted = true;
                 }
             }
         }
+        if (wasInterrupted) Thread.currentThread().interrupt();
         return mLooper;
     }
 

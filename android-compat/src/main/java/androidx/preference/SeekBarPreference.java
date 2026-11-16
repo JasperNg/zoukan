@@ -3,7 +3,7 @@ package androidx.preference;
 import android.content.Context;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-// ZOUKAN: whole file
+// ZOUKAN: whole file -->
 
 /**
  * A minimal androidx.preference.SeekBarPreference: an int between min and max, persisted as an
@@ -102,3 +102,4 @@ public class SeekBarPreference extends Preference {
         return "Integer";
     }
 }
+// ZOUKAN: whole file <--

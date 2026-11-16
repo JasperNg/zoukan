@@ -98,7 +98,8 @@ class CookieManagerImpl : CookieManager() {
         callback?.onReceiveValue(true)
     }
 
-    // ZOUKAN: null when there are none, as on Android
+    // ZOUKAN -->
+    // Null when there are none, as on Android
     override fun getCookie(url: String): String? {
         val uri =
             if (url.startsWith("http")) {
@@ -106,7 +107,7 @@ class CookieManagerImpl : CookieManager() {
             } else {
                 URI("http://$url")
             }
-        // ZOUKAN: as Chromium, only cookies whose Path matches the URL's, the longest path first
+        // As Chromium, only cookies whose Path matches the URL's, the longest path first
         val requestPath = uri.rawPath.takeUnless { it.isNullOrEmpty() } ?: "/"
         return cookieHandler.cookieStore
             .get(uri)
@@ -115,6 +116,7 @@ class CookieManagerImpl : CookieManager() {
             .joinToString("; ") { "${it.name}=${it.value}" }
             .ifEmpty { null }
     }
+    // ZOUKAN <--
 
     @Deprecated("Deprecated in Java")
     override fun removeSessionCookie() {}
@@ -131,8 +133,10 @@ class CookieManagerImpl : CookieManager() {
 
     override fun removeAllCookies(callback: ValueCallback<Boolean>?) {
         val removedCookies = cookieHandler.cookieStore.removeAll()
-        // ZOUKAN: Android's WebView shares this store, so its cookies go too
+        // ZOUKAN -->
+        // Android's WebView shares this store, so its cookies go too
         CefCookieSync.deleteFromCef("", "")
+        // ZOUKAN <--
         callback?.onReceiveValue(removedCookies)
     }
 

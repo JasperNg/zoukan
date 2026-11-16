@@ -4,6 +4,7 @@ import android.annotation.ColorInt;
 import android.annotation.ColorLong;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+// ZOUKAN -->
 import android.graphics.Path;
 import android.graphics.RectF;
 import java.awt.AlphaComposite;
@@ -23,6 +24,7 @@ import java.awt.image.BufferedImage;
 import java.text.AttributedString;
 import java.util.ArrayList;
 import java.util.List;
+// ZOUKAN <--
 
 public final class Canvas {
     private BufferedImage canvasImage;

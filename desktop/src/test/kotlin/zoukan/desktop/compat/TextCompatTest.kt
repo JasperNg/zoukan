@@ -2,6 +2,7 @@ package zoukan.desktop.compat
 
 import android.app.ActivityManager
 import android.content.res.Resources
+import android.hardware.display.DisplayManager
 import android.icu.text.BreakIterator
 import android.icu.text.Collator
 import android.icu.text.Normalizer2
@@ -13,16 +14,44 @@ import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextPaint
 import android.text.style.MetricAffectingSpan
+import android.util.DisplayMetrics
 import android.util.Patterns
+import android.view.Display
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import xyz.nulldev.androidcompat.res.DesktopResources
 import java.text.StringCharacterIterator
 import java.util.Locale
 
 class TextCompatTest {
+
+    @Test
+    fun `default display matches DisplayMetrics defaults`() {
+        val metrics = DisplayMetrics().apply { setToDefaults() }
+        metrics.widthPixels shouldBe DesktopResources.SCREEN_WIDTH_PIXELS
+        metrics.heightPixels shouldBe DesktopResources.SCREEN_HEIGHT_PIXELS
+        val display = DisplayManager.INSTANCE.getDisplay(Display.DEFAULT_DISPLAY)
+        display.width shouldBe DesktopResources.SCREEN_WIDTH_PIXELS
+        display.height shouldBe DesktopResources.SCREEN_HEIGHT_PIXELS
+    }
+
+    @Test
+    fun `LocaleList setDefault does not change the JVM default locale`() {
+        val before = Locale.getDefault()
+        val other = if (before == Locale.JAPAN) Locale.GERMANY else Locale.JAPAN
+        try {
+            LocaleList.setDefault(LocaleList(other))
+
+            Locale.getDefault() shouldBe before
+            LocaleList.getDefault().get(0) shouldBe other
+        } finally {
+            Locale.setDefault(before)
+            LocaleList.setDefault(LocaleList(before))
+        }
+    }
 
     @Test
     fun `LocaleList default is the JVM locale`() {

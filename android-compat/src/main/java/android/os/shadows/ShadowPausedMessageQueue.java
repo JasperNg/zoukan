@@ -65,7 +65,11 @@ public class ShadowPausedMessageQueue {
           this.wait(timeoutMillis);
         }
       } catch (InterruptedException e) {
-        // ignore
+        // ZOUKAN -->
+        // Android's looper ignores interrupts too; restoring the flag here would make
+        // MessageQueue.next() spin. HandlerThread.interrupt() quits its looper instead; other
+        // looper threads stop only with quit().
+        // ZOUKAN <--
       }
       isPolling = false;
       // ZOUKAN -->

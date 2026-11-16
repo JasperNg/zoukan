@@ -90,10 +90,12 @@ public class Preference {
 
     @SuppressWarnings("unchecked")
     public CharSequence getSummary() {
-        // ZOUKAN: as Android, a summary provider replaces the summary set
+        // ZOUKAN -->
+        // As Android, a summary provider replaces the summary set
         if (summaryProvider != null) {
             return summaryProvider.provideSummary(this);
         }
+        // ZOUKAN <--
         return summary;
     }
 
@@ -106,9 +108,11 @@ public class Preference {
     }
 
     public boolean isEnabled() {
-        // ZOUKAN: as Android, also off while the preference it depends on disables its dependents,
+        // ZOUKAN -->
+        // As Android, also off while the preference it depends on disables its dependents,
         // or while its parent group is disabled
         return isEnabled && isDependencyMet() && (parent == null || parent.isEnabled());
+        // ZOUKAN <--
     }
 
     public String getKey() {
@@ -429,7 +433,8 @@ public class Preference {
     /** Tachidesk specific API */
     @SuppressWarnings("unchecked")
     public Object getCurrentValue() {
-        // ZOUKAN: also without SharedPreferences (a preference not added to a screen yet), and a
+        // ZOUKAN -->
+        // Also without SharedPreferences (a preference not added to a screen yet), and a
         // default value of the wrong type is ignored instead of throwing ClassCastException
         if (!shouldPersist()) {
             return Objects.requireNonNullElseGet(defaultValue, () -> switch (getDefaultValueType()) {
@@ -447,6 +452,7 @@ public class Preference {
             case "Integer" -> sharedPreferences.getInt(key, defaultValue instanceof Integer i ? i : 0);
             default -> throw new RuntimeException("Unsupported type");
         };
+        // ZOUKAN <--
     }
 
     /** Tachidesk specific API */
