@@ -6,13 +6,20 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
@@ -28,6 +35,7 @@ import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.tray.Notifications
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -247,6 +255,25 @@ class DownloadQueueStatesTest {
             saved.substringAfter("chapterId\":").substringBefore('}').trim() shouldBe
                 manager.queue.value.first().chapter.id.toString()
         }
+    }
+
+    @Test
+    fun `a saved queue that does not parse is kept aside with a warning`() = runBlocking<Unit> {
+        val garbage = "[{\"mangaId\":1,\"chap".toByteArray()
+        File(temp, "downloads-queue.json").writeBytes(garbage)
+        val posted = mutableListOf<Notifications.Message>()
+        val collector = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) { Notifications.flow.toList(posted) }
+        yield()
+
+        val manager = manager()
+        manager.restore(start = false)
+        manager.enqueue(manga, listOf(chapter(1, 1)), start = false) // a save after the restore
+        manager.awaitBackgroundWork()
+        collector.cancelAndJoin()
+
+        val kept = temp.listFiles()!!.filter { it.name.startsWith("downloads-queue") && it.name.contains("unreadable") }
+        kept.single().readBytes() shouldBe garbage
+        posted.filter { it.kind == Notifications.Kind.WARNING }.shouldHaveSize(1)
     }
 
     @Test

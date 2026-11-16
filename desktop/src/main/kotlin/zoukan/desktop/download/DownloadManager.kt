@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
@@ -41,7 +42,10 @@ import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -719,15 +723,61 @@ class DownloadManager(
                     val saved = _queue.value.map { SavedDownload(it.manga.id, it.chapter.id) }
                     val tmp = File(queueFile.path + ".tmp")
                     tmp.writeText(json.encodeToString(saved))
-                    java.nio.file.Files.move(tmp.toPath(), queueFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    try {
+                        Files.move(tmp.toPath(), queueFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                    } catch (_: AtomicMoveNotSupportedException) {
+                        Files.move(tmp.toPath(), queueFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
                 }.onFailure { logcat(LogPriority.WARN, it) { "Saving the download queue failed" } }
             }
         }
     }
 
+    /**
+     * The saved queue, or null when there is none (first start) or it cannot be read. A file that
+     * cannot be read is moved to `downloads-queue.unreadable-<time>.json`, never replaced or
+     * deleted, so the next save does not overwrite it, and the user is told.
+     */
+    private fun readSavedQueue(): List<SavedDownload>? {
+        val file = queueFile
+        if (!file.exists()) return null
+        return try {
+            json.decodeFromString<List<SavedDownload>>(file.readText())
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (e !is SerializationException && e !is IllegalArgumentException && e !is IOException) throw e
+            val keptName = keepUnreadableQueue(file)
+            logcat(LogPriority.WARN, e) { "The saved download queue could not be read; kept as $keptName" }
+            Notifications.post(
+                localized(DMR.strings.download_queue_unreadable),
+                localized(DMR.strings.download_queue_unreadable_kept, keptName.orEmpty()),
+                Notifications.Kind.WARNING,
+            )
+            null
+        }
+    }
+
+    private fun keepUnreadableQueue(file: File): String? {
+        val stamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+        for (n in 0..99) {
+            val name = "downloads-queue.unreadable-$stamp${if (n == 0) "" else "-$n"}.json"
+            try {
+                // No REPLACE_EXISTING: a kept file is never overwritten
+                Files.move(file.toPath(), File(file.parentFile, name).toPath())
+                return name
+            } catch (_: FileAlreadyExistsException) {
+                continue
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not keep the unreadable download queue aside" }
+                return null
+            }
+        }
+        return null
+    }
+
     /** Loads the saved queue and starts it. Called once at start-up. */
     suspend fun restore(start: Boolean = true) {
-        val saved = runCatching { json.decodeFromString<List<SavedDownload>>(queueFile.readText()) }.getOrNull() ?: return
+        val saved = readSavedQueue() ?: return
         val mangas = HashMap<Long, Manga?>()
         val downloads = saved.mapNotNull { s ->
             val manga = mangas.getOrPut(s.mangaId) { getManga.await(s.mangaId) } ?: return@mapNotNull null

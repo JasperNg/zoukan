@@ -864,4 +864,6 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="download_queue_unreadable">The download queue could not be read</string>
+    <string name="download_queue_unreadable_kept">It was kept as %1$s; queue the chapters again.</string>
 </resources>
