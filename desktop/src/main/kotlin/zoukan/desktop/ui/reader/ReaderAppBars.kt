@@ -1,6 +1,8 @@
 package zoukan.desktop.ui.reader
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -71,6 +73,8 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -108,6 +112,8 @@ import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.chapterStateDescription
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
@@ -157,6 +163,7 @@ fun readerBarColor(): Color {
 }
 
 /** What the reader menu's buttons do */
+@Immutable
 class ReaderMenuActions(
     val onBack: () -> Unit,
     val onToggleBookmark: () -> Unit,
@@ -181,7 +188,8 @@ class ReaderMenuActions(
 )
 
 /** Everything a menu draws, read from the reader's state and settings */
-class ReaderMenuState(
+@Immutable
+data class ReaderMenuState(
     val mangaTitle: String,
     val chapterTitle: String,
     val bookmarked: Boolean,
@@ -207,6 +215,11 @@ class ReaderMenuState(
 fun ReaderAppBars(visible: Boolean, menu: ReaderMenuState, actions: ReaderMenuActions, modifier: Modifier = Modifier) {
     val background = readerBarColor()
     val rtl = menu.readingMode == ReadingModes.RIGHT_TO_LEFT
+    // ZOUKAN -->
+    val reduced = zoukan.desktop.ui.common.LocalReducedMotion.current
+    fun enter(transition: EnterTransition) = if (reduced) EnterTransition.None else transition
+    fun exit(transition: ExitTransition) = if (reduced) ExitTransition.None else transition
+    // ZOUKAN <--
     BoxWithConstraints(modifier.fillMaxSize()) {
         val type = navBarType(
             readingMode = menu.readingMode,
@@ -218,8 +231,8 @@ fun ReaderAppBars(visible: Boolean, menu: ReaderMenuState, actions: ReaderMenuAc
         Column(Modifier.fillMaxHeight()) {
             AnimatedVisibility(
                 visible = visible,
-                enter = slideInVertically(slideSpec) { -it } + fadeIn(fadeSpec),
-                exit = slideOutVertically(slideSpec) { -it } + fadeOut(fadeSpec),
+                enter = enter(slideInVertically(slideSpec) { -it } + fadeIn(fadeSpec)),
+                exit = exit(slideOutVertically(slideSpec) { -it } + fadeOut(fadeSpec)),
             ) {
                 ReaderTopBar(menu, actions, Modifier.background(background))
             }
@@ -229,8 +242,8 @@ fun ReaderAppBars(visible: Boolean, menu: ReaderMenuState, actions: ReaderMenuAc
                     val left = type == NavBarType.VerticalLeft
                     AnimatedVisibility(
                         visible = visible,
-                        enter = slideInHorizontally(slideSpec) { if (left) -it else it } + fadeIn(fadeSpec),
-                        exit = slideOutHorizontally(slideSpec) { if (left) -it else it } + fadeOut(fadeSpec),
+                        enter = enter(slideInHorizontally(slideSpec) { if (left) -it else it } + fadeIn(fadeSpec)),
+                        exit = exit(slideOutHorizontally(slideSpec) { if (left) -it else it } + fadeOut(fadeSpec)),
                         modifier = Modifier.weight(1f).align(if (left) Alignment.Start else Alignment.End),
                     ) {
                         ChapterNavigator(rtl = false, vertical = true, menu = menu, actions = actions)
@@ -241,17 +254,17 @@ fun ReaderAppBars(visible: Boolean, menu: ReaderMenuState, actions: ReaderMenuAc
 
             AnimatedVisibility(
                 visible = visible,
-                enter = slideInVertically(slideSpec) { it } + fadeIn(fadeSpec),
-                exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeSpec),
+                enter = enter(slideInVertically(slideSpec) { it } + fadeIn(fadeSpec)),
+                exit = exit(slideOutVertically(slideSpec) { it } + fadeOut(fadeSpec)),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                     if (type == NavBarType.Bottom) {
                         ChapterNavigator(rtl = rtl, vertical = false, menu = menu, actions = actions)
                     }
                     ReaderBottomBar(
                         menu,
                         actions,
-                        Modifier.fillMaxWidth().background(background).padding(horizontal = 8.dp),
+                        Modifier.fillMaxWidth().background(background).padding(horizontal = Spacing.Small),
                     )
                 }
             }
@@ -262,11 +275,11 @@ fun ReaderAppBars(visible: Boolean, menu: ReaderMenuState, actions: ReaderMenuAc
 @Composable
 private fun ReaderTopBar(menu: ReaderMenuState, actions: ReaderMenuActions, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().pointerInput(Unit) {}.padding(horizontal = 4.dp, vertical = 8.dp),
+        modifier.fillMaxWidth().pointerInput(Unit) {}.padding(horizontal = Spacing.ExtraSmall, vertical = Spacing.Small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MenuButton(Icons.AutoMirrored.Outlined.ArrowBack, localized(MR.strings.action_webview_back), actions.onBack, tint = LocalContentColor.current)
-        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+        Column(Modifier.weight(1f).padding(horizontal = Spacing.Small)) {
             Text(menu.mangaTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (menu.chapterTitle.isNotEmpty()) {
                 Text(
@@ -385,11 +398,7 @@ private fun MenuButton(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.primary,
 ) {
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-        tooltip = { PlainTooltip { Text(label) } },
-        state = rememberTooltipState(),
-    ) {
+    Tooltip(label) {
         IconButton(onClick = onClick, modifier = modifier) { Icon(icon, contentDescription = label, tint = tint) }
     }
 }
@@ -440,11 +449,7 @@ private fun ChapterNavigator(rtl: Boolean, vertical: Boolean, menu: ReaderMenuSt
     fun ChapterButton(next: Boolean) {
         val enabled = if (next) menu.hasNext else menu.hasPrevious
         val label = if (next) localized(DMR.strings.next_chapter_n) else localized(DMR.strings.previous_chapter_p)
-        TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-            tooltip = { PlainTooltip { Text(label) } },
-            state = rememberTooltipState(),
-        ) {
+        Tooltip(label) {
             FilledIconButton(
                 onClick = if (next) actions.onNextChapter else actions.onPreviousChapter,
                 enabled = enabled,
@@ -461,13 +466,13 @@ private fun ChapterNavigator(rtl: Boolean, vertical: Boolean, menu: ReaderMenuSt
 
     if (vertical) {
         Column(
-            Modifier.fillMaxHeight().pointerInput(Unit) {}.padding(vertical = 24.dp, horizontal = 8.dp),
+            Modifier.fillMaxHeight().pointerInput(Unit) {}.padding(vertical = Spacing.ExtraLarge, horizontal = Spacing.Small),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ChapterButton(next = false)
             if (menu.totalPages > 1) {
                 Column(
-                    Modifier.weight(1f).clip(Corners.ExtraLarge).background(background).padding(vertical = 16.dp),
+                    Modifier.weight(1f).clip(Corners.ExtraLarge).background(background).padding(vertical = Spacing.Large),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(menu.currentPageText, color = textColor, fontWeight = FontWeight.Medium)
@@ -483,7 +488,7 @@ private fun ChapterNavigator(rtl: Boolean, vertical: Boolean, menu: ReaderMenuSt
         // The direction is the reading mode's, not the system's
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(
-                Modifier.fillMaxWidth().pointerInput(Unit) {}.padding(horizontal = 24.dp),
+                Modifier.fillMaxWidth().pointerInput(Unit) {}.padding(horizontal = Spacing.ExtraLarge),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ChapterButton(next = rtl)
@@ -525,7 +530,7 @@ private fun PageSlider(menu: ReaderMenuState, actions: ReaderMenuActions, modifi
     val pressed by interaction.collectIsPressedAsState()
     var value by remember(menu.generation) { mutableFloatStateOf(menu.currentPage.toFloat()) }
     // While the thumb is held it stays under the pointer; the viewer may land on the spread's other page
-    if (!dragged && !pressed) value = menu.currentPage.toFloat()
+    LaunchedEffect(menu.currentPage, dragged, pressed) { if (!dragged && !pressed) value = menu.currentPage.toFloat() }
     Slider(
         value = value,
         onValueChange = {

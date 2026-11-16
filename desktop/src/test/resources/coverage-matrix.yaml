@@ -731,7 +731,7 @@
   feature: "Reader screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.reader.ProgressWriterTest, e2e.BrowseAndReadJourneyTest, e2e.AvifJourneyTest, e2e.DescramblingJourneyTest, e2e.DownloadJourneyTest]
+  tests: [ui.ScreenSmokeTest, ui.reader.ProgressWriterTest, e2e.BrowseAndReadJourneyTest, e2e.AvifJourneyTest, e2e.DescramblingJourneyTest, e2e.DownloadJourneyTest, ui.reader.ReaderReducedMotionTest, ui.common.ReducedMotionTest, ui.reader.ReaderFilterTest, ui.reader.ReaderMemoryBudgetTest, e2e.ReaderRecompositionJourneyTest]
 
 - key: flow:reader.paged
   feature: "Paged viewer (zoom, double pages)"
@@ -743,14 +743,13 @@
   feature: "Webtoon viewer"
   tier: unit
   smoke: false
-  tests: [ui.reader.AutoWebtoonTest, ui.reader.ReaderScaleTest]
-  gap: "No test reads in webtoon mode; planned: SettingsPagesJourneyTest (default reading mode Webtoon)"
+  tests: [ui.reader.AutoWebtoonTest, ui.reader.ReaderScaleTest, e2e.WebtoonEndOfChapterJourneyTest, ui.reader.WebtoonPlaceholderHeightTest]
 
 - key: flow:reader.keys
   feature: "Keys: arrows, J/K, space, PgUp/PgDn, Home/End, N/P chapters, zoom, M menu, F/F11 full screen"
   tier: unit
   smoke: false
-  tests: [ui.reader.ReaderNavigationTest]
+  tests: [ui.reader.ReaderNavigationTest, e2e.ReaderKeyboardJourneyTest]
   gap: "Journeys press only Left to turn pages; planned: KeyboardShortcutsJourneyTest (reader keys and Esc)"
 
 - key: dialog-inline:ReaderScreen.kt:KeyboardHelp
@@ -777,15 +776,15 @@
   feature: "Retry failed pages, load this page first"
   tier: journey
   smoke: false
-  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest]
+  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest, e2e.ReaderErrorMessageJourneyTest]
   gap: "The bar's Retry failed pages (R) and Load this page first are not driven; the page's own Retry is"
 
 - key: flow:reader.chapter-nav
   feature: "Next / previous chapter"
   tier: unit
   smoke: false
-  tests: [ui.reader.ChapterTransitionsTest]
-  gap: "The buttons are not driven; planned: ReaderSettingsJourneyTest"
+  tests: [ui.reader.ChapterTransitionsTest, e2e.WebtoonEndOfChapterJourneyTest]
+  gap: "The bar buttons are not driven; planned: ReaderSettingsJourneyTest"
 
 - key: dialog:reader.ReaderChapterListDialog
   feature: "Chapter list dialog"
@@ -803,13 +802,13 @@
   feature: "Reader settings dialog (shift double pages, bottom bar buttons, auto scroll)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ReaderSettingsJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.ReaderSettingsJourneyTest, ui.reader.ReaderSettingsParityTest]
 
 - key: flow:reader.tap-zones
   feature: "Tap zones overlay"
   tier: unit
   smoke: false
-  tests: [ui.reader.ReaderNavigationTest, ui.reader.ReaderScaleTest]
+  tests: [ui.reader.ReaderNavigationTest, ui.reader.ReaderScaleTest, ui.reader.TapZoneLabelsTest]
   gap: "Tapping is not driven; planned: ReaderSettingsJourneyTest"
 
 # --- More tab and its screens ---

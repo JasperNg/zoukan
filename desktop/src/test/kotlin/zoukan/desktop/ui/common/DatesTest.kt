@@ -3,7 +3,9 @@ package zoukan.desktop.ui.common
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.category.model.Category
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.settings.categoriesLabel
+import zoukan.i18n.desktop.DMR
 import java.time.LocalDate
 
 class DatesTest {
@@ -16,6 +18,11 @@ class DatesTest {
         Dates.relative(today.minusDays(3), relative = true, today = today) shouldBe "3 days ago"
         Dates.relative(today.plusDays(1), relative = true, today = today) shouldBe "Tomorrow"
         Dates.relative(today.plusDays(4), relative = true, today = today) shouldBe "In 4 days"
+    }
+
+    @Test
+    fun `a missing date is localized`() {
+        Dates.relative(0L) shouldBe localized(DMR.strings.date_unknown)
     }
 
     @Test

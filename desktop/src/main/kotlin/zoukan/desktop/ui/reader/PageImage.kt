@@ -7,9 +7,12 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.IRect
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.SamplingMode
 import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageFormats
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.UnreadableImageException
 import zoukan.i18n.desktop.DMR
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
@@ -27,13 +30,45 @@ class PageImage(
     val background: PageBackground? = null,
     /** The animation of an animated GIF or WebP page, which the page's composable plays */
     val animation: PageAnimation? = null,
+    /** The Skia bitmaps behind the slices, freed once the image is released and no longer drawn */
+    private val owned: List<Bitmap> = emptyList(),
     // ZOUKAN <--
 ) {
     // ZOUKAN -->
     private val stillSlices = slices
 
     /** The slices to draw: an animated page's current frame (snapshot state, so drawing follows it) */
-    val slices: List<ImageBitmap> get() = animation?.let { listOf(it.frame) } ?: stillSlices
+    val slices: List<ImageBitmap> get() = animation?.let { listOf(it.frame) } ?: if (closed) emptyList() else stillSlices
+
+    // The model releases the image and the composables that draw it let go of it; the native pixels
+    // are freed once both have happened, so a bitmap is never closed while it is drawn
+    private val lock = Any()
+    private var users = 0
+    private var released = false
+
+    @Volatile
+    private var closed = false
+
+    /** A composable starts drawing this image */
+    fun attach() = synchronized(lock) { users++ }
+
+    /** A composable stops drawing this image */
+    fun detach() = synchronized(lock) {
+        users--
+        closeIfUnused()
+    }
+
+    /** The model no longer keeps this image: it closes as soon as nothing draws it */
+    fun release() = synchronized(lock) {
+        released = true
+        closeIfUnused()
+    }
+
+    private fun closeIfUnused() {
+        if (!released || users > 0 || closed) return
+        closed = true
+        owned.forEach { runCatching { it.close() } }
+    }
     // ZOUKAN <--
 
     val aspectRatio: Float get() = width.toFloat() / height.coerceAtLeast(1)
@@ -41,16 +76,16 @@ class PageImage(
     companion object {
         const val MAX_SLICE = 4096
 
-        fun decode(bytes: ByteArray, cropBorders: Boolean = false): PageImage {
+        fun decode(bytes: ByteArray, cropBorders: Boolean = false, maxWidth: Int? = null): PageImage {
             // ZOUKAN -->
             val format = ImageFormats.sniff(bytes)
             // Neither Skia, ImageIO nor the bundled FFmpeg (no libjxl) reads JPEG XL: say so plainly
-            if (format == Format.Jxl) throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
+            if (format == Format.Jxl) throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
             // Animated GIF and WebP pages play, as on Android; they are not cropped, nor given a background
             if (format == Format.Gif || format == Format.Webp) {
                 PageAnimation.of(bytes)?.let { return PageImage(it.width, it.height, emptyList(), null, it) }
             }
-            val bitmap = try {
+            val full = try {
                 val image = Image.makeFromEncoded(bytes)
                 try {
                     Bitmap.makeFromImage(image)
@@ -61,8 +96,18 @@ class PageImage(
                 // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys and the AVIF and
                 // HEIF reader covers a few more. Their pages go the same way, cropped as the others
                 val buffered = ImageIO.read(ByteArrayInputStream(bytes))
-                    ?: throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
+                    ?: throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
                 buffered.toComposeImageBitmap().asSkiaBitmap()
+            }
+            // A page far wider than the window can show is scaled down first, and the full one freed
+            val bitmap = if (maxWidth != null && maxWidth > 0 && full.width > maxWidth) {
+                try {
+                    scaledTo(full, maxWidth)
+                } finally {
+                    full.close()
+                }
+            } else {
+                full
             }
             val width = bitmap.width
             val height = bitmap.height
@@ -72,15 +117,37 @@ class PageImage(
             }
             val background = background(width, height) { x, y -> bitmap.getColor(x, y) }
             if (height <= MAX_SLICE) {
-                return PageImage(width, height, listOf(bitmap.asComposeImageBitmap()), background)
+                return PageImage(width, height, listOf(bitmap.asComposeImageBitmap()), background, owned = listOf(bitmap))
             }
-            return slice(width, height, background) { y, h ->
+            val owned = mutableListOf(bitmap)
+            return slice(width, height, background, owned) { y, h ->
                 // ZOUKAN <--
                 val part = Bitmap()
                 bitmap.extractSubset(part, IRect.makeXYWH(0, y, width, h))
+                owned += part
                 part.asComposeImageBitmap()
             }
         }
+
+        // ZOUKAN -->
+        /** [source] scaled to [width] pixels wide, keeping its aspect */
+        private fun scaledTo(source: Bitmap, width: Int): Bitmap {
+            val height = (source.height.toLong() * width / source.width).toInt().coerceAtLeast(1)
+            val target = Bitmap()
+            target.allocPixels(ImageInfo.makeN32Premul(width, height))
+            val image = Image.makeFromBitmap(source)
+            try {
+                val scaled = target.peekPixels()?.let { image.scalePixels(it, SamplingMode.MITCHELL, false) } ?: false
+                if (!scaled) {
+                    target.close()
+                    throw IllegalStateException("The page could not be scaled")
+                }
+            } finally {
+                image.close()
+            }
+            return target
+        }
+        // ZOUKAN <--
 
         /**
          * [bitmap] with the page's plain margins cut off, as Android's "crop borders": rows and
@@ -96,12 +163,14 @@ class PageImage(
             return if (height <= MAX_SLICE) {
                 val part = Bitmap()
                 bitmap.extractSubset(part, rect)
-                PageImage(width, height, listOf(part.asComposeImageBitmap()), background)
+                PageImage(width, height, listOf(part.asComposeImageBitmap()), background, owned = listOf(bitmap, part))
             } else {
-                slice(width, height, background) { y, h ->
+                val owned = mutableListOf(bitmap)
+                slice(width, height, background, owned) { y, h ->
                     // ZOUKAN <--
                     val part = Bitmap()
                     bitmap.extractSubset(part, IRect.makeXYWH(rect.left, rect.top + y, width, h))
+                    owned += part
                     part.asComposeImageBitmap()
                 }
             }
@@ -151,9 +220,9 @@ class PageImage(
         }
 
         // ZOUKAN -->
-        private fun slice(width: Int, height: Int, background: PageBackground?, cut: (y: Int, h: Int) -> ImageBitmap): PageImage {
+        private fun slice(width: Int, height: Int, background: PageBackground?, owned: List<Bitmap>, cut: (y: Int, h: Int) -> ImageBitmap): PageImage {
             val slices = (0 until height step MAX_SLICE).map { y -> cut(y, minOf(MAX_SLICE, height - y)) }
-            return PageImage(width, height, slices, background)
+            return PageImage(width, height, slices, background, owned = owned)
         }
 
         /** A few hundred pixels are read, so every page gets one; only the Automatic theme shows it */

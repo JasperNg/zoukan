@@ -1,6 +1,8 @@
 package zoukan.desktop.ui.manga
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.reducedMotion
 import kotlin.math.roundToInt
 
 // ZOUKAN -->
@@ -60,6 +63,7 @@ internal fun ResumeButton(
     var buttonSize by remember { mutableStateOf(IntSize.Zero) }
     var buttonX by remember { mutableFloatStateOf(0f) }
     val onMoveState by rememberUpdatedState(onMove)
+    val reduceMotion by reducedMotion()
     Box(
         modifier.fillMaxSize().onGloballyPositioned { coordinates ->
             areaSize = coordinates.size
@@ -68,8 +72,8 @@ internal fun ResumeButton(
     ) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
+            enter = if (reduceMotion) EnterTransition.None else fadeIn() + scaleIn(),
+            exit = if (reduceMotion) ExitTransition.None else fadeOut() + scaleOut(),
             modifier = Modifier
                 .align(if (atStart) Alignment.BottomStart else Alignment.BottomEnd)
                 .padding(16.dp),

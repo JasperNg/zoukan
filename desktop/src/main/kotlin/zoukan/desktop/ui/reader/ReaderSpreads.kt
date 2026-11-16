@@ -88,6 +88,7 @@ fun PageContent(
     gap: Int = 0,
 ) {
     // ZOUKAN -->
+    DrawsImage(image)
     PlayAnimation(image)
     // ZOUKAN <--
     Canvas(modifier.testTag("page-image")) {

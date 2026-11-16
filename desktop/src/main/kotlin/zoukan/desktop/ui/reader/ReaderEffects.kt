@@ -1,6 +1,8 @@
 package zoukan.desktop.ui.reader
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -27,7 +29,9 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.OverlayColors
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 
 /**
@@ -53,14 +57,20 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
         delay(1500)
         modeShown = false
     }
-    AnimatedVisibility(modeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
+    AnimatedVisibility(
+        modeShown,
+        enter = if (reduceMotion) EnterTransition.None else fadeIn(),
+        exit = if (reduceMotion) ExitTransition.None else fadeOut(),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
         Text(
             ReadingModes.label(state.readingMode),
-            color = Color.White,
+            color = OverlayColors.OnScrim,
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.6f), Corners.Large)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .background(OverlayColors.ToastScrim, Corners.Large)
+                .padding(horizontal = Spacing.Large, vertical = Spacing.Small),
         )
     }
 

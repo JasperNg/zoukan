@@ -34,6 +34,19 @@ class SourceErrorsTest {
     }
 
     @Test
+    fun `the unsupported image format message of the page decoder is kept`() {
+        val text = localized(DMR.strings.unsupported_image_format, "JPEG XL")
+        sourceErrorText(UnreadableImageException(text)) shouldBe text
+    }
+
+    @Test
+    fun `a failed check or a malformed address shows the generic message, not developer text`() {
+        val expected = localized(DMR.strings.source_request_failed)
+        sourceErrorText(IllegalArgumentException("Failed requirement.")) shouldBe expected
+        sourceErrorText(IllegalArgumentException("Expected URL scheme 'http' or 'https' but no scheme was found for /p/1.jpg")) shouldBe expected
+    }
+
+    @Test
     fun `a message the source wrote for the user is kept`() {
         sourceErrorText(Exception("Log in via WebView")) shouldBe "Log in via WebView"
     }
