@@ -76,10 +76,10 @@ class ExtensionHttpRewriteTest {
     """.trimIndent()
 
     /** The classes javac makes from [source], by jar path. */
-    private fun compile(): Map<String, ByteArray> {
-        val src = File(dir, "src/gen/Clients.java").apply {
+    private fun compile(code: String = source, name: String = "gen/Clients.java"): Map<String, ByteArray> {
+        val src = File(dir, "src/$name").apply {
             parentFile.mkdirs()
-            writeText(source)
+            writeText(code)
         }
         val out = File(dir, "classes").apply { mkdirs() }
         val compiler = ToolProvider.getSystemJavaCompiler().shouldNotBeNull()
@@ -147,6 +147,32 @@ class ExtensionHttpRewriteTest {
         clients.getMethod("discarded").invoke(null) shouldBe 1
 
         hook.lookups shouldContainExactly listOf("plain.example", "built.example", "nested.example")
+    }
+
+    private val subclassSource = """
+        package gen;
+
+        import okhttp3.OkHttpClient;
+
+        public class Sub {
+            public static class MyClient extends OkHttpClient {
+                public MyClient() { super(); }
+            }
+
+            public static OkHttpClient make() { return new MyClient(); }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a subclass of the extension's client resolves names with the app's DNS`() {
+        val hook = RecordingDns()
+        ExtensionHttp.setDnsProvider { hook }
+        val rewritten = compile(subclassSource, "gen/Sub.java").mapValues { (_, bytes) -> BytecodeEditor.fixAndroidClass(bytes) }
+        val client = ExtensionClassLoader(JarContents(rewritten), "gen").loadClass("gen.Sub")
+            .getMethod("make").invoke(null) as OkHttpClient
+        client.dns shouldBeSameInstanceAs ExtensionHttp.DNS
+        runCatching { client.dns.lookup("sub.example") }
+        hook.lookups shouldContainExactly listOf("sub.example")
     }
 
     @Test

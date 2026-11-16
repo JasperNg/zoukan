@@ -159,7 +159,7 @@ private fun convert(args: List<String>): Int {
         System.err.println("Usage: zoukan convert <apk> <jar>")
         return 2
     }
-    ApkConverter.convert(File(args[0]), File(args[1]))
+    ApkConverter.convert(File(args[0]).readBytes(), File(args[1]))
     println("Wrote ${args[1]}")
     return 0
 }

@@ -105,12 +105,19 @@ object BytecodeEditor {
      * the same way, as only the innermost NEW is held. The stack never grows (one slot instead of
      * two), and no frame lies inside a replaced sequence, so the existing max stack and stack map
      * frames stay valid.
+     *
+     * A subclass of OkHttpClient calls the constructor without a NEW (`ALOAD 0; INVOKESPECIAL
+     * OkHttpClient.<init>()V`). That call becomes `INVOKESTATIC ExtensionHttp.newBuilder();
+     * INVOKESPECIAL OkHttpClient.<init>(Builder)V`, so the subclass has the app's DNS as well. This
+     * puts one more value on the stack, so the method's max stack grows by one. Subclasses of
+     * OkHttpClient.Builder are left alone: setting the DNS there is not a constructor swap.
      */
     private class ExtensionHttpRewriter(
         mv: MethodVisitor?,
     ) : MethodVisitor(Opcodes.ASM9, mv) {
         private var pendingNew: String? = null
         private var pendingDup = false
+        private var rewroteSuperCall = false
 
         private fun flush() {
             val type = pendingNew ?: return
@@ -156,6 +163,14 @@ object BytecodeEditor {
                 return
             }
             flush()
+            if (opcode == Opcodes.INVOKESPECIAL && owner == "okhttp3/OkHttpClient" && name == "<init>" && descriptor == "()V") {
+                // No NEW before it: the super (or this) call of a subclass constructor, on the
+                // uninitialized `this`. The client is built from the builder the app's DNS is set on
+                super.visitMethodInsn(Opcodes.INVOKESTATIC, EXTENSION_HTTP, "newBuilder", "()Lokhttp3/OkHttpClient\$Builder;", false)
+                super.visitMethodInsn(opcode, owner, name, "(Lokhttp3/OkHttpClient\$Builder;)V", isInterface)
+                rewroteSuperCall = true
+                return
+            }
             super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
         }
 
@@ -292,7 +307,9 @@ object BytecodeEditor {
             maxLocals: Int,
         ) {
             flush()
-            super.visitMaxs(maxStack, maxLocals)
+            // A rewritten super call has the builder on the stack besides `this`: one more value
+            // than before, and the class writer does not recompute the max stack
+            super.visitMaxs(if (rewroteSuperCall) maxStack + 1 else maxStack, maxLocals)
         }
 
         override fun visitEnd() {

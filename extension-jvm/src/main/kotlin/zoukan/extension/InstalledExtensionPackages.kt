@@ -67,8 +67,4 @@ class InstalledExtensionPackages(private val extensionsDir: File) : ExternalPack
             }
         }
     }
-
-    companion object {
-        private val PACKAGE_NAME = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
-    }
 }
