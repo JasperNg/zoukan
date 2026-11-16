@@ -65,6 +65,20 @@ The `backup` module cannot depend on `app`, so it keeps copies of two app consta
 `PINNED_SOURCES_PREF_KEY` (`SourcePreferences`) and `READING_MODE_MASK` (`ReadingMode.MASK`).
 `app`'s `BackupUpstreamConstantsTest` fails if they drift.
 
+## Android Gradle Plugin and the multiplatform modules
+
+The modules that apply `mihon.library.kmp` (`domain`, `data`, `backup`, `core/common`,
+`core/archive`), plus `source-api`, `source-local` and the `i18n*` modules, use
+`com.android.library` with `androidTarget()`. The Android documentation's path for Kotlin
+Multiplatform libraries is the `com.android.kotlin.multiplatform.library` plugin, and the
+`com.android.library` combination is the one being phased out. Every shared module carries the
+Android target, so an Android Gradle Plugin major that no longer supports it would break all of them,
+and the desktop build with them.
+
+Renovate does not propose Android Gradle Plugin majors (a rule in `renovate.json`); minor and patch
+updates still come. Before raising the major, migrate these modules to the new plugin. Check what
+upstream Komikku did first, since the `buildSrc` conventions come from upstream.
+
 ## Full list
 
 The exact list of moved files:

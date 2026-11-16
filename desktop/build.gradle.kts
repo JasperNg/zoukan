@@ -318,6 +318,8 @@ tasks.test {
         rootProject.file("gradle/wrapper/gradle-wrapper.properties"),
         rootProject.file("gradle/verification-metadata.xml"),
         rootProject.file("gradle.properties"),
+        rootProject.file("renovate.json"),
+        rootProject.file("desktop/UPSTREAM-MERGES.md"),
         rootProject.file("extension-jvm/build.gradle.kts"),
         rootProject.file("android-compat/build.gradle.kts"),
         file("build.gradle.kts"),

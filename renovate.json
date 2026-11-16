@@ -18,6 +18,18 @@
         "github-actions"
       ],
       "pinDigests": true
+    },
+    {
+      "description": "The multiplatform modules still use com.android.library; a new major needs the migration in desktop/UPSTREAM-MERGES.md first",
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.android.library",
+        "com.android.application"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
     }
   ]
 }

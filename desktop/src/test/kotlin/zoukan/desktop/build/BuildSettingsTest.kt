@@ -3,6 +3,7 @@ package zoukan.desktop.build
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
@@ -63,6 +64,18 @@ class BuildSettingsTest {
         }
         withClue("configure-on-demand is on") {
             text("gradle.properties") shouldNotContain "org.gradle.configureondemand=true"
+        }
+    }
+
+    @Test
+    fun `the update bot never proposes a new Android Gradle Plugin major`() {
+        val renovate = text("renovate.json")
+        val rule = Regex("""\{[^{}]*"com\.android\.tools\.build:gradle"[^{}]*\}""").find(renovate)?.value
+        withClue("no update-bot rule for the Android Gradle Plugin") { rule.shouldNotBeNull() }
+        rule!! shouldContain "\"major\""
+        rule shouldContain "\"enabled\": false"
+        withClue("the Android KMP library plugin migration is not tracked") {
+            text("desktop/UPSTREAM-MERGES.md") shouldContain "com.android.kotlin.multiplatform.library"
         }
     }
 }
