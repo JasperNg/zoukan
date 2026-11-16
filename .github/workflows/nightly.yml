@@ -121,3 +121,59 @@ jobs:
             desktop/build/reports/screenshots/
             desktop/build/reports/tests/
             desktop/build/test-results/
+
+  notify:
+    name: Report to the nightly-failure issue
+    needs: [nightly, screenshots]
+    # Scheduled runs always report; a dispatch reports only when asked; PR runs never do
+    if: always() && (github.event_name == 'schedule' || inputs.notify)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      actions: read
+    steps:
+      - name: Open, update or close the issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REF: ${{ github.ref_name }}
+          NIGHTLY: ${{ needs.nightly.result }}
+          SHOTS: ${{ needs.screenshots.result }}
+        run: |
+          set -euo pipefail
+          gh label create nightly-failure --color B60205 --description "The nightly workflow failed" 2>/dev/null || true
+          issue=$(gh issue list --label nightly-failure --state open --limit 1 --json number --jq '.[0].number // empty')
+
+          if [ "$NIGHTLY" = "success" ] && [ "$SHOTS" = "success" ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --comment "The nightly passed again on $REF: $RUN_URL"
+            fi
+            echo "Nightly passed; open issue: ${issue:-none}"
+            exit 0
+          fi
+
+          failed=$(gh run view "$RUN_ID" --json jobs \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | "- \(.name): \(.conclusion)"')
+          if [ -z "$failed" ]; then
+            failed="- (none listed; nightly=$NIGHTLY, screenshots=$SHOTS)"
+          fi
+          body=$(cat <<EOF
+          The nightly failed on \`$REF\`: $RUN_URL
+
+          Failed jobs:
+          $failed
+
+          Where to look (artifacts nightly-windows-latest, nightly-macos-latest, nightly-screenshots):
+          - Our side: unit tests (nightly/unit-tests), journeys (reports/journeys), the "Missing APIs" section of e2e/extensions-wiring.md, screenshot diffs (reports/screenshots).
+          - Possibly the site: EndToEndReadTest / EndToEndDownloadTest and extension download errors. Re-run once before treating these as ours.
+          EOF
+          )
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "Nightly failed" --label nightly-failure --body "$body"
+          fi
