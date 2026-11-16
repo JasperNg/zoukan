@@ -13,6 +13,7 @@ import exh.source.getMainSource
 import exh.source.isEhBasedManga
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -45,8 +46,20 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicInteger
+
+// ZOUKAN -->
+/**
+ * Whether the Resume button docks to the start of the chapter list. Android persists
+ * FabPosition.Start/End as "Start"/"End" while desktop's Compose material3 spells them
+ * "FabPosition.Start"/"FabPosition.End": both are read, Android's is written, as the
+ * preference travels in backups between the apps.
+ */
+internal fun readButtonAtStart(position: String): Boolean =
+    position == "Start" || position == androidx.compose.material3.FabPosition.Start.toString()
+// ZOUKAN <--
 
 class MangaScreenModel(
     private val mangaId: Long,
@@ -69,8 +82,18 @@ class MangaScreenModel(
     private val filterChaptersForDownload: mihon.domain.chapter.interactor.FilterChaptersForDownload = Injekt.get(),
     private val updateErrors: zoukan.desktop.library.LibraryUpdateErrors = Injekt.get(),
     private val refreshTracks: eu.kanade.domain.track.interactor.RefreshTracks = Injekt.get(),
+    // The screen's own settings, read here so its composables take plain values
+    private val libraryPreferences: tachiyomi.domain.library.service.LibraryPreferences = Injekt.get(),
+    private val uiPreferences: eu.kanade.domain.ui.UiPreferences = Injekt.get(),
     // ZOUKAN <--
-) : StateScreenModel<MangaScreenModel.State>(State()) {
+) : StateScreenModel<MangaScreenModel.State>(
+    State(
+        swipeToStart = libraryPreferences.swipeToStartAction().get(),
+        swipeToEnd = libraryPreferences.swipeToEndAction().get(),
+        showMissingChapters = !libraryPreferences.hideMissingChapters().get(),
+        readButtonAtStart = readButtonAtStart(uiPreferences.readButtonPosition().get()),
+    ),
+) {
 
     data class State(
         val manga: Manga? = null,
@@ -103,6 +126,15 @@ class MangaScreenModel(
         val excludedScanlators: Set<String> = emptySet(),
         /** More > Downloaded only, which shows only downloaded chapters, as on Android */
         val downloadedOnly: Boolean = false,
+        /** Settings > Library > Chapter swipe, towards the start and the end of a row */
+        val swipeToStart: tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction =
+            tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction.Disabled,
+        val swipeToEnd: tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction =
+            tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction.Disabled,
+        /** False while Settings > Library > "Hide missing chapter indicators" is on */
+        val showMissingChapters: Boolean = true,
+        /** The side of the chapter list the Resume button docks to */
+        val readButtonAtStart: Boolean = false,
         // ZOUKAN <--
     ) {
         val isLocal: Boolean get() = manga?.source == LocalSource.ID
@@ -181,6 +213,20 @@ class MangaScreenModel(
         screenModelScope.launch {
             chapterSettings.excludedScanlators(mangaId).collect { excluded ->
                 mutableState.update { it.copy(excludedScanlators = excluded) }
+            }
+        }
+        screenModelScope.launch {
+            libraryPreferences.swipeToStartAction().changes().collect { action -> mutableState.update { it.copy(swipeToStart = action) } }
+        }
+        screenModelScope.launch {
+            libraryPreferences.swipeToEndAction().changes().collect { action -> mutableState.update { it.copy(swipeToEnd = action) } }
+        }
+        screenModelScope.launch {
+            libraryPreferences.hideMissingChapters().changes().collect { hide -> mutableState.update { it.copy(showMissingChapters = !hide) } }
+        }
+        screenModelScope.launch {
+            uiPreferences.readButtonPosition().changes().collect { position ->
+                mutableState.update { it.copy(readButtonAtStart = readButtonAtStart(position)) }
             }
         }
         screenModelScope.launch {
@@ -293,6 +339,7 @@ class MangaScreenModel(
     fun refresh(fetchDetails: Boolean = true, manualFetch: Boolean = true) {
         val manga = state.value.manga ?: return
         if (state.value.refreshing) return
+        onRefreshStart?.invoke(Thread.currentThread())
         mutableState.update { it.copy(refreshing = true, error = null) }
         screenModelScope.launch {
             val error = try {
@@ -308,7 +355,12 @@ class MangaScreenModel(
                 // LinkageError, which would leave the screen refreshing for good
                 // KMK: the failure is the entry's update error, as a library update's
                 runCatching { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
-                if (e is NoChaptersException) localized(DMR.strings.the_source_lists_no_chapters) else e.message ?: e::class.simpleName
+                if (e is NoChaptersException) {
+                    localized(DMR.strings.the_source_lists_no_chapters)
+                } else {
+                    logcat(LogPriority.WARN, e) { "Refreshing the entry failed" }
+                    sourceErrorText(e)
+                }
             }
             // KMK: a manual refresh also syncs progress from the trackers, as Android's fetchAllFromSource
             if (manualFetch) launch { syncTrackers() }
@@ -465,6 +517,13 @@ class MangaScreenModel(
 
     fun clearSelection() = mutableState.update { it.copy(selected = emptySet()) }
 
+    // ZOUKAN -->
+    /** The Resume button was dragged to a side: saved under Android's "Start"/"End" spelling, as backups carry it between the apps. */
+    fun moveReadButton(atStart: Boolean) {
+        uiPreferences.readButtonPosition().set(if (atStart) "Start" else "End")
+    }
+    // ZOUKAN <--
+
     /**
      * Ends an action on [chapters]: an action on the selection clears it, and one on a chapter
      * outside the selection (its row's buttons or context menu) leaves the selection as it was.
@@ -569,7 +628,7 @@ class MangaScreenModel(
                     java.awt.Desktop.getDesktop().open(dir)
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e)
-                    Toasts.show(e.message ?: localized(tachiyomi.i18n.kmk.KMR.strings.error_opening_folder))
+                    Toasts.show(localized(tachiyomi.i18n.kmk.KMR.strings.error_opening_folder))
                 }
             }
         }
@@ -591,19 +650,19 @@ class MangaScreenModel(
         if (removeChapters) removeChaptersDatabase()
     }
 
+    /**
+     * Deletes the downloads of the entry, or of each online entry a merged entry merges. A local
+     * entry has no downloads: its folder holds the user's own files, which only [deleteLocalFiles]
+     * touches, after the user's second confirmation.
+     */
     private fun deleteDownloadedData() {
         val manga = state.value.manga ?: return
-        val source = state.value.source
         AppScope.launch {
             try {
                 if (manga.source == MERGED_SOURCE_ID) {
-                    mergedEntries().forEach { (entry, entrySource) ->
-                        deleteManga(entry)
-                        if (entrySource.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
-                    }
+                    mergedEntries().forEach { (entry, _) -> deleteDownloads(entry) }
                 } else {
-                    deleteManga(manga)
-                    if (source?.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
+                    deleteDownloads(manga)
                 }
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
@@ -612,11 +671,45 @@ class MangaScreenModel(
     }
 
     /** Android's DownloadManager.deleteManga: the queued chapters and the entry's folder. */
-    private suspend fun deleteManga(manga: Manga) {
-        if (manga.source == LocalSource.ID) {
-            withContext(Dispatchers.IO) { mangaFolder(manga)?.deleteRecursively() }
-        } else {
-            downloadManager.deleteManga(manga)
+    private suspend fun deleteDownloads(manga: Manga) {
+        if (manga.source == LocalSource.ID) return
+        downloadManager.deleteManga(manga)
+    }
+
+    /** The folders in the local source folder holding the user's own files for this entry (or its local parts). */
+    suspend fun localFolders(): List<java.io.File> = withContext(Dispatchers.IO) {
+        val manga = state.value.manga ?: return@withContext emptyList()
+        val entries = if (manga.source == MERGED_SOURCE_ID) mergedEntries().map { it.first } else listOf(manga)
+        entries.filter { it.source == LocalSource.ID }.mapNotNull { mangaFolder(it) }.filter { it.isDirectory }
+    }
+
+    /**
+     * Moves [confirmed], the folders the user agreed to in the local-files question, to the system
+     * trash. Only those that are still this entry's local folders move: a folder that left the
+     * entry (or a merge that gained one) while the question was open is never touched. Where the
+     * system has no trash, or the move fails, nothing is deleted: a toast names the folder so the
+     * user can remove it.
+     */
+    fun deleteLocalFiles(confirmed: List<java.io.File>) {
+        if (confirmed.isEmpty()) return
+        // On the screen's scope, so the refresh below checks and sets its busy flag on the UI
+        // thread, as the Refresh button does, and not after the screen is closed. Only the move
+        // to the trash is made non-cancellable, so closing the screen cannot cut it short.
+        screenModelScope.launch {
+            try {
+                val moved = withContext(NonCancellable + Dispatchers.IO) {
+                    var moved = false
+                    localFolders().filter { it in confirmed }.forEach { dir ->
+                        if (systemTrash(dir)) moved = true else Toasts.show(localized(DMR.strings.local_files_not_trashed, dir.absolutePath))
+                    }
+                    moved
+                }
+                if (moved) refresh(fetchDetails = false, manualFetch = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
         }
     }
 
@@ -632,3 +725,24 @@ class MangaScreenModel(
     }
     // ZOUKAN <--
 }
+
+// ZOUKAN -->
+/**
+ * Journeys set it to see on which thread a refresh passes its busy check: it must be the one of
+ * Dispatchers.Main, the UI thread. It has no effect in the app.
+ */
+internal var onRefreshStart: ((Thread) -> Unit)? = null
+
+/** Moves a folder to the system trash; false when it could not (journeys replace it, so no test machine's trash is used). */
+internal var systemTrash: (java.io.File) -> Boolean = SystemTrash::move
+
+private object SystemTrash {
+    fun move(file: java.io.File): Boolean = try {
+        val desktop = if (java.awt.Desktop.isDesktopSupported()) java.awt.Desktop.getDesktop() else null
+        desktop != null && desktop.isSupported(java.awt.Desktop.Action.MOVE_TO_TRASH) && desktop.moveToTrash(file)
+    } catch (e: Exception) {
+        logcat(LogPriority.ERROR, e)
+        false
+    }
+}
+// ZOUKAN <--

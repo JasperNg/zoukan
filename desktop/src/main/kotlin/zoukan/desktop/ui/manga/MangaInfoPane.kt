@@ -400,7 +400,7 @@ private fun ActionRow(
             if (trackCount == 0) inactive else active,
             onTracking,
         )
-        if (onWebView != null) ActionButton("WebView", Icons.Outlined.Public, active, onWebView, onSecondaryClick = onCopyLink)
+        if (onWebView != null) ActionButton(localized(MR.strings.action_web_view), Icons.Outlined.Public, active, onWebView, onSecondaryClick = onCopyLink)
     }
 }
 

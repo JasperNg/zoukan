@@ -31,6 +31,7 @@ import tachiyomi.i18n.kmk.KMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.onRightClick
+import zoukan.i18n.desktop.DMR
 
 // ZOUKAN -->
 /** What the entry page's title, author, artist, source and tag menus search with. */
@@ -181,9 +182,23 @@ fun MergedEntryPicker(action: MergedAction, model: MangaScreenModel, onDismiss: 
  * database, or both.
  */
 @Composable
-fun ClearMangaDialog(onDismissRequest: () -> Unit, onConfirm: (deleteDownload: Boolean, removeChapters: Boolean) -> Unit) {
-    var list by remember { mutableStateOf(listOf(false, false)) }
-    val labels = listOf(KMR.strings.downloaded_data, KMR.strings.chapters_from_database)
+fun ClearMangaDialog(
+    onDismissRequest: () -> Unit,
+    /** Whether the entry has downloads: false for a local entry, whose folder is the user's own files */
+    showDownloadedData: Boolean = true,
+    /** The names of the folders holding the user's own local files; each gets its own option, apart from downloads */
+    localFolders: List<String> = emptyList(),
+    onConfirm: (deleteDownload: Boolean, removeChapters: Boolean, deleteLocalFiles: Boolean) -> Unit,
+) {
+    var downloads by remember { mutableStateOf(false) }
+    var database by remember { mutableStateOf(false) }
+    var local by remember { mutableStateOf(false) }
+    val localLabel = localFolders.takeIf { it.isNotEmpty() }?.let { localized(DMR.strings.clear_local_files, it.joinToString()) }
+    val options = buildList {
+        if (showDownloadedData) add(Triple(localized(KMR.strings.downloaded_data), downloads) { downloads = !downloads })
+        add(Triple(localized(KMR.strings.chapters_from_database), database) { database = !database })
+        if (localLabel != null) add(Triple(localLabel, local) { local = !local })
+    }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         dismissButton = {
@@ -191,24 +206,23 @@ fun ClearMangaDialog(onDismissRequest: () -> Unit, onConfirm: (deleteDownload: B
         },
         confirmButton = {
             TextButton(
-                enabled = list.any { it },
+                enabled = (showDownloadedData && downloads) || database || (localLabel != null && local),
                 onClick = {
                     onDismissRequest()
-                    onConfirm(list[0], list[1])
+                    onConfirm(showDownloadedData && downloads, database, localLabel != null && local)
                 },
             ) { Text(localized(MR.strings.action_ok)) }
         },
         title = { Text(localized(MR.strings.action_remove)) },
         text = {
             Column {
-                labels.forEachIndexed { index, label ->
-                    val toggle = { list = list.toMutableList().also { it[index] = !it[index] } }
+                options.forEach { (label, checked, toggle) ->
                     Row(
                         Modifier.fillMaxWidth().clickable(onClick = toggle),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = list[index], onCheckedChange = { toggle() })
-                        Text(localized(label))
+                        Checkbox(checked = checked, onCheckedChange = { toggle() })
+                        Text(label)
                     }
                 }
             }

@@ -171,7 +171,7 @@ fun FetchIntervalDialog(manga: Manga, onDismiss: () -> Unit) {
                     }
                 }
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
