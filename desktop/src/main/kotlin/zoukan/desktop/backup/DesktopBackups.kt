@@ -84,6 +84,7 @@ class DesktopBackups(
         backup: Backup,
         options: RestoreOptions = RestoreOptions(),
         isSync: Boolean = false,
+        allowSensitive: Boolean = false,
         onProgress: suspend (BackupContentRestorer.Step, Int, Int) -> Unit = { _, _, _ -> },
     ): List<Pair<Date, String>> {
         backup.backupSources
@@ -93,7 +94,7 @@ class DesktopBackups(
                     stubSourceRepository.upsertStubSource(source.sourceId, "", source.name)
                 }
             }
-        return BackupContentRestorer(isSync = isSync, onProgress = onProgress).restore(withSafePreferences(backup), options)
+        return BackupContentRestorer(isSync = isSync, onProgress = onProgress).restore(withSafePreferences(backup, allowSensitive), options)
     }
 
     /**
@@ -149,14 +150,18 @@ class DesktopBackups(
          * extension nobody approved or move the storage folder to another machine. A restore also
          * does not switch the app lock off. Source settings go only to `source_<id>` files, the
          * only ones a backup makes, so a backup cannot write into the app's own settings file
-         * (and switch the lock off there) by naming it as a source.
+         * (and switch the lock off there) by naming it as a source. Sensitive keys
+         * ([isSensitive]) are written only with [allowSensitive], which the user gives by
+         * confirming them.
          */
         fun withSafePreferences(
             backup: Backup,
+            allowSensitive: Boolean = false,
             lockIsOn: () -> Boolean = { runCatching { Injekt.get<SecurityPreferences>().useAuthenticator().get() }.getOrDefault(false) },
         ): Backup {
             fun allowed(preference: BackupPreference): Boolean = when {
                 Preference.isAppState(preference.key) -> false
+                isSensitive(preference.key) -> allowSensitive
                 preference.key == LOCK_KEY -> (preference.value as? BooleanPreferenceValue)?.value == true || !lockIsOn()
                 else -> true
             }
@@ -165,12 +170,35 @@ class DesktopBackups(
                 backupSourcePreferences = backup.backupSourcePreferences
                     .filter { SOURCE_PREFS_KEY.matches(it.sourceKey) }
                     .map { source ->
-                        source.copy(prefs = source.prefs.filterNot { Preference.isAppState(it.key) })
+                        source.copy(prefs = source.prefs.filter { !Preference.isAppState(it.key) && (allowSensitive || !isSensitive(it.key)) })
                     },
             )
         }
 
+        /** The distinct sensitive keys in [backup] that a restore would write only when confirmed. */
+        fun sensitiveKeys(backup: Backup): List<String> =
+            (backup.backupPreferences.map { it.key } + backup.backupSourcePreferences.filter { SOURCE_PREFS_KEY.matches(it.sourceKey) }.flatMap { source -> source.prefs.map { it.key } })
+                .filter { !Preference.isAppState(it) && isSensitive(it) }
+                .distinct()
+
         private const val LOCK_KEY = "use_biometric_lock"
+
+        /**
+         * Settings a restore writes only when the user confirms them: they decide when the app
+         * locks, which DNS it uses, where sync sends the library, and whether the app talks to
+         * Discord or checks for updates. Never written by a restore nobody confirms (data sync,
+         * the command line).
+         */
+        internal val SENSITIVE_KEYS = setOf(
+            "biometric_days", "biometric_time_ranges", "lock_app_after", "secure_screen_v2",
+            "doh_provider",
+            "sync_service", "connection_sync_client_host", "connection_sync_client_api_key",
+            "connection_webdav_url", "connection_webdav_username", "connection_webdav_password", "connection_webdav_folder",
+            "zoukan_update_check", "zoukan_update_prereleases",
+            "pref_enable_discord_rpc",
+        )
+
+        internal fun isSensitive(key: String) = key in SENSITIVE_KEYS || Preference.isPrivate(key)
 
         private val SOURCE_PREFS_FILE = Regex("""source_-?\d+\.xml""")
         private val SOURCE_PREFS_KEY = Regex("""source_-?\d+""")

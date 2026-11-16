@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupExtensionStore
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
 import eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue
+import eu.kanade.tachiyomi.data.backup.models.IntPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringSetPreferenceValue
 import io.kotest.matchers.shouldBe
@@ -27,6 +28,9 @@ class RestoreFilterTest {
     private val storage = BackupPreference(Preference.appStateKey("storage_dir"), StringPreferenceValue("\\\\evil\\share"))
     private val theme = BackupPreference("pref_app_theme", StringPreferenceValue("MONET"))
     private val token = BackupPreference(Preference.privateKey("track_token_1"), StringPreferenceValue("token"))
+    private val days = BackupPreference("biometric_days", IntPreferenceValue(0))
+    private val doh = BackupPreference("doh_provider", IntPreferenceValue(-1))
+    private val syncHost = BackupPreference("connection_sync_client_host", StringPreferenceValue("http://evil.example"))
     private val lockOff = BackupPreference("use_biometric_lock", BooleanPreferenceValue(false))
     private val lockOn = BackupPreference("use_biometric_lock", BooleanPreferenceValue(true))
 
@@ -35,8 +39,36 @@ class RestoreFilterTest {
             .backupPreferences
 
     @Test
-    fun `app-state keys are dropped, settings and private settings stay`() {
-        filtered(trusted, storage, theme, token) shouldBe listOf(theme, token)
+    fun `app-state and private keys are dropped, settings stay`() {
+        filtered(trusted, storage, theme, token) shouldBe listOf(theme)
+    }
+
+    @Test
+    fun `the same keys are restored when the user confirms them`() {
+        val backup = Backup(
+            backupManga = emptyList(),
+            backupPreferences = listOf(days, doh, syncHost, token, theme, trusted),
+        )
+        DesktopBackups.withSafePreferences(backup, allowSensitive = true) { false }.backupPreferences shouldBe
+            listOf(days, doh, syncHost, token, theme)
+        DesktopBackups.sensitiveKeys(backup) shouldBe
+            listOf("biometric_days", "doh_provider", "connection_sync_client_host", token.key)
+    }
+
+    @Test
+    fun `source logins need confirmation too`() {
+        val backup = Backup(
+            backupManga = emptyList(),
+            backupSourcePreferences = listOf(BackupSourcePreferences("source_1", listOf(token, theme))),
+        )
+        DesktopBackups.withSafePreferences(backup) { false }.backupSourcePreferences.single().prefs shouldBe listOf(theme)
+        DesktopBackups.withSafePreferences(backup, allowSensitive = true) { false }.backupSourcePreferences.single().prefs shouldBe
+            listOf(token, theme)
+    }
+
+    @Test
+    fun `a backup cannot set the lock schedule, DNS over HTTPS, the sync host or a private key`() {
+        filtered(days, doh, syncHost, token, theme) shouldBe listOf(theme)
     }
 
     @Test

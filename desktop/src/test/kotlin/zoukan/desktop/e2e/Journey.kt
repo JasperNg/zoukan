@@ -107,6 +107,8 @@ class Journey private constructor(val name: String) {
             // Journeys are offline: no daily update check against GitHub (Updates.start, which
             // startUi calls, checks after 30 s on Windows and macOS)
             Updates.autoCheck().set(false)
+            // A restore asks before it writes security settings, and a journey cannot drive the native dialog
+            zoukan.desktop.ui.settings.sensitiveSettingsChoice = { false }
             startUi(journey.dirs)
             // The source's grid, as before Android's "Replace latest button" (on by default) opened its feed
             Injekt.get<eu.kanade.domain.ui.UiPreferences>().useNewSourceNavigation().set(false)

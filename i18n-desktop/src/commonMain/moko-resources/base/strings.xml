@@ -864,4 +864,5 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="restore_sensitive_settings">This backup also changes security settings and logins (%1$s settings): when the app locks, DNS over HTTPS, the sync server, tracker and source logins.\n\nRestore them too?</string>
 </resources>

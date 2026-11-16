@@ -64,6 +64,7 @@ Commands:
   backup create [file]    Back up the library and settings (default: <data>/backups/zoukan_<date>.tachibk)
       --private             Include private settings (tracker logins and the like)
   backup restore <file>   Restore a .tachibk backup from Komikku, Mihon, TachiyomiSY or Zoukan
+      --private             Restore security settings and logins from the backup too
   backup check <file>     Restore a backup into an empty profile, back it up again, and compare the two
       --report <file.md>    Also write the result as a Markdown report
       --keep                Keep the throwaway profile
@@ -301,7 +302,7 @@ private fun backup(args: List<String>): Int {
                         // Extension stores decide whose code runs, and the command line asks no
                         // one: it never adds a store or changes a signing key, as Settings would ask
                         val (restorable, skipped) = backups.withoutNewExtensionStores(backup)
-                        backups.restore(restorable) { step, progress, total ->
+                        backups.restore(restorable, allowSensitive = "--private" in flags) { step, progress, total ->
                             val now = System.currentTimeMillis()
                             if (progress == total || now - last > 1000) {
                                 last = now
