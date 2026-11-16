@@ -158,6 +158,13 @@ class StoreInstallJourneyTest {
                     (FixtureStore.ROGUE_PKG in manager.installedExtensionsFlow.value) shouldBe false
                     sources.getAll().none { it.name == FixtureStore.ROGUE_NAME } shouldBe true
                     snap("5-untrusted")
+                    // Trust asks first and names the signer; cancelling leaves the extension untrusted
+                    onAllNodes(hasText("Trust") and hasClickAction()).onFirst().performClick()
+                    waitFor(hasText(store.otherKey.fingerprint, substring = true))
+                    onAllNodes(hasText("Cancel") and hasClickAction()).onLast().performClick()
+                    waitForIdle()
+                    (FixtureStore.ROGUE_PKG in manager.untrustedExtensionsFlow.value) shouldBe true
+                    (FixtureStore.ROGUE_PKG in manager.installedExtensionsFlow.value) shouldBe false
                     onAllNodes(hasText("Uninstall") and hasClickAction()).onFirst().performClick()
                     waitFor(hasText("Uninstall ${FixtureStore.ROGUE_NAME}?"))
                     // The dialog's button: the row's button is behind it

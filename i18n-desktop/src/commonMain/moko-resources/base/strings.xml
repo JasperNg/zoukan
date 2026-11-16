@@ -864,4 +864,6 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="trust_extension">Trust %1$s?</string>
+    <string name="trust_extension_warning">It is signed with a key no store you added uses. Once trusted, its code runs in Zoukan with full access.</string>
 </resources>
