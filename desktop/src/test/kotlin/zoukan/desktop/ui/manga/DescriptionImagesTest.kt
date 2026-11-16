@@ -1,10 +1,14 @@
 package zoukan.desktop.ui.manga
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasClickAction
@@ -13,8 +17,10 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -26,12 +32,18 @@ import coil3.fetch.ImageFetchResult
 import coil3.key.Keyer
 import coil3.memory.MemoryCache
 import coil3.request.Options
+import coil3.size.Dimension
+import coil3.size.Size
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.delay
 import org.junit.jupiter.api.Test
 import zoukan.desktop.ui.manga.DescriptionImages.Part
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalTestApi::class)
 class DescriptionImagesTest {
@@ -250,14 +262,70 @@ class DescriptionImagesTest {
         }
     }
 
+    @Test
+    fun `a large description image is requested no wider than the text`() {
+        val huge = "https://example.org/huge.png"
+        val loader = CountingLoader(mapOf(huge to Plan(afterMs = 10, width = 8_000, height = 8_000)))
+        runDesktopComposeUiTest {
+            var widthPx = 0
+            setContent {
+                widthPx = with(LocalDensity.current) { 400.dp.roundToPx() }
+                MaterialTheme {
+                    Box(Modifier.width(400.dp)) {
+                        DescriptionImagesText("![Huge]($huge)", Int.MAX_VALUE, {}, loadImages = true, loader = loader.loader)
+                    }
+                }
+            }
+            waitUntil(timeoutMillis = 10_000) { loader.sizes.containsKey(huge) }
+            val requested = loader.sizes.getValue(huge)
+            requested shouldNotBe Size.ORIGINAL
+            val requestedWidth = (requested.width as Dimension.Pixels).px
+            requestedWidth shouldBeLessThanOrEqual widthPx
+        }
+    }
+
+    @Test
+    fun `opening a failed description image does not call the browser on the UI thread`() {
+        val broken = "https://example.org/broken.png"
+        val loader = CountingLoader(mapOf(broken to Plan(afterMs = 10, fails = true)))
+        val opened = CountDownLatch(1)
+        var browserThread: Thread? = null
+        var uiThread: Thread? = null
+        val original = DescriptionImageLinks.browse
+        try {
+            DescriptionImageLinks.browse = {
+                browserThread = Thread.currentThread()
+                opened.countDown()
+            }
+            runDesktopComposeUiTest {
+                setContent {
+                    MaterialTheme {
+                        DescriptionImagesText("![Broken]($broken)", Int.MAX_VALUE, {}, loadImages = true, loader = loader.loader)
+                    }
+                }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("failed-image").fetchSemanticsNodes().isNotEmpty() }
+                // The click handler runs on the thread that delivers the click: the UI thread
+                uiThread = Thread.currentThread()
+                onNodeWithTag("failed-image").performClick()
+                opened.await(5, TimeUnit.SECONDS) shouldBe true
+                browserThread shouldNotBe uiThread
+            }
+        } finally {
+            DescriptionImageLinks.browse = original
+        }
+    }
+
     /** How an address loads in a [CountingLoader]: after a delay, as the image, or failed. */
-    private data class Plan(val afterMs: Long, val fails: Boolean = false)
+    private data class Plan(val afterMs: Long, val fails: Boolean = false, val width: Int = 300, val height: Int = 200)
 
     /** A Coil loader whose fetches are all counted, each one run as its address's [plan] says. */
     private class CountingLoader(private val plan: Map<String, Plan>) {
         /** Fetch starts and finished loads, by address. */
         val starts = ConcurrentHashMap<String, Int>()
         val ends = ConcurrentHashMap<String, Int>()
+
+        /** The size each address was requested at. */
+        val sizes = ConcurrentHashMap<String, Size>()
 
         val loader = ImageLoader.Builder(PlatformContext.INSTANCE)
             .components {
@@ -276,14 +344,21 @@ class DescriptionImagesTest {
                 delay(plan.afterMs)
                 if (plan.fails) throw IOException("planned failure for $url")
                 ends.merge(url, 1, Int::plus)
-                return ImageFetchResult(ColorImage(0xFF88AA88.toInt(), 300, 200, 300L * 200 * 4, true), true, DataSource.NETWORK)
+                return ImageFetchResult(
+                    ColorImage(0xFF88AA88.toInt(), plan.width, plan.height),
+                    true,
+                    DataSource.NETWORK,
+                )
             }
         }
 
         // Coil maps an address string to its Uri before it looks for a fetcher, so the fetcher reads the address back out
         private inner class PlannedFetcherFactory : Fetcher.Factory<Uri> {
             override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? =
-                data.toString().takeIf { it in plan }?.let { PlannedFetcher(it) }
+                data.toString().takeIf { it in plan }?.let {
+                    sizes[it] = options.size
+                    PlannedFetcher(it)
+                }
         }
 
         // The cache key is the address, whichever type Coil looks it up by

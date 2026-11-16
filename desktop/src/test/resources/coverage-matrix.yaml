@@ -590,10 +590,16 @@
   tests: [ui.ScreenSmokeTest]
 
 - key: dialog:manga.ClearMangaDialog
-  feature: "Clear entry (delete downloads / chapters)"
+  feature: "Clear entry (delete downloads / chapters); local files only behind their own option and a second confirmation"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest]
+
+- key: dialog:common.ConfirmDestructiveDialog
+  feature: "Second question before something the user cannot take back (local files to the trash)"
+  tier: smoke
+  smoke: true
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest]
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"
@@ -611,15 +617,15 @@
   feature: "Chapter toolbar: select all, clear, read/unread, bookmark, download, delete"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: EntryPageJourneyTest"
+  tests: [e2e.MangaDeleteSelectionJourneyTest]
+  gap: "Only select all and delete downloads (toolbar and right-click menu, with its confirmation) are driven; the rest planned: EntryPageJourneyTest"
 
 - key: flow:manga.chapter-row
   feature: "Chapter row (read, bookmark, download state, context menu)"
   tier: journey
   smoke: false
-  tests: [e2e.BrowseAndReadJourneyTest, e2e.DownloadJourneyTest]
-  gap: "Bookmark and the context menu are not driven; planned: EntryPageJourneyTest"
+  tests: [e2e.BrowseAndReadJourneyTest, e2e.DownloadJourneyTest, ui.manga.ChapterListTest]
+  gap: "Bookmark and the context menu are only driven from plain values (ChapterListTest); planned: EntryPageJourneyTest"
 
 - key: flow:manga.download-menu
   feature: "Download menu (next, unread, bookmarked, custom)"
@@ -692,7 +698,7 @@
   feature: "Page previews screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.PagePreviewsJourneyTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.PagePreviewScreenTest, e2e.PagePreviewsJourneyTest]
   gap: "Only the first page of previews loads (the fixture has one); loading the next page as the grid scrolls is not driven. Related titles on the entry screen: e2e.PagePreviewsJourneyTest and e2e.EntrySectionsJourneyTest"
 
 - key: screen:manga.MetadataViewScreen

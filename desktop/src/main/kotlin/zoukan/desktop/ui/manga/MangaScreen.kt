@@ -57,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -90,11 +91,13 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.common.ChapterSwipeBox
 import zoukan.desktop.ui.common.ChapterSwipeState
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
@@ -130,20 +133,10 @@ data class MangaScreen(val mangaId: Long) : Screen {
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val manga = state.manga ?: return LoadingScreen()
-        var mergedDialog by remember { mutableStateOf(false) }
-        if (mergedDialog) MergedEntriesDialog(manga.id, onDismiss = { mergedDialog = false })
         // ZOUKAN -->
-        var editDialog by remember { mutableStateOf(false) }
-        if (editDialog) EditMangaDialog(manga, onDismiss = { editDialog = false })
-        var coverDialog by remember { mutableStateOf(false) }
-        if (coverDialog) CoverDialog(manga, onDismiss = { coverDialog = false })
-        var intervalDialog by remember { mutableStateOf(false) }
-        if (intervalDialog) FetchIntervalDialog(manga, onDismiss = { intervalDialog = false })
-        // KMK: a merged entry asks which of its entries Open folder and the source name act on
-        var mergedAction by remember { mutableStateOf<MergedAction?>(null) }
-        mergedAction?.let { action -> MergedEntryPicker(action, model, onDismiss = { mergedAction = null }) }
-        var clearDialog by remember { mutableStateOf(false) }
-        if (clearDialog) ClearMangaDialog(onDismissRequest = { clearDialog = false }, onConfirm = model::clearManga)
+        // The one dialog the user opened (edit, cover, clear, a question before deleting, ...)
+        var dialog by remember { mutableStateOf<MangaDialog?>(null) }
+        MangaDialogHost(dialog, manga, model, isLocal = state.isLocal, onShow = { dialog = it })
         val isMerged = manga.source == exh.source.MERGED_SOURCE_ID
         val search = remember(navigator, state.source) {
             EntryInfoSearch(
@@ -152,27 +145,21 @@ data class MangaScreen(val mangaId: Long) : Screen {
                 tag = { EntrySearch.searchGenre(navigator, it, state.source) },
             )
         }
-        var migrateDuplicate by remember { mutableStateOf<tachiyomi.domain.manga.model.Manga?>(null) }
-        migrateDuplicate?.let { duplicate ->
-            MigrateDialog(duplicate.id, manga, onDismiss = { migrateDuplicate = null }, onMigrated = {})
+        val chapterCallbacks = remember(model, navigator) {
+            ChapterListCallbacks(
+                onOpen = { navigator.push(ReaderScreen(mangaId, it.id)) },
+                onToggleSelect = model::toggleSelection,
+                onMarkRead = model::markRead,
+                onBookmark = model::setBookmark,
+                onMarkPreviousRead = model::markPreviousRead,
+                onDownload = model::download,
+                onCancelDownload = model::cancelDownload,
+                onDeleteDownload = { model.deleteDownloads(listOf(it)) },
+                // Deleting the downloads of several chapters at once asks first
+                onDeleteSelected = { dialog = MangaDialog.ConfirmDeleteDownloads(it) },
+                onClearSelection = model::clearSelection,
+            )
         }
-        // ZOUKAN <--
-
-        // ZOUKAN -->
-        // The Resume button docks to whichever side of the chapter list it was dragged to,
-        // as on Android, through the Android app's readButtonPosition preference.
-        // Android persists FabPosition.Start/End as "Start"/"End" while desktop's Compose
-        // material3 spells them "FabPosition.Start"/"FabPosition.End": read both spellings,
-        // write Android's, as the preference travels in backups between the apps
-        val uiPreferences = remember { Injekt.get<UiPreferences>() }
-        val readButtonPosition = remember { uiPreferences.readButtonPosition() }
-        val fabPosition by readButtonPosition.collectAsState()
-        val fabAtStart = fabPosition == "Start" || fabPosition == FabPosition.Start.toString()
-        var offsetX by remember { mutableFloatStateOf(0f) }
-        var chaptersLayoutSize by remember { mutableStateOf(IntSize.Zero) }
-        var chaptersLayoutX by remember { mutableFloatStateOf(0f) }
-        var fabSize by remember { mutableStateOf(IntSize.Zero) }
-        var fabX by remember { mutableFloatStateOf(0f) }
         // ZOUKAN <--
 
         CoverBasedTheme(manga) {
@@ -186,19 +173,21 @@ data class MangaScreen(val mangaId: Long) : Screen {
                         // ZOUKAN -->
                         MoreMenu(
                             manga,
-                            onEditMerged = { mergedDialog = true },
-                            onEdit = { editDialog = true },
-                            onCover = { coverDialog = true },
-                            onFetchInterval = { intervalDialog = true },
+                            onEditMerged = { dialog = MangaDialog.MergedEntries },
+                            onEdit = { dialog = MangaDialog.Edit },
+                            onCover = { dialog = MangaDialog.Cover },
+                            onFetchInterval = { dialog = MangaDialog.FetchInterval },
                             onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
                             onOpenFolder = {
                                 if (!isMerged) {
                                     model.openMangaFolder(state.source, manga)
                                 } else {
-                                    mergedAction = MergedAction(localized(KMR.strings.action_open_folder)) { entry, source -> model.openMangaFolder(source, entry) }
+                                    dialog = MangaDialog.PickMergedEntry(
+                                        MergedAction(localized(KMR.strings.action_open_folder)) { entry, source -> model.openMangaFolder(source, entry) },
+                                    )
                                 }
                             }.takeIf { state.source != null && state.source !is tachiyomi.domain.source.model.StubSource },
-                            onClearManga = { clearDialog = true },
+                            onClearManga = { dialog = MangaDialog.Clear },
                         )
                         // ZOUKAN <--
                     }
@@ -216,7 +205,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 onSearch = { query -> EntrySearch.search(navigator, query, global = false) },
                                 onOpenMetadata = { navigator.push(MetadataViewScreen(manga.id, manga.source)) },
                                 modifier = Modifier.width(infoWidth).fillMaxHeight(),
-                                onCoverClick = { coverDialog = true },
+                                onCoverClick = { dialog = MangaDialog.Cover },
                                 search = search,
                                 onCopyLink = { EntryActions.copyLink(manga, state.source) }.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
                                 onSourceClick = {
@@ -224,23 +213,20 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                     when {
                                         source == null || source is tachiyomi.domain.source.model.StubSource -> Unit
                                         !isMerged -> EntrySearch.browseSource(navigator, source)
-                                        else -> mergedAction = MergedAction(localized(MR.strings.browse)) { _, entrySource ->
-                                            EntrySearch.browseSource(navigator, entrySource)
-                                        }
+                                        else -> dialog = MangaDialog.PickMergedEntry(
+                                            MergedAction(localized(MR.strings.browse)) { _, entrySource ->
+                                                EntrySearch.browseSource(navigator, entrySource)
+                                            },
+                                        )
                                     }
                                 },
                             )
                             // ZOUKAN <--
                             VerticalDivider()
                             // Chapters
-                            Box(
-                                Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { coordinates ->
-                                    chaptersLayoutSize = coordinates.size
-                                    chaptersLayoutX = coordinates.positionInWindow().x
-                                },
-                            ) {
+                            Box(Modifier.weight(1f).fillMaxHeight()) {
                                 Column(Modifier.fillMaxSize()) {
-                                    ChapterToolbar(state, model)
+                                    ChapterToolbar(state, model, onDeleteSelected = { dialog = MangaDialog.ConfirmDeleteDownloads(it) })
                                     HorizontalDivider()
                                     if (state.sortedChapters.isEmpty()) {
                                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -257,124 +243,34 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                         }
                                     } else {
                                         // ZOUKAN -->
-                                        val showMissing = showMissingChapters()
-                                        val missing = remember(state.sortedChapters, manga.sortDescending(), showMissing) {
-                                            if (showMissing) MissingChapters.of(state.sortedChapters, manga.sortDescending()) else MissingChapters.NONE
-                                        }
+                                        ChapterList(
+                                            chapters = state.sortedChapters,
+                                            downloaded = state.downloaded,
+                                            downloads = state.queued,
+                                            selected = state.selected,
+                                            displayMode = manga.displayMode,
+                                            swipeStart = state.swipeToStart,
+                                            swipeEnd = state.swipeToEnd,
+                                            callbacks = chapterCallbacks,
+                                            isLocal = state.isLocal,
+                                            showMissing = state.showMissingChapters,
+                                            descending = manga.sortDescending(),
+                                            selectable = state.chapters,
+                                        )
                                         // ZOUKAN <--
-                                        // ZOUKAN -->
-                                        val libraryPrefs = remember { Injekt.get<LibraryPreferences>() }
-                                        val swipeToStart by libraryPrefs.swipeToStartAction().collectAsState()
-                                        val swipeToEnd by libraryPrefs.swipeToEndAction().collectAsState()
-                                        // ZOUKAN <--
-                                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
-                                            items(state.sortedChapters, key = { it.id }) { chapter ->
-                                                // ZOUKAN -->
-                                                missing.before[chapter.id]?.let { MissingChaptersRow(it) }
-                                                // ZOUKAN <--
-                                                // ZOUKAN -->
-                                                // Android's chapter swipe actions (Settings > Library > Chapter swipe)
-                                                ChapterSwipeBox(
-                                                    toStart = swipeToStart,
-                                                    toEnd = swipeToEnd,
-                                                    state = ChapterSwipeState(
-                                                        read = chapter.read,
-                                                        bookmark = chapter.bookmark,
-                                                        downloaded = if (state.isLocal) null else chapter.id in state.downloaded || chapter.id in state.queued,
-                                                    ),
-                                                    onAction = { action ->
-                                                        when (action) {
-                                                            ChapterSwipeAction.ToggleRead -> model.markRead(listOf(chapter), !chapter.read)
-                                                            ChapterSwipeAction.ToggleBookmark -> model.setBookmark(listOf(chapter), !chapter.bookmark)
-                                                            ChapterSwipeAction.Download -> when {
-                                                                chapter.id in state.queued -> model.cancelDownload(chapter)
-                                                                chapter.id in state.downloaded -> model.deleteDownloads(listOf(chapter))
-                                                                else -> model.download(listOf(chapter))
-                                                            }
-                                                            ChapterSwipeAction.Disabled -> Unit
-                                                        }
-                                                    },
-                                                ) {
-                                                    // ZOUKAN <--
-                                                    ChapterRow(
-                                                        chapter = chapter,
-                                                        displayMode = manga.displayMode,
-                                                        selected = chapter.id in state.selected,
-                                                        selecting = state.selected.isNotEmpty(),
-                                                        onOpen = { navigator.push(ReaderScreen(manga.id, chapter.id)) },
-                                                        onToggleSelect = { model.toggleSelection(chapter) },
-                                                        onMarkRead = { model.markRead(listOf(chapter), !chapter.read) },
-                                                        onBookmark = { model.setBookmark(listOf(chapter), !chapter.bookmark) },
-                                                        onMarkPreviousRead = { model.markPreviousRead(chapter) },
-                                                        showDownload = !state.isLocal,
-                                                        downloaded = chapter.id in state.downloaded,
-                                                        download = state.queued[chapter.id],
-                                                        onDownload = { model.download(listOf(chapter)) },
-                                                        onCancelDownload = { model.cancelDownload(chapter) },
-                                                        onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
-                                                        // A right click on a selected chapter acts on the whole selection
-                                                        selectionMenu = if (chapter.id in state.selected && state.selected.size > 1) {
-                                                            { menu -> ChapterSelectionMenu(menu, state, model) }
-                                                        } else {
-                                                            null
-                                                        },
-                                                    )
-                                                    // ZOUKAN -->
-                                                }
-                                                // ZOUKAN <--
-                                            }
-                                            // ZOUKAN -->
-                                            if (missing.end > 0) item(key = "missing-end") { MissingChaptersRow(missing.end) }
-                                            // ZOUKAN <--
-                                        }
                                     }
                                 }
                                 // ZOUKAN -->
                                 // Komikku's Start / Resume button, while there is an unread chapter,
                                 // draggable left/right and docking to the dragged side like on Android
                                 val next = state.nextChapter
-                                val reduceMotion by zoukan.desktop.ui.common.reducedMotion()
-                                androidx.compose.animation.AnimatedVisibility(
+                                ResumeButton(
                                     visible = next != null && state.selected.isEmpty(),
-                                    enter = if (reduceMotion) androidx.compose.animation.EnterTransition.None else fadeIn() + scaleIn(),
-                                    exit = if (reduceMotion) androidx.compose.animation.ExitTransition.None else fadeOut() + scaleOut(),
-                                    modifier = Modifier
-                                        .align(if (fabAtStart) Alignment.BottomStart else Alignment.BottomEnd)
-                                        .padding(16.dp),
-                                ) {
-                                    ExtendedFloatingActionButton(
-                                        onClick = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } },
-                                        modifier = Modifier
-                                            .offset { IntOffset(offsetX.roundToInt(), 0) }
-                                            .onGloballyPositioned { coordinates ->
-                                                fabSize = coordinates.size
-                                                fabX = coordinates.positionInWindow().x
-                                            }
-                                            .pointerInput(Unit) {
-                                                detectHorizontalDragGestures(
-                                                    onDragEnd = {
-                                                        // Dock to the side the button's center ended on, as on Android
-                                                        if (fabX - chaptersLayoutX + fabSize.width / 2f >= chaptersLayoutSize.width / 2f) {
-                                                            readButtonPosition.set("End")
-                                                        } else {
-                                                            readButtonPosition.set("Start")
-                                                        }
-                                                        offsetX = 0f
-                                                    },
-                                                ) { change, dragAmount ->
-                                                    change.consume()
-                                                    val newOffsetX = offsetX + dragAmount
-                                                    if (!newOffsetX.isNaN()) {
-                                                        offsetX = newOffsetX
-                                                    }
-                                                }
-                                            },
-                                    ) {
-                                        Icon(Icons.Filled.PlayArrow, null)
-                                        Spacer(Modifier.width(12.dp))
-                                        Text(if (state.hasStarted) localized(MR.strings.action_resume) else localized(MR.strings.action_start))
-                                    }
-                                }
+                                    atStart = state.readButtonAtStart,
+                                    started = state.hasStarted,
+                                    onMove = model::moveReadButton,
+                                    onOpen = { next?.let { navigator.push(ReaderScreen(manga.id, it.id)) } },
+                                )
                                 // ZOUKAN <--
                             }
                         }
@@ -412,7 +308,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                 },
                 onMigrate = {
                     model.dismissDuplicates()
-                    migrateDuplicate = it
+                    dialog = MangaDialog.MigrateDuplicate(it)
                 },
                 onDismiss = model::dismissDuplicates,
             )
@@ -514,7 +410,7 @@ private fun MoreMenu(
 // ZOUKAN <--
 
 @Composable
-private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenModel) {
+private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenModel, onDeleteSelected: (List<Chapter>) -> Unit) {
     // Ctrl/Cmd + A selects every chapter; Escape clears the selection before it means "back"
     zoukan.desktop.ui.OnShortcut { action ->
         when (action) {
@@ -562,136 +458,7 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.remove_bookmark), onClick = { model.setBookmark(selected, false) })
             if (!state.isLocal) {
                 TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(selected) })
-                TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { model.deleteDownloads(selected) })
-            }
-        }
-    }
-}
-
-/** A selected chapter's right-click menu: the selection toolbar's actions. */
-@Composable
-private fun ColumnScope.ChapterSelectionMenu(menu: ContextMenuState, state: MangaScreenModel.State, model: MangaScreenModel) {
-    val selected = state.chapters.filter { it.id in state.selected }
-    ContextMenuItem(menu, localized(DMR.strings.clear_selection), Icons.Outlined.Close, onClick = model::clearSelection)
-    ContextMenuDivider()
-    ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll) { model.markRead(selected, true) }
-    ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone) { model.markRead(selected, false) }
-    ContextMenuItem(menu, localized(DMR.strings.bookmark), Icons.Outlined.BookmarkAdd) { model.setBookmark(selected, true) }
-    ContextMenuItem(menu, localized(DMR.strings.remove_bookmark), Icons.Outlined.BookmarkRemove) { model.setBookmark(selected, false) }
-    if (!state.isLocal) {
-        ContextMenuItem(menu, localized(MR.strings.action_download), Icons.Outlined.Download) { model.download(selected) }
-        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { model.deleteDownloads(selected) }
-    }
-}
-
-@Composable
-private fun ChapterRow(
-    chapter: Chapter,
-    displayMode: Long,
-    selected: Boolean,
-    selecting: Boolean,
-    onOpen: () -> Unit,
-    onToggleSelect: () -> Unit,
-    onMarkRead: () -> Unit,
-    onBookmark: () -> Unit,
-    onMarkPreviousRead: () -> Unit,
-    showDownload: Boolean,
-    downloaded: Boolean,
-    download: Download?,
-    onDownload: () -> Unit,
-    onCancelDownload: () -> Unit,
-    onDeleteDownload: () -> Unit,
-    selectionMenu: (@Composable ColumnScope.(ContextMenuState) -> Unit)?,
-) {
-    val menu = rememberContextMenuState()
-    Box {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-                .clickable { if (selecting) onToggleSelect() else onOpen() }
-                .onRightClickAt(menu::open)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = selected, onCheckedChange = { onToggleSelect() }, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f).alpha(if (chapter.read) 0.5f else 1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (chapter.bookmark) {
-                        Icon(
-                            Icons.Default.Bookmark,
-                            null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp).padding(end = 2.dp),
-                        )
-                    }
-                    // ZOUKAN -->
-                    // The chapter settings' Display tab, as Android's chapter list
-                    Text(
-                        if (displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
-                            localized(MR.strings.display_mode_chapter, formatChapterNumber(chapter.chapterNumber))
-                        } else {
-                            chapter.name
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    // ZOUKAN <--
-                }
-                val details = listOfNotNull(
-                    chapter.dateUpload.takeIf { SyncChapters.hasSourceDate(chapter) }?.let(zoukan.desktop.ui.common.Dates::relative),
-                    chapter.scanlator?.takeIf { it.isNotBlank() },
-                    if (!chapter.read && chapter.lastPageRead > 0) localized(DMR.strings.page, chapter.lastPageRead + 1) else null,
-                )
-                if (details.isNotEmpty()) {
-                    Text(
-                        details.joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (showDownload) {
-                DownloadIndicator(
-                    downloaded = downloaded,
-                    download = download,
-                    onDownload = onDownload,
-                    onCancel = onCancelDownload,
-                    onDelete = onDeleteDownload,
-                )
-            }
-        }
-        ContextMenu(menu) {
-            if (selectionMenu != null) {
-                selectionMenu(menu)
-                return@ContextMenu
-            }
-            ContextMenuItem(menu, localized(MR.strings.label_read_chapters), Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
-            if (selected) {
-                ContextMenuItem(menu, localized(DMR.strings.deselect), Icons.Outlined.Deselect, onClick = onToggleSelect)
-            } else {
-                ContextMenuItem(menu, localized(DMR.strings.select), Icons.Outlined.CheckCircle, onClick = onToggleSelect)
-            }
-            ContextMenuDivider()
-            if (chapter.read) {
-                ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone, onClick = onMarkRead)
-            } else {
-                ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll, onClick = onMarkRead)
-            }
-            ContextMenuItem(menu, localized(MR.strings.action_mark_previous_as_read), Icons.Outlined.DoneAll, onClick = onMarkPreviousRead)
-            if (chapter.bookmark) {
-                ContextMenuItem(menu, localized(DMR.strings.remove_bookmark), Icons.Outlined.BookmarkRemove, onClick = onBookmark)
-            } else {
-                ContextMenuItem(menu, localized(DMR.strings.bookmark), Icons.Outlined.BookmarkAdd, onClick = onBookmark)
-            }
-            if (showDownload) {
-                when {
-                    download != null -> ContextMenuItem(menu, localized(DMR.strings.cancel_download), Icons.Outlined.Close, onClick = onCancelDownload)
-                    downloaded -> ContextMenuItem(menu, localized(DMR.strings.delete_download), Icons.Outlined.Delete, onClick = onDeleteDownload)
-                    else -> ContextMenuItem(menu, localized(MR.strings.action_download), Icons.Outlined.Download, onClick = onDownload)
-                }
+                TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { onDeleteSelected(selected) })
             }
         }
     }
