@@ -905,6 +905,15 @@ class KcefWebViewProvider(
         // ZOUKAN <--
     }
 
+    // ZOUKAN -->
+    // Android ignores calls on a destroyed WebView; the browser and client are gone after destroy()
+    private fun ignoredAfterDestroy(call: String): Boolean {
+        if (!destroyed) return false
+        Log.w(TAG, "WebView.$call after destroy() is ignored")
+        return true
+    }
+    // ZOUKAN <--
+
     override fun setNetworkAvailable(networkUp: Boolean): Unit = throw RuntimeException("Stub!")
 
     override fun saveState(outState: Bundle): WebBackForwardList = throw RuntimeException("Stub!")
@@ -925,6 +934,9 @@ class KcefWebViewProvider(
         loadUrl: String,
         additionalHttpHeaders: Map<String, String>,
     ) {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("loadUrl")) return
+        // ZOUKAN <--
         // ZOUKAN -->
         // After queued work, as in destroy(); a queued answer to the old page needs it
         disposeLater(handler, browser?.let { PendingDisposal(it, null) })
@@ -951,6 +963,9 @@ class KcefWebViewProvider(
         url: String,
         postData: ByteArray,
     ) {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("postUrl")) return
+        // ZOUKAN <--
         // ZOUKAN -->
         // After queued work, as in destroy(); a queued answer to the old page needs it
         disposeLater(handler, browser?.let { PendingDisposal(it, null) })
@@ -985,6 +1000,9 @@ class KcefWebViewProvider(
         historyUrl: String?,
     ) {
         // ZOUKAN -->
+        if (ignoredAfterDestroy("loadDataWithBaseURL")) return
+        // ZOUKAN <--
+        // ZOUKAN -->
         // After queued work, as in destroy(); a queued answer to the old page needs it
         disposeLater(handler, browser?.let { PendingDisposal(it, null) })
         // ZOUKAN <--
@@ -1008,6 +1026,9 @@ class KcefWebViewProvider(
         script: String,
         resultCallback: ValueCallback<String>?,
     ) {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("evaluateJavascript")) return
+        // ZOUKAN <--
         browser!!.evaluateJavaScript(script.removePrefix("javascript:")) {
             Log.v(TAG, "JS returned: $it")
             handler.post { resultCallback?.onReceiveValue(it) }
@@ -1023,22 +1044,38 @@ class KcefWebViewProvider(
     ): Unit = throw RuntimeException("Stub!")
 
     override fun stopLoading() {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("stopLoading")) return
+        // ZOUKAN <--
         browser!!.stopLoad()
     }
 
     override fun reload() {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("reload")) return
+        // ZOUKAN <--
         browser!!.reload()
     }
 
-    override fun canGoBack(): Boolean = browser!!.canGoBack()
+    // ZOUKAN -->
+    override fun canGoBack(): Boolean = if (ignoredAfterDestroy("canGoBack")) false else browser!!.canGoBack()
+    // ZOUKAN <--
 
     override fun goBack() {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("goBack")) return
+        // ZOUKAN <--
         browser!!.goBack()
     }
 
-    override fun canGoForward(): Boolean = browser!!.canGoForward()
+    // ZOUKAN -->
+    override fun canGoForward(): Boolean = if (ignoredAfterDestroy("canGoForward")) false else browser!!.canGoForward()
+    // ZOUKAN <--
 
     override fun goForward() {
+        // ZOUKAN -->
+        if (ignoredAfterDestroy("goForward")) return
+        // ZOUKAN <--
         browser!!.goForward()
     }
 
@@ -1080,9 +1117,12 @@ class KcefWebViewProvider(
 
     override fun requestImageRef(msg: Message): Unit = throw RuntimeException("Stub!")
 
-    override fun getUrl(): String = browser!!.url
+    // ZOUKAN -->
+    // Null once destroyed or before the first load, as on Android
+    override fun getUrl(): String? = if (destroyed) null else browser?.url
 
-    override fun getOriginalUrl(): String = browser!!.url
+    override fun getOriginalUrl(): String? = if (destroyed) null else browser?.url
+    // ZOUKAN <--
 
     override fun getTitle(): String = throw RuntimeException("Stub!")
 
