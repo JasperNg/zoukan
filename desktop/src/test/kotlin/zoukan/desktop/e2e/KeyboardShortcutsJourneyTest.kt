@@ -6,13 +6,13 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
-import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -86,6 +86,9 @@ class KeyboardShortcutsJourneyTest {
                     waitFor(hasText("Search settings"))
                     shot("2-settings")
                     root().performKeyInput { pressKey(Key.Escape) }
+                    // Settings opens from the More tab, so Escape lands there
+                    waitFor(hasText("Downloaded only"))
+                    chord(Key.One)
                     waitOrDump("for the library after Escape") { libraryShown() }
                 }
 
@@ -112,7 +115,12 @@ class KeyboardShortcutsJourneyTest {
                     onAllNodes(isFocused()).onFirst().performTextInput("Second")
                     waitOrDump("for the list to narrow") { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 1 }
                     shot("4-search")
-                    onAllNodes(isFocused()).onFirst().performTextClearance()
+                    // A shortcut still works while the text field has the focus
+                    chord(Key.Comma)
+                    waitFor(hasText("Search settings"))
+                    chord(Key.One)
+                    waitOrDump("for the library with the search") { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 1 }
+                    onAllNodesWithContentDescription(localized(DMR.strings.clear_search)).onFirst().performClick()
                     waitOrDump("for the whole library") { libraryShown() }
                 }
 
@@ -132,7 +140,7 @@ class KeyboardShortcutsJourneyTest {
                     waitFor(hasText("Chapter 1 (JPEG)"))
                     waitForIdle()
                     // One pop: the entry is still there
-                    onAllNodesWithTag("manga-item").fetchSemanticsNodes().size shouldBe 0
+                    onAllNodesWithText("Search library").fetchSemanticsNodes().size shouldBe 0
                     onAllNodesWithText("Chapter 1 (JPEG)").fetchSemanticsNodes().isNotEmpty() shouldBe true
                     runOnUiThread { navigator?.popUntilRoot() }
                     waitOrDump("for the library") { libraryShown() }
