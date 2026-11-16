@@ -1,21 +1,25 @@
-# Runs the project's checks on every pull request and every push to master: the formatting check,
-# the desktop build and its tests (the same command as CONTRIBUTING.md asks for before a PR).
+# The PR tier: parallel jobs on every pull request and every push to master, ending in one
+# aggregate check, "PR gate", which is the only check branch rules need to require.
 #
-# The end-to-end tests stay local: they only run with -Pzoukan.e2e=true, which this workflow never
-# passes, because they reach real extension sites. The installers are built by desktop-build.yml.
+# Docs-only pull requests still run the workflow: the changes job finds that no code changed, the
+# heavy jobs are skipped and PR gate passes, so a required check never waits forever. The docs list
+# below must stay the same as desktop-build.yml's push paths-ignore, which stops docs-only merges
+# from releasing. The long and live checks run in nightly.yml.
+#
+# The end-to-end tests stay out of this workflow: they only run with -Pzoukan.e2e=true, because
+# they reach real extension sites. The installers are built by desktop-build.yml.
 name: CI
 
 on:
   pull_request:
-    paths-ignore: &docs
+  push:
+    branches: [master]
+    paths-ignore:
       - '**.md'
       - '.github/readme-images/**'
       - '.github/ISSUE_TEMPLATE/**'
       - 'desktop/reports/**'
       - 'LICENSE'
-  push:
-    branches: [master]
-    paths-ignore: *docs
   workflow_dispatch:
 
 concurrency:
@@ -26,42 +30,175 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: Spotless, build and tests
-    # Linux runners start and build faster than Windows ones; the Compose desktop UI tests get a
-    # virtual display from xvfb-run. Windows and macOS are still checked locally before each merge.
+  changes:
+    name: Detect code changes
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
     steps:
       - uses: actions/checkout@v5
-
-      # setup-java's jetbrains distribution looks the release up through the GitHub API without a
-      # token, which the shared hosted-runner IPs often hit the rate limit on. Download a pinned
-      # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file,
-      # as desktop-build.yml does.
-      - name: Download JetBrains Runtime
-        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz"
-
-      - uses: actions/setup-java@v5
         with:
-          distribution: jdkfile
-          jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz
-          java-version: 21
+          fetch-depth: 0
+      - name: Compare with the base branch
+        id: diff
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # Pushes to master already skip docs-only commits through paths-ignore; dispatches run all
+          if [ "$EVENT" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          code=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            # Same list as the paths-ignore above and desktop-build.yml
+            case "$file" in
+              *.md|.github/readme-images/*|.github/ISSUE_TEMPLATE/*|desktop/reports/*|LICENSE) ;;
+              *) echo "Code change: $file"; code=true; break ;;
+            esac
+          done < <(git diff --name-only "origin/$BASE_REF...HEAD")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code=$code"
 
-      - uses: gradle/actions/setup-gradle@v5
+  spotless:
+    name: Spotless
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-zoukan
         with:
           # Only master writes the shared cache, so PR runs cannot poison it
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      - run: ./gradlew spotlessCheck
 
-      - name: Spotless, build and tests
-        run: xvfb-run -a ./gradlew spotlessCheck :desktop:build --continue
-
-      - name: Upload test reports
-        if: failure()
-        uses: actions/upload-artifact@v5
+  unit:
+    name: Build and unit tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-zoukan
         with:
-          name: test-reports
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      # distTar/distZip are built by assemble but nobody uses them in CI
+      - run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest -x distTar -x distZip --continue
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: reports-unit
           path: |
             desktop/build/reports/tests/
             desktop/build/test-results/
+            extension-jvm/build/reports/tests/
+            domain/build/reports/tests/
           if-no-files-found: ignore
+
+  wiring:
+    name: Wiring (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Injekt
+            tests: '*InjektRegistrationsTest'
+            artifact: injekt
+          - name: Screen smoke
+            tests: '*ScreenSmoke*Test'
+            artifact: screen-smoke
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every wiring test class has a shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          listed=$(sed -n 's/^val wiringTests = listOf(\(.*\))$/\1/p' desktop/build.gradle.kts | tr -d ' "' | tr ',' '\n')
+          [ -n "$listed" ] || { echo "::error::Could not read wiringTests from desktop/build.gradle.kts"; exit 1; }
+          for t in $listed; do
+            case "$t" in
+              '*InjektRegistrationsTest') ;;
+              *ScreenSmoke*Test) ;;
+              *) echo "::error::wiringTests lists $t but no wiring shard in ci.yml runs it"; exit 1 ;;
+            esac
+          done
+      - uses: ./.github/actions/setup-zoukan
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      - run: xvfb-run -a ./gradlew :desktop:wiringTest --tests "${{ matrix.tests }}"
+      # wiringTest sets isFailOnNoMatchingTests = false, so a wrong pattern would pass silently
+      - name: The shard ran tests
+        shell: bash
+        run: ls desktop/build/test-results/wiringTest/TEST-*.xml
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: reports-wiring-${{ matrix.artifact }}
+          path: |
+            desktop/build/reports/tests/
+            desktop/build/test-results/
+            desktop/build/reports/usability.md
+            desktop/build/reports/usability/
+          if-no-files-found: ignore
+
+  journeys:
+    name: Journeys (shard ${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-zoukan
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      - run: xvfb-run -a ./gradlew :desktop:journeyTest -Pzoukan.shard=${{ matrix.shard }}/3
+      # journeyTest sets isFailOnNoMatchingTests = false for sharded runs, so check a shard ran tests
+      - name: The shard ran tests
+        shell: bash
+        run: ls desktop/build/test-results/journeyTest/TEST-*.xml
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: journeys-${{ matrix.shard }}
+          path: |
+            desktop/build/reports/journeys/
+            desktop/build/reports/tests/
+            desktop/build/test-results/
+          if-no-files-found: ignore
+
+  pr-gate:
+    name: PR gate
+    needs: [changes, spotless, unit, wiring, journeys]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the needed jobs
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          CODE: ${{ needs.changes.outputs.code }}
+        run: |
+          set -euo pipefail
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$NEEDS" | jq -e '[.[].result] | any(. == "failure" or . == "cancelled")' > /dev/null; then
+            echo "::error::A required job failed or was cancelled"; exit 1
+          fi
+          if [ "$CODE" = "true" ] && echo "$NEEDS" | jq -e '[.[].result] | any(. == "skipped")' > /dev/null; then
+            echo "::error::Code changed but a job was skipped"; exit 1
+          fi
+          echo "PR gate passed (code changed: ${CODE:-unknown})"
