@@ -901,11 +901,17 @@
   smoke: true
   tests: [ui.ScreenSmokeTest, ui.settings.SettingsSearchCoverageTest]
 
+- key: state:settings-theme-row
+  feature: "Appearance: the theme picker row has a scrollbar so every theme is reachable"
+  tier: smoke
+  smoke: true
+  tests: [ui.ScreenSmokeTest]
+
 - key: settings:Appearance
   feature: "Theme mode, app theme, pure black, cover-based theme; entry page, reader navigation, browse; rail buttons, description images"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest, i18n.DesktopStringsTest, ui.settings.SettingsLiteralsTest]
 
 - key: dialog:settings.ColorPickerDialog
   feature: "Appearance: custom color picker"

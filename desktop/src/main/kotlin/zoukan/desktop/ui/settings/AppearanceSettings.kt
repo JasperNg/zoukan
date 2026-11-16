@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -57,6 +56,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
+import zoukan.desktop.ui.common.LazyRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
@@ -133,6 +133,7 @@ internal fun ThemeSection() {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            scrollbarModifier = Modifier.testTag("theme-row-scrollbar"),
         ) {
             items(pickableThemes, key = { it.name }) { appTheme ->
                 ThemePreview(

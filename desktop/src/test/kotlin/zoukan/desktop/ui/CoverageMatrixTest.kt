@@ -215,7 +215,7 @@ class CoverageMatrixTest {
 
         /** Row prefixes the test can check against the app; other rows (state:, flow:) are hand-made. */
         val DISCOVERABLE = listOf("screen:", "tab:", "browse:", "settings:", "dialog:", "dialog-inline:")
-        val HAND_MADE = setOf("settings:search")
+        val HAND_MADE = setOf("settings:search", "settings:search-hidden")
 
         /** A planning folder ("123_NAME/") or a planning ID ("(P13)"), which do not belong in the repo. */
         val PLANNING_NAMES = listOf(Regex("""\b\d{3}_[A-Z]+/"""), Regex("""\([A-Z]\d+\)"""))

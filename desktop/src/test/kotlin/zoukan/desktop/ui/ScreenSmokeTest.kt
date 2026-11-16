@@ -12,6 +12,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
@@ -20,6 +21,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
@@ -772,6 +774,19 @@ open class ScreenSmokeTest {
                 settle()
                 scrollLists()
                 onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+            },
+        ),
+        Check(
+            "state:settings-theme-row",
+            "settings Appearance theme row scrolls",
+            {
+                openSettingsCategory(SettingsCategory.Appearance)
+                HomeScreen.openSettings(it)
+            },
+            drive = {
+                // More themes than fit: the row shows a scrollbar to reach them
+                waitUntil(timeoutMillis = 5_000) { onAllNodes(hasTestTag("theme-row-scrollbar")).fetchSemanticsNodes().isNotEmpty() }
+                onNodeWithTag("theme-row-scrollbar").assertIsDisplayed()
             },
         ),
         run {
