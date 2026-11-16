@@ -288,6 +288,8 @@ open class ScreenSmokeTest {
             mustBeEmpty("coverage-matrix rows with smoke: true that no smoke check has", matrix.filter { it.smoke }.map { it.key }.toSet() - keys)
             // A check whose key has no coverage-matrix row
             mustBeEmpty("smoke check keys with no row in coverage-matrix.yaml", keys - matrix.map { it.key }.toSet())
+            // A malformed allowlist (no reason, unknown rule, a key with no matrix row) is a real failure
+            val allowlist = UsabilityAllowlist.load(matrix.map { it.key })
             // -Pzoukan.smoke.only=<regex> runs only the checks whose key or name matches, to debug one
             val only = System.getProperty("zoukan.smoke.only")?.toRegex()
             val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) || only.containsMatchIn(it.key) }
@@ -304,7 +306,10 @@ open class ScreenSmokeTest {
             // One file per window size: the default and the small-window runs are separate JVMs, side by side
             val report = File("build/reports/usability/$size.md")
             println("Usability: ${usabilityFindings.size} findings, in $report")
-            writeUsabilityReport(usabilityFindings, report)
+            val classified = classify(usabilityFindings, allowlist)
+            writeUsabilityReport(classified, report)
+            // Off until the findings are fixed or allowlisted: -Pzoukan.usability.enforce=true
+            if (System.getProperty("zoukan.usability.enforce") == "true") failures += enforceFailures(classified)
             failures.shouldBeEmpty()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)

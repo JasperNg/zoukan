@@ -334,9 +334,102 @@ val wiringTest by tasks.registering(Test::class) {
     systemProperty("user.language", "en")
     // Runs only the smoke checks whose name matches, to debug one: -Pzoukan.smoke.only="dialog new category"
     providers.gradleProperty("zoukan.smoke.only").orNull?.let { systemProperty("zoukan.smoke.only", it) }
+    // Fails the smoke test on usability findings that are not allowlisted (off until they are fixed)
+    providers.gradleProperty("zoukan.usability.enforce").orNull?.let { systemProperty("zoukan.usability.enforce", it) }
     shouldRunAfter(tasks.test)
+    // Written even when a check fails
+    finalizedBy("usabilityReport")
 }
 tasks.named("check") { dependsOn(wiringTest) }
+
+/**
+ * Merges the usability findings each smoke JVM wrote (build/reports/usability/<size>.tsv) into
+ * build/reports/usability.md: a summary, the new findings, the allowlisted ones with their
+ * reasons, and the allowlist entries that matched nothing.
+ */
+abstract class UsabilityReport : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val findings: ConfigurableFileCollection
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val allowlist: RegularFileProperty
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    private class Finding(val variant: String, val key: String, val rule: String, val node: String, val detail: String, val line: Int)
+
+    @TaskAction
+    fun merge() {
+        val rows = findings.files.sortedBy { it.name }.flatMap { file ->
+            file.readLines().filter { it.isNotBlank() }.map {
+                val c = it.split("\t")
+                Finding(c[0], c[1], c[2], c[3], c[4], c[5].toInt())
+            }
+        }
+        // line number -> (key | rule | node, reason)
+        val entries = allowlist.get().asFile.readLines().withIndex().mapNotNull { (i, raw) ->
+            val text = raw.trim()
+            if (text.isEmpty() || text.startsWith("#")) return@mapNotNull null
+            val p = text.split("|", limit = 4).map { it.trim() }
+            (i + 1) to (p.take(3).joinToString(" | ") to p.getOrElse(3) { "" })
+        }.toMap()
+        fun cell(s: String) = s.replace("|", "\\|")
+        val variants = rows.map { it.variant }.distinct()
+        val rules = listOf("UNLABELLED_CLICKABLE", "TEXT_OVERFLOW", "ESCAPE_NOT_DISMISSING", "TAB_TRAVERSAL")
+        val text = buildString {
+            appendLine("# Usability report")
+            appendLine()
+            appendLine("${rows.size} findings: ${rows.count { it.line == 0 }} new, ${rows.count { it.line != 0 }} allowlisted.")
+            appendLine("Report only; `-Pzoukan.usability.enforce=true` fails the first three rules for new findings.")
+            appendLine()
+            appendLine("## Summary")
+            appendLine()
+            appendLine("| Variant | Rule | New | Allowlisted |")
+            appendLine("|---|---|---|---|")
+            for (variant in variants) {
+                for (rule in rules) {
+                    val of = rows.filter { it.variant == variant && it.rule == rule }
+                    appendLine("| $variant | $rule | ${of.count { it.line == 0 }} | ${of.count { it.line != 0 }} |")
+                }
+            }
+            appendLine()
+            appendLine("## New findings")
+            appendLine()
+            appendLine("| Variant | Key | Rule | Node | Detail |")
+            appendLine("|---|---|---|---|---|")
+            rows.filter { it.line == 0 }.forEach { appendLine("| ${it.variant} | ${cell(it.key)} | ${it.rule} | ${cell(it.node)} | ${cell(it.detail)} |") }
+            appendLine()
+            appendLine("## Allowlisted findings")
+            appendLine()
+            appendLine("| Variant | Key | Rule | Node | Reason |")
+            appendLine("|---|---|---|---|---|")
+            rows.filter { it.line != 0 }.forEach {
+                appendLine("| ${it.variant} | ${cell(it.key)} | ${it.rule} | ${cell(it.node)} | ${cell(entries[it.line]?.second ?: "?")} |")
+            }
+            appendLine()
+            appendLine("## Stale allowlist entries")
+            appendLine()
+            appendLine("Entries that matched nothing (only meaningful after a full run, not with `-Pzoukan.smoke.only`).")
+            appendLine()
+            val used = rows.map { it.line }.toSet()
+            val stale = entries.filterKeys { it !in used }
+            if (stale.isEmpty()) appendLine("None.") else stale.forEach { (line, e) -> appendLine("- line $line: ${e.first}") }
+        }
+        report.get().asFile.apply { parentFile.mkdirs() }.writeText(text)
+    }
+}
+
+tasks.register<UsabilityReport>("usabilityReport") {
+    group = "verification"
+    description = "Merges the smoke test's usability findings into build/reports/usability.md"
+    findings.from(layout.buildDirectory.dir("reports/usability").map { dir -> dir.asFileTree.matching { include("*.tsv") } })
+    allowlist.set(layout.projectDirectory.file("src/test/resources/usability-allowlist.txt"))
+    report.set(layout.buildDirectory.file("reports/usability.md"))
+    onlyIf { !findings.isEmpty }
+}
 
 // Installs every extension of the Keiyoushi store and checks it is wired up on the desktop: no
 // class, method or field its bytecode uses is missing or a stub, its Injekt lookups resolve, its

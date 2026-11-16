@@ -330,24 +330,92 @@ internal fun nodeId(node: SemanticsNode): String {
 
 private fun short(text: String) = text.replace(Regex("\\s+"), " ").trim().let { if (it.length > 60) it.take(57) + "..." else it }
 
-/** Writes [findings] as Markdown: one section per variant, one row per finding. */
-fun writeUsabilityReport(findings: List<UsabilityFinding>, file: File) {
+/**
+ * One line of usability-allowlist.txt: `<key> | <RULE> | <node id> | <reason>`. [key] and [node] may
+ * end with `*` to match a prefix; [line] is the entry's line in the file (1-based).
+ */
+data class AllowEntry(val key: String, val rule: Rule, val node: String, val reason: String, val line: Int) {
+    fun matches(f: UsabilityFinding) = glob(key, f.key) && rule == f.rule && glob(node, f.node)
+}
+
+/** [pattern] equals [value], or ends with `*` and is a prefix of it. */
+private fun glob(pattern: String, value: String) =
+    if (pattern.endsWith("*")) value.startsWith(pattern.dropLast(1)) else pattern == value
+
+/** The checked-in allowlist of findings that are not usability bugs, each with the reason. */
+object UsabilityAllowlist {
+    const val RESOURCE = "/usability-allowlist.txt"
+    private const val NAME = "usability-allowlist.txt"
+
+    /** Reads the allowlist from the test resources; throws [IllegalArgumentException] naming the line of a bad entry. */
+    fun load(matrixKeys: Collection<String> = CoverageMatrix.load().map { it.key }): List<AllowEntry> = parse(
+        requireNotNull(UsabilityAllowlist::class.java.getResourceAsStream(RESOURCE)) { "$RESOURCE is not on the test classpath" }
+            .reader().use { it.readText() },
+        matrixKeys,
+    )
+
+    /**
+     * Every entry needs a reason, a known rule, and a key that is a coverage-matrix key or a prefix
+     * (`dialog:*`) of at least one: a typo then fails instead of silently allowing nothing.
+     */
+    fun parse(text: String, matrixKeys: Collection<String>): List<AllowEntry> = text.lines().mapIndexedNotNull { index, raw ->
+        val line = index + 1
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) return@mapIndexedNotNull null
+        fun bad(why: String): Nothing = throw IllegalArgumentException("$NAME line $line: $why: $trimmed")
+        val parts = trimmed.split("|", limit = 4).map { it.trim() }
+        if (parts.size < 4) bad("expected `<key> | <RULE> | <node id> | <reason>`")
+        val (key, ruleName, node, reason) = parts
+        if (key.isEmpty() || node.isEmpty()) bad("the key and the node id may not be empty")
+        if (reason.isEmpty()) bad("an entry needs a reason")
+        val rule = Rule.entries.firstOrNull { it.name == ruleName } ?: bad("unknown rule `$ruleName`")
+        if (matrixKeys.none { glob(key, it) }) bad("no matrix row for key `$key`")
+        AllowEntry(key, rule, node, reason, line)
+    }
+}
+
+/** A finding with the first allowlist entry that matches it, or null for a new finding. */
+data class ClassifiedFinding(val finding: UsabilityFinding, val allowedBy: AllowEntry?)
+
+fun classify(findings: List<UsabilityFinding>, entries: List<AllowEntry>): List<ClassifiedFinding> =
+    findings.map { f -> ClassifiedFinding(f, entries.firstOrNull { it.matches(f) }) }
+
+/** The rules that fail the smoke test when enforcing; Tab traversal never does (it cannot tell a real trap from a text field). */
+val ENFORCED_RULES = setOf(Rule.UNLABELLED_CLICKABLE, Rule.TEXT_OVERFLOW, Rule.ESCAPE_NOT_DISMISSING)
+
+/** One failure message per new finding of an enforced rule. */
+fun enforceFailures(findings: List<ClassifiedFinding>): List<String> = findings
+    .filter { it.allowedBy == null && it.finding.rule in ENFORCED_RULES }
+    .map { (f) -> "usability [${f.variant}] ${f.key} ${f.rule} ${f.node}: ${f.detail}" }
+
+/**
+ * Writes [findings] to [file] as Markdown (one section per variant, one row per finding) and next to
+ * it as a `.tsv` the `usabilityReport` Gradle task merges: variant, key, rule, node, detail, and the
+ * allowlist line that covers the finding (0 for a new one).
+ */
+fun writeUsabilityReport(findings: List<ClassifiedFinding>, file: File) {
     file.parentFile.mkdirs()
     fun cell(s: String) = s.replace("|", "\\|").replace("\n", " ")
+    fun tsv(s: String) = s.replace(Regex("[\t\r\n]+"), " ")
     val text = buildString {
         appendLine("# Usability findings")
         appendLine()
-        appendLine("Report only: these never fail the smoke test. ${findings.size} findings.")
+        appendLine("Report only unless -Pzoukan.usability.enforce=true. ${findings.size} findings, ${findings.count { it.allowedBy == null }} new.")
         appendLine()
-        Rule.entries.forEach { rule -> appendLine("- $rule: ${findings.count { it.rule == rule }}") }
-        findings.groupBy { it.variant }.forEach { (variant, rows) ->
+        Rule.entries.forEach { rule -> appendLine("- $rule: ${findings.count { it.finding.rule == rule }}") }
+        findings.groupBy { it.finding.variant }.forEach { (variant, rows) ->
             appendLine()
             appendLine("## $variant")
             appendLine()
-            appendLine("| Key | Rule | Node | Detail |")
-            appendLine("|---|---|---|---|")
-            rows.forEach { appendLine("| ${cell(it.key)} | ${it.rule} | ${cell(it.node)} | ${cell(it.detail)} |") }
+            appendLine("| Key | Rule | Node | Detail | Allowlist line |")
+            appendLine("|---|---|---|---|---|")
+            rows.forEach { (f, by) -> appendLine("| ${cell(f.key)} | ${f.rule} | ${cell(f.node)} | ${cell(f.detail)} | ${by?.line ?: "new"} |") }
         }
     }
     file.writeText(text)
+    File(file.parentFile, file.nameWithoutExtension + ".tsv").writeText(
+        findings.joinToString("") { (f, by) ->
+            listOf(f.variant, f.key, f.rule.name, f.node, f.detail, (by?.line ?: 0).toString()).joinToString("\t") { tsv(it) } + "\n"
+        },
+    )
 }

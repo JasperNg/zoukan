@@ -310,7 +310,35 @@ The runtime can start only once per JVM. So each journey is its own class with o
 
 ## Usability checks
 
-Not added yet. When they land, they are report-only and write `desktop/build/reports/usability.md`.
+Every smoke check also looks at what is on screen for four kinds of usability problem, in the
+light and the dark theme at 1280x820 and at 800x560 (`ScreenSmokeSmallWindowTest`):
+
+- `UNLABELLED_CLICKABLE`: a clickable node with no text, content description or state description,
+  so a screen reader cannot name it.
+- `TEXT_OVERFLOW`: text in a button, tab, checkbox, switch or dialog title that is clipped or cut off.
+- `ESCAPE_NOT_DISMISSING`: a dialog whose dismiss is not called by Escape (or is, when it blocks
+  dismissal on purpose).
+- `TAB_TRAVERSAL`: Tab that gets stuck, or does not reach every control, in a dialog or settings page.
+  It never fails a run: a multi-line text field keeps Tab as input, and the check stops after 30 presses.
+
+A finding is report-only by default. `./gradlew :desktop:wiringTest` writes one file per window size
+in `desktop/build/reports/usability/` and `usabilityReport` merges them into
+`desktop/build/reports/usability.md`: a summary per rule and variant (new and allowlisted), the new
+findings, the allowlisted ones with their reasons, and allowlist entries that matched nothing (read
+that list after a full run only).
+
+A finding names the check's coverage-matrix key, the rule and a node: a test tag, the label of the
+nearest labelled node (`in "Alpha"`), or its position (`@474,232`). To allowlist a finding that is not a
+usability problem, add a line to `desktop/src/test/resources/usability-allowlist.txt`:
+
+    <key> | <RULE> | <node id> | <reason>
+
+`<key>` and `<node id>` may end with `*` to match a prefix. A reason is required and says why this is not
+a problem. An entry with no reason, an unknown rule, or a key with no coverage-matrix row fails the
+smoke test, with the line number. Do not allowlist a real problem to clean the report: fix it.
+
+`./gradlew :desktop:wiringTest -Pzoukan.usability.enforce=true` fails the run on every new finding of
+the first three rules.
 
 ## Screenshot comparison
 
