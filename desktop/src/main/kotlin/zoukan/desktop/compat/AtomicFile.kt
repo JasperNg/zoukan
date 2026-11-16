@@ -9,8 +9,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.channels.FileChannel
-import java.nio.file.AccessDeniedException
+import java.nio.file.FileSystemException
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
@@ -54,7 +55,12 @@ class AtomicFile internal constructor(
             try {
                 move(newFile.toPath(), baseFile.toPath())
                 break
-            } catch (e: AccessDeniedException) {
+            } catch (e: NoSuchFileException) {
+                // The new file is gone: trying again cannot help
+                throw e
+            } catch (e: FileSystemException) {
+                // AccessDeniedException, or on Windows a plain FileSystemException for a sharing
+                // violation (another process has the file open without delete sharing)
                 if (attempt >= MOVE_ATTEMPTS) throw e
                 Thread.sleep(50L * attempt)
                 attempt++

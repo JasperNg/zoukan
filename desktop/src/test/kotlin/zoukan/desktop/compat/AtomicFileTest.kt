@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.nio.file.AccessDeniedException
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
@@ -57,6 +58,21 @@ class AtomicFileTest {
         var calls = 0
         val atomic = AtomicFile(file) { from, to ->
             if (calls++ == 0) throw AccessDeniedException(to.toString())
+            Files.move(from, to, REPLACE_EXISTING, ATOMIC_MOVE)
+        }
+        AtomicFile(file).write("old")
+        atomic.write("new")
+        atomic.read() shouldBe "new"
+    }
+
+    @Test
+    fun `a rename refused once because the file is in use is retried`() {
+        // On Windows a sharing violation is a plain FileSystemException, not AccessDeniedException
+        var calls = 0
+        val atomic = AtomicFile(file) { from, to ->
+            if (calls++ == 0) {
+                throw FileSystemException(from.toString(), to.toString(), "being used by another process")
+            }
             Files.move(from, to, REPLACE_EXISTING, ATOMIC_MOVE)
         }
         AtomicFile(file).write("old")
