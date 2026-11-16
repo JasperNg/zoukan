@@ -88,8 +88,21 @@ data class MigrationListScreen(
             navigator.push(GlobalSearchScreen(item.manga.ogTitle, SearchPurpose.MigrateInList(item.manga.id, item.manga.source)))
         }
 
-        LaunchedEffect(state.finished) {
-            if (state.finished) navigator.pop()
+        // The model's one-off events, on the UI thread
+        LaunchedEffect(model) {
+            model.effects.collect { effect ->
+                when (effect) {
+                    MigrationListScreenModel.Effect.Close -> navigator.pop()
+                    is MigrationListScreenModel.Effect.Done -> Toasts.show(
+                        when {
+                            effect.failed > 0 -> localized(if (effect.copy) DMR.strings.copied_entries_failed else DMR.strings.migrated_entries_failed, entries(effect.migrated), effect.failed)
+                            else -> localized(if (effect.copy) DMR.strings.copied_entries else DMR.strings.migrated_entries, entries(effect.migrated))
+                        },
+                    )
+                    is MigrationListScreenModel.Effect.Failed -> Toasts.error(localized(DMR.strings.migration_failed), effect.error)
+                    MigrationListScreenModel.Effect.MissingChapters -> Toasts.show(localized(MR.strings.migrationListScreen_matchWithoutChapterToast))
+                }
+            }
         }
         var openedManualSearch by remember { mutableStateOf(false) }
         LaunchedEffect(state.loading) {
@@ -120,7 +133,7 @@ data class MigrationListScreen(
                         onSkip = { model.removeManga(item.manga.id) },
                         onCancel = { model.cancelSearch(item.manga.id) },
                         onMigrateNow = { replace ->
-                            model.migrateNow(item.manga.id, replace) { Toasts.error(localized(DMR.strings.migration_failed), it) }
+                            model.migrateNow(item.manga.id, replace)
                         },
                     )
                     HorizontalDivider()
@@ -143,16 +156,7 @@ data class MigrationListScreen(
                     )
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        model.migrateAll(replace = !dialog.copy) { migrated, failed ->
-                            Toasts.show(
-                                when {
-                                    failed > 0 -> localized(if (dialog.copy) DMR.strings.copied_entries_failed else DMR.strings.migrated_entries_failed, entries(migrated), failed)
-                                    else -> localized(if (dialog.copy) DMR.strings.copied_entries else DMR.strings.migrated_entries, entries(migrated))
-                                },
-                            )
-                        }
-                    }) { Text(if (dialog.copy) localized(MR.strings.copy) else localized(MR.strings.action_migrate)) }
+                    TextButton(onClick = { model.migrateAll(replace = !dialog.copy) }) { Text(if (dialog.copy) localized(MR.strings.copy) else localized(MR.strings.action_migrate)) }
                 },
                 dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )

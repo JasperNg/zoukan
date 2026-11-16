@@ -68,7 +68,13 @@ class ReaderPage(val index: Int, val page: Page) {
         data class Error(val message: String) : State
     }
 
-    val state = MutableStateFlow<State>(State.Queued)
+    private val _state = MutableStateFlow<State>(State.Queued)
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    /** Only the reader's screen model sets a page's state. */
+    internal fun setState(value: State) {
+        _state.value = value
+    }
 
     @Volatile
     var bytes: ByteArray? = null
@@ -451,7 +457,7 @@ class ReaderScreenModel(
             // ZOUKAN -->
             if (!keepsImage(page.index, center, KEEP_BEHIND, keepAhead, visiblePages)) {
                 // ZOUKAN <--
-                if (page.state.value is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
+                if (page.state.value is ReaderPage.State.Ready) page.setState(ReaderPage.State.Queued)
             }
             // The downloaded bytes are kept longer, so going back a few pages needs no network
             // ZOUKAN -->
@@ -470,7 +476,7 @@ class ReaderScreenModel(
         val format = format
         val source = source as? HttpSource
         if (format == null && source == null) return
-        page.state.value = ReaderPage.State.Loading
+        page.setState(ReaderPage.State.Loading)
         // ZOUKAN -->
         // Started once it owns the page, so even a load that ends at once finds itself the owner
         val job = screenModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
@@ -486,12 +492,12 @@ class ReaderScreenModel(
                 if (image.width > image.height) {
                     mutableState.update { if (index in it.widePages || it.pages.getOrNull(index) !== page) it else it.copy(widePages = it.widePages + index) }
                 }
-                if (owns()) page.state.value = ReaderPage.State.Ready(image)
+                if (owns()) page.setState(ReaderPage.State.Ready(image))
                 // ZOUKAN <--
             } catch (e: CancellationException) {
                 // ZOUKAN -->
                 // A newer load (Boost page) owns the page now, and its state is not this load's to reset
-                if (owns()) page.state.value = ReaderPage.State.Queued
+                if (owns()) page.setState(ReaderPage.State.Queued)
                 // ZOUKAN <--
                 throw e
             } catch (e: Throwable) {
@@ -501,7 +507,7 @@ class ReaderScreenModel(
                 // ZOUKAN <--
                 logcat(LogPriority.WARN, e) { "Page ${index + 1} failed" }
                 page.bytes = null
-                page.state.value = ReaderPage.State.Error(e.message ?: e::class.simpleName.orEmpty())
+                page.setState(ReaderPage.State.Error(e.message ?: e::class.simpleName.orEmpty()))
                 // ZOUKAN -->
                 // SY's "Instant retry": a failed page is tried once more at once
                 if (attempt == 0 && preferences.readerInstantRetry().get()) {
@@ -573,10 +579,10 @@ class ReaderScreenModel(
             val other = pages.getOrNull(i) ?: return@forEach
             if (other.loader === job) {
                 other.loader = null
-                if (other.state.value is ReaderPage.State.Loading) other.state.value = ReaderPage.State.Queued
+                if (other.state.value is ReaderPage.State.Loading) other.setState(ReaderPage.State.Queued)
             }
         }
-        if (page.state.value !is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
+        if (page.state.value !is ReaderPage.State.Ready) page.setState(ReaderPage.State.Queued)
         loadPage(index, retry = true)
         requestPages(index)
     }
@@ -637,7 +643,7 @@ class ReaderScreenModel(
     /** Decodes the shown pages again, after a setting that changes decoding (crop borders). */
     fun redecodePages() {
         state.value.pages.forEach { page ->
-            if (page.state.value is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
+            if (page.state.value is ReaderPage.State.Ready) page.setState(ReaderPage.State.Queued)
         }
         requestPages(state.value.currentPage)
     }

@@ -19,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -873,7 +875,13 @@ class LibraryScreenModel(
      * After a multiple merge: the entries that were merged and the merged entry, for Android's
      * "remove the merged entries?" prompt; null when nothing asks.
      */
-    val removeMergedPrompt = MutableStateFlow<Pair<List<Manga>, Long>?>(null)
+    private val _removeMergedPrompt = MutableStateFlow<Pair<List<Manga>, Long>?>(null)
+    val removeMergedPrompt: StateFlow<Pair<List<Manga>, Long>?> = _removeMergedPrompt.asStateFlow()
+
+    /** Closes the "remove the merged entries?" prompt. */
+    fun dismissMergedPrompt() {
+        _removeMergedPrompt.value = null
+    }
 
     /**
      * Merges [selectedMangas] in the screen model's scope, so leaving the screen doesn't stop the
@@ -892,7 +900,7 @@ class LibraryScreenModel(
             }
             if (mergedMangaId != null) {
                 Toasts.show(localized(SYMR.strings.entry_merged))
-                removeMergedPrompt.value = mergingMangas to mergedMangaId
+                _removeMergedPrompt.value = mergingMangas to mergedMangaId
             } else {
                 Toasts.show(localized(SYMR.strings.merged_references_invalid))
             }

@@ -292,19 +292,35 @@ class SourceScreenModel(
         loadNextPage()
     }
 
+    /** A copy of [filters] with their current values; a source whose filters cannot be made gets none. */
+    private fun filtersSnapshot(): FilterList {
+        val copy = defaultFilters()
+        try {
+            filterSerializer.deserialize(copy, filterSerializer.serialize(filters))
+        } catch (e: VirtualMachineError) {
+            throw e
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to copy the filters of ${source?.name}" }
+        }
+        return copy
+    }
+
     fun loadNextPage() {
         val source = source ?: return
         val current = state.value
         if (current.loading || !current.hasNextPage || current.error != null) return
         val page = current.page + 1
         mutableState.update { it.copy(loading = true) }
+        // The filter sheet edits [filters] in place on the UI thread while the request runs on IO:
+        // the request gets a copy taken here, on the UI thread
+        val sentFilters = if (current.listing is Listing.Search) filtersSnapshot() else null
         job = screenModelScope.launch {
             try {
                 val result: MangasPage = withContext(Dispatchers.IO) {
                     when (val listing = current.listing) {
                         Listing.Popular -> source.getPopularManga(page)
                         Listing.Latest -> source.getLatestUpdates(page)
-                        is Listing.Search -> source.getSearchManga(page, listing.query, filters)
+                        is Listing.Search -> source.getSearchManga(page, listing.query, sentFilters ?: FilterList())
                         // ZOUKAN -->
                         Listing.Follows -> source.getMainSource<MangaDex>()!!.fetchFollows(page)
                         // ZOUKAN <--
