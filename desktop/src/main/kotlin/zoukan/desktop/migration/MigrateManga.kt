@@ -9,6 +9,7 @@ import mihon.domain.migration.models.MigrationFlag
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -45,6 +46,7 @@ class MigrateManga(
     private val refreshManga: RefreshManga,
     private val getHistory: GetHistory,
     private val upsertHistory: UpsertHistory,
+    private val handler: DatabaseHandler,
 ) {
     /** The Android app's "migration_flags" preference, so a restored backup keeps the choice. */
     fun flags() = preferenceStore.getObjectFromInt(
@@ -77,13 +79,15 @@ class MigrateManga(
         currentSource: eu.kanade.tachiyomi.source.Source?,
         targetSource: eu.kanade.tachiyomi.source.Source,
     ) {
+        // Prepare: every read and every network call comes first, so a failure here writes nothing
+        var updated = emptyList<tachiyomi.domain.chapter.model.Chapter>()
+        val historyUpdates = mutableListOf<HistoryUpdate>()
         if (MigrationFlag.CHAPTER in flags) {
             val previous = getChaptersByMangaId.await(current.id)
             val chapters = getChaptersByMangaId.await(target.id)
             val maxRead = previous.filter { it.read }.maxOfOrNull { it.chapterNumber }
             val history = getHistory.await(current.id).associateBy { it.chapterId }
-            val historyUpdates = mutableListOf<HistoryUpdate>()
-            val updated = chapters.map { chapter ->
+            updated = chapters.map { chapter ->
                 if (!chapter.isRecognizedNumber) return@map chapter
                 val match = previous.find { it.isRecognizedNumber && it.chapterNumber == chapter.chapterNumber }
                 when {
@@ -102,27 +106,19 @@ class MigrateManga(
                     else -> chapter
                 }
             }
-            updateChapter.awaitAll(updated.map { it.toChapterUpdate() })
-            upsertHistory.awaitAll(historyUpdates)
         }
 
-        if (MigrationFlag.CATEGORY in flags) {
-            setMangaCategories.await(target.id, getCategories.await(current.id).map { it.id })
-        }
+        val categoryIds = if (MigrationFlag.CATEGORY in flags) getCategories.await(current.id).map { it.id } else null
 
-        if (MigrationFlag.TRACK in flags) {
+        val movedTracks = if (MigrationFlag.TRACK in flags) {
             val enhanced = trackerManager.trackers.filterIsInstance<EnhancedTracker>()
             getTracks.await(current.id).mapNotNull { track ->
                 val moved = track.copy(mangaId = target.id)
                 val service = enhanced.firstOrNull { it.isTrackFrom(moved, current, currentSource) }
                 if (service != null) service.migrateTrack(moved, target, targetSource) else moved
-            }.takeIf { it.isNotEmpty() }?.let { insertTrack.awaitAll(it) }
-        }
-
-        if (MigrationFlag.CUSTOM_COVER in flags) {
-            zoukan.desktop.ui.common.Images.customCoverFile(current.id).takeIf { it.isFile }?.let { cover ->
-                cover.copyTo(zoukan.desktop.ui.common.Images.customCoverFile(target.id).apply { parentFile.mkdirs() }, overwrite = true)
             }
+        } else {
+            emptyList()
         }
 
         val currentUpdate = MangaUpdate(id = current.id, favorite = false, dateAdded = 0).takeIf { replace }
@@ -135,7 +131,23 @@ class MigrateManga(
             notes = if (MigrationFlag.NOTES in flags) current.notes else null,
             coverLastModified = Instant.now().toEpochMilli().takeIf { MigrationFlag.CUSTOM_COVER in flags },
         )
-        updateManga.awaitAll(listOfNotNull(currentUpdate, targetUpdate))
+
+        // Write: the database steps are one transaction, so a failing step leaves both entries as they were
+        handler.await(inTransaction = true) {
+            if (MigrationFlag.CHAPTER in flags) {
+                updateChapter.awaitAll(updated.map { it.toChapterUpdate() })
+                upsertHistory.awaitAll(historyUpdates)
+            }
+            if (categoryIds != null) setMangaCategories.await(target.id, categoryIds)
+            if (movedTracks.isNotEmpty()) insertTrack.awaitAll(movedTracks)
+            updateManga.awaitAll(listOfNotNull(currentUpdate, targetUpdate))
+        }
+
+        if (MigrationFlag.CUSTOM_COVER in flags) {
+            zoukan.desktop.ui.common.Images.customCoverFile(current.id).takeIf { it.isFile }?.let { cover ->
+                cover.copyTo(zoukan.desktop.ui.common.Images.customCoverFile(target.id).apply { parentFile.mkdirs() }, overwrite = true)
+            }
+        }
 
         // Last, once every database step succeeded: a failure above leaves the user on the old
         // entry, which must still have its downloads
