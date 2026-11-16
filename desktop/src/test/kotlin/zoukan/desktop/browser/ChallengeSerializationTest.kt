@@ -1,5 +1,6 @@
 package zoukan.desktop.browser
 
+import eu.kanade.tachiyomi.network.interceptor.ChallengeFailures
 import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
 import eu.kanade.tachiyomi.network.interceptor.HostLocks
 import io.kotest.matchers.shouldBe
@@ -66,5 +67,18 @@ class ChallengeSerializationTest {
         locks.withLock("b.example") { "done" } shouldBe "done"
         release.countDown()
         thread.join(5_000)
+    }
+
+    @Test
+    fun `a challenge the user closed is not shown again within the cooldown`() {
+        val minute = TimeUnit.MINUTES.toNanos(1)
+        val failures = ChallengeFailures(cooldownNanos = 5 * minute)
+        failures.failed("example.org", now = 0)
+        // A request that starts after the failure, a minute later
+        failures.shouldFailFast("example.org", waitStarted = minute, now = minute) shouldBe true
+        // After the cooldown a new attempt is allowed again
+        failures.shouldFailFast("example.org", waitStarted = 6 * minute, now = 6 * minute) shouldBe false
+        // Another host is not affected
+        failures.shouldFailFast("other.org", waitStarted = minute, now = minute) shouldBe false
     }
 }

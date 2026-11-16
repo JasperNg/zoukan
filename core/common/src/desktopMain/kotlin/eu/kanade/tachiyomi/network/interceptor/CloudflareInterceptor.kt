@@ -64,8 +64,7 @@ class CloudflareInterceptor(
                 if (current != null && current != sentClearance) return@withLock true
                 // An attempt that ended while this one waited failed (the user closed its window,
                 // say): failing too, not showing the challenge again for each queued request
-                val failedAt = lastFailure[host]
-                if (failedAt != null && failedAt - waitStarted > 0) return@withLock false
+                if (failures.shouldFailFast(host, waitStarted, System.nanoTime())) return@withLock false
                 cookieManager.remove(request.url, COOKIE_NAMES, 0)
                 val oldCookie = clearance(request)
                 // Solved with the request's own user agent when Cloudflare accepts it, so the request
@@ -85,7 +84,7 @@ class CloudflareInterceptor(
                     clearance(request)?.takeIf { clearanceUserAgents.userAgentOf(it) == null }
                         ?.let { clearanceUserAgents.record(it, solvedWith) }
                 }
-                (solvedWith != null).also { if (it) lastFailure.remove(host) else lastFailure[host] = System.nanoTime() }
+                (solvedWith != null).also { if (it) failures.solved(host) else failures.failed(host, System.nanoTime()) }
             }
             if (!solved) throw IOException("Failed to bypass Cloudflare on ${request.url.host}")
             return chain.proceed(withClearanceUserAgent(original))
@@ -177,7 +176,8 @@ class CloudflareInterceptor(
         val hostLocks = HostLocks()
 
         // When the last attempt to solve each host's challenge failed; a success removes it
-        val lastFailure = ConcurrentHashMap<String, Long>()
+        val failures = ChallengeFailures(TimeUnit.MINUTES.toNanos(CHALLENGE_COOLDOWN_MINUTES))
+        const val CHALLENGE_COOLDOWN_MINUTES = 5L
         const val CF_CLEARANCE = "cf_clearance"
         const val HEADLESS_TIMEOUT_SECONDS = 30L
         val ERROR_CODES = listOf(403, 503)
@@ -187,6 +187,26 @@ class CloudflareInterceptor(
             "content-length", "host", "trailer", "te", "upgrade", "cookie2", "keep-alive", "transfer-encoding",
             "set-cookie",
         )
+    }
+}
+
+/** When a host's last challenge failed, and whether a new challenge for it should fail at once. */
+class ChallengeFailures(private val cooldownNanos: Long) {
+    private val lastFailure = ConcurrentHashMap<String, Long>()
+
+    fun failed(host: String, now: Long) {
+        lastFailure[host.lowercase(Locale.ENGLISH)] = now
+    }
+
+    fun solved(host: String) {
+        lastFailure.remove(host.lowercase(Locale.ENGLISH))
+    }
+
+    /** Whether a request that started waiting at [waitStarted] should fail without a new attempt. */
+    fun shouldFailFast(host: String, waitStarted: Long, now: Long): Boolean {
+        val failedAt = lastFailure[host.lowercase(Locale.ENGLISH)] ?: return false
+        // Failed while this request waited, or recently enough that the user's refusal still stands
+        return failedAt - waitStarted > 0 || now - failedAt < cooldownNanos
     }
 }
 
