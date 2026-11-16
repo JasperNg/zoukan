@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,6 +62,7 @@ import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel
@@ -211,8 +213,8 @@ private fun MoreRow(icon: ImageVector, title: String, subtitle: String? = null, 
 
 @Composable
 private fun MoreSwitch(icon: ImageVector, title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    MoreItem(icon, title, subtitle, Modifier.clickable { onCheckedChange(!checked) }) {
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    MoreItem(icon, title, subtitle, Modifier.checkRow(checked, role = Role.Switch, onChange = onCheckedChange)) {
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

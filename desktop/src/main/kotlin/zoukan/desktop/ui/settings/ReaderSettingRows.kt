@@ -1,7 +1,6 @@
 package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,7 +33,9 @@ import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.reader.ReaderNavigation
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
@@ -377,8 +378,8 @@ private fun <T> ChoiceRow(row: ReaderSettingRow.Choice<T>, inline: Boolean) {
 @Composable
 fun <T> RadioChoices(selected: T, choices: List<Pair<T, String>>, onSelect: (T) -> Unit) {
     choices.forEach { (value, label) ->
-        Row(Modifier.fillMaxWidth().clickable { onSelect(value) }, verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected == value, onClick = { onSelect(value) })
+        Row(Modifier.fillMaxWidth().radioRow(selected == value) { onSelect(value) }, verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(selected == value, onClick = null)
             Text(label)
         }
     }
@@ -416,8 +417,8 @@ private fun BottomButtonsRow(prefs: DesktopPreferences) {
     ReaderBottomButtons.all.forEach { (value, label) ->
         val on = value in buttons
         val toggle = { prefs.readerBottomButtons().set(if (on) buttons - value else buttons + value) }
-        Row(Modifier.fillMaxWidth().clickable(onClick = toggle).padding(horizontal = Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(on, onCheckedChange = { toggle() })
+        Row(Modifier.fillMaxWidth().checkRow(on) { toggle() }.padding(horizontal = Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(on, onCheckedChange = null)
             Text(label)
         }
     }

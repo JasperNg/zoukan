@@ -70,6 +70,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
@@ -277,7 +278,7 @@ data class MigrateMangaScreen(val sourceId: Long) : Screen {
 @Composable
 private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Unit, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onToggle)
+        Modifier.fillMaxWidth().checkRow(selected) { onToggle() }
             // ZOUKAN -->
             // Android's long press on an entry selects it
             .onRightClick(onToggle)
@@ -285,7 +286,7 @@ private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Uni
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(selected, onCheckedChange = { onToggle() })
+        Checkbox(selected, onCheckedChange = null)
         Spacer(Modifier.width(8.dp))
         CoverImage(Cover.of(manga), Modifier.size(width = 40.dp, height = 56.dp).clip(Corners.Medium).coverOutline(Corners.Medium))
         Spacer(Modifier.width(12.dp))

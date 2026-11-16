@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -205,7 +206,8 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 CoverImage(
                     Cover.of(manga),
-                    Modifier.width(320.dp).aspectRatio(2f / 3f).clip(Corners.Large),
+                    // Shrinks to the height the buttons leave in a short window, so they keep their own
+                    Modifier.weight(1f, fill = false).widthIn(max = 320.dp).aspectRatio(2f / 3f).clip(Corners.Large),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CoverAction(localized(MR.strings.copy), Icons.Outlined.ContentCopy) {

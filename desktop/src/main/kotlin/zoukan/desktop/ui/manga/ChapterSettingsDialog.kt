@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
@@ -33,12 +34,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.checkRow
+import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 
@@ -138,19 +142,19 @@ fun ChapterSettingsDialog(state: MangaScreenModel.State, model: MangaScreenModel
 
 @Composable
 private fun TriStateRow(label: String, value: TriState, onChange: ((TriState) -> Unit)?) {
+    val state = when (value) {
+        TriState.DISABLED -> ToggleableState.Off
+        TriState.ENABLED_IS -> ToggleableState.On
+        TriState.ENABLED_NOT -> ToggleableState.Indeterminate
+    }
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = onChange != null) { onChange?.invoke(value.next()) }.padding(vertical = 2.dp),
+        Modifier
+            .fillMaxWidth()
+            .triStateToggleable(state = state, enabled = onChange != null, role = Role.Checkbox) { onChange?.invoke(value.next()) }
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TriStateCheckbox(
-            state = when (value) {
-                TriState.DISABLED -> ToggleableState.Off
-                TriState.ENABLED_IS -> ToggleableState.On
-                TriState.ENABLED_NOT -> ToggleableState.Indeterminate
-            },
-            onClick = onChange?.let { { it(value.next()) } },
-            enabled = onChange != null,
-        )
+        TriStateCheckbox(state = state, onClick = null, enabled = onChange != null)
         Text(if (value == TriState.ENABLED_NOT) localized(DMR.strings.not, label.lowercase()) else label)
     }
 }
@@ -194,10 +198,10 @@ private fun SortRow(label: String, descending: Boolean?, onClick: () -> Unit) {
 @Composable
 private fun DisplayRow(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().radioRow(selected, onClick = onClick).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = onClick)
+        RadioButton(selected = selected, onClick = null)
         Text(label)
     }
 }
@@ -221,11 +225,11 @@ private fun ScanlatorFilterDialog(
                     val shown = scanlator !in hidden
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable { hidden = if (shown) hidden + scanlator else hidden - scanlator }
+                            .checkRow(shown) { hidden = if (it) hidden - scanlator else hidden + scanlator }
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(shown, onCheckedChange = { hidden = if (it) hidden - scanlator else hidden + scanlator })
+                        Checkbox(shown, onCheckedChange = null)
                         Text(scanlator)
                     }
                 }
@@ -258,10 +262,10 @@ private fun SetAsDefaultDialog(onConfirm: (toLibrary: Boolean) -> Unit, onDismis
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(localized(DMR.strings.make_these_the_default_chapter_settings))
                 Row(
-                    Modifier.fillMaxWidth().clickable { toLibrary = !toLibrary },
+                    Modifier.fillMaxWidth().checkRow(toLibrary) { toLibrary = it },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(toLibrary, onCheckedChange = { toLibrary = it })
+                    Checkbox(toLibrary, onCheckedChange = null)
                     Text(localized(DMR.strings.also_apply_them_to_every_entry))
                 }
             }

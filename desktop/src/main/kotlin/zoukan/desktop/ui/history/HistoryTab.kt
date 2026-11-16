@@ -45,6 +45,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -95,6 +98,7 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.library.ClickKind
@@ -433,7 +437,7 @@ private fun HistoryRow(
         val shape = Corners.Medium
         CoverImage(
             Cover.of(item.coverData),
-            Modifier.size(if (wide) 107.dp else 44.dp, 60.dp).clip(shape).coverOutline(shape).clickable(onClick = onOpenManga),
+            Modifier.size(if (wide) 107.dp else 44.dp, 60.dp).clip(shape).coverOutline(shape).clickable(onClick = onOpenManga).semantics { contentDescription = item.title },
             onLoaded = { w, h -> if (w > 0) ratio = h.toFloat() / w },
         )
         Spacer(Modifier.width(12.dp))
@@ -480,10 +484,10 @@ private fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntr
                     if (one) localized(DMR.strings.this_removes_the_read_date_of) else localized(DMR.strings.this_removes_the_read_date_of_2),
                 )
                 Row(
-                    Modifier.fillMaxWidth().clickable { wholeEntry = !wholeEntry },
+                    Modifier.fillMaxWidth().checkRow(wholeEntry) { wholeEntry = it },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = wholeEntry, onCheckedChange = { wholeEntry = it })
+                    Checkbox(checked = wholeEntry, onCheckedChange = null)
                     Text(if (one) localized(DMR.strings.remove_every_chapter_of_this_entry) else localized(DMR.strings.remove_every_chapter_of_these_entries))
                 }
             }
@@ -522,11 +526,11 @@ private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -
                 val panorama = preferences.usePanoramaCover()
                 val on by panorama.collectAsState()
                 Row(
-                    Modifier.fillMaxWidth().clickable { panorama.set(!on) }.padding(vertical = 2.dp),
+                    Modifier.fillMaxWidth().checkRow(on, role = Role.Switch) { panorama.set(it) }.padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(localized(KMR.strings.action_panorama_cover), modifier = Modifier.weight(1f))
-                    Switch(checked = on, onCheckedChange = { panorama.set(it) })
+                    Switch(checked = on, onCheckedChange = null)
                 }
             }
         },

@@ -321,7 +321,8 @@ light and the dark theme at 1280x820 and at 800x560 (`ScreenSmokeSmallWindowTest
 - `TAB_TRAVERSAL`: Tab that gets stuck, or does not reach every control, in a dialog or settings page.
   It never fails a run: a multi-line text field keeps Tab as input, and the check stops after 30 presses.
 
-A finding is report-only by default. `./gradlew :desktop:wiringTest` writes one file per window size
+A new finding of the first three rules (not allowlisted) fails the smoke test, in every variant;
+`TAB_TRAVERSAL` findings are only reported. `./gradlew :desktop:wiringTest` writes one file per window size
 in `desktop/build/reports/usability/` and `usabilityReport` merges them into
 `desktop/build/reports/usability.md`: a summary per rule and variant (new and allowlisted), the new
 findings, the allowlisted ones with their reasons, and allowlist entries that matched nothing (read
@@ -337,8 +338,8 @@ usability problem, add a line to `desktop/src/test/resources/usability-allowlist
 a problem. An entry with no reason, an unknown rule, or a key with no coverage-matrix row fails the
 smoke test, with the line number. Do not allowlist a real problem to clean the report: fix it.
 
-`./gradlew :desktop:wiringTest -Pzoukan.usability.enforce=true` fails the run on every new finding of
-the first three rules.
+The failure message names the variant, the key, the rule and the node. Escape on a dialog that blocks
+dismissal on purpose belongs in `ESCAPE_BLOCKED_ON_PURPOSE` (`Usability.kt`), not in the allowlist.
 
 ## Screenshot comparison
 

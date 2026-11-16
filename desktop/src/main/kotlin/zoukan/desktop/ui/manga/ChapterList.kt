@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -211,7 +212,17 @@ private fun ChapterRow(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(checked = selected, onCheckedChange = { onToggleSelect() }, modifier = Modifier.size(32.dp))
+            // Its own control inside a row that opens the chapter, so it needs its own label
+            val chapterLabel = if (displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
+                localized(MR.strings.display_mode_chapter, formatChapterNumber(chapter.chapterNumber))
+            } else {
+                chapter.name
+            }
+            Checkbox(
+                checked = selected,
+                onCheckedChange = { onToggleSelect() },
+                modifier = Modifier.size(32.dp).semantics { contentDescription = chapterLabel },
+            )
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f).alpha(if (chapter.read) 0.5f else 1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

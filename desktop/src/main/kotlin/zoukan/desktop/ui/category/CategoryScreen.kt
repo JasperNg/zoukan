@@ -42,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -169,11 +171,13 @@ object CategoryScreen : Screen {
                     }
                 }
             }
+            val addLabel = localized(MR.strings.action_add)
             ExtendedFloatingActionButton(
-                text = { Text(localized(MR.strings.action_add)) },
+                text = { Text(addLabel) },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 onClick = { model.showDialog(CategoryDialog.Create) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("category-add"),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("category-add")
+                    .semantics { contentDescription = addLabel },
             )
         }
 

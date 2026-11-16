@@ -1,7 +1,6 @@
 package zoukan.desktop.ui.manga
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -30,7 +29,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DropdownMenu
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.onRightClick
+import zoukan.desktop.ui.common.radioRow
 import zoukan.i18n.desktop.DMR
 
 // ZOUKAN -->
@@ -157,16 +158,13 @@ fun MergedEntryPicker(action: MergedAction, model: MangaScreenModel, onDismiss: 
             Column {
                 entries.forEach { (manga, source) ->
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().radioRow(selected = false) {
                             onDismiss()
                             action.action(manga, source)
                         }.padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = false, onClick = {
-                            onDismiss()
-                            action.action(manga, source)
-                        })
+                        RadioButton(selected = false, onClick = null)
                         Text(source.toString())
                     }
                 }
@@ -218,10 +216,10 @@ fun ClearMangaDialog(
             Column {
                 options.forEach { (label, checked, toggle) ->
                     Row(
-                        Modifier.fillMaxWidth().clickable(onClick = toggle),
+                        Modifier.fillMaxWidth().checkRow(checked) { toggle() },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = checked, onCheckedChange = { toggle() })
+                        Checkbox(checked = checked, onCheckedChange = null)
                         Text(label)
                     }
                 }

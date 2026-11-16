@@ -204,8 +204,9 @@ import kotlin.time.Duration.Companion.seconds
  * A failed check prints the semantics tree that was on screen, to tell a crash from a test that
  * looked for the wrong node.
  *
- * Each check also runs the usability rules (report only, see [usabilityChecks]) in the light and
- * the dark theme. [ScreenSmokeSmallWindowTest] runs the same checks at the app's minimum window
+ * Each check also runs the usability rules (see [usabilityChecks]) in the light and the dark theme:
+ * a new unlabelled clickable, clipped text or dialog that Escape cannot close fails the run, Tab
+ * traversal is only reported. [ScreenSmokeSmallWindowTest] runs the same checks at the app's minimum window
  * size, in a JVM of its own beside this one. Failures name the window size: "[800x560] tab Library".
  */
 @OptIn(ExperimentalTestApi::class)
@@ -268,7 +269,7 @@ open class ScreenSmokeTest {
     private var current = "starting"
     private val failures = Collections.synchronizedList(mutableListOf<String>())
 
-    /** Usability problems: reported in build/reports/usability/<size>.md, never a failure (see [usabilityChecks]). */
+    /** Usability problems: reported in build/reports/usability/<size>.md; the new ones of the enforced rules fail the run (see [enforceFailures]). */
     private val usabilityFindings = mutableListOf<UsabilityFinding>()
 
     /** Null unless -Pzoukan.screenshots=verify|record: then no screenshot is taken, which costs nothing. */
@@ -347,8 +348,8 @@ open class ScreenSmokeTest {
             println("Usability: ${usabilityFindings.size} findings, in $report")
             val classified = classify(usabilityFindings, allowlist)
             writeUsabilityReport(classified, report)
-            // Off until the findings are fixed or allowlisted: -Pzoukan.usability.enforce=true
-            if (System.getProperty("zoukan.usability.enforce") == "true") failures += enforceFailures(classified)
+            // A new finding of an enforced rule fails the run; Tab traversal stays in the report only
+            failures += enforceFailures(classified)
             screenshots?.let { run ->
                 // A filtered run skips screens on purpose; a full one must take every curated screen
                 if (only == null) screenshotFindings += run.notTaken(ScreenshotKeys.curated, listOf("$size/light", "$size/dark"))
@@ -894,7 +895,8 @@ open class ScreenSmokeTest {
 
     /** The dialogs that other code can show, rendered directly. */
     private fun dialogs(f: Fixture): List<Check> {
-        val categories = runBlocking { Injekt.get<GetCategories>().await() }
+        // As the app hands them to the dialogs: the nameless system category is never offered
+        val categories = runBlocking { Injekt.get<GetCategories>().await() }.filterNot { it.isSystemCategory }
         val noop = {}
         return listOf(
             dialog("dialog:manga.CategoryDialog", "CategoryDialog") { CategoryDialog(categories, {}, it) },

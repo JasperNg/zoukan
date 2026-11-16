@@ -401,7 +401,7 @@ fun writeUsabilityReport(findings: List<ClassifiedFinding>, file: File) {
     val text = buildString {
         appendLine("# Usability findings")
         appendLine()
-        appendLine("Report only unless -Pzoukan.usability.enforce=true. ${findings.size} findings, ${findings.count { it.allowedBy == null }} new.")
+        appendLine("New findings of the first three rules fail the run; Tab traversal is only reported. ${findings.size} findings, ${findings.count { it.allowedBy == null }} new.")
         appendLine()
         Rule.entries.forEach { rule -> appendLine("- $rule: ${findings.count { it.finding.rule == rule }}") }
         findings.groupBy { it.finding.variant }.forEach { (variant, rows) ->

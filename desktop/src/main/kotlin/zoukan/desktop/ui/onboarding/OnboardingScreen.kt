@@ -6,8 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.Navigator
@@ -125,8 +125,8 @@ fun OnboardingScreen(
     val window = LocalWindow.current?.window
     Surface(
         Modifier.fillMaxSize().testTag("onboarding")
-            // Clicks do not reach the app behind
-            .clickable(remember { MutableInteractionSource() }, indication = null) {},
+            // Clicks do not reach the app behind (not a clickable: that is a control with no name for a screen reader)
+            .pointerInput(Unit) { detectTapGestures { } },
         color = MaterialTheme.colorScheme.background,
     ) {
         InfoScreen(

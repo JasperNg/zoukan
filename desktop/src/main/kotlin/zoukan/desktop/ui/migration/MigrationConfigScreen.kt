@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.migration
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +69,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.settings.SwitchPreference
 import zoukan.desktop.ui.settings.SwitchSetting
@@ -178,10 +178,10 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
         trailing: @Composable () -> Unit,
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable { model.toggle(source.id) }.padding(horizontal = 16.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().checkRow(source.selected) { model.toggle(source.id) }.padding(horizontal = 16.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(source.selected, onCheckedChange = { model.toggle(source.id) })
+            Checkbox(source.selected, onCheckedChange = null)
             Column(Modifier.weight(1f)) {
                 Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(

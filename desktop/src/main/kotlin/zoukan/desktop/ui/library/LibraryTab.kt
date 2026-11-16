@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -53,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -88,6 +90,7 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.downloads.DownloadsButton
 import zoukan.desktop.ui.manga.MangaScreen
@@ -592,8 +595,11 @@ private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categori
                         val next = {
                             states[c.id] = if (value == ToggleableState.On) ToggleableState.Off else ToggleableState.On
                         }
-                        Row(Modifier.fillMaxWidth().clickable(onClick = next), verticalAlignment = Alignment.CenterVertically) {
-                            TriStateCheckbox(value, onClick = next)
+                        Row(
+                            Modifier.fillMaxWidth().triStateToggleable(state = value, role = Role.Checkbox, onClick = next),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TriStateCheckbox(value, onClick = null)
                             Text(c.name)
                         }
                     }
@@ -633,8 +639,8 @@ private fun RemoveDialog(count: Int, onConfirm: (Boolean) -> Unit, onDismiss: ()
         onDismissRequest = onDismiss,
         title = { Text(if (count == 1) localized(DMR.strings.remove_from_library) else localized(DMR.strings.remove_entries_from_library, count)) },
         text = {
-            Row(Modifier.clickable { deleteDownloads = !deleteDownloads }, verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(deleteDownloads, onCheckedChange = { deleteDownloads = it })
+            Row(Modifier.checkRow(deleteDownloads) { deleteDownloads = it }, verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(deleteDownloads, onCheckedChange = null)
                 Text(localized(DMR.strings.also_delete_downloaded_chapters))
             }
         },

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -41,6 +42,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.materialkolor.PaletteStyle
@@ -225,7 +229,8 @@ private fun ThemePreview(
                     shape = Corners.Large,
                 )
                 .background(scheme.background)
-                .clickable(onClick = onClick)
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+                .semantics { contentDescription = label }
                 .padding(8.dp),
         ) {
             // A miniature screen: top bar, a cover with badges, and the navigation bar
@@ -322,7 +327,8 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
                             colors.forEach { preset ->
                                 Box(
                                     Modifier.size(32.dp).clip(Corners.Small).background(Color(preset))
-                                        .clickable { setColor(Color(preset)) }
+                                        .clickable(role = Role.Button) { setColor(Color(preset)) }
+                                        .semantics { contentDescription = "#%06X".format(preset and 0xFFFFFF) }
                                         .testTag("theme-palette-%08X".format(preset)),
                                 )
                             }

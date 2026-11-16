@@ -420,8 +420,6 @@ val wiringTest by tasks.registering(Test::class) {
     systemProperty("user.language", "en")
     // Runs only the smoke checks whose name matches, to debug one: -Pzoukan.smoke.only="dialog new category"
     providers.gradleProperty("zoukan.smoke.only").orNull?.let { systemProperty("zoukan.smoke.only", it) }
-    // Fails the smoke test on usability findings that are not allowlisted (off until they are fixed)
-    providers.gradleProperty("zoukan.usability.enforce").orNull?.let { systemProperty("zoukan.usability.enforce", it) }
     // Screenshot comparison (nightly, Linux): -Pzoukan.screenshots=verify compares with
     // src/test/screenshots/linux; =record rewrites them after an intended visual change.
     // Unset, no screenshot is taken and the goldens are not a task input, so normal runs stay cacheable.
@@ -483,7 +481,7 @@ abstract class UsabilityReport : DefaultTask() {
             appendLine("# Usability report")
             appendLine()
             appendLine("${rows.size} findings: ${rows.count { it.line == 0 }} new, ${rows.count { it.line != 0 }} allowlisted.")
-            appendLine("Report only; `-Pzoukan.usability.enforce=true` fails the first three rules for new findings.")
+            appendLine("A new finding of the first three rules fails the smoke test; Tab traversal is only reported.")
             appendLine()
             appendLine("## Summary")
             appendLine()

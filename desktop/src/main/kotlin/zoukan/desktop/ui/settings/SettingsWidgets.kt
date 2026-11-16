@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ColorScheme
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
@@ -72,6 +74,8 @@ fun SettingRow(
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     searchTerms: List<String> = emptyList(),
+    /** The state of a switch in [trailing]: the row then is the switch (one node with the title), and the switch has no handler of its own. */
+    switched: Boolean? = null,
     trailing: @Composable () -> Unit = {},
 ) {
     // Settings search matches the title, the summary and [searchTerms] (such as the choices of a
@@ -84,6 +88,8 @@ fun SettingRow(
             // clickable(enabled = false) also reports the row as disabled to accessibility tools
             .then(
                 when {
+                    onClick != null && switched != null ->
+                        Modifier.toggleable(value = switched, enabled = enabled, role = Role.Switch, onValueChange = { onClick() })
                     onClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
                     !enabled -> Modifier.semantics(mergeDescendants = true) { disabled() }
                     else -> Modifier
@@ -109,8 +115,8 @@ fun SettingRow(
 
 @Composable
 fun SwitchSetting(title: String, subtitle: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    SettingRow(title, subtitle, enabled, onClick = { onChange(!checked) }) {
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+    SettingRow(title, subtitle, enabled, onClick = { onChange(!checked) }, switched = checked) {
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 

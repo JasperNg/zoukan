@@ -64,6 +64,7 @@ import zoukan.desktop.manga.CustomCovers
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.i18n.desktop.DMR
 import java.io.Serializable
 
@@ -211,10 +212,10 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
                 Text(localized(DMR.strings.take_along), style = MaterialTheme.typography.bodyMedium)
                 migrationDialogFlags(hasCustomCover).forEach { flag ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { flags = if (flag in flags) flags - flag else flags + flag },
+                        Modifier.fillMaxWidth().checkRow(flag in flags) { flags = if (it) flags + flag else flags - flag },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(flag in flags, onCheckedChange = { flags = if (it) flags + flag else flags - flag })
+                        Checkbox(flag in flags, onCheckedChange = null)
                         Text(localized(MigrateManga.label(flag)))
                     }
                 }
