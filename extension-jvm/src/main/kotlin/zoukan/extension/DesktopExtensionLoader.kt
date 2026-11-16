@@ -11,6 +11,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.pm.ExternalPackages
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
 
 sealed interface LoadResult {
     val pkgName: String
@@ -114,6 +116,38 @@ class DesktopExtensionLoader(
         File(dir, "$versionCode.jar").delete()
         File(dir, "$versionCode.apk").delete()
         File(dir, "$versionCode.sha256").delete()
+    }
+
+    /**
+     * Deletes the installer's and converter's own stray files, which a crash or kill leaves
+     * behind: download temp files directly in the extensions folder, and temp files and dex2jar
+     * error reports in a package folder. Only files last changed before [olderThan] (milliseconds
+     * since the epoch) go, so a download or conversion that is running now keeps its files.
+     * Installed files (`N.jar`, `N.apk`) and every other name are never touched, and nothing
+     * outside the extensions folder can be reached. A file that cannot be deleted is skipped.
+     */
+    fun removeLeftovers(olderThan: Long) {
+        val root = extensionsDir.canonicalFile
+        fun removeIf(dir: File, matches: (String) -> Boolean) {
+            dir.listFiles().orEmpty().forEach { file ->
+                if (!matches(file.name) || file.lastModified() >= olderThan) return@forEach
+                try {
+                    val path = file.toPath()
+                    // Regular files only: never a folder or a link, and never outside the extensions folder
+                    if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) return@forEach
+                    if (!file.canonicalFile.startsWith(root)) return@forEach
+                    Files.deleteIfExists(path)
+                } catch (e: Exception) {
+                    logcat(LogPriority.WARN, e) { "Could not remove the leftover file ${file.name}" }
+                }
+            }
+        }
+        removeIf(root) { DOWNLOAD_TEMP.matches(it) }
+        installedPackageNames().forEach { pkg ->
+            val dir = File(root, pkg)
+            if (Files.isSymbolicLink(dir.toPath())) return@forEach
+            removeIf(dir) { name -> PACKAGE_TEMP_SUFFIXES.any { name.endsWith(it) } }
+        }
     }
 
     /** Forgets what is recorded about an uninstalled package. */
@@ -274,6 +308,14 @@ class DesktopExtensionLoader(
         hashes.record(files.pkgName, files.versionCode, apkSha256, jarSha256)
         // The sidecar earlier versions wrote next to the jar; it is not read any more
         File(files.jar.parentFile, "${files.versionCode}.sha256").delete()
+    }
+
+    private companion object {
+        /** The installer's download temp files: `<package>-<number>.jar` or `.apk`. */
+        val DOWNLOAD_TEMP = Regex("[A-Za-z0-9_.]+-\\d+\\.(jar|apk)")
+
+        /** The installer's and converter's temp and error files in a package folder. */
+        val PACKAGE_TEMP_SUFFIXES = listOf(".part", ".part.tmp", ".jar.tmp", "-dex2jar-error.txt")
     }
 
     /** Instantiates the classes in tachiyomi.extension.class, the same way ExtensionLoader does. */

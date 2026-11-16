@@ -49,9 +49,17 @@ class DesktopExtensionManager(
     /** Why an installed package failed to load, by package name. */
     val loadErrorsFlow: StateFlow<Map<String, ExtensionException>> = errors.asStateFlow()
 
+    /** Files an install started after this are newer than this, and are not leftovers. */
+    private val createdAt = System.currentTimeMillis()
+
     /** Loads every installed extension. */
     suspend fun init() = withContext(Dispatchers.IO) {
         try {
+            try {
+                loader.removeLeftovers(createdAt)
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Could not remove leftover extension files" }
+            }
             val stores = getStores()
             loader.installedPackageNames().forEach { pkg ->
                 locked(pkg) {

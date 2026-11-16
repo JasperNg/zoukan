@@ -193,6 +193,40 @@ class DesktopExtensionManagerTest {
     }
 
     @Test
+    fun `start removes leftover temp files and keeps the installed files`() = withStubbedSignatures {
+        manager().installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
+        File(extensionsDir, "$pkgName/notes.txt").writeText("my notes")
+        File(extensionsDir, "readme.txt").writeText("readme")
+        val kept = extensionsDir.walkTopDown().filter { it.isFile }
+            .associate { it.relativeTo(extensionsDir).path to it.readBytes() }
+        // What a killed install leaves behind, named as the installer and converter name them
+        val leftovers = listOf(
+            File(extensionsDir, "$pkgName-123456789.jar"),
+            File(extensionsDir, "$pkgName-987654321.apk"),
+            File(extensionsDir, "$pkgName/3-converting-42.jar.part"),
+            File(extensionsDir, "$pkgName/3-converting-42.jar.part.tmp"),
+            File(extensionsDir, "$pkgName/3-converting-42.jar.part-dex2jar-error.txt"),
+            File(extensionsDir, "$pkgName/3-converting-43.apk.part"),
+            File(extensionsDir, "$pkgName/3.jar.tmp"),
+            File(extensionsDir, "$pkgName/3.jar-dex2jar-error.txt"),
+        )
+        leftovers.forEach {
+            it.writeText("leftover")
+            it.setLastModified(System.currentTimeMillis() - 3_600_000)
+        }
+
+        val restarted = manager()
+        restarted.init()
+
+        leftovers.forEach { it.exists() shouldBe false }
+        kept.forEach { (path, bytes) ->
+            File(extensionsDir, path).readBytes().contentEquals(bytes) shouldBe true
+        }
+        restarted.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>()
+            .versionCode shouldBe 3
+    }
+
+    @Test
     fun `an update signed by another key stays refused after a failed attempt`() = withStubbedSignatures {
         val manager = manager()
         manager.installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
