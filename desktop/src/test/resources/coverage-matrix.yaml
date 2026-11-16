@@ -675,15 +675,14 @@
   feature: "Merge / migrate pick"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Picking for a merge is not driven; planned: MergeEntriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MergeEntriesJourneyTest]
+  gap: "Only the merge pick is driven; picking for a migration, planned: MigrationJourneyTest"
 
 - key: dialog:manga.MergeDialog
   feature: "Merge dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Dialog not opened and no test merges entries (ReportOutcomeTest covers only the failure toast it shares with migrating); planned: MergeEntriesJourneyTest"
+  tests: [e2e.MergeEntriesJourneyTest]
 
 - key: dialog:manga.MigrateDialog
   feature: "Migrate dialog"
@@ -696,8 +695,8 @@
   feature: "Merged entries dialog"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Toggling a merged source is not driven; planned: MergeEntriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MergeEntriesJourneyTest]
+  gap: "Only removing a source from the merge is driven (the dialog has no on/off switch for a source); the update and download checkboxes and choosing the info entry are not"
 
 - key: dialog:track.TrackingDialog
   feature: "Tracking dialog"
@@ -710,8 +709,8 @@
   feature: "Page previews screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Previews from a source are not driven; planned: PagePreviewsJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.PagePreviewsJourneyTest]
+  gap: "Only the first page of previews loads (the fixture has one); loading the next page as the grid scrolls is not driven. Related titles on the entry screen: e2e.PagePreviewsJourneyTest and e2e.EntrySectionsJourneyTest"
 
 - key: screen:manga.MetadataViewScreen
   feature: "Metadata view"
@@ -892,8 +891,8 @@
   feature: "Data and storage (also the More tab's row): storage location, downloads folder; backup create, restore, folder; storage usage, chapter and cover cache, data folder; export library list; data sync; data saver"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest]
-  gap: "Storage and export only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest; data saver, planned: MetadataJourneyTest; sync, planned: SyncWebDavJourneyTest and SyncYomiJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest]
+  gap: "Storage and export only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest; data saver, planned: MetadataJourneyTest; sync on start and on resume stays Window-level (accepted gap until a later refactor)"
 
 - key: screen:more.SettingsScreen
   feature: "Settings row"
@@ -1056,22 +1055,20 @@
   feature: "Data sync: text dialog (host, key)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: SyncWebDavJourneyTest and SyncYomiJourneyTest"
+  tests: [e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest]
 
 - key: dialog:settings.WhatDialog
   feature: "Data sync: what to sync"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: SyncWebDavJourneyTest and SyncYomiJourneyTest"
+  tests: [e2e.SyncWebDavJourneyTest]
 
 - key: dialog:settings.TriggersDialog
   feature: "Data sync: when to sync"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Dialog not opened and no test reads the sync triggers (SyncManagerTest covers only due times and back-off); planned: SyncWebDavJourneyTest and SyncYomiJourneyTest; sync on start and resume stays Window-level"
+  tests: [e2e.SyncYomiJourneyTest]
+  gap: "The dialog sets the triggers; sync on start and on resume stays Window-level (accepted gap until a later refactor)"
 
 - key: dialog-inline:DataSaverSettings.kt:DataSaverSettings
   feature: "Data saver dialogs"
