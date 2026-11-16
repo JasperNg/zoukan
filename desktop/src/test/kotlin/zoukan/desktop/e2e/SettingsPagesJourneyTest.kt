@@ -80,7 +80,7 @@ class SettingsPagesJourneyTest {
                     runOnUiThread { HomeScreen.openSettings(navigator!!) }
                 }
 
-                /** Opens [page], scrolls to the row with [text] and clicks that text. */
+                /** Scrolls the open settings [list] to the row with [text] and clicks that text. */
                 fun ComposeUiTest.clickRow(list: SemanticsNodeInteraction, text: String) {
                     list.performScrollToNode(hasText(text))
                     onAllNodesWithText(text).onFirst().performClick()
@@ -105,7 +105,7 @@ class SettingsPagesJourneyTest {
                     waitFor(hasText(ReadingModes.label(ReadingModes.WEBTOON)), timeout = 60_000)
                     waitOrDump("for the first page", timeout = 60_000) { pageDrew(FixtureCatalog.pages("jpeg").first()) }
                     shot("1-reader-webtoon")
-                    runOnUiThread { while (navigator?.canPop == true) navigator?.pop() }
+                    runOnUiThread { while (navigator?.canPop == true) navigator.pop() }
                     preferences.defaultReadingMode().set(ReadingModes.RIGHT_TO_LEFT)
                     preferences.showNavigationOverlayOnStart().set(false)
                     preferences.showNavigationOverlayNewUser().set(true)
@@ -138,7 +138,7 @@ class SettingsPagesJourneyTest {
                     clickRow(list, localized(DMR.strings.adds_the_built_in_e_hentai))
                     waitOrDump("for E-Hentai on") { exh.isHentaiEnabled().get() }
                     shot("3-ehentai-setting")
-                    runOnUiThread { while (navigator?.canPop == true) navigator?.pop() }
+                    runOnUiThread { while (navigator?.canPop == true) navigator.pop() }
                     onAllNodesWithText("Browse").onFirst().performClick()
                     onAllNodesWithText("Sources").onFirst().performClick()
                     // Listed only: opening it would fetch e-hentai.org

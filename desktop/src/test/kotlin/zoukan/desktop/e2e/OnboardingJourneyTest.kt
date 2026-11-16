@@ -10,7 +10,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
-import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ThemeMode
 import io.kotest.matchers.shouldBe
@@ -50,7 +49,6 @@ class OnboardingJourneyTest {
         val preferences = Injekt.get<DesktopPreferences>()
         val ui = Injekt.get<UiPreferences>()
         val storage = Injekt.get<ZoukanStorage>()
-        var navigator: Navigator? = null
         val onboarding = hasTestTag("onboarding")
         val next = hasText("Next") and hasClickAction()
 
@@ -59,7 +57,7 @@ class OnboardingJourneyTest {
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
-                setContent { ZoukanContent(preferences, firstRun = true) { navigator = it } }
+                setContent { ZoukanContent(preferences, firstRun = true) }
 
                 step("The setup covers a new install") {
                     waitFor(onboarding)
@@ -124,7 +122,7 @@ class OnboardingJourneyTest {
                 preferences.shownOnboardingFlow().set(false)
                 addToLibrary(FixtureCatalog.FORMATS_TITLE)
                 runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
-                    setContent { ZoukanContent(preferences, firstRun = true) { navigator = it } }
+                    setContent { ZoukanContent(preferences, firstRun = true) }
                     waitFor(hasText(FixtureCatalog.FORMATS_TITLE))
                     waitOrDump("for the first run check to mark the setup done") { preferences.shownOnboardingFlow().get() }
                     waitForIdle()
