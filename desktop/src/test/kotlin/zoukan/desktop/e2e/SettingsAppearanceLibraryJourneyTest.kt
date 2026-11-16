@@ -1,6 +1,7 @@
 package zoukan.desktop.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -19,9 +20,11 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
@@ -29,6 +32,7 @@ import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settingsPage
+import zoukan.i18n.desktop.DMR
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.minutes
 
@@ -137,6 +141,31 @@ class SettingsAppearanceLibraryJourneyTest {
                     waitFor(hasText("History"))
                     ui.showNavHistory().set(false)
                     waitOrDump("for History to leave the navigation again", 10_000) { onAllNodesWithText("History").fetchSemanticsNodes().isEmpty() }
+
+                    // With a tab hidden from the navigation, More lists it as a row that opens it;
+                    // with the tab shown, the only one is the navigation's
+                    val history = localized(MR.strings.history)
+                    val updates = localized(MR.strings.label_recent_updates)
+                    fun count(text: String) = onAllNodesWithText(text).fetchSemanticsNodes().size
+                    ui.showNavUpdates().set(false)
+                    runOnUiThread { HomeScreen.selectTab(HomeTab.More) }
+                    waitOrDump("for More's History row", 10_000) { count(history) == 1 }
+                    waitOrDump("for More's Updates row", 10_000) { count(updates) == 1 }
+                    shot("more-hidden-tabs")
+                    onAllNodesWithText(history).onFirst().performClick()
+                    waitFor(hasContentDescription(localized(MR.strings.pref_clear_history)))
+                    runOnUiThread { navigator?.pop() }
+                    waitFor(hasText(updates))
+                    onAllNodesWithText(updates).onFirst().performClick()
+                    waitFor(hasText(localized(DMR.strings.new_chapters_in_your_library_from)))
+                    runOnUiThread { navigator?.pop() }
+                    waitFor(hasText(history))
+                    ui.showNavHistory().set(true)
+                    ui.showNavUpdates().set(true)
+                    // Back in the navigation: one of each (the navigation's), no More rows
+                    waitFor(hasText(localized(MR.strings.label_download_queue)))
+                    waitOrDump("for More's History row to go", 10_000) { count(history) == 1 }
+                    waitOrDump("for More's Updates row to go", 10_000) { count(updates) == 1 }
                     ui.appTheme().set(AppTheme.DEFAULT)
                     ui.themeMode().set(ThemeMode.SYSTEM)
                 }

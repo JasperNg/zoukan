@@ -25,6 +25,9 @@ import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.history.model.HistoryWithRelations
+import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.model.MangaUpdate
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -39,7 +42,8 @@ import kotlin.time.Duration.Companion.minutes
 
 /**
  * The History tab: read a chapter, find it in History, search, resume (opens the next chapter),
- * remove one chapter, remove the whole title, filter, select and clear.
+ * remove one chapter, remove the whole title, filter, select and clear, and add a title outside
+ * the library from its row.
  *
  *   ./gradlew :desktop:journeyTest --tests "*HistoryJourneyTest"
  */
@@ -215,6 +219,20 @@ class HistoryJourneyTest {
                     waitFor(hasText(localized(DMR.strings.nothing_read_yet)))
                     rows() shouldHaveSize 0
                     shot("9-cleared")
+                }
+
+                step("A title outside the library: its row's Add to library adds it") {
+                    runBlocking { Injekt.get<MangaRepository>().update(MangaUpdate(id = second.id, favorite = false)) }
+                    seed(secondChapter)
+                    waitOrDump("for the row") { rowCount() == 1 }
+                    val addToLibrary = localized(MR.strings.add_to_library)
+                    waitFor(hasContentDescription(addToLibrary))
+                    onAllNodes(hasContentDescription(addToLibrary)).onFirst().performClick()
+                    waitOrDump("for the title to be in the library") {
+                        runBlocking { Injekt.get<GetManga>().await(second.id) }?.favorite == true
+                    }
+                    waitOrDump("for the row's button to go") { onAllNodes(hasContentDescription(addToLibrary)).fetchSemanticsNodes().isEmpty() }
+                    shot("10-added")
                 }
             }
         }

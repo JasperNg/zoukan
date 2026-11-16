@@ -266,7 +266,7 @@
   feature: "Updates filter dialog"
   tier: journey
   smoke: false
-  tests: [e2e.LibraryViewJourneyTest]
+  tests: [ui.updates.UpdatesFilterDialogTest, e2e.LibraryViewJourneyTest]
 
 - key: screen:upcoming.UpcomingScreen
   feature: "Upcoming calendar (previous/next month, guide)"
@@ -278,7 +278,7 @@
   feature: "Updates as a More screen (when hidden from the rail)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest]
 
 # --- History tab ---
 
@@ -306,13 +306,12 @@
   tier: journey
   smoke: false
   tests: [e2e.HistoryJourneyTest]
-  gap: "The journey removes and resumes; the add to library button is not driven"
 
 - key: dialog:history.RemoveDialog
   feature: "Remove dialog (one or whole entry)"
   tier: journey
   smoke: false
-  tests: [e2e.HistoryJourneyTest]
+  tests: [ui.history.HistoryRemoveDialogTest, e2e.HistoryJourneyTest]
 
 - key: dialog:history.HistoryFilterDialog
   feature: "History filter dialog"
@@ -325,7 +324,7 @@
   feature: "History as a More screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest]
 
 # --- Browse tab ---
 
@@ -574,7 +573,7 @@
   feature: "Edit details: tracker select (fill from tracker)"
   tier: journey
   smoke: false
-  tests: [e2e.EntryPageJourneyTest]
+  tests: [ui.manga.TrackerFillTest, e2e.EntryPageJourneyTest]
 
 - key: dialog:manga.CoverDialog
   feature: "Cover dialog"
