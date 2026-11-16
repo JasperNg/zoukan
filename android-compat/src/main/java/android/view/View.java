@@ -2964,8 +2964,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public boolean dispatchTouchEvent(MotionEvent event) {
-        // ZOUKAN: no listeners or child views to route to on desktop
+        // ZOUKAN -->
+        // No listeners or child views to route to on desktop
         return onTouchEvent(event);
+        // ZOUKAN <--
     }
 
     boolean isAccessibilityFocusedViewOrHost() {
@@ -3252,8 +3254,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public final ViewParent getParent() {
-        // ZOUKAN: views are parented by ViewGroup.addView (an offscreen host for extension WebViews)
+        // ZOUKAN -->
+        // Views are parented by ViewGroup.addView (an offscreen host for extension WebViews)
         return mParent;
+        // ZOUKAN <--
     }
 
     public void setScrollX(int value) {
@@ -3274,16 +3278,20 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @ViewDebug.ExportedProperty(category = "layout")
     public final int getWidth() {
-        // ZOUKAN: views fill the display (the extension WebView's size) until laid out
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until laid out
         if (mZoukanLaidOut) return mRight - mLeft;
         return getResources().getDisplayMetrics().widthPixels;
+        // ZOUKAN <--
     }
 
     @ViewDebug.ExportedProperty(category = "layout")
     public final int getHeight() {
-        // ZOUKAN: views fill the display (the extension WebView's size) until laid out
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until laid out
         if (mZoukanLaidOut) return mBottom - mTop;
         return getResources().getDisplayMetrics().heightPixels;
+        // ZOUKAN <--
     }
 
     public void getDrawingRect(Rect outRect) {
@@ -3291,9 +3299,11 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public final int getMeasuredWidth() {
-        // ZOUKAN: views fill the display (the extension WebView's size) until measured
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until measured
         if ((mPrivateFlags & PFLAG_MEASURED_DIMENSION_SET) != 0) return mMeasuredWidth & MEASURED_SIZE_MASK;
         return getResources().getDisplayMetrics().widthPixels;
+        // ZOUKAN <--
     }
 
     public final int getMeasuredWidthAndState() {
@@ -3303,9 +3313,11 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public final int getMeasuredHeight() {
-        // ZOUKAN: views fill the display (the extension WebView's size) until measured
+        // ZOUKAN -->
+        // Views fill the display (the extension WebView's size) until measured
         if ((mPrivateFlags & PFLAG_MEASURED_DIMENSION_SET) != 0) return mMeasuredHeight & MEASURED_SIZE_MASK;
         return getResources().getDisplayMetrics().heightPixels;
+        // ZOUKAN <--
     }
 
     public final int getMeasuredHeightAndState() {
@@ -3728,20 +3740,28 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     @Deprecated
     public void invalidate(Rect dirty) {
-        // ZOUKAN: nothing is drawn on desktop
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     @Deprecated
     public void invalidate(int l, int t, int r, int b) {
-        // ZOUKAN: nothing is drawn on desktop
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     public void invalidate() {
-        // ZOUKAN: nothing is drawn on desktop
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     public void invalidate(boolean invalidateCache) {
-        // ZOUKAN: nothing is drawn on desktop
+        // ZOUKAN -->
+        // Nothing is drawn on desktop
+        // ZOUKAN <--
     }
 
     void invalidateInternal(int l, int t, int r, int b, boolean invalidateCache,
@@ -4013,8 +4033,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * (This allows addViewInLayout to not request a new layout.)
      */
     void assignParent(ViewParent parent) {
-        // ZOUKAN
+        // ZOUKAN -->
         mParent = parent;
+        // ZOUKAN <--
     }
 
     @CallSuper
@@ -5429,8 +5450,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     public static class MeasureSpec {
         private static final int MODE_SHIFT = 30;
-        // ZOUKAN
+        // ZOUKAN -->
         private static final int MODE_MASK  = 0x3 << MODE_SHIFT;
+        // ZOUKAN <--
 
         /** @hide */
         @Retention(RetentionPolicy.SOURCE)
@@ -5444,29 +5466,38 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         public static int makeMeasureSpec(@IntRange(from = 0, to = (1 << MeasureSpec.MODE_SHIFT) - 1) int size,
                                           @MeasureSpecMode int mode) {
-            // ZOUKAN: AOSP's, as for apps targeting API 17 and later
+            // ZOUKAN -->
+            // AOSP's, as for apps targeting API 17 and later
             return (size & ~MODE_MASK) | (mode & MODE_MASK);
+            // ZOUKAN <--
         }
 
         public static int makeSafeMeasureSpec(int size, int mode) {
-            // ZOUKAN: AOSP's, as for apps targeting API 23 and later
+            // ZOUKAN -->
+            // AOSP's, as for apps targeting API 23 and later
             return makeMeasureSpec(size, mode);
+            // ZOUKAN <--
         }
 
         @MeasureSpecMode
         public static int getMode(int measureSpec) {
-            // ZOUKAN: AOSP's
+            // ZOUKAN -->
+            // AOSP's
             //noinspection ResourceType
             return (measureSpec & MODE_MASK);
+            // ZOUKAN <--
         }
 
         public static int getSize(int measureSpec) {
-            // ZOUKAN: AOSP's
+            // ZOUKAN -->
+            // AOSP's
             return (measureSpec & ~MODE_MASK);
+            // ZOUKAN <--
         }
 
         static int adjust(int measureSpec, int delta) {
-            // ZOUKAN: AOSP's
+            // ZOUKAN -->
+            // AOSP's
             final int mode = getMode(measureSpec);
             int size = getSize(measureSpec);
             if (mode == UNSPECIFIED) {
@@ -5478,10 +5509,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                 size = 0;
             }
             return makeMeasureSpec(size, mode);
+            // ZOUKAN <--
         }
 
         public static String toString(int measureSpec) {
-            // ZOUKAN: AOSP's
+            // ZOUKAN -->
+            // AOSP's
             int mode = getMode(measureSpec);
             int size = getSize(measureSpec);
 
@@ -5498,6 +5531,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
             sb.append(size);
             return sb.toString();
+            // ZOUKAN <--
         }
     }
 

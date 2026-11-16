@@ -9,10 +9,12 @@ package androidx.preference;
 
 import android.content.Context;
 
-// ZOUKAN: a PreferenceGroup, as on Android; addPreference and getPreferences (the direct children)
+// ZOUKAN: whole file -->
+// A PreferenceGroup, as on Android; addPreference and getPreferences (the direct children)
 // are PreferenceGroup's
 public class PreferenceScreen extends PreferenceGroup {
     public PreferenceScreen(Context context) {
         super(context);
     }
 }
+// ZOUKAN: whole file <--

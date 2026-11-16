@@ -84,10 +84,12 @@ public class CustomContext extends Context {
     {
         serviceMap.put(Context.CONNECTIVITY_SERVICE, ConnectivityManager.INSTANCE);
         serviceMap.put(Context.POWER_SERVICE, PowerManager.INSTANCE);
-        // ZOUKAN: virtual displays for offscreen WebViews
+        // ZOUKAN -->
+        // Virtual displays for offscreen WebViews
         serviceMap.put(Context.DISPLAY_SERVICE, android.hardware.display.DisplayManager.INSTANCE);
-        // ZOUKAN: memory info (ActivityManager.getMemoryInfo)
+        // Memory info (ActivityManager.getMemoryInfo)
         serviceMap.put(Context.ACTIVITY_SERVICE, android.app.ActivityManager.INSTANCE);
+        // ZOUKAN <--
     }
 
     @Override
@@ -114,8 +116,10 @@ public class CustomContext extends Context {
 
     @Override
     public Looper getMainLooper() {
-        // ZOUKAN: the looper the desktop app runs as Android's main thread (null until it is prepared)
+        // ZOUKAN -->
+        // The looper the desktop app runs as Android's main thread (null until it is prepared)
         return Looper.getMainLooper();
+        // ZOUKAN <--
     }
 
     @Override
@@ -140,10 +144,13 @@ public class CustomContext extends Context {
 
     @Override
     public String getPackageName() {
-        // ZOUKAN: the emulated app's package name (android.app.packageName), as Android reports it
+        // ZOUKAN -->
+        // The emulated app's package name (android.app.packageName), as Android reports it
         return applicationInfo.packageName;
+        // ZOUKAN <--
     }
 
+    // ZOUKAN -->
     @Override
     public String getBasePackageName() {
         return getPackageName();
@@ -153,6 +160,7 @@ public class CustomContext extends Context {
     public String getOpPackageName() {
         return getPackageName();
     }
+    // ZOUKAN <--
 
     @Override
     public ApplicationInfo getApplicationInfo() {
@@ -231,8 +239,10 @@ public class CustomContext extends Context {
 
     @Override
     public File getSharedPreferencesPath(String name) {
-        // ZOUKAN: where getSharedPreferences(name) keeps its values
+        // ZOUKAN -->
+        // Where getSharedPreferences(name) keeps its values
         return JavaSharedPreferences.fileFor(name);
+        // ZOUKAN <--
     }
 
     @Override

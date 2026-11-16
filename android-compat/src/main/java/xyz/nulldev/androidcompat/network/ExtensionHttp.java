@@ -1,3 +1,4 @@
+// ZOUKAN: whole file -->
 package xyz.nulldev.androidcompat.network;
 
 import java.net.InetAddress;
@@ -9,7 +10,7 @@ import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 
 /**
- * ZOUKAN: what an extension's own {@code new OkHttpClient()} and {@code new OkHttpClient.Builder()}
+ * What an extension's own {@code new OkHttpClient()} and {@code new OkHttpClient.Builder()}
  * become. BytecodeEditor rewrites those constructor calls in extension classes into calls of
  * {@link #newClient()} and {@link #newBuilder()}, which give the same fresh client (no app
  * interceptors, cookies or cache) except that names resolve through the app's DNS: over HTTPS when
@@ -59,3 +60,4 @@ public final class ExtensionHttp {
         return new OkHttpClient.Builder().dns(DNS);
     }
 }
+// ZOUKAN: whole file <--

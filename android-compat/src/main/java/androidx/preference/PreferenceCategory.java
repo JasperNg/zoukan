@@ -2,7 +2,7 @@ package androidx.preference;
 
 import android.content.Context;
 
-// ZOUKAN: whole file
+// ZOUKAN: whole file -->
 
 /** A minimal androidx.preference.PreferenceCategory: a titled section of a screen. */
 public class PreferenceCategory extends PreferenceGroup {
@@ -22,3 +22,4 @@ public class PreferenceCategory extends PreferenceGroup {
         return !super.isEnabled();
     }
 }
+// ZOUKAN: whole file <--

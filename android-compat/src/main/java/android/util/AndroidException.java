@@ -1,6 +1,7 @@
+// ZOUKAN: whole file -->
 package android.util;
 
-// ZOUKAN: whole file. android.jar's AndroidException is a stub whose constructors throw "Stub!", so
+// android.jar's AndroidException is a stub whose constructors throw "Stub!", so
 // PackageManager.NameNotFoundException (and the other exceptions built on it) could not be thrown
 
 /** Base class for the checked exceptions the Android framework throws, as on Android. */
@@ -20,3 +21,4 @@ public class AndroidException extends Exception {
         super(cause);
     }
 }
+// ZOUKAN: whole file <--

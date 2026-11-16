@@ -388,9 +388,11 @@ object BytecodeEditor {
         if (this == null) return null
         var classReference: String = this
         classesToReplace.forEach {
-            // ZOUKAN: only as a descriptor's class name (Ljava/text/SimpleDateFormat; or <...>), so a
+            // ZOUKAN -->
+            // Only as a descriptor's class name (Ljava/text/SimpleDateFormat; or <...>), so a
             // name already replaced is not prefixed twice
             classReference = classReference.replace(Regex("(?<=L)${Regex.escape(it)}(?=[;<])"), "$REPLACEMENT_PATH/$it")
+            // ZOUKAN <--
         }
         return classReference
     }

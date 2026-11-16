@@ -1328,8 +1328,10 @@ public class WebView extends AbsoluteLayout
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
-        // ZOUKAN: the offscreen browser keeps its own size (see KcefWebViewProvider.RenderHandler)
+        // ZOUKAN -->
+        // The offscreen browser keeps its own size (see KcefWebViewProvider.RenderHandler)
         if (isKcef()) return;
+        // ZOUKAN <--
         mProvider.getViewDelegate().onSizeChanged(w, h, ow, oh);
     }
 

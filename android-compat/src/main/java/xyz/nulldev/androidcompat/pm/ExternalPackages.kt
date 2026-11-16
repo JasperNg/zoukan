@@ -2,7 +2,7 @@ package xyz.nulldev.androidcompat.pm
 
 import android.content.pm.PackageInfo
 
-// ZOUKAN: whole file
+// ZOUKAN: whole file -->
 
 /**
  * What the emulated package manager knows beyond AndroidCompat's own package folder: the app
@@ -46,3 +46,4 @@ object ExternalPackages {
                 }
         }
 }
+// ZOUKAN: whole file <--

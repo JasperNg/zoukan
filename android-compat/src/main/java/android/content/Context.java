@@ -46,10 +46,12 @@ import java.lang.annotation.RetentionPolicy;
  * broadcasting and receiving intents, etc.
  */
 public abstract class Context {
-    // ZOUKAN: the registerReceiver flags of API 26 and 33, as on Android
+    // ZOUKAN -->
+    // The registerReceiver flags of API 26 and 33, as on Android
     public static final int RECEIVER_VISIBLE_TO_INSTANT_APPS = 0x1;
     public static final int RECEIVER_EXPORTED = 0x2;
     public static final int RECEIVER_NOT_EXPORTED = 0x4;
+    // ZOUKAN <--
     /**
      * File creation mode: the default mode, where the created file can only
      * be accessed by the calling application (or all applications sharing the

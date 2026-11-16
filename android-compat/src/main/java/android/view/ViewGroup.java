@@ -563,8 +563,10 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        // ZOUKAN: no child views to route to on desktop
+        // ZOUKAN -->
+        // No child views to route to on desktop
         return onTouchEvent(ev);
+        // ZOUKAN <--
     }
 
     public ArrayList<View> buildTouchDispatchChildList() {
@@ -927,16 +929,22 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     // ZOUKAN <--
 
     public void addView(View child, int index) {
-        addView(child, index, null); // ZOUKAN
+        // ZOUKAN -->
+        addView(child, index, null);
+        // ZOUKAN <--
     }
 
     public void addView(View child, int width, int height) {
-        addView(child, -1, null); // ZOUKAN
+        // ZOUKAN -->
+        addView(child, -1, null);
+        // ZOUKAN <--
     }
 
     @Override
     public void addView(View child, LayoutParams params) {
-        addView(child, -1, params); // ZOUKAN
+        // ZOUKAN -->
+        addView(child, -1, params);
+        // ZOUKAN <--
     }
 
     public void addView(View child, int index, LayoutParams params) {
@@ -966,7 +974,9 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     }
 
     public void setOnHierarchyChangeListener(OnHierarchyChangeListener listener) {
-        mOnHierarchyChangeListener = listener; // ZOUKAN
+        // ZOUKAN -->
+        mOnHierarchyChangeListener = listener;
+        // ZOUKAN <--
     }
 
     void dispatchViewAdded(View child) {
@@ -1250,11 +1260,15 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     }
 
     public int getChildCount() {
-        return zoukanChildren.size(); // ZOUKAN
+        // ZOUKAN -->
+        return zoukanChildren.size();
+        // ZOUKAN <--
     }
 
     public View getChildAt(int index) {
-        return index >= 0 && index < zoukanChildren.size() ? zoukanChildren.get(index) : null; // ZOUKAN
+        // ZOUKAN -->
+        return index >= 0 && index < zoukanChildren.size() ? zoukanChildren.get(index) : null;
+        // ZOUKAN <--
     }
 
     protected void measureChildren(int widthMeasureSpec, int heightMeasureSpec) {
