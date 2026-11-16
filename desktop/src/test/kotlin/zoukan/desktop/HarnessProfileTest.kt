@@ -32,7 +32,7 @@ class HarnessProfileTest {
 
     @Test
     fun `a second harness run on the same profile is refused`() {
-        val held = SingleInstance.acquireForCommand(harnessDirs().root)
+        val held = SingleInstance.acquireForCommand(harnessDirs().root, "harness")
         (held != null) shouldBe true
         lockHarness(harnessDirs()) shouldBe null
     }

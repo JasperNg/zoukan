@@ -259,7 +259,7 @@ internal fun harnessDirs(): ZoukanDirs = ZoukanDirs.harness()
 
 /** Takes the harness profile's lock; null (after saying so) when another harness run holds it. */
 internal fun lockHarness(dirs: ZoukanDirs): AutoCloseable? =
-    SingleInstance.acquireForCommand(dirs.root) ?: run {
+    SingleInstance.acquireForCommand(dirs.root, "harness") ?: run {
         System.err.println("Another harness run is using ${dirs.root}; wait for it to finish.")
         null
     }
