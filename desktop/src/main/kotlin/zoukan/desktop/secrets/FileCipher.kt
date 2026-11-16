@@ -3,6 +3,8 @@ package zoukan.desktop.secrets
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.security.SecureRandom
 import java.util.HexFormat
 import javax.crypto.Cipher
@@ -63,7 +65,13 @@ class FileCipher(private val key: ByteArray) : SettingsFileCodec {
          * the files it encrypted (kept aside as `.unreadable`) can still be recovered.
          */
         fun fromStore(secrets: SecretStore): FileCipher {
-            val text = secrets.get(KEY_NAME)
+            // A read that fails (access denied, locked keychain) stops here: nothing is written, so
+            // the key that exists is never replaced
+            val text = try {
+                secrets.get(KEY_NAME)
+            } catch (e: Exception) {
+                throw SecretStoreUnavailableException(secrets.name, localized(DMR.strings.secret_store_unavailable, secrets.name), e)
+            }
             val stored = text?.let { runCatching { HexFormat.of().parseHex(it.trim()) }.getOrNull() }
             if (stored != null && stored.size == KEY_BYTES) return FileCipher(stored)
             if (text != null) {

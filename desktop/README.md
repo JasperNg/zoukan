@@ -232,6 +232,11 @@ real export in `src/test/resources/backups/`; reports go to `desktop/build/repor
 | Cloudflare | `CloudflareInterceptor` (core/common desktopMain) | Hidden WebView first, then a browser window (`--interactive`) |
 | Android app code | `app-shared.txt`, `compat/` | Trackers, E-Hentai, merged source and some interactors are copied from `app/src/main/java` at build time (`syncAppShared`) and compiled as they are; `compat/` has desktop versions of the Android pieces they call |
 
+Mac builds are unsigned, so after an update macOS may ask whether Zoukan may use its Keychain items
+(the database key, the file key and others). Allow it for Zoukan only. "Deny" stops the start with a
+message that names the Keychain and changes nothing: no key is replaced, and starting Zoukan again
+asks once more.
+
 ## Known limits
 
 - Converting APKs with dex2jar fails JVM bytecode verification for R8-minified APKs, which is every

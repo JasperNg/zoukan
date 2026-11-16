@@ -864,4 +864,5 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="secret_store_unavailable">Zoukan could not read its keys in %1$s. If you denied access, start Zoukan again and allow it; nothing was changed.</string>
 </resources>
