@@ -56,6 +56,18 @@ class SyncSettingsValidationTest {
     }
 
     @Test
+    fun `plain http over a private network such as Tailscale is fine`() {
+        listOf(
+            "http://100.101.102.103:8282",
+            "http://100.64.0.1",
+            "http://sync.internal/dav",
+            "http://nas.home.arpa",
+        ).forEach { ServerAddress.check(it) shouldBe Verdict.Ok }
+        // Just outside 100.64.0.0/10
+        ServerAddress.check("http://100.128.0.1") shouldBe Verdict.PlainHttp
+    }
+
+    @Test
     fun `an empty address clears the setting`() {
         ServerAddress.check("") shouldBe Verdict.Ok
         ServerAddress.check("   ") shouldBe Verdict.Ok

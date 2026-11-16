@@ -424,7 +424,7 @@ private fun LazyListScope.downloadSettings(
         SettingRow(
             if (hasPassword) localized(DMR.strings.change_the_download_password) else localized(DMR.strings.set_the_download_password),
             localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name) +
-                if (hasPassword) " " + localized(DMR.strings.existing_downloads_keep_their_password) + "." else "",
+                if (hasPassword) " " + localized(DMR.strings.existing_downloads_keep_their_password) else "",
             onClick = onEditPassword,
         )
     }

@@ -222,10 +222,14 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
         is ListPreference, is MultiSelectListPreference, is EditTextPreference -> SettingRow(
             title = title,
             subtitle = when (pref) {
-                // A password, token or key is never the summary: the extension's own summary, or "Not set"
-                is EditTextPreference -> summaryOf(pref) ?: readSafely(pref, null) { pref.currentValue as? String }.let { value ->
+                // A password, token or key is never the summary: the extension's own summary unless it
+                // repeats the value, or "Not set"
+                is EditTextPreference -> {
+                    val value = readSafely(pref, null) { pref.currentValue as? String }
+                    val summary = summaryOf(pref)
                     when {
-                        !looksSecret(pref.key, title) -> value
+                        !looksSecret(pref.key, title) -> summary ?: value
+                        summary != null && (value.isNullOrEmpty() || value !in summary) -> summary
                         value.isNullOrEmpty() -> localized(DMR.strings.not_set)
                         else -> null
                     }
@@ -308,11 +312,12 @@ internal fun snapSeekBar(value: Float, min: Int, max: Int, increment: Int): Int 
     return (min + steps * increment).coerceIn(min, max)
 }
 
-private val secretWords = listOf("pass", "secret", "token", "apikey", "api_key", "api key", "cookie", "hash", "auth")
+// "auth" but not "author"
+private val secretWords = Regex("pass|secret|token|apikey|api_key|api key|cookie|hash|auth(?!or)")
 
 /** Whether a text setting called [key] or [title] probably holds a password, token or key. */
 internal fun looksSecret(key: String?, title: String?): Boolean =
-    listOfNotNull(key, title).any { text -> secretWords.any { it in text.lowercase() } }
+    listOfNotNull(key, title).any { secretWords.containsMatchIn(it.lowercase()) }
 
 /** A single-line text field that shows bullets until the eye button is pressed. */
 @Composable

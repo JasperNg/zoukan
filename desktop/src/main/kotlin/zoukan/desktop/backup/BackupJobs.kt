@@ -36,8 +36,7 @@ class BackupJobs(
 
     /** Writes a backup of what [options] picks (Create backup's choices) to [file]. */
     fun create(file: File, options: BackupOptions) {
-        if (_status.value != null) return
-        _status.value = localized(DMR.strings.backing_up)
+        if (!_status.compareAndSet(null, localized(DMR.strings.backing_up))) return
         scope.launch {
             try {
                 val backup = backups().create(file, options)

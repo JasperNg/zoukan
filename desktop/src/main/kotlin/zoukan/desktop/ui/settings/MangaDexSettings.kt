@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import exh.md.utils.MdUtil
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
@@ -166,11 +167,16 @@ internal fun FollowLibraryRow(enabled: Boolean, count: suspend () -> Int, onFoll
         enabled = enabled,
         onClick = {
             scope.launch {
-                runCatching { count() }
-                    .onSuccess { entries ->
-                        if (entries == 0) Toasts.show(localized(DMR.strings.no_mangadex_entries_in_the_library)) else asking = entries
-                    }
-                    .onFailure { Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), it) }
+                val entries = try {
+                    count()
+                } catch (e: CancellationException) {
+                    // The page closed while counting: nothing failed
+                    throw e
+                } catch (e: Exception) {
+                    Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), e)
+                    return@launch
+                }
+                if (entries == 0) Toasts.show(localized(DMR.strings.no_mangadex_entries_in_the_library)) else asking = entries
             }
         },
     )

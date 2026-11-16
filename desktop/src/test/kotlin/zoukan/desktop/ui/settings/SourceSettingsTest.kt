@@ -163,6 +163,22 @@ class SourceSettingsTest {
     }
 
     @Test
+    fun `a secret setting whose summary repeats its value does not show it`() = withRoot {
+        runDesktopComposeUiTest {
+            // Extensions often set the summary to the value they just saved
+            val pref = textPreference("api_key", "API key", "s3cr3t-value").apply { summary = "Key: s3cr3t-value" }
+            val described = textPreference("token", "Token", "s3cr3t-value").apply { summary = "From your account page" }
+            setContent {
+                PreferenceItem(pref, 0, onChanged = {}, onOpen = {})
+                PreferenceItem(described, 0, onChanged = {}, onOpen = {})
+            }
+
+            onAllNodesWithText("s3cr3t-value", substring = true).fetchSemanticsNodes().isEmpty() shouldBe true
+            onNodeWithText("From your account page").assertExists()
+        }
+    }
+
+    @Test
     fun `a password-like text setting is masked in its edit dialog`() = withRoot {
         runDesktopComposeUiTest {
             val pref = textPreference("password", "Password", "s3cr3t-value")
@@ -185,6 +201,8 @@ class SourceSettingsTest {
         looksSecret(null, "Password") shouldBe true
         looksSecret("pref_cookie", "Session") shouldBe true
         looksSecret("server_url", "Server address") shouldBe false
+        looksSecret("hidden_authors", "Authors to hide") shouldBe false
+        looksSecret("auth_code", null) shouldBe true
         looksSecret(null, null) shouldBe false
     }
 

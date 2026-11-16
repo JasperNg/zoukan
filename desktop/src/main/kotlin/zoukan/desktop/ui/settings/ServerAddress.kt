@@ -40,14 +40,17 @@ internal object ServerAddress {
         if (IPV4.matches(name)) return isLocalIpv4(name)
         // A dotted number that is not an address is not a local name
         if (DIGITS_AND_DOTS.matches(name)) return false
-        return name == "localhost" || name.endsWith(".localhost") || name.endsWith(".local") || name.endsWith(".lan") || '.' !in name
+        return name == "localhost" || name.endsWith(".localhost") || name.endsWith(".local") || name.endsWith(".lan") ||
+            name.endsWith(".internal") || name.endsWith(".home.arpa") || '.' !in name
     }
 
     private fun isLocalIpv4(address: String): Boolean {
         val parts = address.split('.').map { it.toInt() }
         if (parts.any { it > 255 }) return false
         val (a, b) = parts
-        return a == 127 || a == 10 || (a == 172 && b in 16..31) || (a == 192 && b == 168) || (a == 169 && b == 254)
+        return a == 127 || a == 10 || (a == 172 && b in 16..31) || (a == 192 && b == 168) || (a == 169 && b == 254) ||
+            // Shared address space (100.64.0.0/10): Tailscale and carrier-grade NAT
+            (a == 100 && b in 64..127)
     }
 
     private fun isLocalIpv6(literal: String): Boolean {
