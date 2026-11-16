@@ -237,7 +237,7 @@ class MangaScreenModel(
         if (state.value.isLocal) return
         // ZOUKAN -->
         screenModelScope.launch {
-            byEntry(manga, chapters).forEach { (entry, list) -> downloadManager.enqueue(entry, list) }
+            downloadManager.enqueueAll(byEntry(manga, chapters))
         }
         // ZOUKAN <--
         done(chapters)
@@ -341,7 +341,7 @@ class MangaScreenModel(
         screenModelScope.launch(kotlinx.coroutines.NonCancellable) {
             val chaptersToDownload = filterChaptersForDownload.await(manga, chapters)
             if (chaptersToDownload.isNotEmpty() && !manga.isEhBasedManga()) {
-                byEntry(manga, chaptersToDownload).forEach { (entry, list) -> downloadManager.enqueue(entry, list) }
+                downloadManager.enqueueAll(byEntry(manga, chaptersToDownload))
             }
         }
     }

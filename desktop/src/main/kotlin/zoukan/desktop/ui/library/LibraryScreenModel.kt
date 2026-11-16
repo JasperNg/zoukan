@@ -668,14 +668,14 @@ class LibraryScreenModel(
     fun download(count: Int?, ids: Set<Long> = state.value.selection) {
         val mangas = selected(ids).filter { it.source != LocalSource.ID }
         screenModelScope.launch {
-            mangas.forEach { manga ->
-                val unread = chaptersOf(manga).filter { !it.read }.sortedByDescending { it.sourceOrder }
-                    .let { list -> if (count == null) list else list.take(count) }
-                byEntry(manga, unread).forEach { (entry, chapters) ->
-                    val missing = chapters.filter { !downloadManager.isDownloaded(entry, it) }
-                    downloadManager.enqueue(entry, missing)
-                }
-            }
+            // The manager skips chapters that are downloaded or queued, and reads folders off the UI thread
+            downloadManager.enqueueAll(
+                mangas.flatMap { manga ->
+                    val unread = chaptersOf(manga).filter { !it.read }.sortedByDescending { it.sourceOrder }
+                        .let { list -> if (count == null) list else list.take(count) }
+                    byEntry(manga, unread)
+                },
+            )
             done(ids)
         }
     }
@@ -713,12 +713,9 @@ class LibraryScreenModel(
     fun downloadBookmarked() {
         val mangas = selected(state.value.selection).filter { it.source != LocalSource.ID }
         screenModelScope.launch {
-            mangas.forEach { manga ->
-                byEntry(manga, chaptersOf(manga).filter { it.bookmark }).forEach { (entry, chapters) ->
-                    val missing = chapters.filter { !downloadManager.isDownloaded(entry, it) }
-                    downloadManager.enqueue(entry, missing)
-                }
-            }
+            downloadManager.enqueueAll(
+                mangas.flatMap { manga -> byEntry(manga, chaptersOf(manga).filter { it.bookmark }) },
+            )
             clearSelection()
         }
     }

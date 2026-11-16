@@ -134,24 +134,30 @@ class DownloadManager(
         _changes.update { it + 1 }
     }
 
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun isDownloaded(manga: Manga, chapter: Chapter): Boolean {
         val names = namesIn(paths.mangaDir(manga))
         if (names.isEmpty()) return false
         return paths.validChapterNames(chapter).any { it in names }
     }
 
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun downloadedIds(manga: Manga, chapters: List<Chapter>): Set<Long> {
         val names = namesIn(paths.mangaDir(manga))
         if (names.isEmpty()) return emptySet()
         return chapters.filter { c -> paths.validChapterNames(c).any { it in names } }.mapTo(HashSet()) { it.id }
     }
 
-    /** How many chapters of [manga] are downloaded, for the library's download badge and filter. */
+    /**
+     * How many chapters of [manga] are downloaded, for the library's download badge and filter.
+     * Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models).
+     */
     fun downloadCount(manga: Manga): Int =
         namesIn(paths.mangaDir(manga)).count { name ->
             !name.endsWith(DownloadPaths.TMP_SUFFIX) && !name.startsWith(".") && NOT_CHAPTER.none { name.endsWith(it, ignoreCase = true) }
         }
 
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun findChapter(manga: Manga, chapter: Chapter): File? =
         if (isDownloaded(manga, chapter)) paths.findChapter(manga, chapter) else null
 
@@ -414,7 +420,17 @@ class DownloadManager(
 
     // Queue -----------------------------------------------------------------------------------
 
-    /** Adds [chapters] to the queue, unless downloaded or queued already. */
+    /** Queues each entry's chapters that are not downloaded or queued yet. Safe to call from the UI thread. */
+    suspend fun enqueueAll(entries: List<Pair<Manga, List<Chapter>>>, start: Boolean = true) {
+        withContext(Dispatchers.IO) {
+            entries.forEach { (manga, chapters) -> enqueue(manga, chapters, start) }
+        }
+    }
+
+    /**
+     * Adds [chapters] to the queue, unless downloaded or queued already.
+     * Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models).
+     */
     fun enqueue(manga: Manga, chapters: List<Chapter>, start: Boolean = true) {
         if (chapters.isEmpty()) return
         val candidates = chapters

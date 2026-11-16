@@ -353,7 +353,7 @@ class UpdatesScreenModel(
 
     fun download(items: List<UpdatesWithRelations>) {
         screenModelScope.launch {
-            byEntry(items).forEach { (manga, chapters) -> downloadManager.enqueue(manga, chapters) }
+            downloadManager.enqueueAll(byEntry(items))
         }
         done(items)
     }
