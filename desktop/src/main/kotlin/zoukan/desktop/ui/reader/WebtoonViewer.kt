@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,9 +44,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.i18n.desktop.DMR
 
 /**
  * Webtoon and continuous vertical modes: every page in one scrolling strip. Webtoon has no gaps
@@ -66,9 +70,9 @@ fun WebtoonViewer(
     val hasPrevious = state.previousChapter != null
     // Item 0 is the previous chapter transition, then the pages, then the next chapter transition
     // ZOUKAN -->
-    // With "Always show chapter transition" off, the one between back-to-back chapters is an empty
-    // item, so the indices stay; the reader then goes on to that chapter at the strip's end, as
-    // Android shows its pages there instead
+    // With "Always show chapter transition" off, the one between back-to-back chapters is not shown,
+    // so the strip ends with a small next chapter button (an empty item before the first page), and
+    // the indices stay; keys, taps and auto scroll go on to that chapter directly
     val alwaysTransition by model.preferences.alwaysShowChapterTransition().collectAsState()
     val showPrevious = ChapterTransitions.shown(alwaysTransition, state.chapter, state.previousChapter, next = false, hasPages = pages.isNotEmpty())
     val showNext = ChapterTransitions.shown(alwaysTransition, state.chapter, state.nextChapter, next = true, hasPages = pages.isNotEmpty())
@@ -293,6 +297,13 @@ fun WebtoonViewer(
                                 onGo = { model.nextChapter() },
                                 modifier = Modifier.fillMaxWidth().height(with(density) { (viewportHeight * 0.6f).toDp() }),
                             )
+                        } else if (state.nextChapter != null) {
+                            // A wheel or trackpad scroll stops at the strip's end: keep a way on there
+                            Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
+                                FilledTonalButton(onClick = { model.nextChapter() }) {
+                                    Text(localized(DMR.strings.next_chapter_button))
+                                }
+                            }
                         } else {
                             Spacer(Modifier.height(1.dp))
                         }
