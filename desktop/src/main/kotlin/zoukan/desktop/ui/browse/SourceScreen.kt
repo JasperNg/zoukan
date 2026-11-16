@@ -246,6 +246,8 @@ data class SourceScreen(
                             // While selecting, right-click selects; otherwise it adds or removes (Android's long press)
                             onMangaSecondaryClick = { manga -> if (bulk.active) bulk.toggle(manga) else libraryToggle.toggle(manga) },
                             onNearEnd = model::loadNextPage,
+                            // A page that "hide entries in library" filters out entirely still asks for the next one
+                            loadedCount = state.items.size,
                         ) {
                             // ZOUKAN <--
                             Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
