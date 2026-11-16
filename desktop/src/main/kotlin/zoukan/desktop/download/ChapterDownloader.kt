@@ -8,6 +8,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Locale
@@ -35,6 +36,8 @@ class ChapterDownloader(
     )
 
     /**
+     * Never replaces or deletes a chapter that is already on disk: it fails instead.
+     *
      * @param onProgress pages done and the page count
      * @return the chapter's CBZ or folder
      */
@@ -98,12 +101,19 @@ class ChapterDownloader(
                 tmp.listFiles().orEmpty().filter { it.isFile }.sortedWith(compareBy(FileNames.naturalOrder) { it.name })
                     .forEach { writer.write(it.name, it.readBytes()) }
             }
-            Files.move(part.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            try {
+                // No REPLACE_EXISTING: a chapter already on disk is never replaced
+                Files.move(part.toPath(), target.toPath())
+            } catch (e: FileAlreadyExistsException) {
+                // Only the new, unpublished archive goes; the page folder stays for a resume
+                part.delete()
+                throw java.io.IOException("${target.name} already exists; the existing file was kept", e)
+            }
             tmp.deleteRecursively()
             target
         } else {
             val target = File(mangaDir, chapterName)
-            if (target.exists()) target.deleteRecursively()
+            if (target.exists()) throw java.io.IOException("${target.name} already exists; the existing folder was kept")
             if (!tmp.renameTo(target)) error("Could not rename ${tmp.name}")
             target
         }

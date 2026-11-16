@@ -608,7 +608,11 @@ class DownloadManager(
             val source = sourceManager.get(manga.source) as? HttpSource
                 ?: error("The source of ${manga.title} is not installed")
             val dir = paths.mangaDir(manga)
-            if (!isDownloaded(manga, chapter)) {
+            // The gate is the disk, not the cache: a chapter copied in since the folder was listed
+            // is kept as it is
+            if (paths.findChapter(manga, chapter) != null) {
+                invalidate(dir)
+            } else {
                 val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
                 if (freeSpace != null && freeSpace in 1 until MIN_FREE_SPACE) error("Not enough free disk space")
                 val downloader = ChapterDownloader(

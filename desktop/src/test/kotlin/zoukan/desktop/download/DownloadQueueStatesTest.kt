@@ -112,7 +112,7 @@ class DownloadQueueStatesTest {
         }
     }
 
-    private fun manager(): DownloadManager {
+    private fun manager(asCbz: Boolean = true): DownloadManager {
         val sourceManager = mockk<SourceManager> {
             every { get(source.id) } returns source
             every { getOrStub(source.id) } returns source
@@ -121,7 +121,7 @@ class DownloadQueueStatesTest {
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)
-            every { saveChaptersAsCBZ() } returns pref(true)
+            every { saveChaptersAsCBZ() } returns pref(asCbz)
             every { parallelSourceLimit() } returns pref(1)
             every { parallelPageLimit() } returns pref(1)
             every { splitTallImages() } returns pref(false)
@@ -135,6 +135,43 @@ class DownloadQueueStatesTest {
         val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
         return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, password, mockk(), mockk(), mockk(relaxed = true))
             .also { managers += it }
+    }
+
+    @Test
+    fun `a chapter copied into the folder after it was listed keeps its bytes when the same chapter downloads`() = runBlocking<Unit> {
+        val manager = manager()
+        val chapter = chapter(1, pages = 3)
+        manager.isDownloaded(manga, chapter) shouldBe false // lists the (empty) folder into the cache
+        val dir = File(temp, "downloads/$source/Manga").apply { mkdirs() }
+        val bytes = kotlin.random.Random(2).nextBytes(8192)
+        File(dir, "Chapter 1.cbz").writeBytes(bytes) // a synced copy, written outside the manager
+
+        manager.enqueue(manga, listOf(chapter))
+        withTimeout(30_000) { manager.awaitIdle() }
+
+        File(dir, "Chapter 1.cbz").readBytes() shouldBe bytes
+        dir.list()!!.toList() shouldBe listOf("Chapter 1.cbz")
+        manager.isDownloaded(manga, chapter) shouldBe true
+        manager.queue.value.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a chapter folder copied in after it was listed keeps its files when the same chapter downloads`() = runBlocking<Unit> {
+        val manager = manager(asCbz = false)
+        val chapter = chapter(1, pages = 3)
+        manager.isDownloaded(manga, chapter) shouldBe false
+        val dir = File(temp, "downloads/$source/Manga").apply { mkdirs() }
+        val bytes = kotlin.random.Random(3).nextBytes(8192)
+        File(dir, "Chapter 1").mkdirs()
+        File(dir, "Chapter 1/001.png").writeBytes(bytes)
+
+        manager.enqueue(manga, listOf(chapter))
+        withTimeout(30_000) { manager.awaitIdle() }
+
+        File(dir, "Chapter 1").list()!!.toList() shouldBe listOf("001.png")
+        File(dir, "Chapter 1/001.png").readBytes() shouldBe bytes
+        manager.isDownloaded(manga, chapter) shouldBe true
+        manager.queue.value.shouldBeEmpty()
     }
 
     @Test
