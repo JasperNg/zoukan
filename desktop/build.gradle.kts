@@ -247,7 +247,8 @@ dependencies {
 
     testImplementation(libs.bundles.test)
     testImplementation(zoukanlibs.compose.ui.test)
-    testRuntimeOnly(libs.junit.platform.launcher)
+    // On the compile classpath too: JourneyShardFilter is a launcher PostDiscoveryFilter
+    testImplementation(libs.junit.platform.launcher)
 }
 
 val jvmFlags = listOf(
@@ -282,7 +283,7 @@ tasks.named<JavaExec>("run") {
 /** The tests [wiringTest] runs instead of `test`. */
 val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest")
 
-/** The offline user journeys [journeyTest] runs instead of `test`. */
+/** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
 
 tasks.test {
@@ -368,8 +369,38 @@ val journeyTest by tasks.registering(Test::class) {
     classpath = test.classpath
     useJUnitPlatform()
     filter { journeyTests.forEach { includeTestsMatching(it) } }
+    // Only the journey classes themselves, not their nested and lambda classes: Gradle hands the
+    // classes it scans to the forks in turn, so empty forks would leave journeys queued behind
+    // each other in one fork while the other forks have nothing to do. Subpackages too: `test`
+    // leaves out every zoukan.desktop.e2e.*JourneyTest, subpackages included (Gradle's * matches
+    // dots), so a journey must run here (JourneyShardTest checks the naming)
+    include("zoukan/desktop/e2e/**/*JourneyTest.class")
     // Each journey starts the runtime with its own data folder, once per JVM
     forkEvery = 1
+    // Journeys share nothing but this machine (each has its own data folder and a free port), so
+    // their JVMs run side by side. Each runs a full runtime, Skia and FFmpeg: half the cores, at
+    // most 4. -Pzoukan.journey.forks=1 runs them one at a time (to time or debug them).
+    maxParallelForks = providers.gradleProperty("zoukan.journey.forks").orNull
+        ?.let { forks -> forks.toIntOrNull()?.takeIf { it >= 1 } ?: error("zoukan.journey.forks must be a positive number, not \"$forks\"") }
+        ?: (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
+    // FFmpeg's natives (AVIF) unpack once for all forks instead of into each journey's data folder;
+    // ZoukanRuntime keeps a cachedir that is already set. AvifJourneyTest clears it to keep the
+    // app's own path (FFmpeg in the data folder) under test
+    systemProperty("org.bytedeco.javacpp.cachedir", layout.buildDirectory.dir("javacpp-cache").get().asFile.absolutePath)
+    // CI splits the journeys over jobs: -Pzoukan.shard=2/3 runs the second third. Which journeys a
+    // shard keeps is decided only by JourneyShardFilter in the test JVMs (JourneyShard.includes);
+    // the build checks only the form of the value, so a typo fails here and not in every fork
+    providers.gradleProperty("zoukan.shard").orNull?.let { value ->
+        value.split('/').mapNotNull { it.trim().toIntOrNull() }
+            .takeIf { it.size == 2 && value.count { c -> c == '/' } == 1 && it[1] >= 1 && it[0] in 1..it[1] }
+            ?: error("zoukan.shard must be i/n with 1 <= i <= n, not \"$value\"")
+        systemProperty("zoukan.shard", value)
+        // With few journeys and many shards, a shard can hold none: that job has nothing to do and
+        // passes (Gradle would fail it with "No tests found for given includes")
+        filter.isFailOnNoMatchingTests = false
+    }
+    // Each journey that ran (so each journey a shard kept), as it ends
+    testLogging { events("passed", "skipped", "failed") }
     // The journeys check this machine as much as the code (JDK, display, decoders): never skip
     // them as up to date, and start each run without the last run's screenshots
     outputs.upToDateWhen { false }

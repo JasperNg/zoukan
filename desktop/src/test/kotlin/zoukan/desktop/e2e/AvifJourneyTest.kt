@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
@@ -35,7 +37,11 @@ class AvifJourneyTest {
 
     @Test
     fun readAvifChapter() {
+        // The other journeys share one FFmpeg cache (journeyTest sets the cachedir); this one takes
+        // the app's own path, where ZoukanRuntime unpacks FFmpeg into the data folder
+        System.clearProperty(JAVACPP_CACHEDIR)
         journey = Journey.start("avif")
+        System.getProperty(JAVACPP_CACHEDIR) shouldBe journey.dirs.javacppCache.absolutePath
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
         val manga = journey.addToLibrary(FixtureCatalog.FORMATS_TITLE)
@@ -51,7 +57,15 @@ class AvifJourneyTest {
                     onAllNodesWithText("Chapter 4 (AVIF)").onFirst().performClick()
                     readThrough(FixtureCatalog.pages("avif"), "avif")
                 }
+
+                step("FFmpeg unpacked into the data folder") {
+                    journey.dirs.javacppCache.walkTopDown().any { it.isFile }.shouldBeTrue()
+                }
             }
         }
+    }
+
+    private companion object {
+        const val JAVACPP_CACHEDIR = "org.bytedeco.javacpp.cachedir"
     }
 }
