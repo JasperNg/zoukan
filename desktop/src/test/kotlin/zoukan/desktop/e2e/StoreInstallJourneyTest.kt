@@ -23,6 +23,7 @@ import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.source.online.HttpSource
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -134,6 +135,9 @@ class StoreInstallJourneyTest {
                     server.requests.count { it == store.jarPath(store.trusted) } shouldBe 1
                     File(extensionsDir, "1.jar").isFile shouldBe true
                     waitOrDump("for the SourceManager to list the source") { sources.get(sourceId) != null }
+                    // The installed row names its store as the Stores tab does
+                    waitFor(hasText("· ${FixtureStore.STORE_NAME}", substring = true))
+                    onAllNodes(hasText("· ${FixtureStore.STORE_BADGE}", substring = true), useUnmergedTree = true).fetchSemanticsNodes().shouldBeEmpty()
                     snap("3-installed")
                     searchExtensions("")
                 }

@@ -375,7 +375,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 items(state.visibleUntrusted, key = { "u-${it.pkgName}" }) { ext ->
                     // ZOUKAN -->
                     // Android's long press on an untrusted extension uninstalls it
-                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { askUninstall(ext) }) {
+                    ExtensionRow(ext, null, state.stores, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { askUninstall(ext) }) {
                         // ZOUKAN <--
                         Button(onClick = { askUninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
                         Spacer(Modifier.width(8.dp))
@@ -433,7 +433,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                     val iconUrl = state.availableIcons[ext.pkgName]
                     // ZOUKAN -->
                     // Android's long press on an installed extension uninstalls it
-                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { askUninstall(ext) }) {
+                    ExtensionRow(ext, iconUrl, state.stores, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { askUninstall(ext) }) {
                         // ZOUKAN <--
                         if (ext.hasUpdate) {
                             Button(onClick = { model.update(ext) }) { Text(localized(MR.strings.ext_update)) }
@@ -448,7 +448,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             items(available, key = { "a-${it.pkgName}" }) { ext ->
                 // ZOUKAN -->
                 // Android's long press on an available extension installs it
-                ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy, onSecondaryClick = { confirmInstall = ext }) {
+                ExtensionRow(ext, ext.iconUrl, state.stores, busy = ext.pkgName in state.busy, onSecondaryClick = { confirmInstall = ext }) {
                     // ZOUKAN <--
                     FilledTonalButton(onClick = { model.install(ext) }) { Text(localized(MR.strings.action_install)) }
                 }
@@ -509,10 +509,18 @@ private fun ConfirmTrustDialog(ext: Extension.Untrusted, onConfirm: () -> Unit, 
 }
 // ZOUKAN <--
 
+/**
+ * The store name to show under [extension]: the name the Stores tab shows, found by the signing
+ * key (as the loader matches them). The extension's own short name stays when its store is gone.
+ */
+internal fun storeLabel(extension: Extension, stores: List<ExtensionStore>): String? =
+    stores.firstOrNull { it.signingKey == extension.signatureHash }?.name?.takeIf(String::isNotBlank) ?: extension.storeName
+
 @Composable
 private fun ExtensionRow(
     extension: Extension,
     iconUrl: String?,
+    stores: List<ExtensionStore>,
     subtitle: String? = null,
     busy: Boolean,
     // ZOUKAN -->
@@ -539,7 +547,7 @@ private fun ExtensionRow(
                 extension.lang?.let(::languageName),
                 extension.versionName,
                 if (extension.isNsfw) "18+" else null,
-                extension.storeName,
+                storeLabel(extension, stores),
             )
             Text(
                 subtitle ?: details.joinToString(" · "),
