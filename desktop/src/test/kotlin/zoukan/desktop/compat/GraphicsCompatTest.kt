@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -227,6 +228,36 @@ class GraphicsCompatTest {
         result.getPixel(2, 1) shouldBe 0
         canvas.drawColor(0xFF00FF00.toInt())
         result.getPixel(3, 3) shouldBe 0xFF00FF00.toInt()
+    }
+
+    @Test
+    fun `restoreToCount with the count read before save restores the transform and clip`() {
+        val result = Bitmap.createBitmap(10, 10, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.saveCount shouldBe 1
+
+        val c = canvas.saveCount
+        canvas.save() shouldBe 1
+        canvas.saveCount shouldBe 2
+        canvas.translate(5f, 0f)
+        canvas.clipRect(0, 0, 2, 2)
+        canvas.save() shouldBe 2
+        canvas.saveCount shouldBe 3
+
+        canvas.restoreToCount(c)
+        canvas.saveCount shouldBe 1
+        val paint = Paint().apply {
+            isAntiAlias = false
+            color = 0xFFFF0000.toInt()
+        }
+        canvas.drawRect(0f, 0f, 1f, 1f, paint)
+        result.getPixel(0, 0) shouldBe 0xFFFF0000.toInt()
+        result.getPixel(5, 0) shouldBe 0
+
+        // Restoring to the current count changes nothing; restore() with nothing saved is an error
+        canvas.restoreToCount(canvas.saveCount)
+        canvas.saveCount shouldBe 1
+        shouldThrow<IllegalStateException> { canvas.restore() }
     }
 
     @Test

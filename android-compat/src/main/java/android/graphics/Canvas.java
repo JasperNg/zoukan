@@ -401,17 +401,18 @@ public final class Canvas {
         // ZOUKAN <--
     }
 
+    // ZOUKAN -->
+    // Android's save count starts at 1 (the base layer); save() returns the count before the save
     public int getSaveCount() {
-        return transformStack.size();
+        return transformStack.size() + 1;
     }
 
     public int save() {
-        // ZOUKAN -->
+        int count = getSaveCount();
         Shape clip = canvas.getClip();
         Shape deviceClip = clip == null ? null : canvas.getTransform().createTransformedShape(clip);
         transformStack.add(new SavedState(canvas.getTransform(), deviceClip));
-        // ZOUKAN <--
-        return getSaveCount();
+        return count;
     }
 
     public void restoreToCount(int saveCount) {
@@ -421,22 +422,24 @@ public final class Canvas {
         }
         if (saveCount > getSaveCount()) {
             throw new IllegalArgumentException("Overflow in restoreToCount");
-
         }
-        // ZOUKAN -->
+        if (saveCount == getSaveCount()) return; // nothing saved since then
         SavedState state = transformStack.get(saveCount - 1);
         canvas.setTransform(new AffineTransform());
         canvas.setClip(state.deviceClip);
         canvas.setTransform(state.transform);
-        // ZOUKAN <--
         while (transformStack.size() >= saveCount) {
             transformStack.remove(transformStack.size() - 1);
         }
     }
 
     public void restore() {
-        restoreToCount(getSaveCount());
+        if (transformStack.isEmpty()) {
+            throw new IllegalStateException("Underflow in restore - more restores than saves");
+        }
+        restoreToCount(getSaveCount() - 1);
     }
+    // ZOUKAN <--
 
     public boolean getClipBounds(@NonNull Rect bounds) {
         Rectangle r = canvas.getClipBounds();
