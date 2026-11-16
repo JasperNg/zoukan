@@ -31,14 +31,35 @@ object ChromiumDns {
     fun apply(rootCachePath: File, provider: Int) {
         val file = File(rootCachePath, LOCAL_STATE)
         runCatching {
-            val current = if (file.exists()) file.readText() else null
-            val updated = updateLocalState(current, dohProviderUrl(provider)) ?: return
+            var current = if (file.exists()) file.readText() else null
+            val template = dohProviderUrl(provider)
+            if (!isReadable(current)) {
+                if (template == null) {
+                    logcat(LogPriority.WARN) { "Chromium's Local State is not readable; left as it is (DNS over HTTPS is off)" }
+                    return
+                }
+                // Keep the damaged file beside the new one, never delete it
+                logcat(LogPriority.WARN) {
+                    "Chromium's Local State is not readable; it was moved aside and DNS over HTTPS written to a new one"
+                }
+                Files.move(
+                    file.toPath(),
+                    File(rootCachePath, "$LOCAL_STATE.zoukan-bad").toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+                current = null
+            }
+            val updated = updateLocalState(current, template) ?: return
             rootCachePath.mkdirs()
             val temp = File(rootCachePath, "$LOCAL_STATE.zoukan-tmp")
             temp.writeText(updated)
             Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         }.onFailure { logcat(LogPriority.WARN, it) { "Could not apply DNS over HTTPS to the browser" } }
     }
+
+    /** Whether [localState] is absent, blank or a JSON object, so [updateLocalState] can work with it. */
+    private fun isReadable(localState: String?): Boolean =
+        localState.isNullOrBlank() || runCatching { Json.parseToJsonElement(localState) is JsonObject }.getOrDefault(false)
 
     /**
      * [localState] (the file's JSON, null when there is none) with the DoH preferences for

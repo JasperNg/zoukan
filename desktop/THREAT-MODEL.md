@@ -177,7 +177,7 @@ Verified and trusted:
 | The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed) | `DesktopDatabase.databaseKey`, `KeyMissingException` |
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |
 | Windows: Credential Manager generic credentials, per-user, non-roaming; macOS: login Keychain generic passwords | `desktop/.../secrets/WindowsCredentialStore.kt`, `MacKeychainStore.kt` |
-| Session cookies never persisted: the app's cookie store is in-memory (`java.net.CookieManager`), synced with Chromium only while windows are open | `android-compat/.../webkit/CefCookieSync.kt` |
+| The app's cookie store writes only cookies with an expiry, to `cookies.json`, encrypted with `FileCipher`; session cookies stay in memory. Chromium does not persist session cookies either (`persist_session_cookies = false`) | `desktop/.../network/PersistentCookieStore.kt`, `desktop/.../browser/JcefRuntime.kt` (`applySettings`) |
 | App-lock password: PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte per-password salt, constant-time comparison | `desktop/.../security/AppLock.kt` (`hash`, `verify`) |
 
 Residual risk:
@@ -188,6 +188,10 @@ Residual risk:
 2. On Linux — a development target only — secrets go to a plaintext file restricted to 0600 after
    the write (`FileSecretStore.set`), so a same-user process watching the folder can win a
    write-before-chmod race; and Chromium's own cookie DB on disk uses CEF's well-known static key.
+   Chromium also keeps the expiring cookies the app copies into it (`CefCookieSync`) in its own
+   `Cookies` database under the browser cache, protected only by Chromium's `os_crypt` (DPAPI on
+   Windows; on macOS probably a fixed mock-keychain key), outside `FileCipher`. Whoever copies the
+   data folder may be able to read those sign-ins.
 3. App lock has no attempt rate limit; offline guessing is bounded only by PBKDF2 cost. And
    `AppLock.verify` fails open when the stored hash is missing (returns unlocked rather than
    locked-down) — a known nit, harmless while the lock is enabled and the hash exists. When the

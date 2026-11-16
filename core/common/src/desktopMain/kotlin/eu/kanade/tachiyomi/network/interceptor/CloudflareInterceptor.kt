@@ -42,15 +42,7 @@ class CloudflareInterceptor(
 
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
-    private val clearanceUserAgents by lazy {
-        val preferences = context.getSharedPreferences("cloudflare_clearance", Context.MODE_PRIVATE)
-        ClearanceUserAgents(
-            object : ClearanceUserAgents.Store {
-                override fun get(key: String): String? = preferences.getString(key, null)
-                override fun put(key: String, value: String) = preferences.edit().putString(key, value).apply()
-            },
-        )
-    }
+    private val clearanceUserAgents by lazy { ClearanceUserAgents.forContext(context) }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
@@ -72,8 +64,7 @@ class CloudflareInterceptor(
                 if (current != null && current != sentClearance) return@withLock true
                 // An attempt that ended while this one waited failed (the user closed its window,
                 // say): failing too, not showing the challenge again for each queued request
-                val failedAt = lastFailure[host]
-                if (failedAt != null && failedAt - waitStarted > 0) return@withLock false
+                if (failures.shouldFailFast(host, waitStarted, System.nanoTime())) return@withLock false
                 cookieManager.remove(request.url, COOKIE_NAMES, 0)
                 val oldCookie = clearance(request)
                 // Solved with the request's own user agent when Cloudflare accepts it, so the request
@@ -93,7 +84,7 @@ class CloudflareInterceptor(
                     clearance(request)?.takeIf { clearanceUserAgents.userAgentOf(it) == null }
                         ?.let { clearanceUserAgents.record(it, solvedWith) }
                 }
-                (solvedWith != null).also { if (it) lastFailure.remove(host) else lastFailure[host] = System.nanoTime() }
+                (solvedWith != null).also { if (it) failures.solved(host) else failures.failed(host, System.nanoTime()) }
             }
             if (!solved) throw IOException("Failed to bypass Cloudflare on ${request.url.host}")
             return chain.proceed(withClearanceUserAgent(original))
@@ -116,13 +107,7 @@ class CloudflareInterceptor(
         return request.newBuilder().header("User-Agent", userAgent).build()
     }
 
-    private fun isChallenge(response: Response): Boolean {
-        if (response.code !in ERROR_CODES || response.header("Server") !in SERVER_CHECK) return false
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string(), response.request.url.toString())
-        // Solve only captchas, not geo blocks
-        return document.getElementById("challenge-error-title") != null ||
-            document.getElementById("challenge-error-text") != null
-    }
+    private fun isChallenge(response: Response): Boolean = CloudflareChallenge.isChallenge(response)
 
     private fun clearance(request: Request): Cookie? =
         cookieManager.get(request.url).firstOrNull { it.name == CF_CLEARANCE }
@@ -185,16 +170,57 @@ class CloudflareInterceptor(
         val hostLocks = HostLocks()
 
         // When the last attempt to solve each host's challenge failed; a success removes it
-        val lastFailure = ConcurrentHashMap<String, Long>()
+        val failures = ChallengeFailures(TimeUnit.MINUTES.toNanos(CHALLENGE_COOLDOWN_MINUTES))
+        const val CHALLENGE_COOLDOWN_MINUTES = 5L
         const val CF_CLEARANCE = "cf_clearance"
         const val HEADLESS_TIMEOUT_SECONDS = 30L
-        val ERROR_CODES = listOf(403, 503)
-        val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
         val COOKIE_NAMES = listOf(CF_CLEARANCE)
         val UNSAFE_HEADER_NAMES = listOf(
             "content-length", "host", "trailer", "te", "upgrade", "cookie2", "keep-alive", "transfer-encoding",
             "set-cookie",
         )
+    }
+}
+
+/** When a host's last challenge failed, and whether a new challenge for it should fail at once. */
+class ChallengeFailures(private val cooldownNanos: Long) {
+    private val lastFailure = ConcurrentHashMap<String, Long>()
+
+    fun failed(host: String, now: Long) {
+        lastFailure[host.lowercase(Locale.ENGLISH)] = now
+    }
+
+    fun solved(host: String) {
+        lastFailure.remove(host.lowercase(Locale.ENGLISH))
+    }
+
+    /** Whether a request that started waiting at [waitStarted] should fail without a new attempt. */
+    fun shouldFailFast(host: String, waitStarted: Long, now: Long): Boolean {
+        val failedAt = lastFailure[host.lowercase(Locale.ENGLISH)] ?: return false
+        // Failed while this request waited, or recently enough that the user's refusal still stands
+        return failedAt - waitStarted > 0 || now - failedAt < cooldownNanos
+    }
+}
+
+/** Whether a response is a Cloudflare challenge the app should solve (not a geo block). */
+object CloudflareChallenge {
+    private val ERROR_CODES = listOf(403, 503)
+    private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
+
+    // Real challenge pages are tens of KB; the status and Server header come from whoever answers
+    const val MAX_CHALLENGE_BYTES = 1024L * 1024
+
+    fun isChallenge(response: Response): Boolean {
+        if (response.code !in ERROR_CODES || response.header("Server") !in SERVER_CHECK) return false
+        val peeked = response.peekBody(MAX_CHALLENGE_BYTES + 1)
+        if (peeked.contentLength() > MAX_CHALLENGE_BYTES) {
+            logcat(LogPriority.DEBUG) { "Cloudflare: not a challenge, the body of ${response.request.url.host} is too big" }
+            return false
+        }
+        val document = Jsoup.parse(peeked.string(), response.request.url.toString())
+        // Solve only captchas, not geo blocks
+        return document.getElementById("challenge-error-title") != null ||
+            document.getElementById("challenge-error-text") != null
     }
 }
 

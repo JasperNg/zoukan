@@ -3,6 +3,7 @@ package zoukan.desktop.network
 import eu.kanade.tachiyomi.network.interceptor.ClearanceUserAgents
 import io.kotest.matchers.shouldBe
 import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.jupiter.api.Test
 
 /** Which user agent a request to a host with a cf_clearance cookie is sent with. */
@@ -49,6 +50,33 @@ class ClearanceUserAgentsTest {
         ClearanceUserAgents.solveOrder(extensionUa, chromiumUa) shouldBe listOf(extensionUa, chromiumUa)
         ClearanceUserAgents.solveOrder(chromiumUa, chromiumUa) shouldBe listOf(chromiumUa)
         ClearanceUserAgents.solveOrder(extensionUa, null) shouldBe listOf(extensionUa)
+    }
+
+    @Test
+    fun `a clearance obtained in the browser window keeps the window's user agent`() {
+        val agents = ClearanceUserAgents(MapStore())
+        val cookie = clearance("solved-by-hand")
+        agents.recordIfUnknown(cookie, extensionUa) // the window ran with the source's user agent
+        ClearanceUserAgents.overrideFor(extensionUa, agents.userAgentOf(cookie), chromiumUa) shouldBe null
+    }
+
+    @Test
+    fun `a browser window does not replace a known record`() {
+        val agents = ClearanceUserAgents(MapStore())
+        val cookie = clearance("solved-headless")
+        agents.record(cookie, chromiumUa)
+        agents.recordIfUnknown(cookie, extensionUa)
+        agents.userAgentOf(cookie) shouldBe chromiumUa
+    }
+
+    @Test
+    fun `a domain clearance recorded on www applies to api of the same domain`() {
+        val agents = ClearanceUserAgents(MapStore())
+        // As AndroidCookieJar.get parses it: "name=value" against the request URL, so domain = request host
+        val onWww = Cookie.parse("https://www.example.org/".toHttpUrl(), "cf_clearance=shared")!!
+        val onApi = Cookie.parse("https://api.example.org/".toHttpUrl(), "cf_clearance=shared")!!
+        agents.record(onWww, extensionUa)
+        agents.userAgentOf(onApi) shouldBe extensionUa
     }
 
     @Test

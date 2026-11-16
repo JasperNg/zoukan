@@ -162,6 +162,10 @@ class DesktopAppModule(
                 override fun init(provider: KcefWebViewProvider) = CefCookieSync.copyToCef()
             }
         }
+        // A clearance an extension's WebView got keeps the user agent the WebView ran with
+        CefCookieSync.onCopiedFromCef = { url, userAgent ->
+            zoukan.desktop.browser.recordClearanceUserAgent(url, userAgent)
+        }
     }
 
     companion object {
