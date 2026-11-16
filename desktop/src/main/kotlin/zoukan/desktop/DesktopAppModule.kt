@@ -30,7 +30,6 @@ import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
-import xyz.nulldev.androidcompat.network.ExtensionHttp
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
 import xyz.nulldev.androidcompat.webkit.KcefWebViewProvider
 import zoukan.desktop.db.DesktopDatabase
@@ -53,19 +52,13 @@ import java.util.concurrent.Executors
 class DesktopAppModule(
     private val app: Application,
     private val dirs: ZoukanDirs,
+    private val secrets: SecretStore,
 ) : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
         addSingleton(app)
         addSingleton(dirs)
-        // The app's PackageInfo, as extensions read it from the package manager
-        xyz.nulldev.androidcompat.pm.ExternalPackages.appVersionName = zoukan.desktop.app.AppVersion.name
-        // 1.2.3 is 1002003
-        xyz.nulldev.androidcompat.pm.ExternalPackages.appVersionCode =
-            (zoukan.desktop.app.AppVersion.version.parts + listOf(0, 0, 0))
-                .take(3).fold(0L) { code, part -> code * 1000 + part }
-        zoukan.desktop.local.Archives.cacheRoot = java.io.File(dirs.root, "cache/archives")
 
-        addSingletonFactory<SecretStore> { SecretStore.forPlatform(dirs.secrets) }
+        addSingleton(secrets)
 
         addSingletonFactory<PreferenceStore> {
             // The same file as Android's default SharedPreferences, so keys match
@@ -77,7 +70,7 @@ class DesktopAppModule(
         addSingletonFactory { SecurityPreferences(get()) }
         addSingletonFactory { ZoukanStorage(dirs, get()) }
         addSingletonFactory { CbzPassword(get(), get()) }
-        // Read by HttpSource and EnhancedHttpSource. Delegated sources are not wired on desktop yet.
+        // Read by HttpSource and EnhancedHttpSource.
         addSingletonFactory { DelegateSourcePreferences(get()) }
         addSingletonFactory { zoukan.desktop.exh.DelegatedSources(get(), get(), get(), /* ZOUKAN --> */get()/* ZOUKAN <-- */) }
         addSingletonFactory { zoukan.desktop.security.AppLock(get(), get()) }
@@ -107,9 +100,6 @@ class DesktopAppModule(
         addSingletonFactory<ProtoBuf> { ProtoBuf }
 
         addSingletonFactory { NetworkHelper(app, get()) }
-        // Clients extensions make for themselves (OkHttpClient(), rewritten to ExtensionHttp) resolve
-        // names with the app's DNS, over HTTPS when it is on; asked at each lookup, so never too early
-        ExtensionHttp.setDnsProvider { get<NetworkHelper>().client.dns }
 
         addSingletonFactory { ExtensionStoreService(get(), get(), get()) }
         addSingletonFactory<ExtensionStoreRepository> { ExtensionStoreRepositoryImpl(get(), get()) }

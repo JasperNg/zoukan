@@ -9,11 +9,13 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.TypeReference
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.secrets.SecretStore
 import zoukan.extension.DesktopExtensionLoader
 import java.io.File
 import java.lang.reflect.ParameterizedType
@@ -51,6 +53,13 @@ class InjektRegistrationsTest {
         val missing = types.filter { type -> runCatching { Injekt.getInstance<Any>(type) }.isFailure }
             .map { it.typeName }
         missing.shouldBeEmpty()
+    }
+
+    @Test
+    fun `the secret store is one instance`() {
+        System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
+        ZoukanRuntime.start(ZoukanDirs(Files.createTempDirectory("zoukan-secrets").toFile()), interactiveBrowser = false)
+        Injekt.get<SecretStore>() shouldBeSameInstanceAs ZoukanRuntime.secrets
     }
 
     /**

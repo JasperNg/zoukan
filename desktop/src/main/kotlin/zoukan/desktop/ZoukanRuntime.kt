@@ -1,6 +1,7 @@
 package zoukan.desktop
 
 import android.os.Looper
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.network.migrateRemovedDohProvider
 import exh.log.EHLogLevel
@@ -15,6 +16,8 @@ import xyz.nulldev.androidcompat.AndroidCompatInitializer
 import xyz.nulldev.androidcompat.AndroidCompatModule
 import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import xyz.nulldev.androidcompat.network.ExtensionHttp
+import xyz.nulldev.androidcompat.pm.ExternalPackages
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManagerModule
 import zoukan.desktop.app.AppVersion
@@ -22,9 +25,11 @@ import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
+import zoukan.desktop.local.Archives
 import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
+import java.io.File
 import java.net.CookieHandler
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -40,6 +45,10 @@ object ZoukanRuntime {
     private var started = false
 
     lateinit var dirs: ZoukanDirs
+        private set
+
+    /** The OS secret store the runtime opened at start; the file cipher's key is in it. */
+    lateinit var secrets: SecretStore
         private set
 
     /**
@@ -79,7 +88,8 @@ object ZoukanRuntime {
 
         // Cookies and the preference files (tracker tokens, sync passwords, source logins) are
         // encrypted with a key from the OS secret store. Set before any preference file is opened.
-        val fileCipher = FileCipher.fromStore(SecretStore.forPlatform(dirs.secrets))
+        secrets = SecretStore.forPlatform(dirs.secrets)
+        val fileCipher = FileCipher.fromStore(secrets)
         SettingsFileCodec.current = fileCipher
 
         // One cookie store for OkHttp, android.webkit.CookieManager and (copied) Chromium
@@ -95,9 +105,19 @@ object ZoukanRuntime {
         Security.addProvider(BouncyCastleProvider())
 
         val app = ZoukanApplication()
+        // The app's PackageInfo, as extensions read it from the package manager
+        ExternalPackages.appVersionName = AppVersion.name
+        // 1.2.3 is 1002003
+        ExternalPackages.appVersionCode =
+            (AppVersion.version.parts + listOf(0, 0, 0))
+                .take(3).fold(0L) { code, part -> code * 1000 + part }
+        Archives.cacheRoot = File(dirs.root, "cache/archives")
+        // Clients extensions make for themselves (OkHttpClient(), rewritten to ExtensionHttp) resolve
+        // names with the app's DNS, over HTTPS when it is on; asked at each lookup, so never too early
+        ExtensionHttp.setDnsProvider { Injekt.get<NetworkHelper>().client.dns }
         Injekt.importModule(ConfigManagerModule())
         Injekt.importModule(AndroidCompatModule())
-        Injekt.importModule(DesktopAppModule(app, dirs))
+        Injekt.importModule(DesktopAppModule(app, dirs, secrets))
         Injekt.importModule(DesktopDomainModule())
 
         // Config modules, the Chromium WebView provider and http.agent
