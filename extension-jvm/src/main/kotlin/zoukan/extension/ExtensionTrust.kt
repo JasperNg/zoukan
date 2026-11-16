@@ -9,7 +9,8 @@ import tachiyomi.core.common.preference.getAndSet
 /**
  * Komikku's trust rule (TrustExtension on Android): an extension is trusted when it is signed with
  * the signing key of an added extension store, or the user trusted this exact package, version and
- * signature. The trusted list uses the same preference as Android, so it moves with backups.
+ * signature. The trusted list is an app-state preference: it belongs to this computer, so backups
+ * leave it out and restores drop it.
  */
 class ExtensionTrust(
     preferenceStore: PreferenceStore,

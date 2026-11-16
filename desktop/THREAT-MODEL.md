@@ -47,7 +47,7 @@ Verified and trusted:
 | The signature is re-checked from the file on disk at every load, not remembered from install | `extension-jvm/.../DesktopExtensionLoader.kt` (`loadOrThrow`) |
 | What runs is what was checked: the jar is read into memory once, its signature (or hash) is checked on those bytes, and the class loader defines classes and serves resources from the same bytes, never reopening the file. No jar stays open, so on Windows an uninstall or same-version reinstall is not blocked by a file lock | `extension-jvm/.../ExtensionClassLoader.kt` (`JarContents`, `ExtensionClassLoader`), `DesktopExtensionLoader.loadOrThrow` |
 | A jar converted from an APK runs only while it matches the SHA-256 recorded at conversion, which is kept in the app's preferences (app-state key `converted_jar_sha256_<package>`, encrypted at rest under the OS-store key), not next to the jar; a missing or stale hash (including every install from before this change, which kept a `.sha256` file beside the jar that is now ignored and removed) converts the signature-verified APK again rather than trusting or deleting the jar | `extension-jvm/.../ConvertedJarHashes.kt`, `DesktopExtensionLoader.verifiedConvertedJar` |
-| Installs and updates are staged: an APK is converted into a temporary file and moved into place only after the conversion worked, and an update whose new files fail to load is removed again when an older version was loaded and the version codes differ, so the installed, working version stays (a reinstall of the same version, or a package that was not loaded, keeps the new files and reports the error). The converted jar's hash is recorded only once a load succeeds, so a failed update does not replace the working version's hash | `DesktopExtensionInstaller.installApk`, `DesktopExtensionManager.installExtension`, `DesktopExtensionLoader.loadOrThrow` |
+| Installs and updates are staged: an APK is converted into a temporary file and moved into place only after the conversion worked, and an update whose new files fail to load is removed again when an older version was loaded and the version codes differ, so the installed, working version stays (a reinstall of the same version, or a package that was not loaded, keeps the new files and reports the error). The converted jar's hash is recorded after its manifest has been read and validated, not after the extension's classes load: an extension the user has not trusted yet, or an NSFW one that is switched off, still gets its hash recorded. A failed conversion or manifest check records nothing, so it does not replace the working version's hash. The record is `versionCode:sha256` under the package name; it is not tied to a particular APK file | `DesktopExtensionInstaller.installApk`, `DesktopExtensionManager.installExtension`, `DesktopExtensionLoader.loadOrThrow` |
 | No downgrades: the file's version must be the one the store lists, and not older than the installed version | `DesktopExtensionInstaller.checkManifest` |
 | Install, update, uninstall and trust of one package run one at a time, so an uninstall cannot be undone by an install that was still running | `DesktopExtensionManager` (`locked`) |
 | Updates pinned to the installed signer; a differently-signed file is refused before it replaces anything | `extension-jvm/.../DesktopExtensionInstaller.kt` (`checkSigner`, `requiredSigner`) |
@@ -61,7 +61,8 @@ Verified and trusted:
 Residual risk:
 
 1. **No sandbox.** An extension runs in-process with the user's full account privileges. The
-   loader's `ChildFirstURLClassLoader` is effectively system-first, so extension code reaches
+   loader, `ExtensionClassLoader` (`extension-jvm/.../ExtensionClassLoader.kt`), asks the app's
+   class path first and the extension's own jar second, so extension code reaches
    every app class: the SQLCipher database, the cookie store, JNA and the native APIs. Android
    contained this in a per-app UID sandbox; a desktop has nothing equivalent, and the port keeps
    the Android model deliberately — the same model as Suwayomi-Server. A malicious or turncoat
@@ -90,27 +91,34 @@ Residual risk:
 
 ## Updater
 
-The updater replaces the whole app. It checks a download three ways before running it.
+The updater replaces the whole app. It checks a download before running it, as the controls
+below say. The installers are not OS-signed (no Authenticode certificate, no Developer ID or
+notarisation: a project decision), so what protects an update is the release signature and the
+digest, not an OS publisher check.
 
 Verified and trusted:
 
 | Control | Where |
 |---|---|
-| Release JSON and downloads over TLS to `api.github.com`; asset names limited to a safe pattern | `desktop/src/main/kotlin/zoukan/desktop/update/UpdateChecker.kt` (`request`, `SAFE_NAME`) |
+| Release JSON and downloads over TLS to `api.github.com`; asset names limited to a safe pattern. The token is sent only to `https://` addresses on the API host: an asset address anywhere else is refused before a request is made | `desktop/src/main/kotlin/zoukan/desktop/update/UpdateChecker.kt` (`request`, `assetRequest`, `SAFE_NAME`) |
+| A detached Ed25519 release signature, `<installer name>.sig`, made by the release job with a key held as a repository secret that only that job reads (`ZOUKAN_RELEASE_SIGNING_KEY`), checked against the public key compiled into the app (`desktop/src/main/resources/zoukan-release-key.pem`). It covers the installer's name and the SHA-256 the app computes itself, so GitHub's digest is not part of the trust. A missing or wrong signature, or a packaged build without the key, is refused (fails closed), and the files are deleted. Releases made before it have no signature, and apps from before it do not check one | `desktop/.../update/ReleaseSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install`; `.github/workflows/desktop-build.yml` (`release` job) |
 | SHA-256 from GitHub's `digest` field checked while streaming; refused outright when GitHub lists none | `UpdateChecker.downloadTo`; the refusal in `desktop/.../update/Updates.kt` (`states.download`) |
-| Authenticode certificate of the installer compared with the running executable's on Windows; Developer ID team on macOS; rejected downloads are deleted | `desktop/.../update/InstallerSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install` |
-| The signature is re-verified immediately before the installer runs — it sat in a folder other programs can write to | `Updates.install` |
+| Only when the running app is itself OS-signed (release builds are not): the installer's signer must match it, by the SHA-256 of the signer certificate's public key on Windows (a renewal that reuses the key passes; the thumbprint is not compared) and by Developer ID team on macOS. A build that says it shipped signed but has no readable signature fails closed. For an unsigned release this check is `Unchecked` and adds nothing | `desktop/.../update/InstallerSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install` |
+| The signatures are re-verified immediately before the installer runs — it sat in a folder other programs can write to | `Updates.install` |
 | The GitHub token lives in the OS secret store, never in a file | `UpdateChecker.token` (`TOKEN_KEY` in `SecretStore`) |
 
 Residual risk:
 
-1. The publisher comparison is a subject string on Windows, not a certificate thumbprint.
-   (Hardened: thumbprint comparison, failing closed when the running app's thumbprint cannot be
-   determined.)
-2. The GitHub token is attached to whatever asset URL the release JSON names — a compromised
-   repository or token holder can point the download at any https host. The digest and publisher
-   checks still bound that, but a build with no publisher to compare (an unsigned build) rests on
-   the checksum alone, as the `InstallerSignature.Verdict.Unchecked` case says in so many words.
+1. **Whoever holds the release signing key can publish an update every new install accepts.**
+   The key is the `ZOUKAN_RELEASE_SIGNING_KEY` repository secret; anyone who can read repository
+   secrets (an account with admin access, or a change to the release job that reaches `master`)
+   can sign what they like. Publishing a release without that key is not enough.
+   Rotating the key needs one release signed with the old key (`desktop/RELEASING.md`).
+2. **The check and the run are not one step.** The installer and its signature sit in the updates
+   folder, which any same-user process can write to. They are checked again just before the
+   installer is started, but a swap in the moment between that check and `msiexec` or `open`
+   starting is not prevented. A same-user process can already do everything the installer can.
+3. Apps from before the release signature do not check it and still update on the digest alone.
 
 ## Web and embedded Chromium
 
@@ -176,7 +184,7 @@ Verified and trusted:
 | The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed) | `DesktopDatabase.databaseKey`, `KeyMissingException` |
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |
 | Windows: Credential Manager generic credentials, per-user, non-roaming; macOS: login Keychain generic passwords | `desktop/.../secrets/WindowsCredentialStore.kt`, `MacKeychainStore.kt` |
-| Session cookies never persisted: the app's cookie store is in-memory (`java.net.CookieManager`), synced with Chromium only while windows are open | `android-compat/.../webkit/CefCookieSync.kt` |
+| The app's own cookie store (`java.net.CookieManager`, what OkHttp and the sources use) is saved to an encrypted file and leaves out session cookies (no expiry); it is synced with Chromium's cookies while a window is open. Chromium itself is started with `persist_session_cookies = true`, so the session cookies of its own store are kept in its cache folder (`browserCache`) by Chromium, outside the app's encryption | `desktop/.../network/PersistentCookieStore.kt`, `android-compat/.../webkit/CefCookieSync.kt`, `desktop/.../browser/JcefRuntime.kt` |
 | App-lock password: PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte per-password salt, constant-time comparison | `desktop/.../security/AppLock.kt` (`hash`, `verify`) |
 
 Residual risk:
@@ -219,6 +227,6 @@ fallback's input file is user- or source-chosen content, parsed by libarchive as
 | System tar (libarchive) reads RAR 5 and odd 7z archives | RAR 5 has no maintained pure-Java reader; without tar those chapters cannot open at all | The caps and symlink-skip shrink it (hardened); a pure-Java RAR 5 reader would remove it |
 | OAuth login CSRF from unbound `komikku://` redirects | The trackers' app registrations only accept the custom scheme; Android inherits the same flaw | Trackers move to loopback or https redirects, then the window can bind the redirect to the page it was opened from |
 | Same-user malware reads secret-store keys | OS design; no desktop API grants per-read prompts or hardware binding for generic credentials | OS-level change; the app can only shrink what is at rest, which it already does |
-| Updater follows the release JSON's asset URL with its token | Private-repo support needs it; GitHub hosts the JSON and the digest | Pin the download host, or proxy releases through a host the token is not sent to |
+| The updater sends its GitHub token to the API host named in the release JSON's asset address | Private-repo support needs it. Only `https://` addresses on the API host get a download request (and so the token); the asset's own redirect to storage on another host drops it. The installer must also pass the release signature, so a tampered release JSON cannot supply one | Fetch assets through a host the token is not sent to, if a private repository ever serves them from elsewhere |
 | Build dependencies have no project-wide `verification-metadata.xml` | Upstream has none, and a partial file fails the build; Maven Central, Google and the Gradle plugin portal serve fixed versions over TLS. The one artifact from a plain GitHub repository, Suwayomi's `android-jar`, is pinned to a commit (`settings.gradle.kts`) and checked against a SHA-256 before anything compiles against it (`android-compat`'s `verifyAndroidJar`) | A complete `gradle/verification-metadata.xml` for every dependency, kept current on each update |
 | App-lock verifies fail-open with no rate limit | The lock is a shoulder-surfer control, not a decryption boundary; PBKDF2 at 210k iterations bounds offline guessing | Make `verify` fail closed when the lock is enabled, and add a delay between attempts |
