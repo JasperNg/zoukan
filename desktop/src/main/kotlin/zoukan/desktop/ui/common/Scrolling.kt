@@ -83,7 +83,10 @@ fun LazyColumn(
     }
 }
 
-/** A foundation LazyRow with a scrollbar under it, shown when the row is wider than its space. */
+/**
+ * A foundation LazyRow with a scrollbar under it, shown when the row is wider than its space.
+ * [scrollbarModifier] sets the scrollbar's inset, usually the same as the content's.
+ */
 @Composable
 fun LazyRow(
     modifier: Modifier = Modifier,
@@ -102,7 +105,7 @@ fun LazyRow(
         )
         HorizontalScrollbar(
             rememberScrollbarAdapter(state),
-            scrollbarModifier.fillMaxWidth().padding(horizontal = 24.dp),
+            scrollbarModifier.fillMaxWidth(),
             style = scrollbarStyle(),
         )
     }

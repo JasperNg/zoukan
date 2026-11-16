@@ -4,6 +4,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.w3c.dom.Element
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.settings.restoredMessage
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -30,6 +31,13 @@ class DesktopStringsTest {
     @Test
     fun `the relative timestamps summary has balanced quotes`() {
         localized(DMR.strings.today_instead_of, "x") shouldBe "\"Today\" instead of \"x\""
+    }
+
+    @Test
+    fun `a restore with one error reads one error`() {
+        restoredMessage(3, 1) shouldBe "Restored 3 entries with 1 error"
+        restoredMessage(1, 2) shouldBe "Restored 1 entry with 2 errors"
+        restoredMessage(1, 0) shouldBe "Restored 1 entry"
     }
 
     @Test

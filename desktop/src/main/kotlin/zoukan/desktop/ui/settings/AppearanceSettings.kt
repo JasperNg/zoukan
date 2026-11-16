@@ -134,7 +134,7 @@ internal fun ThemeSection() {
         LazyRow(
             contentPadding = PaddingValues(horizontal = Spacing.SettingsRowInset, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            scrollbarModifier = Modifier.testTag("theme-row-scrollbar"),
+            scrollbarModifier = Modifier.testTag("theme-row-scrollbar").padding(horizontal = Spacing.SettingsRowInset),
         ) {
             items(pickableThemes, key = { it.name }) { appTheme ->
                 ThemePreview(

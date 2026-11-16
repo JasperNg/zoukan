@@ -115,8 +115,11 @@ data class WindowBounds(val x: Int, val y: Int, val width: Int, val height: Int,
             }.getOrNull()
         }
 
+        /** The usable areas of all screens, the primary first ([initialState] falls back to the first). */
         private fun screens(): List<Rectangle> = runCatching {
-            GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.mapNotNull { usableArea(it.defaultConfiguration) }
+            val env = GraphicsEnvironment.getLocalGraphicsEnvironment()
+            val primary = env.defaultScreenDevice
+            (listOf(primary) + env.screenDevices.filter { it != primary }).mapNotNull { usableArea(it.defaultConfiguration) }
         }.getOrDefault(emptyList())
     }
 }

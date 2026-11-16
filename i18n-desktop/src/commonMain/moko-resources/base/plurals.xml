@@ -29,7 +29,11 @@
         <item quantity="other">Restored %1$d entries</item>
     </plurals>
     <plurals name="restored_entries_with_errors">
-        <item quantity="one">Restored %1$d entry with %2$s errors</item>
-        <item quantity="other">Restored %1$d entries with %2$s errors</item>
+        <item quantity="one">Restored %1$d entry with %2$s</item>
+        <item quantity="other">Restored %1$d entries with %2$s</item>
+    </plurals>
+    <plurals name="restore_errors">
+        <item quantity="one">%1$d error</item>
+        <item quantity="other">%1$d errors</item>
     </plurals>
 </resources>

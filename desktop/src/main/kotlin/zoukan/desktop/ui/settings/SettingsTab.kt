@@ -480,6 +480,14 @@ private fun LazyListScope.downloadSettings(
     }
 }
 
+/** The toast after a restore of [entries] entries that had [errors] errors, with both counts pluralised. */
+internal fun restoredMessage(entries: Int, errors: Int): String =
+    if (errors == 0) {
+        localizedPlural(DMR.plurals.restored_entries, entries, entries)
+    } else {
+        localizedPlural(DMR.plurals.restored_entries_with_errors, entries, entries, localizedPlural(DMR.plurals.restore_errors, errors, errors))
+    }
+
 /** Writes a backup of what [options] picks (Create backup's choices) to [file]. */
 internal fun createBackup(file: File, options: BackupOptions) {
     if (backupStatusFlow.value != null) return
@@ -532,13 +540,7 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                         backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
                     }
                     result = RestoreOutcome.OK
-                    Toasts.show(
-                        if (errors.isEmpty()) {
-                            localizedPlural(DMR.plurals.restored_entries, backup.backupManga.size, backup.backupManga.size)
-                        } else {
-                            localizedPlural(DMR.plurals.restored_entries_with_errors, backup.backupManga.size, backup.backupManga.size, errors.size)
-                        },
-                    )
+                    Toasts.show(restoredMessage(backup.backupManga.size, errors.size))
                 } catch (e: Exception) {
                     Toasts.error(localized(DMR.strings.restore_failed), e)
                 } finally {
