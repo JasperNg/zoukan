@@ -44,6 +44,9 @@ object ZoukanRuntime {
     @Volatile
     private var started = false
 
+    @Volatile
+    private var failure: Throwable? = null
+
     lateinit var dirs: ZoukanDirs
         private set
 
@@ -57,8 +60,20 @@ object ZoukanRuntime {
      */
     @Synchronized
     fun start(dirs: ZoukanDirs = ZoukanDirs.default(), interactiveBrowser: Boolean = true) {
+        // A start that failed stays failed: some steps (the main looper, the Injekt modules) cannot
+        // run twice, so a later call reports the first failure instead of returning a half-built runtime
+        failure?.let { throw IllegalStateException("Zoukan's runtime failed to start earlier", it) }
         if (started) return
         started = true
+        try {
+            boot(dirs, interactiveBrowser)
+        } catch (e: Throwable) {
+            failure = e
+            throw e
+        }
+    }
+
+    private fun boot(dirs: ZoukanDirs, interactiveBrowser: Boolean) {
         this.dirs = dirs.create()
 
         if (!LogcatLogger.isInstalled) {
