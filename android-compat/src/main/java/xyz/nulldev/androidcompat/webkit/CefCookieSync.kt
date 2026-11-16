@@ -93,19 +93,30 @@ data class SyncedCookie(
 /**
  * The app's cookies for a page to delete after a complete visit: copied to Chromium, and gone from
  * it. A cookie the app got after the copy was never in Chromium and stays; one Chromium has with
- * another value was changed there, and copying from Chromium updates it.
+ * another value was changed there, and copying from Chromium updates it. Only cookies sent to
+ * [pagePath] count, as Chromium lists only those for the page.
  */
 fun staleAppCookies(
     appCookies: List<SyncedCookie>,
     copiedToCef: Set<SyncedCookie>,
     inChromium: List<SyncedCookie>,
+    pagePath: String,
 ): List<SyncedCookie> {
     fun SyncedCookie.key() = Triple(name, domain.trimStart('.').lowercase(), path)
 
     fun SyncedCookie.exact() = copy(domain = domain.trimStart('.').lowercase())
     val copied = copiedToCef.mapTo(HashSet()) { it.exact() }
     val present = inChromium.mapTo(HashSet()) { it.key() }
-    return appCookies.filter { it.exact() in copied && it.key() !in present }
+    // The app's store matches a page by domain only; Chromium lists only the cookies whose path
+    // matches the page, so a cookie for another path is not missing from it
+    return appCookies.filter { pathMatches(pagePath, it.path) && it.exact() in copied && it.key() !in present }
+}
+
+/** Whether a cookie for [cookiePath] is sent to [pagePath] (RFC 6265 5.1.4, as Chromium does). */
+private fun pathMatches(pagePath: String, cookiePath: String): Boolean {
+    val page = pagePath.ifEmpty { "/" }
+    if (page == cookiePath) return true
+    return page.startsWith(cookiePath) && (cookiePath.endsWith('/') || page[cookiePath.length] == '/')
 }
 
 /**
@@ -219,7 +230,7 @@ object CefCookieSync {
         val uri = runCatching { URI(url) }.getOrNull() ?: return
         val app = store.get(uri).associateBy { it.toSynced(uri) }
         val copied = synchronized(copiedToCef) { copiedToCef.toSet() }
-        val stale = staleAppCookies(app.keys.toList(), copied, inChromium)
+        val stale = staleAppCookies(app.keys.toList(), copied, inChromium, uri.rawPath.orEmpty())
         stale.forEach { app[it]?.let { cookie -> store.remove(uri, cookie) } }
         if (stale.isNotEmpty()) logger.info { "Removed ${stale.size} cookies the built-in browser no longer has" }
     }
