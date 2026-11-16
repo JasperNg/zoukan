@@ -53,10 +53,13 @@ kotlin {
 
 // Compose's desktop runtime (Skia) for the OS and CPU that builds the app: Windows x64 and macOS
 // arm64 are the targets, Linux x64 is for development
+// zoukan.targetPlatform (windows-x64, macos-arm64, linux-x64) only exists to generate the dependency
+// checksums of another OS (gradle/verification-metadata.xml); it does not build another OS's app
+val targetPlatformOverride: String? = providers.gradleProperty("zoukan.targetPlatform").orNull
 val composeDesktopRuntime: String = run {
     val os = System.getProperty("os.name").lowercase()
     val arm = System.getProperty("os.arch").lowercase().let { it == "aarch64" || it == "arm64" }
-    val platform = when {
+    val platform = targetPlatformOverride ?: when {
         os.contains("win") -> "windows-x64"
         os.contains("mac") -> if (arm) "macos-arm64" else "macos-x64"
         else -> if (arm) "linux-arm64" else "linux-x64"
@@ -68,10 +71,15 @@ val composeDesktopRuntime: String = run {
 val javacppPlatform: String = run {
     val os = System.getProperty("os.name").lowercase()
     val arm = System.getProperty("os.arch").lowercase().let { it == "aarch64" || it == "arm64" }
-    when {
-        os.contains("win") -> "windows-x86_64"
-        os.contains("mac") -> if (arm) "macosx-arm64" else "macosx-x86_64"
-        else -> if (arm) "linux-arm64" else "linux-x86_64"
+    when (targetPlatformOverride) {
+        "windows-x64" -> "windows-x86_64"
+        "macos-arm64" -> "macosx-arm64"
+        "linux-x64" -> "linux-x86_64"
+        else -> when {
+            os.contains("win") -> "windows-x86_64"
+            os.contains("mac") -> if (arm) "macosx-arm64" else "macosx-x86_64"
+            else -> if (arm) "linux-arm64" else "linux-x86_64"
+        }
     }
 }
 
@@ -301,6 +309,12 @@ tasks.test {
     providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
     providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    // The build-settings test reads these files, so a change to one reruns it
+    inputs.files(
+        rootProject.file("settings.gradle.kts"),
+        rootProject.file("gradle/wrapper/gradle-wrapper.properties"),
+        rootProject.file("gradle/verification-metadata.xml"),
+    ).withPropertyName("releaseFiles")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs

@@ -89,9 +89,9 @@ dependencies {
 }
 
 // Suwayomi's android.jar is served from a GitHub repository (pinned to a commit in
-// settings.gradle.kts), not from a signed Maven repository, and the build has no project-wide
-// dependency verification. Check this one artifact against a known SHA-256 before anything
-// compiles against it. To update the jar: change the commit and version, then put the new jar's
+// settings.gradle.kts), not from a signed Maven repository. The jar is also pinned in
+// gradle/verification-metadata.xml; this task checks it independently against a known SHA-256
+// before anything compiles against it. To update the jar: change the commit and version, then put the new jar's
 // `shasum -a 256` here.
 val androidJarSha256 = "d719e8c95a224f970e4d8d5ceabf1a0f90afa9e7b5da62b64bf76f29cad269f5"
 

@@ -3,6 +3,8 @@
 #.vscode
 .kotlin
 build
+# The build-settings tests live in a package called build
+!desktop/src/test/kotlin/zoukan/desktop/build/
 
 # IDE files
 *.iml
