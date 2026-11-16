@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
@@ -22,6 +21,7 @@ import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.FolderDelete
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.QueryStats
@@ -65,6 +65,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.HomeScreen
@@ -73,6 +74,7 @@ import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.category.CategoryScreen
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
 import zoukan.desktop.ui.common.ContextMenuState
@@ -114,6 +116,9 @@ fun LibraryTab(model: LibraryScreenModel) {
     // The entries a categories or remove dialog is for: the selection, or one entry's context menu
     var categoryDialog by remember { mutableStateOf<Set<Long>?>(null) }
     var removeDialog by remember { mutableStateOf<Set<Long>?>(null) }
+    // ZOUKAN -->
+    var deleteDownloadsDialog by remember { mutableStateOf<Set<Long>?>(null) }
+    // ZOUKAN <--
     // SY -->
     var recommendationDialog by remember { mutableStateOf<List<Manga>?>(null) }
     // SY <--
@@ -141,6 +146,9 @@ fun LibraryTab(model: LibraryScreenModel) {
                 count = state.selection.size,
                 onCategories = { categoryDialog = state.selection },
                 onRemove = { removeDialog = state.selection },
+                // ZOUKAN -->
+                onDeleteDownloads = { deleteDownloadsDialog = state.selection },
+                // ZOUKAN <--
                 // ZOUKAN -->
                 onMigrate = {
                     // In the library's order, as the Android app's selection
@@ -331,6 +339,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                         },
                         onCategories = { categoryDialog = ids },
                         onRemove = { removeDialog = ids },
+                        onDeleteDownloads = { deleteDownloadsDialog = ids },
                         onMigrate = {
                             val ordered = state.visible.map { it.id }.filter { it in ids }.ifEmpty { ids.toList() }
                             if (ids == state.selection) model.clearSelection()
@@ -349,6 +358,15 @@ fun LibraryTab(model: LibraryScreenModel) {
     removeDialog?.let { ids ->
         RemoveDialog(ids.size, onConfirm = { model.removeFromLibrary(it, ids) }) { removeDialog = null }
     }
+    // ZOUKAN -->
+    deleteDownloadsDialog?.let { ids ->
+        LibraryDeleteDownloadsDialog(
+            ids.size,
+            onConfirm = { model.deleteDownloads(ids) },
+            onDismiss = { deleteDownloadsDialog = null },
+        )
+    }
+    // ZOUKAN <--
     // ZOUKAN -->
     when (favoritesSyncDialog) {
         FavoritesSyncDialog.Notes -> SyncFavoritesNotesDialog(
@@ -435,6 +453,7 @@ private fun ColumnScope.EntryContextMenu(
     onContinue: () -> Unit,
     onCategories: () -> Unit,
     onRemove: () -> Unit,
+    onDeleteDownloads: () -> Unit,
     onMigrate: () -> Unit,
 ) {
     // Download opens its choices in place of the menu, as the selection bar's download button does
@@ -465,7 +484,7 @@ private fun ColumnScope.EntryContextMenu(
             trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
             onClick = { downloads = true },
         )
-        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.BookmarkRemove) { model.deleteDownloads(ids) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.FolderDelete, onClick = onDeleteDownloads)
     }
     // ZOUKAN -->
     ContextMenuItem(menu, localized(MR.strings.action_migrate), Icons.Outlined.SwapHoriz, onClick = onMigrate)
@@ -481,6 +500,7 @@ private fun SelectionBar(
     onCategories: () -> Unit,
     onRemove: () -> Unit,
     // ZOUKAN -->
+    onDeleteDownloads: () -> Unit,
     onMigrate: () -> Unit,
     // ZOUKAN <--
     // KMK -->
@@ -527,7 +547,7 @@ private fun SelectionBar(
                     )
                 }
             }
-            TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.delete_downloads), onClick = model::deleteDownloads)
+            TooltipIconButton(Icons.Outlined.FolderDelete, localized(DMR.strings.delete_downloads), onClick = onDeleteDownloads)
             // KMK -->
             TooltipIconButton(Icons.Outlined.Refresh, localized(KMR.strings.action_update), onClick = onSelectionUpdate)
             // KMK <--
@@ -613,6 +633,20 @@ private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categori
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
+
+// ZOUKAN -->
+/** Asks before the downloaded chapters of [entryCount] library entries are deleted. */
+@Composable
+internal fun LibraryDeleteDownloadsDialog(entryCount: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    ConfirmDestructiveDialog(
+        title = localizedPlural(DMR.plurals.delete_downloads_of_entries, entryCount, entryCount),
+        text = localized(DMR.strings.delete_downloads_cannot_be_undone),
+        confirmLabel = localized(DMR.strings.delete_downloads),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
+}
+// ZOUKAN <--
 
 @Composable
 private fun RemoveDialog(count: Int, onConfirm: (Boolean) -> Unit, onDismiss: () -> Unit) {

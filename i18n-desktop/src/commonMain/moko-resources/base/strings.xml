@@ -874,4 +874,5 @@
     <string name="chapter_state_read">Read</string>
     <string name="chapter_state_bookmarked">Bookmarked</string>
     <string name="local_files_not_trashed">Could not move %1$s to the trash, so nothing was removed. Remove the folder yourself if you want it gone.</string>
+    <string name="delete_downloads_cannot_be_undone">Every downloaded chapter of these entries is deleted from this computer. This cannot be undone.</string>
 </resources>

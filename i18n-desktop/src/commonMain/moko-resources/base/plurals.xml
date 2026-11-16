@@ -8,4 +8,8 @@
         <item quantity="one">Delete the download of %d chapter?</item>
         <item quantity="other">Delete the downloads of %d chapters?</item>
     </plurals>
+    <plurals name="delete_downloads_of_entries">
+        <item quantity="one">Delete the downloads of %d entry?</item>
+        <item quantity="other">Delete the downloads of %d entries?</item>
+    </plurals>
 </resources>
