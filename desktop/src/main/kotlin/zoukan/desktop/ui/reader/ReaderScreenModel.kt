@@ -73,6 +73,32 @@ class ReaderPage(val index: Int, val page: Page) {
     /** The load that owns [state]; a load that was replaced or cancelled leaves the state alone */
     @Volatile
     internal var loader: Job? = null
+
+    /** The size the page decoded to, kept after its bitmap is released so its placeholder keeps the height */
+    @Volatile
+    var decodedWidth = 0
+        private set
+
+    @Volatile
+    var decodedHeight = 0
+        private set
+
+    fun rememberSize(width: Int, height: Int) {
+        decodedHeight = height
+        decodedWidth = width
+    }
+
+    /** Width over height for a placeholder: the decoded shape, or [DEFAULT_ASPECT] for a page never decoded */
+    val placeholderAspect: Float
+        get() {
+            val width = decodedWidth
+            val height = decodedHeight
+            return if (width > 0 && height > 0) width.toFloat() / height else DEFAULT_ASPECT
+        }
+
+    companion object {
+        const val DEFAULT_ASPECT = 0.7f
+    }
     // ZOUKAN <--
 }
 
@@ -484,7 +510,10 @@ class ReaderScreenModel(
                 if (image.width > image.height) {
                     mutableState.update { if (index in it.widePages || it.pages.getOrNull(index) !== page) it else it.copy(widePages = it.widePages + index) }
                 }
-                if (owns()) page.state.value = ReaderPage.State.Ready(image)
+                if (owns()) {
+                    page.rememberSize(image.width, image.height)
+                    page.state.value = ReaderPage.State.Ready(image)
+                }
                 // ZOUKAN <--
             } catch (e: CancellationException) {
                 // ZOUKAN -->

@@ -41,6 +41,7 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -49,6 +50,16 @@ import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
+
+/**
+ * A strip page that is queued or loading. It keeps the shape the page decoded to before (also after
+ * its bitmap was released), so scrolling back up does not shift the strip when it decodes again; the
+ * raw image shape is kept even where a split or rotated wide page shows another one.
+ */
+@Composable
+internal fun WebtoonPagePlaceholder(page: ReaderPage, number: Int, color: Color) {
+    PageLoading(number, color, Modifier.fillMaxWidth().aspectRatio(page.placeholderAspect).testTag("page-placeholder"))
+}
 
 /**
  * Webtoon and continuous vertical modes: every page in one scrolling strip. Webtoon has no gaps
@@ -279,11 +290,11 @@ fun WebtoonViewer(
                                 s.message,
                                 foreground,
                                 onRetry = { model.loadPage(index, retry = true) },
-                                modifier = Modifier.fillMaxWidth().aspectRatio(0.7f),
+                                modifier = Modifier.fillMaxWidth().aspectRatio(page.placeholderAspect),
                             )
                             else -> {
                                 LaunchedEffect(page) { model.loadPage(index) }
-                                PageLoading(index + 1, foreground, Modifier.fillMaxWidth().aspectRatio(0.7f))
+                                WebtoonPagePlaceholder(page, index + 1, foreground)
                             }
                         }
                     }
