@@ -35,9 +35,11 @@ import kotlin.time.Duration.Companion.minutes
 class ClearMangaLocalFilesJourneyTest {
 
     private lateinit var journey: Journey
+    private val originalTrash = systemTrash
 
     @AfterEach
     fun close() {
+        systemTrash = originalTrash
         if (::journey.isInitialized) journey.close()
     }
 

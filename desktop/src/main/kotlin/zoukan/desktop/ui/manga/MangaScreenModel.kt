@@ -684,12 +684,14 @@ class MangaScreenModel(
     }
 
     /**
-     * Moves the folders of the entry's local files to the system trash. Runs only with the user's
-     * explicit confirmation of the local-files question. Where the system has no trash, or the
-     * move fails, nothing is deleted: a toast names the folder so the user can remove it.
+     * Moves [confirmed], the folders the user agreed to in the local-files question, to the system
+     * trash. Only those that are still this entry's local folders move: a folder that left the
+     * entry (or a merge that gained one) while the question was open is never touched. Where the
+     * system has no trash, or the move fails, nothing is deleted: a toast names the folder so the
+     * user can remove it.
      */
-    fun deleteLocalFiles(confirmed: Boolean) {
-        if (!confirmed) return
+    fun deleteLocalFiles(confirmed: List<java.io.File>) {
+        if (confirmed.isEmpty()) return
         // On the screen's scope, so the refresh below checks and sets its busy flag on the UI
         // thread, as the Refresh button does, and not after the screen is closed. Only the move
         // to the trash is made non-cancellable, so closing the screen cannot cut it short.
@@ -697,7 +699,7 @@ class MangaScreenModel(
             try {
                 val moved = withContext(NonCancellable + Dispatchers.IO) {
                     var moved = false
-                    localFolders().forEach { dir ->
+                    localFolders().filter { it in confirmed }.forEach { dir ->
                         if (systemTrash(dir)) moved = true else Toasts.show(localized(DMR.strings.local_files_not_trashed, dir.absolutePath))
                     }
                     moved

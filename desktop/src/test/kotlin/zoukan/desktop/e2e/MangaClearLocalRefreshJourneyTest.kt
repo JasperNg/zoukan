@@ -36,10 +36,12 @@ import kotlin.time.Duration.Companion.minutes
 class MangaClearLocalRefreshJourneyTest {
 
     private lateinit var journey: Journey
+    private val originalTrash = systemTrash
 
     @AfterEach
     fun close() {
         onRefreshStart = null
+        systemTrash = originalTrash
         if (::journey.isInitialized) journey.close()
     }
 

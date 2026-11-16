@@ -28,6 +28,12 @@ class SourceErrorsTest {
     }
 
     @Test
+    fun `an unknown host names the host, and never leaves the name empty`() {
+        sourceErrorText(java.net.UnknownHostException("example.org")) shouldBe localized(MR.strings.exception_unknown_host, "example.org")
+        sourceErrorText(java.net.UnknownHostException()) shouldBe localized(DMR.strings.source_request_failed)
+    }
+
+    @Test
     fun `a message the source wrote for the user is kept`() {
         sourceErrorText(Exception("Log in via WebView")) shouldBe "Log in via WebView"
     }

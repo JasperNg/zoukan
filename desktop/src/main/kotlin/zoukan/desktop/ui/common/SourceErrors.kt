@@ -11,7 +11,7 @@ import zoukan.i18n.desktop.DMR
  */
 internal fun sourceErrorText(e: Throwable): String = when {
     e is HttpException -> localized(MR.strings.exception_http, e.code)
-    e is java.net.UnknownHostException -> localized(MR.strings.exception_unknown_host, e.message.orEmpty())
+    e is java.net.UnknownHostException && !e.message.isNullOrBlank() -> localized(MR.strings.exception_unknown_host, e.message.orEmpty())
     e is java.net.SocketTimeoutException || e is java.util.concurrent.TimeoutException ->
         localized(DMR.strings.source_timed_out)
     e is LinkageError -> localized(DMR.strings.source_extension_outdated)

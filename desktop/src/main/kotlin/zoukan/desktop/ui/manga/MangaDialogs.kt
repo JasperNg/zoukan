@@ -49,7 +49,8 @@ internal fun MangaDialogHost(
     // The user's own local files are never "downloaded data": they get their own option and a second confirmation
     var localFolders by remember { mutableStateOf<List<File>>(emptyList()) }
     val clearing = dialog is MangaDialog.Clear
-    LaunchedEffect(clearing) { if (clearing) localFolders = model.localFolders() }
+    // Loaded fresh each time the Clear dialog opens; never a list left over from an earlier opening
+    LaunchedEffect(clearing) { localFolders = if (clearing) model.localFolders() else emptyList() }
     when (dialog) {
         null -> Unit
         MangaDialog.MergedEntries -> MergedEntriesDialog(manga.id, onDismiss = dismiss)
@@ -70,7 +71,7 @@ internal fun MangaDialogHost(
             title = localized(DMR.strings.delete_local_files_title),
             text = localized(DMR.strings.delete_local_files_text, dialog.folders.joinToString { it.absolutePath }),
             confirmLabel = localized(DMR.strings.move_to_trash),
-            onConfirm = { model.deleteLocalFiles(confirmed = true) },
+            onConfirm = { model.deleteLocalFiles(dialog.folders) },
             onDismiss = dismiss,
         )
         is MangaDialog.ConfirmDeleteDownloads -> ConfirmDestructiveDialog(
