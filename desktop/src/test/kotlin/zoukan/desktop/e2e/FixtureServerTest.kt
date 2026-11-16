@@ -82,6 +82,18 @@ class FixtureServerTest {
     }
 
     @Test
+    fun `the chapter list has its own path, so it can fail while the details load`() = withServer { server ->
+        server.fail("/manga/second/chapters", FixtureFailure.Status(500))
+
+        server.get("/manga/second/chapters").statusCode() shouldBe 500
+        server.get("/manga/second").statusCode() shouldBe 200
+        val chapters = server.get("/manga/formats/chapters")
+        chapters.statusCode() shouldBe 200
+        chapters.text shouldBe server.get("/manga/formats").text
+        server.get("/manga/nope/chapters").statusCode() shouldBe 404
+    }
+
+    @Test
     fun `a failure with times fails that often, then the path works`() = withServer { server ->
         server.fail("/catalog", FixtureFailure.Status(404), times = 1)
 

@@ -197,6 +197,9 @@ class FixtureServer : AutoCloseable {
             }
             parts.size == 2 && parts[0] == "manga" -> FixtureCatalog.manga(parts[1])?.let { json(exchange, mangaJson(it)) }
                 ?: notFound(exchange)
+            // The chapter list on its own path, so a journey can fail it while the details load
+            parts.size == 3 && parts[0] == "manga" && parts[2] == "chapters" ->
+                FixtureCatalog.manga(parts[1])?.let { json(exchange, mangaJson(it)) } ?: notFound(exchange)
             parts.size == 3 && parts[0] == "chapter" -> {
                 val chapter = FixtureCatalog.manga(parts[1])?.chapters?.firstOrNull { it.key == parts[2] }
                 if (chapter == null) notFound(exchange) else json(exchange, pagesJson(chapter))
