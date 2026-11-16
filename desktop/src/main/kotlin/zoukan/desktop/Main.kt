@@ -84,7 +84,8 @@ Only one Zoukan can use a data folder at a time: the commands that start the run
 
 Data folder: -Dzoukan.dataDir=<path> or ZOUKAN_DATA_DIR overrides the default.
 
-Exit codes: 0 success, 1 the command failed, 2 bad usage.
+Exit codes: 0 success, 1 the command failed, 2 bad usage. harness exits 1 when an extension fails to
+install or load, and with --wiring also when an app API is missing.
 """
 
 fun main(args: Array<String>) {
@@ -251,10 +252,10 @@ private fun harness(args: List<String>): Int {
             loader = Injekt.get<DesktopExtensionLoader>(),
             options = ExtensionWiringCheck.Options(options.storeUrl, options.packages, options.skipNsfw),
         )
-        val (report, _) = check.run()
+        val (report, rows) = check.run()
         report.save(check.reportFile())
         println("\nReport saved to ${check.reportFile()}")
-        return 0
+        return wiringExitCode(rows)
     }
     val harness = CompatibilityHarness(
         dirs = dirs,
@@ -265,7 +266,7 @@ private fun harness(args: List<String>): Int {
     )
     // NetworkHelper first, so the cookie store and Chromium hooks are in place
     Injekt.get<NetworkHelper>()
-    val (report, _) = harness.run()
+    val (report, rows) = harness.run()
     val name = buildString {
         append("extensions")
         if (options.forceApk) append("-apk")
@@ -274,8 +275,19 @@ private fun harness(args: List<String>): Int {
     val file = File(dirs.reports, "$name.md")
     report.save(file)
     println("\nReport saved to $file")
-    return 0
+    return harnessExitCode(rows)
 }
+
+/** 1 when an extension failed to load or an app API it needs is missing; 0 for a clean run. */
+internal fun wiringExitCode(rows: List<ExtensionWiringCheck.Row>): Int =
+    if (ExtensionWiringCheck.appGaps(rows).isNotEmpty() || rows.any { !it.loaded }) 1 else 0
+
+/**
+ * 1 when an extension failed to install or load, or is not in the store. The live-site steps
+ * (popular, details, pages) stay in the report only: they depend on the sites, not on the app.
+ */
+internal fun harnessExitCode(rows: List<CompatibilityHarness.Row>): Int =
+    if (rows.any { !it.install.startsWith("ok") }) 1 else 0
 
 private fun browser(args: List<String>): Int {
     val url = args.firstOrNull() ?: run {
