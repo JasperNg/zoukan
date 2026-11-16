@@ -875,6 +875,9 @@
     <string name="storage_change_warning">Downloads, local entries and automatic backups already in %1$s stay there; Zoukan does not move them. They show as not downloaded until you move them yourself or switch back.</string>
     <string name="storage_folder_has_downloads">This folder already has downloads. Clean up deletes those of entries not in this library.</string>
     <string name="open_the_old_folder">Open the old folder</string>
+    <string name="follow_library_on_mangadex_warning">%1$d library entries will be followed on your MangaDex account as Reading. Undo it on the MangaDex site.</string>
+    <string name="follow_on_mangadex">Follow</string>
+    <string name="no_mangadex_entries_in_the_library">No MangaDex entries are in the library.</string>
     <string name="show_value">Show value</string>
     <string name="hide_value">Hide value</string>
     <string name="reset_sync_time_warning">The next sync uploads this library over the copy on the server, as a first sync does. Progress made on other devices since the last sync may be lost.</string>
