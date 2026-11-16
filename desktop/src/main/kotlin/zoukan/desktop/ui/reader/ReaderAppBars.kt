@@ -89,6 +89,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -106,6 +108,7 @@ import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReaderBottomButtons
 import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.chapterStateDescription
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
@@ -599,6 +602,7 @@ private fun ReaderChapterRow(chapter: Chapter, current: Boolean, onClick: () -> 
             .clip(Corners.Medium)
             .background(if (current) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
             .clickable(onClick = onClick)
+            .semantics { chapterStateDescription(chapter.read, chapter.bookmark)?.let { stateDescription = it } }
             .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -607,7 +611,7 @@ private fun ReaderChapterRow(chapter: Chapter, current: Boolean, onClick: () -> 
                 if (chapter.bookmark) {
                     Icon(
                         Icons.Filled.Bookmark,
-                        null,
+                        localized(DMR.strings.chapter_state_bookmarked),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp).padding(end = 2.dp),
                     )

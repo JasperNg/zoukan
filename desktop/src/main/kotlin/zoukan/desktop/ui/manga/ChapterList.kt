@@ -35,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.util.formatChapterNumber
@@ -52,6 +54,7 @@ import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
 import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.chapterStateDescription
 import zoukan.desktop.ui.common.onRightClickAt
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.downloads.DownloadIndicator
@@ -204,6 +207,7 @@ private fun ChapterRow(
                 .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
                 .clickable { if (selecting) onToggleSelect() else onOpen() }
                 .onRightClickAt(menu::open)
+                .semantics { chapterStateDescription(chapter.read, chapter.bookmark)?.let { stateDescription = it } }
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -214,7 +218,7 @@ private fun ChapterRow(
                     if (chapter.bookmark) {
                         Icon(
                             Icons.Default.Bookmark,
-                            null,
+                            localized(DMR.strings.chapter_state_bookmarked),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp).padding(end = 2.dp),
                         )
