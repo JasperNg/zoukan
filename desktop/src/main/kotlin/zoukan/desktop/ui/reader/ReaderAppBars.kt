@@ -73,6 +73,8 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -161,6 +163,7 @@ fun readerBarColor(): Color {
 }
 
 /** What the reader menu's buttons do */
+@Immutable
 class ReaderMenuActions(
     val onBack: () -> Unit,
     val onToggleBookmark: () -> Unit,
@@ -185,7 +188,8 @@ class ReaderMenuActions(
 )
 
 /** Everything a menu draws, read from the reader's state and settings */
-class ReaderMenuState(
+@Immutable
+data class ReaderMenuState(
     val mangaTitle: String,
     val chapterTitle: String,
     val bookmarked: Boolean,
@@ -526,7 +530,7 @@ private fun PageSlider(menu: ReaderMenuState, actions: ReaderMenuActions, modifi
     val pressed by interaction.collectIsPressedAsState()
     var value by remember(menu.generation) { mutableFloatStateOf(menu.currentPage.toFloat()) }
     // While the thumb is held it stays under the pointer; the viewer may land on the spread's other page
-    if (!dragged && !pressed) value = menu.currentPage.toFloat()
+    LaunchedEffect(menu.currentPage, dragged, pressed) { if (!dragged && !pressed) value = menu.currentPage.toFloat() }
     Slider(
         value = value,
         onValueChange = {

@@ -14,12 +14,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +51,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
@@ -60,6 +63,20 @@ import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.reducedMotion
 import zoukan.i18n.desktop.DMR
+
+/** What a viewer draws: everything but the current page, which turns on every page change. */
+@Immutable
+data class ViewerContent(
+    val pages: List<ReaderPage>,
+    val chapter: Chapter?,
+    val previousChapter: Chapter?,
+    val nextChapter: Chapter?,
+    val readingMode: Int,
+    val startPage: Int,
+    val widePages: Set<Int>,
+    val shiftDoublePages: Boolean,
+    val generation: Int,
+)
 
 data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? = null) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
@@ -194,6 +211,49 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         LaunchedEffect(menuVisible, state.generation) { if (!menuVisible) focus.requestFocus() }
 
         // ZOUKAN -->
+        // The viewers get only what they draw, not the current page, so a page turn leaves them alone
+        val viewerContent = remember(
+            state.pages, state.chapter, state.previousChapter, state.nextChapter, state.readingMode,
+            state.startPage, state.widePages, state.shiftDoublePages, state.generation,
+        ) {
+            ViewerContent(
+                pages = state.pages,
+                chapter = state.chapter,
+                previousChapter = state.previousChapter,
+                nextChapter = state.nextChapter,
+                readingMode = state.readingMode,
+                startPage = state.startPage,
+                widePages = state.widePages,
+                shiftDoublePages = state.shiftDoublePages,
+                generation = state.generation,
+            )
+        }
+        val webtoonNow by rememberUpdatedState(webtoon)
+        val menuActions = remember(model, navigator, windowState, prefs, actions) {
+            ReaderMenuActions(
+                onBack = { navigator.pop() },
+                onToggleBookmark = { model.toggleBookmark() },
+                onAutoScroll = { autoScroll = !autoScroll },
+                onKeys = { showKeys = true },
+                onFullscreen = { toggleFullscreen() },
+                onChapters = { showChapters = true },
+                onWebView = model::openChapterInWebView,
+                onBrowser = model::openChapterInBrowser,
+                onReadingMode = model::setReadingMode,
+                onFitMode = { prefs.imageScaleType().set(it) },
+                onToggleCrop = {
+                    val pref = if (webtoonNow) prefs.cropBordersWebtoon() else prefs.cropBorders()
+                    pref.set(!pref.get())
+                },
+                onPageLayout = { prefs.pageLayout().set(it) },
+                onSettings = { showSettings = true },
+                onPreviousChapter = { model.previousChapter() },
+                onNextChapter = { model.nextChapter() },
+                onPage = { actions.goTo(it) },
+                onRetryAll = model::retryAllPages,
+                onBoostPage = model::boostPage,
+            )
+        }
         // Read once: every reader composable below follows the system's "reduce motion" setting
         val reduceMotion by reducedMotion()
         CompositionLocalProvider(LocalReducedMotion provides reduceMotion) {
@@ -229,9 +289,9 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                             Box(Modifier.fillMaxSize().readerFilter(filter).semantics { contentDescription = pageDescription }) {
                                 // ZOUKAN <--
                                 if (webtoon) {
-                                    WebtoonViewer(model, state, actions, sidePadding, background, foreground, tapZones)
+                                    WebtoonViewer(model, viewerContent, actions, sidePadding, background, foreground, tapZones)
                                 } else {
-                                    PagedViewer(model, state, actions, fitMode, background, foreground, tapZones, autoBackground = theme == 3)
+                                    PagedViewer(model, viewerContent, actions, fitMode, background, foreground, tapZones, autoBackground = theme == 3)
                                 }
                             }
                         }
@@ -290,29 +350,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                         hasNext = state.nextChapter != null,
                         generation = state.generation,
                     ),
-                    actions = ReaderMenuActions(
-                        onBack = { navigator.pop() },
-                        onToggleBookmark = { model.toggleBookmark() },
-                        onAutoScroll = { autoScroll = !autoScroll },
-                        onKeys = { showKeys = true },
-                        onFullscreen = ::toggleFullscreen,
-                        onChapters = { showChapters = true },
-                        onWebView = model::openChapterInWebView,
-                        onBrowser = model::openChapterInBrowser,
-                        onReadingMode = model::setReadingMode,
-                        onFitMode = { prefs.imageScaleType().set(it) },
-                        onToggleCrop = {
-                            val pref = if (webtoon) prefs.cropBordersWebtoon() else prefs.cropBorders()
-                            pref.set(!pref.get())
-                        },
-                        onPageLayout = { prefs.pageLayout().set(it) },
-                        onSettings = { showSettings = true },
-                        onPreviousChapter = { model.previousChapter() },
-                        onNextChapter = { model.nextChapter() },
-                        onPage = { actions.goTo(it) },
-                        onRetryAll = model::retryAllPages,
-                        onBoostPage = model::boostPage,
-                    ),
+                    actions = menuActions,
                 )
                 // ZOUKAN <--
             }

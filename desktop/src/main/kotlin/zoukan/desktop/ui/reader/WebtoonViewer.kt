@@ -69,7 +69,7 @@ internal fun WebtoonPagePlaceholder(page: ReaderPage, number: Int, color: Color)
 @Composable
 fun WebtoonViewer(
     model: ReaderScreenModel,
-    state: ReaderScreenModel.State,
+    content: ViewerContent,
     actions: ReaderActions,
     sidePadding: Int,
     background: Color,
@@ -78,21 +78,21 @@ fun WebtoonViewer(
     tapZones: TapZonesOverlayState? = null,
     // ZOUKAN <--
 ) {
-    val pages = state.pages
-    val hasPrevious = state.previousChapter != null
+    val pages = content.pages
+    val hasPrevious = content.previousChapter != null
     // Item 0 is the previous chapter transition, then the pages, then the next chapter transition
     // ZOUKAN -->
     // With "Always show chapter transition" off, the one between back-to-back chapters is not shown,
     // so the strip ends with a small next chapter button (an empty item before the first page), and
     // the indices stay; keys, taps and auto scroll go on to that chapter directly
     val alwaysTransition by model.preferences.alwaysShowChapterTransition().collectAsState()
-    val showPrevious = ChapterTransitions.shown(alwaysTransition, state.chapter, state.previousChapter, next = false, hasPages = pages.isNotEmpty())
-    val showNext = ChapterTransitions.shown(alwaysTransition, state.chapter, state.nextChapter, next = true, hasPages = pages.isNotEmpty())
+    val showPrevious = ChapterTransitions.shown(alwaysTransition, content.chapter, content.previousChapter, next = false, hasPages = pages.isNotEmpty())
+    val showNext = ChapterTransitions.shown(alwaysTransition, content.chapter, content.nextChapter, next = true, hasPages = pages.isNotEmpty())
     // ZOUKAN <--
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = state.startPage + 1)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = content.startPage + 1)
     val scope = rememberCoroutineScope()
     var zoom by remember { mutableFloatStateOf(1f) }
-    val gap = if (state.readingMode == ReadingModes.CONTINUOUS_VERTICAL) 16.dp else 0.dp
+    val gap = if (content.readingMode == ReadingModes.CONTINUOUS_VERTICAL) 16.dp else 0.dp
     val hScroll = rememberScrollState()
     // ZOUKAN -->
     val prefs = model.preferences
@@ -111,7 +111,7 @@ fun WebtoonViewer(
     // KMK's "Smart scale on wide screen", for Long strip with gaps only when its own setting is on
     val scaleType by prefs.webtoonScaleType().collectAsState()
     val gapScale by prefs.longStripGapSmartScale().collectAsState()
-    val smartScaleOn = state.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
+    val smartScaleOn = content.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
     val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
     val minZoom = if (noZoomOut) 1f else 0.3f
     LaunchedEffect(minZoom) { if (zoom < minZoom) zoom = minZoom }
@@ -133,31 +133,34 @@ fun WebtoonViewer(
         fun scroll(by: Float) {
             scope.launch { if (transitions && !reduceMotion) listState.animateScrollBy(by, tween(200)) else listState.scrollBy(by) }
         }
-        actions.down = { scroll(viewportHeight * 0.8f) }
-        actions.up = { scroll(-viewportHeight * 0.8f) }
-        // SY's smooth auto scroll: a window's height over each interval
-        actions.smoothScroll = { millis ->
-            scope.launch {
-                if (listState.canScrollForward) {
-                    listState.animateScrollBy(viewportHeight, tween(millis.toInt(), easing = androidx.compose.animation.core.LinearEasing))
-                } else {
-                    model.nextChapter()
+        // Set after every successful composition, not during it
+        SideEffect {
+            actions.down = { scroll(viewportHeight * 0.8f) }
+            actions.up = { scroll(-viewportHeight * 0.8f) }
+            // SY's smooth auto scroll: a window's height over each interval
+            actions.smoothScroll = { millis ->
+                scope.launch {
+                    if (listState.canScrollForward) {
+                        listState.animateScrollBy(viewportHeight, tween(millis.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+                    } else {
+                        model.nextChapter()
+                    }
                 }
             }
+            actions.next = {
+                if (listState.canScrollForward) actions.down() else model.nextChapter()
+            }
+            actions.previous = {
+                if (listState.canScrollBackward) actions.up() else model.previousChapter(atEnd = true)
+            }
+            actions.first = { scope.launch { listState.scrollToItem(1) } }
+            actions.last = { scope.launch { listState.scrollToItem(pages.size) } }
+            actions.goTo = { index -> scope.launch { listState.scrollToItem(index + 1) } }
+            actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
+            actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
+            actions.zoomReset = { zoom = 1f }
         }
         // ZOUKAN <--
-        actions.next = {
-            if (listState.canScrollForward) actions.down() else model.nextChapter()
-        }
-        actions.previous = {
-            if (listState.canScrollBackward) actions.up() else model.previousChapter(atEnd = true)
-        }
-        actions.first = { scope.launch { listState.scrollToItem(1) } }
-        actions.last = { scope.launch { listState.scrollToItem(pages.size) } }
-        actions.goTo = { index -> scope.launch { listState.scrollToItem(index + 1) } }
-        actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
-        actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
-        actions.zoomReset = { zoom = 1f }
 
         // ZOUKAN -->
         var secondaryAt by remember { mutableStateOf(0L) }
@@ -252,8 +255,8 @@ fun WebtoonViewer(
                     item(key = "previous") {
                         if (showPrevious) {
                             ChapterTransition(
-                                state.chapter,
-                                state.previousChapter,
+                                content.chapter,
+                                content.previousChapter,
                                 next = false,
                                 color = foreground,
                                 onGo = { model.previousChapter(atEnd = true) },
@@ -306,14 +309,14 @@ fun WebtoonViewer(
                     item(key = "next") {
                         if (showNext) {
                             ChapterTransition(
-                                state.chapter,
-                                state.nextChapter,
+                                content.chapter,
+                                content.nextChapter,
                                 next = true,
                                 color = foreground,
                                 onGo = { model.nextChapter() },
                                 modifier = Modifier.fillMaxWidth().height(with(density) { (viewportHeight * 0.6f).toDp() }),
                             )
-                        } else if (state.nextChapter != null) {
+                        } else if (content.nextChapter != null) {
                             // A wheel or trackpad scroll stops at the strip's end: keep a way on there
                             Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
                                 FilledTonalButton(onClick = { model.nextChapter() }) {
