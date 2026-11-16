@@ -1,0 +1,73 @@
+# Records or verifies the screenshot goldens: about 20 curated screens in light and dark, at the
+# default and the smallest window (desktop/src/test/screenshots/linux/<size>-<theme>/<key>.png).
+#
+# Goldens are per operating system and only Linux compares them (fonts and the rasteriser differ
+# elsewhere), so they are recorded here, on ubuntu-24.04 under xvfb with pinned fonts, never on a
+# developer machine. After an intended visual change:
+#   gh workflow run screenshots-record.yml --ref <branch>                   (mode: record)
+# then download the "screenshot-goldens" artifact into desktop/src/test/screenshots and commit it.
+#   gh workflow run screenshots-record.yml --ref <branch> -f mode=verify    (compare; the nightly job does this)
+# A failed verify uploads build/reports/screenshots: expected.png, actual.png and diff.png per screen.
+name: Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'record writes the goldens and uploads them; verify compares with the committed ones'
+        type: choice
+        options: [record, verify]
+        default: record
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    name: Screenshots (${{ inputs.mode }})
+    # Pinned: a newer image can change fonts and the rasteriser, and so every golden
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # The JetBrains Runtime from JetBrains' own CDN, as ci.yml does
+      - name: Download JetBrains Runtime
+        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: jdkfile
+          jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      # Installed explicitly rather than relying on the runner image, so the glyphs (CJK titles
+      # included) are the same in every run
+      - name: Install fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu-core fonts-noto-cjk
+          fc-cache -f
+
+      - name: Screenshots
+        run: xvfb-run -a ./gradlew :desktop:wiringTest -Pzoukan.screenshots=${{ inputs.mode }}
+
+      - name: Upload goldens
+        if: ${{ (inputs.mode) == 'record' && always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: screenshot-goldens
+          path: desktop/src/test/screenshots/
+          if-no-files-found: error
+
+      - name: Upload screenshot reports
+        if: ${{ (inputs.mode) == 'verify' && failure() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: screenshot-reports
+          path: desktop/build/reports/screenshots/
+          if-no-files-found: ignore

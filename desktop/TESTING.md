@@ -342,7 +342,36 @@ the first three rules.
 
 ## Screenshot comparison
 
-Not added yet. This section will explain the golden images and how to update them.
+About twenty curated screens and dialogs (`ScreenshotKeys.curated`, named by their coverage-matrix
+key) are compared with golden images in four variants: light and dark, at 1280x820
+(`ScreenSmokeTest`) and 800x560 (`ScreenSmokeSmallWindowTest`). The smoke test takes them after its
+usability rules. The check is off by default and costs nothing then.
+
+```bash
+./gradlew :desktop:wiringTest -Pzoukan.screenshots=verify   # compare with the goldens (Linux only)
+./gradlew :desktop:wiringTest -Pzoukan.screenshots=record   # write the goldens
+```
+
+- Goldens: `desktop/src/test/screenshots/linux/<size>-<theme>/<key>.png`, with `:` and `/` in the
+  key replaced by `_`. They are recorded on ubuntu-24.04 under xvfb with fonts-dejavu-core and
+  fonts-noto-cjk, by the `Screenshots` workflow (`.github/workflows/screenshots-record.yml`).
+  Fonts and the rasteriser differ on Windows and macOS, so `verify` there only saves the captures
+  and compares nothing; goldens recorded there are gitignored.
+- A pixel is changed when a channel differs by more than 8; a screen fails when more than 0.1% of
+  its pixels changed. Parts that change from run to run (dates, "ago" text, async covers, a caret,
+  the temporary data folder) are masked per key in `ScreenshotKeys`.
+- A failed `verify` writes `expected.png`, `actual.png` and `diff.png` (changed pixels red over the
+  dimmed actual) per screen to `desktop/build/reports/screenshots/<variant>/<key>/`, and a summary
+  to `desktop/build/reports/screenshots/report.md`. A curated key that the run never reached also
+  fails a full `verify`, so a golden cannot silently stop being compared.
+- `captureAllRoots()` (`Screenshots.kt`) draws every root (dialogs, menus, toasts) over the window.
+  Journeys and the `EndToEnd*Test` classes use it for their screenshots too.
+
+After an intended visual change, record new goldens: run the `Screenshots` workflow with mode
+`record` on your branch (`gh workflow run screenshots-record.yml --ref <branch>`), download its
+`screenshot-goldens` artifact into `desktop/src/test/screenshots/`, look at the changed images, and
+commit them. To add a screen, add its key to `ScreenshotKeys.curated` (and masks if it shows
+anything that changes per run) and record.
 
 ## Gated live tests
 

@@ -38,13 +38,13 @@ import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.E2EDiagnostics
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.saveScreenshot
 import zoukan.desktop.ui.startUi
 import zoukan.desktop.update.Updates
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.util.Collections
-import javax.imageio.ImageIO
 import kotlin.math.abs
 
 /**
@@ -182,28 +182,13 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
      */
     fun ComposeUiTest.root() = onAllNodes(isRoot()).onFirst()
 
+    /** Saves what is on screen, dialogs and popups included, as `<journey>-<title>.png`. */
     fun ComposeUiTest.shot(title: String) {
-        waitForIdle()
-        ImageIO.write(root().captureToImage().toAwtImage(), "png", File(shots, "$name-$title.png"))
+        saveScreenshot(shots, "$name-$title")
     }
 
-    /**
-     * Like [shot], with the popups on it: a dialog or a menu is a root of its own, which [shot]
-     * leaves out. Every other root is drawn over the window's at its place in the window.
-     */
-    fun ComposeUiTest.shotWithPopups(title: String) {
-        waitForIdle()
-        val roots = onAllNodes(isRoot())
-        val count = roots.fetchSemanticsNodes().size
-        val image = roots[0].captureToImage().toAwtImage()
-        val g = image.createGraphics()
-        (1 until count).forEach { i ->
-            val bounds = roots[i].fetchSemanticsNode().boundsInWindow
-            g.drawImage(roots[i].captureToImage().toAwtImage(), bounds.left.toInt(), bounds.top.toInt(), null)
-        }
-        g.dispose()
-        ImageIO.write(image, "png", File(shots, "$name-$title.png"))
-    }
+    /** The same as [shot], which already draws dialogs and popups; kept for the journeys that call it. */
+    fun ComposeUiTest.shotWithPopups(title: String) = shot(title)
 
     /** The node [index] (the first by default) with content description [text] (icon buttons have no text). */
     fun ComposeUiTest.byDescription(text: String, index: Int = 0) = onAllNodesWithContentDescription(text)[index]

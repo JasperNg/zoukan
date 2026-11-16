@@ -22,6 +22,10 @@ local.properties
 *.jks
 app/standard/preview/*
 
+# Screenshot goldens are recorded on Linux only (see .github/workflows/screenshots-record.yml)
+desktop/src/test/screenshots/windows/
+desktop/src/test/screenshots/macos/
+
 # AI agent files (kept locally, not tracked)
 .claude/
 .gemini/

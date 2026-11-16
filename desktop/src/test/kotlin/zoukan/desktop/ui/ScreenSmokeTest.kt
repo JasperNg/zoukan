@@ -214,6 +214,9 @@ open class ScreenSmokeTest {
         /** Rows per scroll step: fewer than a screen holds, so every row composes on the way. */
         const val SCROLL_STEP = 6
 
+        /** The date of the seeded entries and chapters (2024-01-15), fixed so screenshots show the same dates every day. */
+        const val SEED_DATE = 1_705_314_000_000L
+
         /** Bounds a list's scrolling, at 3,000 rows. */
         const val MAX_SCROLL_STEPS = 500
 
@@ -254,6 +257,19 @@ open class ScreenSmokeTest {
     /** Usability problems: reported in build/reports/usability/<size>.md, never a failure (see [usabilityChecks]). */
     private val usabilityFindings = mutableListOf<UsabilityFinding>()
 
+    /** Null unless -Pzoukan.screenshots=verify|record: then no screenshot is taken, which costs nothing. */
+    private val screenshots = ScreenshotRun.fromProperty()
+
+    /** Screens that differ from their golden: reported in build/reports/screenshots/report.md, and a failure at the end in verify mode only. */
+    private val screenshotFindings = mutableListOf<ScreenshotFinding>()
+
+    /** Takes the curated screens only, once per key and variant, after the usability rules that only read the screen. */
+    private fun ComposeUiTest.screenshot(key: String, variant: String) {
+        val run = screenshots ?: return
+        if (key !in ScreenshotKeys.curated) return
+        run.check(captureAllRoots(), variant, key, ScreenshotKeys.masks(key, this))?.let { screenshotFindings += it }
+    }
+
     @Test
     fun `every screen and dialog opens without an error`() {
         System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
@@ -288,6 +304,8 @@ open class ScreenSmokeTest {
             mustBeEmpty("coverage-matrix rows with smoke: true that no smoke check has", matrix.filter { it.smoke }.map { it.key }.toSet() - keys)
             // A check whose key has no coverage-matrix row
             mustBeEmpty("smoke check keys with no row in coverage-matrix.yaml", keys - matrix.map { it.key }.toSet())
+            // A curated screenshot key that no check has would never be compared
+            mustBeEmpty("screenshot keys (ScreenshotKeys.curated) that no smoke check has", ScreenshotKeys.curated - keys)
             // A malformed allowlist (no reason, unknown rule, a key with no matrix row) is a real failure
             val allowlist = UsabilityAllowlist.load(matrix.map { it.key })
             // -Pzoukan.smoke.only=<regex> runs only the checks whose key or name matches, to debug one
@@ -310,6 +328,14 @@ open class ScreenSmokeTest {
             writeUsabilityReport(classified, report)
             // Off until the findings are fixed or allowlisted: -Pzoukan.usability.enforce=true
             if (System.getProperty("zoukan.usability.enforce") == "true") failures += enforceFailures(classified)
+            screenshots?.let { run ->
+                // A filtered run skips screens on purpose; a full one must take every curated screen
+                if (only == null) screenshotFindings += run.notTaken(ScreenshotKeys.curated, listOf("$size/light", "$size/dark"))
+                run.writeReport(size, screenshotFindings)
+                println("Screenshots: ${screenshotFindings.size} differ, in build/reports/screenshots/report.md")
+                // Collected over the whole run, so one failure here never ended a batch; only verify fails
+                if (run.compares) screenshotFindings.forEach { failures += "screenshot [${it.variant}] ${it.key}: ${it.message}" }
+            }
             failures.shouldBeEmpty()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)
@@ -370,6 +396,7 @@ open class ScreenSmokeTest {
                                 // then in dark, and the ones that press Tab and Escape last, in light,
                                 // because Escape may close the dialog.
                                 usabilityFindings += staticUsabilityChecks(check.key, "$size/light")
+                                screenshot(check.key, "$size/light")
                                 // The theme preference reaches ZoukanTheme as Compose goes idle, so
                                 // waitForIdle is enough here; settle's sleeps would add ~1 s per check
                                 try {
@@ -378,6 +405,7 @@ open class ScreenSmokeTest {
                                     ui.themeMode().set(ThemeMode.DARK)
                                     waitForIdle()
                                     usabilityFindings += staticUsabilityChecks(check.key, "$size/dark")
+                                    screenshot(check.key, "$size/dark")
                                 } finally {
                                     // Light again for the next checks even when the dark pass threw; waiting
                                     // here would throw again over a broken composition and hide the first error
@@ -501,7 +529,8 @@ open class ScreenSmokeTest {
         val storage = Injekt.get<ZoukanStorage>()
         listOf("Alpha", "Bravo").forEach { title ->
             val dir = File(storage.local, title).apply { mkdirs() }
-            (1..2).forEach { cbz(File(dir, "Chapter $it.cbz"), 3, title) }
+            // A fixed modified time too: it becomes the chapter's upload date, which a screenshot shows
+            (1..2).forEach { cbz(File(dir, "Chapter $it.cbz"), 3, title).setLastModified(SEED_DATE) }
         }
         Injekt.get<LibraryPreferences>().autoUpdateMangaRestrictions().set(emptySet())
         runBlocking {
@@ -510,7 +539,7 @@ open class ScreenSmokeTest {
             val source = Injekt.get<SourceManager>().get(LocalSource.ID) as CatalogueSource
             val found = source.getPopularManga(1).mangas.map { it.toDomainManga(LocalSource.ID) }
             Injekt.get<NetworkToLocalManga>()(found).forEach { manga ->
-                Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = System.currentTimeMillis()))
+                Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = SEED_DATE))
             }
         }
         updateLibrary()
@@ -545,7 +574,7 @@ open class ScreenSmokeTest {
         }
     }
 
-    private fun cbz(file: File, pages: Int, label: String) {
+    private fun cbz(file: File, pages: Int, label: String): File {
         CbzWriter(file).use { writer ->
             (1..pages).forEach { i ->
                 val image = BufferedImage(300, 450, BufferedImage.TYPE_INT_RGB)
@@ -558,6 +587,7 @@ open class ScreenSmokeTest {
                 writer.write("%03d.png".format(i), ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray())
             }
         }
+        return file
     }
 
     // Screens
