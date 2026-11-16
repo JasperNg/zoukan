@@ -8,6 +8,8 @@ import exh.eh.EHentaiUpdaterStats
 import exh.eh.GalleryNotUpdatedException
 import exh.metadata.metadata.EHentaiSearchMetadata
 import exh.source.ExhPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import mihon.domain.source.interactor.UpdateMangaFromRemote
@@ -45,12 +47,22 @@ class EhGalleryUpdater(
     private val getExhFavoriteMangaWithMetadata: GetExhFavoriteMangaWithMetadata,
 ) {
     private val running = AtomicBoolean(false)
+    private val roundRunning = MutableStateFlow(false)
 
     @Volatile
     private var paused = false
 
+    /**
+     * Pausing keeps rounds from starting and stops a running round before its next gallery. Use
+     * [awaitIdle] to wait until the gallery in flight is done.
+     */
     fun setPaused(paused: Boolean) {
         this.paused = paused
+    }
+
+    /** Suspends until no round is running. */
+    suspend fun awaitIdle() {
+        roundRunning.first { !it }
     }
 
     fun stats(): EHentaiUpdaterStats? = exhPreferences.exhAutoUpdateStats().get().takeIf { it.isNotBlank() }
@@ -73,10 +85,12 @@ class EhGalleryUpdater(
     /** Runs one round now; returns false when one is already running. */
     suspend fun run(): Boolean {
         if (!running.compareAndSet(false, true)) return false
+        roundRunning.value = true
         try {
             update()
         } finally {
             running.set(false)
+            roundRunning.value = false
         }
         return true
     }
@@ -115,6 +129,10 @@ class EhGalleryUpdater(
         val modified = mutableSetOf<Long>()
         try {
             for ((manga, _) in toUpdate) {
+                if (paused) {
+                    logcat { "E-Hentai updates paused; stopping this round" }
+                    break
+                }
                 if (failures > MAX_UPDATE_FAILURES) {
                     logcat(LogPriority.WARN) { "Too many E-Hentai update failures, stopping" }
                     break
