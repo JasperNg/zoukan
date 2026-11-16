@@ -259,12 +259,10 @@ public final class Bitmap {
         }
         ImageWriter writer = writers.next();
 
-        ImageOutputStream ios;
-        try {
-            ios = ImageIO.createImageOutputStream(stream);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
+        // ZOUKAN -->
+        // An in-memory cache: ImageIO.createImageOutputStream may spill the page to a temp file
+        ImageOutputStream ios = new javax.imageio.stream.MemoryCacheImageOutputStream(stream);
+        // ZOUKAN <--
         writer.setOutput(ios);
 
         BufferedImage img = image;

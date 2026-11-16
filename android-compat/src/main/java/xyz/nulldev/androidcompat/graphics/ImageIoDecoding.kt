@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import javax.imageio.ImageIO
 import javax.imageio.ImageReader
+import javax.imageio.stream.MemoryCacheImageInputStream
 import org.w3c.dom.Node
 
 /**
@@ -20,7 +21,8 @@ internal object ImageIoDecoding {
         bytes: ByteArray,
         block: (ImageReader) -> T,
     ): T {
-        val input = ImageIO.createImageInputStream(ByteArrayInputStream(bytes)) ?: throw IOException("Cannot read the image")
+        // An in-memory cache: ImageIO.createImageInputStream may spill the page to a temp file
+        val input = MemoryCacheImageInputStream(ByteArrayInputStream(bytes))
         input.use {
             val readers = ImageIO.getImageReaders(input)
             if (!readers.hasNext()) throw IOException("No decoder for this image format")

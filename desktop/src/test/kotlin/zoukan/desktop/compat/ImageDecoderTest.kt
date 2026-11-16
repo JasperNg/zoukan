@@ -5,12 +5,14 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageDecoder
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.nio.file.Path
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageTypeSpecifier
@@ -111,6 +113,50 @@ class ImageDecoderTest {
         }
         writer.dispose()
         return out.toByteArray()
+    }
+
+    /** Runs every decode, probe and compress path once; [onOpen] runs while a stream is open. */
+    private fun useEveryImagePath(png: ByteArray, gif: ByteArray, onOpen: () -> Unit) {
+        val source = android.graphics.ImageDecoder.createSource(png)
+        val bitmap = android.graphics.ImageDecoder.decodeBitmap(source) { _, _, _ -> onOpen() }
+        ImageDecoder.newInstance(ByteArrayInputStream(png))!!.decode().shouldNotBeNull()
+        FrameDecoder.open(ByteArrayInputStream(gif)).use { decoder ->
+            decoder.decodeNext().close()
+            decoder.decodeNext().close()
+        }
+        for (format in listOf(android.graphics.Bitmap.CompressFormat.PNG, android.graphics.Bitmap.CompressFormat.JPEG)) {
+            val sink = object : ByteArrayOutputStream() {
+                override fun write(b: ByteArray, off: Int, len: Int) {
+                    onOpen()
+                    super.write(b, off, len)
+                }
+            }
+            bitmap.compress(format, 100, sink)
+            (sink.size() > 0) shouldBe true
+        }
+    }
+
+    @Test
+    fun `decoding and compressing never write page bytes to ImageIO's cache folder`(@TempDir dir: Path) {
+        val useCache = ImageIO.getUseCache()
+        val cacheDirectory = ImageIO.getCacheDirectory()
+        val png = png()
+        val gif = twoFrameGif()
+        try {
+            ImageIO.setUseCache(true)
+            ImageIO.setCacheDirectory(dir.toFile())
+            val seen = mutableListOf<String>()
+            useEveryImagePath(png, gif) { seen += dir.toFile().list().orEmpty() }
+            seen shouldBe emptyList()
+            dir.toFile().list().orEmpty().toList() shouldBe emptyList()
+
+            // A cache folder that no longer exists makes any file-backed stream fail
+            dir.toFile().delete()
+            useEveryImagePath(png, gif) {}
+        } finally {
+            ImageIO.setUseCache(useCache)
+            ImageIO.setCacheDirectory(cacheDirectory)
+        }
     }
 
     @Test
