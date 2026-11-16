@@ -137,7 +137,7 @@ public abstract class PreferenceGroup extends Preference {
         return initialExpandedChildrenCount;
     }
 
-    /** Tachidesk specific API: the direct children, in the order they were added. */
+    /** Tachidesk specific API: the direct children, sorted by getOrder() (add order for equal orders). */
     @JsonIgnore
     public List<Preference> getPreferences() {
         return preferences;

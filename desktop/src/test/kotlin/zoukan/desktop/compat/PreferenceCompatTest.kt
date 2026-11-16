@@ -430,7 +430,7 @@ class PreferenceCompatTest {
     }
 
     @Test
-    fun `an editor is empty after apply, and clear runs before puts`() {
+    fun `an editor is empty after a commit, and clear runs before puts`() {
         val prefs = prefs("editor_semantics")
 
         // A reused editor does not replay what it already wrote

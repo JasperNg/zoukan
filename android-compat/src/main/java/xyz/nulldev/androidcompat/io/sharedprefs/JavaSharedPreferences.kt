@@ -196,7 +196,6 @@ class JavaSharedPreferences(
                     // ZOUKAN -->
                     val stored = file.readBytes()
                     val codec = SettingsFileCodec.current
-                    // ZOUKAN -->
                     // Without a codec, bytes that are not XML are an encrypted file opened before
                     // the host app set its key: keep it as it is, and do not save over it
                     if (codec == null && stored.isNotBlankNonXml()) {
@@ -204,7 +203,6 @@ class JavaSharedPreferences(
                         saveBlocked = true
                         return@also
                     }
-                    // ZOUKAN <--
                     val plain = if (codec != null && codec.isEncoded(stored)) codec.decode(stored) else stored
                     // A plain file from before encryption is encrypted when it is read
                     migrateToCodec = codec != null && plain === stored
