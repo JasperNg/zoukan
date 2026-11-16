@@ -19,8 +19,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -58,11 +60,20 @@ import zoukan.i18n.desktop.DMR
 @Composable
 fun OpenUrlDialog(onDismiss: () -> Unit) {
     val navigator = LocalNavigator.currentOrThrow
+    OpenUrlDialogContent(onOpen = { navigator.push(OpenUrlScreen(it)) }, onDismiss = onDismiss)
+}
+
+@Composable
+internal fun OpenUrlDialogContent(onOpen: (String) -> Unit, onDismiss: () -> Unit) {
     var url by remember { mutableStateOf("") }
+    var opened by remember { mutableStateOf(false) }
+    val valid = OpenUrlScreen.isUrl(url.trim())
     val open = {
-        if (url.isNotBlank()) {
+        // Once only, even if two events arrive before the dialog has left the screen
+        if (valid && !opened) {
+            opened = true
             onDismiss()
-            navigator.push(OpenUrlScreen(url.trim()))
+            onOpen(url.trim())
         }
     }
     AlertDialog(
@@ -80,8 +91,14 @@ fun OpenUrlDialog(onDismiss: () -> Unit) {
                     onValueChange = { url = it },
                     singleLine = true,
                     placeholder = { Text("https://…") },
+                    isError = url.isNotBlank() && !valid,
+                    supportingText = if (url.isNotBlank() && !valid) {
+                        { Text(localized(DMR.strings.enter_an_address_that_starts_with)) }
+                    } else {
+                        null
+                    },
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("open-url-field").onKeyEvent {
-                        if (it.key == Key.Enter) {
+                        if (it.type == KeyEventType.KeyDown && (it.key == Key.Enter || it.key == Key.NumPadEnter)) {
                             open()
                             true
                         } else {
@@ -91,7 +108,7 @@ fun OpenUrlDialog(onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton(onClick = open, enabled = url.isNotBlank()) { Text(localized(KMR.strings.open)) } },
+        confirmButton = { TextButton(onClick = open, enabled = valid) { Text(localized(KMR.strings.open)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
