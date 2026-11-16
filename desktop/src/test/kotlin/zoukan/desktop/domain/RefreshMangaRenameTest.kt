@@ -186,4 +186,46 @@ class RefreshMangaRenameTest {
 
         file.readBytes() shouldBe bytes
     }
+
+    @Test
+    fun `clean up keeps a folder under the old title while the entry's folder under the new title exists`() = runBlocking<Unit> {
+        setUp()
+        val bytes = Random(4).nextBytes(4096)
+        val newBytes = Random(5).nextBytes(2048)
+        val chapter2 = Chapter.create().copy(id = 2, mangaId = 1, url = "/c2", name = "Chapter 2")
+        // A download queued with the entry as read before the refresh lands in the old folder
+        val stranded = write(paths.mangaDir(old), "Chapter 2.cbz", bytes)
+        val moved = write(paths.mangaDir(renamed), "Chapter 1.cbz", newBytes)
+
+        manager.cleanup(
+            removeRead = false,
+            removeNonFavorite = false,
+            allManga = { listOf(renamed) },
+            chaptersOf = { listOf(chapter, chapter2) },
+        ) shouldBe 0
+
+        stranded.readBytes() shouldBe bytes
+        moved.readBytes() shouldBe newBytes
+    }
+
+    @Test
+    fun `the chapter sync after a title change works in the moved folder`() = runBlocking<Unit> {
+        setUp()
+        write(paths.mangaDir(old), "Chapter 1.cbz", Random(6).nextBytes(1024))
+        val synced = slot<Manga>()
+        val sync = mockk<SyncChapters> { coEvery { await(any(), capture(synced), any()) } returns emptyList() }
+        val chapterRepository = mockk<ChapterRepository> { coEvery { getChapterByMangaId(1) } returns listOf(chapter) }
+        val mangaRepository = mockk<MangaRepository> {
+            coEvery { update(capture(updates)) } returns true
+            coEvery { getMangaById(1) } returns renamed
+        }
+        every { libraryPreferences.updateMangaTitles() } returns pref(true)
+        val refresh = RefreshManga(sourceManager, chapterRepository, mangaRepository, sync, libraryPreferences, manager)
+
+        refresh(old, fetchDetails = true, fetchChapters = true, source = sourceWithNewTitle())
+
+        // SyncChapters renames chapter downloads in paths.mangaDir(manga): it must be the new folder
+        paths.mangaDir(synced.captured) shouldBe paths.mangaDir(renamed)
+        paths.mangaDir(renamed).isDirectory shouldBe true
+    }
 }

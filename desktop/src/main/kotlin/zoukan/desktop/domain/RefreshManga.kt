@@ -62,17 +62,20 @@ class RefreshManga(
                 fetchChapters = fetchChapters,
             )
         }
-        if (fetchDetails) updateDetails(manga, update.manga)
+        // A new title moved the download folder: the chapter sync renames downloads in the new one
+        val moved = fetchDetails && updateDetails(manga, update.manga)
+        val current = if (moved && fetchChapters) mangaRepository.getMangaById(manga.id) else manga
         val newChapters = when {
             !fetchChapters -> emptyList()
-            source is MergedSource -> source.fetchChaptersAndSync(manga, downloadChapters = downloadNew)
-            else -> syncChapters.await(update.chapters, manga, source)
+            source is MergedSource -> source.fetchChaptersAndSync(current, downloadChapters = downloadNew)
+            else -> syncChapters.await(update.chapters, current, source)
         }
         // ZOUKAN <--
         Result(mangaRepository.getMangaById(manga.id), newChapters)
     }
 
-    private suspend fun updateDetails(local: Manga, remote: SManga) {
+    /** @return whether the download folder moved to a new title that was saved */
+    private suspend fun updateDetails(local: Manga, remote: SManga): Boolean {
         val remoteTitle = try {
             remote.title
         } catch (_: UninitializedPropertyAccessException) {
@@ -120,6 +123,7 @@ class RefreshManga(
             throw e
         }
         if (!saved) moveBack(local, renamedTo)
+        return saved && renamedTo != null
     }
 
     private suspend fun moveBack(local: Manga, renamedTo: String?) {

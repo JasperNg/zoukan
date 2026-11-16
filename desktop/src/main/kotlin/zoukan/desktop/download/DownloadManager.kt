@@ -328,7 +328,9 @@ class DownloadManager(
 
     /**
      * SY's "Clean up downloaded chapters" (Settings > Advanced). In each installed source's
-     * folder it deletes entry folders that belong to no entry, then, per entry: everything when
+     * folder it deletes entry folders that belong to no entry and hold no chapter download that an
+     * entry of that source lacks in its own folder (a folder left under an old title is kept), then,
+     * per entry: everything when
      * [removeNonFavorite] and the entry left the library, files that are no chapter of the entry
      * and unfinished downloads, the read chapters when [removeRead], and the folder once no
      * chapter is left. Entries with chapters in the queue are left alone.
@@ -343,18 +345,23 @@ class DownloadManager(
     ): Int = withContext(Dispatchers.IO) {
         val mangas = allManga()
         val busy = _queue.value.mapTo(HashSet()) { it.manga.id }
+        // Each entry's chapters read once for the folder-owner checks
+        val chapterCache = HashMap<Long, List<Chapter>>()
+        val knownChapters: suspend (Long) -> List<Chapter> = { id -> chapterCache.getOrPut(id) { chaptersOf(id) } }
         var cleared = 0
         sourceManager.getOnlineSources().forEach { source ->
             val sourceDir = paths.sourceDir(source.id)
             val folders = sourceDir.listFiles()?.filter { it.isDirectory }.orEmpty()
             if (folders.isEmpty()) return@forEach
-            val byFolder = mangas.filter { it.source == source.id }.associateBy { paths.mangaDirName(it.ogTitle) }
-            folders.forEach folder@{ folder ->
+            val sourceMangas = mangas.filter { it.source == source.id }
+            val byFolder = sourceMangas.associateBy { paths.mangaDirName(it.ogTitle) }
+            // Folders of no entry first, so their checks see each entry's folder before it is cleaned
+            folders.sortedBy { it.name in byFolder }.forEach folder@{ folder ->
                 val manga = byFolder[folder.name]
                 if (manga == null) {
-                    // Not orphaned when it holds chapters of an entry whose own folder has another
-                    // name (the source changed the title); the next refresh moves it
-                    val owner = renamedOwner(folder, mangas.filter { it.source == source.id }, chaptersOf)
+                    // Not orphaned when it holds chapters of an entry whose folder has another name (the
+                    // source changed the title, and a download may have used the old one since)
+                    val owner = renamedOwner(folder, sourceMangas, knownChapters)
                     if (owner != null) {
                         logcat(LogPriority.WARN) { "Kept ${folder.name}: its chapters belong to ${owner.ogTitle}, whose folder has another name" }
                         return@folder
@@ -378,7 +385,10 @@ class DownloadManager(
         cleared
     }
 
-    /** An entry of the source without a folder of its own that has a chapter's download in [folder]. */
+    /**
+     * An entry of the source that has a chapter's download in [folder], which is not the folder its
+     * title names, and not in its own folder (which may or may not exist).
+     */
     private suspend fun renamedOwner(
         folder: File,
         sourceMangas: List<Manga>,
@@ -387,8 +397,12 @@ class DownloadManager(
         val names = folder.list()?.toHashSet().orEmpty()
         if (names.isEmpty()) return null
         return sourceMangas.firstOrNull { manga ->
-            !paths.mangaDir(manga).exists() &&
-                chaptersOf(manga.id).any { chapter -> paths.validChapterNames(chapter).any { it in names } }
+            val own = paths.mangaDir(manga)
+            // A copy of a chapter the entry's own folder also has is a leftover, not the only download
+            chaptersOf(manga.id).any { chapter ->
+                val valid = paths.validChapterNames(chapter)
+                valid.any { it in names } && valid.none { File(own, it).exists() }
+            }
         }
     }
 
