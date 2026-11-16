@@ -121,6 +121,7 @@ import zoukan.desktop.ui.common.DesktopPreferences
  */
 class DesktopDomainModule : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
+        addFactory { zoukan.desktop.domain.ChaptersByEntry(get()) }
         addSingletonFactory { LibraryPreferences(get()) }
         addSingletonFactory { BackupPreferences(get()) }
         addSingletonFactory { DownloadPreferences(get()) }

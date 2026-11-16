@@ -60,7 +60,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import zoukan.desktop.compat.localized
+import zoukan.desktop.domain.ChaptersByEntry
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
@@ -101,6 +103,10 @@ class LibraryScreenModel(
     // SY <--
     private val librarySearch: LibrarySearch = LibrarySearch(),
     private val extensionManager: DesktopExtensionManager = Injekt.get(),
+    private val chaptersByEntry: ChaptersByEntry = Injekt.get(),
+    // Resolved on first use, as before, so a missing registration only fails where it is used
+    private val desktopPreferences: Lazy<zoukan.desktop.ui.common.DesktopPreferences> = injectLazy(),
+    private val libraryUpdater: Lazy<LibraryUpdater> = injectLazy(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     /** The library preferences that change what is shown. */
@@ -522,7 +528,7 @@ class LibraryScreenModel(
             p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
             // ZOUKAN -->
             // More > Downloaded only shows only downloaded entries, as Android's library
-            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes(),
+            desktopPreferences.value.downloadedOnly().changes(),
             p.groupLibraryBy().changes(),
             // ZOUKAN <--
             p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
@@ -580,9 +586,9 @@ class LibraryScreenModel(
         // "Library dynamic category updates" (groupLibraryUpdateType) says
         val started = if (state.value.grouped) {
             val groupIds = state.value.groupUpdateIds(category, preferences.groupLibraryUpdateType().get())
-            Injekt.get<LibraryUpdater>().start(groupIds = groupIds)
+            libraryUpdater.value.start(groupIds = groupIds)
         } else {
-            Injekt.get<LibraryUpdater>().start(categoryId = category)
+            libraryUpdater.value.start(categoryId = category)
         }
         // ZOUKAN <--
         if (!started) Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
@@ -704,10 +710,8 @@ class LibraryScreenModel(
         }
     }
 
-    private suspend fun byEntry(manga: Manga, chapters: List<Chapter>): List<Pair<Manga, List<Chapter>>> {
-        if (manga.source != MERGED_SOURCE_ID) return listOf(manga to chapters)
-        return chapters.groupBy { it.mangaId }.mapNotNull { (id, list) -> getManga.await(id)?.let { it to list } }
-    }
+    private suspend fun byEntry(manga: Manga, chapters: List<Chapter>): List<Pair<Manga, List<Chapter>>> =
+        chaptersByEntry.group(manga, chapters)
 
     /** Queues each selected entry's bookmarked chapters (DownloadAction.BOOKMARKED_CHAPTERS). */
     fun downloadBookmarked() {
@@ -842,7 +846,7 @@ class LibraryScreenModel(
     /** Updates the chapters of the selected entries. */
     fun updateSelectedManga(): Boolean {
         val mangaIds = state.value.selection
-        return Injekt.get<LibraryUpdater>().start(mangaIds = mangaIds)
+        return libraryUpdater.value.start(mangaIds = mangaIds)
     }
 
     /**

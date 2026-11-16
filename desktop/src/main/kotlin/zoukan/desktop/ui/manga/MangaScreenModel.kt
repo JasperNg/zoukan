@@ -12,6 +12,7 @@ import exh.source.MERGED_SOURCE_ID
 import exh.source.getMainSource
 import exh.source.isEhBasedManga
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -35,8 +36,10 @@ import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
+import zoukan.desktop.domain.ChaptersByEntry
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.download.Download
@@ -69,6 +72,19 @@ class MangaScreenModel(
     private val filterChaptersForDownload: mihon.domain.chapter.interactor.FilterChaptersForDownload = Injekt.get(),
     private val updateErrors: zoukan.desktop.library.LibraryUpdateErrors = Injekt.get(),
     private val refreshTracks: eu.kanade.domain.track.interactor.RefreshTracks = Injekt.get(),
+    private val chaptersByEntry: ChaptersByEntry = Injekt.get<ChaptersByEntry>().cached(),
+    // Resolved on first use, as before, so a missing registration only fails where it is used
+    private val desktopPreferences: Lazy<zoukan.desktop.ui.common.DesktopPreferences> = injectLazy(),
+    private val networkHelper: Lazy<NetworkHelper> = injectLazy(),
+    private val downloadPaths: Lazy<zoukan.desktop.download.DownloadPaths> = injectLazy(),
+    private val getMergedMangaById: Lazy<tachiyomi.domain.manga.interactor.GetMergedMangaById> = lazy {
+        tachiyomi.domain.manga.interactor.GetMergedMangaById(Injekt.get())
+    },
+    private val deleteChapters: Lazy<tachiyomi.domain.chapter.interactor.DeleteChapters> = lazy {
+        tachiyomi.domain.chapter.interactor.DeleteChapters(Injekt.get())
+    },
+    /** Scope of the work that outlives the screen */
+    private val appScope: CoroutineScope = AppScope,
     // ZOUKAN <--
 ) : StateScreenModel<MangaScreenModel.State>(State()) {
 
@@ -184,7 +200,7 @@ class MangaScreenModel(
             }
         }
         screenModelScope.launch {
-            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes().collect { on ->
+            desktopPreferences.value.downloadedOnly().changes().collect { on ->
                 mutableState.update { it.copy(downloadedOnly = on) }
             }
         }
@@ -266,19 +282,8 @@ class MangaScreenModel(
     }
 
     // ZOUKAN -->
-    private val mergedEntries = java.util.concurrent.ConcurrentHashMap<Long, Manga>()
-
-    /**
-     * Chapters grouped by the entry they belong to: the entry itself, or for a merged entry the
-     * entries it merges, which own the chapters and their downloads, as on Android.
-     */
-    private suspend fun byEntry(manga: Manga, chapters: List<Chapter>): List<Pair<Manga, List<Chapter>>> {
-        if (manga.source != MERGED_SOURCE_ID) return listOf(manga to chapters)
-        return chapters.groupBy { it.mangaId }.mapNotNull { (id, list) ->
-            val entry = mergedEntries[id] ?: getMangaWithChapters.awaitManga(id).also { mergedEntries[id] = it }
-            entry to list
-        }
-    }
+    private suspend fun byEntry(manga: Manga, chapters: List<Chapter>): List<Pair<Manga, List<Chapter>>> =
+        chaptersByEntry.group(manga, chapters)
     // ZOUKAN <--
 
     fun cancelDownload(chapter: Chapter) = downloadManager.cancel(setOf(chapter.id))
@@ -480,12 +485,12 @@ class MangaScreenModel(
             )
             done(chapters)
             // ZOUKAN -->
-            if (read) AppScope.launch { downloadManager.afterMarkedRead(chapters.filter { !it.read }) }
+            if (read) appScope.launch { downloadManager.afterMarkedRead(chapters.filter { !it.read }) }
             // ZOUKAN <--
             val highest = chapters.filter { it.isRecognizedNumber }.maxOfOrNull { it.chapterNumber }
             if (read && highest != null && state.value.trackCount > 0) {
                 when (trackPreferences.autoUpdateTrackOnMarkRead().get()) {
-                    AutoTrackState.ALWAYS -> AppScope.launch { trackChapters.await(mangaId, highest) }
+                    AutoTrackState.ALWAYS -> appScope.launch { trackChapters.await(mangaId, highest) }
                     AutoTrackState.ASK -> mutableState.update { it.copy(askTrackChapter = highest) }
                     AutoTrackState.NEVER -> Unit
                 }
@@ -497,7 +502,7 @@ class MangaScreenModel(
     fun answerTrackQuestion(update: Boolean) {
         val chapter = state.value.askTrackChapter ?: return
         mutableState.update { it.copy(askTrackChapter = null) }
-        if (update) AppScope.launch { trackChapters.await(mangaId, chapter) }
+        if (update) appScope.launch { trackChapters.await(mangaId, chapter) }
     }
 
     /** Marks every chapter before [chapter] (in reading order) as read. */
@@ -521,15 +526,15 @@ class MangaScreenModel(
     /** Opens the entry's page in the built-in browser, which shares cookies with the app. */
     fun openInWebView() {
         val url = mangaUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
-        AppScope.launch {
-            val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
+        appScope.launch {
+            val userAgent = networkHelper.value.defaultUserAgentProvider()
             if (!BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
     }
 
     fun openInBrowser() {
         val url = mangaUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
-        AppScope.launch {
+        appScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }
                     .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_browser), it) }
@@ -549,7 +554,7 @@ class MangaScreenModel(
         val manga = state.value.manga ?: return emptyList()
         if (manga.source != MERGED_SOURCE_ID) return emptyList()
         return withContext(Dispatchers.IO) {
-            tachiyomi.domain.manga.interactor.GetMergedMangaById(Injekt.get()).await(manga.id)
+            getMergedMangaById.value.await(manga.id)
                 .filterNot { it.source == MERGED_SOURCE_ID }
                 .map { it to sourceManager.getOrStub(it.source) }
         }
@@ -561,7 +566,7 @@ class MangaScreenModel(
      */
     fun openMangaFolder(source: Source?, manga: Manga?) {
         if (manga == null || source == null || source is tachiyomi.domain.source.model.StubSource) return
-        AppScope.launch {
+        appScope.launch {
             withContext(Dispatchers.IO) {
                 try {
                     val dir = mangaFolder(manga) ?: return@withContext
@@ -579,7 +584,7 @@ class MangaScreenModel(
     private fun mangaFolder(manga: Manga): java.io.File? = if (manga.source == LocalSource.ID) {
         (sourceManager.get(LocalSource.ID) as? LocalSource)?.mangaDir(manga.url)
     } else {
-        Injekt.get<zoukan.desktop.download.DownloadPaths>().mangaDir(manga)
+        downloadPaths.value.mangaDir(manga)
     }
 
     /**
@@ -594,7 +599,7 @@ class MangaScreenModel(
     private fun deleteDownloadedData() {
         val manga = state.value.manga ?: return
         val source = state.value.source
-        AppScope.launch {
+        appScope.launch {
             try {
                 if (manga.source == MERGED_SOURCE_ID) {
                     mergedEntries().forEach { (entry, entrySource) ->
@@ -622,9 +627,9 @@ class MangaScreenModel(
 
     private fun removeChaptersDatabase() {
         val ids = state.value.chapters.map { it.id }
-        AppScope.launch {
+        appScope.launch {
             try {
-                tachiyomi.domain.chapter.interactor.DeleteChapters(Injekt.get()).await(ids)
+                deleteChapters.value.await(ids)
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
             }
