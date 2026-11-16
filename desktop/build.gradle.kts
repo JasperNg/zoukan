@@ -303,6 +303,11 @@ tasks.test {
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")
+    // The release tests read the workflow files and the packaging script
+    inputs.files(
+        rootProject.fileTree(".github/workflows"),
+        file("packaging.gradle.kts"),
+    ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
         filter { (wiringTests + journeyTests).forEach { excludeTestsMatching(it) } }

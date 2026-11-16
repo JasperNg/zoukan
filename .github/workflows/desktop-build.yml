@@ -85,7 +85,11 @@ jobs:
       # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file.
       - name: Download JetBrains Runtime
         shell: bash
-        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-windows-x64-b1163.125.zip" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-windows-x64-b1163.125.zip"
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-windows-x64-b1163.125.zip" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-windows-x64-b1163.125.zip"
+          # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
+          echo "9d244c480cc3b5b77c06753ad8f32e2f40ded94ee02fc3ff6c2bee06fac3d5f1cc42cb1f7b7fa8f8a6e0b14a7dafa2451cd2781d6d5f1c2f598c511f53e2ffe9  jbrsdk-21.0.11-windows-x64-b1163.125.zip" | sha512sum -c -
 
       - uses: actions/setup-java@v5
         with:
@@ -132,7 +136,11 @@ jobs:
       # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file.
       - name: Download JetBrains Runtime
         shell: bash
-        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz"
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz"
+          # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
+          echo "4b2769d097547b70df3cd8ff49d137579acb7fea874419052ec3450565665dc3262caa9a7a9f7e9ca611fd02650eb002845b3cd029cebc300eb00dd00ef45c43  jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" | shasum -a 512 -c -
 
       - uses: actions/setup-java@v5
         with:

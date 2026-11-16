@@ -40,7 +40,11 @@ jobs:
       # JetBrains Runtime from JetBrains' own CDN instead and hand it to setup-java as a local file,
       # as desktop-build.yml does.
       - name: Download JetBrains Runtime
-        run: curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz"
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz"
+          # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
+          echo "690fbea6224aeb57478f98ad56671fdbb6e927b3513555e78088f276552c554fe672705e9c6da4a65ed8279846f42e0756bae539d8282bee01f78d2fd68f846a  jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz" | sha512sum -c -
 
       - uses: actions/setup-java@v5
         with:
