@@ -2,7 +2,8 @@ package android.os;
 
 // ZOUKAN -->
 // Shadows Suwayomi android.jar's stub of LocaleList, keeping every public member. The default list
-// is the JVM's default locale (java.util.Locale.getDefault()).
+// is the JVM's default locale (java.util.Locale.getDefault()). setDefault keeps its override
+// inside this class and never calls Locale.setDefault.
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,7 +15,8 @@ public final class LocaleList implements Parcelable {
     public static final Parcelable.Creator<LocaleList> CREATOR = null;
 
     private static final LocaleList EMPTY = new LocaleList();
-    private static LocaleList sDefaultOverride;
+    private static volatile LocaleList sDefaultOverride;
+    private static String sLoggedOverrideTags;
 
     private final Locale[] mList;
 
@@ -164,8 +166,19 @@ public final class LocaleList implements Parcelable {
         if (locales.isEmpty()) {
             throw new IllegalArgumentException("locales is empty");
         }
-        sDefaultOverride = locales;
-        Locale.setDefault(locales.get(0));
+        // Every extension and the app share one JVM, so Locale.setDefault here would change date,
+        // number and string formatting for the whole app. The override stays inside LocaleList.
+        String tags = locales.toLanguageTags();
+        boolean changed;
+        synchronized (LocaleList.class) {
+            changed = !tags.equals(sLoggedOverrideTags);
+            sLoggedOverrideTags = tags;
+            sDefaultOverride = locales;
+        }
+        if (changed) {
+            android.util.Log.w("LocaleList", "An extension asked to change the default locale to " + tags
+                    + "; only LocaleList.getDefault() reflects it, the app's locale is unchanged");
+        }
     }
 }
 // ZOUKAN <--

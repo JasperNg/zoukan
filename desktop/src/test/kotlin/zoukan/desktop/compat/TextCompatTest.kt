@@ -39,6 +39,21 @@ class TextCompatTest {
     }
 
     @Test
+    fun `LocaleList setDefault does not change the JVM default locale`() {
+        val before = Locale.getDefault()
+        val other = if (before == Locale.JAPAN) Locale.GERMANY else Locale.JAPAN
+        try {
+            LocaleList.setDefault(LocaleList(other))
+
+            Locale.getDefault() shouldBe before
+            LocaleList.getDefault().get(0) shouldBe other
+        } finally {
+            Locale.setDefault(before)
+            LocaleList.setDefault(LocaleList(before))
+        }
+    }
+
+    @Test
     fun `LocaleList default is the JVM locale`() {
         val list = LocaleList.getDefault()
         list.size() shouldBe 1
