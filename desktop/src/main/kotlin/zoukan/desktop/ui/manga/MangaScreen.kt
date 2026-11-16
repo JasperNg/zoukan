@@ -91,6 +91,7 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
@@ -167,6 +168,17 @@ data class MangaScreen(val mangaId: Long) : Screen {
                 confirmLabel = localized(DMR.strings.move_to_trash),
                 onConfirm = { model.deleteLocalFiles(confirmed = true) },
                 onDismiss = { confirmLocalFiles = false },
+            )
+        }
+        // Deleting the downloads of several chapters at once asks first, from the toolbar and the right-click menu
+        var confirmDelete by remember { mutableStateOf<List<Chapter>?>(null) }
+        confirmDelete?.let { chapters ->
+            ConfirmDestructiveDialog(
+                title = localizedPlural(DMR.plurals.delete_selected_downloads_title, chapters.size, chapters.size),
+                text = localized(DMR.strings.delete_selected_downloads_text),
+                confirmLabel = localized(DMR.strings.delete_downloads),
+                onConfirm = { model.deleteDownloads(chapters) },
+                onDismiss = { confirmDelete = null },
             )
         }
         val isMerged = manga.source == exh.source.MERGED_SOURCE_ID
@@ -265,7 +277,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 },
                             ) {
                                 Column(Modifier.fillMaxSize()) {
-                                    ChapterToolbar(state, model)
+                                    ChapterToolbar(state, model, onDeleteSelected = { confirmDelete = it })
                                     HorizontalDivider()
                                     if (state.sortedChapters.isEmpty()) {
                                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -339,7 +351,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                                         onDeleteDownload = { model.deleteDownloads(listOf(chapter)) },
                                                         // A right click on a selected chapter acts on the whole selection
                                                         selectionMenu = if (chapter.id in state.selected && state.selected.size > 1) {
-                                                            { menu -> ChapterSelectionMenu(menu, state, model) }
+                                                            { menu -> ChapterSelectionMenu(menu, state, model, onDeleteSelected = { confirmDelete = it }) }
                                                         } else {
                                                             null
                                                         },
@@ -538,7 +550,7 @@ private fun MoreMenu(
 // ZOUKAN <--
 
 @Composable
-private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenModel) {
+private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenModel, onDeleteSelected: (List<Chapter>) -> Unit) {
     // Ctrl/Cmd + A selects every chapter; Escape clears the selection before it means "back"
     zoukan.desktop.ui.OnShortcut { action ->
         when (action) {
@@ -586,7 +598,7 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             TooltipIconButton(Icons.Outlined.BookmarkRemove, localized(DMR.strings.remove_bookmark), onClick = { model.setBookmark(selected, false) })
             if (!state.isLocal) {
                 TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(selected) })
-                TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { model.deleteDownloads(selected) })
+                TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { onDeleteSelected(selected) })
             }
         }
     }
@@ -594,7 +606,12 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
 
 /** A selected chapter's right-click menu: the selection toolbar's actions. */
 @Composable
-private fun ColumnScope.ChapterSelectionMenu(menu: ContextMenuState, state: MangaScreenModel.State, model: MangaScreenModel) {
+private fun ColumnScope.ChapterSelectionMenu(
+    menu: ContextMenuState,
+    state: MangaScreenModel.State,
+    model: MangaScreenModel,
+    onDeleteSelected: (List<Chapter>) -> Unit,
+) {
     val selected = state.chapters.filter { it.id in state.selected }
     ContextMenuItem(menu, localized(DMR.strings.clear_selection), Icons.Outlined.Close, onClick = model::clearSelection)
     ContextMenuDivider()
@@ -604,7 +621,7 @@ private fun ColumnScope.ChapterSelectionMenu(menu: ContextMenuState, state: Mang
     ContextMenuItem(menu, localized(DMR.strings.remove_bookmark), Icons.Outlined.BookmarkRemove) { model.setBookmark(selected, false) }
     if (!state.isLocal) {
         ContextMenuItem(menu, localized(MR.strings.action_download), Icons.Outlined.Download) { model.download(selected) }
-        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { model.deleteDownloads(selected) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { onDeleteSelected(selected) }
     }
 }
 

@@ -632,8 +632,8 @@
   feature: "Chapter toolbar: select all, clear, read/unread, bookmark, download, delete"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: EntryPageJourneyTest"
+  tests: [e2e.MangaDeleteSelectionJourneyTest]
+  gap: "Only select all and delete downloads (toolbar and right-click menu, with its confirmation) are driven; the rest planned: EntryPageJourneyTest"
 
 - key: flow:manga.chapter-row
   feature: "Chapter row (read, bookmark, download state, context menu)"
