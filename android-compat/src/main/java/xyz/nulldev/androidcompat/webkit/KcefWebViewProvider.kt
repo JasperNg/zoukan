@@ -793,7 +793,7 @@ class KcefWebViewProvider(
     // ZOUKAN <--
 
     private class RenderHandler : CefRenderHandlerAdapter() {
-        override fun getViewRect(browser: CefBrowser): Rectangle = Rectangle(0, 0, 1280, 2856)
+        override fun getViewRect(browser: CefBrowser): Rectangle = /* ZOUKAN --> */Rectangle(0, 0, xyz.nulldev.androidcompat.res.DesktopResources.SCREEN_WIDTH_PIXELS, xyz.nulldev.androidcompat.res.DesktopResources.SCREEN_HEIGHT_PIXELS)/* ZOUKAN <-- */
 
         // ZOUKAN -->
         override fun addOnPaintListener(listener: java.util.function.Consumer<org.cef.browser.CefPaintEvent>) {}

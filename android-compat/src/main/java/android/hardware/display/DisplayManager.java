@@ -7,6 +7,8 @@ import android.view.Surface;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import xyz.nulldev.androidcompat.res.DesktopResources;
+
 /**
  * Virtual displays for extensions that host a WebView offscreen (Comix's reader). The desktop's
  * WebViews render headless, so a virtual display only has to exist.
@@ -21,7 +23,8 @@ public final class DisplayManager {
     public static final DisplayManager INSTANCE = new DisplayManager();
 
     private final AtomicInteger nextId = new AtomicInteger(1);
-    private final Display defaultDisplay = new Display(Display.DEFAULT_DISPLAY, "Built-in screen", 1280, 2856);
+    private final Display defaultDisplay = new Display(Display.DEFAULT_DISPLAY, "Built-in screen",
+            DesktopResources.SCREEN_WIDTH_PIXELS, DesktopResources.SCREEN_HEIGHT_PIXELS);
 
     private DisplayManager() {
     }

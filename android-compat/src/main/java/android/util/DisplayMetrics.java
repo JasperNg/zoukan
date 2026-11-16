@@ -57,8 +57,10 @@ public class DisplayMetrics {
     }
 
     public void setToDefaults() {
-        widthPixels = 1280;
-        heightPixels = 2856;
+        // ZOUKAN -->
+        widthPixels = xyz.nulldev.androidcompat.res.DesktopResources.SCREEN_WIDTH_PIXELS;
+        heightPixels = xyz.nulldev.androidcompat.res.DesktopResources.SCREEN_HEIGHT_PIXELS;
+        // ZOUKAN <--
         density = 1f;
         densityDpi = DENSITY_DEFAULT;
         scaledDensity = 1f;
