@@ -870,4 +870,6 @@
     <string name="remove_store_question">Remove %1$s?</string>
     <string name="remove_store_body">Its extensions leave Available and stop getting updates. Installed ones stay.</string>
     <string name="remove_feed_question">Remove %1$s from the feed?</string>
+    <string name="source_blocked_open_the_site">The site blocked the request. Open the site to pass its check or sign in, then try again.</string>
+    <string name="source_no_connection">Could not reach the site. Check the connection.</string>
 </resources>

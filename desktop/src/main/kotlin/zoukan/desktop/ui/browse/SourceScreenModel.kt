@@ -250,7 +250,7 @@ class SourceScreenModel(
         screenModelScope.launch {
             runCatching { withContext(Dispatchers.IO) { mangaDex.fetchRandomMangaUrl() } }
                 .onSuccess(onRandomFound)
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else Toasts.show(it.message ?: it::class.simpleName.orEmpty()) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else Toasts.show(sourceErrorMessage(it)) }
         }
     }
     // ZOUKAN <--
@@ -338,7 +338,7 @@ class SourceScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                mutableState.update { it.copy(loading = false, error = e.message ?: e::class.simpleName) }
+                mutableState.update { it.copy(loading = false, error = sourceErrorMessage(e)) }
             }
         }
     }
