@@ -700,7 +700,10 @@ class ScreenSmokeTest {
             },
             dialog("dialog:manga.MigrateDialog", "MigrateDialog") { MigrateDialog(f.alpha.id, f.bravo, noop) },
             dialog("dialog:manga.MergedEntriesDialog", "MergedEntriesDialog") { MergedEntriesDialog(f.alpha.id, noop) },
-            dialog("dialog:manga.ClearMangaDialog", "ClearMangaDialog") { ClearMangaDialog(noop) { _, _ -> } },
+            dialog("dialog:common.ConfirmDestructiveDialog", "ConfirmDestructiveDialog") {
+                zoukan.desktop.ui.common.ConfirmDestructiveDialog("Title", "Text", "Confirm", {}, noop)
+            },
+            dialog("dialog:manga.ClearMangaDialog", "ClearMangaDialog") { ClearMangaDialog(noop, localFolders = listOf("Alpha")) { _, _, _ -> } },
             dialog("dialog:manga.FetchIntervalDialog", "FetchIntervalDialog") { FetchIntervalDialog(f.alpha, noop) },
             dialog("dialog:manga.CoverDialog", "CoverDialog") { CoverDialog(f.alpha, noop) },
             dialog("dialog:manga.DuplicateDialog", "DuplicateDialog") {

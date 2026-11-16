@@ -57,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -95,6 +96,7 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.common.ChapterSwipeBox
 import zoukan.desktop.ui.common.ChapterSwipeState
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
@@ -143,7 +145,30 @@ data class MangaScreen(val mangaId: Long) : Screen {
         var mergedAction by remember { mutableStateOf<MergedAction?>(null) }
         mergedAction?.let { action -> MergedEntryPicker(action, model, onDismiss = { mergedAction = null }) }
         var clearDialog by remember { mutableStateOf(false) }
-        if (clearDialog) ClearMangaDialog(onDismissRequest = { clearDialog = false }, onConfirm = model::clearManga)
+        var confirmLocalFiles by remember { mutableStateOf(false) }
+        // The user's own local files are never "downloaded data": they get their own option and a second confirmation
+        var localFolders by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
+        LaunchedEffect(clearDialog) { if (clearDialog) localFolders = model.localFolders() }
+        if (clearDialog) {
+            ClearMangaDialog(
+                onDismissRequest = { clearDialog = false },
+                showDownloadedData = !state.isLocal,
+                localFolders = localFolders.map { it.name },
+                onConfirm = { downloads, chapters, local ->
+                    model.clearManga(downloads, chapters)
+                    if (local) confirmLocalFiles = true
+                },
+            )
+        }
+        if (confirmLocalFiles) {
+            ConfirmDestructiveDialog(
+                title = localized(DMR.strings.delete_local_files_title),
+                text = localized(DMR.strings.delete_local_files_text, localFolders.joinToString { it.absolutePath }),
+                confirmLabel = localized(DMR.strings.move_to_trash),
+                onConfirm = { model.deleteLocalFiles(confirmed = true) },
+                onDismiss = { confirmLocalFiles = false },
+            )
+        }
         val isMerged = manga.source == exh.source.MERGED_SOURCE_ID
         val search = remember(navigator, state.source) {
             EntryInfoSearch(

@@ -864,4 +864,9 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="clear_local_files">Local files in %1$s</string>
+    <string name="delete_local_files_title">Move your local files to the trash?</string>
+    <string name="delete_local_files_text">These are your own files, not downloads, and the app cannot fetch them again. The folder %1$s and everything in it moves to the trash.</string>
+    <string name="move_to_trash">Move to trash</string>
+    <string name="local_files_not_trashed">Could not move %1$s to the trash, so nothing was removed. Remove the folder yourself if you want it gone.</string>
 </resources>

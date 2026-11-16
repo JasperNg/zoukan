@@ -604,11 +604,17 @@
   tests: [ui.ScreenSmokeTest]
 
 - key: dialog:manga.ClearMangaDialog
-  feature: "Clear entry (delete downloads / chapters)"
+  feature: "Clear entry (delete downloads / chapters); local files only behind their own option and a second confirmation"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Clearing only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest]
+  gap: "Clearing downloads and chapters of an online entry only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+
+- key: dialog:common.ConfirmDestructiveDialog
+  feature: "Second question before something the user cannot take back (local files to the trash)"
+  tier: smoke
+  smoke: true
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest]
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"

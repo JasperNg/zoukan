@@ -591,19 +591,19 @@ class MangaScreenModel(
         if (removeChapters) removeChaptersDatabase()
     }
 
+    /**
+     * Deletes the downloads of the entry, or of each online entry a merged entry merges. A local
+     * entry has no downloads: its folder holds the user's own files, which only [deleteLocalFiles]
+     * touches, after the user's second confirmation.
+     */
     private fun deleteDownloadedData() {
         val manga = state.value.manga ?: return
-        val source = state.value.source
         AppScope.launch {
             try {
                 if (manga.source == MERGED_SOURCE_ID) {
-                    mergedEntries().forEach { (entry, entrySource) ->
-                        deleteManga(entry)
-                        if (entrySource.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
-                    }
+                    mergedEntries().forEach { (entry, _) -> deleteDownloads(entry) }
                 } else {
-                    deleteManga(manga)
-                    if (source?.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
+                    deleteDownloads(manga)
                 }
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
@@ -612,11 +612,36 @@ class MangaScreenModel(
     }
 
     /** Android's DownloadManager.deleteManga: the queued chapters and the entry's folder. */
-    private suspend fun deleteManga(manga: Manga) {
-        if (manga.source == LocalSource.ID) {
-            withContext(Dispatchers.IO) { mangaFolder(manga)?.deleteRecursively() }
-        } else {
-            downloadManager.deleteManga(manga)
+    private suspend fun deleteDownloads(manga: Manga) {
+        if (manga.source == LocalSource.ID) return
+        downloadManager.deleteManga(manga)
+    }
+
+    /** The folders in the local source folder holding the user's own files for this entry (or its local parts). */
+    suspend fun localFolders(): List<java.io.File> = withContext(Dispatchers.IO) {
+        val manga = state.value.manga ?: return@withContext emptyList()
+        val entries = if (manga.source == MERGED_SOURCE_ID) mergedEntries().map { it.first } else listOf(manga)
+        entries.filter { it.source == LocalSource.ID }.mapNotNull { mangaFolder(it) }.filter { it.isDirectory }
+    }
+
+    /**
+     * Moves the folders of the entry's local files to the system trash. Runs only with the user's
+     * explicit confirmation of the local-files question. Where the system has no trash, or the
+     * move fails, nothing is deleted: a toast names the folder so the user can remove it.
+     */
+    fun deleteLocalFiles(confirmed: Boolean) {
+        if (!confirmed) return
+        AppScope.launch {
+            try {
+                var moved = false
+                localFolders().forEach { dir ->
+                    val ok = withContext(Dispatchers.IO) { systemTrash(dir) }
+                    if (ok) moved = true else Toasts.show(localized(DMR.strings.local_files_not_trashed, dir.absolutePath))
+                }
+                if (moved) refresh(fetchDetails = false, manualFetch = false)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
         }
     }
 
@@ -632,3 +657,18 @@ class MangaScreenModel(
     }
     // ZOUKAN <--
 }
+
+// ZOUKAN -->
+/** Moves a folder to the system trash; false when it could not (journeys replace it, so no test machine's trash is used). */
+internal var systemTrash: (java.io.File) -> Boolean = SystemTrash::move
+
+private object SystemTrash {
+    fun move(file: java.io.File): Boolean = try {
+        val desktop = if (java.awt.Desktop.isDesktopSupported()) java.awt.Desktop.getDesktop() else null
+        desktop != null && desktop.isSupported(java.awt.Desktop.Action.MOVE_TO_TRASH) && desktop.moveToTrash(file)
+    } catch (e: Exception) {
+        logcat(LogPriority.ERROR, e)
+        false
+    }
+}
+// ZOUKAN <--
