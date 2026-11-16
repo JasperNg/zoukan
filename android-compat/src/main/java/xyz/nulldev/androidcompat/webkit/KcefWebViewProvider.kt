@@ -109,9 +109,15 @@ class KcefWebViewProvider(
     private var viewClient = WebViewClient()
     private var chromeClient = WebChromeClient()
     private val renderHandler = RenderHandler()
-    private val mappings: MutableList<FunctionMapping> = mutableListOf()
-    private val urlHttpMapping: MutableMap<String, String> = mutableMapOf()
+    // ZOUKAN -->
+    // Read on Chromium's threads while the WebView's looper changes them
+    private val mappings: MutableList<FunctionMapping> = java.util.concurrent.CopyOnWriteArrayList()
+    private val urlHttpMapping: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+
+    // Set on the looper, consumed on Chromium's IO thread
+    @Volatile
     private var initialRequestData: InitialRequestData? = null
+    // ZOUKAN <--
 
     // ZOUKAN -->
     // Kept in a holder the cleanup of a dropped WebView can reach without reaching this provider
@@ -891,6 +897,7 @@ class KcefWebViewProvider(
 
     override fun destroy() {
         // ZOUKAN -->
+        if (postedToLooper { destroy() }) return
         // Disposed after the main looper's queued work: a page's call into a Java object runs
         // there and answers the page (callback.success) after the method returns, and a method
         // that ends the run (Comix's payload) has the extension destroy the WebView meanwhile.
@@ -904,6 +911,19 @@ class KcefWebViewProvider(
         disposeLater(handler, disposal)
         // ZOUKAN <--
     }
+
+    // ZOUKAN -->
+    /**
+     * A client callback that Android runs on the WebView's thread runs on one of Chromium's here,
+     * and the provider is not thread-safe. A WebView call made inside such a callback is posted to
+     * the WebView's looper (in order) and this returns true; any other call returns false.
+     */
+    private fun postedToLooper(call: () -> Unit): Boolean {
+        if (!WebView.isInClientCallback() || android.os.Looper.myLooper() == view.webViewLooper) return false
+        handler.post(call)
+        return true
+    }
+    // ZOUKAN <--
 
     // ZOUKAN -->
     // Android ignores calls on a destroyed WebView; the browser and client are gone after destroy()
@@ -935,6 +955,7 @@ class KcefWebViewProvider(
         additionalHttpHeaders: Map<String, String>,
     ) {
         // ZOUKAN -->
+        if (postedToLooper { loadUrl(loadUrl, additionalHttpHeaders) }) return
         if (ignoredAfterDestroy("loadUrl")) return
         // ZOUKAN <--
         // ZOUKAN -->
@@ -964,6 +985,7 @@ class KcefWebViewProvider(
         postData: ByteArray,
     ) {
         // ZOUKAN -->
+        if (postedToLooper { postUrl(url, postData) }) return
         if (ignoredAfterDestroy("postUrl")) return
         // ZOUKAN <--
         // ZOUKAN -->
@@ -1000,6 +1022,7 @@ class KcefWebViewProvider(
         historyUrl: String?,
     ) {
         // ZOUKAN -->
+        if (postedToLooper { loadDataWithBaseURL(baseUrl, data, mimeType, encoding, historyUrl) }) return
         if (ignoredAfterDestroy("loadDataWithBaseURL")) return
         // ZOUKAN <--
         // ZOUKAN -->
@@ -1027,6 +1050,7 @@ class KcefWebViewProvider(
         resultCallback: ValueCallback<String>?,
     ) {
         // ZOUKAN -->
+        if (postedToLooper { evaluateJavaScript(script, resultCallback) }) return
         if (ignoredAfterDestroy("evaluateJavascript")) return
         // ZOUKAN <--
         browser!!.evaluateJavaScript(script.removePrefix("javascript:")) {
@@ -1045,6 +1069,7 @@ class KcefWebViewProvider(
 
     override fun stopLoading() {
         // ZOUKAN -->
+        if (postedToLooper { stopLoading() }) return
         if (ignoredAfterDestroy("stopLoading")) return
         // ZOUKAN <--
         browser!!.stopLoad()
@@ -1052,6 +1077,7 @@ class KcefWebViewProvider(
 
     override fun reload() {
         // ZOUKAN -->
+        if (postedToLooper { reload() }) return
         if (ignoredAfterDestroy("reload")) return
         // ZOUKAN <--
         browser!!.reload()
@@ -1063,6 +1089,7 @@ class KcefWebViewProvider(
 
     override fun goBack() {
         // ZOUKAN -->
+        if (postedToLooper { goBack() }) return
         if (ignoredAfterDestroy("goBack")) return
         // ZOUKAN <--
         browser!!.goBack()
@@ -1074,6 +1101,7 @@ class KcefWebViewProvider(
 
     override fun goForward() {
         // ZOUKAN -->
+        if (postedToLooper { goForward() }) return
         if (ignoredAfterDestroy("goForward")) return
         // ZOUKAN <--
         browser!!.goForward()
@@ -1466,6 +1494,9 @@ class KcefWebViewProvider(
         obj: Any,
         interfaceName: String,
     ) {
+        // ZOUKAN -->
+        if (postedToLooper { addJavascriptInterface(obj, interfaceName) }) return
+        // ZOUKAN <--
         val cls = obj::class
         mappings.addAll(
             cls.declaredMemberFunctions
@@ -1492,6 +1523,9 @@ class KcefWebViewProvider(
     // ZOUKAN <--
 
     override fun removeJavascriptInterface(interfaceName: String) {
+        // ZOUKAN -->
+        if (postedToLooper { removeJavascriptInterface(interfaceName) }) return
+        // ZOUKAN <--
         val removed = mappings.removeAll { it.interfaceName == interfaceName }
         Log.v(TAG, if (removed) "Removed interface mappings for $interfaceName" else "No interface mappings for $interfaceName to remove")
     }

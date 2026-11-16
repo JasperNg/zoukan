@@ -989,6 +989,16 @@ public class WebView extends AbsoluteLayout
             depth[0]--;
         }
     }
+
+    /**
+     * Whether the calling thread is inside {@link #callClientOffThread}, so a call it makes belongs
+     * on the WebView's looper.
+     *
+     * @hide
+     */
+    public static boolean isInClientCallback() {
+        return sInClientCallback.get()[0] > 0;
+    }
     // ZOUKAN <--
 
     private void checkThread() {
