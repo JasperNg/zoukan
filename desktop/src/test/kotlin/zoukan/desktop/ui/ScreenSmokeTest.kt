@@ -627,7 +627,7 @@ open class ScreenSmokeTest {
         ),
         MigrationConfigScreen::class.java to listOf({ MigrationConfigScreen(listOf(f.alpha.id, f.bravo.id)) }),
         RecommendsScreen::class.java to listOf({ RecommendsScreen(f.alpha.id) }),
-        CommonRecommendsScreen::class.java to listOf({ CommonRecommendsScreen(emptyList()) }),
+        CommonRecommendsScreen::class.java to listOf({ CommonRecommendsScreen(listOf(f.alpha.id)) }),
     )
 
     private fun screens(f: Fixture): List<Check> {

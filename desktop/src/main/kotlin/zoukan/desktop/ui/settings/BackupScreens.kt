@@ -170,7 +170,7 @@ class CreateBackupScreenModel : StateScreenModel<CreateBackupScreenModel.State>(
  * Android's RestoreBackupScreen for the backup at [path]: what to restore, and the sources and
  * trackers the backup uses that are not installed or signed in.
  */
-class RestoreBackupScreen(private val path: String) : Screen {
+data class RestoreBackupScreen(private val path: String) : Screen {
 
     // Closed, so no key starts with another (see ScreenKeysTest)
     override val key: ScreenKey = "restore-backup($path)"

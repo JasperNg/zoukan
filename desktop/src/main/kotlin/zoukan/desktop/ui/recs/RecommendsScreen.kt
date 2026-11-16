@@ -17,6 +17,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,6 +37,7 @@ import exh.recs.sources.RecommendationPagingSource
 import exh.recs.sources.RecommendationSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -58,6 +60,7 @@ import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
 
@@ -178,10 +181,40 @@ internal fun openRecommendation(manga: Manga) {
  * selection, each service's results ranked by how many of the entries recommend them.
  */
 class CommonRecommendsScreenModel(
-    results: List<RankedSearchResults>,
+    private val mangaIds: List<Long>,
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
+    private val getManga: GetManga = Injekt.get(),
 ) : StateScreenModel<List<RecommendsScreenModel.Group>>(emptyList()) {
+
+    /** The search of the entries' recommendations; its status drives the progress dialog. */
+    val search = RecommendationSearchHelper()
+    private var searchJob: Job? = null
+
     init {
+        screenModelScope.launch {
+            val mangaList = withContext(Dispatchers.IO) { mangaIds.mapNotNull { getManga.await(it) } }
+            if (mangaList.isEmpty()) {
+                search.status.value = SearchStatus.Finished.WithoutResults
+                return@launch
+            }
+            searchJob = search.runSearch(screenModelScope, mangaList)
+        }
+        screenModelScope.launch {
+            search.status.collect { status ->
+                if (status is SearchStatus.Finished.WithResults) {
+                    showResults(status.results)
+                    search.status.value = SearchStatus.Idle
+                }
+            }
+        }
+    }
+
+    /** The user cancelled: stops the search. */
+    fun cancelSearch() {
+        searchJob?.cancel()
+    }
+
+    private fun showResults(results: List<RankedSearchResults>) {
         screenModelScope.launch {
             // StaticResultPagingSource: the results as the search ranked them
             val groups = results.mapIndexed { index, data ->
@@ -214,13 +247,41 @@ class CommonRecommendsScreenModel(
     }
 }
 
-class CommonRecommendsScreen(private val results: List<RankedSearchResults>) : Screen {
-    override val key: ScreenKey = "common-recommends-${results.hashCode()}/"
+/** The common recommendations of the library entries [mangaIds]; the screen runs the search itself. */
+data class CommonRecommendsScreen(val mangaIds: List<Long>) : Screen {
+    // Ends with / because Voyager disposes every screen model whose key starts with a
+    // disposed screen's key
+    override val key: ScreenKey = "common-recommends/${mangaIds.joinToString(",")}/"
 
     @Composable
     override fun Content() {
-        val model = rememberScreenModel { CommonRecommendsScreenModel(results) }
+        val navigator = LocalNavigator.currentOrThrow
+        val model = rememberScreenModel { CommonRecommendsScreenModel(mangaIds) }
         val groups by model.state.collectAsState()
+        val status by model.search.status.collectAsState()
+        RecommendationSearchProgressDialog(
+            status = status,
+            setStatusIdle = {
+                model.search.status.value = SearchStatus.Idle
+                navigator.pop()
+            },
+            setStatusCancelling = { model.search.status.value = SearchStatus.Cancelling },
+        )
+        LaunchedEffect(status) {
+            when (status) {
+                is SearchStatus.Finished.WithoutResults -> {
+                    Toasts.show(localized(SYMR.strings.rec_no_results))
+                    model.search.status.value = SearchStatus.Idle
+                    navigator.pop()
+                }
+                is SearchStatus.Cancelling -> {
+                    model.cancelSearch()
+                    model.search.status.value = SearchStatus.Idle
+                    navigator.pop()
+                }
+                else -> {}
+            }
+        }
         Column(Modifier.fillMaxSize()) {
             ScreenHeader(localized(SYMR.strings.rec_common_recommendations)) {}
             RecommendsList(groups)

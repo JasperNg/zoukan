@@ -90,7 +90,10 @@ internal object ScreenScan {
                 { MigrationConfigScreen(listOf(1, 2)) },
             ),
             RecommendsScreen::class.java to ids.map { id -> { RecommendsScreen(id) } },
-            CommonRecommendsScreen::class.java to listOf({ CommonRecommendsScreen(emptyList()) }),
+            CommonRecommendsScreen::class.java to listOf(
+                { CommonRecommendsScreen(listOf(1)) },
+                { CommonRecommendsScreen(listOf(1, 12)) },
+            ),
         )
     }
 }

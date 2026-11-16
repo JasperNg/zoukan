@@ -42,7 +42,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -91,8 +90,6 @@ import zoukan.desktop.ui.migration.MigrationConfigScreen
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.recs.CommonRecommendsScreen
 import zoukan.desktop.ui.recs.RecommendationSearchDialog
-import zoukan.desktop.ui.recs.RecommendationSearchProgressDialog
-import zoukan.desktop.ui.recs.SearchStatus
 import zoukan.desktop.ui.stats.StatsScreen
 import zoukan.i18n.desktop.DMR
 
@@ -383,33 +380,10 @@ fun LibraryTab(model: LibraryScreenModel) {
             onSearchRequest = {
                 recommendationDialog = null
                 model.clearSelection()
-                model.runRecommendationSearch(manga)
+                // The screen runs the search and shows its progress
+                navigator.push(CommonRecommendsScreen(manga.map { it.id }))
             },
         )
-    }
-
-    val recSearchState by model.recommendationSearch.status.collectAsState()
-    RecommendationSearchProgressDialog(
-        status = recSearchState,
-        setStatusIdle = { model.recommendationSearch.status.value = SearchStatus.Idle },
-        setStatusCancelling = { model.recommendationSearch.status.value = SearchStatus.Cancelling },
-    )
-    LaunchedEffect(recSearchState) {
-        when (val current = recSearchState) {
-            is SearchStatus.Finished.WithResults -> {
-                navigator.push(CommonRecommendsScreen(current.results))
-                model.recommendationSearch.status.value = SearchStatus.Idle
-            }
-            is SearchStatus.Finished.WithoutResults -> {
-                Toasts.show(localized(SYMR.strings.rec_no_results))
-                model.recommendationSearch.status.value = SearchStatus.Idle
-            }
-            is SearchStatus.Cancelling -> {
-                model.cancelRecommendationSearch()
-                model.recommendationSearch.status.value = SearchStatus.Idle
-            }
-            else -> {}
-        }
     }
     // SY <--
 }
