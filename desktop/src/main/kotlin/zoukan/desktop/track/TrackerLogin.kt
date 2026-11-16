@@ -152,24 +152,25 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
         private val SCHEMES = setOf("komikku", "mihon", "tachiyomisy")
         private val HOSTS = setOf("anilist-auth", "bangumi-auth", "myanimelist-auth", "shikimori-auth", "mangadex-auth")
 
-        fun isRedirect(address: String): Boolean {
-            val scheme = address.substringBefore("://", "").lowercase()
-            if (scheme !in SCHEMES) return false
-            val host = address.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#')
-            return host.lowercase() in HOSTS
-        }
+        /** Whether [address] is a tracker sign-in address: the same parser as [parseRedirect]. */
+        fun isRedirect(address: String): Boolean = parseRedirect(address) != null
 
-        /** The redirect in [address], or null when it is not a tracker sign-in address. */
+        /**
+         * The redirect in [address], or null when it is not a tracker sign-in address. The scheme and
+         * the host are compared in lower case, once, here; the parameters keep their case.
+         */
         fun parseRedirect(address: String): Redirect? {
-            if (!isRedirect(address.trim())) return null
-            val uri = Uri.parse(address.trim())
-            val host = uri.host ?: return null
+            val trimmed = address.trim()
+            if (trimmed.substringBefore("://", "").lowercase() !in SCHEMES) return null
+            val host = trimmed.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').lowercase()
+            if (host !in HOSTS) return null
+            val uri = Uri.parse(trimmed)
             return Redirect(host, parseParameters(uri.encodedQuery?.takeIf { it.isNotBlank() } ?: uri.encodedFragment))
         }
 
-        /** The redirect address, or an error when it is not a tracker sign-in address. */
+        /** The redirect address, or an error when it is not a tracker sign-in address. The text never holds the address. */
         fun requireRedirect(address: String): Redirect =
-            parseRedirect(address) ?: error("Not a tracker sign-in address: $address")
+            parseRedirect(address) ?: error("Not a tracker sign-in address")
 
         /** What a sign-in for the tracker whose redirect host is [expectedHost] does with [redirect]. */
         fun decide(redirect: Redirect, expectedHost: String): RedirectAction {

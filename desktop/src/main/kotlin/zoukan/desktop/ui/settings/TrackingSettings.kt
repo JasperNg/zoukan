@@ -264,7 +264,7 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
-                                error = e.message
+                                error = e.message ?: localized(DMR.strings.could_not_sign_in)
                             }
                             busy = false
                         }
