@@ -63,7 +63,9 @@ object SortTagScreen : Screen {
     @Composable
     override fun Content() {
         val getSortTag = remember { Injekt.get<GetSortTag>() }
-        val tags by getSortTag.subscribe().collectAsState(getSortTag.await())
+        val tagsFlow = remember { getSortTag.subscribe() }
+        val initial = remember { getSortTag.await() }
+        val tags by tagsFlow.collectAsState(initial)
         var adding by remember { mutableStateOf(false) }
         var deleting by remember { mutableStateOf<String?>(null) }
         Column(Modifier.fillMaxSize()) {

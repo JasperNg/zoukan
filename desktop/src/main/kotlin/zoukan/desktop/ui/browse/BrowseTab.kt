@@ -85,7 +85,7 @@ import zoukan.i18n.desktop.DMR
 import java.util.Locale
 
 @Composable
-fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
+fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel, migrate: MigrateSourcesModel) {
     val state by model.state.collectAsState()
     var tab by rememberSaveable { mutableStateOf(BrowsePage.SOURCES) }
     val navigator = LocalNavigator.currentOrThrow
@@ -173,7 +173,7 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
             BrowsePage.STORES -> StoresList(state, model)
             BrowsePage.FEED -> FeedTab(feed)
             // ZOUKAN -->
-            BrowsePage.MIGRATE -> MigrateSourcesList()
+            BrowsePage.MIGRATE -> MigrateSourcesList(migrate)
             // ZOUKAN <--
         }
     }
