@@ -2,9 +2,11 @@ package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -15,7 +17,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import kotlinx.coroutines.launch
@@ -27,6 +31,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 import java.text.DateFormat
@@ -59,6 +64,7 @@ private fun SyncSettingsSection() {
     val last by preferences.lastSyncTimestamp().collectAsState()
     var edit by remember { mutableStateOf<Pair<String, Preference<String>>?>(null) }
     var secret by remember { mutableStateOf(false) }
+    var address by remember { mutableStateOf(false) }
     var whatDialog by remember { mutableStateOf(false) }
     var triggersDialog by remember { mutableStateOf(false) }
 
@@ -77,28 +83,34 @@ private fun SyncSettingsSection() {
                 TextRow(localized(SYMR.strings.pref_sync_host), preferences.clientHost()) {
                     edit = it
                     secret = false
+                    address = true
                 }
                 TextRow(localized(SYMR.strings.pref_sync_api_key), preferences.clientAPIKey(), hidden = true) {
                     edit = it
                     secret = true
+                    address = false
                 }
             }
             SyncManager.SyncService.WEB_DAV -> {
                 TextRow(localized(DMR.strings.server_url), preferences.webDavUrl()) {
                     edit = it
                     secret = false
+                    address = true
                 }
                 TextRow(localized(MR.strings.username), preferences.webDavUsername()) {
                     edit = it
                     secret = false
+                    address = false
                 }
                 TextRow(localized(MR.strings.password), preferences.webDavPassword(), hidden = true) {
                     edit = it
                     secret = true
+                    address = false
                 }
                 TextRow(localized(DMR.strings.folder), preferences.webDavFolder()) {
                     edit = it
                     secret = false
+                    address = false
                 }
             }
             else -> Unit
@@ -112,16 +124,12 @@ private fun SyncSettingsSection() {
                 if (last == 0L) localized(DMR.strings.never_synced) else localized(DMR.strings.last_synced, DateFormat.getDateTimeInstance().format(Date(last))),
                 onClick = { if (!running) AppScope.launch { manager.syncData() } },
             )
-            SettingRow(
-                localized(DMR.strings.reset_the_last_sync_time),
-                localized(DMR.strings.the_next_sync_uploads_this_library),
-                onClick = { preferences.lastSyncTimestamp().set(0L) },
-            )
+            ResetSyncTimeRow { preferences.lastSyncTimestamp().set(0L) }
         }
     }
 
     edit?.let { (title, preference) ->
-        TextDialog(title, preference, secret) { edit = null }
+        TextDialog(title, preference, secret, checkAddress = address, refusePlainHttp = true) { edit = null }
     }
     if (whatDialog) WhatDialog(preferences) { whatDialog = false }
     if (triggersDialog) TriggersDialog(preferences) { triggersDialog = false }
@@ -141,27 +149,84 @@ private fun TextRow(title: String, preference: Preference<String>, hidden: Boole
     )
 }
 
+/**
+ * "Reset the last sync time": the next sync uploads this library over the server's copy, so it
+ * asks first.
+ */
 @Composable
-private fun TextDialog(title: String, preference: Preference<String>, secret: Boolean, onDismiss: () -> Unit) {
+internal fun ResetSyncTimeRow(onReset: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    SettingRow(
+        localized(DMR.strings.reset_the_last_sync_time),
+        localized(DMR.strings.the_next_sync_uploads_this_library),
+        onClick = { confirming = true },
+    )
+    if (confirming) {
+        ConfirmDestructiveDialog(
+            title = localized(DMR.strings.reset_the_last_sync_time),
+            text = localized(DMR.strings.reset_sync_time_warning),
+            confirmLabel = localized(MR.strings.action_reset),
+            onConfirm = onReset,
+            onDismiss = { confirming = false },
+        )
+    }
+}
+
+/**
+ * Edits one text setting. With [checkAddress] the text must be an http(s) address; an unencrypted
+ * http address to a public host is refused when [refusePlainHttp], else warned about.
+ */
+@Composable
+internal fun TextDialog(
+    title: String,
+    preference: Preference<String>,
+    secret: Boolean,
+    checkAddress: Boolean = false,
+    refusePlainHttp: Boolean = false,
+    onDismiss: () -> Unit,
+) {
     var text by remember { mutableStateOf(preference.get()) }
+    val verdict = if (checkAddress) ServerAddress.check(text) else ServerAddress.Verdict.Ok
+    val refused = verdict == ServerAddress.Verdict.Invalid || (refusePlainHttp && verdict == ServerAddress.Verdict.PlainHttp)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                text,
-                { text = it },
-                singleLine = true,
-                visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-            )
+            Column {
+                OutlinedTextField(
+                    text,
+                    { text = it },
+                    singleLine = true,
+                    isError = refused,
+                    visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                )
+                AddressNote(verdict, refusePlainHttp)
+            }
         },
         confirmButton = {
-            TextButton(onClick = {
+            TextButton(enabled = !refused, onClick = {
                 preference.set(text.trim())
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_save)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
+}
+
+/** The line under an address field: why it is refused, or that it is not encrypted. */
+@Composable
+internal fun AddressNote(verdict: ServerAddress.Verdict, refusePlainHttp: Boolean) {
+    val (text, refused) = when {
+        verdict == ServerAddress.Verdict.Invalid -> localized(DMR.strings.not_a_web_address) to true
+        verdict == ServerAddress.Verdict.PlainHttp && refusePlainHttp -> localized(DMR.strings.plain_http_refused) to true
+        verdict == ServerAddress.Verdict.PlainHttp -> localized(DMR.strings.plain_http_warning) to false
+        else -> return
+    }
+    Text(
+        text,
+        color = if (refused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.padding(top = 4.dp),
     )
 }
 

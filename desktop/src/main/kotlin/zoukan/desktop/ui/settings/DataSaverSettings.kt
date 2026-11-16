@@ -110,12 +110,25 @@ private fun DataSaverSettings() {
 
     if (serverDialog) {
         var text by remember { mutableStateOf(server) }
+        // Bandwidth Hero servers are often on the local network: plain http is warned about, not refused
+        val verdict = ServerAddress.check(text)
         AlertDialog(
             onDismissRequest = { serverDialog = false },
             title = { Text(localized(SYMR.strings.bandwidth_data_saver_server)) },
-            text = { OutlinedTextField(text, { text = it }, singleLine = true, label = { Text("https://…") }) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        text,
+                        { text = it },
+                        singleLine = true,
+                        isError = verdict == ServerAddress.Verdict.Invalid,
+                        label = { Text("https://…") },
+                    )
+                    AddressNote(verdict, refusePlainHttp = false)
+                }
+            },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = verdict != ServerAddress.Verdict.Invalid, onClick = {
                     preferences.dataSaverServer().set(text.trim())
                     serverDialog = false
                 }) { Text(localized(MR.strings.action_ok)) }

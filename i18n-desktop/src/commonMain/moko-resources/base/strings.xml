@@ -868,4 +868,8 @@
     <string name="passwords_do_not_match">The passwords do not match</string>
     <string name="download_password_change_warning">Chapters downloaded with the current password only open with it. Keep a copy of it if you have encrypted downloads.</string>
     <string name="existing_downloads_keep_their_password">Downloads made with it need it to open</string>
+    <string name="not_a_web_address">This is not a web address (it must start with https:// or http://)</string>
+    <string name="plain_http_warning">This address is not encrypted: the password and the library are sent in clear.</string>
+    <string name="plain_http_refused">This address is not encrypted: the password and the library would be sent in clear. Use https://, or an address on this computer or your local network.</string>
+    <string name="reset_sync_time_warning">The next sync uploads this library over the copy on the server, as a first sync does. Progress made on other devices since the last sync may be lost.</string>
 </resources>
