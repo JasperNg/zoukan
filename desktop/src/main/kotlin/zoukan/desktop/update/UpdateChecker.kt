@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import zoukan.desktop.Platform
@@ -123,7 +125,7 @@ class UpdateChecker(
         val target = File(dir, asset.name)
         val partial = File(dir, "${asset.name}.part")
         // The asset's API URL redirects to storage; OkHttp drops the token on that other host
-        val request = request(asset.apiUrl).header("Accept", "application/octet-stream").build()
+        val request = assetRequest(asset.apiUrl).build()
         val context = coroutineContext
         try {
             downloadTo(request, partial, asset, progress) { context.ensureActive() }
@@ -148,7 +150,7 @@ class UpdateChecker(
         val url = asset.signatureApiUrl ?: return@withContext null
         dir.mkdirs()
         val target = File(dir, asset.name + ".sig")
-        val request = request(url).header("Accept", "application/octet-stream").build()
+        val request = assetRequest(url).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             val body = response.body
@@ -193,6 +195,20 @@ class UpdateChecker(
                 throw IOException("The download is damaged (SHA-256 does not match)")
             }
         }
+    }
+
+    /**
+     * A download request for a release asset. The address comes from the release's JSON, and the
+     * token is attached to it, so only an https address on the API host is accepted: no request is
+     * made, and no token sent, for anything else.
+     */
+    private fun assetRequest(url: String): Request.Builder {
+        val asset = url.toHttpUrlOrNull()
+        val api = apiUrl.toHttpUrl()
+        if (asset == null || !asset.isHttps || !asset.host.equals(api.host, ignoreCase = true)) {
+            throw IOException("The release names an unexpected download address; get the update from the release page instead")
+        }
+        return request(url).header("Accept", "application/octet-stream")
     }
 
     private fun request(url: String) = Request.Builder().url(url)

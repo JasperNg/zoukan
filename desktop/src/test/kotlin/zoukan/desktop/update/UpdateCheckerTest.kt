@@ -1,9 +1,18 @@
 package zoukan.desktop.update
 
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.Platform
 import zoukan.desktop.app.Version
+import zoukan.desktop.secrets.SecretStore
+import java.io.File
 
 class UpdateCheckerTest {
     private val releases = """
@@ -67,5 +76,49 @@ class UpdateCheckerTest {
         notes.name shouldBe "Zoukan 1.1.0"
         notes.body shouldBe "## Fixes\n- One"
         notes.pageUrl shouldBe "https://github.com/o/r/releases/tag/desktop-v1.1.0"
+    }
+
+    private class MemorySecrets(private val map: MutableMap<String, String> = mutableMapOf()) : SecretStore {
+        override val name = "memory"
+        override fun get(key: String) = map[key]
+        override fun set(key: String, value: String) {
+            map[key] = value
+        }
+        override fun delete(key: String) {
+            map.remove(key)
+        }
+    }
+
+    private fun recordingClient(seen: MutableList<Request>) = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            seen += chain.request()
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("OK").body("x".toResponseBody()).build()
+        }.build()
+
+    @Test
+    fun `an asset address that is not https on the GitHub API gets no token`(@TempDir dir: File): Unit = runBlocking {
+        val seen = mutableListOf<Request>()
+        val checker = UpdateChecker(
+            recordingClient(seen),
+            MemorySecrets(mutableMapOf(UpdateChecker.TOKEN_KEY to "secret-token")),
+            repo = "o/r",
+        )
+        for (url in listOf("http://api.github.com/repos/o/r/releases/assets/1", "https://evil.example/asset")) {
+            runCatching { checker.download(UpdateChecker.Asset("Zoukan.msi", url, 1, null), dir) }
+        }
+        seen.forEach { it.header("Authorization") shouldBe null }
+    }
+
+    @Test
+    fun `an asset address on the GitHub API over https is downloaded with the token`(@TempDir dir: File): Unit = runBlocking {
+        val seen = mutableListOf<Request>()
+        val checker = UpdateChecker(
+            recordingClient(seen),
+            MemorySecrets(mutableMapOf(UpdateChecker.TOKEN_KEY to "secret-token")),
+            repo = "o/r",
+        )
+        checker.download(UpdateChecker.Asset("Zoukan.msi", "https://api.github.com/repos/o/r/releases/assets/1", 1, null), dir)
+        seen.map { it.header("Authorization") } shouldBe listOf("Bearer secret-token")
     }
 }
