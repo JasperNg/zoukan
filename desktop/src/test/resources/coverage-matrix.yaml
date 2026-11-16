@@ -639,8 +639,8 @@
   feature: "Chapter row (read, bookmark, download state, context menu)"
   tier: journey
   smoke: false
-  tests: [e2e.BrowseAndReadJourneyTest, e2e.DownloadJourneyTest]
-  gap: "Bookmark and the context menu are not driven; planned: EntryPageJourneyTest"
+  tests: [e2e.BrowseAndReadJourneyTest, e2e.DownloadJourneyTest, ui.manga.ChapterListTest]
+  gap: "Bookmark and the context menu are only driven from plain values (ChapterListTest); planned: EntryPageJourneyTest"
 
 - key: flow:manga.download-menu
   feature: "Download menu (next, unread, bookmarked, custom)"

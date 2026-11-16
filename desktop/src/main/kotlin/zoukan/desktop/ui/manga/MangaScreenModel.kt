@@ -48,6 +48,17 @@ import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicInteger
 
+// ZOUKAN -->
+/**
+ * Whether the Resume button docks to the start of the chapter list. Android persists
+ * FabPosition.Start/End as "Start"/"End" while desktop's Compose material3 spells them
+ * "FabPosition.Start"/"FabPosition.End": both are read, Android's is written, as the
+ * preference travels in backups between the apps.
+ */
+internal fun readButtonAtStart(position: String): Boolean =
+    position == "Start" || position == androidx.compose.material3.FabPosition.Start.toString()
+// ZOUKAN <--
+
 class MangaScreenModel(
     private val mangaId: Long,
     private val getMangaWithChapters: GetMangaWithChapters = Injekt.get(),
@@ -69,8 +80,18 @@ class MangaScreenModel(
     private val filterChaptersForDownload: mihon.domain.chapter.interactor.FilterChaptersForDownload = Injekt.get(),
     private val updateErrors: zoukan.desktop.library.LibraryUpdateErrors = Injekt.get(),
     private val refreshTracks: eu.kanade.domain.track.interactor.RefreshTracks = Injekt.get(),
+    // The screen's own settings, read here so its composables take plain values
+    private val libraryPreferences: tachiyomi.domain.library.service.LibraryPreferences = Injekt.get(),
+    private val uiPreferences: eu.kanade.domain.ui.UiPreferences = Injekt.get(),
     // ZOUKAN <--
-) : StateScreenModel<MangaScreenModel.State>(State()) {
+) : StateScreenModel<MangaScreenModel.State>(
+    State(
+        swipeToStart = libraryPreferences.swipeToStartAction().get(),
+        swipeToEnd = libraryPreferences.swipeToEndAction().get(),
+        showMissingChapters = !libraryPreferences.hideMissingChapters().get(),
+        readButtonAtStart = readButtonAtStart(uiPreferences.readButtonPosition().get()),
+    ),
+) {
 
     data class State(
         val manga: Manga? = null,
@@ -103,6 +124,15 @@ class MangaScreenModel(
         val excludedScanlators: Set<String> = emptySet(),
         /** More > Downloaded only, which shows only downloaded chapters, as on Android */
         val downloadedOnly: Boolean = false,
+        /** Settings > Library > Chapter swipe, towards the start and the end of a row */
+        val swipeToStart: tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction =
+            tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction.Disabled,
+        val swipeToEnd: tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction =
+            tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction.Disabled,
+        /** False while Settings > Library > "Hide missing chapter indicators" is on */
+        val showMissingChapters: Boolean = true,
+        /** The side of the chapter list the Resume button docks to */
+        val readButtonAtStart: Boolean = false,
         // ZOUKAN <--
     ) {
         val isLocal: Boolean get() = manga?.source == LocalSource.ID
@@ -181,6 +211,20 @@ class MangaScreenModel(
         screenModelScope.launch {
             chapterSettings.excludedScanlators(mangaId).collect { excluded ->
                 mutableState.update { it.copy(excludedScanlators = excluded) }
+            }
+        }
+        screenModelScope.launch {
+            libraryPreferences.swipeToStartAction().changes().collect { action -> mutableState.update { it.copy(swipeToStart = action) } }
+        }
+        screenModelScope.launch {
+            libraryPreferences.swipeToEndAction().changes().collect { action -> mutableState.update { it.copy(swipeToEnd = action) } }
+        }
+        screenModelScope.launch {
+            libraryPreferences.hideMissingChapters().changes().collect { hide -> mutableState.update { it.copy(showMissingChapters = !hide) } }
+        }
+        screenModelScope.launch {
+            uiPreferences.readButtonPosition().changes().collect { position ->
+                mutableState.update { it.copy(readButtonAtStart = readButtonAtStart(position)) }
             }
         }
         screenModelScope.launch {
@@ -464,6 +508,13 @@ class MangaScreenModel(
     // ZOUKAN <--
 
     fun clearSelection() = mutableState.update { it.copy(selected = emptySet()) }
+
+    // ZOUKAN -->
+    /** The Resume button was dragged to a side: saved under Android's "Start"/"End" spelling, as backups carry it between the apps. */
+    fun moveReadButton(atStart: Boolean) {
+        uiPreferences.readButtonPosition().set(if (atStart) "Start" else "End")
+    }
+    // ZOUKAN <--
 
     /**
      * Ends an action on [chapters]: an action on the selection clears it, and one on a chapter
