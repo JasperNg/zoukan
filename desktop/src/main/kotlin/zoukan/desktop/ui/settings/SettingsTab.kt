@@ -76,11 +76,10 @@ import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import exh.md.utils.MdUtil
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -92,8 +91,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.backup.BackupJobs
 import zoukan.desktop.backup.DesktopBackups
-import zoukan.desktop.backup.RestoreGate
+import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.AppScope
@@ -111,8 +111,16 @@ import java.awt.Desktop
 import java.awt.FileDialog
 import java.io.File
 
+/** The backups and restores started from Settings; the screens and the settings pages share this one. */
+internal val backupJobs = BackupJobs(
+    scope = AppScope,
+    backups = { DesktopBackups(ZoukanRuntime.dirs.android) },
+    sensitivePrompt = { count -> sensitiveSettingsChoice(count) },
+    storePrompt = SwingStorePrompt,
+)
+
 /** What a backup or restore started from Settings is doing, shown in place of its buttons. */
-internal val backupStatusFlow = MutableStateFlow<String?>(null)
+internal val backupStatusFlow: StateFlow<String?> get() = backupJobs.status
 
 /**
  * The settings pages, in the order and with the names of the Android app's settings list. Desktop
@@ -289,41 +297,9 @@ fun SettingsTab() {
     }
 
     if (passwordDialog) {
-        var password by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { passwordDialog = false },
-            title = { Text(localized(DMR.strings.download_password)) },
-            text = {
-                OutlinedTextField(
-                    password,
-                    { password = it },
-                    singleLine = true,
-                    label = { Text(localized(MR.strings.password)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                )
-            },
-            confirmButton = {
-                TextButton(enabled = password.isNotEmpty(), onClick = {
-                    cbzPassword.set(password)
-                    hasPassword = true
-                    passwordDialog = false
-                    Toasts.show(localized(DMR.strings.download_password_saved))
-                }) { Text(localized(MR.strings.action_save)) }
-            },
-            dismissButton = {
-                Row {
-                    if (hasPassword) {
-                        TextButton(onClick = {
-                            cbzPassword.set("")
-                            securityPreferences.passwordProtectDownloads().set(false)
-                            hasPassword = false
-                            passwordDialog = false
-                        }) { Text(localized(MR.strings.action_remove)) }
-                    }
-                    TextButton(onClick = { passwordDialog = false }) { Text(localized(MR.strings.action_cancel)) }
-                }
-            },
-        )
+        DownloadPasswordDialog(cbzPassword, securityPreferences.passwordProtectDownloads(), hasPassword, { hasPassword = it }) {
+            passwordDialog = false
+        }
     }
 }
 
@@ -452,7 +428,8 @@ private fun LazyListScope.downloadSettings(
     item {
         SettingRow(
             if (hasPassword) localized(DMR.strings.change_the_download_password) else localized(DMR.strings.set_the_download_password),
-            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name),
+            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name) +
+                if (hasPassword) " " + localized(DMR.strings.existing_downloads_keep_their_password) else "",
             onClick = onEditPassword,
         )
     }
@@ -470,95 +447,13 @@ private fun LazyListScope.downloadSettings(
 }
 
 /** Writes a backup of what [options] picks (Create backup's choices) to [file]. */
-internal fun createBackup(file: File, options: BackupOptions) {
-    if (backupStatusFlow.value != null) return
-    backupStatusFlow.value = localized(DMR.strings.backing_up)
-    AppScope.launch {
-        try {
-            val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, options)
-            Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
-        } catch (e: Exception) {
-            Toasts.error(localized(MR.strings.creating_backup_error), e)
-        } finally {
-            backupStatusFlow.value = null
-        }
-    }
-}
-
-/** How a restore that [restoreBackup] started ended. */
-enum class RestoreOutcome { OK, FAILED, CANCELLED }
+internal fun createBackup(file: File, options: BackupOptions) = backupJobs.create(file, options)
 
 /**
  * Restores what [options] picks (Restore backup's choices) from [file]. Returns null, and does
  * nothing, while another backup or restore runs; otherwise how the restore ends.
  */
-internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<RestoreOutcome>? {
-    if (!backupStatusFlow.compareAndSet(null, localized(DMR.strings.restoring, file.name))) return null
-    val outcome = CompletableDeferred<RestoreOutcome>()
-    AppScope.launch {
-        var result = RestoreOutcome.FAILED
-        try {
-            // The gate holds the background jobs off while the library is half-restored
-            RestoreGate.whileRestoring {
-                try {
-                    val backups = DesktopBackups(ZoukanRuntime.dirs.android)
-                    val backup = backups.read(file)
-                    // Extension stores decide whose code runs, so a backup adds them only when the user
-                    // has seen which ones
-                    val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
-                    val chosen = when {
-                        newStores.isEmpty() -> options
-                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.extensionListUrl ?: it.indexUrl}" })) {
-                            true -> options
-                            false -> options.copy(extensionStores = false)
-                            null -> {
-                                result = RestoreOutcome.CANCELLED
-                                return@launch
-                            }
-                        }
-                    }
-                    // Security settings and logins change when the app locks and where data goes, so a
-                    // backup writes them only when the user has been told
-                    val sensitive = DesktopBackups.sensitiveKeys(
-                        backup.copy(
-                            backupPreferences = if (chosen.appSettings) backup.backupPreferences else emptyList(),
-                            backupSourcePreferences = if (chosen.sourceSettings) backup.backupSourcePreferences else emptyList(),
-                        ),
-                    )
-                    val allowSensitive = when {
-                        sensitive.isEmpty() -> false
-                        else -> when (sensitiveSettingsChoice(sensitive.size)) {
-                            true -> true
-                            false -> false
-                            null -> {
-                                result = RestoreOutcome.CANCELLED
-                                return@launch
-                            }
-                        }
-                    }
-                    val errors = backups.restore(backup, chosen, allowSensitive = allowSensitive) { _, progress, total ->
-                        backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
-                    }
-                    result = RestoreOutcome.OK
-                    Toasts.show(
-                        if (errors.isEmpty()) {
-                            localized(DMR.strings.restored_entries, backup.backupManga.size)
-                        } else {
-                            localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
-                        },
-                    )
-                } catch (e: Exception) {
-                    Toasts.error(localized(DMR.strings.restore_failed), e)
-                } finally {
-                    backupStatusFlow.value = null
-                }
-            }
-        } finally {
-            outcome.complete(result)
-        }
-    }
-    return outcome
-}
+internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<RestoreOutcome>? = backupJobs.restore(file, options)
 
 /** How a restore decides about security settings and logins; tests replace the native dialog. */
 internal var sensitiveSettingsChoice: (count: Int) -> Boolean? = ::confirmSensitive
@@ -590,37 +485,6 @@ private fun confirmSensitive(count: Int): Boolean? {
     }
 }
 
-/**
- * Asks whether a restore may add the extension stores a backup lists. True adds them, false
- * restores without them, null cancels the restore.
- */
-private fun confirmStores(stores: List<String>): Boolean? {
-    val shown = stores.take(8).map { it.take(140) } + listOfNotNull(localized(DMR.strings.and_more, stores.size - 8).takeIf { stores.size > 8 })
-    val message = if (stores.size == 1) {
-        localized(DMR.strings.backup_adds_one_store, shown.joinToString("\n"))
-    } else {
-        localized(DMR.strings.backup_adds_stores, stores.size, shown.joinToString("\n"))
-    }
-    var choice = javax.swing.JOptionPane.CANCEL_OPTION
-    val ask = Runnable {
-        choice = javax.swing.JOptionPane.showOptionDialog(
-            null,
-            message,
-            localized(MR.strings.pref_restore_backup),
-            javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
-            javax.swing.JOptionPane.WARNING_MESSAGE,
-            null,
-            arrayOf(localized(MR.strings.action_add), localized(DMR.strings.restore_without), localized(MR.strings.action_cancel)),
-            localized(DMR.strings.restore_without),
-        )
-    }
-    if (javax.swing.SwingUtilities.isEventDispatchThread()) ask.run() else javax.swing.SwingUtilities.invokeAndWait(ask)
-    return when (choice) {
-        0 -> true
-        1 -> false
-        else -> null
-    }
-}
 
 /** A folder picker: the native one on macOS, Swing's on Windows (AWT's FileDialog picks only files there). */
 internal fun chooseFolder(window: java.awt.Window?, start: File): File? {

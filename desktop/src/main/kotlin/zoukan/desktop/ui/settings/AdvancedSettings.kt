@@ -146,7 +146,7 @@ fun LazyListScope.advancedSettings() {
         )
     }
 
-    settingsGroup(localized(MR.strings.label_library) + " ")
+    settingsGroup(localized(MR.strings.label_library), id = "advanced-library")
     item(key = "advanced-refresh-covers") {
         val running by refreshingCovers.collectAsState()
         SettingRow(
@@ -181,7 +181,7 @@ fun LazyListScope.advancedSettings() {
         )
     }
 
-    settingsGroup(localized(MR.strings.pref_category_downloads) + " ")
+    settingsGroup(localized(MR.strings.pref_category_downloads), id = "advanced-downloads")
     item(key = "advanced-url-hash") {
         val preferences = remember { Injekt.get<DownloadPreferences>() }
         SwitchPreference(

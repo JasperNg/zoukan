@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import exh.md.utils.MdUtil
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
@@ -37,6 +38,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.MangaDexSync
 import zoukan.desktop.track.TrackerLogin
 import zoukan.desktop.ui.AppScope
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
@@ -109,18 +111,13 @@ private fun MangaDexSettings() {
             enabled = !running,
             onClick = { syncDialog = true },
         ) { if (running) CircularProgressIndicator(Modifier.size(24.dp)) }
-        SettingRow(
-            localized(SYMR.strings.mangadex_push_favorites_to_mangadex),
-            localized(SYMR.strings.mangadex_push_favorites_to_mangadex_summary),
-            enabled = !running,
-            onClick = {
-                AppScope.launch {
-                    runCatching { sync.pushFavorites() }
-                        .onSuccess { Toasts.show(localized(DMR.strings.followed_library_entries_on_mangadex, it)) }
-                        .onFailure { Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), it) }
-                }
-            },
-        )
+        FollowLibraryRow(enabled = !running, count = sync::libraryEntriesToFollow) {
+            AppScope.launch {
+                runCatching { sync.pushFavorites() }
+                    .onSuccess { Toasts.show(localized(DMR.strings.followed_library_entries_on_mangadex, it)) }
+                    .onFailure { Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), it) }
+            }
+        }
     }
 
     if (logoutDialog) {
@@ -152,6 +149,44 @@ private fun MangaDexSettings() {
                         .onFailure { Toasts.error(localized(DMR.strings.syncing_mangadex_follows_failed), it) }
                 }
             },
+        )
+    }
+}
+
+/**
+ * The row that follows the library on MangaDex. A click asks first, with how many entries [count]
+ * says will be followed; only the dialog's Follow button runs [onFollow].
+ */
+@Composable
+internal fun FollowLibraryRow(enabled: Boolean, count: suspend () -> Int, onFollow: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var asking by remember { mutableStateOf<Int?>(null) }
+    SettingRow(
+        localized(SYMR.strings.mangadex_push_favorites_to_mangadex),
+        localized(SYMR.strings.mangadex_push_favorites_to_mangadex_summary),
+        enabled = enabled,
+        onClick = {
+            scope.launch {
+                val entries = try {
+                    count()
+                } catch (e: CancellationException) {
+                    // The page closed while counting: nothing failed
+                    throw e
+                } catch (e: Exception) {
+                    Toasts.error(localized(DMR.strings.following_the_library_on_mangadex_failed), e)
+                    return@launch
+                }
+                if (entries == 0) Toasts.show(localized(DMR.strings.no_mangadex_entries_in_the_library)) else asking = entries
+            }
+        },
+    )
+    asking?.let { entries ->
+        ConfirmDestructiveDialog(
+            title = localized(SYMR.strings.mangadex_push_favorites_to_mangadex),
+            text = localized(DMR.strings.follow_library_on_mangadex_warning, entries),
+            confirmLabel = localized(DMR.strings.follow_on_mangadex),
+            onConfirm = onFollow,
+            onDismiss = { asking = null },
         )
     }
 }

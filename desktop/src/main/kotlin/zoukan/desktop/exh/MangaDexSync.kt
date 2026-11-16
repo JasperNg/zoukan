@@ -91,6 +91,11 @@ class MangaDexSync(
         follows.size
     }
 
+    /** How many library entries [pushFavorites] goes through. Reads the library only: no network, no account change. */
+    suspend fun libraryEntriesToFollow(): Int = withContext(Dispatchers.IO) {
+        getFavorites.await().count { it.source in mangaDexSourceIds }
+    }
+
     /** Follows the unfollowed MangaDex library entries. Returns how many it went through. */
     suspend fun pushFavorites(): Int = exclusive {
         val mdList = trackerManager.mdList

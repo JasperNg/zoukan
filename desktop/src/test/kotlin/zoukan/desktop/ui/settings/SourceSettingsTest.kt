@@ -8,9 +8,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -30,7 +34,9 @@ import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.io.File
 
 /** A source's own settings, drawn from the androidx.preference objects the extension builds. */
@@ -133,6 +139,132 @@ class SourceSettingsTest {
         switch.assertIsOff()
         onNodeWithText("Safe (default)").assertExists()
         prefs.getBoolean("pref_18_mode", true) shouldBe false
+    }
+
+    private fun textPreference(key: String, title: String, value: String): EditTextPreference {
+        val prefs = JavaSharedPreferences("source_text_test_${System.nanoTime()}")
+        prefs.edit().putString(key, value).apply()
+        return EditTextPreference(null).apply {
+            this.key = key
+            this.title = title
+            sharedPreferences = prefs
+        }
+    }
+
+    @Test
+    fun `a text setting does not show its stored value as its summary`() = withRoot {
+        runDesktopComposeUiTest {
+            val pref = textPreference("api_key", "API key", "s3cr3t-value")
+            setContent { PreferenceItem(pref, 0, onChanged = {}, onOpen = {}) }
+
+            onNodeWithText("API key").assertExists()
+            onAllNodesWithText("s3cr3t-value", substring = true).fetchSemanticsNodes().isEmpty() shouldBe true
+        }
+    }
+
+    @Test
+    fun `a secret setting whose summary repeats its value does not show it`() = withRoot {
+        runDesktopComposeUiTest {
+            // Extensions often set the summary to the value they just saved
+            val pref = textPreference("api_key", "API key", "s3cr3t-value").apply { summary = "Key: s3cr3t-value" }
+            val described = textPreference("token", "Token", "s3cr3t-value").apply { summary = "From your account page" }
+            setContent {
+                PreferenceItem(pref, 0, onChanged = {}, onOpen = {})
+                PreferenceItem(described, 0, onChanged = {}, onOpen = {})
+            }
+
+            onAllNodesWithText("s3cr3t-value", substring = true).fetchSemanticsNodes().isEmpty() shouldBe true
+            onNodeWithText("From your account page").assertExists()
+        }
+    }
+
+    @Test
+    fun `a password-like text setting is masked in its edit dialog`() = withRoot {
+        runDesktopComposeUiTest {
+            val pref = textPreference("password", "Password", "s3cr3t-value")
+            setContent { PreferenceDialog(pref, onDismiss = {}, onSave = {}) }
+
+            // A masked field is marked as a password; its semantics text is the typed value, so the
+            // mark is what the test can check
+            onNode(hasSetTextAction()).assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
+
+            // The eye button reveals it
+            onNodeWithContentDescription(localized(DMR.strings.show_value)).performClick()
+            waitForIdle()
+            onNodeWithContentDescription(localized(DMR.strings.hide_value)).assertExists()
+        }
+    }
+
+    @Test
+    fun `a text setting is masked when its key or title names a secret`() {
+        looksSecret("api_key", null) shouldBe true
+        looksSecret(null, "Password") shouldBe true
+        looksSecret("pref_cookie", "Session") shouldBe true
+        looksSecret("server_url", "Server address") shouldBe false
+        looksSecret("hidden_authors", "Authors to hide") shouldBe false
+        looksSecret("auth_code", null) shouldBe true
+        looksSecret(null, null) shouldBe false
+    }
+
+    @Test
+    fun `a preference whose visibility throws is skipped with an error`() = withRoot {
+        val prefs = JavaSharedPreferences("source_visible_test_${System.nanoTime()}")
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs }
+        screen.addPreference(
+            SwitchPreferenceCompat(null).apply {
+                key = "fine"
+                title = "Fine"
+            },
+        )
+        screen.addPreference(
+            object : SwitchPreferenceCompat(null) {
+                override fun isVisible(): Boolean = throw IllegalStateException("visible bug")
+            }.apply {
+                key = "broken"
+                title = "Broken"
+            },
+        )
+        val toasts = mutableListOf<String>()
+        val collector = CoroutineScope(Dispatchers.Unconfined).launch { Toasts.flow.collect { toasts += it } }
+        try {
+            flattenPreferences(screen).map { it.title?.toString() } shouldBe listOf("Fine")
+            toasts.any { "visible bug" in it } shouldBe true
+        } finally {
+            collector.cancel()
+        }
+    }
+
+    @Test
+    fun `a preference whose title throws still draws`() = withRoot {
+        runDesktopComposeUiTest {
+            val prefs = JavaSharedPreferences("source_title_test_${System.nanoTime()}")
+            val pref = object : SwitchPreferenceCompat(null) {
+                override fun getTitle(): CharSequence = throw IllegalStateException("title bug")
+            }.apply {
+                key = "untitled"
+                sharedPreferences = prefs
+            }
+            val toasts = mutableListOf<String>()
+            val collector = CoroutineScope(Dispatchers.Unconfined).launch { Toasts.flow.collect { toasts += it } }
+            try {
+                setContent { PreferenceItem(pref, 0, onChanged = {}, onOpen = {}) }
+                waitForIdle()
+                toasts.any { "title bug" in it } shouldBe true
+            } finally {
+                collector.cancel()
+            }
+        }
+    }
+
+    @Test
+    fun `a dialog for an unknown preference type is closed after composition`() = withRoot {
+        runDesktopComposeUiTest {
+            var dismissed = 0
+            val pref = androidx.preference.Preference(null).apply { key = "plain" }
+            setContent { PreferenceDialog(pref, onDismiss = { dismissed++ }, onSave = {}) }
+            waitForIdle()
+            dismissed shouldBe 1
+        }
     }
 
     private fun withRoot(block: () -> Unit) {

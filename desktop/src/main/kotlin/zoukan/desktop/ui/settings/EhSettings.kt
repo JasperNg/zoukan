@@ -122,9 +122,7 @@ private fun EhSettings() {
                         localized(DMR.strings.copy_these_cookies_of_e_hentai),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    OutlinedTextField(memberId, { memberId = it.trim() }, singleLine = true, label = { Text("ipb_member_id") })
-                    OutlinedTextField(passHash, { passHash = it.trim() }, singleLine = true, label = { Text("ipb_pass_hash") })
-                    OutlinedTextField(igneous, { igneous = it.trim() }, singleLine = true, label = { Text(localized(DMR.strings.igneous_optional)) })
+                    EhCookieFields(memberId, { memberId = it }, passHash, { passHash = it }, igneous, { igneous = it })
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -153,6 +151,22 @@ private fun EhSettings() {
             dismissButton = { TextButton(onClick = { cookieDialog = false }, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
+}
+
+/** The three cookies of the E-Hentai sign-in. */
+@Composable
+internal fun EhCookieFields(
+    memberId: String,
+    onMemberId: (String) -> Unit,
+    passHash: String,
+    onPassHash: (String) -> Unit,
+    igneous: String,
+    onIgneous: (String) -> Unit,
+) {
+    OutlinedTextField(memberId, { onMemberId(it.trim()) }, singleLine = true, label = { Text("ipb_member_id") })
+    // ipb_pass_hash and igneous sign in to the account, so they are masked
+    SecretTextField(passHash, { onPassHash(it.trim()) }, label = { Text("ipb_pass_hash") })
+    SecretTextField(igneous, { onIgneous(it.trim()) }, label = { Text(localized(DMR.strings.igneous_optional)) })
 }
 
 /** The site settings Zoukan uploads to the account (EHConfigurator), as Android's E-Hentai settings. */

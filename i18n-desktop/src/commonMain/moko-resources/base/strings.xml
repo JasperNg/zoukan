@@ -877,4 +877,21 @@
     <string name="chapter_state_bookmarked">Bookmarked</string>
     <string name="local_files_not_trashed">Could not move %1$s to the trash, so nothing was removed. Remove the folder yourself if you want it gone.</string>
     <string name="delete_downloads_cannot_be_undone">Every downloaded chapter of these entries is deleted from this computer. This cannot be undone.</string>
+    <string name="repeat_the_password">Repeat the password</string>
+    <string name="passwords_do_not_match">The passwords do not match</string>
+    <string name="download_password_change_warning">Chapters downloaded with the current password only open with it. Keep a copy of it if you have encrypted downloads.</string>
+    <string name="existing_downloads_keep_their_password">Downloads made with it need it to open.</string>
+    <string name="not_a_web_address">This is not a web address (it must start with https:// or http://)</string>
+    <string name="plain_http_warning">This address is not encrypted: the password and the library are sent in clear.</string>
+    <string name="plain_http_refused">This address is not encrypted: the password and the library would be sent in clear. Use https://, or an address on this computer or your local network.</string>
+    <string name="storage_folder_not_writable">Zoukan cannot write in %1$s. Pick another folder.</string>
+    <string name="storage_change_warning">Downloads, local entries and automatic backups already in %1$s stay there; Zoukan does not move them. They show as not downloaded until you move them yourself or switch back.</string>
+    <string name="storage_folder_has_downloads">This folder already has downloads. Clean up deletes those of entries not in this library.</string>
+    <string name="open_the_old_folder">Open the old folder</string>
+    <string name="follow_library_on_mangadex_warning">%1$d MangaDex entries in the library will be followed on your MangaDex account as Reading; those already followed stay as they are. Undo it on the MangaDex site.</string>
+    <string name="follow_on_mangadex">Follow</string>
+    <string name="no_mangadex_entries_in_the_library">No MangaDex entries are in the library.</string>
+    <string name="show_value">Show value</string>
+    <string name="hide_value">Hide value</string>
+    <string name="reset_sync_time_warning">The next sync uploads this library over the copy on the server, as a first sync does. Progress made on other devices since the last sync may be lost.</string>
 </resources>

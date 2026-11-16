@@ -21,7 +21,6 @@ dialog-inline:MangaScreen.kt:Content
 dialog-inline:MigrationListScreen.kt:Content 3
 dialog-inline:MissingExtensionsCard.kt:ReadyPlan
 dialog-inline:ReaderScreen.kt:KeyboardHelp
-dialog-inline:SettingsTab.kt:SettingsTab
 dialog-inline:SettingsWidgets.kt:ChoiceSetting
 dialog-inline:SettingsWidgets.kt:MultiSelectPreference
 dialog-inline:SortTagScreen.kt:Content

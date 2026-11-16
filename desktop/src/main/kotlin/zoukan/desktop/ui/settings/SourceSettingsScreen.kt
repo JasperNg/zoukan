@@ -11,14 +11,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonSkippableComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -28,6 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.preference.DialogPreference
 import androidx.preference.EditTextPreference
@@ -119,7 +127,7 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
 internal fun flattenPreferences(group: PreferenceGroup): List<Preference> =
     group.preferences.toList().flatMap { pref ->
         when {
-            !pref.isVisible -> emptyList()
+            !readSafely(pref, false) { pref.isVisible } -> emptyList()
             pref is PreferenceGroup -> listOf(pref) + flattenPreferences(pref)
             else -> listOf(pref)
         }
@@ -140,8 +148,11 @@ private fun save(pref: Preference, value: Any) {
 
 private fun reportFailure(pref: Preference, e: Throwable) {
     pref.logcat(LogPriority.ERROR, e) { "Source preference ${pref.key} failed" }
-    Toasts.error(pref.title?.toString().orEmpty().ifEmpty { pref.key.orEmpty() }, e)
+    // Not readSafely: that reports failures through here, and the title getter may be the one that throws
+    Toasts.error(runCatching { pref.title?.toString() }.getOrNull().orEmpty().ifEmpty { pref.key.orEmpty() }, e)
 }
+
+private fun titleOf(pref: Preference): String = readSafely(pref, "") { pref.title?.toString().orEmpty() }
 
 // Reads run at every redraw: a preference whose reads fail is reported once, not at each redraw
 private val failedReads: MutableSet<Preference> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))
@@ -182,7 +193,7 @@ private fun summaryOf(pref: Preference): String? = readSafely(pref, null) {
 @NonSkippableComposable
 @Composable
 internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") version: Int, onChanged: () -> Unit, onOpen: () -> Unit) {
-    val title = pref.title?.toString().orEmpty()
+    val title = titleOf(pref)
     // As Android: off while the switch it depends on (setDependency) is off, or its group is disabled
     val enabled = readSafely(pref, true) { pref.isEnabled }
     when (pref) {
@@ -211,7 +222,18 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
         is ListPreference, is MultiSelectListPreference, is EditTextPreference -> SettingRow(
             title = title,
             subtitle = when (pref) {
-                is EditTextPreference -> summaryOf(pref) ?: readSafely(pref, null) { pref.currentValue as? String }
+                // A password, token or key is never the summary: the extension's own summary unless it
+                // repeats the value, or "Not set"
+                is EditTextPreference -> {
+                    val value = readSafely(pref, null) { pref.currentValue as? String }
+                    val summary = summaryOf(pref)
+                    when {
+                        !looksSecret(pref.key, title) -> summary ?: value
+                        summary != null && (value.isNullOrEmpty() || value !in summary) -> summary
+                        value.isNullOrEmpty() -> localized(DMR.strings.not_set)
+                        else -> null
+                    }
+                }
                 is MultiSelectListPreference -> summaryOf(pref) ?: readSafely(pref, null) {
                     (pref.currentValue as? Set<*>)?.let { values ->
                         values.mapNotNull { v -> pref.entryValues?.indexOfFirst { it.toString() == v }?.let { pref.entries?.getOrNull(it) } }
@@ -290,9 +312,43 @@ internal fun snapSeekBar(value: Float, min: Int, max: Int, increment: Int): Int 
     return (min + steps * increment).coerceIn(min, max)
 }
 
+// "auth" but not "author"
+private val secretWords = Regex("pass|secret|token|apikey|api_key|api key|cookie|hash|auth(?!or)")
+
+/** Whether a text setting called [key] or [title] probably holds a password, token or key. */
+internal fun looksSecret(key: String?, title: String?): Boolean =
+    listOfNotNull(key, title).any { secretWords.containsMatchIn(it.lowercase()) }
+
+/** A single-line text field that shows bullets until the eye button is pressed. */
 @Composable
-private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (Any) -> Unit) {
-    val title = (pref as? DialogPreference)?.dialogTitle?.toString() ?: pref.title?.toString().orEmpty()
+internal fun SecretTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: @Composable (() -> Unit)? = null,
+) {
+    var revealed by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value,
+        onValueChange,
+        modifier = modifier,
+        singleLine = true,
+        label = label,
+        visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = { revealed = !revealed }) {
+                Icon(
+                    if (revealed) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    contentDescription = localized(if (revealed) DMR.strings.hide_value else DMR.strings.show_value),
+                )
+            }
+        },
+    )
+}
+
+@Composable
+internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (Any) -> Unit) {
+    val title = readSafely(pref, null) { (pref as? DialogPreference)?.dialogTitle?.toString() } ?: titleOf(pref)
     when (pref) {
         is ListPreference -> {
             val entries = pref.entries.orEmpty()
@@ -357,13 +413,17 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                 text = {
                     Column {
                         pref.dialogMessage?.let { Text(it.toString(), Modifier.padding(bottom = 8.dp)) }
-                        OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
+                        if (looksSecret(pref.key, titleOf(pref))) {
+                            SecretTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
+                        } else {
+                            OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 },
                 confirmButton = { TextButton(onClick = { onSave(text) }) { Text(localized(MR.strings.action_save)) } },
                 dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
             )
         }
-        else -> onDismiss()
+        else -> LaunchedEffect(pref) { onDismiss() }
     }
 }

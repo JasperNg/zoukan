@@ -74,7 +74,8 @@ fun LazyListScope.appearanceSettings() {
     item(key = "appearance-theme") { ThemeSection() }
     item(key = "appearance-display") { DisplaySection() }
     // ZOUKAN -->
-    // One "Entry page" group: a header's key is its title, and two with one key crash the list
+    // One "Entry page" group: a header's key is its id (the title by default), and two with one key
+    // crash the list, so a second group with the same title needs its own id
     settingsGroup(localized(DMR.strings.entry_page))
     item(key = "appearance-manga-info") { MangaInfoSection() }
     item(key = "appearance-previews") {

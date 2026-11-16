@@ -37,8 +37,9 @@ import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
-fun LazyListScope.settingsGroup(title: String) {
-    item(key = "$GROUP_KEY_PREFIX$title") {
+/** A group header. Its list key is [id]; give a group an id of its own when another on the page has its title. */
+fun LazyListScope.settingsGroup(title: String, id: String = title) {
+    item(key = "$GROUP_KEY_PREFIX$id", contentType = SettingsGroupHeader(title)) {
         Text(
             title,
             style = MaterialTheme.typography.titleSmall,
