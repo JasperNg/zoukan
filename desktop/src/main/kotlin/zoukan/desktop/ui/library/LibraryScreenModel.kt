@@ -172,6 +172,29 @@ class LibraryScreenModel(
         val manga: Manga get() = library.manga
     }
 
+    /**
+     * What a [State] derives from everything but its selection (the shown list, tabs and counts),
+     * shared by its copies. A value is only used for the key it was computed for, so a copy with
+     * other inputs recomputes. All derived [State]s compare equal, so state de-duplication is unchanged.
+     */
+    class Derived {
+        internal class Slot(val key: Any?) {
+            @Volatile var visible: List<Item>? = null
+
+            @Volatile var tabs: List<Category>? = null
+
+            @Volatile var groups: List<Pair<Category, Set<Long>>>? = null
+
+            @Volatile var entryCount: Int? = null
+            val counts = java.util.concurrent.ConcurrentHashMap<Long, Int>()
+        }
+
+        @Volatile internal var slot: Slot = Slot(null)
+
+        override fun equals(other: Any?): Boolean = other is Derived
+        override fun hashCode(): Int = 0
+    }
+
     data class State(
         val loading: Boolean = true,
         val items: List<LibraryManga> = emptyList(),
@@ -197,7 +220,49 @@ class LibraryScreenModel(
         /** Sources that are not installed */
         val stubSources: Set<Long> = emptySet(),
         // KMK <--
+        /** What is derived from everything but [selection], carried across copies; see [Derived] */
+        val derived: Derived = Derived(),
     ) {
+        /** Everything the shown list, tabs and counts depend on: all of the state except the selection */
+        private data class ViewKey(
+            val items: List<LibraryManga>,
+            val categories: List<Category>,
+            val selectedCategory: Long?,
+            val query: String,
+            val settings: Settings,
+            val tracks: Map<Long, List<Track>>,
+            val downloadCounts: Map<Long, Int>,
+            val sources: Map<Long, Pair<String, String>>,
+            val trackStatuses: Map<Long, List<TrackStatus>>,
+            val searchResults: Set<Long>?,
+            val sourceIcons: Map<Long, String>,
+            val stubSources: Set<Long>,
+        )
+
+        private val viewKey: Any by lazy {
+            ViewKey(items, categories, selectedCategory, query, settings, tracks, downloadCounts, sources, trackStatuses, searchResults, sourceIcons, stubSources)
+        }
+
+        /** True when [other] shows the same list: only the selection may differ */
+        fun sameView(other: State): Boolean = viewKey == other.viewKey
+
+        /** The cache for this state's inputs: a selection-only copy reuses it, any other change gets a fresh one */
+        private val slot: Derived.Slot
+            get() {
+                val current = derived.slot
+                if (current.key == viewKey) return current
+                return Derived.Slot(viewKey).also { derived.slot = it }
+            }
+
+        /** Computes the shown list, tabs and counts now, so the UI finds them ready */
+        fun warm(withCounts: Boolean) {
+            visible
+            if (withCounts) {
+                tabs.forEach { countIn(it.id) }
+                countIn(null)
+            }
+        }
+
         val grouped: Boolean get() = settings.effectiveGroup != LibraryGroup.BY_DEFAULT
 
         // ZOUKAN -->
@@ -205,7 +270,10 @@ class LibraryScreenModel(
          * The tabs when the library is grouped by source, status or tracking status, with the entries
          * in each, as Android's getGroupedMangaItems. Ungrouped has none, so only All shows.
          */
-        val groups: List<Pair<Category, Set<Long>>> by lazy {
+        val groups: List<Pair<Category, Set<Long>>>
+            get() = slot.let { it.groups ?: computeGroups.also { g -> it.groups = g } }
+
+        private val computeGroups: List<Pair<Category, Set<Long>>> by lazy {
             run {
                 fun tab(id: Long, name: String, order: Long) = Category(id = id, name = name, order = order, flags = 0, hidden = false)
                 when (settings.effectiveGroup) {
@@ -242,7 +310,10 @@ class LibraryScreenModel(
          * searching or filtering, categories with no match are left out unless "Show empty
          * categories during search/filtering" is on, as Android's (KMK).
          */
-        val tabs: List<Category> by lazy {
+        val tabs: List<Category>
+            get() = slot.let { it.tabs ?: computeTabs.also { t -> it.tabs = t } }
+
+        private val computeTabs: List<Category> by lazy {
             run {
                 // ZOUKAN -->
                 if (grouped) return@run groups.map { it.first }
@@ -257,7 +328,8 @@ class LibraryScreenModel(
         }
 
         /** How many distinct entries the library holds, for the header */
-        val entryCount: Int by lazy { items.distinctBy { it.id }.size }
+        val entryCount: Int
+            get() = slot.let { it.entryCount ?: items.distinctBy { i -> i.id }.size.also { n -> it.entryCount = n } }
 
         val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }.takeIf { !grouped }
 
@@ -275,11 +347,15 @@ class LibraryScreenModel(
             else -> items.filter { category in it.categories }
         }.distinctBy { it.id }
 
-        // Each state computes its tab counts once, not on every recomposition
-        private val counts = HashMap<Long?, Int>()
-
-        fun countIn(category: Long?): Int = synchronized(counts) {
-            counts.getOrPut(category) { inCategory(category).count { passes(it) } }
+        // Counts are kept per view, not per state, so a selection change does not recount; nothing is
+        // locked while counting, so the UI never waits for the background warm-up
+        fun countIn(category: Long?): Int {
+            val slot = slot
+            val key = category ?: Long.MIN_VALUE
+            slot.counts[key]?.let { return it }
+            val count = inCategory(category).count { passes(it) }
+            slot.counts[key] = count
+            return count
         }
 
         // ZOUKAN -->
@@ -324,10 +400,15 @@ class LibraryScreenModel(
             return passesTracking(item) && passesCategories(item)
         }
 
+        /** The included and excluded trackers, read from the settings once per state */
+        private val trackFilters by lazy {
+            settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_IS) it.key else null } to
+                settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_NOT) it.key else null }
+        }
+
         /** KMK's tracking filter: no excluded tracker, and one of the included ones if any */
         private fun passesTracking(item: LibraryManga): Boolean {
-            val excludedTracks = settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_NOT) it.key else null }
-            val includedTracks = settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_IS) it.key else null }
+            val (includedTracks, excludedTracks) = trackFilters
             if (includedTracks.isEmpty() && excludedTracks.isEmpty()) return true
             val mangaTracks = tracks[item.id].orEmpty()
             val isExcluded = excludedTracks.isNotEmpty() && mangaTracks.any { it.trackerId in excludedTracks }
@@ -346,8 +427,11 @@ class LibraryScreenModel(
         }
         // KMK <--
 
-        // Computed once per state, so a recomposition that doesn't change the state doesn't refilter or resort
-        val visible: List<Item> by lazy {
+        // Computed once per view (everything but the selection), so neither a recomposition nor a selection change refilters or resorts
+        val visible: List<Item>
+            get() = slot.let { it.visible ?: computeVisible.also { v -> it.visible = v } }
+
+        private val computeVisible: List<Item> by lazy {
             run {
                 val filtered = inCategory(selectedCategory).filter(::passes)
                 sorted(filtered).map { lm ->
@@ -402,6 +486,12 @@ class LibraryScreenModel(
     }
 
     init {
+        // Filter and sort in the background whenever the inputs change, so the UI finds the list ready
+        screenModelScope.launch(Dispatchers.Default) {
+            mutableState.distinctUntilChanged { a, b -> a.sameView(b) }.collectLatest { s ->
+                s.warm(withCounts = s.settings.itemCounts)
+            }
+        }
         screenModelScope.launch {
             // Download counts come from the same items they describe, so the two always match
             combine(getLibraryManga.subscribe(), getCategories.subscribe(), downloadManager.changes) { items, categories, _ ->
@@ -725,20 +815,39 @@ class LibraryScreenModel(
 
     // SY -->
     /** Whether a selected entry is from E-Hentai, ExHentai or nhentai, for Clean titles. */
-    fun showCleanTitles(): Boolean = selected(state.value.selection).any { it.isEhBasedManga() || it.source in nHentaiSourceIds }
+    fun showCleanTitles(): Boolean = selectionFlags().cleanTitles
 
     /** Whether a selected entry is from MangaDex, for Add to MangaDex follows. */
-    fun showAddToMangadex(): Boolean = selected(state.value.selection).any { it.source in mangaDexSourceIds }
+    fun showAddToMangadex(): Boolean = selectionFlags().addToMangadex
 
     /** Whether a selected entry has edited details, for Reset info. */
-    fun showResetInfo(): Boolean = selected(state.value.selection).any { manga ->
-        manga.title != manga.ogTitle ||
-            manga.author != manga.ogAuthor ||
-            manga.artist != manga.ogArtist ||
-            manga.thumbnailUrl != manga.ogThumbnailUrl ||
-            manga.description != manga.ogDescription ||
-            manga.genre != manga.ogGenre ||
-            manga.status != manga.ogStatus
+    fun showResetInfo(): Boolean = selectionFlags().resetInfo
+
+    /** Which of the selection's overflow-menu actions apply, found in one pass over the library. */
+    data class SelectionFlags(val cleanTitles: Boolean, val addToMangadex: Boolean, val resetInfo: Boolean)
+
+    fun selectionFlags(state: State = this.state.value): SelectionFlags {
+        var clean = false
+        var mangadex = false
+        var reset = false
+        if (state.selection.isNotEmpty()) {
+            for (item in state.items) {
+                if (item.id !in state.selection) continue
+                val manga = item.manga
+                clean = clean || manga.isEhBasedManga() || manga.source in nHentaiSourceIds
+                mangadex = mangadex || manga.source in mangaDexSourceIds
+                reset = reset ||
+                    manga.title != manga.ogTitle ||
+                    manga.author != manga.ogAuthor ||
+                    manga.artist != manga.ogArtist ||
+                    manga.thumbnailUrl != manga.ogThumbnailUrl ||
+                    manga.description != manga.ogDescription ||
+                    manga.genre != manga.ogGenre ||
+                    manga.status != manga.ogStatus
+                if (clean && mangadex && reset) break
+            }
+        }
+        return SelectionFlags(clean, mangadex, reset)
     }
 
     /** Removes bracketed tags (groups, events, languages) from gallery titles, as custom titles. */

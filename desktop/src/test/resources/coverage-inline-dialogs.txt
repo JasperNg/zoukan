@@ -30,4 +30,3 @@ dialog-inline:SourceScreen.kt:Content
 dialog-inline:SourceScreen.kt:FilterPanel
 dialog-inline:TrackingDialog.kt:RemoveButton
 dialog-inline:TrackingSettings.kt:TrackerSetting 3
-dialog-inline:UpdatesTab.kt:SelectionHeader

@@ -157,7 +157,7 @@
   feature: "Selection bar: clear, select all, invert, change categories, mark read/unread, download, delete downloads, update, migrate, remove"
   tier: journey
   smoke: false
-  tests: [e2e.MigrationJourneyTest, e2e.LibrarySelectionJourneyTest, e2e.CategoriesJourneyTest, e2e.LibraryViewJourneyTest]
+  tests: [e2e.MigrationJourneyTest, e2e.LibrarySelectionJourneyTest, e2e.CategoriesJourneyTest, e2e.LibraryViewJourneyTest, e2e.DownloadJourneyTest, ui.library.LibraryDeleteDownloadsConfirmTest]
 
 - key: flow:library.selection-overflow
   feature: "Selection overflow: merge, clean titles, recommendation search, MangaDex follows, reset info"
@@ -185,6 +185,12 @@
   smoke: false
   tests: []
   gap: "Not opened by any test; planned: LibrarySelectionJourneyTest"
+
+- key: dialog:library.LibraryDeleteDownloadsDialog
+  feature: "Delete downloads of the selected entries: asks first, with the entry count"
+  tier: journey
+  smoke: false
+  tests: [e2e.DownloadJourneyTest, ui.library.LibraryDeleteDownloadsConfirmTest]
 
 - key: dialog-inline:LibraryTab.kt:LibraryTab
   feature: "Remove merged entry confirmation"
@@ -248,13 +254,6 @@
   tier: unit
   smoke: false
   tests: [ui.updates.UpdatesUiModelTest, e2e.UpdatesJourneyTest]
-
-- key: dialog-inline:UpdatesTab.kt:SelectionHeader
-  feature: "Delete chapters confirmation"
-  tier: journey
-  smoke: false
-  tests: []
-  gap: "Delete from the selection is not driven; planned: UpdatesJourneyTest"
 
 - key: flow:updates.row-actions
   feature: "Row read/unread toggle"
@@ -596,10 +595,10 @@
   tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest]
 
 - key: dialog:common.ConfirmDestructiveDialog
-  feature: "Second question before something the user cannot take back (local files to the trash)"
+  feature: "Second question before something the user cannot take back (local files to the trash, downloads deleted from Updates)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest]
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"

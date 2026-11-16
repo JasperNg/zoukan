@@ -80,9 +80,16 @@ class LibrarySearchTest {
 
     @Test
     fun `a dash excludes`() {
-        // As Komikku: an excluded word never lets a local entry through (its source id check fails)
-        find("-sky") shouldContainExactlyInAnyOrder listOf(1L, 3L)
+        find("-sky") shouldContainExactlyInAnyOrder listOf(1L, 3L, 4L)
         find("-artist:jane") shouldContainExactlyInAnyOrder listOf(2L, 3L, 4L)
+    }
+
+    @Test
+    fun `an excluded word keeps local entries that do not contain it`() {
+        find("-sky") shouldContainExactlyInAnyOrder listOf(1L, 3L, 4L)
+        find("-drama") shouldContainExactlyInAnyOrder listOf(1L, 2L, 4L)
+        // A local entry that does contain the word is still excluded
+        find("-local") shouldContainExactlyInAnyOrder listOf(1L, 2L, 3L)
     }
 
     @Test

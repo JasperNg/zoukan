@@ -87,8 +87,10 @@ import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
+import zoukan.desktop.ui.common.RATIO_SWITCH_TO_PANORAMA
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
@@ -378,15 +380,13 @@ fun HistoryTab(model: HistoryScreenModel) {
 /** The toolbar while rows are selected, as Komikku's: the count, select all, invert and remove. */
 @Composable
 private fun SelectionHeader(state: HistoryScreenModel.State, model: HistoryScreenModel, onRemove: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp)
-            .testTag("history-selection"),
-        verticalAlignment = Alignment.CenterVertically,
+    SelectionBar(
+        count = state.selected.size,
+        onClear = model::clearSelection,
+        onSelectAll = model::selectAll,
+        onInvert = model::invertSelection,
+        modifier = Modifier.testTag("history-selection"),
     ) {
-        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
-        Text(localized(DMR.strings.selected, state.selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
-        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
         TooltipIconButton(Icons.Outlined.DeleteSweep, localized(DMR.strings.remove_from_history), onClick = onRemove, enabled = state.selected.isNotEmpty())
     }
 }
@@ -409,7 +409,7 @@ private fun HistoryRow(
 ) {
     // Height over width of the loaded cover; Komikku shows a cover this wide as a panorama
     var ratio by remember(item.mangaId) { mutableFloatStateOf(1.5f) }
-    val wide = panorama && ratio <= PANORAMA_RATIO
+    val wide = panorama && ratio <= RATIO_SWITCH_TO_PANORAMA
     Row(
         Modifier.fillMaxWidth()
             .testTag("history-item")
@@ -520,9 +520,6 @@ private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -
         },
     )
 }
-
-/** Komikku's RatioSwitchToPanorama: covers this wide or wider show as panoramas. */
-private const val PANORAMA_RATIO = 0.75f
 
 private fun HistoryScreenModel.screenModelScopeLaunch(block: suspend () -> Unit) {
     screenModelScope.launch { block() }
