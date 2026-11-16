@@ -300,6 +300,6 @@ class DesktopDomainModule : InjektModule {
         addFactory { zoukan.desktop.library.AddToLibrary(get(), get(), get(), get(), get(), get(), get(), get()) }
 
         // Migration (Phase 6)
-        addFactory { MigrateManga(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        addFactory { MigrateManga(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     }
 }

@@ -1,6 +1,5 @@
 package zoukan.desktop.migration
 
-import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
@@ -11,18 +10,17 @@ import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.category.interactor.GetCategories
-import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
-import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.toChapterUpdate
+import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.history.interactor.GetHistory
-import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
-import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.domain.track.repository.TrackRepository
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
 import java.time.Instant
@@ -36,16 +34,16 @@ class MigrateManga(
     private val trackerManager: TrackerManager,
     private val sourceManager: SourceManager,
     private val downloadManager: DownloadManager,
-    private val updateManga: UpdateManga,
+    // The writes use the repositories, not their interactors: the interactors log and swallow a
+    // failure, which would roll the transaction back without telling the migration
+    private val mangaRepository: MangaRepository,
     private val getChaptersByMangaId: GetChaptersByMangaId,
-    private val updateChapter: UpdateChapter,
+    private val chapterRepository: ChapterRepository,
     private val getCategories: GetCategories,
-    private val setMangaCategories: SetMangaCategories,
     private val getTracks: GetTracks,
-    private val insertTrack: InsertTrack,
+    private val trackRepository: TrackRepository,
     private val refreshManga: RefreshManga,
     private val getHistory: GetHistory,
-    private val upsertHistory: UpsertHistory,
     private val handler: DatabaseHandler,
 ) {
     /** The Android app's "migration_flags" preference, so a restored backup keeps the choice. */
@@ -132,15 +130,16 @@ class MigrateManga(
             coverLastModified = Instant.now().toEpochMilli().takeIf { MigrationFlag.CUSTOM_COVER in flags },
         )
 
-        // Write: the database steps are one transaction, so a failing step leaves both entries as they were
+        // Write: the database steps are one transaction, so a failing step leaves both entries as
+        // they were and throws, which stops the migration before the downloads below
         handler.await(inTransaction = true) {
             if (MigrationFlag.CHAPTER in flags) {
-                updateChapter.awaitAll(updated.map { it.toChapterUpdate() })
-                upsertHistory.awaitAll(historyUpdates)
+                chapterRepository.updateAll(updated.map { it.toChapterUpdate() })
+                historyUpdates.forEach { historyQueries.upsert(it.chapterId, it.readAt, it.sessionReadDuration) }
             }
-            if (categoryIds != null) setMangaCategories.await(target.id, categoryIds)
-            if (movedTracks.isNotEmpty()) insertTrack.awaitAll(movedTracks)
-            updateManga.awaitAll(listOfNotNull(currentUpdate, targetUpdate))
+            if (categoryIds != null) mangaRepository.setMangaCategories(target.id, categoryIds)
+            if (movedTracks.isNotEmpty()) trackRepository.insertAll(movedTracks)
+            check(mangaRepository.updateAll(listOfNotNull(currentUpdate, targetUpdate))) { "Moving the library entry failed" }
         }
 
         if (MigrationFlag.CUSTOM_COVER in flags) {

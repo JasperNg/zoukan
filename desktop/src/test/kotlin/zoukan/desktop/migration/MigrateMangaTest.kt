@@ -1,6 +1,5 @@
 package zoukan.desktop.migration
 
-import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
@@ -18,18 +17,17 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.data.Database
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.category.interactor.GetCategories
-import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
-import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.history.interactor.GetHistory
-import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
-import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
+import tachiyomi.domain.track.repository.TrackRepository
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.CbzPassword
@@ -49,11 +47,11 @@ class MigrateMangaTest {
     private val current = Manga.create().copy(id = 1, source = 10, ogTitle = "Old")
     private val target = Manga.create().copy(id = 2, source = 20, ogTitle = "New", initialized = true)
 
-    private val updateManga = mockk<UpdateManga>(relaxed = true)
-    private val updateChapter = mockk<UpdateChapter>(relaxed = true)
-    private val setMangaCategories = mockk<SetMangaCategories>(relaxed = true)
-    private val insertTrack = mockk<InsertTrack>(relaxed = true)
-    private val upsertHistory = mockk<UpsertHistory>(relaxed = true)
+    private val mangaRepository = mockk<MangaRepository>(relaxed = true) {
+        coEvery { updateAll(any()) } returns true
+    }
+    private val chapterRepository = mockk<ChapterRepository>(relaxed = true)
+    private val trackRepository = mockk<TrackRepository>(relaxed = true)
     private val getChapters = mockk<GetChaptersByMangaId>()
     private val getCategories = mockk<GetCategories>()
     private val getTracks = mockk<GetTracks>()
@@ -65,19 +63,33 @@ class MigrateMangaTest {
     private val oldChapters = listOf(chapter(11, 1, 1.0, true), chapter(12, 1, 2.0, true))
     private val newChapters = listOf(chapter(21, 2, 1.0, false), chapter(22, 2, 2.0, false))
 
-    private fun downloads(): DownloadManager {
+    private val downloadSource = mockk<Source>(relaxed = true)
+
+    private val paths by lazy {
         val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
-        val sourceManager = mockk<SourceManager>(relaxed = true)
         val libraryPreferences = mockk<tachiyomi.domain.library.service.LibraryPreferences> {
             every { disallowNonAsciiFilenames() } returns pref(false)
         }
-        val downloadPreferences = mockk<tachiyomi.domain.download.service.DownloadPreferences> {
-            every { includeChapterUrlHash() } returns pref(false)
-            every { saveChaptersAsCBZ() } returns pref(true)
-            every { downloadCacheRenewInterval() } returns pref(1)
-        }
-        val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
-        return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, mockk<CbzPassword>(), mockk(), mockk(), mockk(relaxed = true))
+        DownloadPaths(storage, downloadSourceManager, libraryPreferences, downloadPreferences)
+    }
+
+    private val downloadSourceManager = mockk<SourceManager>(relaxed = true) {
+        every { getOrStub(any()) } returns downloadSource
+    }
+
+    private val downloadPreferences = mockk<tachiyomi.domain.download.service.DownloadPreferences> {
+        every { includeChapterUrlHash() } returns pref(false)
+        every { saveChaptersAsCBZ() } returns pref(true)
+        every { downloadCacheRenewInterval() } returns pref(1)
+    }
+
+    private fun downloads(): DownloadManager =
+        DownloadManager(ZoukanDirs(temp), paths, downloadSourceManager, downloadPreferences, mockk<CbzPassword>(), mockk(), mockk(), mockk(relaxed = true))
+
+    /** The old entry's downloaded chapters, where the download manager keeps them. */
+    private fun oldDownloads(): List<File> {
+        val dir = paths.mangaDir(current).apply { mkdirs() }
+        return oldChapters.map { File(dir, paths.chapterDirName(it) + ".cbz").apply { writeBytes(ByteArray(64) { b -> (b + it.id).toByte() }) } }
     }
 
     private fun <T> pref(value: T) = mockk<tachiyomi.core.common.preference.Preference<T>> { every { get() } returns value }
@@ -85,35 +97,31 @@ class MigrateMangaTest {
     private fun sha(file: File): String =
         MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
 
-    private fun build(downloadManager: DownloadManager, failing: BaseTracker): MigrateManga {
-        val targetSource = mockk<Source>(relaxed = true)
+    private fun build(downloadManager: DownloadManager, trackers: List<BaseTracker> = emptyList()): MigrateManga {
         val sourceManager = mockk<SourceManager> {
-            every { get(target.source) } returns targetSource
+            every { get(target.source) } returns mockk<Source>(relaxed = true)
             every { get(current.source) } returns null
         }
-        val trackerManager = mockk<TrackerManager> { every { trackers } returns listOf(failing) }
-        return create(downloadManager, trackerManager, sourceManager)
+        val trackerManager = mockk<TrackerManager> { every { this@mockk.trackers } returns trackers }
+        return MigrateManga(
+            mockk(relaxed = true),
+            trackerManager,
+            sourceManager,
+            downloadManager,
+            mangaRepository,
+            getChapters,
+            chapterRepository,
+            getCategories,
+            getTracks,
+            trackRepository,
+            mockk<RefreshManga>(relaxed = true),
+            getHistory,
+            handler,
+        )
     }
 
-    private fun create(downloadManager: DownloadManager, trackerManager: TrackerManager, sourceManager: SourceManager) = MigrateManga(
-        mockk(relaxed = true),
-        trackerManager,
-        sourceManager,
-        downloadManager,
-        updateManga,
-        getChapters,
-        updateChapter,
-        getCategories,
-        setMangaCategories,
-        getTracks,
-        insertTrack,
-        mockk<RefreshManga>(relaxed = true),
-        getHistory,
-        upsertHistory,
-        handler,
-    )
-
     private var inTransaction = false
+    private val database = mockk<Database>(relaxed = true)
 
     // Runs the block like the real handler does, and says whether it is inside a transaction
     private val handler = mockk<DatabaseHandler> {
@@ -121,7 +129,7 @@ class MigrateMangaTest {
             val block = secondArg<suspend Database.() -> Any?>()
             inTransaction = firstArg()
             try {
-                block(mockk<Database>(relaxed = true))
+                block(database)
             } finally {
                 inTransaction = false
             }
@@ -143,51 +151,68 @@ class MigrateMangaTest {
         coEvery { getTracks.await(1L) } returns listOf(Track(1, 1, 1, 1, null, "t", 2.0, 0, 0, 0.0, "", 0, 0, false))
     }
 
+    private val allSteps = setOf(MigrationFlag.CHAPTER, MigrationFlag.CATEGORY, MigrationFlag.TRACK, MigrationFlag.REMOVE_DOWNLOAD)
+
     @Test
     fun `a tracker that fails to migrate leaves both entries unchanged`() = runBlocking<Unit> {
         stubReads()
-        val manager = downloads()
-        val dir = File(temp, "downloads/old").apply { mkdirs() }
-        val files = oldChapters.map { File(dir, "Chapter ${it.chapterNumber}.cbz").apply { writeBytes(ByteArray(64) { b -> (b + it.id).toByte() }) } }
+        val files = oldDownloads()
         val before = files.associateWith { sha(it) to it.length() }
-        val migrate = build(manager, failingTracker())
+        val migrate = build(downloads(), listOf(failingTracker()))
 
-        shouldThrow<IOException> {
-            migrate(
-                current,
-                target,
-                replace = true,
-                flags = setOf(MigrationFlag.CHAPTER, MigrationFlag.CATEGORY, MigrationFlag.TRACK, MigrationFlag.REMOVE_DOWNLOAD),
-            )
-        }
+        shouldThrow<IOException> { migrate(current, target, replace = true, flags = allSteps) }
 
-        coVerify(exactly = 0) { updateChapter.awaitAll(any()) }
-        coVerify(exactly = 0) { upsertHistory.awaitAll(any()) }
-        coVerify(exactly = 0) { setMangaCategories.await(any(), any()) }
-        coVerify(exactly = 0) { insertTrack.awaitAll(any()) }
-        coVerify(exactly = 0) { updateManga.awaitAll(any()) }
+        coVerify(exactly = 0) { chapterRepository.updateAll(any()) }
+        coVerify(exactly = 0) { mangaRepository.setMangaCategories(any(), any()) }
+        coVerify(exactly = 0) { trackRepository.insertAll(any()) }
+        coVerify(exactly = 0) { mangaRepository.updateAll(any()) }
         files.forEach { (sha(it) to it.length()) shouldBe before[it] }
+    }
+
+    @Test
+    fun `a database step that fails stops the migration before the old downloads are deleted`() = runBlocking<Unit> {
+        stubReads()
+        // The repository reports a failed update with false, as the real one does
+        coEvery { mangaRepository.updateAll(any()) } returns false
+        val files = oldDownloads()
+        val before = files.associateWith { sha(it) to it.length() }
+
+        shouldThrow<IllegalStateException> { build(downloads())(current, target, replace = true, flags = allSteps) }
+
+        files.forEach { (sha(it) to it.length()) shouldBe before[it] }
+    }
+
+    @Test
+    fun `a migration that succeeds deletes the old downloads when asked`() = runBlocking<Unit> {
+        // Proves the survival checks above look at the files the download manager would delete
+        stubReads()
+        val files = oldDownloads()
+
+        build(downloads())(current, target, replace = true, flags = allSteps)
+
+        files.forEach { it.exists() shouldBe false }
     }
 
     @Test
     fun `every database step of a migration runs in one transaction`() = runBlocking<Unit> {
         stubReads()
+        coEvery { getHistory.await(1L) } returns listOf(
+            tachiyomi.domain.history.model.History(1, 11, java.util.Date(5), 7),
+        )
         val seen = mutableListOf<Pair<String, Boolean>>()
-        coEvery { updateChapter.awaitAll(any()) } coAnswers { seen += "chapters" to inTransaction }
-        coEvery { upsertHistory.awaitAll(any()) } coAnswers { seen += "history" to inTransaction }
-        coEvery { setMangaCategories.await(any(), any()) } coAnswers { seen += "categories" to inTransaction }
-        coEvery { insertTrack.awaitAll(any()) } coAnswers { seen += "tracks" to inTransaction }
-        coEvery { updateManga.awaitAll(any()) } coAnswers {
+        coEvery { chapterRepository.updateAll(any()) } coAnswers { seen += "chapters" to inTransaction }
+        every { database.historyQueries.upsert(any(), any(), any()) } answers {
+            seen += "history" to inTransaction
+            mockk(relaxed = true)
+        }
+        coEvery { mangaRepository.setMangaCategories(any(), any()) } coAnswers { seen += "categories" to inTransaction }
+        coEvery { trackRepository.insertAll(any()) } coAnswers { seen += "tracks" to inTransaction }
+        coEvery { mangaRepository.updateAll(any()) } coAnswers {
             seen += "manga" to inTransaction
             true
         }
-        val trackerManager = mockk<TrackerManager> { every { trackers } returns emptyList() }
-        val sourceManager = mockk<SourceManager> {
-            every { get(target.source) } returns mockk<Source>(relaxed = true)
-            every { get(current.source) } returns null
-        }
 
-        create(downloads(), trackerManager, sourceManager)(
+        build(downloads())(
             current,
             target,
             replace = true,
