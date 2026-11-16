@@ -5,9 +5,11 @@ import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.network.NetworkHelper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import mihon.data.extension.service.ExtensionStoreService
 import okio.sink
+import org.slf4j.LoggerFactory
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.data.Database
 import tachiyomi.domain.source.service.SourceManager
@@ -81,6 +83,8 @@ Only one Zoukan can use a data folder at a time: the commands that start the run
 (status, backup create and restore, library update, browser) refuse while the app is running.
 
 Data folder: -Dzoukan.dataDir=<path> or ZOUKAN_DATA_DIR overrides the default.
+
+Exit codes: 0 success, 1 the command failed, 2 bad usage.
 """
 
 fun main(args: Array<String>) {
@@ -88,9 +92,52 @@ fun main(args: Array<String>) {
     // AndroidCompat provides; the service loader instead finds Swing's, so Dispatchers.Main is the
     // AWT event thread the UI runs on. Set before anything touches Dispatchers.Main.
     System.setProperty("kotlinx.coroutines.fast.service.loader", "false")
+    val code = runCommand(args)
+    // Chromium crashes when it shuts down (at exit) with a browser still open: the quit paths
+    // have disposed the built-in browser windows, and this catches anything left over (a CLI
+    // command's window). disposePending then does the same for the extension WebView browsers.
+    BrowserWindow.disposeAllForQuit()
+    runCatching {
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            KcefWebViewProvider.disposePending()
+        } else {
+            javax.swing.SwingUtilities.invokeAndWait { KcefWebViewProvider.disposePending() }
+        }
+    }
+    exitProcess(code)
+}
+
+private class UsageError(message: String) : Exception(message)
+
+private fun Iterator<String>.value(option: String): String =
+    if (hasNext()) next() else throw UsageError("$option needs a value")
+
+private fun Iterator<String>.intValue(option: String): Int =
+    value(option).toIntOrNull() ?: throw UsageError("$option needs a number")
+
+/**
+ * Runs one command line and returns its exit code: 0 success, 1 the command failed, 2 bad usage.
+ * It does not throw for a failing command, so [main] always reaches its shutdown path.
+ */
+internal fun runCommand(args: Array<String>): Int {
     val command = args.firstOrNull() ?: "ui"
     val rest = args.drop(1)
-    val code = when (command) {
+    return try {
+        dispatch(command, rest)
+    } catch (e: UsageError) {
+        System.err.println("${e.message}\n\n$USAGE")
+        2
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        System.err.println("zoukan $command failed: ${CompatibilityHarness.describe(e)}")
+        LoggerFactory.getLogger("zoukan.cli").error("zoukan {} failed", command, e)
+        1
+    }
+}
+
+private fun dispatch(command: String, rest: List<String>): Int {
+    return when (command) {
         "ui" -> {
             try {
                 runZoukanApp()
@@ -121,18 +168,6 @@ fun main(args: Array<String>) {
             2
         }
     }
-    // Chromium crashes when it shuts down (at exit) with a browser still open: the quit paths
-    // have disposed the built-in browser windows, and this catches anything left over (a CLI
-    // command's window). disposePending then does the same for the extension WebView browsers.
-    BrowserWindow.disposeAllForQuit()
-    runCatching {
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
-            KcefWebViewProvider.disposePending()
-        } else {
-            javax.swing.SwingUtilities.invokeAndWait { KcefWebViewProvider.disposePending() }
-        }
-    }
-    exitProcess(code)
 }
 
 private fun selftest(args: List<String>): Int {
@@ -140,7 +175,7 @@ private fun selftest(args: List<String>): Int {
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
-            "--report" -> options = options.copy(report = File(it.next()))
+            "--report" -> options = options.copy(report = File(it.value("--report")))
             "--ui" -> options = options.copy(ui = true)
             "--network" -> options = options.copy(network = true)
             "--keep" -> options = options.copy(keep = true)
@@ -189,10 +224,10 @@ private fun harness(args: List<String>): Int {
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
-            "--store" -> options = options.copy(storeUrl = it.next())
-            "--packages" -> options = options.copy(packages = it.next().split(',').map(String::trim).filter(String::isNotEmpty))
+            "--store" -> options = options.copy(storeUrl = it.value("--store"))
+            "--packages" -> options = options.copy(packages = it.value("--packages").split(',').map(String::trim).filter(String::isNotEmpty))
             "--all" -> options = options.copy(all = true)
-            "--lang" -> options = options.copy(lang = it.next())
+            "--lang" -> options = options.copy(lang = it.value("--lang"))
             "--offline" -> options = options.copy(offline = true)
             "--apk" -> options = options.copy(forceApk = true)
             "--skip-nsfw" -> options = options.copy(skipNsfw = true)
@@ -269,6 +304,7 @@ private fun browser(args: List<String>): Int {
 private fun backup(args: List<String>): Int {
     val sub = args.firstOrNull()
     val rest = args.drop(1)
+    if (rest.lastOrNull() == "--report") throw UsageError("--report needs a value")
     val flags = rest.filter { it.startsWith("--") }.toSet()
     val positional = rest.filterIndexed { i, a -> !a.startsWith("--") && rest.getOrNull(i - 1) != "--report" }
     return when (sub) {
@@ -367,8 +403,8 @@ private fun library(args: List<String>): Int {
     while (it.hasNext()) {
         when (val arg = it.next()) {
             "--all-entries" -> options = options.copy(ignoreRestrictions = true)
-            "--download" -> options = options.copy(download = it.next().toInt())
-            "--report" -> options = options.copy(report = File(it.next()))
+            "--download" -> options = options.copy(download = it.intValue("--download"))
+            "--report" -> options = options.copy(report = File(it.value("--report")))
             else -> {
                 System.err.println("Unknown option $arg\n\n$USAGE")
                 return 2
