@@ -19,9 +19,9 @@ import org.junit.jupiter.api.Test
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.migration.MigrationListScreen
 import kotlin.time.Duration.Companion.minutes

@@ -20,10 +20,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
-import zoukan.desktop.app.Toasts
 import zoukan.i18n.desktop.DMR
 
 /** The change the user asked for, waiting for a second confirmation. */

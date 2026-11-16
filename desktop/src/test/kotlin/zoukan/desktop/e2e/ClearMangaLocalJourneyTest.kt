@@ -14,11 +14,11 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.e2e.LocalEntryFixture.addLocalEntry
 import zoukan.desktop.e2e.LocalEntryFixture.fingerprint
 import zoukan.desktop.e2e.LocalEntryFixture.openClearManga
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
 import kotlin.time.Duration.Companion.minutes

@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.dp
 import io.kotest.matchers.floats.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.ui.common.LocalReducedMotion
 
 @OptIn(ExperimentalTestApi::class)
 class ReaderReducedMotionTest {
