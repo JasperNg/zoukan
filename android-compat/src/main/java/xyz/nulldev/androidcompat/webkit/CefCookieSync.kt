@@ -44,10 +44,12 @@ interface CookieExpirySource {
 /**
  * Calls [onDone] once a cookie visit ends: after its last cookie ([visited] with the last count), or
  * when no cookie came within [quietMillis] (Chromium does not call the visitor when there are none),
- * or at the latest after [maxMillis].
+ * or at the latest after [maxMillis]. [onDone] is told whether the visit was complete: only one that
+ * reached its last cookie is. One that ended by a timer may have missed cookies, or Chromium may
+ * have had none, so nothing may be concluded from the cookies it returned.
  */
 class CookieVisitEnd(
-    private val onDone: () -> Unit,
+    private val onDone: (complete: Boolean) -> Unit,
     scheduler: ScheduledExecutorService,
     quietMillis: Long,
     maxMillis: Long,
@@ -69,15 +71,41 @@ class CookieVisitEnd(
         total: Int,
     ) {
         visited = true
-        if (count + 1 >= total) finish()
+        if (count + 1 >= total) finish(complete = true)
     }
 
     /** Ends the visit now; only the first call runs [onDone]. */
-    fun finish() {
+    fun finish(complete: Boolean = false) {
         if (!done.compareAndSet(false, true)) return
         runCatching { timers.forEach { it.cancel(false) } }
-        runCatching { onDone() }.onFailure { logger.warn(it) { "Finishing a cookie copy failed" } }
+        runCatching { onDone(complete) }.onFailure { logger.warn(it) { "Finishing a cookie copy failed" } }
     }
+}
+
+/** A cookie as both stores identify it. */
+data class SyncedCookie(
+    val name: String,
+    val domain: String,
+    val path: String,
+    val value: String,
+)
+
+/**
+ * The app's cookies for a page to delete after a complete visit: copied to Chromium, and gone from
+ * it. A cookie the app got after the copy was never in Chromium and stays; one Chromium has with
+ * another value was changed there, and copying from Chromium updates it.
+ */
+fun staleAppCookies(
+    appCookies: List<SyncedCookie>,
+    copiedToCef: Set<SyncedCookie>,
+    inChromium: List<SyncedCookie>,
+): List<SyncedCookie> {
+    fun SyncedCookie.key() = Triple(name, domain.trimStart('.').lowercase(), path)
+
+    fun SyncedCookie.exact() = copy(domain = domain.trimStart('.').lowercase())
+    val copied = copiedToCef.mapTo(HashSet()) { it.exact() }
+    val present = inChromium.mapTo(HashSet()) { it.key() }
+    return appCookies.filter { it.exact() in copied && it.key() !in present }
 }
 
 /**
@@ -156,6 +184,7 @@ object CefCookieSync {
         // Before the app's cookies: those set again since are copied back after their deletion
         applyPendingDeletions(cef)
         val expiries = store as? CookieExpirySource
+        val copied = HashSet<SyncedCookie>()
         store.cookiesByUri().forEach { (uri, cookie) ->
             runCatching {
                 // A cookie without a Domain attribute is host-only: Chromium keeps it so
@@ -163,8 +192,36 @@ object CefCookieSync {
                 val host = (cookie.domain ?: uri.host).trimStart('.')
                 val expiresAt = expiresAt(cookie, expiries?.expiresAt(cookie), System.currentTimeMillis())
                 cef.setCookie("https://$host", cookie.toCefCookie(cookie.domain.orEmpty(), expiresAt))
+                copied += cookie.toSynced(uri)
             }.onFailure { logger.warn(it) { "Copying cookie ${cookie.name} to Chromium failed" } }
         }
+        synchronized(copiedToCef) {
+            copiedToCef.clear()
+            copiedToCef.addAll(copied)
+        }
+    }
+
+    /** What the last [copyToCef] put in Chromium. */
+    private val copiedToCef = HashSet<SyncedCookie>()
+
+    private fun HttpCookie.toSynced(uri: URI) =
+        SyncedCookie(name, (domain ?: uri.host).orEmpty().trimStart('.'), path ?: "/", value)
+
+    /**
+     * After a complete visit of [url], removes the app's cookies for it that were copied to Chromium
+     * and that Chromium no longer has: the user signed out there. Logs the count only.
+     */
+    private fun removeStaleAppCookies(
+        url: String,
+        inChromium: List<SyncedCookie>,
+    ) {
+        val store = (CookieHandler.getDefault() as? java.net.CookieManager)?.cookieStore ?: return
+        val uri = runCatching { URI(url) }.getOrNull() ?: return
+        val app = store.get(uri).associateBy { it.toSynced(uri) }
+        val copied = synchronized(copiedToCef) { copiedToCef.toSet() }
+        val stale = staleAppCookies(app.keys.toList(), copied, inChromium)
+        stale.forEach { app[it]?.let { cookie -> store.remove(uri, cookie) } }
+        if (stale.isNotEmpty()) logger.info { "Removed ${stale.size} cookies the built-in browser no longer has" }
     }
 
     /**
@@ -178,7 +235,21 @@ object CefCookieSync {
         url: String,
         onDone: () -> Unit = {},
     ) {
-        val end = CookieVisitEnd(onDone, scheduler, VISIT_QUIET_MILLIS, VISIT_MAX_MILLIS)
+        val seen = java.util.Collections.synchronizedList(mutableListOf<SyncedCookie>())
+        val end =
+            CookieVisitEnd(
+                { complete ->
+                    // Only a visit that reached its last cookie shows what Chromium has
+                    if (complete) {
+                        runCatching { removeStaleAppCookies(url, seen.toList()) }
+                            .onFailure { logger.warn(it) { "Removing cookies Chromium dropped failed" } }
+                    }
+                    onDone()
+                },
+                scheduler,
+                VISIT_QUIET_MILLIS,
+                VISIT_MAX_MILLIS,
+            )
         try {
             if (!url.startsWith("http")) return end.finish()
             val cef = CefCookieManager.getGlobalManager() ?: return end.finish()
@@ -188,6 +259,7 @@ object CefCookieSync {
                 cef.visitUrlCookies(url, true) { cookie, count, total, _ ->
                     runCatching { manager.setCookie(url, cookie.toSetCookieHeader()) }
                         .onFailure { logger.warn(it) { "Copying cookie ${cookie.name} from Chromium failed" } }
+                    seen += SyncedCookie(cookie.name, cookie.domain.orEmpty(), cookie.path ?: "/", cookie.value)
                     end.visited(count, total)
                     true
                 }

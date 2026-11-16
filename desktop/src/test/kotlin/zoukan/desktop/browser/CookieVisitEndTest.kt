@@ -4,6 +4,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import xyz.nulldev.androidcompat.webkit.CookieVisitEnd
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -17,7 +18,9 @@ class CookieVisitEndTest {
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private val calls = AtomicInteger()
     private val called = CountDownLatch(1)
-    private val onDone = {
+    private val completes = CopyOnWriteArrayList<Boolean>()
+    private val onDone = { complete: Boolean ->
+        completes += complete
         calls.incrementAndGet()
         called.countDown()
     }
@@ -36,6 +39,24 @@ class CookieVisitEndTest {
         calls.get() shouldBe 1
         end.finish()
         calls.get() shouldBe 1
+        completes shouldBe listOf(true)
+    }
+
+    @Test
+    fun `a visit that ends by the time limit is not complete`() {
+        val end = CookieVisitEnd(onDone, scheduler, quietMillis = 20, maxMillis = 300)
+        end.visited(0, 3)
+        called.await(5, TimeUnit.SECONDS) shouldBe true
+        completes shouldBe listOf(false)
+        end.visited(2, 3)
+        completes shouldBe listOf(false)
+    }
+
+    @Test
+    fun `a visit that ends by the quiet time is not complete`() {
+        CookieVisitEnd(onDone, scheduler, quietMillis = 20, maxMillis = 10_000)
+        called.await(5, TimeUnit.SECONDS) shouldBe true
+        completes shouldBe listOf(false)
     }
 
     @Test
