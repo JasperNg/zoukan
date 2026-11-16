@@ -29,7 +29,8 @@ on:
   workflow_dispatch:
 
 # Pull requests cancel their older runs. Runs on master queue instead, so each release sees the
-# tag of the one before it and no two releases pick the same version.
+# tag of the one before it and no two releases pick the same version. GitHub keeps one waiting run
+# per group: a newer merge replaces a waiting run, and that commit ships in the next release.
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

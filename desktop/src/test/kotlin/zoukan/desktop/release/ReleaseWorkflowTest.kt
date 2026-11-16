@@ -112,6 +112,35 @@ class ReleaseWorkflowTest {
     }
 
     @Test
+    fun `release docs and comments match the workflow`() {
+        val problems = mutableListOf<String>()
+        val releasing = text("desktop/RELEASING.md")
+        for (phrase in listOf("To release by hand", "a signed build, say", "two quick merges make two releases")) {
+            if (phrase in releasing) problems += "desktop/RELEASING.md still says \"$phrase\""
+        }
+        val tableAt = releasing.indexOf("### Windows (Authenticode")
+        val headingAt = releasing.indexOf("not used for published releases")
+        if (headingAt < 0 || tableAt < 0 || headingAt > tableAt) {
+            problems += "desktop/RELEASING.md has no heading \"not used for published releases\" above the signing tables"
+        }
+        val build = text(".github/workflows/desktop-build.yml")
+        Regex("""(?m)^\s*runs-on:\s*(\S+)""").findAll(build).map { it.groupValues[1] }.distinct().forEach {
+            if (it !in releasing) problems += "desktop/RELEASING.md does not name the runner image $it"
+        }
+        val banned = mapOf(
+            ".github/workflows/ci.yml" to listOf("checked locally before each merge"),
+            "desktop/build.gradle.kts" to listOf("once that task exists", "once it exists", "task yet"),
+            "desktop/packaging/check/nightly-windows.ps1" to listOf("once that task exists", "once it exists", "task yet"),
+            ".github/workflows/desktop-build.yml" to listOf("the one inside the DMG"),
+        )
+        for ((file, phrases) in banned) {
+            val content = text(file)
+            for (phrase in phrases) if (phrase in content) problems += "$file still says \"$phrase\""
+        }
+        problems.shouldBeEmpty()
+    }
+
+    @Test
     fun `packaging changes build the installers on pull requests`() {
         val build = text(".github/workflows/desktop-build.yml")
         val paths = Regex("""(?m)^ {2}pull_request:\s*\n {4}paths:\s*(\[[^\]]*]|(?:\n {6}- .*)+)""")

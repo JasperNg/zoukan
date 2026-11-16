@@ -308,6 +308,9 @@ tasks.test {
         rootProject.fileTree(".github/workflows"),
         file("packaging.gradle.kts"),
         rootProject.file("renovate.json"),
+        rootProject.file("desktop/RELEASING.md"),
+        file("build.gradle.kts"),
+        file("packaging/check/nightly-windows.ps1"),
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
@@ -533,8 +536,7 @@ val journeyTest by tasks.registering(Test::class) {
 
 /**
  * The extension wiring check that installs every extension from the stores and starts each
- * source. The nightly run picks it up by this name once it exists; until then it runs the
- * journeys alone.
+ * source; the nightly run runs it by this name.
  */
 val extensionWiringTaskName = "extensionWiringTest"
 
@@ -548,7 +550,7 @@ val nightlyCheck by tasks.registering {
     dependsOn(tasks.matching { it.name == extensionWiringTaskName })
     val hasWiring = provider { tasks.names.contains(extensionWiringTaskName) }
     doLast {
-        if (!hasWiring.get()) logger.warn("nightlyCheck: there is no $extensionWiringTaskName task yet, so only the journeys ran")
+        if (!hasWiring.get()) logger.warn("nightlyCheck: no $extensionWiringTaskName task, so only the journeys ran")
     }
 }
 // ZOUKAN <--

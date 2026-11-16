@@ -32,7 +32,8 @@ jobs:
   check:
     name: Spotless, build and tests
     # Linux runners start and build faster than Windows ones; the Compose desktop UI tests get a
-    # virtual display from xvfb-run. Windows and macOS are still checked locally before each merge.
+    # virtual display from xvfb-run. The installer workflow (desktop-build.yml) builds and
+    # self-tests the Windows and macOS installers.
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
