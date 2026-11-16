@@ -8,9 +8,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -30,7 +34,9 @@ import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Toasts
+import zoukan.i18n.desktop.DMR
 import java.io.File
 
 /** A source's own settings, drawn from the androidx.preference objects the extension builds. */
@@ -133,6 +139,53 @@ class SourceSettingsTest {
         switch.assertIsOff()
         onNodeWithText("Safe (default)").assertExists()
         prefs.getBoolean("pref_18_mode", true) shouldBe false
+    }
+
+    private fun textPreference(key: String, title: String, value: String): EditTextPreference {
+        val prefs = JavaSharedPreferences("source_text_test_${System.nanoTime()}")
+        prefs.edit().putString(key, value).apply()
+        return EditTextPreference(null).apply {
+            this.key = key
+            this.title = title
+            sharedPreferences = prefs
+        }
+    }
+
+    @Test
+    fun `a text setting does not show its stored value as its summary`() = withRoot {
+        runDesktopComposeUiTest {
+            val pref = textPreference("api_key", "API key", "s3cr3t-value")
+            setContent { PreferenceItem(pref, 0, onChanged = {}, onOpen = {}) }
+
+            onNodeWithText("API key").assertExists()
+            onAllNodesWithText("s3cr3t-value", substring = true).fetchSemanticsNodes().isEmpty() shouldBe true
+        }
+    }
+
+    @Test
+    fun `a password-like text setting is masked in its edit dialog`() = withRoot {
+        runDesktopComposeUiTest {
+            val pref = textPreference("password", "Password", "s3cr3t-value")
+            setContent { PreferenceDialog(pref, onDismiss = {}, onSave = {}) }
+
+            // A masked field is marked as a password; its semantics text is the typed value, so the
+            // mark is what the test can check
+            onNode(hasSetTextAction()).assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
+
+            // The eye button reveals it
+            onNodeWithContentDescription(localized(DMR.strings.show_value)).performClick()
+            waitForIdle()
+            onNodeWithContentDescription(localized(DMR.strings.hide_value)).assertExists()
+        }
+    }
+
+    @Test
+    fun `a text setting is masked when its key or title names a secret`() {
+        looksSecret("api_key", null) shouldBe true
+        looksSecret(null, "Password") shouldBe true
+        looksSecret("pref_cookie", "Session") shouldBe true
+        looksSecret("server_url", "Server address") shouldBe false
+        looksSecret(null, null) shouldBe false
     }
 
     private fun withRoot(block: () -> Unit) {

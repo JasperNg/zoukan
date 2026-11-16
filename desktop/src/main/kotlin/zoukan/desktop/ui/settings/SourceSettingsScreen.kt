@@ -11,8 +11,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -28,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.preference.DialogPreference
 import androidx.preference.EditTextPreference
@@ -211,7 +218,14 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
         is ListPreference, is MultiSelectListPreference, is EditTextPreference -> SettingRow(
             title = title,
             subtitle = when (pref) {
-                is EditTextPreference -> summaryOf(pref) ?: readSafely(pref, null) { pref.currentValue as? String }
+                // A password, token or key is never the summary: the extension's own summary, or "Not set"
+                is EditTextPreference -> summaryOf(pref) ?: readSafely(pref, null) { pref.currentValue as? String }.let { value ->
+                    when {
+                        !looksSecret(pref.key, pref.title?.toString()) -> value
+                        value.isNullOrEmpty() -> localized(DMR.strings.not_set)
+                        else -> null
+                    }
+                }
                 is MultiSelectListPreference -> summaryOf(pref) ?: readSafely(pref, null) {
                     (pref.currentValue as? Set<*>)?.let { values ->
                         values.mapNotNull { v -> pref.entryValues?.indexOfFirst { it.toString() == v }?.let { pref.entries?.getOrNull(it) } }
@@ -290,8 +304,41 @@ internal fun snapSeekBar(value: Float, min: Int, max: Int, increment: Int): Int 
     return (min + steps * increment).coerceIn(min, max)
 }
 
+private val secretWords = listOf("pass", "secret", "token", "apikey", "api_key", "api key", "cookie", "hash", "auth")
+
+/** Whether a text setting called [key] or [title] probably holds a password, token or key. */
+internal fun looksSecret(key: String?, title: String?): Boolean =
+    listOfNotNull(key, title).any { text -> secretWords.any { it in text.lowercase() } }
+
+/** A single-line text field that shows bullets until the eye button is pressed. */
 @Composable
-private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (Any) -> Unit) {
+internal fun SecretTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: @Composable (() -> Unit)? = null,
+) {
+    var revealed by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value,
+        onValueChange,
+        modifier = modifier,
+        singleLine = true,
+        label = label,
+        visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = { revealed = !revealed }) {
+                Icon(
+                    if (revealed) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    contentDescription = localized(if (revealed) DMR.strings.hide_value else DMR.strings.show_value),
+                )
+            }
+        },
+    )
+}
+
+@Composable
+internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (Any) -> Unit) {
     val title = (pref as? DialogPreference)?.dialogTitle?.toString() ?: pref.title?.toString().orEmpty()
     when (pref) {
         is ListPreference -> {
@@ -357,7 +404,11 @@ private fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (A
                 text = {
                     Column {
                         pref.dialogMessage?.let { Text(it.toString(), Modifier.padding(bottom = 8.dp)) }
-                        OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
+                        if (looksSecret(pref.key, pref.title?.toString())) {
+                            SecretTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
+                        } else {
+                            OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 },
                 confirmButton = { TextButton(onClick = { onSave(text) }) { Text(localized(MR.strings.action_save)) } },
