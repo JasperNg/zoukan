@@ -20,6 +20,14 @@ class SourceErrorsTest {
     }
 
     @Test
+    fun `any other failure shows a generic message, never its class name or address`() {
+        val expected = localized(DMR.strings.source_request_failed)
+        sourceErrorText(IllegalStateException("GET https://example.org/manga/1 failed")) shouldBe expected
+        sourceErrorText(java.io.FileNotFoundException("https://example.org/cover.jpg")) shouldBe expected
+        sourceErrorText(Exception("  ")) shouldBe expected
+    }
+
+    @Test
     fun `a message the source wrote for the user is kept`() {
         sourceErrorText(Exception("Log in via WebView")) shouldBe "Log in via WebView"
     }
