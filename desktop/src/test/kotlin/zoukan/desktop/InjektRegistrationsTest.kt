@@ -35,7 +35,8 @@ import java.util.zip.ZipOutputStream
  * generic superclass is the type looked up, so the test finds them in the compiled classes of
  * desktop and the project's modules rather than in the sources: inferred types count too. Each
  * type is then resolved, which also runs its factory and the lookups inside it. The types that
- * extensions look up (Application, NetworkHelper, Json) are among them.
+ * extensions look up (Application, NetworkHelper, Json) are among them. A lookup that passes a
+ * Class makes no TypeReference and stays invisible to the scan, so a test forbids those.
  *
  * It needs no network, so it runs with every build, in its own JVM since it starts the runtime:
  *
@@ -53,6 +54,27 @@ class InjektRegistrationsTest {
         val missing = types.filter { type -> runCatching { Injekt.getInstance<Any>(type) }.isFailure }
             .map { it.typeName }
         missing.shouldBeEmpty()
+    }
+
+    /**
+     * A lookup that passes a Class (Injekt.getInstance(Foo::class.java)) makes no TypeReference, so
+     * the scan above cannot see it; every lookup names its type with a reified call instead.
+     */
+    @Test
+    fun `every lookup names its type so the scan sees it`() {
+        val repo = File(System.getProperty("user.dir")).absoluteFile.parentFile
+        val byClass = Regex("""getInstance\s*<[^>]*>\s*\(\s*[\w.]+::class\.java\s*\)""")
+        val found = listOf("desktop/src/main", "extension-jvm/src/main", "android-compat/src/main")
+            .map { File(repo, it) }.filter { it.isDirectory }
+            .flatMap { dir ->
+                dir.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "java") }.toList()
+            }
+            .flatMap { file ->
+                file.readLines().mapIndexedNotNull { i, line ->
+                    if (byClass.containsMatchIn(line)) "${file.relativeTo(repo).invariantSeparatorsPath}:${i + 1}" else null
+                }
+            }
+        found.shouldBeEmpty()
     }
 
     @Test
@@ -125,8 +147,10 @@ class InjektRegistrationsTest {
     private fun isProjectOutput(file: File): Boolean {
         val root = File(System.getProperty("user.dir")).absoluteFile.parentFile
         val path = file.absoluteFile
-        return path.startsWith(root) && !path.path.contains("${File.separator}test") &&
-            (path.isDirectory || path.name.endsWith(".jar"))
+        val p = path.invariantSeparatorsPath
+        val testOutput = p.endsWith("/classes/kotlin/test") || p.endsWith("/classes/java/test") ||
+            p.endsWith("/resources/test")
+        return path.startsWith(root) && !testOutput && (path.isDirectory || path.name.endsWith(".jar"))
     }
 
     private fun anonymousClassNames(file: File): List<String> {

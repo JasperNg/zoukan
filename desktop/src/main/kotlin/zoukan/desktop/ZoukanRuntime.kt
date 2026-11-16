@@ -149,7 +149,7 @@ object ZoukanRuntime {
             // ZOUKAN -->
             // The browser windows hide while the app is locked, and a challenge waits for the unlock
             BrowserWindow.followAppLock(
-                Injekt.getInstance<zoukan.desktop.security.AppLock>(zoukan.desktop.security.AppLock::class.java).locked,
+                Injekt.get<zoukan.desktop.security.AppLock>().locked,
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
             )
             // ZOUKAN <--
