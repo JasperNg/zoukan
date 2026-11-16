@@ -95,7 +95,8 @@ class OnboardingJourneyTest {
                     onAllNodes(next).onFirst().performClick()
                     waitFor(hasText("Storage location"))
                     onAllNodes(next).onFirst().assertIsEnabled()
-                    chosen.isDirectory shouldBe true
+                    // Checking the folder must not create it
+                    chosen.exists() shouldBe false
                     storage.folderPreference.get() shouldBe chosen.path
                     shot("3-storage-valid")
                 }

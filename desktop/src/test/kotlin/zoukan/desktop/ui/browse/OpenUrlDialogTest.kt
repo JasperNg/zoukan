@@ -22,7 +22,7 @@ class OpenUrlDialogTest {
     @Test
     fun `text that is not an address cannot be opened`() = runDesktopComposeUiTest {
         val opened = mutableListOf<String>()
-        setContent { OpenUrlDialogContent(onOpen = { opened += it }, onDismiss = {}) }
+        setContent { OpenUrlEntryDialog(onOpen = { opened += it }, onDismiss = {}) }
 
         onNodeWithTag("open-url-field").performTextInput("one piece")
         onNodeWithText(localized(KMR.strings.open)).assertIsNotEnabled()
@@ -37,7 +37,7 @@ class OpenUrlDialogTest {
     @Test
     fun `one Enter press opens the address once`() = runDesktopComposeUiTest {
         val opened = mutableListOf<String>()
-        setContent { OpenUrlDialogContent(onOpen = { opened += it }, onDismiss = {}) }
+        setContent { OpenUrlEntryDialog(onOpen = { opened += it }, onDismiss = {}) }
 
         onNodeWithTag("open-url-field").performTextInput(address)
         onNodeWithTag("open-url-field").performKeyInput {
@@ -51,7 +51,7 @@ class OpenUrlDialogTest {
     @Test
     fun `an address can be opened with the button`() = runDesktopComposeUiTest {
         val opened = mutableListOf<String>()
-        setContent { OpenUrlDialogContent(onOpen = { opened += it }, onDismiss = {}) }
+        setContent { OpenUrlEntryDialog(onOpen = { opened += it }, onDismiss = {}) }
 
         onNodeWithTag("open-url-field").performTextInput(address)
         onNodeWithText(localized(KMR.strings.open)).assertIsEnabled().performClick()

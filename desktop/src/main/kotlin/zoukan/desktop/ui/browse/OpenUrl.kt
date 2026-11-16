@@ -60,11 +60,11 @@ import zoukan.i18n.desktop.DMR
 @Composable
 fun OpenUrlDialog(onDismiss: () -> Unit) {
     val navigator = LocalNavigator.currentOrThrow
-    OpenUrlDialogContent(onOpen = { navigator.push(OpenUrlScreen(it)) }, onDismiss = onDismiss)
+    OpenUrlEntryDialog(onOpen = { navigator.push(OpenUrlScreen(it)) }, onDismiss = onDismiss)
 }
 
 @Composable
-internal fun OpenUrlDialogContent(onOpen: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun OpenUrlEntryDialog(onOpen: (String) -> Unit, onDismiss: () -> Unit) {
     var url by remember { mutableStateOf("") }
     var opened by remember { mutableStateOf(false) }
     val valid = OpenUrlScreen.isUrl(url.trim())

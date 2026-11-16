@@ -369,6 +369,24 @@
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.StoreInstallJourneyTest]
 
+- key: dialog:browse.ConfirmTrustDialog
+  feature: "Trust confirmation for an extension with an unknown signing key"
+  tier: journey
+  smoke: false
+  tests: [e2e.StoreInstallJourneyTest]
+
+- key: dialog:common.ConfirmDialog
+  feature: "Shared confirmation dialog for destructive or trusting actions"
+  tier: journey
+  smoke: false
+  tests: [e2e.StoreInstallJourneyTest]
+
+- key: dialog:browse.OpenUrlEntryDialog
+  feature: "Open from URL entry form: accepts only addresses, opens once"
+  tier: unit
+  smoke: false
+  tests: [ui.browse.OpenUrlDialogTest]
+
 - key: dialog:browse.ConfirmUninstallDialog
   feature: "Uninstall confirmation"
   tier: journey
