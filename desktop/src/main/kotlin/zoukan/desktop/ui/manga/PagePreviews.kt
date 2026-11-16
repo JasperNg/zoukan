@@ -151,20 +151,73 @@ internal class PagePreviewFetcher(private val image: PagePreviewImage) : Fetcher
 
 private val PREVIEW_WIDTH = 120.dp
 
+/** [old] followed by the previews of [new] it does not already hold (same number and address). */
+internal fun appendPreviews(old: List<PagePreviewImage>, new: List<PagePreviewImage>): List<PagePreviewImage> {
+    val seen = old.mapTo(HashSet()) { it.index to it.imageUrl }
+    return old + new.filter { seen.add(it.index to it.imageUrl) }
+}
+
 @Composable
-private fun PreviewThumbnail(preview: PagePreviewImage, onOpen: (PagePreviewImage) -> Unit, modifier: Modifier = Modifier) {
+private fun PreviewThumbnail(
+    preview: PagePreviewImage,
+    onOpen: (PagePreviewImage) -> Unit,
+    modifier: Modifier = Modifier,
+    loader: ImageLoader = Images.loader,
+) {
     Column(
         modifier.clip(MaterialTheme.shapes.small).clickable { onOpen(preview) },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         AsyncImage(
             model = preview,
-            imageLoader = Images.loader,
+            imageLoader = loader,
             contentDescription = localized(DMR.strings.page, preview.index),
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).clip(MaterialTheme.shapes.small),
         )
         Text(preview.index.toString(), style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/** The previews of an entry as a grid that asks for more as it nears its end. */
+@Composable
+internal fun PagePreviewGrid(
+    previews: List<PagePreviewImage>,
+    loading: Boolean,
+    error: String?,
+    onLoadMore: () -> Unit,
+    onOpen: (PagePreviewImage) -> Unit,
+    loader: ImageLoader = Images.loader,
+) {
+    val grid = rememberLazyGridState()
+    val nearEnd by remember {
+        derivedStateOf {
+            val last = grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= grid.layoutInfo.totalItemsCount - 6
+        }
+    }
+    LaunchedEffect(nearEnd, previews.size) { if (nearEnd) onLoadMore() }
+    LazyVerticalGrid(
+        GridCells.Adaptive(PREVIEW_WIDTH),
+        state = grid,
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(previews, key = { it.index to it.imageUrl }) { preview ->
+            PreviewThumbnail(preview, onOpen = onOpen, loader = loader)
+        }
+        if (loading || error != null) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    if (loading) {
+                        CircularProgressIndicator(Modifier.size(32.dp))
+                    } else {
+                        TextButton(onClick = onLoadMore) { Text(localized(DMR.strings.retry, error)) }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -262,7 +315,7 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                     val result = PagePreviews.load(manga, page)
                     mutableState.update {
                         it.copy(
-                            previews = it.previews + result?.previews.orEmpty(),
+                            previews = appendPreviews(it.previews, result?.previews.orEmpty()),
                             nextPage = if (result?.hasNextPage == true) page + 1 else null,
                             pageCount = result?.pageCount ?: it.pageCount,
                             loading = false,
@@ -299,36 +352,7 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                 state.previews.isEmpty() && (state.loading || state.manga == null) -> LoadingScreen()
                 state.previews.isEmpty() -> EmptyScreen(localized(DMR.strings.this_entry_has_no_page_previews))
                 else -> {
-                    val grid = rememberLazyGridState()
-                    val nearEnd by remember {
-                        derivedStateOf {
-                            val last = grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                            last >= grid.layoutInfo.totalItemsCount - 6
-                        }
-                    }
-                    LaunchedEffect(nearEnd, state.previews.size) { if (nearEnd) model.loadMore() }
-                    LazyVerticalGrid(
-                        GridCells.Adaptive(PREVIEW_WIDTH),
-                        state = grid,
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(state.previews, key = { it.index }) { preview ->
-                            PreviewThumbnail(preview, onOpen = { opening = it })
-                        }
-                        if (state.loading || state.error != null) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                    if (state.loading) {
-                                        CircularProgressIndicator(Modifier.size(32.dp))
-                                    } else {
-                                        TextButton(onClick = model::loadMore) { Text(localized(DMR.strings.retry, state.error)) }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    PagePreviewGrid(state.previews, state.loading, state.error, model::loadMore, { opening = it })
                 }
             }
         }

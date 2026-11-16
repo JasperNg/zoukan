@@ -716,7 +716,7 @@
   feature: "Page previews screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.PagePreviewScreenTest]
   gap: "Previews from a source are not driven; planned: PagePreviewsJourneyTest"
 
 - key: screen:manga.MetadataViewScreen
