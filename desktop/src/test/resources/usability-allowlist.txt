@@ -1,0 +1,16 @@
+# Usability findings that are not usability bugs, one per line:
+#   <key> | <RULE> | <node id> | <reason>
+# <key> and <node id> may end with * to match a prefix. The key is a coverage-matrix key.
+# The reason is required and says why this is not a usability problem. Real problems are not
+# listed here: they stay new findings in build/reports/usability.md until they are fixed.
+
+# The check renders one SearchStatus variant that shows no dialog, so there is nothing to dismiss.
+# The dialog itself blocks dismissal on purpose while a search runs (ESCAPE_BLOCKED_ON_PURPOSE).
+
+dialog:recs.RecommendationSearchProgressDialog | ESCAPE_NOT_DISMISSING | - | One of the rendered SearchStatus variants shows no dialog window, so there is nothing to dismiss; the dialog blocks dismissal on purpose while a search runs
+
+# A multi-line text field keeps Tab as input (a tab character), so focus stays in it by design.
+dialog:manga.EditMangaDialog | TAB_TRAVERSAL | "Description" | A multi-line text field uses Tab as input, so focus staying in it is expected
+
+# The MangaDex settings check opens the follows dialog over the page; Tab inside the window under a modal dialog cannot move.
+settings:MangaDex | TAB_TRAVERSAL | "Back" | The check drives the page with a modal dialog open over it, so focus in the window below cannot move by design
