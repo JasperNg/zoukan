@@ -79,6 +79,7 @@ import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LazyVerticalGrid
 import zoukan.desktop.ui.common.MangaGridItem
+import zoukan.desktop.ui.common.RATIO_SWITCH_TO_PANORAMA
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
@@ -95,9 +96,6 @@ import java.time.ZoneId
 
 /** Android's BrowseFavoriteCoverAlpha: entries already in the library show faded. */
 private const val BROWSE_FAVORITE_COVER_ALPHA = 0.34f
-
-/** Komikku's RatioSwitchToPanorama: covers this wide or wider show as panoramas. */
-private const val RATIO_SWITCH_TO_PANORAMA = 0.75f
 
 /** Komikku's MangaCover.Book and MangaCover.Panorama ratios (width / height). */
 private const val BOOK_RATIO = 2f / 3f

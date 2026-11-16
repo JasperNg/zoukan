@@ -80,6 +80,7 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.coverOutline
@@ -241,28 +242,20 @@ object UpdateErrorsScreen : Screen {
 
         Column(Modifier.fillMaxSize()) {
             if (state.selection.isNotEmpty()) {
-                Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
-                        Text(
-                            localized(DMR.strings.selected, state.selection.size),
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f).padding(start = 8.dp),
-                        )
-                        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
-                        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
-                        TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_retry), onClick = { model.retry() }, enabled = !updating)
-                        TooltipIconButton(
-                            Icons.Outlined.FindReplace,
-                            if (state.selection.size == 1) localized(MR.strings.action_migrate) else localized(DMR.strings.migrate_one_entry_at_a_time),
-                            onClick = { state.selected.singleOrNull()?.let(::migrate) },
-                            enabled = state.selection.size == 1,
-                        )
-                        TooltipIconButton(Icons.Outlined.DeleteOutline, localized(MR.strings.action_delete), onClick = { model.delete() })
-                    }
+                SelectionBar(
+                    count = state.selection.size,
+                    onClear = model::clearSelection,
+                    onSelectAll = model::selectAll,
+                    onInvert = model::invertSelection,
+                ) {
+                    TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_retry), onClick = { model.retry() }, enabled = !updating)
+                    TooltipIconButton(
+                        Icons.Outlined.FindReplace,
+                        if (state.selection.size == 1) localized(MR.strings.action_migrate) else localized(DMR.strings.migrate_one_entry_at_a_time),
+                        onClick = { state.selected.singleOrNull()?.let(::migrate) },
+                        enabled = state.selection.size == 1,
+                    )
+                    TooltipIconButton(Icons.Outlined.DeleteOutline, localized(MR.strings.action_delete), onClick = { model.delete() })
                 }
             } else {
                 ScreenHeader(localized(DMR.strings.library_update_errors, state.items.size)) {

@@ -53,6 +53,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -227,18 +228,18 @@ fun Modifier.bulkSelected(selected: Boolean): Modifier =
 @Composable
 fun BulkFavoriteBar(bulk: BulkFavorite, visible: List<Manga>) {
     if (!bulk.active) return
-    Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().testTag("bulk-favorite-bar")) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_the_selection), onClick = bulk::clear)
-            Text(localized(DMR.strings.selected, bulk.selection.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = { bulk.selectAll(visible) })
-            TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_the_selection), onClick = { bulk.invert(visible) })
-            Spacer(Modifier.width(8.dp))
-            if (bulk.running) {
-                CircularProgressIndicator(Modifier.size(24.dp))
-            } else {
-                Button(onClick = bulk::addToLibrary) { Text(localized(MR.strings.add_to_library)) }
-            }
+    SelectionBar(
+        count = bulk.selection.size,
+        onClear = bulk::clear,
+        onSelectAll = { bulk.selectAll(visible) },
+        onInvert = { bulk.invert(visible) },
+        modifier = Modifier.testTag("bulk-favorite-bar"),
+    ) {
+        Spacer(Modifier.width(8.dp))
+        if (bulk.running) {
+            CircularProgressIndicator(Modifier.size(24.dp))
+        } else {
+            Button(onClick = bulk::addToLibrary) { Text(localized(MR.strings.add_to_library)) }
         }
     }
     BulkFavoriteDialogs(bulk)

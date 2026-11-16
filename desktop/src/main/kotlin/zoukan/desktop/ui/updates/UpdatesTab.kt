@@ -110,6 +110,7 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -553,14 +554,12 @@ private fun LastUpdatedLine() {
 @Composable
 private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel, onDeleteDownloads: (List<UpdatesWithRelations>) -> Unit) {
     val selected = state.selectedItems
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    SelectionBar(
+        count = selected.size,
+        onClear = model::clearSelection,
+        onSelectAll = model::selectAll,
+        onInvert = model::invertSelection,
     ) {
-        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
-        Text(localized(DMR.strings.selected, selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
-        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
         if (selected.any { !it.read }) {
             TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.setRead(selected, true) })
         }

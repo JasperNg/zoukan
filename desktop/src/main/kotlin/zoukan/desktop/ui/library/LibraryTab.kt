@@ -85,6 +85,7 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -144,7 +145,7 @@ fun LibraryTab(model: LibraryScreenModel) {
 
     Column(Modifier.fillMaxSize()) {
         if (state.selection.isNotEmpty()) {
-            SelectionBar(
+            LibrarySelectionBar(
                 model,
                 count = state.selection.size,
                 onCategories = { categoryDialog = state.selection },
@@ -500,7 +501,7 @@ private fun ColumnScope.EntryContextMenu(
 }
 
 @Composable
-private fun SelectionBar(
+private fun LibrarySelectionBar(
     model: LibraryScreenModel,
     count: Int,
     onCategories: () -> Unit,
@@ -522,12 +523,8 @@ private fun SelectionBar(
 ) {
     var downloadMenu by remember { mutableStateOf(false) }
     var overflowMenu by remember { mutableStateOf(false) }
-    Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
-            Text(localized(DMR.strings.selected, count), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
-            TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
-            TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
+    SelectionBar(count, onClear = model::clearSelection, onSelectAll = model::selectAll, onInvert = model::invertSelection) {
+        run {
             TooltipIconButton(Icons.AutoMirrored.Outlined.Label, localized(DMR.strings.change_categories), onClick = onCategories)
             TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.markRead(true) })
             TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = { model.markRead(false) })
