@@ -336,6 +336,17 @@ val wiringTest by tasks.registering(Test::class) {
     providers.gradleProperty("zoukan.smoke.only").orNull?.let { systemProperty("zoukan.smoke.only", it) }
     // Fails the smoke test on usability findings that are not allowlisted (off until they are fixed)
     providers.gradleProperty("zoukan.usability.enforce").orNull?.let { systemProperty("zoukan.usability.enforce", it) }
+    // Screenshot comparison (nightly, Linux): -Pzoukan.screenshots=verify compares with
+    // src/test/screenshots/linux; =record rewrites them after an intended visual change.
+    // Unset, no screenshot is taken and the goldens are not a task input, so normal runs stay cacheable.
+    providers.gradleProperty("zoukan.screenshots").orNull?.let { mode ->
+        systemProperty("zoukan.screenshots", mode)
+        inputs.files(fileTree("src/test/screenshots")).withPropertyName("screenshotGoldens").withPathSensitivity(PathSensitivity.RELATIVE)
+        // Every run takes and compares its own screenshots, so a second run is never skipped as up to date
+        outputs.upToDateWhen { false }
+        val reports = layout.buildDirectory.dir("reports/screenshots").get().asFile
+        doFirst { reports.deleteRecursively() }
+    }
     shouldRunAfter(tasks.test)
     // Each run starts without the findings of an earlier one, so usabilityReport merges only this run's
     val usabilityDir = layout.buildDirectory.dir("reports/usability").get().asFile
