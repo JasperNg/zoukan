@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
 import io.mockk.just
@@ -370,6 +371,20 @@ class DesktopExtensionLoaderTest {
             val result = loader().load(files, emptyList())
 
             result.shouldBeInstanceOf<LoadResult.Error>().error.stage shouldBe ExtensionException.Stage.CONVERT
+        }
+    }
+
+    @Test
+    fun `an installed APK larger than any download is not read`() {
+        val files = install(manifest(pkgName, sourceClass))
+        // Larger than the installer ever writes: not ours, and not read into memory
+        java.io.RandomAccessFile(files.apk!!, "rw").use { it.setLength(ExtensionLimits.MAX_DOWNLOAD_BYTES + 1) }
+        mockkObject(ExtensionSignatures) {
+            val result = loader().load(files, emptyList())
+
+            val error = result.shouldBeInstanceOf<LoadResult.Error>().error
+            error.message!! shouldContain "too large"
+            verify(exactly = 0) { ExtensionSignatures.verifyApk(any()) }
         }
     }
 }

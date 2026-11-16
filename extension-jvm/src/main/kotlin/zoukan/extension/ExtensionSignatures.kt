@@ -73,9 +73,15 @@ object ExtensionSignatures {
 
     private val SIGNATURE_SUFFIXES = listOf(".SF", ".RSA", ".DSA", ".EC")
 
-    /** Checks an APK's v1, v2 and v3 signatures with apksig, as Android's package manager would. */
-    fun verifyApk(apk: ByteArray): List<String> {
-        val result = ApkVerifier.Builder(DataSources.asDataSource(ByteBuffer.wrap(apk))).build().verify()
+    /**
+     * Checks an APK's v1, v2 and v3 signatures with apksig, as Android's package manager would, and
+     * requires a v2 or newer one: only those cover every byte the other readers of the APK parse.
+     */
+    fun verifyApk(apk: ByteArray): List<String> =
+        signersOf(ApkVerifier.Builder(DataSources.asDataSource(ByteBuffer.wrap(apk))).build().verify())
+
+    /** The signing certificates' SHA-256 of a verified APK; fails when [result] does not verify. */
+    internal fun signersOf(result: ApkVerifier.Result): List<String> {
         if (!result.isVerified) {
             val errors = result.errors +
                 result.v1SchemeSigners.flatMap { it.errors } +
@@ -84,6 +90,15 @@ object ExtensionSignatures {
             throw ExtensionException(
                 ExtensionException.Stage.SIGNATURE,
                 "APK signature does not verify: ${errors.joinToString("; ")}",
+            )
+        }
+        // The v1 (JAR) scheme alone signs entries through the unsigned central directory, so the
+        // manifest, asset and dex readers could see bytes it does not cover. v2 and newer sign every
+        // byte outside the signing block; apksig refuses a v1+v2 APK with v2 stripped
+        if (!result.isVerifiedUsingV2Scheme && !result.isVerifiedUsingV3Scheme && !result.isVerifiedUsingV31Scheme) {
+            throw ExtensionException(
+                ExtensionException.Stage.SIGNATURE,
+                "APK is signed only with the v1 scheme; a v2 or newer signature is required",
             )
         }
         return result.signerCertificates.map { it.sha256() }

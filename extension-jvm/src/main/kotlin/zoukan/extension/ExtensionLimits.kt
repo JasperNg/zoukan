@@ -1,5 +1,6 @@
 package zoukan.extension
 
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -15,6 +16,20 @@ internal object ExtensionLimits {
     const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
 
     fun megabytes(bytes: Long) = bytes / (1024 * 1024)
+}
+
+/**
+ * Reads an installed APK. The installer never writes one larger than a download may be, so a
+ * larger file is not ours and is refused before it is read into memory.
+ */
+internal fun readInstalledApk(apk: File): ByteArray {
+    if (apk.length() > ExtensionLimits.MAX_DOWNLOAD_BYTES) {
+        throw ExtensionException(
+            ExtensionException.Stage.SIGNATURE,
+            "${apk.name} is too large (over ${ExtensionLimits.megabytes(ExtensionLimits.MAX_DOWNLOAD_BYTES)} MB)",
+        )
+    }
+    return apk.readBytes()
 }
 
 /**

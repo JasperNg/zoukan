@@ -1,5 +1,6 @@
 package zoukan.extension
 
+import com.android.apksig.ApkVerifier
 import com.sun.net.httpserver.HttpServer
 import eu.kanade.tachiyomi.extension.model.Extension
 import io.kotest.assertions.throwables.shouldThrow
@@ -7,6 +8,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import kotlinx.coroutines.runBlocking
 import mihon.data.extension.service.InsecureExtensionStoreException
@@ -63,6 +65,26 @@ class ExtensionVerificationTest {
 
         shouldThrow<ExtensionException> { ExtensionSignatures.verifyJar(jar) }.message shouldContain "too large"
         shouldThrow<ExtensionException> { JarContents.fromBytes(jar.readBytes()) }.message shouldContain "too large"
+    }
+
+    /** What apksig reports for an APK whose signature verifies, by scheme. */
+    private fun verifiedApk(v2: Boolean, v3: Boolean = false): ApkVerifier.Result = mockk {
+        every { isVerified } returns true
+        every { isVerifiedUsingV2Scheme } returns v2
+        every { isVerifiedUsingV3Scheme } returns v3
+        every { isVerifiedUsingV31Scheme } returns false
+        every { signerCertificates } returns emptyList()
+    }
+
+    @Test
+    fun `an APK signed only with the v1 scheme is refused`() {
+        // The v1 scheme signs entries through the unsigned central directory, so other zip readers
+        // could see entries the signature does not cover
+        shouldThrow<ExtensionException> { ExtensionSignatures.signersOf(verifiedApk(v2 = false)) }
+            .message shouldContain "v2"
+
+        ExtensionSignatures.signersOf(verifiedApk(v2 = true)) shouldBe emptyList()
+        ExtensionSignatures.signersOf(verifiedApk(v2 = false, v3 = true)) shouldBe emptyList()
     }
 
     private fun jdkTool(name: String): String = File(System.getProperty("java.home"), "bin/$name").path

@@ -190,7 +190,7 @@ class DesktopExtensionLoader(
         var apkSha256 = ""
         val (signatures, contents) = if (files.apk != null) {
             // The APK is read once: the signature, its digest and a new conversion all use these bytes
-            val apkBytes = files.apk.readBytes()
+            val apkBytes = readInstalledApk(files.apk)
             val signers = ExtensionSignatures.verifyApk(apkBytes)
             apkSha256 = ApkConverter.sha256Of(apkBytes)
             // The manifest is read only after the checks that decide whether the jar may run at
