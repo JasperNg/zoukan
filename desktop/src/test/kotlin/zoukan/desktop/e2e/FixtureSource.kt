@@ -43,6 +43,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 import java.net.URLEncoder
 import java.util.Collections
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -113,7 +114,7 @@ class FixtureSource(
     // together. Lazy, because the source is made before the app's network is up.
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
-            .apply { readTimeoutSeconds?.let { readTimeout(it, java.util.concurrent.TimeUnit.SECONDS) } }
+            .apply { readTimeoutSeconds?.let { readTimeout(it, TimeUnit.SECONDS) } }
             .addInterceptor(::descramble)
             .build()
     }
@@ -236,7 +237,8 @@ class FixtureSource(
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    // Its own path (same JSON as the details), so the chapter list can fail while the details load
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val json = Json.parseToJsonElement(response.body.string()).jsonObject

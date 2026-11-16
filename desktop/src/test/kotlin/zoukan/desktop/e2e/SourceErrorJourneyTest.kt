@@ -27,14 +27,15 @@ import zoukan.desktop.ui.e2eEffectContext
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * A source that answers with errors: the catalogue (500), a title's details (404) and its chapter
- * list (500). Each shows the error the user reads and a retry (the "Retry" button, the entry's
- * "Refresh") that works once the server answers again. Every call fails while a rule is on, so a
- * silent client retry cannot hide the error. A failed load adds nothing to the library.
+ * A source that answers with errors: the catalogue (500), a title's details and chapters (404) and
+ * only its chapter list (500; the details call answers, but the source API returns details and
+ * chapters as one update, so the screen has neither). Each shows the error the user reads and a retry
+ * (the "Retry" button, the entry's "Refresh") that works once the server answers again. Every call
+ * fails while a rule is on, so a silent client retry cannot hide the error. A failed load adds
+ * nothing to the library.
  *
- * The fixture serves a title's details and its chapters from one URL (`/manga/<key>`), so the
- * details and the chapter list fail together: a title whose first load fails has neither, which
- * is what the 404 and the 500 steps show (no details, "No chapters").
+ * The fixture serves a title's details at `/manga/<key>` and its chapter list at
+ * `/manga/<key>/chapters`, so the 404 rule (`/manga/`) fails both and the 500 rule only the list.
  *
  *   ./gradlew :desktop:journeyTest --tests "*SourceErrorJourneyTest"
  */
@@ -104,22 +105,26 @@ class SourceErrorJourneyTest {
                     waitOrDump("for the catalogue again") { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 3 }
                 }
 
-                step("A title's chapter list answers 500: the error and no chapters") {
-                    server.fail("/manga/", FixtureFailure.Status(500))
+                step("Only a title's chapter list answers 500: the error and no chapters") {
+                    server.fail("/manga/second/chapters", FixtureFailure.Status(500))
                     onAllNodesWithText("Fixture Second").onFirst().performClick()
                     waitFor(hasText("HTTP error 500"))
                     waitFor(hasText("No chapters"))
-                    // Failing every call: the client did not hide it with a retry that worked
+                    // The details call answered; the source API returns details and chapters as one
+                    // update, so the chapter error drops both until Refresh
                     server.requests.count { it == "/manga/second" } shouldBeGreaterThan 0
+                    // Failing every call: the client did not hide it with a retry that worked
+                    server.requests.count { it == "/manga/second/chapters" } shouldBeGreaterThan 0
                     runBlocking { Injekt.get<GetFavorites>().await() }.shouldBeEmpty()
                     shot("5-chapters-500")
                 }
 
-                step("The server answers again: Refresh lists the chapters") {
+                step("The server answers again: Refresh loads the details and lists the chapters") {
                     server.clearFailures()
                     onAllNodesWithContentDescription("Refresh").onFirst().performClick()
                     waitFor(hasText("Start") and isEnabled())
                     waitFor(hasText("Chapter 1", substring = true))
+                    waitFor(hasText(SECOND_DESCRIPTION, substring = true))
                     onAllNodesWithText("HTTP error 500").fetchSemanticsNodes() shouldHaveSize 0
                     onAllNodesWithText("No chapters").fetchSemanticsNodes() shouldHaveSize 0
                     runBlocking { Injekt.get<GetFavorites>().await() }.shouldBeEmpty()
@@ -127,5 +132,10 @@ class SourceErrorJourneyTest {
                 }
             }
         }
+    }
+
+    private companion object {
+        /** The start of Fixture Second's description, shown once its details load. */
+        const val SECOND_DESCRIPTION = "A second title"
     }
 }

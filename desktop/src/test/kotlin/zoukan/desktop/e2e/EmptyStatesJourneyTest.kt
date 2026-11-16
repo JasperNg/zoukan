@@ -15,6 +15,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -62,7 +64,7 @@ class EmptyStatesJourneyTest {
                     shot("1-library-empty")
                     // The rail's Browse and the message's action share a label: the action is the last one
                     val browse = onAllNodesWithText("Browse")
-                    (browse.fetchSemanticsNodes().size >= 2) shouldBe true
+                    browse.fetchSemanticsNodes().size shouldBeGreaterThanOrEqual 2
                     browse[browse.fetchSemanticsNodes().size - 1].performClick()
                     waitFor(hasText("Sources"))
                     onAllNodesWithText("Library").onFirst().performClick()
@@ -103,7 +105,7 @@ class EmptyStatesJourneyTest {
                     waitFor(hasText("Nothing found"))
                     count("manga-item") shouldBe 0
                     // The search went to the server (the path is recorded without its query)
-                    (server.requests.count { it == "/catalog" } > catalogueRequests) shouldBe true
+                    server.requests.count { it == "/catalog" } shouldBeGreaterThan catalogueRequests
                     shot("4-source-search-empty")
                     runOnUiThread { navigator?.popUntilRoot() }
                 }

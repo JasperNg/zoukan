@@ -556,7 +556,7 @@
   tests: [e2e.SourceErrorJourneyTest]
 
 - key: flow:manga.chapters-error-refresh
-  feature: "A title's chapter list fails (500): the error shows, Refresh lists the chapters"
+  feature: "Only a title's chapter list fails (500): the error shows, Refresh loads the details and lists the chapters"
   tier: journey
   smoke: false
   tests: [e2e.SourceErrorJourneyTest]
