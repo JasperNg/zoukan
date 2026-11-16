@@ -73,6 +73,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.ConfirmDialog
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -299,10 +300,12 @@ fun FeedTab(model: FeedScreenModel) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(rows, key = { it.feed.id }) { row ->
                     Column(Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable(enabled = row.source != null) {
-                                    val source = row.source ?: return@clickable
+                        // ZOUKAN -->
+                        FeedRowHeader(
+                            title = row.title,
+                            fixed = row.fixed,
+                            onOpen = row.source?.let { source ->
+                                {
                                     navigator.push(
                                         when {
                                             row.savedSearch != null -> SourceScreen(source.id, savedSearch = row.savedSearch.id)
@@ -311,17 +314,10 @@ fun FeedTab(model: FeedScreenModel) {
                                         },
                                     )
                                 }
-                                // ZOUKAN -->
-                                // Android's long press on a feed row opens its actions: Delete
-                                .onRightClick { if (!row.fixed) model.remove(row) }
-                                // ZOUKAN <--
-                                .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(row.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                            if (!row.fixed) TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.remove_from_the_feed), onClick = { model.remove(row) })
-                            Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
-                        }
+                            },
+                            onRemove = { model.remove(row) },
+                        )
+                        // ZOUKAN <--
                         when (val result = state.results[row.feed.id]) {
                             // ZOUKAN -->
                             is FeedScreenModel.Result.Success -> if (result.manga.none { !hideInLibrary || !it.favorite }) {
@@ -429,3 +425,31 @@ private fun AddFeedDialog(model: FeedScreenModel, onDismiss: () -> Unit) {
         dismissButton = if (source != null && fixedSource == null) ({ TextButton(onClick = { source = null }) { Text(localized(MR.strings.action_webview_back)) } }) else null,
     )
 }
+
+// ZOUKAN -->
+/** A feed row's header: the title, a delete button and the arrow. Deleting, by the button or a right-click, asks first. */
+@Composable
+internal fun FeedRowHeader(title: String, fixed: Boolean, onOpen: (() -> Unit)?, onRemove: () -> Unit) {
+    var confirmRemove by remember { mutableStateOf(false) }
+    if (confirmRemove) {
+        ConfirmDialog(
+            title = localized(DMR.strings.remove_feed_question, title),
+            confirmLabel = localized(MR.strings.action_remove),
+            onConfirm = onRemove,
+            onDismiss = { confirmRemove = false },
+        )
+    }
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable(enabled = onOpen != null) { onOpen?.invoke() }
+            // Android's long press on a feed row opens its actions: Delete
+            .onRightClick { if (!fixed) confirmRemove = true }
+            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        if (!fixed) TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.remove_from_the_feed), onClick = { confirmRemove = true })
+        Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
+    }
+}
+// ZOUKAN <--

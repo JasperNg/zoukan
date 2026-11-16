@@ -62,12 +62,14 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import mihon.domain.extension.model.ExtensionStore
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.ConfirmDialog
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.DropdownMenu
@@ -319,6 +321,16 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
     confirmTrust?.let { ext ->
         ConfirmTrustDialog(ext, onConfirm = { model.trust(ext) }, onDismiss = { confirmTrust = null })
     }
+    // Installing runs third-party code, so a right-click on an available row asks first; the Install button is explicit
+    var confirmInstall by remember { mutableStateOf<Extension.Available?>(null) }
+    confirmInstall?.let { ext ->
+        ConfirmDialog(
+            title = localized(DMR.strings.install_extension_question, ext.name),
+            confirmLabel = localized(MR.strings.action_install),
+            onConfirm = { model.install(ext) },
+            onDismiss = { confirmInstall = null },
+        )
+    }
     fun askUninstall(ext: Extension) {
         confirmUninstall = UninstallRequest(ext.name) { model.uninstall(ext) }
     }
@@ -435,7 +447,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             items(available, key = { "a-${it.pkgName}" }) { ext ->
                 // ZOUKAN -->
                 // Android's long press on an available extension installs it
-                ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy, onSecondaryClick = { model.install(ext) }) {
+                ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy, onSecondaryClick = { confirmInstall = ext }) {
                     // ZOUKAN <--
                     FilledTonalButton(onClick = { model.install(ext) }) { Text(localized(MR.strings.action_install)) }
                 }
@@ -545,6 +557,19 @@ private fun ExtensionRow(
 @Composable
 internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel) {
     var url by remember { mutableStateOf("") }
+    // ZOUKAN -->
+    // Removing a store hides its extensions from Available and from updates, so it asks first
+    var confirmRemoveStore by remember { mutableStateOf<ExtensionStore?>(null) }
+    confirmRemoveStore?.let { store ->
+        ConfirmDialog(
+            title = localized(DMR.strings.remove_store_question, store.name),
+            body = localized(DMR.strings.remove_store_body),
+            confirmLabel = localized(MR.strings.action_remove),
+            onConfirm = { model.removeStore(store) },
+            onDismiss = { confirmRemoveStore = null },
+        )
+    }
+    // ZOUKAN <--
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text(
@@ -595,7 +620,7 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                             )
                         }
                     }
-                    TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_remove), onClick = { model.removeStore(store) })
+                    TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_remove), onClick = { confirmRemoveStore = store })
                 }
             }
         }

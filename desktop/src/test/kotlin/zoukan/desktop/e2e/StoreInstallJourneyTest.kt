@@ -15,9 +15,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -150,6 +152,15 @@ class StoreInstallJourneyTest {
                 step("An extension signed with another key installs as untrusted, and goes back to available on uninstall") {
                     browsePage("Extensions")
                     searchExtensions(FixtureStore.ROGUE_NAME)
+                    // A right-click on an available extension asks first and does not install it on its own
+                    // (the search field holds the same text, so skip editable nodes)
+                    onAllNodes(hasText(FixtureStore.ROGUE_NAME) and !hasSetTextAction()).onFirst().performMouseInput { rightClick() }
+                    waitForIdle()
+                    (FixtureStore.ROGUE_PKG in manager.untrustedExtensionsFlow.value) shouldBe false
+                    (FixtureStore.ROGUE_PKG in manager.installedExtensionsFlow.value) shouldBe false
+                    waitFor(hasText("Install ${FixtureStore.ROGUE_NAME}?"))
+                    onAllNodes(hasText("Cancel") and hasClickAction()).onLast().performClick()
+                    waitForIdle()
                     onAllNodes(hasText("Install") and hasClickAction()).onFirst().performClick()
                     waitFor(hasText("Untrusted"))
                     waitFor(hasText("Trust") and hasClickAction())
@@ -181,6 +192,10 @@ class StoreInstallJourneyTest {
                     browsePage("Stores")
                     waitFor(hasText(FixtureStore.STORE_NAME))
                     onAllNodes(hasContentDescription("Remove")).onFirst().performClick()
+                    // Removing a store asks first; the store stays until confirmed
+                    waitFor(hasText("Remove ${FixtureStore.STORE_NAME}?"))
+                    runBlocking { Injekt.get<GetExtensionStores>().get() }.size shouldBe 1
+                    onAllNodes(hasText("Remove") and hasClickAction()).onLast().performClick()
                     waitOrDump("for the store to leave the list") { onAllNodesWithText(FixtureStore.STORE_NAME).fetchSemanticsNodes().isEmpty() }
                     runBlocking { Injekt.get<GetExtensionStores>().get() } shouldBe emptyList()
                     waitOrDump("for the available list to empty") { manager.availableExtensionsFlow.value.isEmpty() }
