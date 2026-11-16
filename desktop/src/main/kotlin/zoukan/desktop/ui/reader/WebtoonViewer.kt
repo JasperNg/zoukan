@@ -42,8 +42,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import zoukan.desktop.ui.common.ReadingModes
-import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
 
 /**

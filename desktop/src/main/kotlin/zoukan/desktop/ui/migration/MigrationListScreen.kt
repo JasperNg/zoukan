@@ -51,6 +51,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.Corners
@@ -59,7 +60,6 @@ import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.SearchPurpose

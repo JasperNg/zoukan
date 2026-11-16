@@ -8,7 +8,7 @@ package eu.kanade.tachiyomi.util.system
 import android.content.Context
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.core.common.i18n.stringResource
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 
 /** Android's toast: a message at the bottom of the main window. */
 fun Context.toast(text: String?, duration: Int = 0) {

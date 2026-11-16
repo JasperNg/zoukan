@@ -29,8 +29,8 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 
 /**

@@ -1,4 +1,4 @@
-package zoukan.desktop.ui.common
+package zoukan.desktop.app
 
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore

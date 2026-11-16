@@ -65,6 +65,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzWriter
@@ -88,7 +89,6 @@ import zoukan.desktop.ui.browse.SourceCategoriesDialog
 import zoukan.desktop.ui.browse.SourceFeedScreen
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.browse.rememberQuickLibraryToggle
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.library.LibraryScreenModel
 import zoukan.desktop.ui.library.LibrarySettingsDialog
 import zoukan.desktop.ui.library.SyncFavoritesConfirmDialog

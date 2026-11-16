@@ -19,10 +19,10 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
 import kotlin.time.Duration.Companion.minutes

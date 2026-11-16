@@ -98,14 +98,14 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReaderBottomButtons
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.DropdownMenu
-import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
-import zoukan.desktop.ui.common.ReaderBottomButtons
-import zoukan.desktop.ui.common.ReadingModes
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 

@@ -2,7 +2,7 @@ package zoukan.desktop.ui.reader
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.app.ReadingModes
 
 class ReaderAppBarsTest {
     private fun type(

@@ -42,8 +42,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import zoukan.desktop.ui.common.FitModes
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.common.collectAsState
 import kotlin.math.abs
 import kotlin.math.roundToInt

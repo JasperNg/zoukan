@@ -30,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 import java.io.File
 
 /** A source's own settings, drawn from the androidx.preference objects the extension builds. */

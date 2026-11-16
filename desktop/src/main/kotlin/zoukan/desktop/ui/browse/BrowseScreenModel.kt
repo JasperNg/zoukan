@@ -18,10 +18,10 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.Toasts
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import zoukan.i18n.desktop.DMR

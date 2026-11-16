@@ -34,10 +34,10 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 
 class SourceScreenModel(

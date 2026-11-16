@@ -32,6 +32,7 @@ import tachiyomi.domain.source.interactor.InsertFeedSavedSearch
 import tachiyomi.domain.source.model.FeedSavedSearch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
@@ -40,7 +41,6 @@ import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.browse.ExtensionDetailsScreen
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.browse.SourceScreen
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import java.io.File
 import kotlin.time.Duration.Companion.minutes

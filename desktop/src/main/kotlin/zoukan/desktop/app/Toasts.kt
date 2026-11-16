@@ -1,4 +1,4 @@
-package zoukan.desktop.ui.common
+package zoukan.desktop.app
 
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow

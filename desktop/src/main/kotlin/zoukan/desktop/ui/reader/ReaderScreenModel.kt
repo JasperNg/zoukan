@@ -42,6 +42,9 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.download.CbzPassword
@@ -49,9 +52,6 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.LocalFormat
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.ReadingModes
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 import java.util.Date
 
@@ -156,7 +156,7 @@ class ReaderScreenModel(
     private var chapterOpenedAt = System.currentTimeMillis()
 
     /** Writes reading progress in page-turn order; on the app scope, so writes finish after the reader closes */
-    private val progressWriter = ProgressWriter(zoukan.desktop.ui.AppScope) { updateChapter.await(it) }
+    private val progressWriter = ProgressWriter(zoukan.desktop.app.AppScope) { updateChapter.await(it) }
 
     private val _menuVisible = MutableStateFlow(false)
     val menuVisible: StateFlow<Boolean> = _menuVisible.asStateFlow()
@@ -267,7 +267,7 @@ class ReaderScreenModel(
                         opened = null
                         List(owned.pageCount) { ReaderPage(it, Page(it)) }
                     } finally {
-                        opened?.let { orphan -> zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) { runCatching { orphan.close() } } }
+                        opened?.let { orphan -> zoukan.desktop.app.AppScope.launch(Dispatchers.IO) { runCatching { orphan.close() } } }
                     }
                 } else {
                     if (source !is HttpSource) error(localized(DMR.strings.the_source_of_this_entry_is))
@@ -352,7 +352,7 @@ class ReaderScreenModel(
             // ZOUKAN -->
             Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>().syncOn { it.syncOnChapterRead }
             if (chapter.isRecognizedNumber) {
-                zoukan.desktop.ui.AppScope.launch {
+                zoukan.desktop.app.AppScope.launch {
                     runCatching { Injekt.get<TrackChapters>().afterReading(mangaId, chapter.chapterNumber) }
                 }
             }
@@ -396,7 +396,7 @@ class ReaderScreenModel(
         if (markDuplicates && chapter.isRecognizedNumber) {
             val duplicates = state.chapters.filter { !it.read && it.isRecognizedNumber && it.chapterNumber == chapter.chapterNumber }
             if (duplicates.isNotEmpty()) {
-                zoukan.desktop.ui.AppScope.launch { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
+                zoukan.desktop.app.AppScope.launch { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
                 val ids = duplicates.mapTo(HashSet()) { it.id }
                 mutableState.update { s -> s.copy(chapters = s.chapters.map { if (it.id in ids) it.copy(read = true) else it }) }
                 // Android deletes them too when "Last read chapter" is the delete setting
@@ -419,7 +419,7 @@ class ReaderScreenModel(
         if (readerManga.source == LocalSource.ID) return
         val next = state.nextChapter ?: return
         downloadedAheadFor = current.id
-        zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) {
+        zoukan.desktop.app.AppScope.launch(Dispatchers.IO) {
             val mangas = HashMap<Long, Manga?>()
             suspend fun mangaOf(chapter: Chapter): Manga? =
                 if (chapter.mangaId == readerManga.id) readerManga else mangas.getOrPut(chapter.mangaId) { getManga.await(chapter.mangaId) }
@@ -710,7 +710,7 @@ class ReaderScreenModel(
 
     /** Runs a page action to the end even when the reader closes, as Android's launchNonCancellable. */
     private fun pageAction(failure: String, block: suspend () -> Unit) {
-        zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) {
+        zoukan.desktop.app.AppScope.launch(Dispatchers.IO) {
             try {
                 block()
             } catch (e: CancellationException) {
@@ -788,7 +788,7 @@ class ReaderScreenModel(
         if (state.value.pages.isEmpty()) return
         val duration = System.currentTimeMillis() - chapterOpenedAt
         chapterOpenedAt = System.currentTimeMillis()
-        zoukan.desktop.ui.AppScope.launch {
+        zoukan.desktop.app.AppScope.launch {
             upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
         }
     }
@@ -796,7 +796,7 @@ class ReaderScreenModel(
     private fun closeFormat() {
         val old = format ?: return
         format = null
-        zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) { runCatching { old.close() } }
+        zoukan.desktop.app.AppScope.launch(Dispatchers.IO) { runCatching { old.close() } }
     }
 
     override fun onDispose() {
@@ -809,7 +809,7 @@ class ReaderScreenModel(
         format = null
         val deletes = pendingDeletes.values.toList()
         if (old != null || deletes.isNotEmpty()) {
-            zoukan.desktop.ui.AppScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(old, deletes) { downloadManager.deleteRead(it) } }
+            zoukan.desktop.app.AppScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(old, deletes) { downloadManager.deleteRead(it) } }
         }
         // ZOUKAN <--
         // ZOUKAN -->
@@ -818,7 +818,7 @@ class ReaderScreenModel(
         val chapter = state.value.chapter
         if (chapter != null && state.value.pages.isNotEmpty() && !incognito) {
             val duration = System.currentTimeMillis() - chapterOpenedAt
-            zoukan.desktop.ui.AppScope.launch {
+            zoukan.desktop.app.AppScope.launch {
                 upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
             }
         }
@@ -838,7 +838,7 @@ class ReaderScreenModel(
                 navigable = s.navigable.map { it.updated() },
             )
         }
-        zoukan.desktop.ui.AppScope.launch {
+        zoukan.desktop.app.AppScope.launch {
             updateChapter.await(ChapterUpdate(id = chapter.id, bookmark = bookmark))
         }
     }
@@ -862,7 +862,7 @@ class ReaderScreenModel(
     /** Opens the chapter's page in the built-in browser, which shares cookies with the app */
     fun openChapterInWebView() {
         val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
-        zoukan.desktop.ui.AppScope.launch {
+        zoukan.desktop.app.AppScope.launch {
             val userAgent = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
             if (!zoukan.desktop.browser.BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
@@ -871,7 +871,7 @@ class ReaderScreenModel(
     /** Opens the chapter's page in the system browser */
     fun openChapterInBrowser() {
         val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
-        zoukan.desktop.ui.AppScope.launch {
+        zoukan.desktop.app.AppScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }
                     .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_browser), it) }

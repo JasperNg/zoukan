@@ -100,6 +100,7 @@ import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.domain.SyncChapters
@@ -111,7 +112,6 @@ import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.track.TrackerLogin
-import zoukan.desktop.ui.common.DesktopPreferences
 
 /**
  * Repositories, interactors and preference groups of the shared domain and data modules, registered

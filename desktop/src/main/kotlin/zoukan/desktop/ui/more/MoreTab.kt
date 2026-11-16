@@ -52,15 +52,15 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.ui.category.CategoryScreen
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.LazyColumn
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel

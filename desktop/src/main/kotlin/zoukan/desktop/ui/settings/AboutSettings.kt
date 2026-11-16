@@ -24,13 +24,13 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
-import zoukan.desktop.ui.AppScope
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.UpdateStates
 import zoukan.desktop.update.Updates

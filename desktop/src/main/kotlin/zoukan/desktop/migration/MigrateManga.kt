@@ -120,8 +120,8 @@ class MigrateManga(
         }
 
         if (MigrationFlag.CUSTOM_COVER in flags) {
-            zoukan.desktop.ui.common.Images.customCoverFile(current.id).takeIf { it.isFile }?.let { cover ->
-                cover.copyTo(zoukan.desktop.ui.common.Images.customCoverFile(target.id).apply { parentFile.mkdirs() }, overwrite = true)
+            zoukan.desktop.manga.CustomCovers.file(current.id).takeIf { it.isFile }?.let { cover ->
+                cover.copyTo(zoukan.desktop.manga.CustomCovers.file(target.id).apply { parentFile.mkdirs() }, overwrite = true)
             }
         }
 

@@ -25,8 +25,8 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.interactor.GetFavorites
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.tray.Notifications
-import zoukan.desktop.ui.AppScope
 import java.util.Collections
 
 /**

@@ -18,9 +18,9 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.reader.ReaderNavigation
 import zoukan.desktop.ui.reader.ReaderSettingChoices

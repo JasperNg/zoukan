@@ -43,6 +43,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.download.CbzWriter
@@ -51,8 +54,6 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.browse.BrowseScreenModel
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.extension.DesktopExtensionManager
 import java.awt.image.BufferedImage

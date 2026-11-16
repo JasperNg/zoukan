@@ -39,15 +39,15 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.manga.EditManga
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice

@@ -31,11 +31,11 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import kotlin.time.Duration.Companion.minutes
 

@@ -22,10 +22,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.settings.CreateBackupScreen
 import zoukan.desktop.ui.settings.RestoreBackupScreen

@@ -26,8 +26,8 @@ import kotlinx.coroutines.delay
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.Platform
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.common.Corners
-import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.collectAsState
 
 /**

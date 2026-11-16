@@ -19,12 +19,12 @@ import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManagerModule
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
-import zoukan.desktop.ui.common.Toasts
 import java.net.CookieHandler
 import java.net.CookieManager
 import java.net.CookiePolicy

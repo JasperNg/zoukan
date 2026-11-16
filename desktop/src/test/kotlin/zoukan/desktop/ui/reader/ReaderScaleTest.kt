@@ -4,9 +4,9 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.FitModes
-import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.WebtoonScaleTypes
 
 class ReaderScaleTest {
     private fun store() = DesktopPreferenceStore(JavaSharedPreferences("reader_scale_test_${System.nanoTime()}"))

@@ -47,10 +47,10 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.i18n.MR
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
-import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 

@@ -57,12 +57,12 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
+import zoukan.desktop.manga.CustomCovers
 import zoukan.desktop.migration.MigrateManga
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.browse.GlobalSearchScreen
-import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.i18n.desktop.DMR
 import java.io.Serializable
@@ -173,7 +173,7 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
     var busy by remember { mutableStateOf(false) }
     // ZOUKAN -->
     // Android's MigrateMangaDialog: the Custom cover flag only applies when the entry has a custom cover
-    val hasCustomCover = remember(mangaId) { Images.customCoverFile(mangaId).isFile }
+    val hasCustomCover = remember(mangaId) { CustomCovers.file(mangaId).isFile }
     // ZOUKAN <--
     val run = { replace: Boolean ->
         busy = true

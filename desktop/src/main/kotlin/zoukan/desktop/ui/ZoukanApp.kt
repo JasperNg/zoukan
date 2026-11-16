@@ -66,9 +66,6 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.FadeTransition
 import eu.kanade.tachiyomi.network.NetworkHelper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -85,8 +82,11 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.SingleInstance
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
@@ -96,9 +96,7 @@ import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.tray.Notifications
 import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.BrowseTab
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIf
 import zoukan.desktop.ui.common.WindowBounds
 import zoukan.desktop.ui.common.ZoukanTheme
@@ -116,9 +114,6 @@ import zoukan.desktop.update.Updates
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
 import java.awt.SystemTray
-
-/** The app's long-lived background work (extension loading, library refreshes). */
-val AppScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /** The main window, for file dialogs; null in tests. */
 val LocalWindow = staticCompositionLocalOf<FrameWindowScope?> { null }

@@ -35,6 +35,8 @@ import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
@@ -43,8 +45,6 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
-import zoukan.desktop.ui.AppScope
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -184,7 +184,7 @@ class MangaScreenModel(
             }
         }
         screenModelScope.launch {
-            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes().collect { on ->
+            Injekt.get<zoukan.desktop.app.DesktopPreferences>().downloadedOnly().changes().collect { on ->
                 mutableState.update { it.copy(downloadedOnly = on) }
             }
         }

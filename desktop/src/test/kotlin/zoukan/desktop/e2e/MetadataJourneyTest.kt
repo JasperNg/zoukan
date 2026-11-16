@@ -33,9 +33,9 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.settings.SettingsCategory
