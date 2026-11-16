@@ -12,4 +12,13 @@ object Spacing {
 
     /** Widest a settings page grows; wider windows leave the rest empty. */
     val SettingsPageMaxWidth = 900.dp
+
+    /** Below this width two equal panes are too narrow (Material's expanded width class starts at 840 dp). */
+    val TwoPaneBreakpoint = 840.dp
+
+    /** Width of the settings list below [TwoPaneBreakpoint], so the page keeps most of the room. */
+    val SettingsListNarrowWidth = 280.dp
+
+    /** Widest the settings list grows in wide windows. */
+    val SettingsListMaxWidth = 450.dp
 }

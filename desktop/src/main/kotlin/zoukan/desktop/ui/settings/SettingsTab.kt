@@ -68,6 +68,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -151,9 +152,17 @@ fun openSettingsCategory(category: SettingsCategory) {
     selectedCategory = category
 }
 
+/** How wide the list of pages is when [available] width is shared with the open page. */
+internal fun settingsListWidth(available: Dp): Dp =
+    if (available < Spacing.TwoPaneBreakpoint) {
+        Spacing.SettingsListNarrowWidth.coerceAtMost(available / 2)
+    } else {
+        (available / 2).coerceAtMost(Spacing.SettingsListMaxWidth)
+    }
+
 /**
  * Settings, laid out as the Android app's tablet settings: the list of pages on the left (half the
- * width, at most 450dp) and the open page on the right.
+ * width, at most 450dp; a fixed narrower width in small windows) and the open page on the right.
  */
 @Composable
 fun SettingsTab() {
@@ -246,7 +255,7 @@ fun SettingsTab() {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val listWidth = (maxWidth / 2).coerceAtMost(450.dp)
+        val listWidth = settingsListWidth(maxWidth)
         Row(Modifier.fillMaxSize()) {
             Surface(color = palerSurface(), modifier = Modifier.width(listWidth).fillMaxHeight()) {
                 SettingsCategoryList(pages, if (searching) null else selected) {
