@@ -12,6 +12,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -487,6 +488,39 @@ class GraphicsCompatTest {
         src.density shouldBe 160
         src.density = 320
         src.density shouldBe 320
+    }
+
+    @Test
+    fun `Paint effects that Canvas cannot draw are still Android stubs`() {
+        // Reflection passes null for the enum arguments, so the stub enums are never touched
+        val float = Float::class.javaPrimitiveType!!
+        val int = Int::class.javaPrimitiveType!!
+        val tileMode = Class.forName("android.graphics.Shader\$TileMode")
+        val effects = listOf(
+            Triple("PorterDuffXfermode", listOf<Class<*>>(Class.forName("android.graphics.PorterDuff\$Mode")), listOf<Any?>(null)),
+            Triple(
+                "LinearGradient",
+                listOf(float, float, float, float, int, int, tileMode),
+                listOf(0f, 0f, 1f, 1f, 0, 0, null),
+            ),
+            Triple("RadialGradient", listOf(float, float, float, int, int, tileMode), listOf(0f, 0f, 1f, 0, 0, null)),
+            Triple(
+                "BitmapShader",
+                listOf(Bitmap::class.java, tileMode, tileMode),
+                listOf(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), null, null),
+            ),
+            Triple("BlurMaskFilter", listOf(float, Class.forName("android.graphics.BlurMaskFilter\$Blur")), listOf(1f, null)),
+            Triple("DashPathEffect", listOf(FloatArray::class.java, float), listOf(floatArrayOf(1f, 1f), 0f)),
+        )
+        for ((name, types, args) in effects) {
+            withClue("$name is no longer a stub: map it in Canvas.applyPaint and Canvas.drawImage in the same change, then update this test") {
+                val constructor = Class.forName("android.graphics.$name").getConstructor(*types.toTypedArray())
+                val failure = shouldThrow<java.lang.reflect.InvocationTargetException> {
+                    constructor.newInstance(*args.toTypedArray())
+                }
+                failure.targetException.message shouldBe "Stub!"
+            }
+        }
     }
 
     @Test
