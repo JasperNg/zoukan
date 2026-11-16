@@ -12,6 +12,7 @@ import org.jetbrains.skia.SamplingMode
 import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageFormats
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.UnreadableImageException
 import zoukan.i18n.desktop.DMR
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
@@ -79,7 +80,7 @@ class PageImage(
             // ZOUKAN -->
             val format = ImageFormats.sniff(bytes)
             // Neither Skia, ImageIO nor the bundled FFmpeg (no libjxl) reads JPEG XL: say so plainly
-            if (format == Format.Jxl) throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
+            if (format == Format.Jxl) throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
             // Animated GIF and WebP pages play, as on Android; they are not cropped, nor given a background
             if (format == Format.Gif || format == Format.Webp) {
                 PageAnimation.of(bytes)?.let { return PageImage(it.width, it.height, emptyList(), null, it) }
@@ -95,7 +96,7 @@ class PageImage(
                 // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys and the AVIF and
                 // HEIF reader covers a few more. Their pages go the same way, cropped as the others
                 val buffered = ImageIO.read(ByteArrayInputStream(bytes))
-                    ?: throw IllegalArgumentException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
+                    ?: throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
                 buffered.toComposeImageBitmap().asSkiaBitmap()
             }
             // A page far wider than the window can show is scaled down first, and the full one freed

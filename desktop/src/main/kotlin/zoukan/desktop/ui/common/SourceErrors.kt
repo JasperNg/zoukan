@@ -19,6 +19,13 @@ internal fun sourceErrorText(e: Throwable): String = when {
     (e::class == Exception::class || e::class == java.io.IOException::class) && !e.message.isNullOrBlank() ->
         e.message.orEmpty()
     // The reader's image decoder words this for the user ("unsupported image format")
-    e::class == IllegalArgumentException::class && !e.message.isNullOrBlank() -> e.message.orEmpty()
+    e is UnreadableImageException -> e.message
     else -> localized(DMR.strings.source_request_failed)
 }
+
+/**
+ * A page that cannot be decoded, with a [message] already worded for the user. Other
+ * [IllegalArgumentException]s (a failed `require`, a malformed URL) carry developer text and are
+ * not shown.
+ */
+internal class UnreadableImageException(override val message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)

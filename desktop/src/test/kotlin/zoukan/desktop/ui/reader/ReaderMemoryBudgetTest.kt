@@ -13,12 +13,19 @@ class ReaderMemoryBudgetTest {
     fun `the decoded pages kept stay under the pixel budget across a chapter`() {
         val pixels = { _: Int -> 9_600_000L }
         for (center in 0 until 30) {
-            for (visible in listOf(center..center, 0..29)) {
-                val kept = PageWindow.kept(30, center, behind = 4, ahead = 12, visible = visible, pixels = pixels)
-                kept.sumOf { pixels(it) } shouldBeLessThanOrEqual PageWindow.BUDGET_PIXELS
-                kept shouldContain center
-            }
+            val kept = PageWindow.kept(30, center, behind = 4, ahead = 12, visible = center..center, pixels = pixels)
+            kept.sumOf { pixels(it) } shouldBeLessThanOrEqual PageWindow.BUDGET_PIXELS
+            kept shouldContain center
         }
+    }
+
+    @Test
+    fun `pages on screen are kept even over the budget, and nothing else is`() {
+        // Zoomed out on large pages: four pages on screen already pass the budget
+        val pixels = { _: Int -> 24_000_000L }
+        val visible = 10..13
+        val kept = PageWindow.kept(30, center = 10, behind = 4, ahead = 12, visible = visible, pixels = pixels)
+        kept shouldBe visible.toSet()
     }
 
     @Test

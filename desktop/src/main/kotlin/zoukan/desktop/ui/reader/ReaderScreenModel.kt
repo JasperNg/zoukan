@@ -967,14 +967,16 @@ internal object PageWindow {
     /**
      * The pages that keep their decoded image with [center] current: the window of [keepsImage],
      * nearest first (ahead before behind) while the decoded [pixels] stay within [BUDGET_PIXELS].
-     * The current page is always kept; a page not decoded yet has no pixels.
+     * The current page and the [visible] ones are always kept, whatever their size: releasing a page
+     * on screen would only make it decode again. A page not decoded yet has no pixels.
      */
     fun kept(count: Int, center: Int, behind: Int, ahead: Int, visible: IntRange, pixels: (Int) -> Long): Set<Int> {
         val window = (0 until count).filter { keepsImage(it, center, behind, ahead, visible) }
         if (center !in 0 until count) return window.toSet()
         val kept = linkedSetOf(center)
-        var total = pixels(center)
-        val others = window.filter { it != center }.sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
+        window.filterTo(kept) { it in visible }
+        var total = kept.sumOf(pixels)
+        val others = window.filter { it !in kept }.sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
         for (index in others) {
             total += pixels(index)
             if (total > BUDGET_PIXELS) break
