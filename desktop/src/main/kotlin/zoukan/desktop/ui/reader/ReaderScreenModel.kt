@@ -83,6 +83,12 @@ class ReaderPage(val index: Int, val page: Page) {
     var decodedHeight = 0
         private set
 
+    /** Sets the page back to Queued when it is Ready; its image frees its pixels once nothing draws it */
+    fun release() {
+        val current = state.value
+        if (current is State.Ready && state.compareAndSet(current, State.Queued)) current.image.release()
+    }
+
     fun rememberSize(width: Int, height: Int) {
         decodedHeight = height
         decodedWidth = width
@@ -244,6 +250,8 @@ class ReaderScreenModel(
         prefetchJob?.cancel()
         keepAllBytes = false
         visiblePages = IntRange.EMPTY
+        // The old chapter's decoded pages free their pixels once the viewers stop drawing them
+        state.value.pages.forEach { it.release() }
         // ZOUKAN <--
         mutableState.update {
             it.copy(
@@ -467,15 +475,24 @@ class ReaderScreenModel(
         // ZOUKAN -->
         val ahead = preferences.preloadSize().get().coerceIn(1, 50)
         val keepAhead = maxOf(KEEP_AHEAD, ahead + 2)
-        val wanted = (center - 2..center + ahead).filter { it in pages.indices }
+        val kept = PageWindow.kept(
+            pages.size,
+            center,
+            KEEP_BEHIND,
+            keepAhead,
+            visiblePages,
+            pixels = { pages[it].decodedWidth.toLong() * pages[it].decodedHeight },
+        )
+        // A page of known size that does not fit the budget is not decoded only to be released again
+        val wanted = (center - 2..center + ahead).filter { it in pages.indices && (it in kept || pages[it].decodedWidth == 0) }
             // ZOUKAN <--
             .sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
         wanted.forEach(::loadPage)
         pages.forEach { page ->
             // ZOUKAN -->
-            if (!keepsImage(page.index, center, KEEP_BEHIND, keepAhead, visiblePages)) {
+            if (page.index !in kept) {
                 // ZOUKAN <--
-                if (page.state.value is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
+                page.release()
             }
             // The downloaded bytes are kept longer, so going back a few pages needs no network
             // ZOUKAN -->
@@ -505,14 +522,21 @@ class ReaderScreenModel(
                 val bytes = page.bytes
                     ?: (format?.page(index) ?: downloads.withPermit { fetch(source!!, page.page) }).also { page.bytes = it }
                 // ZOUKAN -->
-                val image = decodes.withPermit { PageImage.decode(bytes, cropBorders()) }
-                ensureActive()
+                val widthPx = viewportWidth
+                val maxWidth = if (widthPx > 0) (widthPx * MAX_ZOOM).toInt() else null
+                val image = decodes.withPermit { PageImage.decode(bytes, cropBorders(), maxWidth) }
+                if (!isActive || !owns()) {
+                    image.release()
+                    ensureActive()
+                }
                 if (image.width > image.height) {
                     mutableState.update { if (index in it.widePages || it.pages.getOrNull(index) !== page) it else it.copy(widePages = it.widePages + index) }
                 }
                 if (owns()) {
                     page.rememberSize(image.width, image.height)
                     page.state.value = ReaderPage.State.Ready(image)
+                } else {
+                    image.release()
                 }
                 // ZOUKAN <--
             } catch (e: CancellationException) {
@@ -608,6 +632,14 @@ class ReaderScreenModel(
         requestPages(index)
     }
 
+    /** The viewer's width in pixels, read when a page decodes: no page is decoded wider than it can be zoomed */
+    @Volatile
+    private var viewportWidth = 0
+
+    fun onViewport(widthPx: Int) {
+        viewportWidth = widthPx
+    }
+
     /** Called by the webtoon viewer with the pages in its window; those are never released. */
     fun onVisiblePages(visible: IntRange) {
         visiblePages = visible
@@ -663,9 +695,7 @@ class ReaderScreenModel(
 
     /** Decodes the shown pages again, after a setting that changes decoding (crop borders). */
     fun redecodePages() {
-        state.value.pages.forEach { page ->
-            if (page.state.value is ReaderPage.State.Ready) page.state.value = ReaderPage.State.Queued
-        }
+        state.value.pages.forEach { it.release() }
         requestPages(state.value.currentPage)
     }
 
@@ -915,6 +945,9 @@ class ReaderScreenModel(
 
         // ZOUKAN -->
         private val DECODE_THREADS = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+
+        /** The most a page is zoomed in: the paged viewer's, which is above the webtoon's 3 */
+        private const val MAX_ZOOM = PageZoom.MAX_ZOOM
         // ZOUKAN <--
     }
 }
@@ -926,6 +959,29 @@ class ReaderScreenModel(
  */
 internal fun keepsImage(index: Int, center: Int, behind: Int, ahead: Int, visible: IntRange): Boolean =
     index in center - behind..center + ahead || index in visible
+
+internal object PageWindow {
+    const val BUDGET_PIXELS = 64_000_000L
+
+    /**
+     * The pages that keep their decoded image with [center] current: the window of [keepsImage],
+     * nearest first (ahead before behind) while the decoded [pixels] stay within [BUDGET_PIXELS].
+     * The current page is always kept; a page not decoded yet has no pixels.
+     */
+    fun kept(count: Int, center: Int, behind: Int, ahead: Int, visible: IntRange, pixels: (Int) -> Long): Set<Int> {
+        val window = (0 until count).filter { keepsImage(it, center, behind, ahead, visible) }
+        if (center !in 0 until count) return window.toSet()
+        val kept = linkedSetOf(center)
+        var total = pixels(center)
+        val others = window.filter { it != center }.sortedBy { kotlin.math.abs(it - center) + if (it < center) 1 else 0 }
+        for (index in others) {
+            total += pixels(index)
+            if (total > BUDGET_PIXELS) break
+            kept += index
+        }
+        return kept
+    }
+}
 
 internal object ReaderCleanup {
     /**

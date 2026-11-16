@@ -22,6 +22,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -118,6 +119,9 @@ fun WebtoonViewer(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewportHeight = constraints.maxHeight.toFloat()
         val viewportWidth = maxWidth
+        // ZOUKAN -->
+        SideEffect { model.onViewport(constraints.maxWidth) }
+        // ZOUKAN <--
         // ZOUKAN -->
         val smartScale = if (smartScaleOn) WebtoonScaleTypes.scale(scaleType, constraints.maxWidth.toFloat(), viewportHeight) else 1f
         val stripWidth = viewportWidth * (1f - 2f * sidePadding.coerceIn(0, 25) / 100f) * zoom * smartScale

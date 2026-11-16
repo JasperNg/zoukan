@@ -29,10 +29,20 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.i18n.desktop.DMR
 
+/** Tells [image] that this composable draws it, so a released image keeps its pixels until this leaves */
+@Composable
+internal fun DrawsImage(image: PageImage) {
+    androidx.compose.runtime.DisposableEffect(image) {
+        image.attach()
+        onDispose { image.detach() }
+    }
+}
+
 /** A decoded page drawn at its own aspect ratio: the slices stacked, filling the width it gets. */
 @Composable
 fun PageSlices(image: PageImage, modifier: Modifier = Modifier) {
     // ZOUKAN -->
+    DrawsImage(image)
     PlayAnimation(image)
     // ZOUKAN <--
     Column(modifier.testTag("page-image")) {
