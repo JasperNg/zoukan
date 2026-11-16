@@ -14,13 +14,13 @@
   feature: "Main window, navigation rail with 5 tabs"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.HomeTabSelectionTest]
 
 - key: state:shell
   feature: "Window content: theme, snackbar messages, mouse Back button"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.common.AppMessagesTest, ui.ShortcutsBackGuardTest, e2e.BackupRestoreJourneyTest]
 
 - key: flow:shell.window-bounds
   feature: "Window size and position restored, minimum 800x560"
@@ -40,7 +40,7 @@
   feature: "Global shortcuts: Ctrl+1..5 tabs, Ctrl+comma settings, Ctrl+Shift+U update, Ctrl+F find, Ctrl+A select all, Esc/Alt+Left back"
   tier: journey
   smoke: false
-  tests: [ui.ShortcutsTest, e2e.KeyboardShortcutsJourneyTest]
+  tests: [ui.ShortcutsTest, ui.ShortcutsBackGuardTest, ui.HomeTabSelectionTest, e2e.KeyboardShortcutsJourneyTest, e2e.MigrationBackGuardJourneyTest]
 
 - key: flow:shell.theme
   feature: "Theme: system/light/dark, color schemes, custom color, pure black"
@@ -1180,7 +1180,7 @@
   feature: "Migrate-confirm, progress (cannot be dismissed) and exit dialogs"
   tier: journey
   smoke: false
-  tests: [e2e.MigrationJourneyTest]
+  tests: [e2e.MigrationJourneyTest, e2e.MigrationBackGuardJourneyTest]
 
 - key: dialog:recs.RecommendationSearchDialog
   feature: "Recommendation search dialog (hide library entries)"
@@ -1198,7 +1198,7 @@
   feature: "Common recommendations screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.ScreenSerializationTest]
 
 # --- Empty states ---
 
