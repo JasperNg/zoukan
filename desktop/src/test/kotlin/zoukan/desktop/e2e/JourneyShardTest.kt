@@ -86,7 +86,14 @@ class JourneyShardTest {
         // `test` leaves out zoukan.desktop.e2e.*JourneyTest and journeyTest runs only those, so a
         // journey named otherwise would run in the shared JVM of `test`, where the runtime may
         // already be started. Unit tests of the kit itself are listed here.
-        val unitTests = setOf(JourneyShardTest::class.java.name, ReadThroughMovesTest::class.java.name)
+        val unitTests = setOf(
+            JourneyShardTest::class.java.name,
+            ReadThroughMovesTest::class.java.name,
+            FixtureServerTest::class.java.name,
+            FixtureKomgaTest::class.java.name,
+            FixtureSyncServerTest::class.java.name,
+            FixtureSourcePreviewsTest::class.java.name,
+        )
         val misnamed = topLevelClasses()
             .filter { it !in unitTests && !JourneyShard.isJourney(it) }
             .filter { name -> Class.forName(name, false, javaClass.classLoader).declaredMethods.any { it.isAnnotationPresent(Test::class.java) } }
