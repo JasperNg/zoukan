@@ -864,4 +864,8 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="repeat_the_password">Repeat the password</string>
+    <string name="passwords_do_not_match">The passwords do not match</string>
+    <string name="download_password_change_warning">Chapters downloaded with the current password only open with it. Keep a copy of it if you have encrypted downloads.</string>
+    <string name="existing_downloads_keep_their_password">Downloads made with it need it to open</string>
 </resources>

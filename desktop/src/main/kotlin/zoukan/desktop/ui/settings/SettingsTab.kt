@@ -289,41 +289,9 @@ fun SettingsTab() {
     }
 
     if (passwordDialog) {
-        var password by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { passwordDialog = false },
-            title = { Text(localized(DMR.strings.download_password)) },
-            text = {
-                OutlinedTextField(
-                    password,
-                    { password = it },
-                    singleLine = true,
-                    label = { Text(localized(MR.strings.password)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                )
-            },
-            confirmButton = {
-                TextButton(enabled = password.isNotEmpty(), onClick = {
-                    cbzPassword.set(password)
-                    hasPassword = true
-                    passwordDialog = false
-                    Toasts.show(localized(DMR.strings.download_password_saved))
-                }) { Text(localized(MR.strings.action_save)) }
-            },
-            dismissButton = {
-                Row {
-                    if (hasPassword) {
-                        TextButton(onClick = {
-                            cbzPassword.set("")
-                            securityPreferences.passwordProtectDownloads().set(false)
-                            hasPassword = false
-                            passwordDialog = false
-                        }) { Text(localized(MR.strings.action_remove)) }
-                    }
-                    TextButton(onClick = { passwordDialog = false }) { Text(localized(MR.strings.action_cancel)) }
-                }
-            },
-        )
+        DownloadPasswordDialog(cbzPassword, securityPreferences.passwordProtectDownloads(), hasPassword, { hasPassword = it }) {
+            passwordDialog = false
+        }
     }
 }
 
@@ -452,7 +420,8 @@ private fun LazyListScope.downloadSettings(
     item {
         SettingRow(
             if (hasPassword) localized(DMR.strings.change_the_download_password) else localized(DMR.strings.set_the_download_password),
-            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name),
+            localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name) +
+                if (hasPassword) " " + localized(DMR.strings.existing_downloads_keep_their_password) + "." else "",
             onClick = onEditPassword,
         )
     }
