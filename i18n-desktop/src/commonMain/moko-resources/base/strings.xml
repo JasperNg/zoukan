@@ -889,5 +889,6 @@
     <string name="reader_key_chapters">C</string>
     <string name="reader_key_retry">R / Shift+R</string>
     <string name="reader_key_shift_pages">D</string>
+    <string name="tap_zone_with_action">%1$s: %2$s</string>
     <string name="local_files_not_trashed">Could not move %1$s to the trash, so nothing was removed. Remove the folder yourself if you want it gone.</string>
 </resources>

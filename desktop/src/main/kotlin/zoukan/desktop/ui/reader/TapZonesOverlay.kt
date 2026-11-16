@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.i18n.desktop.DMR
 
 /**
  * Android's tap zones overlay (ReaderNavigationOverlayView): the zones in color with their names.
@@ -66,7 +67,12 @@ class TapZonesOverlayState(private val preferences: DesktopPreferences) {
 }
 
 @Composable
-fun TapZonesOverlay(state: TapZonesOverlayState, zones: List<ReaderNavigation.Zone>) {
+fun TapZonesOverlay(
+    state: TapZonesOverlayState,
+    zones: List<ReaderNavigation.Zone>,
+    rtl: Boolean = false,
+    vertical: Boolean = false,
+) {
     LaunchedEffect(zones) { state.onZones(zones) }
     val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
     AnimatedVisibility(
@@ -84,14 +90,24 @@ fun TapZonesOverlay(state: TapZonesOverlayState, zones: List<ReaderNavigation.Zo
                         .background(regionColor(zone.region)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val label = regionLabel(zone.region)
-                    // White text with a black outline, as Android draws it
-                    Text(label, style = labelStyle.copy(color = Color.Black, drawStyle = Stroke(width = 8f)))
-                    Text(label, style = labelStyle.copy(color = Color.White))
+                    OutlinedLabel(regionLabel(zone.region, rtl, vertical))
+                }
+            }
+            // Nothing covers the centre: a tap there opens the menu, so say so (no colored box)
+            if (ReaderNavigation.regionAt(0.5f, 0.5f, state.zones) == ReaderNavigation.Region.MENU) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    OutlinedLabel(regionLabel(ReaderNavigation.Region.MENU))
                 }
             }
         }
     }
+}
+
+/** White text with a black outline, as Android draws it */
+@Composable
+private fun OutlinedLabel(label: String) {
+    Text(label, style = labelStyle.copy(color = Color.Black, drawStyle = Stroke(width = 8f)))
+    Text(label, style = labelStyle.copy(color = Color.White))
 }
 
 private const val FADE_MILLIS = 1000
@@ -107,10 +123,17 @@ private fun regionColor(region: ReaderNavigation.Region): Color = when (region) 
     ReaderNavigation.Region.RIGHT -> Color(0xCCA6CFD5)
 }
 
-private fun regionLabel(region: ReaderNavigation.Region): String = when (region) {
+internal fun regionLabel(region: ReaderNavigation.Region, rtl: Boolean = false, vertical: Boolean = false): String = when (region) {
     ReaderNavigation.Region.MENU -> localized(MR.strings.action_menu)
     ReaderNavigation.Region.PREV -> localized(MR.strings.nav_zone_prev)
     ReaderNavigation.Region.NEXT -> localized(MR.strings.nav_zone_next)
-    ReaderNavigation.Region.LEFT -> localized(MR.strings.nav_zone_left)
-    ReaderNavigation.Region.RIGHT -> localized(MR.strings.nav_zone_right)
+    // The same rules as the paged viewer's taps: a side goes forward or back by the reading direction
+    ReaderNavigation.Region.LEFT -> sideLabel(MR.strings.nav_zone_left, forward = !vertical && rtl)
+    ReaderNavigation.Region.RIGHT -> sideLabel(MR.strings.nav_zone_right, forward = vertical || !rtl)
 }
+
+private fun sideLabel(position: dev.icerock.moko.resources.StringResource, forward: Boolean): String = localized(
+    DMR.strings.tap_zone_with_action,
+    localized(position),
+    localized(if (forward) MR.strings.nav_zone_next else MR.strings.nav_zone_prev),
+)

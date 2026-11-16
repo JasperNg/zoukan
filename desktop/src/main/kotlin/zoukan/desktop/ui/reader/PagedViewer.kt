@@ -435,7 +435,7 @@ fun PagedViewer(
         }
         // ZOUKAN -->
         if (tapZones != null) {
-            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, vertical, ReaderNavigation.Invert.of(navInvert), smallerZones))
+            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, vertical, ReaderNavigation.Invert.of(navInvert), smallerZones), rtl = rtl, vertical = vertical)
         }
         // ZOUKAN <--
     }

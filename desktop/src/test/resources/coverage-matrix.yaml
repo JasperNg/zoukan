@@ -797,7 +797,7 @@
   feature: "Tap zones overlay"
   tier: unit
   smoke: false
-  tests: [ui.reader.ReaderNavigationTest, ui.reader.ReaderScaleTest]
+  tests: [ui.reader.ReaderNavigationTest, ui.reader.ReaderScaleTest, ui.reader.TapZoneLabelsTest]
   gap: "Tapping is not driven; planned: ReaderSettingsJourneyTest"
 
 # --- More tab and its screens ---

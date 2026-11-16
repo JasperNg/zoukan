@@ -329,7 +329,7 @@ fun WebtoonViewer(
         }
         // ZOUKAN -->
         if (tapZones != null) {
-            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, verticalViewer = true, ReaderNavigation.Invert.of(navInvert), smallerZones))
+            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, verticalViewer = true, ReaderNavigation.Invert.of(navInvert), smallerZones), vertical = true)
         }
         // ZOUKAN <--
     }
