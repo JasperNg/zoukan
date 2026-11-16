@@ -304,45 +304,42 @@
 
 - key: tab:History
   feature: "Reading history list and search"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.history.HistoryFiltersTest]
-  gap: "Search and resume not driven; planned: HistoryJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.history.HistoryFiltersTest, e2e.HistoryJourneyTest]
 
 - key: flow:history.clear-all
   feature: "Select mode, clear all history"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: HistoryJourneyTest"
+  tests: [e2e.HistoryJourneyTest]
 
 - key: flow:history.selection
   feature: "Selection: clear, select all, invert, remove"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [ui.history.HistoryFiltersTest]
-  gap: "Not driven in the UI; planned: HistoryJourneyTest"
+  tests: [ui.history.HistoryFiltersTest, e2e.HistoryJourneyTest]
+  gap: "The journey selects all and removes; invert and Shift + click ranges are unit tested only"
 
 - key: flow:history.row-actions
   feature: "Row: add to library, remove"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: HistoryJourneyTest"
+  tests: [e2e.HistoryJourneyTest]
+  gap: "The journey removes and resumes; the add to library button is not driven"
 
 - key: dialog:history.RemoveDialog
   feature: "Remove dialog (one or whole entry)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: HistoryJourneyTest"
+  tests: [e2e.HistoryJourneyTest]
 
 - key: dialog:history.HistoryFilterDialog
   feature: "History filter dialog"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [ui.history.HistoryFiltersTest]
-  gap: "Dialog not opened; planned: HistoryJourneyTest"
+  tests: [ui.history.HistoryFiltersTest, e2e.HistoryJourneyTest]
+  gap: "The journey toggles the not-in-library filter; the unfinished filters and the panorama switch are not driven"
 
 - key: screen:more.HistoryScreen
   feature: "History as a More screen"
@@ -829,15 +826,14 @@
   feature: "Downloaded only switch"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: DownloadedOnlyJourneyTest"
+  tests: [e2e.DownloadedOnlyJourneyTest]
 
 - key: flow:more.incognito
   feature: "Incognito mode switch"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: IncognitoJourneyTest"
+  tests: [e2e.IncognitoJourneyTest]
+  gap: "Global incognito only; per-extension incognito is under dialog:settings.IncognitoExtensionsDialog"
 
 - key: flow:more.hidden-tabs
   feature: "Updates / History rows (when hidden from the rail)"
@@ -883,10 +879,10 @@
 
 - key: screen:stats.StatsScreen
   feature: "Statistics row and Stats screen"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Counts are not checked; planned: StatsJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.StatsJourneyTest]
+  gap: "The journey checks the library, read chapter, total chapter, downloaded and read time counts; tracker figures and the all-read-entries switch are not driven"
 
 - key: settings:Data
   feature: "Data and storage (also the More tab's row): storage location, downloads folder; backup create, restore, folder; storage usage, chapter and cover cache, data folder; export library list; data sync; data saver"
@@ -1120,7 +1116,7 @@
   tier: journey
   smoke: false
   tests: []
-  gap: "No test sets an extension incognito (ReaderIncognitoTest covers merged entries only). Per-extension incognito keys on the extension package, which test sources lack (needs the StoreInstall jar source); planned: IncognitoJourneyTest"
+  gap: "Accepted gap: no test sets an extension incognito (ReaderIncognitoTest covers merged entries only; IncognitoJourneyTest covers the global switch). Per-extension incognito keys on the extension package, which a testSources source does not have; it needs the StoreInstall jar source"
 
 - key: settings:EHentai
   feature: "E-Hentai options, languages, front page categories, favorites sync"
