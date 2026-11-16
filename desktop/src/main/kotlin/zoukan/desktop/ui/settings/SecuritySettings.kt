@@ -262,7 +262,7 @@ private fun DaysDialog(preferences: SecurityPreferences, onDismiss: () -> Unit) 
             TextButton(onClick = {
                 preferences.authenticatorDays().set(days)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -310,7 +310,7 @@ private fun TimesDialog(preferences: SecurityPreferences, onDismiss: () -> Unit)
             TextButton(onClick = {
                 preferences.authenticatorTimeRanges().set(ranges.toSet())
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

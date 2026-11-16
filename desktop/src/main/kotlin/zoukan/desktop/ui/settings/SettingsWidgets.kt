@@ -226,7 +226,7 @@ fun MultiSelectPreference(
                 TextButton(onClick = {
                     preference.set(chosen)
                     open = false
-                }) { Text("OK") }
+                }) { Text(localized(MR.strings.action_ok)) }
             },
             dismissButton = { TextButton(onClick = { open = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
@@ -317,7 +317,7 @@ fun CategoriesIncludeExcludeDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(inc, exc) }) { Text("OK") } },
+        confirmButton = { TextButton(onClick = { onConfirm(inc, exc) }) { Text(localized(MR.strings.action_ok)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }

@@ -181,7 +181,7 @@ private fun TextDialog(title: String, preference: Preference<String>, secret: Bo
             TextButton(onClick = {
                 preference.set(text.trim())
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -221,7 +221,7 @@ private fun WhatDialog(preferences: SyncPreferences, onDismiss: () -> Unit) {
             TextButton(onClick = {
                 preferences.setSyncSettings(s)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -245,7 +245,7 @@ private fun TriggersDialog(preferences: SyncPreferences, onDismiss: () -> Unit) 
             TextButton(onClick = {
                 preferences.setSyncTriggerOptions(t)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

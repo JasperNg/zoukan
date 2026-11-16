@@ -362,7 +362,7 @@ private fun DisplaySection() {
         ChoiceSetting(
             localized(MR.strings.pref_date_format),
             format,
-            Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { "Default" }} (${Dates.format(now, pattern)})" },
+            Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { localized(MR.strings.label_default) }} (${Dates.format(now, pattern)})" },
         ) { ui.dateFormat().set(it) }
         SwitchPreference(
             localized(MR.strings.pref_relative_format),

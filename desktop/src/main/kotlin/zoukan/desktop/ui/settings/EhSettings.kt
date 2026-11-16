@@ -34,6 +34,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.DeleteFavoriteEntries
 import tachiyomi.i18n.MR
@@ -161,7 +163,10 @@ private fun EhSettings() {
                                         error = localized(DMR.strings.these_cookies_did_not_sign_in)
                                     }
                                 }
-                                .onFailure { error = it.message }
+                                .onFailure {
+                                    logcat(LogPriority.WARN, it) { "Signing in failed" }
+                                    error = localized(DMR.strings.could_not_sign_in)
+                                }
                             busy = false
                         }
                     },
@@ -256,7 +261,7 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
             TextButton(onClick = {
                 preferences.exhSettingsLanguages().set(rows.joinToString("\n") { it.joinToString("*") })
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -287,7 +292,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
             TextButton(onClick = {
                 preferences.exhEnabledCategories().set(shown.joinToString(",") { (!it).toString() })
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

@@ -97,7 +97,7 @@ private fun DiscordSettingsSection() {
                 TextButton(onClick = {
                     presence.customMessage().set(text.trim())
                     messageDialog = false
-                }) { Text("OK") }
+                }) { Text(localized(MR.strings.action_ok)) }
             },
             dismissButton = { TextButton(onClick = { messageDialog = false }) { Text(localized(MR.strings.action_cancel)) } },
         )
@@ -127,7 +127,7 @@ private fun HiddenCategoriesDialog(presence: DiscordPresence, onDismiss: () -> U
             TextButton(onClick = {
                 presence.hiddenCategories().set(hidden)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
