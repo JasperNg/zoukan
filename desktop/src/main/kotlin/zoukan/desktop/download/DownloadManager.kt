@@ -106,6 +106,13 @@ class DownloadManager(
     private var job: Job? = null
     private var stopping: Job? = null
 
+    /**
+     * One lock per entry, shared by the clean-up and the download writer, so clean-up never deletes the
+     * files of a download that is starting or running. Never held for two entries at once.
+     */
+    private val entryLocks = ConcurrentHashMap<Long, Mutex>()
+    private fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
+
     /** The file names in each manga folder, read once and kept up to date by this class */
     private val cache = ConcurrentHashMap<File, Set<String>>()
 
@@ -358,8 +365,14 @@ class DownloadManager(
                     invalidate(folder)
                     return@folder
                 }
+                // The queue is read for this entry under its lock, right before deleting: an entry queued
+                // since the walk began is left alone, and a download of it waits for this to finish
                 if (manga.id in busy) return@folder
-                cleared += cleanupEntry(folder, manga, chaptersOf(manga.id), removeRead, removeNonFavorite)
+                entryLock(manga.id).withLock {
+                    if (_queue.value.none { it.manga.id == manga.id }) {
+                        cleared += cleanupEntry(folder, manga, chaptersOf(manga.id), removeRead, removeNonFavorite)
+                    }
+                }
             }
         }
         cleared
@@ -641,48 +654,50 @@ class DownloadManager(
                 ?: error("The source of ${manga.title} is not installed")
             val dir = paths.mangaDir(manga)
             // The gate is the disk, not the cache: a chapter copied in since the folder was listed
-            // is kept as it is
-            if (paths.findChapter(manga, chapter) != null) {
-                invalidate(dir)
-            } else {
-                val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
-                if (!hasRoom(freeSpace)) error(localized(DMR.strings.download_disk_full))
-                val downloader = ChapterDownloader(
-                    pageList = { source.getPageList(chapter.toSChapter()) },
-                    imageUrl = { source.getImageUrl(it) },
-                    image = { page ->
-                        // ZOUKAN -->
-                        // The SY data saver, when it applies to downloads, as Android's Downloader
-                        val prefs = sourcePreferences
-                        val dataSaver =
-                            if (prefs != null && prefs.dataSaverDownloader().get()) {
-                                exh.util.DataSaver(source, prefs)
-                            } else {
-                                exh.util.DataSaver.NoOp
+            // is kept as it is. The entry's lock keeps a clean-up away from the files being written.
+            entryLock(manga.id).withLock {
+                if (paths.findChapter(manga, chapter) != null) {
+                    invalidate(dir)
+                } else {
+                    val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
+                    if (!hasRoom(freeSpace)) error(localized(DMR.strings.download_disk_full))
+                    val downloader = ChapterDownloader(
+                        pageList = { source.getPageList(chapter.toSChapter()) },
+                        imageUrl = { source.getImageUrl(it) },
+                        image = { page ->
+                            // ZOUKAN -->
+                            // The SY data saver, when it applies to downloads, as Android's Downloader
+                            val prefs = sourcePreferences
+                            val dataSaver =
+                                if (prefs != null && prefs.dataSaverDownloader().get()) {
+                                    exh.util.DataSaver(source, prefs)
+                                } else {
+                                    exh.util.DataSaver.NoOp
+                                }
+                            with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
+                                // ZOUKAN <--
+                                if (!response.isSuccessful) error("HTTP ${response.code}")
+                                response.body.bytes()
                             }
-                        with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
-                            // ZOUKAN <--
-                            if (!response.isSuccessful) error("HTTP ${response.code}")
-                            response.body.bytes()
-                        }
-                    },
-                    parallelPages = preferences.parallelPageLimit().get(),
-                )
-                // Only a CBZ is encrypted: a folder download never reads the secret store
-                val asCbz = preferences.saveChaptersAsCBZ().get()
-                val encryption = if (asCbz) password.encryption() else null
-                val options = ChapterDownloader.Options(
-                    asCbz = asCbz,
-                    encryption = encryption,
-                    comicInfo = comicInfo(manga, chapter, source, encryption),
-                    // ZOUKAN -->
-                    splitTallImages = preferences.splitTallImages().get(),
-                    // ZOUKAN <--
-                )
-                downloader.download(dir, paths.chapterDirName(chapter), options) { done, total ->
-                    download.progress.value = done to total
+                        },
+                        parallelPages = preferences.parallelPageLimit().get(),
+                    )
+                    // Only a CBZ is encrypted: a folder download never reads the secret store
+                    val asCbz = preferences.saveChaptersAsCBZ().get()
+                    val encryption = if (asCbz) password.encryption() else null
+                    val options = ChapterDownloader.Options(
+                        asCbz = asCbz,
+                        encryption = encryption,
+                        comicInfo = comicInfo(manga, chapter, source, encryption),
+                        // ZOUKAN -->
+                        splitTallImages = preferences.splitTallImages().get(),
+                        // ZOUKAN <--
+                    )
+                    downloader.download(dir, paths.chapterDirName(chapter), options) { done, total ->
+                        download.progress.value = done to total
+                    }
+                    invalidate(dir)
                 }
-                invalidate(dir)
             }
             download.state.value = Download.State.DOWNLOADED
             _queue.update { it - download }
