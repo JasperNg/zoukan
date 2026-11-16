@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.common
 
+import eu.kanade.domain.source.service.SourcePreferences
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
@@ -38,11 +39,16 @@ class DesktopPreferences(private val store: PreferenceStore) {
 
     fun alwaysShowChapterTransition() = store.getBoolean("always_show_chapter_transition", true)
 
-    fun showNsfwSource() = store.getBoolean("show_nsfw_source", true)
+    // ZOUKAN -->
+    // The source keys are declared once, in SourcePreferences
+    private val sourcePreferences = SourcePreferences(store)
 
-    fun enabledLanguages() = store.getStringSet("source_languages", setOf("all", "en"))
+    fun showNsfwSource() = sourcePreferences.showNsfwSource()
 
-    fun pinnedSources() = store.getStringSet("pinned_catalogues", emptySet())
+    fun enabledLanguages() = sourcePreferences.enabledLanguages()
+
+    fun pinnedSources() = sourcePreferences.pinnedSources()
+    // ZOUKAN <--
 
     fun lastUsedSource() = store.getLong(Preference.appStateKey("last_catalogue_source"), -1L)
 

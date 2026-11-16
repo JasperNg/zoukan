@@ -70,19 +70,22 @@ public class TwoStatePreference extends Preference {
 
     @Override
     public CharSequence getSummary() {
-        final CharSequence summary = super.getSummary();
-        if (summary != null) {
-            return summary;
+        // ZOUKAN -->
+        // As Android: a summary provider wins, then summaryOn/summaryOff for the current
+        // state (when not empty), then the plain summary.
+        if (getSummaryProvider() != null) {
+            return super.getSummary();
         }
 
         final boolean checked = isChecked();
-        if (checked && mSummaryOn != null) {
+        if (checked && mSummaryOn != null && mSummaryOn.length() > 0) {
             return mSummaryOn;
-        } else if (!checked && mSummaryOff != null) {
+        } else if (!checked && mSummaryOff != null && mSummaryOff.length() > 0) {
             return mSummaryOff;
         }
 
-        return null;
+        return super.getSummary();
+        // ZOUKAN <--
     }
 
     @JsonIgnore

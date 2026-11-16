@@ -18,6 +18,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -84,6 +85,18 @@ class JavaSharedPreferences(
                 "${SafePath.buildValidFilename(key)}.xml",
             ).toFile()
 
+        /** True for bytes that are not blank and do not start with the XML header (after a byte order mark and spaces). */
+        private fun ByteArray.isNotBlankNonXml(): Boolean {
+            var i = if (size >= 3 && this[0] == 0xEF.toByte() && this[1] == 0xBB.toByte() && this[2] == 0xBF.toByte()) 3 else 0
+            while (i < size && this[i].toInt().toChar().isWhitespace()) i++
+            if (i >= size) return false
+            val header = "<?xml".toByteArray()
+            return size - i < header.size || !header.indices.all { this[i + it] == header[it] }
+        }
+
+        /** Waits before the tries that follow a failed background write. */
+        private val SAVE_RETRY_DELAYS_MS = longArrayOf(250, 1_000, 4_000)
+
         /** Files with an apply() not yet written; flushed when the JVM shuts down. */
         private val unsaved = java.util.concurrent.ConcurrentHashMap.newKeySet<JavaSharedPreferences>()
 
@@ -103,8 +116,12 @@ class JavaSharedPreferences(
             unsaved.toList().forEach { prefs ->
                 // save() takes the file's lock, so this never interleaves with the background writer;
                 // writing the latest snapshot again is harmless
-                prefs.save()
-                unsaved.remove(prefs)
+                // Only a file that was written leaves the list
+                if (prefs.save()) {
+                    unsaved.remove(prefs)
+                } else {
+                    logger.error { "The settings file ${prefs.key} could not be written at shutdown; the latest changes are lost" }
+                }
             }
         }
 
@@ -149,6 +166,9 @@ class JavaSharedPreferences(
 
     // ZOUKAN -->
     private var migrateToCodec = false
+
+    /** Set when the file on disk could not be read and is not safely kept aside: saving would replace it. */
+    private var saveBlocked = false
     // ZOUKAN <--
 
     private val file = fileFor(key).toPath()
@@ -161,12 +181,24 @@ class JavaSharedPreferences(
                 val leftover = file.resolveSibling("${file.name}.tmp")
                 if (!file.exists() && leftover.exists()) {
                     java.nio.file.Files.move(leftover, file)
+                } else if (file.exists()) {
+                    // Every save writes .tmp and moves it under the file lock, so a .tmp next to
+                    // a main file is stale; it must not come back if the main file is cleared
+                    // later. The main file itself is not touched.
+                    runCatching { leftover.deleteIfExists() }
                 }
                 // ZOUKAN <--
                 if (file.exists()) {
                     // ZOUKAN -->
                     val stored = file.readBytes()
                     val codec = SettingsFileCodec.current
+                    // Without a codec, bytes that are not XML are an encrypted file opened before
+                    // the host app set its key: keep it as it is, and do not save over it
+                    if (codec == null && stored.isNotBlankNonXml()) {
+                        logger.warn { "The settings file $key looks encrypted but no key is set yet; it is left untouched" }
+                        saveBlocked = true
+                        return@also
+                    }
                     val plain = if (codec != null && codec.isEncoded(stored)) codec.decode(stored) else stored
                     // A plain file from before encryption is encrypted when it is read
                     migrateToCodec = codec != null && plain === stored
@@ -178,9 +210,19 @@ class JavaSharedPreferences(
                 // ZOUKAN -->
                 // The next save would replace a file that could not be read (a lost key, a damaged
                 // file); keep it beside the new one
-                runCatching {
-                    file.copyTo(file.resolveSibling("${file.name}.unreadable"), overwrite = true)
+                // The first copy is never overwritten: a later failed load would replace the
+                // original with the defaults-only file saved in between
+                val firstCopy = file.resolveSibling("${file.name}.unreadable")
+                val copy = if (firstCopy.exists()) {
+                    file.resolveSibling("${file.name}.unreadable-${System.currentTimeMillis()}")
+                } else {
+                    firstCopy
                 }
+                val copied = runCatching { file.copyTo(copy) }.onFailure {
+                    logger.error(it) { "Could not keep a copy of the unreadable settings file $key" }
+                }.isSuccess
+                // No copy, no save: the original must stay on disk
+                if (!copied) saveBlocked = true
                 // ZOUKAN <--
             }
         }
@@ -268,15 +310,33 @@ class JavaSharedPreferences(
         }
     // ZOUKAN <--
 
+    // ZOUKAN -->
+    /**
+     * As on Android, a value read as another type than it was stored as is a ClassCastException.
+     * A value written before types were kept has no type and is still read leniently.
+     */
+    private fun checkType(
+        key: String,
+        vararg allowed: String,
+    ) {
+        val stored = synchronized(properties) { preferences.getStringOrNull(TYPE_PREFIX + key) } ?: return
+        if (stored !in allowed) throw ClassCastException("$key is a $stored")
+    }
+    // ZOUKAN <--
+
     override fun getString(
         key: String,
         defValue: String?,
-    ): String? =
-        if (defValue != null) {
+    ): String? {
+        // ZOUKAN -->
+        checkType(key, TYPE_STRING)
+        // ZOUKAN <--
+        return if (defValue != null) {
             preferences.getString(key, defValue)
         } else {
             preferences.getStringOrNull(key)
         }
+    }
 
     override fun getStringSet(
         key: String,
@@ -296,25 +356,49 @@ class JavaSharedPreferences(
     override fun getInt(
         key: String,
         defValue: Int,
-    ): Int = preferences.getInt(key, defValue)
+    ): Int {
+        // ZOUKAN -->
+        checkType(key, TYPE_INT)
+        // ZOUKAN <--
+        return preferences.getInt(key, defValue)
+    }
 
     override fun getLong(
         key: String,
         defValue: Long,
-    ): Long = preferences.getLong(key, defValue)
+    ): Long {
+        // ZOUKAN -->
+        checkType(key, TYPE_LONG)
+        // ZOUKAN <--
+        return preferences.getLong(key, defValue)
+    }
 
     override fun getFloat(
         key: String,
         defValue: Float,
-    ): Float = preferences.getFloat(key, defValue)
+    ): Float {
+        // ZOUKAN -->
+        checkType(key, TYPE_FLOAT, TYPE_DOUBLE)
+        // ZOUKAN <--
+        return preferences.getFloat(key, defValue)
+    }
 
     override fun getBoolean(
         key: String,
         defValue: Boolean,
-    ): Boolean = preferences.getBoolean(key, defValue)
+    ): Boolean {
+        // ZOUKAN -->
+        checkType(key, TYPE_BOOLEAN)
+        // ZOUKAN <--
+        return preferences.getBoolean(key, defValue)
+    }
 
     override fun contains(key: String): Boolean =
-        key in preferences.keys /* ZOUKAN --> */ || "$key.size" in preferences.keys /* ZOUKAN <-- */
+        // ZOUKAN -->
+        // A key.size of its own type is not a Set: only a Set's marker (or, before types were kept,
+        // its entries) makes the base key present
+        synchronized(properties) { key in preferences.keys || storedAsSet(key) }
+    // ZOUKAN <--
 
     // ZOUKAN -->
     // Called after the properties' lock is released, on the writer's thread. A listener that throws
@@ -450,19 +534,31 @@ class JavaSharedPreferences(
             Action.Clear -> {
                 val keys = preferences.keys
 
+                // ZOUKAN -->
+                // Listeners are told about the user's keys: a Set once under its own key, not
+                // for its entries (key.0, key.size) or its type marker
+                val setKeys =
+                    keys
+                        .filter { it.endsWith(".size") }
+                        .map { it.removeSuffix(".size") }
+                        .filter { storedAsSet(it) }
+                        .toSet() +
+                        keys
+                            .filter { it.startsWith(TYPE_PREFIX) }
+                            .map { it.removePrefix(TYPE_PREFIX) }
+                            .filter { preferences.getStringOrNull(TYPE_PREFIX + it) == TYPE_STRING_SET }
+                // ZOUKAN <--
+
                 preferences.clear()
 
+                // ZOUKAN -->
                 keys.forEach { key ->
-                    // ZOUKAN -->
                     if (key.startsWith(TYPE_PREFIX)) return@forEach
-                    // ZOUKAN <--
+                    if (setKeys.any { isSetEntry(it, key) }) return@forEach
                     changed += key
-
-                    val isSetKey = key.endsWith(".size")
-                    if (isSetKey) {
-                        changed += key.removeSuffix(".size")
-                    }
                 }
+                changed += setKeys.filter { it !in changed }
+                // ZOUKAN <--
             }
         }
     }
@@ -471,7 +567,11 @@ class JavaSharedPreferences(
     private fun saveActions(actions: List<Action>): List<String> =
         synchronized(properties) {
             val changed = mutableListOf<String>()
-            actions.forEach { saveAction(it, changed) }
+            // ZOUKAN -->
+            // As on Android, clear() takes effect before the puts and removes of the same edit
+            val (clears, others) = actions.partition { it is Action.Clear }
+            (clears + others).forEach { saveAction(it, changed) }
+            // ZOUKAN <--
             changed
         }
 
@@ -488,9 +588,19 @@ class JavaSharedPreferences(
 
     private fun save(properties: Properties): Boolean =
         synchronized(file) {
+            // ZOUKAN -->
+            if (saveBlocked) {
+                logger.error { "The settings file $key is not saved: the file on disk could not be read and is kept as it is" }
+                return false
+            }
+            // ZOUKAN <--
             try {
                 if (properties.isEmpty) {
                     file.deleteIfExists()
+                    // ZOUKAN -->
+                    // A stale temporary file would be moved in as the settings on the next start
+                    file.resolveSibling("${file.name}.tmp").deleteIfExists()
+                    // ZOUKAN <--
                 } else {
                     file.createParentDirectories()
 
@@ -551,11 +661,26 @@ class JavaSharedPreferences(
         // ZOUKAN -->
         // The job is kept so tests can wait for it (awaitPendingSaves)
         val job = GlobalScope.launch(Dispatchers.IO) {
+            var failedAttempts = 0
             // ZOUKAN <--
             while (true) {
                 dirty.store(false)
 
-                save()
+                // ZOUKAN -->
+                // A failed write (a file briefly held by a scanner or sync client) stays on the
+                // pending list and is tried again, then once more by the shutdown flush
+                if (!save()) {
+                    if (failedAttempts < SAVE_RETRY_DELAYS_MS.size) {
+                        delay(SAVE_RETRY_DELAYS_MS[failedAttempts++])
+                        continue
+                    }
+                    logger.error { "The settings file $key could not be written; it stays pending until shutdown" }
+                    dirty.store(true)
+                    pendingAsyncSave.store(false)
+                    break
+                }
+                failedAttempts = 0
+                // ZOUKAN <--
 
                 if (!dirty.load()) {
                     // ZOUKAN -->
@@ -678,11 +803,18 @@ class JavaSharedPreferences(
             return this
         }
 
-        override fun commit(): Boolean = save(actions)
+        // ZOUKAN -->
+        // As on Android, an editor is empty after a commit or apply: a reused editor does not
+        // write its earlier changes again
+        private fun takeActions(): List<Action> =
+            synchronized(actions) { actions.toList().also { actions.clear() } }
+
+        override fun commit(): Boolean = save(takeActions())
 
         override fun apply() {
-            saveAsync(actions)
+            saveAsync(takeActions())
         }
+        // ZOUKAN <--
     }
 
     override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

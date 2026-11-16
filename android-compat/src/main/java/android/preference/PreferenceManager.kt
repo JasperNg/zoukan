@@ -34,7 +34,7 @@ class PreferenceManager {
          * Earlier versions kept the default preferences under the package name alone
          * (`app.komikku`, or `eu.kanade.tachiyomi` before the package name was configured). Their
          * values move into the default file once, where a key is not set there already, and the old
-         * file is deleted.
+         * file is kept as `<name>.xml.migrated` (never deleted).
          */
         private fun migrateLegacy(
             context: Context,
@@ -66,8 +66,26 @@ class PreferenceManager {
                                 else -> editor.putString(key, value.toString())
                             }
                         }
-                        if (editor.commit()) context.deleteSharedPreferences(legacyName)
+                        if (editor.commit()) keepMigratedFile(context.getSharedPreferencesPath(legacyName))
                     }
+            }
+        }
+
+        /** Moves the old file aside as `<file>.migrated`; it is never deleted or rewritten. */
+        private fun keepMigratedFile(file: java.io.File?) {
+            if (file == null || !file.exists()) return
+            val first = java.io.File(file.parentFile, file.name + ".migrated")
+            val target =
+                if (first.exists()) {
+                    java.io.File(file.parentFile, file.name + ".migrated-" + System.currentTimeMillis())
+                } else {
+                    first
+                }
+            try {
+                java.nio.file.Files.move(file.toPath(), target.toPath())
+            } catch (e: java.io.IOException) {
+                // The old file stays where it is; the next start migrates again and skips keys already set
+                System.err.println("Could not keep the old preferences file ${file.name}: ${e.message}")
             }
         }
         // ZOUKAN <--

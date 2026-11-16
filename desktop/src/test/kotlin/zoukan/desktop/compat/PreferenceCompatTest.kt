@@ -5,21 +5,25 @@ import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceScreen
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import tachiyomi.core.common.preference.DesktopPreferenceStore
 import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.ui.settings.flattenPreferences
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -321,6 +325,46 @@ class PreferenceCompatTest {
     }
 
     @Test
+    fun `setOrder sorts a group's preferences as on Android`() {
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs("order") }
+        val c = EditTextPreference(null).apply {
+            key = "c"
+            order = 3
+        }
+        val a = EditTextPreference(null).apply {
+            key = "a"
+            order = 1
+        }
+        val plain = EditTextPreference(null).apply { key = "plain" } // no order: placed as added
+        val b = EditTextPreference(null).apply {
+            key = "b"
+            order = 2
+        }
+        listOf(c, a, plain, b).forEach(screen::addPreference)
+
+        screen.preferences.map { it.key } shouldBe listOf("plain", "a", "b", "c")
+        (0 until screen.preferenceCount).map { screen.getPreference(it).key } shouldBe
+            listOf("plain", "a", "b", "c")
+    }
+
+    @Test
+    fun `a preference added to a second group moves there`() {
+        val screen = PreferenceScreen(null).apply { sharedPreferences = prefs("move") }
+        val x = PreferenceCategory(null).apply { key = "x" }
+        val y = PreferenceCategory(null).apply { key = "y" }
+        screen.addPreference(x)
+        screen.addPreference(y)
+        val pref = SwitchPreferenceCompat(null).apply { key = "moved" }
+        x.addPreference(pref)
+        y.addPreference(pref)
+
+        x.preferenceCount shouldBe 0
+        y.preferenceCount shouldBe 1
+        pref.parent shouldBe y
+        flattenPreferences(screen).count { it === pref } shouldBe 1
+    }
+
+    @Test
     fun `a dependent preference is disabled while the switch it depends on is off`() {
         val screen = PreferenceScreen(null).apply { sharedPreferences = prefs("dependency") }
         val master = SwitchPreferenceCompat(null).apply {
@@ -386,6 +430,66 @@ class PreferenceCompatTest {
     }
 
     @Test
+    fun `an editor is empty after a commit, and clear runs before puts`() {
+        val prefs = prefs("editor_semantics")
+
+        // A reused editor does not replay what it already wrote
+        val editor = prefs.edit()
+        editor.putString("a", "1").commit()
+        prefs.edit().remove("a").commit()
+        editor.putString("b", "2").commit()
+        prefs.contains("a") shouldBe false
+        prefs.getString("b", null) shouldBe "2"
+
+        // clear() runs first whatever its place in the chain
+        prefs.edit().putString("c", "x").clear().commit()
+        prefs.getString("c", null) shouldBe "x"
+
+        // A key of its own that ends in .size is not a Set
+        prefs.edit().clear().commit()
+        prefs.edit().putString("domain.size", "3").commit()
+        prefs.contains("domain") shouldBe false
+        prefs.contains("domain.size") shouldBe true
+
+        // clear() tells listeners about user keys only
+        prefs.edit().clear().putStringSet("s", mutableSetOf("x", "y")).putInt("n", 1).commit()
+        val keys = mutableListOf<String?>()
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key -> keys += key }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        prefs.edit().clear().commit()
+        keys.toSet() shouldBe setOf("s", "n")
+        keys.size shouldBe 2
+    }
+
+    @Test
+    fun `a mistyped value is deleted and reads as the default, as on Android`() {
+        val prefs = prefs("mistyped")
+        prefs.edit().putInt("n", 5).commit()
+
+        shouldThrow<ClassCastException> { prefs.getString("n", "d") }
+        shouldThrow<ClassCastException> { prefs.getBoolean("n", false) }
+        prefs.getInt("n", 0) shouldBe 5
+
+        DesktopPreferenceStore(prefs).getString("n", "d").get() shouldBe "d"
+        prefs.contains("n") shouldBe false
+
+        // A value written before types were kept is still read leniently, and kept
+        val settings = File(root, "settings").apply { mkdirs() }
+        File(settings, "legacy_untyped.xml").writeText(
+            """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<entry key="n">5</entry>
+</properties>
+""",
+        )
+        val legacy = JavaSharedPreferences("legacy_untyped")
+        legacy.getInt("n", 0) shouldBe 5
+        legacy.getString("n", null) shouldBe "5"
+        legacy.contains("n") shouldBe true
+    }
+
+    @Test
     fun `setPersistent(false) keeps values out of SharedPreferences, and the common setters exist`() {
         val prefs = prefs("persistent")
         val pref = SwitchPreferenceCompat(null).apply {
@@ -406,6 +510,15 @@ class PreferenceCompatTest {
         pref.isSelectable shouldBe false
         pref.hasKey() shouldBe true
         PreferenceCategory(null).isSelectable shouldBe false
+
+        val multi = MultiSelectListPreference(null).apply {
+            key = "transient_multi"
+            sharedPreferences = prefs
+            isPersistent = false
+        }
+        multi.values = setOf("a", "b")
+        prefs.contains("transient_multi") shouldBe false
+        multi.values shouldBe setOf("a", "b")
     }
 
     @Test
@@ -423,5 +536,35 @@ class PreferenceCompatTest {
         text.summary shouldBe "Not set"
         text.text = "abc"
         text.summary shouldBe "abc"
+    }
+
+    @Test
+    fun `summaryOn and summaryOff take precedence over the summary for a switch`() {
+        val prefs = prefs("switch_summary")
+        val switch = SwitchPreferenceCompat(null).apply {
+            key = "mode"
+            sharedPreferences = prefs
+            summary = "Plain"
+            summaryOn = "On text"
+            summaryOff = "Off text"
+        }
+        switch.summary shouldBe "Off text"
+        switch.isChecked = true
+        switch.summary shouldBe "On text"
+        // An empty on text falls back to the plain summary, as Android's TextUtils.isEmpty check
+        switch.summaryOn = ""
+        switch.summary shouldBe "Plain"
+        // Only a plain summary: it is shown in both states
+        val plainOnly = CheckBoxPreference(null).apply {
+            key = "box"
+            summary = "Plain"
+        }
+        plainOnly.summary shouldBe "Plain"
+        // A summary provider still wins
+        val provided = SwitchPreferenceCompat(null).apply {
+            summaryOn = "On text"
+            summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { "Provided" }
+        }
+        provided.summary shouldBe "Provided"
     }
 }

@@ -51,7 +51,7 @@ public class MultiSelectListPreference extends DialogPreference {
     @JsonIgnore
     public void setValues(Set<String> values) {
         this.values = values == null ? new HashSet<>() : new HashSet<>(values);
-        if (getKey() != null && getSharedPreferences() != null) {
+        if (shouldPersist()) {
             saveNewValue(this.values);
         }
     }
@@ -59,7 +59,7 @@ public class MultiSelectListPreference extends DialogPreference {
     @JsonIgnore
     @SuppressWarnings("unchecked")
     public Set<String> getValues() {
-        if (getKey() != null && getSharedPreferences() != null) {
+        if (shouldPersist()) {
             Object current = getCurrentValue();
             if (current != null) {
                 return (Set<String>) current;

@@ -19,7 +19,11 @@ class SourcePreferences(private val preferenceStore: PreferenceStore) {
         LibraryDisplayMode.Serializer::deserialize,
     )
 
-    fun enabledLanguages() = preferenceStore.getStringSet("source_languages", setOf("all", "en"))
+    // As Android's default: all, English and the system language
+    fun enabledLanguages() = preferenceStore.getStringSet(
+        "source_languages",
+        setOf("all", "en", java.util.Locale.getDefault().language),
+    )
 
     fun incognitoExtensions() = preferenceStore.getStringSet("incognito_extensions", emptySet())
 

@@ -90,6 +90,48 @@ class FileCipherTest {
     }
 
     @Test
+    fun `a second unreadable load keeps the first unreadable copy`() {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        try {
+            SettingsFileCodec.current = cipher
+            JavaSharedPreferences("lost_twice").edit().putString("token", "value").commit()
+            val original = File(root, "settings/lost_twice.xml").readBytes()
+
+            // The key is lost: the file is set aside, and a defaults-only file is saved
+            SettingsFileCodec.current = FileCipher(ByteArray(32) { 7 })
+            JavaSharedPreferences("lost_twice").edit().putString("other", "x").commit()
+
+            // Another key that cannot read that file: a second failed load
+            SettingsFileCodec.current = FileCipher(ByteArray(32) { 9 })
+            JavaSharedPreferences("lost_twice").all shouldBe emptyMap()
+
+            val copies = File(root, "settings").listFiles { f -> f.name.startsWith("lost_twice.xml.unreadable") }!!
+            copies.any { it.readBytes().contentEquals(original) } shouldBe true
+        } finally {
+            SettingsFileCodec.current = null
+        }
+    }
+
+    @Test
+    fun `an encrypted settings file opened before the codec is set is never saved over`() {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        try {
+            SettingsFileCodec.current = cipher
+            JavaSharedPreferences("early_open").edit().putString("token", "value").commit()
+            val file = File(root, "settings/early_open.xml")
+            val original = file.readBytes()
+
+            // Opened before the host app sets the codec
+            SettingsFileCodec.current = null
+            JavaSharedPreferences("early_open").edit().putString("other", "x").commit()
+
+            file.readBytes().contentEquals(original) shouldBe true
+        } finally {
+            SettingsFileCodec.current = null
+        }
+    }
+
+    @Test
     fun `the cookie file is encrypted, and a plain one from before is taken over`() {
         val file = File(root, "cookies.json")
         val plain = PersistentCookieStore(file)
