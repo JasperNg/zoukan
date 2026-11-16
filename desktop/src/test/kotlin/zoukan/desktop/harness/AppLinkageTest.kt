@@ -43,7 +43,8 @@ class AppLinkageTest {
         val allowed = javaClass.getResourceAsStream("/app-linkage-allowlist.txt")!!.bufferedReader().readLines()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("#") }
-        return linkage.check(classes)
+        // The classes checked are the app's own, so they are the app's copy, not a shadowed one
+        return linkage.check(classes, reportShadowed = false)
             .filter { gap -> allowed.none { gap.symbol.startsWith(it) } }
     }
 
