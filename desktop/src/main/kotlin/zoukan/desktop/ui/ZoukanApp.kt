@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -464,8 +465,25 @@ enum class HomeTab(val label: String, val icon: ImageVector, val selectedIcon: I
 object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
     private fun readResolve(): Any = HomeScreen
 
-    /** Lets other screens switch the tab, for example "Browse" from an empty library. */
-    var selectTab: (HomeTab) -> Unit = {}
+    private var current: HomeTabState? = null
+    private var pending: HomeTab? = null
+
+    /** Lets other screens switch the tab, for example "Browse" from an empty library. Kept until the home screen shows. */
+    fun selectTab(tab: HomeTab) {
+        current?.select(tab) ?: run { pending = tab }
+    }
+
+    /** For the home screen's own effect. */
+    internal fun register(state: HomeTabState) {
+        current = state
+        pending?.let { state.select(it) }
+        pending = null
+    }
+
+    /** For the home screen's own effect. */
+    internal fun unregister(state: HomeTabState) {
+        if (current === state) current = null
+    }
 
     // ZOUKAN -->
     /** Opens the library with [query] in its search, as Android's HomeScreen.search (Library search). */
@@ -481,8 +499,12 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
 
     @Composable
     override fun Content() {
-        var tab by rememberSaveable { mutableStateOf(HomeTab.Library) }
-        selectTab = { tab = it }
+        val tabs = rememberSaveable(saver = HomeTabState.Saver) { HomeTabState() }
+        val tab = tabs.selected
+        DisposableEffect(tabs) {
+            HomeScreen.register(tabs)
+            onDispose { HomeScreen.unregister(tabs) }
+        }
         // ZOUKAN -->
         // Discord Rich Presence shows the tab in use, as Android's tabs set it
         LaunchedEffect(tab) {
@@ -500,7 +522,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val library = rememberScreenModel { LibraryScreenModel() }
         // ZOUKAN -->
         searchLibrary = { query ->
-            tab = HomeTab.Library
+            tabs.select(HomeTab.Library)
             library.search(query)
         }
         // ZOUKAN <--
@@ -524,6 +546,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val shownTabs = HomeTab.entries.filter {
             (it != HomeTab.Updates || showUpdates) && (it != HomeTab.History || showHistory)
         }
+        LaunchedEffect(shownTabs) { tabs.showOnly(shownTabs) }
         // Opening Updates clears the badge, as Android's Updates tab does
         LaunchedEffect(tab, newUpdates) {
             if (tab == HomeTab.Updates && newUpdates != 0) libraryPreferences.newUpdatesCount().set(0)
@@ -547,7 +570,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                         TooltipIf(!showLabels, item.label) {
                             NavigationRailItem(
                                 selected = tab == item,
-                                onClick = { tab = item },
+                                onClick = { tabs.select(item) },
                                 icon = {
                                     androidx.compose.material3.BadgedBox(
                                         badge = { if (badge > 0) androidx.compose.material3.Badge { Text(badge.toString()) } },
