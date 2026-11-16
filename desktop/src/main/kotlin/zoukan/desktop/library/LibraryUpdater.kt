@@ -103,6 +103,9 @@ class LibraryUpdater(
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Written by [start] inside its lock; read through the same lock, so a cancel never misses a start. */
+    @Volatile
     private var job: Job? = null
 
     private val _progress = MutableStateFlow<Progress?>(null)
@@ -113,7 +116,7 @@ class LibraryUpdater(
     private val _lastResult = MutableStateFlow<Result?>(null)
     val lastResult: StateFlow<Result?> = _lastResult.asStateFlow()
 
-    val isRunning: Boolean get() = job?.isActive == true
+    val isRunning: Boolean get() = synchronized(this) { job?.isActive == true }
 
     /**
      * Starts an update unless one is running.
@@ -180,11 +183,12 @@ class LibraryUpdater(
     }
 
     fun cancel() {
-        job?.cancel()
+        synchronized(this) { job }?.cancel()
     }
 
     suspend fun join() {
-        job?.join()
+        // Reads the job under the lock; never suspends while holding it
+        synchronized(this) { job }?.join()
     }
 
     private fun isSyncEnabled(): Boolean =
