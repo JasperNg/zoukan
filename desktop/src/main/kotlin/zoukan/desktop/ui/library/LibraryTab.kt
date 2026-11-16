@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -187,7 +185,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                 subtitle = if (state.loading) null else localized(DMR.strings.entries, state.entryCount),
                 showBack = false,
             ) {
-                SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp).background(Color.Red))
+                SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp))
                 TooltipIconButton(
                     Icons.Outlined.FilterList,
                     if (settings.hasFilter) localized(DMR.strings.filter_sort_and_display_filtered) else localized(DMR.strings.filter_sort_and_display),

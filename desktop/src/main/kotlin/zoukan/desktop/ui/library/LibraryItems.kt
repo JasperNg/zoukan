@@ -293,7 +293,7 @@ private fun GridItem(
         Modifier.coverOutline(Corners.Medium)
     }
     Box {
-        Column(Modifier.testTag("manga-item").clip(Corners.Medium).selectableClick(menu::open, onClick)) {
+        Column(Modifier.testTag("manga-item").background(Color.Red).clip(Corners.Medium).selectableClick(menu::open, onClick)) {
             Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(Corners.Medium).then(border)) {
                 CoverImage(Cover.of(item.manga), Modifier.fillMaxSize())
                 if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)))
