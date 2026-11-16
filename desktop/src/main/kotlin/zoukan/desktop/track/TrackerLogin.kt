@@ -56,7 +56,7 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
         // MDList signs in to MangaDex, through the MangaDex extension
         trackerManager.mdList.id -> {
             MdUtil.getEnabledMangaDex() ?: error("Install the MangaDex extension first: MDList signs in through it")
-            MdConstants.Login.authUrl(MdUtil.getPkceChallengeCode())
+            mangaDexAuthUrl()
         }
         else -> null
     }?.toString()
@@ -148,6 +148,9 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
     }
 
     companion object {
+        /** The MangaDex sign-in address. */
+        internal fun mangaDexAuthUrl(): String = MdConstants.Login.authUrl(MdUtil.newPkceChallengeCode())
+
         private const val LOGIN_TIMEOUT_MS = 10 * 60 * 1000L
         private val SCHEMES = setOf("komikku", "mihon", "tachiyomisy")
         private val HOSTS = setOf("anilist-auth", "bangumi-auth", "myanimelist-auth", "shikimori-auth", "mangadex-auth")

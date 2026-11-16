@@ -1,9 +1,14 @@
 package zoukan.desktop.track
 
+import android.net.Uri
+import exh.md.utils.MdUtil
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
+import java.security.MessageDigest
+import java.util.Base64
 
 class TrackerLoginTest {
     @Test
@@ -58,5 +63,18 @@ class TrackerLoginTest {
         TrackerLogin.parseParameters("access_token=a%2Bb&token_type=Bearer&flag") shouldBe
             mapOf("access_token" to "a+b", "token_type" to "Bearer", "flag" to null)
         TrackerLogin.parseParameters(null) shouldBe emptyMap()
+    }
+
+    @Test
+    fun `each MangaDex sign-in uses a new verifier`() {
+        fun challenge(url: String) = TrackerLogin.parseParameters(Uri.parse(url).encodedQuery)["code_challenge"]
+        val first = challenge(TrackerLogin.mangaDexAuthUrl())
+        val second = challenge(TrackerLogin.mangaDexAuthUrl())
+        second shouldNotBe first
+        // The code exchange sends the verifier of the sign-in that was started last
+        val verifier = MdUtil.getPkceChallengeCode()
+        val expected = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()))
+        second shouldBe expected
     }
 }
