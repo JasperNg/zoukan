@@ -471,7 +471,7 @@ private fun HistoryRow(
 
 /** Komikku's remove dialog: the read date of these chapters, or every chapter of their entries. */
 @Composable
-private fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntry: Boolean) -> Unit, onDismiss: () -> Unit) {
+internal fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEntry: Boolean) -> Unit, onDismiss: () -> Unit) {
     var wholeEntry by remember { mutableStateOf(false) }
     val one = items.size == 1
     AlertDialog(

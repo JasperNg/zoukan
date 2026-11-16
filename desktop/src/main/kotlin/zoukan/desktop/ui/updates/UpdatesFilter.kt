@@ -81,7 +81,7 @@ fun UpdatesFilterButton(model: UpdatesScreenModel, filters: UpdatesFilters) {
 }
 
 @Composable
-private fun UpdatesFilterDialog(preferences: UpdatesPreferences, onDismiss: () -> Unit) {
+internal fun UpdatesFilterDialog(preferences: UpdatesPreferences, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(localized(MR.strings.action_filter)) },

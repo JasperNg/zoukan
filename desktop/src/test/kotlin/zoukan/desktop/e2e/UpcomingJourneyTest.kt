@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
@@ -17,13 +18,17 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.compat.localized
+import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.visibleCalendarDay
+import zoukan.i18n.desktop.DMR
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -84,7 +89,8 @@ class UpcomingJourneyTest {
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
-                setContent { ZoukanContent(preferences) }
+                var navigator: Navigator? = null
+                setContent { ZoukanContent(preferences) { navigator = it } }
 
                 step("Open Upcoming from the Updates tab") {
                     waitFor(hasText("Library"))
@@ -125,6 +131,15 @@ class UpcomingJourneyTest {
                     onAllNodesWithText("Alpha").onFirst().performClick()
                     waitOrDump("for the entry to open", 10_000) { onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().isEmpty() }
                     shot("4-entry")
+                }
+
+                step("The Updates header's Update library runs a library update") {
+                    val updater = Injekt.get<LibraryUpdater>()
+                    updater.lastResult.value shouldBe null
+                    runOnUiThread { navigator?.popUntilRoot() }
+                    waitFor(hasText(localized(DMR.strings.new_chapters_in_your_library_from)))
+                    byDescription(localized(MR.strings.action_update_library)).performClick()
+                    waitOrDump("for the library update to run", 30_000) { updater.lastResult.value != null }
                 }
             }
         }
