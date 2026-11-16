@@ -100,6 +100,7 @@ class AndroidIdentityTest {
             .putString("both", "old")
             .putInt("count", 3)
             .commit()
+        val legacyBytes = JavaSharedPreferences.fileFor("app.komikku").readBytes()
         // The app's own settings already in the default file win
         JavaSharedPreferences("app.komikku_preferences").edit().putString("both", "new").commit()
 
@@ -111,6 +112,9 @@ class AndroidIdentityTest {
         prefs.getString("both", null) shouldBe "new"
         prefs.getInt("count", 0) shouldBe 3
         JavaSharedPreferences.fileFor("app.komikku").exists() shouldBe false
+        // The old file is kept byte for byte, including the old value of the conflicting key
+        File(JavaSharedPreferences.fileFor("app.komikku").path + ".migrated").readBytes()
+            .contentEquals(legacyBytes) shouldBe true
         JavaSharedPreferences.fileFor("app.komikku_preferences").exists() shouldBe true
         // The same file as the app's PreferenceStore reads
         JavaSharedPreferences("app.komikku_preferences").getString("legacy_only", null) shouldBe "kept"
