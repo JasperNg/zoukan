@@ -865,4 +865,5 @@
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
     <string name="a_zoukan_command_is_using_the_data_folder">\"zoukan %1$s\" is using the data folder. Wait for it to finish, or stop it, then open Zoukan again.</string>
+    <string name="backup_file_and_date">%1$s, saved %2$s</string>
 </resources>
