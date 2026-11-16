@@ -93,7 +93,7 @@ fun MigrateSourcesList() {
 
     Column(Modifier.fillMaxSize().testTag("migrate-sources")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            SearchField(query, { query = it }, localized(DMR.strings.search_sources), Modifier.weight(1f))
+            SearchField(query, { query = it }, localized(DMR.strings.find_a_source_by_name), Modifier.weight(1f), filter = true)
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = mode == MigrateSortingMode.ALPHABETICAL,

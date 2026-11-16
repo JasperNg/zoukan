@@ -883,4 +883,6 @@
     <string name="migration_flag_notes">Notes</string>
     <string name="migration_flag_extra">Chapter and reader settings</string>
     <string name="enter_an_address_that_starts_with">Enter an address that starts with http:// or https://</string>
+    <string name="find_a_source_by_name">Find a source by name</string>
+    <string name="find_an_extension_by_name">Find an extension by name</string>
 </resources>

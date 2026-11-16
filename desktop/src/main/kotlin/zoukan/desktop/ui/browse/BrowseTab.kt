@@ -64,7 +64,6 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import mihon.domain.extension.model.ExtensionStore
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -120,7 +119,7 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
                 globalQuery,
                 { globalQuery = it },
                 localized(DMR.strings.search_all_sources),
-                Modifier.width(320.dp),
+                Modifier.width(320.dp).testTag("global-search"),
                 onSearch = {
                     if (globalQuery.isNotBlank()) {
                         // ZOUKAN -->
@@ -200,8 +199,9 @@ private fun SourcesList(state: BrowseScreenModel.State, model: BrowseScreenModel
             SearchField(
                 state.sourceQuery,
                 model::searchSources,
-                localized(KMR.strings.action_search_for_source),
+                localized(DMR.strings.find_a_source_by_name),
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).testTag("source-search"),
+                filter = true,
             )
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
                 state.visibleSections.forEachIndexed { index, (title, sources) ->
@@ -340,8 +340,9 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             SearchField(
                 state.extensionQuery,
                 model::searchExtensions,
-                localized(DMR.strings.search_extensions),
+                localized(DMR.strings.find_an_extension_by_name),
                 Modifier.weight(1f).testTag("extension-search"),
+                filter = true,
             )
             Spacer(Modifier.width(8.dp))
             Box {
