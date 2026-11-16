@@ -397,7 +397,7 @@ private fun library(args: List<String>): Int {
  * using the commands alone (no app running) still works and frees the folder again.
  */
 private fun lockForDataFolder(command: String, hint: String = "Quit Zoukan and try again."): SingleInstance? {
-    val instance = SingleInstance.acquireForCommand(ZoukanDirs.default().root)
+    val instance = SingleInstance.acquireForCommand(ZoukanDirs.default().root, command)
     if (instance == null) {
         System.err.println("Zoukan is already running; \"zoukan $command\" cannot use the same data folder beside it. $hint")
     }

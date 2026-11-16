@@ -141,6 +141,10 @@ fun runZoukanApp() {
             if (!instance.shown) showAlreadyRunning()
             return
         }
+        is SingleInstance.Result.CommandRunning -> {
+            showCommandRunning(instance.command)
+            return
+        }
     }
     ZoukanRuntime.start(dirs)
     // English only, before anything looks up a string
@@ -315,8 +319,12 @@ fun runZoukanApp() {
     }
 }
 
-private fun showAlreadyRunning() {
-    val message = localized(DMR.strings.zoukan_is_already_running_open_it)
+private fun showAlreadyRunning() = showStartupMessage(localized(DMR.strings.zoukan_is_already_running_open_it))
+
+private fun showCommandRunning(command: String) =
+    showStartupMessage(localized(DMR.strings.a_zoukan_command_is_using_the_data_folder, command))
+
+private fun showStartupMessage(message: String) {
     if (java.awt.GraphicsEnvironment.isHeadless()) {
         System.err.println(message)
     } else {
