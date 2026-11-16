@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   screenshots:
-    name: Screenshots (${{ inputs.mode || 'record' }})
+    name: Screenshots (${{ inputs.mode || 'verify' }})
     # Pinned: a newer image can change fonts and the rasteriser, and so every golden
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -57,10 +57,10 @@ jobs:
           fc-cache -f
 
       - name: Screenshots
-        run: xvfb-run -a ./gradlew :desktop:wiringTest -Pzoukan.screenshots=${{ inputs.mode || 'record' }}
+        run: xvfb-run -a ./gradlew :desktop:wiringTest -Pzoukan.screenshots=${{ inputs.mode || 'verify' }}
 
       - name: Upload goldens
-        if: ${{ (inputs.mode || 'record') == 'record' && always() }}
+        if: ${{ (inputs.mode || 'verify') == 'record' && always() }}
         uses: actions/upload-artifact@v5
         with:
           name: screenshot-goldens
@@ -68,7 +68,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload screenshot reports
-        if: ${{ (inputs.mode || 'record') == 'verify' && failure() }}
+        if: ${{ (inputs.mode || 'verify') == 'verify' && failure() }}
         uses: actions/upload-artifact@v5
         with:
           name: screenshot-reports

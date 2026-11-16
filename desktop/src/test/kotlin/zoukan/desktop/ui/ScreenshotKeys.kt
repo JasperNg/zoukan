@@ -43,8 +43,12 @@ object ScreenshotKeys {
         "settings:Appearance" to listOf(DATE_TEXT),
     )
 
-    /** The focused text field blinks its caret. */
+    /**
+     * The focused text field blinks its caret, and a cover loads asynchronously: it can still be
+     * the placeholder when the screen is taken.
+     */
     private val tagMasks: Map<String, List<String>> = mapOf(
+        "tab:Library" to listOf("manga-item"),
         "dialog:browse.OpenUrlDialog" to listOf("open-url-field"),
     )
 
