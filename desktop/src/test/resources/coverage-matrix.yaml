@@ -46,8 +46,7 @@
   feature: "Theme: system/light/dark, color schemes, custom color, pure black"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndParityTest; planned: SettingsAppearanceLibraryJourneyTest"
+  tests: [e2e.SettingsAppearanceLibraryJourneyTest]
 
 - key: flow:shell.reduced-motion
   feature: "Reduced-motion probe"
@@ -108,29 +107,25 @@
   feature: "Library grid and list"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.library.LibraryFiltersTest, ui.library.LibraryStateCacheTest, e2e.BackupRestoreJourneyTest]
-  gap: "Display modes only in the gated EndToEndParityTest; planned: LibraryViewJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.library.LibraryFiltersTest, ui.library.LibraryStateCacheTest, e2e.BackupRestoreJourneyTest, e2e.LibraryViewJourneyTest]
 
 - key: flow:library.category-tabs
   feature: "Category tabs"
   tier: unit
   smoke: false
-  tests: [ui.library.LibraryGroupingTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: CategoriesJourneyTest"
+  tests: [ui.library.LibraryGroupingTest, e2e.CategoriesJourneyTest]
 
 - key: flow:library.search
   feature: "Search the library"
   tier: unit
   smoke: false
-  tests: [ui.library.LibrarySearchTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: LibraryViewJourneyTest"
+  tests: [ui.library.LibrarySearchTest, e2e.LibraryViewJourneyTest]
 
 - key: dialog:library.LibrarySettingsDialog
   feature: "Filter, sort and display sheet"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.library.LibraryFiltersTest]
-  gap: "Filter effects only in the gated EndToEndParityTest; planned: LibraryViewJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.library.LibraryFiltersTest, e2e.LibraryViewJourneyTest]
 
 - key: flow:library.downloads-button
   feature: "Downloads button in the header"
@@ -155,29 +150,27 @@
   feature: "Overflow menu: random entry, select all, edit categories, update errors, sync favorites, sync library"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Update errors only in the gated EndToEndParityTest; planned: LibraryUpdateErrorsJourneyTest; sync favorites needs an E-Hentai account (manual)"
+  tests: [e2e.LibraryUpdateErrorsJourneyTest, e2e.CategoriesJourneyTest]
+  gap: "sync favorites needs an E-Hentai account (manual)"
 
 - key: flow:library.selection
   feature: "Selection bar: clear, select all, invert, change categories, mark read/unread, download, delete downloads, update, migrate, remove"
   tier: journey
   smoke: false
-  tests: [e2e.MigrationJourneyTest]
-  gap: "Only selecting and migrating is driven (MigrationJourneyTest); the rest only in the gated EndToEndParityTest; planned: LibrarySelectionJourneyTest"
+  tests: [e2e.MigrationJourneyTest, e2e.LibrarySelectionJourneyTest, e2e.CategoriesJourneyTest, e2e.LibraryViewJourneyTest]
 
 - key: flow:library.selection-overflow
   feature: "Selection overflow: merge, clean titles, recommendation search, MangaDex follows, reset info"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Only the gated EndToEndParityTest; planned: LibrarySelectionJourneyTest; merging, planned: MergeEntriesJourneyTest"
+  tests: [e2e.LibrarySelectionJourneyTest]
+  gap: "merging, planned: MergeEntriesJourneyTest"
 
 - key: flow:library.selection-download
   feature: "Download menu for the selection (unread, bookmarked, ...)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Only the gated EndToEndParityTest; planned: LibrarySelectionJourneyTest"
+  tests: [e2e.LibrarySelectionJourneyTest]
 
 - key: dialog:library.CategoriesDialog
   feature: "Move to category dialog"
@@ -216,8 +209,7 @@
   feature: "Sort tags screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Tag sorting only in the gated EndToEndParityTest; planned: LibraryViewJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.LibraryViewJourneyTest]
 
 - key: dialog:library.AddTagDialog
   feature: "Sort tags: add tag"
@@ -229,8 +221,7 @@
   feature: "Library update errors screen (also the More tab's row)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, library.LibraryUpdaterErrorsTest]
-  gap: "Retry from the screen only in the gated EndToEndParityTest; planned: LibraryUpdateErrorsJourneyTest"
+  tests: [ui.ScreenSmokeTest, library.LibraryUpdaterErrorsTest, e2e.LibraryUpdateErrorsJourneyTest]
 
 - key: dialog:browse.QuickLibraryToggleDialogs
   feature: "Quick add/remove from library toggles (remove, duplicates, categories, migrate)"
@@ -244,8 +235,7 @@
   feature: "Recent updates list"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.updates.UpdatesUiModelTest, e2e.LocalJourneyTest]
-  gap: "Grouping only in the gated EndToEndParityTest; reading from it is driven by LocalJourneyTest; planned: UpdatesJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.updates.UpdatesUiModelTest, e2e.LocalJourneyTest, e2e.UpdatesJourneyTest]
 
 - key: flow:updates.header
   feature: "View upcoming / update library buttons"
@@ -257,8 +247,7 @@
   feature: "Selection: clear, select all, invert, read/unread, bookmark, download, delete"
   tier: unit
   smoke: false
-  tests: [ui.updates.UpdatesUiModelTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: UpdatesJourneyTest"
+  tests: [ui.updates.UpdatesUiModelTest, e2e.UpdatesJourneyTest]
 
 - key: dialog-inline:UpdatesTab.kt:SelectionHeader
   feature: "Delete chapters confirmation"
@@ -278,8 +267,7 @@
   feature: "Updates filter dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndParityTest; planned: LibraryViewJourneyTest"
+  tests: [e2e.LibraryViewJourneyTest]
 
 - key: screen:upcoming.UpcomingScreen
   feature: "Upcoming calendar (previous/next month, guide)"
@@ -409,15 +397,13 @@
   feature: "Sources filter screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Filtering only in the gated EndToEndParityTest; planned: BrowseCategoriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseCategoriesJourneyTest]
 
 - key: screen:browse.SourceCategoryScreen
   feature: "Source categories screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest]
-  gap: "Categories in use only in the gated EndToEndParityTest; planned: BrowseCategoriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.BrowseCategoriesJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: dialog:browse.SourceCategoriesDialog
   feature: "Source categories dialog"
@@ -469,8 +455,7 @@
   feature: "Source feed screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Local source feed only in the gated EndToEndParityTest; planned: BrowseCategoriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseCategoriesJourneyTest]
 
 - key: screen:browse.GlobalSearchScreen
   feature: "Global search (pinned only, all, has results; merge/migrate purposes)"
@@ -559,29 +544,26 @@
   feature: "Title/author menus: library search, global search, copy"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+  tests: [e2e.EntryPageJourneyTest]
 
 - key: flow:manga.more-menu
   feature: "More menu: edit, cover, update frequency, copy link, similar titles, merged entries, migrate, open folder, clear"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Edit and clear only in the gated EndToEndParityTest; planned: EntryPageJourneyTest; merged entries, planned: MergeEntriesJourneyTest"
+  tests: [e2e.EntryPageJourneyTest]
+  gap: "merged entries, planned: MergeEntriesJourneyTest"
 
 - key: dialog:manga.EditMangaDialog
   feature: "Edit details, notes and cover"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Editing only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest]
 
 - key: dialog:manga.TrackerSelectDialog
   feature: "Edit details: tracker select (fill from tracker)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+  tests: [e2e.EntryPageJourneyTest]
 
 - key: dialog:manga.CoverDialog
   feature: "Cover dialog"
@@ -611,8 +593,7 @@
   feature: "Clear entry (delete downloads / chapters)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Clearing only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest]
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"
@@ -651,8 +632,7 @@
   feature: "Chapter settings (filter, sort, display)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.manga.ChapterSettingsTest]
-  gap: "Display tab in use only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.manga.ChapterSettingsTest, e2e.EntryPageJourneyTest]
 
 - key: dialog:manga.ScanlatorFilterDialog
   feature: "Chapter settings: scanlator filter"
@@ -739,8 +719,7 @@
   feature: "Paged viewer (zoom, double pages)"
   tier: journey
   smoke: false
-  tests: [e2e.BrowseAndReadJourneyTest, e2e.AvifJourneyTest, e2e.DescramblingJourneyTest, e2e.DownloadJourneyTest, ui.reader.ReaderSpreadsTest]
-  gap: "Zoom and double pages only in the gated EndToEndParityTest; planned: ReaderSettingsJourneyTest"
+  tests: [e2e.BrowseAndReadJourneyTest, e2e.AvifJourneyTest, e2e.DescramblingJourneyTest, e2e.DownloadJourneyTest, ui.reader.ReaderSpreadsTest, e2e.ReaderSettingsJourneyTest]
 
 - key: flow:reader.webtoon
   feature: "Webtoon viewer"
@@ -774,8 +753,7 @@
   feature: "Quick settings: reading mode, scale type, crop borders, page layout (single/double/auto)"
   tier: unit
   smoke: false
-  tests: [ui.reader.ReaderScaleTest, ui.reader.CropBordersTest, ui.reader.ReaderSpreadsTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: ReaderSettingsJourneyTest"
+  tests: [ui.reader.ReaderScaleTest, ui.reader.CropBordersTest, ui.reader.ReaderSpreadsTest, e2e.ReaderSettingsJourneyTest]
 
 - key: flow:reader.page-loading
   feature: "Retry failed pages, load this page first"
@@ -801,15 +779,13 @@
   feature: "Page actions (save, share, set as cover; double page)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.reader.PageImagesTest]
-  gap: "Saving and set as cover only in the gated EndToEndParityTest; planned: ReaderSettingsJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.reader.PageImagesTest, e2e.ReaderSettingsJourneyTest]
 
 - key: dialog:reader.ReaderSettingsDialog
   feature: "Reader settings dialog (shift double pages, bottom bar buttons, auto scroll)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Settings in use only in the gated EndToEndParityTest; planned: ReaderSettingsJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.ReaderSettingsJourneyTest]
 
 - key: flow:reader.tap-zones
   feature: "Tap zones overlay"
@@ -843,8 +819,7 @@
   feature: "Updates / History rows (when hidden from the rail)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Hiding History only in the gated EndToEndParityTest; planned: SettingsAppearanceLibraryJourneyTest"
+  tests: [e2e.SettingsAppearanceLibraryJourneyTest]
 
 - key: flow:more.download-queue
   feature: "Download queue row"
@@ -864,22 +839,19 @@
   feature: "Categories row and Category screen: add, rename, delete, reorder, default"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Editing categories only in the gated EndToEndParityTest; planned: CategoriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.CategoriesJourneyTest]
 
 - key: dialog:category.CategoryNameDialog
   feature: "New/rename category dialog"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Renaming only in the gated EndToEndParityTest; planned: CategoriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.CategoriesJourneyTest]
 
 - key: dialog-inline:CategoryScreen.kt:Content
   feature: "Delete category confirmation"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndParityTest; planned: CategoriesJourneyTest"
+  tests: [e2e.CategoriesJourneyTest]
 
 - key: screen:stats.StatsScreen
   feature: "Statistics row and Stats screen"
@@ -892,8 +864,8 @@
   feature: "Data and storage (also the More tab's row): storage location, downloads folder; backup create, restore, folder; storage usage, chapter and cover cache, data folder; export library list; data sync; data saver"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest, e2e.MetadataJourneyTest]
-  gap: "Storage and export only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest; sync on start and on resume stays Window-level (accepted gap until a later refactor)"
+  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest, e2e.MetadataJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
+  gap: "sync on start and on resume stays Window-level (accepted gap until a later refactor)"
 
 - key: screen:more.SettingsScreen
   feature: "Settings row"
@@ -927,22 +899,19 @@
   feature: "Theme mode, app theme, pure black, cover-based theme; entry page, reader navigation, browse; rail buttons, description images"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: SettingsAppearanceLibraryJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest]
 
 - key: dialog:settings.ColorPickerDialog
   feature: "Appearance: custom color picker"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndParityTest; planned: SettingsAppearanceLibraryJourneyTest"
+  tests: [e2e.SettingsAppearanceLibraryJourneyTest]
 
 - key: settings:Library
   feature: "Edit categories row; library update (interval, restrictions, categories, tab badge); behavior, sorting, chapter swipe"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: SettingsAppearanceLibraryJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest, e2e.CategoriesJourneyTest]
 
 - key: dialog:settings.CategoriesIncludeExcludeDialog
   feature: "Library update: categories include/exclude"
@@ -961,8 +930,7 @@
   feature: "Download location and password (CBZ); delete chapters, auto download, download ahead, cache renew"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Excluded categories only in the gated EndToEndParityTest; planned: SettingsAppearanceLibraryJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest]
 
 - key: state:download-password
   feature: "Download password (encrypted CBZ) dialog"
@@ -1009,22 +977,20 @@
   feature: "Sources, feed, hide library items, NSFW"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "covered only by the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: screen:settings.ExtensionStoresScreen
   feature: "Extension stores screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Opening it from Settings only in the gated EndToEndParityTest; planned: BrowseCategoriesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseCategoriesJourneyTest]
 
 - key: screen:settings.CreateBackupScreen
   feature: "Create backup screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Options only in the gated EndToEndParityTest; planned: BackupScreensJourneyTest; the file chooser is a native dialog (manual)"
+  tests: [ui.ScreenSmokeTest, e2e.BackupScreensJourneyTest]
+  gap: "the file chooser is a native dialog (manual)"
 
 - key: screen:settings.RestoreBackupScreen
   feature: "Restore backup screen"
@@ -1049,8 +1015,7 @@
   feature: "Export library list dialog"
   tier: unit
   smoke: false
-  tests: [ui.settings.DataSettingsTest]
-  gap: "Dialog only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest"
+  tests: [ui.settings.DataSettingsTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: dialog:settings.TextDialog
   feature: "Data sync: text dialog (host, key)"
@@ -1081,8 +1046,7 @@
   feature: "Clear database screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Clearing only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: settings:Security
   feature: "Lock, password, days, times, hide notification content, incognito and extensions"
@@ -1158,8 +1122,7 @@
   feature: "Keep running in the tray; keyboard shortcuts list; onboarding guide, invalidate download cache, cookies, WebView data, user agent, reset viewer flags, revoke extension trust, crash logs, developer tools"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.CookieJourneyTest]
-  gap: "DoH and the rest only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.CookieJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: dialog-inline:AdvancedSettings.kt:UserAgentPreference
   feature: "Advanced: user agent dialog"
