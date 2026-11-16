@@ -85,7 +85,7 @@ class SourceErrorJourneyTest {
                 step("A title's details answer 404: the error, no chapters, nothing in the library") {
                     server.fail("/manga/", FixtureFailure.Status(404))
                     onAllNodesWithText(FixtureCatalog.FORMATS_TITLE).onFirst().performClick()
-                    waitFor(hasText("HTTP error 404"))
+                    waitFor(hasText("HTTP 404, check website in WebView"))
                     waitFor(hasText("No chapters"))
                     runBlocking { Injekt.get<GetFavorites>().await() }.shouldBeEmpty()
                     shot("3-details-404")
@@ -98,7 +98,7 @@ class SourceErrorJourneyTest {
                     FixtureCatalog.formats.forEachIndexed { i, format ->
                         waitFor(hasText("Chapter ${i + 1} (${format.uppercase()})"))
                     }
-                    onAllNodesWithText("HTTP error 404").fetchSemanticsNodes() shouldHaveSize 0
+                    onAllNodesWithText("HTTP 404, check website in WebView").fetchSemanticsNodes() shouldHaveSize 0
                     runBlocking { Injekt.get<GetFavorites>().await() }.shouldBeEmpty()
                     shot("4-details-refreshed")
                     runOnUiThread { navigator?.pop() }
@@ -108,7 +108,7 @@ class SourceErrorJourneyTest {
                 step("Only a title's chapter list answers 500: the error and no chapters") {
                     server.fail("/manga/second/chapters", FixtureFailure.Status(500))
                     onAllNodesWithText("Fixture Second").onFirst().performClick()
-                    waitFor(hasText("HTTP error 500"))
+                    waitFor(hasText("HTTP 500, check website in WebView"))
                     waitFor(hasText("No chapters"))
                     // The details call answered; the source API returns details and chapters as one
                     // update, so the chapter error drops both until Refresh
@@ -125,7 +125,7 @@ class SourceErrorJourneyTest {
                     waitFor(hasText("Start") and isEnabled())
                     waitFor(hasText("Chapter 1", substring = true))
                     waitFor(hasText(SECOND_DESCRIPTION, substring = true))
-                    onAllNodesWithText("HTTP error 500").fetchSemanticsNodes() shouldHaveSize 0
+                    onAllNodesWithText("HTTP 500, check website in WebView").fetchSemanticsNodes() shouldHaveSize 0
                     onAllNodesWithText("No chapters").fetchSemanticsNodes() shouldHaveSize 0
                     runBlocking { Injekt.get<GetFavorites>().await() }.shouldBeEmpty()
                     shot("6-chapters-refreshed")
