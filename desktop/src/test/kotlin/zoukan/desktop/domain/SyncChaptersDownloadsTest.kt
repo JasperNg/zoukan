@@ -14,6 +14,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.data.Database
+import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.ShouldUpdateDbChapter
 import tachiyomi.domain.chapter.model.Chapter
@@ -73,6 +75,10 @@ class SyncChaptersDownloadsTest {
             downloads,
             paths,
             getExcluded,
+            object : DatabaseHandler by mockk() {
+                override suspend fun <T> await(inTransaction: Boolean, block: suspend Database.() -> T): T =
+                    block(mockk(relaxed = true))
+            },
         )
     }
 
