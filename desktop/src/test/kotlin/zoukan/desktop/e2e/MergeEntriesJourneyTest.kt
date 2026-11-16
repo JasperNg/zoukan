@@ -94,8 +94,9 @@ class MergeEntriesJourneyTest {
                     waitFor(hasText("Chapter 1"))
                     val merged = runBlocking { Injekt.get<GetManga>().await(second.id) }
                     println("Journey $name: the entry after the merge: ${merged?.title}")
-                    server.requests.count { it == "/manga/second" } shouldBeGreaterThan 0
-                    server.requests.count { it == "/manga/formats" } shouldBeGreaterThan 0
+                    // A source's chapter list is asked at <entry>/chapters, so count every path under the entry
+                    server.requests.count { it == "/manga/second" || it.startsWith("/manga/second/") } shouldBeGreaterThan 0
+                    server.requests.count { it == "/manga/formats" || it.startsWith("/manga/formats/") } shouldBeGreaterThan 0
                     shot("3-merged")
                 }
 
