@@ -177,17 +177,21 @@ class BackupContentRestorer(
         categories: List<BackupCategory>?,
     ) = launch {
         ensureActive()
+        // ZOUKAN -->
         preferenceRestorer.restoreApp(
             preferences,
             categories,
-        )
+        ).forEach { errors.add(Date() to it) }
+        // ZOUKAN <--
 
         progress(Step.Section(MR.strings.app_settings))
     }
 
     private fun CoroutineScope.restoreSourcePreferences(preferences: List<BackupSourcePreferences>) = launch {
         ensureActive()
-        preferenceRestorer.restoreSource(preferences)
+        // ZOUKAN -->
+        preferenceRestorer.restoreSource(preferences).forEach { errors.add(Date() to it) }
+        // ZOUKAN <--
 
         progress(Step.Section(MR.strings.source_settings))
     }

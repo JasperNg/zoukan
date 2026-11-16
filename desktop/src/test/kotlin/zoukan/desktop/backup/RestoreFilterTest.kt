@@ -8,8 +8,12 @@ import eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.IntPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringSetPreferenceValue
+import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import io.kotest.matchers.shouldBe
+import io.mockk.Runs
 import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import mihon.domain.extension.interactor.GetExtensionStores
@@ -17,6 +21,7 @@ import mihon.domain.extension.model.ExtensionStore
 import mihon.domain.extension.repository.ExtensionStoreRepository
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import java.io.File
 
 /** A backup file made by hand must not set this computer's own state. */
@@ -130,5 +135,49 @@ class RestoreFilterTest {
             restorable.backupExtensionStores shouldBe listOf(same, legacySame)
             skipped shouldBe listOf(newKey, newStore)
         }
+    }
+
+    @Test
+    fun `a setting stored as untyped text is restored from a typed backup value`() {
+        val written = mutableListOf<Int>()
+        val intPref = mockk<Preference<Int>>(relaxed = true) { every { set(capture(written)) } just Runs }
+        // As JavaSharedPreferences.getAll() returns a value saved before types were kept
+        val store = mockk<PreferenceStore>(relaxed = true) {
+            every { getAll() } returns mapOf("reader_theme" to "5")
+            every { getInt("reader_theme", any()) } returns intPref
+        }
+        val restorer = PreferenceRestorer(getCategories = mockk(relaxed = true), preferenceStore = store)
+        runBlocking { restorer.restoreApp(listOf(BackupPreference("reader_theme", IntPreferenceValue(7))), null) }
+        written shouldBe listOf(7)
+    }
+
+    @Test
+    fun `a setting that cannot be restored is reported, not only logged`() {
+        val written = mutableListOf<Int>()
+        val intPref = mockk<Preference<Int>>(relaxed = true) { every { set(capture(written)) } just Runs }
+        val store = mockk<PreferenceStore>(relaxed = true) {
+            every { getAll() } returns mapOf("reader_theme" to "dark")
+            every { getInt("reader_theme", any()) } returns intPref
+        }
+        val restorer = PreferenceRestorer(getCategories = mockk(relaxed = true), preferenceStore = store)
+        val problems = runBlocking {
+            restorer.restoreApp(listOf(BackupPreference("reader_theme", IntPreferenceValue(7))), null)
+        }
+        written shouldBe emptyList()
+        problems.single().contains("reader_theme") shouldBe true
+    }
+
+    @Test
+    fun `a setting that fails to write is reported`() {
+        val intPref = mockk<Preference<Int>>(relaxed = true) { every { set(any()) } throws IllegalStateException("disk full") }
+        val store = mockk<PreferenceStore>(relaxed = true) {
+            every { getAll() } returns emptyMap<String, Any>()
+            every { getInt("reader_theme", any()) } returns intPref
+        }
+        val restorer = PreferenceRestorer(getCategories = mockk(relaxed = true), preferenceStore = store)
+        val problems = runBlocking {
+            restorer.restoreApp(listOf(BackupPreference("reader_theme", IntPreferenceValue(7))), null)
+        }
+        problems.single().contains("reader_theme") shouldBe true
     }
 }
