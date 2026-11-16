@@ -36,6 +36,7 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
@@ -47,7 +48,7 @@ fun LazyListScope.settingsGroup(title: String) {
             title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = Spacing.SettingsRowInset, end = Spacing.SettingsRowInset, top = Spacing.SettingsGroupGap, bottom = 8.dp),
         )
     }
 }
@@ -87,7 +88,7 @@ fun SettingRow(
                     else -> Modifier
                 },
             )
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.SettingsRowInset, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -168,7 +169,7 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
     LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOf(title))) return }
     val saved by preference.collectAsState()
     var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row {
             Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(label(value.roundToInt()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

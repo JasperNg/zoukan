@@ -31,6 +31,7 @@ import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.SourceCategoryScreen
 import zoukan.desktop.ui.browse.StoresList
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
@@ -157,7 +158,7 @@ fun InfoText(text: String) {
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
     )
 }
 

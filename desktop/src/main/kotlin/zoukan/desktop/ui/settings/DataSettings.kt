@@ -54,6 +54,7 @@ import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
@@ -194,7 +195,7 @@ private fun BackupButtons() {
     val status by backupStatusFlow.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
     SearchTerms(localized(MR.strings.pref_create_backup), localized(MR.strings.pref_restore_backup))
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { navigator.push(CreateBackupScreen) }, enabled = status == null, modifier = Modifier.weight(1f)) {
                 Text(localized(MR.strings.pref_create_backup))
@@ -243,7 +244,7 @@ private fun StorageUsage() {
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }
     SearchTerms(localized(MR.strings.pref_storage_usage), localized(DMR.strings.disk_space))
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(root.absolutePath, style = MaterialTheme.typography.bodyMedium)
         LinearProgressIndicator(
             progress = { if (total > 0) 1 - available / total.toFloat() else 0f },

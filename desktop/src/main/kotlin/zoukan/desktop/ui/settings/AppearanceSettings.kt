@@ -57,6 +57,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.LazyRow
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
@@ -125,13 +126,13 @@ internal fun ThemeSection() {
             localized(MR.strings.theme_dark),
         )
         SettingRow(localized(MR.strings.pref_app_theme))
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(horizontal = Spacing.SettingsRowInset), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(ThemeMode.SYSTEM to localized(MR.strings.theme_system), ThemeMode.LIGHT to localized(MR.strings.theme_light), ThemeMode.DARK to localized(MR.strings.theme_dark)).forEach { (value, label) ->
                 FilterChip(selected = mode == value, onClick = { ui.themeMode().set(value) }, label = { Text(label) })
             }
         }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.SettingsRowInset, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             scrollbarModifier = Modifier.testTag("theme-row-scrollbar"),
         ) {

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.reducedMotion
 
 /**
@@ -202,7 +203,7 @@ private fun SearchResult(
                             opened = true
                             onOpen()
                         }
-                    }.padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 0.dp),
+                    }.padding(start = Spacing.SettingsRowInset, end = Spacing.SettingsRowInset, top = 12.dp, bottom = 0.dp),
                 )
                 CompositionLocalProvider(LocalSearchTexts provides texts, LocalSearchQuery provides query) { content() }
             }

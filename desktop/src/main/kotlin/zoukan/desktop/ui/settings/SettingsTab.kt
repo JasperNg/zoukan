@@ -105,6 +105,7 @@ import zoukan.desktop.ui.common.FitModes
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
@@ -229,7 +230,7 @@ fun SettingsTab() {
         // Every item but the end spacer has no height when nothing matches
         val nothing by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.none { it.size > 0 && it.key != "search-end" } } }
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+            LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
                 pages.forEach { SearchScope(this, it, query, onOpen).settingsPage(it) }
                 item(key = "search-end") { Spacer(Modifier.height(24.dp)) }
             }
@@ -268,7 +269,7 @@ fun SettingsTab() {
                         val state = rememberLazyListState()
                         val ids = remember { mutableListOf<Any>() }
                         val highlight = highlightedItem?.takeIf { it.first == selected }?.second
-                        LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+                        LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
                             ids.clear()
                             HighlightScope(this, highlight, ids).settingsPage(selected)
                             item { Spacer(Modifier.height(24.dp)) }

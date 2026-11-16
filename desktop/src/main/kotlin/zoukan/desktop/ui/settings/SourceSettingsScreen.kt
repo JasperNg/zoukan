@@ -52,6 +52,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
@@ -92,7 +93,7 @@ data class SourceSettingsScreen(val sourceId: Long) : Screen {
             when {
                 source == null -> EmptyScreen(localized(DMR.strings.this_source_is_not_installed_or))
                 rows == null || rows.none { it !is PreferenceGroup } -> EmptyScreen(localized(DMR.strings.this_source_has_no_settings))
-                else -> LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp)) {
+                else -> LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth)) {
                     // Index-qualified: an extension may give two preferences the same key, and a
                     // repeated LazyColumn key crashes the window
                     itemsIndexed(rows, key = { i, p -> "$i:${p.key}" }) { _, pref ->
@@ -192,7 +193,7 @@ internal fun PreferenceItem(pref: Preference, @Suppress("UNUSED_PARAMETER") vers
                 title,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = Spacing.SettingsRowInset, end = Spacing.SettingsRowInset, top = Spacing.SettingsGroupGap, bottom = 8.dp),
             )
         }
         is SeekBarPreference -> SeekBarSetting(pref, title, enabled) { value ->
@@ -248,7 +249,7 @@ private fun SeekBarSetting(pref: SeekBarPreference, title: String, enabled: Bool
     var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
     val increment = pref.seekBarIncrement.takeIf { it > 0 } ?: 1
     val summary = summaryOf(pref)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(

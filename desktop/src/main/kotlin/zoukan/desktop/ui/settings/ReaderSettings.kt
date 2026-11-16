@@ -20,6 +20,7 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.reader.ReaderNavigation
@@ -97,7 +98,7 @@ private fun FlashDurationPreference(preferences: DesktopPreferences) {
     val pref = preferences.flashDurationMillis()
     val saved by pref.collectAsState()
     var steps by remember(saved) { mutableFloatStateOf((saved / 100).coerceIn(1, 15).toFloat()) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row {
             Text(localized(MR.strings.pref_flash_duration), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(localized(MR.strings.pref_flash_duration_summary, steps.roundToInt() * 100), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
