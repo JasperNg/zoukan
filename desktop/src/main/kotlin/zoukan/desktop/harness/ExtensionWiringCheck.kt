@@ -425,7 +425,7 @@ class ExtensionWiringCheck(
                 listOf("Symbol", "Problem", "Extensions", "Used by"),
                 ofKind.entries.sortedWith(compareByDescending<Map.Entry<ApiLinkage.Gap, List<String>>> { it.value.size }.thenBy { it.key.symbol })
                     .map { (gap, pkgs) ->
-                        val problem = KNOWN.entries.firstOrNull { gap.symbol.startsWith(it.key) }?.value ?: gap.reason
+                        val problem = knownReason(gap) ?: gap.reason
                         listOf(gap.symbol, problem, pkgs.size.toString(), pkgs.take(8).joinToString() + if (pkgs.size > 8) ", ..." else "")
                     },
             )
@@ -561,11 +561,6 @@ class ExtensionWiringCheck(
             "android.app.Activity." to
                 "Needs the current Activity, to show a dialog (a captcha or login). The desktop has no Activity, " +
                 "so the extension's own lookup finds none and the call fails with its own error",
-            "org.chromium.support_lib_boundary." to
-                "Interfaces of androidx.webkit that the extension bundles and the app has too; the extension " +
-                "runs the app's copy, which declares the same interfaces",
-            "nl.adaptivity.xmlutil." to
-                "The XML library that the extension bundles and the app has too; the extension runs the app's copy",
             "me.zhanghai.android.libarchive." to
                 "Android-only native archive library (all.jellyfin's own use of it): not available on the desktop",
             "android.os.ResultReceiver" to
@@ -573,9 +568,28 @@ class ExtensionWiringCheck(
                 "desktop cannot open",
         )
 
+        /**
+         * Libraries that extensions bundle and the app has too, by package prefix, with the reason.
+         * Only the bundled class itself is known (the app's copy runs instead): a member or class
+         * the app's copy lacks is still a missing API, since the extension's call to it fails.
+         */
+        val KNOWN_SHADOWED = mapOf(
+            "org.chromium.support_lib_boundary." to
+                "Interfaces of androidx.webkit that the extension bundles and the app has too; the extension " +
+                "runs the app's copy, which declares the same interfaces",
+            "nl.adaptivity.xmlutil." to
+                "The XML library that the extension bundles and the app has too; the extension runs the app's copy",
+        )
+
+        /** Why [gap] is missing on purpose, or null when it is not. */
+        fun knownReason(gap: ApiLinkage.Gap): String? =
+            KNOWN.entries.firstOrNull { gap.symbol.startsWith(it.key) }?.value
+                ?: KNOWN_SHADOWED.entries.takeIf { gap.reason == ApiLinkage.SHADOWED }
+                    ?.firstOrNull { gap.symbol.startsWith(it.key) }?.value
+
         fun kindOf(gap: ApiLinkage.Gap): GapKind = when {
             gap.activityOnly -> GapKind.ACTIVITY
-            KNOWN.keys.any { gap.symbol.startsWith(it) } -> GapKind.KNOWN
+            knownReason(gap) != null -> GapKind.KNOWN
             UI_PREFIXES.any { gap.symbol.startsWith(it) } -> GapKind.UI
             else -> GapKind.APP
         }

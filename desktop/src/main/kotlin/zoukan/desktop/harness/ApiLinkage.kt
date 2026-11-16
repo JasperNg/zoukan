@@ -59,7 +59,7 @@ class ApiLinkage(private val host: ClassLoader) {
             .map { (gap, activityOnly) -> gap.copy(activityOnly = activityOnly.all { it }) }
         val shadowed = if (reportShadowed) {
             jar.own.filterNot { it.endsWith("module-info") }.filter { classOf(it).isSuccess }
-                .map { Gap(it.dotted(), "bundled class replaced by the app's copy") }
+                .map { Gap(it.dotted(), SHADOWED) }
         } else {
             emptyList()
         }
@@ -454,11 +454,14 @@ class ApiLinkage(private val host: ClassLoader) {
 
     private fun String.dotted() = replace('/', '.')
 
-    private companion object {
-        const val ACTIVITY = "android/app/Activity"
-        val STUB_PACKAGES = listOf("android.", "androidx.", "dalvik.")
+    companion object {
+        /** The [Gap.reason] of a bundled class that never runs, because the app has the same class. */
+        const val SHADOWED = "bundled class replaced by the app's copy"
+
+        private const val ACTIVITY = "android/app/Activity"
+        private val STUB_PACKAGES = listOf("android.", "androidx.", "dalvik.")
 
         /** A class that declares these inherits them from Object, whatever an interface says. */
-        val OBJECT_METHODS = Any::class.java.declaredMethods.map { it.name + Type.getMethodDescriptor(it) }.toSet()
+        private val OBJECT_METHODS = Any::class.java.declaredMethods.map { it.name + Type.getMethodDescriptor(it) }.toSet()
     }
 }
