@@ -851,14 +851,14 @@
   tier: journey
   smoke: false
   tests: []
-  gap: "Only the gated EndToEndLocalTest; planned: LocalJourneyTest; empty queue, planned: EmptyStatesJourneyTest"
+  gap: "Only the gated EndToEndLocalTest; planned: LocalJourneyTest; the empty queue is in EmptyStatesJourneyTest"
 
 - key: screen:downloads.DownloadsScreen
   feature: "Download queue screen: pause/start, cancel all, open folder, move top/bottom, cancel series, sort"
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, download.DownloadQueueOrderTest, download.DownloadQueueStatesTest]
-  gap: "Queue actions are not driven; planned: EmptyStatesJourneyTest (empty queue)"
+  gap: "Queue actions are not driven; the empty queue is in EmptyStatesJourneyTest"
 
 - key: screen:category.CategoryScreen
   feature: "Categories row and Category screen: add, rename, delete, reorder, default"
@@ -1243,3 +1243,35 @@
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest]
+
+# --- Empty states ---
+
+- key: state:library-empty
+  feature: "Empty library: message and Browse action; one title replaces it"
+  tier: journey
+  smoke: false
+  tests: [e2e.EmptyStatesJourneyTest]
+
+- key: state:history-empty
+  feature: "Empty history and a history search that matches nothing"
+  tier: journey
+  smoke: false
+  tests: [e2e.EmptyStatesJourneyTest]
+
+- key: state:downloads-empty
+  feature: "Empty download queue"
+  tier: journey
+  smoke: false
+  tests: [e2e.EmptyStatesJourneyTest]
+
+- key: state:source-search-empty
+  feature: "Source search with no results"
+  tier: journey
+  smoke: false
+  tests: [e2e.EmptyStatesJourneyTest]
+
+- key: state:global-search-empty
+  feature: "Global search with no results; Has results hides the empty source"
+  tier: journey
+  smoke: false
+  tests: [e2e.EmptyStatesJourneyTest]
