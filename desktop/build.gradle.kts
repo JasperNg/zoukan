@@ -295,8 +295,11 @@ tasks.named<JavaExec>("run") {
     }
 }
 
+/** The test classes [wiringTest] must run; a rename needs this one list changed. */
+val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ScreenSmokeSmallWindowTest")
+
 /** The tests [wiringTest] runs instead of `test`. */
-val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest", "*ScreenSmokeSmallWindowTest")
+val wiringTests = expectedWiringClasses.map { "*$it" }
 
 /** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
@@ -342,7 +345,19 @@ val wiringTest by tasks.registering(Test::class) {
     useJUnitPlatform()
     filter {
         wiringTests.forEach { includeTestsMatching(it) }
-        isFailOnNoMatchingTests = false
+    }
+    // A class renamed out of the patterns would otherwise drop out of the wiring tests silently,
+    // unless the developer narrowed the run with --tests on purpose
+    val narrowedOnCommandLine = gradle.startParameter.taskRequests.any { "--tests" in it.args }
+    val wiringResults = reports.junitXml.outputLocation
+    doLast {
+        if (!narrowedOnCommandLine) {
+            val ran = wiringResults.get().asFile.listFiles().orEmpty().map { it.name }
+            val missing = expectedWiringClasses.filter { name ->
+                ran.none { it.startsWith("TEST-") && it.endsWith(".$name.xml") }
+            }
+            check(missing.isEmpty()) { "wiringTest did not run ${missing.joinToString()}: was a class renamed or moved?" }
+        }
     }
     // Only the test classes themselves, not their nested and lambda classes: Gradle hands the
     // classes it scans to the forks in turn, which would queue both smoke runs in one fork
