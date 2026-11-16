@@ -5,7 +5,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
@@ -62,7 +61,7 @@ class SourceSettingsRobustnessJourneyTest {
         journey = Journey.start("source-settings-robustness")
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
-        val experimentalOff = isOff() and hasAnyAncestor(hasText(FixtureSource.EXPERIMENTAL_TITLE))
+        val experimentalOff = isOff() and hasText(FixtureSource.EXPERIMENTAL_TITLE)
         val failureToast = "${FixtureSource.EXPERIMENTAL_TITLE}: ${FixtureSource.EXPERIMENTAL_FAILURE}"
         val autoToast = FixtureSource.qualityToast("${FixtureSource.QUALITY_AUTO} chose ${FixtureSource.QUALITY_HIGH}", FixtureSource.QUALITY_LOW)
         val lowToast = FixtureSource.qualityToast(FixtureSource.QUALITY_LOW, FixtureSource.QUALITY_HIGH)

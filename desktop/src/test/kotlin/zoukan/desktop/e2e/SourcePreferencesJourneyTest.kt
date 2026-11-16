@@ -1,7 +1,6 @@
 package zoukan.desktop.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
@@ -51,9 +50,9 @@ class SourcePreferencesJourneyTest {
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
         val switch = hasText(FixtureSource.SHOW_BONUS_TITLE)
-        // The row's switch is its own node, inside the row with the title
-        val switchOn = isOn() and hasAnyAncestor(switch)
-        val switchOff = isOff() and hasAnyAncestor(switch)
+        // The row is the switch: one node with the title and the on/off state
+        val switchOn = isOn() and switch
+        val switchOff = isOff() and switch
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
