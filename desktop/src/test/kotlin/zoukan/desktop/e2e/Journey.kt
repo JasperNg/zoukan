@@ -115,12 +115,14 @@ class Journey private constructor(val name: String) {
 
     /**
      * Installs another fixture source over the same server, beside [source], as a merge or
-     * migration target. Its own name gives it its own id, settings file and entries.
+     * migration target. Its own name gives it its own id, settings file and entries, so the name
+     * must differ from every fixture source installed already.
      */
     fun addSource(name: String = FixtureSource.SECOND_NAME): FixtureSource {
         val extra = FixtureSource(server.baseUrl, name)
-        require(extra.id != source.id) { "a second fixture source needs another name than \"${source.name}\": the id comes from the name" }
         val tests = Injekt.get<BuiltInSources>().testSources
+        val clash = (tests.value + source).firstOrNull { it.id == extra.id }
+        require(clash == null) { "another fixture source needs another name than \"${clash?.name}\": the id comes from the name" }
         tests.value = tests.value + extra
         awaitListed(extra)
         return extra

@@ -85,9 +85,12 @@ class EntrySectionsJourneyTest {
                     onAllNodesWithText("Related titles").onFirst().performScrollTo()
                     waitFor(hasText("Fixture Second"))
                     waitFor(hasText("Fixture Third"))
-                    // From the source only: no search-only title, as the app's search would bring
-                    onAllNodesWithText(FixtureCatalog.HTML_TITLE).fetchSemanticsNodes() shouldHaveSize 0
-                    onAllNodesWithText(FixtureCatalog.SCRAMBLED_TITLE).fetchSemanticsNodes() shouldHaveSize 0
+                    // Every path of the app's lookup has answered and the row shows all it got
+                    waitOrDump("for the related-titles lookup to finish") { entrySource.relatedLookups.get() > 0 }
+                    waitForIdle()
+                    // From the source only. The app's search for the title's words ("fixture") would
+                    // also bring the search-only title below, which the source does not relate
+                    onAllNodesWithText(FixtureCatalog.MISSING_COVER_TITLE).fetchSemanticsNodes() shouldHaveSize 0
                     shot("2-related")
                 }
 

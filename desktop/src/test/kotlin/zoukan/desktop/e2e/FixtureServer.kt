@@ -15,6 +15,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -43,20 +44,24 @@ sealed interface FixtureFailure {
      * - the browse screens (global search, feed) stop a source call after 60 s
      *   (`withSourceTimeout`, GlobalSearchScreen.kt);
      * - the app's OkHttp client (`NetworkHelper.client`, which sources use) has a 30 s connect and
-     *   a 30 s read timeout and a 120 s call timeout; `NetworkHelper.plainClient` (sync and other
-     *   services that are not sources) has 10 s connect, read and write timeouts and no call
-     *   timeout.
+     *   a 30 s read timeout and a 120 s call timeout;
+     * - `NetworkHelper.plainClient` (SyncYomi sync and other services that are not sources) has
+     *   10 s connect, read and write timeouts and no call timeout;
+     * - WebDAV sync (`WebDavSyncService`) builds on the plain client but sets 30 s connect, read
+     *   and write timeouts, still with no call timeout.
      *
-     * So a hang reaches the app's timeout message only after 30 s or more. To show a timeout,
-     * answer [Status] 504 (a gateway timeout) instead; use Hang only to show a loading state,
-     * then [FixtureServer.clearFailures].
+     * So a hang reaches the app's timeout message only after 10 s (SyncYomi) or 30 s or more
+     * (sources, WebDAV). To show a timeout, answer [Status] 504 (a gateway timeout) instead; use
+     * Hang only to show a loading state, then [FixtureServer.clearFailures].
      */
     data object Hang : FixtureFailure
 
     /**
-     * An image path answers 200 with its real content type, but only the image's first 64 bytes
-     * followed by zeros, so the decoder rejects it. Any other path answers 200 JSON that is not
-     * valid (`{`).
+     * An image answers 200 with its real content type and its full length, but only its format
+     * magic is kept (the first 12 bytes, or an AVIF's whole `ftyp` box) and the rest is zeros:
+     * a client still sniffs the format, but no decoder finds the image's size or data. An image
+     * path without an image (a missing cover, the HTML page) answers as it does without the rule.
+     * Any other path answers 200 JSON that is not valid (`{`).
      */
     data object CorruptImage : FixtureFailure
 }
@@ -168,13 +173,10 @@ class FixtureServer : AutoCloseable {
                 runCatching { send(exchange, 503, "text/plain", "Fixture hang released".toByteArray()) }
             }
             FixtureFailure.CorruptImage -> {
-                val bytes = if (parts.size == 2 && parts[0] == "images") imageBytes(parts[1]) else null
-                if (bytes == null) {
-                    send(exchange, 200, "application/json", "{".toByteArray())
-                } else {
-                    val corrupt = ByteArray(bytes.size).also { bytes.copyInto(it, endIndex = minOf(CORRUPT_KEPT_BYTES, bytes.size)) }
-                    send(exchange, 200, imageType(parts[1]), corrupt)
-                }
+                if (parts.size != 2 || parts[0] != "images") return send(exchange, 200, "application/json", "{".toByteArray())
+                // No image here: the path's own answer (404, or the HTML page)
+                val bytes = imageBytes(parts[1]) ?: return route(exchange, parts)
+                send(exchange, 200, imageType(parts[1]), corrupted(bytes))
             }
         }
     }
@@ -292,7 +294,21 @@ class FixtureServer : AutoCloseable {
 
     companion object {
         private const val HANG_LIMIT_MINUTES = 5L
-        private const val CORRUPT_KEPT_BYTES = 64
+
+        /** Enough for every format's magic: JPEG's SOI and APP0 marker, PNG's signature, RIFF....WEBP. */
+        private const val CORRUPT_KEPT_BYTES = 12
+
+        /**
+         * [bytes] at the same length with only the format magic kept: the first
+         * [CORRUPT_KEPT_BYTES], or for ISO-BMFF (AVIF) the `ftyp` box, whose brands say the format.
+         * The header that follows (JPEG's frame, PNG's IHDR, WebP's VP8, AVIF's meta) is zeros.
+         */
+        internal fun corrupted(bytes: ByteArray): ByteArray {
+            val ftyp = bytes.size >= 8 && String(bytes, 4, 4, Charsets.ISO_8859_1) == "ftyp"
+            val ftypSize = if (ftyp) ByteBuffer.wrap(bytes, 0, 4).int else 0
+            val kept = maxOf(CORRUPT_KEPT_BYTES, ftypSize).coerceAtMost(bytes.size)
+            return ByteArray(bytes.size).also { bytes.copyInto(it, endIndex = kept) }
+        }
 
         const val COOKIE_NAME = "fixture_session"
         const val COOKIE_VALUE = "journey-cookie-1"

@@ -9,12 +9,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import eu.kanade.tachiyomi.source.model.FilterList
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -22,6 +24,7 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.interactor.GetFavorites
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
@@ -49,6 +52,11 @@ class SecondSourceJourneyTest {
         journey = Journey.start("second-source")
         val mirror = journey.addSource()
         mirror.id shouldNotBe journey.source.id
+        journey.step("A name already installed is refused, the first source's or the mirror's") {
+            shouldThrow<IllegalArgumentException> { journey.addSource(FixtureSource.NAME) }
+            shouldThrow<IllegalArgumentException> { journey.addSource() }.message shouldContain FixtureSource.SECOND_NAME
+            Injekt.get<BuiltInSources>().testSources.value shouldContainExactly listOf(journey.source, mirror)
+        }
         val preferences = Injekt.get<DesktopPreferences>()
 
         with(journey) {

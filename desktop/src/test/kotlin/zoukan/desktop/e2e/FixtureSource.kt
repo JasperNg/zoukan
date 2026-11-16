@@ -271,6 +271,25 @@ class FixtureSource(
     // catalogue as well, and hide whether these came through
     override val disableRelatedMangasBySearch: Boolean get() = related
 
+    /**
+     * How many times the app's related-titles lookup ([getRelatedMangaList]: the source's list,
+     * and the app's search unless [disableRelatedMangasBySearch]) finished, every result handed on.
+     */
+    val relatedLookups = AtomicInteger()
+
+    // The app's own lookup, only counted, so a journey can wait until every path has answered
+    override suspend fun getRelatedMangaList(
+        manga: SManga,
+        exceptionHandler: (Throwable) -> Unit,
+        pushResults: suspend (relatedManga: Pair<String, List<SManga>>, completed: Boolean) -> Unit,
+    ) {
+        try {
+            super<HttpSource>.getRelatedMangaList(manga, exceptionHandler, pushResults)
+        } finally {
+            relatedLookups.incrementAndGet()
+        }
+    }
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         if (!related) return emptyList()
         return FixtureCatalog.manga.filter { !it.searchOnly && !it.bonus && "/manga/${it.key}" != manga.url }

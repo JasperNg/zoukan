@@ -1,6 +1,13 @@
 package zoukan.desktop.e2e
 
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.serviceLoaderEnabled
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldContainInOrder
@@ -9,8 +16,9 @@ import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.ints.shouldBeInRange
 import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldStartWith
+import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
@@ -20,12 +28,15 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.jupiter.api.Test
+import zoukan.desktop.download.ImageType
 import zoukan.desktop.e2e.FixtureCatalog.CJK_DESCRIPTION
 import zoukan.desktop.e2e.FixtureCatalog.CJK_TITLE
 import zoukan.desktop.e2e.FixtureCatalog.LONG_TITLE
 import zoukan.desktop.e2e.FixtureCatalog.MISSING_COVER
 import zoukan.desktop.e2e.FixtureCatalog.MISSING_COVER_TITLE
-import java.io.ByteArrayInputStream
+import zoukan.desktop.image.FfmpegCoilDecoder
+import zoukan.desktop.ui.reader.PageImage
+import java.io.IOException
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -35,11 +46,12 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
-import javax.imageio.ImageIO
+import javax.imageio.IIOException
 
 /**
  * The failures [FixtureServer.fail] puts on paths, which the error-state journeys use, and the
- * search-only long, CJK and missing-cover titles. Plain HTTP against the server, no app runtime.
+ * search-only long, CJK and missing-cover titles. Plain HTTP against the server, no app runtime;
+ * corrupt images go through the app's own image decoders.
  */
 class FixtureServerTest {
 
@@ -111,7 +123,7 @@ class FixtureServerTest {
         shouldThrow<TimeoutException> { hung.get(500, TimeUnit.MILLISECONDS) }
 
         server.clearFailures()
-        hung.get(1, TimeUnit.SECONDS).statusCode() shouldBe 503
+        hung.get(RELEASE_SECONDS, TimeUnit.SECONDS).statusCode() shouldBe 503
         server.get("/manga/second").statusCode() shouldBe 200
     }
 
@@ -125,7 +137,7 @@ class FixtureServerTest {
         shouldThrow<TimeoutException> { hung.get(500, TimeUnit.MILLISECONDS) }
 
         server.clearFailures()
-        hung.get(1, TimeUnit.SECONDS).statusCode() shouldBe 503
+        hung.get(RELEASE_SECONDS, TimeUnit.SECONDS).statusCode() shouldBe 503
     }
 
     @Test
@@ -138,7 +150,7 @@ class FixtureServerTest {
         server.get("/manga/formats").statusCode() shouldBe 200
 
         server.clearFailures()
-        hung.forEach { it.get(5, TimeUnit.SECONDS).statusCode() shouldBe 503 }
+        hung.forEach { it.get(RELEASE_SECONDS, TimeUnit.SECONDS).statusCode() shouldBe 503 }
     }
 
     @Test
@@ -156,16 +168,72 @@ class FixtureServerTest {
         (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 5_000) shouldBe true
     }
 
-    @Test
-    fun `a corrupt image keeps its content type but does not decode`() = withServer { server ->
-        server.get("/images/jpeg-1.jpg").let { ImageIO.read(ByteArrayInputStream(it.body())) } shouldNotBe null
-        server.fail("/images/jpeg-1.jpg", FixtureFailure.CorruptImage)
+    /**
+     * A page of each format the fixture chapters use: its content type, the type the app sniffs,
+     * and the error the reader's decode ([PageImage.decode]) throws for it once corrupt.
+     */
+    private data class Corruptible(val file: String, val type: String, val sniffed: ImageType, val readerError: Class<out Throwable>)
 
-        val corrupt = server.get("/images/jpeg-1.jpg")
-        corrupt.statusCode() shouldBe 200
-        corrupt.headers().firstValue("Content-Type").orElse(null) shouldBe "image/jpeg"
-        val decoded = runCatching { ImageIO.read(ByteArrayInputStream(corrupt.body())) }.getOrNull()
-        decoded shouldBe null
+    private val corruptible = listOf(
+        // Skia fails, then ImageIO's JPEG and PNG readers throw rather than answer null
+        Corruptible("jpeg-1.jpg", "image/jpeg", ImageType.JPEG, IIOException::class.java),
+        Corruptible("png-1.png", "image/png", ImageType.PNG, IIOException::class.java),
+        // No ImageIO reader takes it: the reader's own "unsupported image format"
+        Corruptible("webp-1.webp", "image/webp", ImageType.WEBP, IllegalArgumentException::class.java),
+        // The AVIF reader's FFmpeg cannot open it
+        Corruptible("avif-1.avif", "image/avif", ImageType.AVIF, IOException::class.java),
+    )
+
+    @Test
+    fun `a corrupt image keeps its content type, length and format, but the reader cannot decode it`() = withServer { server ->
+        server.fail("/images/", FixtureFailure.CorruptImage, times = corruptible.size)
+        val corrupt = corruptible.associate { it.file to server.get("/images/${it.file}") }
+        corruptible.forEach { (file, type, sniffed, readerError) ->
+            val intact = server.get("/images/$file").body()
+            // The reader's own decode (Skia, then ImageIO with the AVIF reader) reads the real page
+            PageImage.decode(intact).width shouldBeGreaterThan 0
+
+            val response = corrupt.getValue(file)
+            response.statusCode() shouldBe 200
+            response.headers().firstValue("Content-Type").orElse(null) shouldBe type
+            response.body().size shouldBe intact.size
+            ImageType.fromBytes(response.body()) shouldBe sniffed
+            // Skia fails on every one; the error the reader shows is the fallback's for that format
+            val error = runCatching { PageImage.decode(response.body()) }.exceptionOrNull()
+            withClue("$file: $error") { error?.javaClass shouldBe readerError }
+        }
+    }
+
+    @Test
+    fun `a corrupt image fails in the cover loader`() = withServer { server ->
+        // Coil as the app sets it up for covers and previews: its Skia decoder, and the app's AVIF decoder
+        val loader = ImageLoader.Builder(PlatformContext.INSTANCE)
+            .serviceLoaderEnabled(false)
+            .components { add(FfmpegCoilDecoder.Factory()) }
+            .memoryCache { null }
+            .diskCache { null }
+            .build()
+        fun load(bytes: ByteArray) = runBlocking { loader.execute(ImageRequest.Builder(PlatformContext.INSTANCE).data(bytes).build()) }
+        server.fail("/images/", FixtureFailure.CorruptImage, times = corruptible.size)
+        val corrupt = corruptible.associate { it.file to server.get("/images/${it.file}").body() }
+        corruptible.forEach { (file) ->
+            withClue(file) {
+                load(server.get("/images/$file").body()).shouldBeInstanceOf<SuccessResult>()
+                load(corrupt.getValue(file)).shouldBeInstanceOf<ErrorResult>()
+            }
+        }
+        loader.shutdown()
+    }
+
+    @Test
+    fun `a corrupt image rule leaves image paths without an image as they are`() = withServer { server ->
+        server.fail("/images/", FixtureFailure.CorruptImage)
+
+        server.get("/images/$MISSING_COVER").statusCode() shouldBe 404
+        val html = server.get("/images/${FixtureCatalog.HTML_PAGE}")
+        html.statusCode() shouldBe 200
+        html.headers().firstValue("Content-Type").orElse(null) shouldBe "text/html"
+        server.get("/images/cover-1.png").headers().firstValue("Content-Type").orElse(null) shouldBe "image/png"
     }
 
     @Test
@@ -276,4 +344,12 @@ class FixtureServerTest {
     }
 
     private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
+
+    private companion object {
+        /**
+         * How long a released hang may take to answer. Generous for a loaded runner: the tests
+         * still prove the hold, by the 500 ms wait that timed out before the release.
+         */
+        const val RELEASE_SECONDS = 5L
+    }
 }
