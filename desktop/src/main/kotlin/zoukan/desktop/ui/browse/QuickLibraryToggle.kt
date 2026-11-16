@@ -20,9 +20,9 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.manga.CategoryDialog
 import zoukan.desktop.ui.manga.DuplicateDialog
 import zoukan.desktop.ui.manga.MangaScreen

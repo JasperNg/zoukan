@@ -60,7 +60,7 @@ import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
 

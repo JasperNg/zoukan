@@ -60,6 +60,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.BackupValidator
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.RestoreOutcome
@@ -68,7 +69,6 @@ import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReserveSnackbarSpace
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File

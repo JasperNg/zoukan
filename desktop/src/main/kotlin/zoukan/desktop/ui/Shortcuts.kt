@@ -17,9 +17,9 @@ import cafe.adriel.voyager.navigator.Navigator
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 
 /**

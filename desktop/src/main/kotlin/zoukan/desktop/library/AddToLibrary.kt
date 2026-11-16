@@ -18,9 +18,9 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.domain.RefreshManga
-import zoukan.desktop.ui.AppScope
-import zoukan.desktop.ui.common.Toasts
 import java.time.Instant
 
 /**

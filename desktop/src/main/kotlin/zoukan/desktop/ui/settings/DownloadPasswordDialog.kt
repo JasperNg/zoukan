@@ -23,7 +23,7 @@ import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 import zoukan.i18n.desktop.DMR
 
 /** The change the user asked for, waiting for a second confirmation. */

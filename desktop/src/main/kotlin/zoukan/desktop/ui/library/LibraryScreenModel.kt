@@ -59,11 +59,12 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
 import java.text.Collator
@@ -610,7 +611,7 @@ class LibraryScreenModel(
             p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
             // ZOUKAN -->
             // More > Downloaded only shows only downloaded entries, as Android's library
-            Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes(),
+            Injekt.get<zoukan.desktop.app.DesktopPreferences>().downloadedOnly().changes(),
             p.groupLibraryBy().changes(),
             // ZOUKAN <--
             p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),

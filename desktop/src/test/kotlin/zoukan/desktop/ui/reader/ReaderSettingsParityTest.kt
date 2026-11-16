@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.settings.ReaderSettingRow
 import zoukan.desktop.ui.settings.ReaderSettingRows
 

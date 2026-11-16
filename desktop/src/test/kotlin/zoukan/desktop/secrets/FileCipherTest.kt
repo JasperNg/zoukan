@@ -1,7 +1,9 @@
 package zoukan.desktop.secrets
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -39,6 +41,29 @@ class FileCipherTest {
         val secrets = FileSecretStore(File(root, "secrets"))
         val stored = FileCipher.fromStore(secrets).encode("x".toByteArray())
         FileCipher.fromStore(secrets).decode(stored).decodeToString() shouldBe "x"
+    }
+
+    /** A store the user denied access to, as the Keychain answers after "Deny". */
+    private class DeniedStore : SecretStore {
+        override val name = "macOS Keychain"
+        val written = mutableListOf<String>()
+        override fun get(key: String): String? =
+            throw IllegalStateException("SecKeychainFindGenericPassword failed with status -25293")
+        override fun set(key: String, value: String) {
+            written += key
+        }
+        override fun delete(key: String) {
+            written += "-$key"
+        }
+    }
+
+    @Test
+    fun `a secret store that cannot be read stops the start with a clear error and writes no new key`() {
+        val store = DeniedStore()
+        val error = shouldThrow<SecretStoreUnavailableException> { FileCipher.fromStore(store) }
+        error.storeName shouldBe "macOS Keychain"
+        error.message shouldContain "macOS Keychain"
+        store.written.shouldBeEmpty()
     }
 
     @Test

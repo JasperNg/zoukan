@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.reader.ReaderNavigation.Region.LEFT
 import zoukan.desktop.ui.reader.ReaderNavigation.Region.RIGHT
 

@@ -46,9 +46,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.ReadingModes
-import zoukan.desktop.ui.common.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 

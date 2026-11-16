@@ -42,14 +42,14 @@ import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.LocalWindow
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.InfoScreen
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.settings.StorageLocationPreference
 import zoukan.desktop.ui.settings.ThemeSection

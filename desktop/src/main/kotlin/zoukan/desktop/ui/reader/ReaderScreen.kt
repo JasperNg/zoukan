@@ -53,13 +53,13 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.HoldMessages
 import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.OverlayColors
-import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.reducedMotion

@@ -92,6 +92,7 @@ import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
@@ -111,7 +112,6 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SelectionBar
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
@@ -253,7 +253,7 @@ class UpdatesScreenModel(
                 }
             // ZOUKAN -->
             // More > Downloaded only shows only downloaded chapters, as Android's Updates
-            val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
+            val downloadedOnly = Injekt.get<zoukan.desktop.app.DesktopPreferences>().downloadedOnly().changes()
             // ZOUKAN <--
             combine(updates, filters, downloadedOnly, downloadManager.changes) { items, f, only, _ ->
                 items to if (only) f.copy(downloaded = TriState.ENABLED_IS) else f

@@ -32,12 +32,12 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.secrets.SecretStore
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.E2EDiagnostics
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.saveScreenshot
 import zoukan.desktop.ui.startUi
 import zoukan.desktop.update.Updates

@@ -46,6 +46,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
@@ -53,7 +54,6 @@ import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog

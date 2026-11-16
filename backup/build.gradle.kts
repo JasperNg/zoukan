@@ -24,9 +24,10 @@ kotlin {
                 api(projects.data)
                 api(projects.sourceApi)
                 api(projects.core.common)
-                api(projects.i18n)
-                api(projects.i18nSy)
-                api(projects.i18nKmk)
+                // Only constants used inside; no i18n type appears in a public signature
+                implementation(projects.i18n)
+                implementation(projects.i18nSy)
+                implementation(projects.i18nKmk)
 
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
                 implementation(kotlinx.coroutines.core)

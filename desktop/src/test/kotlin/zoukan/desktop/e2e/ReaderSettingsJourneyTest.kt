@@ -24,13 +24,13 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.interactor.GetManga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.FitModes
-import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.reader.ReaderScreen
 import java.io.File

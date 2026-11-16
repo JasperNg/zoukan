@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 import zoukan.i18n.desktop.DMR
 import java.io.File
 

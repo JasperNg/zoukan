@@ -28,12 +28,12 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.FitModes
-import zoukan.desktop.ui.common.ReaderBottomButtons
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReaderBottomButtons
+import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.common.Spacing
-import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.reader.ReaderNavigation
 import zoukan.desktop.ui.reader.ReaderSettingChoices

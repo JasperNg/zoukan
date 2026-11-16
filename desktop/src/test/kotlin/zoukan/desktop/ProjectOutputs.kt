@@ -9,8 +9,10 @@ object ProjectOutputs {
     fun isProjectOutput(file: File): Boolean {
         val root = File(System.getProperty("user.dir")).absoluteFile.parentFile
         val path = file.absoluteFile
-        return path.startsWith(root) && !path.path.contains("${File.separator}test") &&
-            (path.isDirectory || path.name.endsWith(".jar"))
+        val p = path.invariantSeparatorsPath
+        val testOutput = p.endsWith("/classes/kotlin/test") || p.endsWith("/classes/java/test") ||
+            p.endsWith("/resources/test")
+        return path.startsWith(root) && !testOutput && (path.isDirectory || path.name.endsWith(".jar"))
     }
 
     /** The project output on the test class path. */

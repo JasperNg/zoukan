@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.secrets.SecretStoreUnavailableException
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.io.File
@@ -251,10 +252,15 @@ object CrashReporter {
             return
         }
         val show = {
+            val unavailable = generateSequence(e) { it.cause }.take(10).filterIsInstance<SecretStoreUnavailableException>().firstOrNull()
             val message = buildString {
-                appendLine("Zoukan ran into a problem and has to close.")
-                appendLine()
-                appendLine("${e::class.simpleName}: ${e.message.orEmpty().take(300)}")
+                if (unavailable != null) {
+                    appendLine(unavailable.message.orEmpty())
+                } else {
+                    appendLine("Zoukan ran into a problem and has to close.")
+                    appendLine()
+                    appendLine("${e::class.simpleName}: ${e.message.orEmpty().take(300)}")
+                }
                 if (report != null) {
                     appendLine()
                     appendLine("The crash log is saved at")

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
-import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.app.DesktopPreferences
 import java.io.File
 import java.util.Locale
 

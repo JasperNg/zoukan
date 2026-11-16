@@ -334,7 +334,7 @@ tasks.named<JavaExec>("run") {
 }
 
 /** The test classes [wiringTest] must run; a rename needs this one list changed. */
-val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ScreenSmokeSmallWindowTest", "AppLinkageTest")
+val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ScreenSmokeSmallWindowTest", "AppLinkageTest", "ZoukanRuntimeStartTest")
 
 /** The tests [wiringTest] runs instead of `test`. */
 val wiringTests = expectedWiringClasses.map { "*$it" }

@@ -34,8 +34,8 @@ import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 import java.io.File
 

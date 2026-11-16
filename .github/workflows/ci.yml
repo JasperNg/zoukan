@@ -123,6 +123,9 @@ jobs:
           - name: App linkage
             tests: '*AppLinkageTest'
             artifact: app-linkage
+          - name: Runtime start
+            tests: '*ZoukanRuntimeStartTest'
+            artifact: runtime-start
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Every wiring test class has a shard
@@ -138,6 +141,7 @@ jobs:
               InjektRegistrationsTest) ;;
               ScreenSmoke*Test) ;;
               AppLinkageTest) ;;
+              ZoukanRuntimeStartTest) ;;
               *) echo "::error::wiringTests lists $t but no wiring shard in ci.yml runs it"; exit 1 ;;
             esac
           done

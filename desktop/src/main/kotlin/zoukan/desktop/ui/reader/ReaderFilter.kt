@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import org.jetbrains.skia.ColorFilter
 import org.jetbrains.skia.ColorMatrix
 import org.jetbrains.skia.ImageFilter
-import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.common.collectAsState
 
 /** The reader's color settings, as Android's reader Filter tab: brightness, a color filter, grayscale and inverted colors. */

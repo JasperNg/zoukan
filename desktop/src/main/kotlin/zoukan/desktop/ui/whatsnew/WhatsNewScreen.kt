@@ -27,12 +27,12 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.i18n.MR
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.app.Version
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.InfoScreen
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR

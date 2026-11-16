@@ -15,12 +15,12 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.secrets.MacKeychainStore
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.secrets.WindowsCredentialStore
 import zoukan.desktop.ui.ZoukanContent
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.startUi
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates

@@ -27,6 +27,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.ImageType
+import zoukan.desktop.manga.CustomCovers
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
@@ -50,7 +51,7 @@ data class Cover(val url: String, val sourceId: Long, val version: Long = 0) {
         /** A library entry's custom cover, as Android keeps them: covers/custom/<md5 of the id>. */
         private fun custom(mangaId: Long, favorite: Boolean, version: Long): Cover? {
             if (!favorite) return null
-            val file = Images.customCoverFile(mangaId).takeIf { it.isFile } ?: return null
+            val file = CustomCovers.file(mangaId).takeIf { it.isFile } ?: return null
             return Cover(file.toURI().toString(), -1, version)
         }
     }
@@ -97,6 +98,7 @@ object Images {
 
     fun init(coverDir: File, diskCacheDir: File = File(coverDir.parentFile, "images")) {
         this.coverDir = coverDir.apply { mkdirs() }
+        CustomCovers.coverDir = this.coverDir
         this.diskCacheDir = diskCacheDir
     }
 
@@ -110,12 +112,6 @@ object Images {
         val url = manga.thumbnailUrl?.takeIf { it.isNotBlank() } ?: return
         File(coverDir, hash("${manga.source}:$url")).delete()
     }
-
-    /** Where a library entry's custom cover is kept, as Android's CoverCache. */
-    fun customCoverFile(mangaId: Long): File = File(File(coverDir, "custom"), md5(mangaId.toString()))
-
-    private fun md5(text: String): String =
-        MessageDigest.getInstance("MD5").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /**
      * The cover's image file: a custom or local cover as it is, a source cover from the disk

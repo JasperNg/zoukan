@@ -9,11 +9,13 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.TypeReference
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppVersion
+import zoukan.desktop.secrets.SecretStore
 import zoukan.extension.DesktopExtensionLoader
 import java.io.File
 import java.lang.reflect.ParameterizedType
@@ -33,7 +35,8 @@ import java.util.zip.ZipOutputStream
  * generic superclass is the type looked up, so the test finds them in the compiled classes of
  * desktop and the project's modules rather than in the sources: inferred types count too. Each
  * type is then resolved, which also runs its factory and the lookups inside it. The types that
- * extensions look up (Application, NetworkHelper, Json) are among them.
+ * extensions look up (Application, NetworkHelper, Json) are among them. A lookup that passes a
+ * Class makes no TypeReference and stays invisible to the scan, so a test forbids those.
  *
  * It needs no network, so it runs with every build, in its own JVM since it starts the runtime:
  *
@@ -51,6 +54,35 @@ class InjektRegistrationsTest {
         val missing = types.filter { type -> runCatching { Injekt.getInstance<Any>(type) }.isFailure }
             .map { it.typeName }
         missing.shouldBeEmpty()
+    }
+
+    /**
+     * A lookup that passes a Class (Injekt.getInstance(Foo::class.java), with or without a type
+     * argument, getInstanceOrNull, or Foo.class from Java) makes no TypeReference, so the scan above
+     * cannot see it; every lookup names its type with a reified call instead.
+     */
+    @Test
+    fun `every lookup names its type so the scan sees it`() {
+        val repo = File(System.getProperty("user.dir")).absoluteFile.parentFile
+        val byClass = Regex("""getInstance(OrNull)?\s*(<[^>]*>)?\s*\(\s*[\w.]+(::class\.java|\.class)\s*\)""")
+        val found = listOf("desktop/src/main", "extension-jvm/src/main", "android-compat/src/main")
+            .map { File(repo, it) }.filter { it.isDirectory }
+            .flatMap { dir ->
+                dir.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "java") }.toList()
+            }
+            .flatMap { file ->
+                file.readLines().mapIndexedNotNull { i, line ->
+                    if (byClass.containsMatchIn(line)) "${file.relativeTo(repo).invariantSeparatorsPath}:${i + 1}" else null
+                }
+            }
+        found.shouldBeEmpty()
+    }
+
+    @Test
+    fun `the secret store is one instance`() {
+        System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
+        ZoukanRuntime.start(ZoukanDirs(Files.createTempDirectory("zoukan-secrets").toFile()), interactiveBrowser = false)
+        Injekt.get<SecretStore>() shouldBeSameInstanceAs ZoukanRuntime.secrets
     }
 
     /**

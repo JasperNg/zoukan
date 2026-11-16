@@ -50,10 +50,10 @@ import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.AppScope
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.manga.DescriptionImages.Part
 import zoukan.i18n.desktop.DMR

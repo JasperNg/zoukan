@@ -14,7 +14,7 @@ import io.kotest.matchers.floats.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import zoukan.desktop.ui.common.LocalReducedMotion
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.app.ReadingModes
 
 @OptIn(ExperimentalTestApi::class)
 class ReaderReducedMotionTest {

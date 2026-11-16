@@ -32,7 +32,7 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.app.Toasts
 
 /** One manga's tracking: the logged-in trackers, its tracks, search and binding, and edits. */
 class TrackingModel(

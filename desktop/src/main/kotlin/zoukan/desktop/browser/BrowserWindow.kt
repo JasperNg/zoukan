@@ -19,6 +19,7 @@ import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.network.CefRequest
 import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -224,7 +225,7 @@ class BrowserWindow(
         }
     }
 
-    private fun discord() = runCatching { uy.kohesive.injekt.Injekt.getInstance<zoukan.desktop.discord.DiscordPresence>(zoukan.desktop.discord.DiscordPresence::class.java) }.getOrNull()
+    private fun discord() = runCatching { uy.kohesive.injekt.Injekt.get<zoukan.desktop.discord.DiscordPresence>() }.getOrNull()
 
     /** Waits until the window closes, [isDone] returns true (the window then closes) or the timeout. */
     fun await(timeoutMs: Long, isDone: () -> Boolean = { false }): Boolean {

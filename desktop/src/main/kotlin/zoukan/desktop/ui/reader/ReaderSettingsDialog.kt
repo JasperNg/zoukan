@@ -24,10 +24,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.FitModes
+import zoukan.desktop.app.ReaderBottomButtons
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.ReadingModes
+import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.settings.RadioChoices
 import zoukan.desktop.ui.settings.ReaderSettingHeading

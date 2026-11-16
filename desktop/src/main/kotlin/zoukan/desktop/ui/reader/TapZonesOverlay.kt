@@ -27,8 +27,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import tachiyomi.i18n.MR
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.i18n.desktop.DMR
 
 /**

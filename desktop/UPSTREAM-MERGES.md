@@ -65,6 +65,11 @@ The `backup` module cannot depend on `app`, so it keeps copies of two app consta
 `PINNED_SOURCES_PREF_KEY` (`SourcePreferences`) and `READING_MODE_MASK` (`ReadingMode.MASK`).
 `app`'s `BackupUpstreamConstantsTest` fails if they drift.
 
+`backup`'s project dependencies are `implementation`, except the ones its public signatures name:
+`domain`, `data`, `source-api` and `core:common` stay `api`, the three i18n modules are
+`implementation`. Keep that when merging `backup/build.gradle.kts`. `domain` keeps
+`api(libs.sqldelight.android.paging)` as upstream has it (the paging source is in its public API).
+
 ## Android Gradle Plugin and the multiplatform modules
 
 The modules that apply `mihon.library.kmp` (`domain`, `data`, `backup`, `core/common`,

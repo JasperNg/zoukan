@@ -30,11 +30,11 @@ import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.tray.Notifications
-import zoukan.desktop.ui.AppScope
 import zoukan.i18n.desktop.DMR
 import java.util.Date
 
