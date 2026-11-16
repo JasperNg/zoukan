@@ -81,8 +81,8 @@ installs, but SmartScreen warns about an unknown publisher.
 
 With an identity set, the build signs the native libraries inside the jars (SQLite, JNA, Skia and
 the rest; notarization rejects unsigned code anywhere in the app), then the app with the hardened
-runtime and `packaging/macos/entitlements.plist` (JIT, unsigned executable memory and libraries
-loaded at run time, which a JVM and Chromium need), then the DMG. `notarizeDmg` submits the DMG,
+runtime and `packaging/macos/entitlements.plist` (three exceptions only: `allow-jit`,
+`allow-unsigned-executable-memory` and `disable-library-validation`, which a JVM and Chromium need), then the DMG. `notarizeDmg` submits the DMG,
 waits, staples the ticket and asks Gatekeeper. Without an identity the app is ad hoc signed:
 it runs on the Mac that built it, and a downloaded copy is blocked the first time until System Settings > Privacy & Security > Open Anyway.
 
