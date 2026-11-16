@@ -76,7 +76,7 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
         if (!preferences.shownOnboardingFlow().get()) {
             // Someone who used Zoukan before the setup existed already has a library: no setup for them
             val hasLibrary = withContext(Dispatchers.IO) {
-                runCatching { Injekt.get<GetFavorites>().await().isNotEmpty() }.getOrDefault(false)
+                zoukan.desktop.app.runCatchingCancellable { Injekt.get<GetFavorites>().await().isNotEmpty() }.getOrDefault(false)
             }
             if (hasLibrary) preferences.shownOnboardingFlow().set(true)
         }

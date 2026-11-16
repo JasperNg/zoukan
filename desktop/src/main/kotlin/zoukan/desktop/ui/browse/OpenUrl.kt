@@ -117,7 +117,7 @@ class OpenUrlScreenModel(
 
     init {
         screenModelScope.launch(Dispatchers.IO) {
-            mutableState.value = runCatching { resolveGallery() ?: resolveSource() }
+            mutableState.value = zoukan.desktop.app.runCatchingCancellable { resolveGallery() ?: resolveSource() }
                 .onFailure { logcat(LogPriority.ERROR, it) { "Could not open $url" } }
                 .getOrNull() ?: State.NoResults
         }

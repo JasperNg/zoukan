@@ -792,7 +792,7 @@ class LibraryScreenModel(
     fun syncMangaToDex() {
         val mangas = selected(state.value.selection).filter { it.source in mangaDexSourceIds }
         screenModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            zoukan.desktop.app.runCatchingCancellable {
                 MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager)?.let { mdex ->
                     mangas.forEach { manga ->
                         mdex.updateFollowStatus(MdUtil.getMangaId(manga.url), FollowStatus.READING)

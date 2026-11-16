@@ -281,7 +281,7 @@ class SourceScreenModel(
         val metadataSource = source?.getMainSource<MetadataSource<*, *>>() ?: return emptyMap()
         val pageMetadata = (page as? MetadataMangasPage)?.mangasMetadata.orEmpty()
         return manga.mapIndexedNotNull { index, entry ->
-            val stored = runCatching { getFlatMetadataById.await(entry.id)?.raise(metadataSource.metaClass) }.getOrNull()
+            val stored = zoukan.desktop.app.runCatchingCancellable { getFlatMetadataById.await(entry.id)?.raise(metadataSource.metaClass) }.getOrNull()
             (stored ?: pageMetadata.getOrNull(index))?.let { entry.id to it }
         }.toMap()
     }

@@ -370,7 +370,7 @@ class ReaderScreenModel(
             syncManager.value.syncOn { it.syncOnChapterRead }
             if (chapter.isRecognizedNumber) {
                 appScope.launch {
-                    runCatching { trackChapters.value.afterReading(mangaId, chapter.chapterNumber) }
+                    zoukan.desktop.app.runCatchingCancellable { trackChapters.value.afterReading(mangaId, chapter.chapterNumber) }
                 }
             }
             // ZOUKAN <--
@@ -849,7 +849,7 @@ class ReaderScreenModel(
     fun openChapter(chapter: Chapter) {
         if (chapter.id == state.value.chapter?.id) return
         screenModelScope.launch {
-            val fresh = runCatching { getChapter.value.await(chapter.id) }
+            val fresh = zoukan.desktop.app.runCatchingCancellable { getChapter.value.await(chapter.id) }
                 .getOrNull() ?: chapter
             loadChapter(fresh, fromStart = false)
         }

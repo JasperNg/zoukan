@@ -477,6 +477,8 @@ internal fun createBackup(file: File, options: BackupOptions) {
         try {
             val backup = DesktopBackups(ZoukanRuntime.dirs.android).create(file, options)
             Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Toasts.error(localized(MR.strings.creating_backup_error), e)
         } finally {
@@ -528,6 +530,8 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                             localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
                         },
                     )
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Toasts.error(localized(DMR.strings.restore_failed), e)
                 } finally {

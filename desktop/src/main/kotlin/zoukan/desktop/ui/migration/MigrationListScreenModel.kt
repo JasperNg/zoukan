@@ -209,7 +209,7 @@ class MigrationListScreenModel(
             }
 
             if (found != null && found.first.thumbnailUrl == null) {
-                runCatching { refreshManga(found.first, fetchDetails = true, fetchChapters = false) }
+                zoukan.desktop.app.runCatchingCancellable { refreshManga(found.first, fetchDetails = true, fetchChapters = false) }
             }
             val result = found?.let { (manga, chapters) -> success(getManga.await(manga.id) ?: manga, chapters) }
             // A pick or Stop searching since the search began wins

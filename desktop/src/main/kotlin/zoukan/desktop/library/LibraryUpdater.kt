@@ -199,7 +199,7 @@ class LibraryUpdater(
     ): Result {
         val previousUpdate = preferences.lastUpdatedTimestamp().get()
         preferences.lastUpdatedTimestamp().set(System.currentTimeMillis())
-        runCatching { errors.clean() }.onFailure { logcat(LogPriority.WARN, it) { "Cleaning the update errors failed" } }
+        zoukan.desktop.app.runCatchingCancellable { errors.clean() }.onFailure { logcat(LogPriority.WARN, it) { "Cleaning the update errors failed" } }
         val library = getLibraryManga.await().distinctBy { it.manga.id }
         val (selected, skipped) = if (mangaIds != null) {
             // KMK: a targeted update keeps only "Not set to always update" of the skip rules

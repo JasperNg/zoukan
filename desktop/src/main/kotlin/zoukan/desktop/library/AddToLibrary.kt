@@ -70,7 +70,7 @@ class AddToLibrary(
         val fetchDetails = fetchOnAdd && libraryPreferences.fetchMetadataOnAdd().get()
         val fetchChapters = fetchOnAdd && libraryPreferences.fetchChaptersOnAdd().get()
         AppScope.launch(Dispatchers.IO) {
-            runCatching { addTracks.bindEnhancedTrackers(manga, source) }
+            zoukan.desktop.app.runCatchingCancellable { addTracks.bindEnhancedTrackers(manga, source) }
                 .onFailure { if (it !is CancellationException) Toasts.error("Tracking failed", it) }
             if (fetchDetails || fetchChapters) {
                 try {

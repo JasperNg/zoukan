@@ -375,6 +375,8 @@ class RestoreBackupScreenModel(
                 val backup = DesktopBackups(ZoukanRuntime.dirs.android).read(file)
                 BackupValidator().validate(backup)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             setError(
                 error = InvalidRestore(file, e.message.toString()),

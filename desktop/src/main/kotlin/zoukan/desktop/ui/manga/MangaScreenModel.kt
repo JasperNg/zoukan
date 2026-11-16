@@ -14,6 +14,8 @@ import exh.source.isEhBasedManga
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -318,7 +320,7 @@ class MangaScreenModel(
             val error = try {
                 val update = refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = true, downloadNew = manualFetch)
                 // KMK: a successful refresh clears the entry's update error
-                runCatching { updateErrors.clear(manga.id) }
+                zoukan.desktop.app.runCatchingCancellable { updateErrors.clear(manga.id) }
                 if (manualFetch) downloadNewChapters(update.manga, update.newChapters)
                 null
             } catch (e: CancellationException) {
@@ -327,7 +329,7 @@ class MangaScreenModel(
                 // Throwable, not Exception: an extension built against another API fails with a
                 // LinkageError, which would leave the screen refreshing for good
                 // KMK: the failure is the entry's update error, as a library update's
-                runCatching { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
+                zoukan.desktop.app.runCatchingCancellable { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
                 if (e is NoChaptersException) localized(DMR.strings.the_source_lists_no_chapters) else e.message ?: e::class.simpleName
             }
             // KMK: a manual refresh also syncs progress from the trackers, as Android's fetchAllFromSource
@@ -620,6 +622,8 @@ class MangaScreenModel(
             try {
                 if (manga.source == MERGED_SOURCE_ID) {
                     mergedEntries().forEach { (entry, entrySource) ->
+                        // A cancel stops before the next entry's folder, never keeps deleting
+                        ensureActive()
                         deleteManga(entry)
                         if (entrySource.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
                     }
@@ -627,6 +631,8 @@ class MangaScreenModel(
                     deleteManga(manga)
                     if (source?.id == LocalSource.ID) refresh(fetchDetails = false, manualFetch = false)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
             }
@@ -635,10 +641,13 @@ class MangaScreenModel(
 
     /** Android's DownloadManager.deleteManga: the queued chapters and the entry's folder. */
     private suspend fun deleteManga(manga: Manga) {
-        if (manga.source == LocalSource.ID) {
-            withContext(Dispatchers.IO) { mangaFolder(manga)?.deleteRecursively() }
-        } else {
-            downloadManager.deleteManga(manga)
+        // One entry's files are deleted whole: a cancel waits for this entry and stops before the next
+        withContext(NonCancellable) {
+            if (manga.source == LocalSource.ID) {
+                withContext(Dispatchers.IO) { mangaFolder(manga)?.deleteRecursively() }
+            } else {
+                downloadManager.deleteManga(manga)
+            }
         }
     }
 
@@ -647,6 +656,8 @@ class MangaScreenModel(
         appScope.launch {
             try {
                 deleteChapters.value.await(ids)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
             }

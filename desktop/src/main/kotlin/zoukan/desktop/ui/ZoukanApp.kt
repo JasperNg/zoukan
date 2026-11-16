@@ -349,9 +349,9 @@ fun startUi(dirs: ZoukanDirs) {
     Injekt.get<SourceManager>()
     val manager = Injekt.get<DesktopExtensionManager>()
     AppScope.launch {
-        runCatching { manager.init() }
+        zoukan.desktop.app.runCatchingCancellable { manager.init() }
             .onFailure { logcat(LogPriority.ERROR, it) { "Loading extensions failed" } }
-        runCatching { manager.findAvailableExtensions() }
+        zoukan.desktop.app.runCatchingCancellable { manager.findAvailableExtensions() }
     }
     // Only the kind: the title and text can name what is read, and the log's end goes into crash
     // reports, even with "Hide notification content" on
@@ -360,7 +360,7 @@ fun startUi(dirs: ZoukanDirs) {
     val downloads = Injekt.get<DownloadManager>()
     AppScope.launch {
         Injekt.get<SourceManager>().isInitialized.first { it }
-        runCatching { downloads.restore() }.onFailure { logcat(LogPriority.ERROR, it) { "Restoring the download queue failed" } }
+        zoukan.desktop.app.runCatchingCancellable { downloads.restore() }.onFailure { logcat(LogPriority.ERROR, it) { "Restoring the download queue failed" } }
     }
     Injekt.get<BackgroundJobs>().start(ServiceScope)
     // The daily update check (Phase 7)

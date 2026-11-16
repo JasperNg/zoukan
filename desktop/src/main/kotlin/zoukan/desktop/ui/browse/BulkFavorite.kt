@@ -204,7 +204,7 @@ class BulkFavorite {
             repository.update(MangaUpdate(id = manga.id, favorite = true, dateAdded = Instant.now().toEpochMilli()))
             added++
             sourceManager.get(manga.source)?.let { source ->
-                runCatching { addTracks.bindEnhancedTrackers(manga, source) }
+                zoukan.desktop.app.runCatchingCancellable { addTracks.bindEnhancedTrackers(manga, source) }
             }
         }
         withContext(Dispatchers.Main) { clear() }

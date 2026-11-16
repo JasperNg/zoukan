@@ -85,7 +85,7 @@ private fun EhSettings() {
                     OutlinedButton(onClick = {
                         busy = true
                         scope.launch {
-                            runCatching { login.login() }
+                            zoukan.desktop.app.runCatchingCancellable { login.login() }
                                 .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to_exhentai)) }
                                 .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_exhentai_failed), it) }
                             busy = false
@@ -135,7 +135,7 @@ private fun EhSettings() {
                         busy = true
                         error = null
                         scope.launch {
-                            runCatching { login.loginWithCookies(memberId, passHash, igneous) }
+                            zoukan.desktop.app.runCatchingCancellable { login.loginWithCookies(memberId, passHash, igneous) }
                                 .onSuccess { ok ->
                                     if (ok) {
                                         cookieDialog = false
@@ -184,7 +184,7 @@ private fun EhSiteSettings(preferences: ExhPreferences) {
             onClick = {
                 busy = true
                 scope.launch {
-                    runCatching { withContext(Dispatchers.IO) { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() } }
+                    zoukan.desktop.app.runCatchingCancellable { withContext(Dispatchers.IO) { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() } }
                         .onSuccess { Toasts.show(localized(DMR.strings.e_hentai_settings_applied)) }
                         .onFailure { Toasts.error(localized(DMR.strings.applying_the_e_hentai_settings_failed), it) }
                     busy = false

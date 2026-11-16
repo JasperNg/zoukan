@@ -103,7 +103,7 @@ class RecommendsScreenModel(
                 put(Group(key, title, source.associatedSourceId != null, Result.Loading))
                 launch {
                     val result = permits.withPermit {
-                        runCatching {
+                        zoukan.desktop.app.runCatchingCancellable {
                             val page = withContext(Dispatchers.IO) { source.requestNextPage(1) }
                             val sourceId = source.associatedSourceId
                             val titles = if (sourceId != null) {
@@ -126,7 +126,7 @@ class RecommendsScreenModel(
         val loading = Group("related", localized(DMR.strings.related_titles), true, Result.Loading)
         put(loading)
         val found = mutableListOf<Manga>()
-        runCatching {
+        zoukan.desktop.app.runCatchingCancellable {
             withContext(Dispatchers.IO) {
                 source.getRelatedMangaList(manga.toSManga(), exceptionHandler = {}) { (_, list), _ ->
                     val local = networkToLocalManga(list.map { it.toDomainManga(source.id) })
@@ -187,7 +187,7 @@ class CommonRecommendsScreenModel(
             val groups = results.mapIndexed { index, data ->
                 val ranks = data.results.mapKeys { it.key.url }
                 val recSourceId = data.recAssociatedSourceId
-                val titles = runCatching {
+                val titles = zoukan.desktop.app.runCatchingCancellable {
                     if (recSourceId != null) {
                         // If the recommendation is associated with a source, resolve it
                         withContext(Dispatchers.IO) { networkToLocalManga(data.results.keys.map { it.toDomainManga(recSourceId) }) }
