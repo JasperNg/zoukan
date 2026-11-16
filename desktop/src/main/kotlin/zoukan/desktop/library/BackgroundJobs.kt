@@ -53,6 +53,9 @@ class BackgroundJobs(
         }
     }
 
+    val isRunning: Boolean
+        @Synchronized get() = job?.isActive == true
+
     @Synchronized
     fun stop() {
         job?.cancel()

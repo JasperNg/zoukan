@@ -124,12 +124,19 @@ import java.awt.SystemTray
  * nothing catches is logged with the work's [CoroutineName] and still written as a report, as the
  * default handler does.
  */
-val AppScope = CoroutineScope(
-    SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { context, e ->
-        context.logcat(LogPriority.ERROR, e) { "Background work failed: ${context[CoroutineName]?.name ?: "unnamed"}" }
-        runCatching { zoukan.desktop.app.CrashReporter.write(Thread.currentThread(), e, fatal = false) }
-    },
-)
+val AppScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailureHandler())
+
+/**
+ * Work that runs for as long as the app does (the notification log, the daily update check). It
+ * has a scope of its own, so quitting, which waits for [AppScope]'s work to finish, does not wait
+ * for it.
+ */
+val ServiceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailureHandler())
+
+private fun backgroundFailureHandler() = CoroutineExceptionHandler { context, e ->
+    context.logcat(LogPriority.ERROR, e) { "Background work failed: ${context[CoroutineName]?.name ?: "unnamed"}" }
+    runCatching { zoukan.desktop.app.CrashReporter.write(Thread.currentThread(), e, fatal = false) }
+}
 
 /** The main window, for file dialogs; null in tests. */
 val LocalWindow = staticCompositionLocalOf<FrameWindowScope?> { null }
@@ -162,7 +169,7 @@ fun runZoukanApp() {
     // ZOUKAN -->
     // Secure screen follows its setting and incognito mode, for the windows that attach to it
     zoukan.desktop.security.SecureScreen.start(
-        AppScope,
+        ServiceScope,
         Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>(),
         Injekt.get<zoukan.desktop.security.Incognito>().mode(),
     )
@@ -348,16 +355,16 @@ fun startUi(dirs: ZoukanDirs) {
     }
     // Only the kind: the title and text can name what is read, and the log's end goes into crash
     // reports, even with "Hide notification content" on
-    AppScope.launch { Notifications.flow.collect { logcat { "Notification: ${it.kind}" } } }
+    ServiceScope.launch { Notifications.flow.collect { logcat { "Notification: ${it.kind}" } } }
     // The saved download queue, then the scheduled library update and automatic backups
     val downloads = Injekt.get<DownloadManager>()
     AppScope.launch {
         Injekt.get<SourceManager>().isInitialized.first { it }
         runCatching { downloads.restore() }.onFailure { logcat(LogPriority.ERROR, it) { "Restoring the download queue failed" } }
     }
-    Injekt.get<BackgroundJobs>().start(AppScope)
+    Injekt.get<BackgroundJobs>().start(ServiceScope)
     // The daily update check (Phase 7)
-    Updates.start(AppScope)
+    Updates.start(ServiceScope)
 }
 
 /**
