@@ -16,6 +16,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
@@ -215,6 +216,8 @@ class ScreenSmokeTest {
         val open: (Navigator) -> Unit,
         val drive: ComposeUiTest.() -> Unit = {},
         val cleanup: () -> Unit = {},
+        /** Matrix keys this check also opens, such as a dialog its [drive] waits for. */
+        val alsoCovers: List<String> = emptyList(),
     )
 
     /** A screen that only shows [content], to render a dialog with a navigator and screen models around it. */
@@ -250,14 +253,19 @@ class ScreenSmokeTest {
             val all = screens + tabs() + settings() + dialogs(fixture) + uiDialogs()
             println("Smoke: ${screens.size} screens, ${all.size} checks")
             // Before the filter below, so a run that debugs one check still holds these
-            val keys = all.map { it.key }.toSet()
+            val keys = all.flatMap { listOf(it.key) + it.alsoCovers }.toSet()
+            val matrix = CoverageMatrix.load()
+            // Every key listed, so one run shows all the drift
+            fun mustBeEmpty(what: String, missing: Collection<String>) =
+                check(missing.isEmpty()) { "$what:\n" + missing.sorted().joinToString("\n") { "  $it" } }
             // A screen, tab or page that no check opens
             val discovered = UiInventory.screenClasses().filter { it != HomeScreen::class.java }.map(UiInventory::screenKey) +
                 UiInventory.enumKeys()
-            (discovered - keys).shouldBeEmpty()
+            mustBeEmpty("screens, tabs or pages that no smoke check opens", discovered.toSet() - keys)
             // A coverage-matrix row that says "smoke: true" but no check has its key
-            val claimed = CoverageMatrix.load().filter { it.smoke }.map { it.key }
-            (claimed - keys).shouldBeEmpty()
+            mustBeEmpty("coverage-matrix rows with smoke: true that no smoke check has", matrix.filter { it.smoke }.map { it.key }.toSet() - keys)
+            // A check whose key has no coverage-matrix row
+            mustBeEmpty("smoke check keys with no row in coverage-matrix.yaml", keys - matrix.map { it.key }.toSet())
             // -Pzoukan.smoke.only=<regex> runs only the checks whose key or name matches, to debug one
             val only = System.getProperty("zoukan.smoke.only")?.toRegex()
             val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) || only.containsMatchIn(it.key) }
@@ -567,11 +575,26 @@ class ScreenSmokeTest {
     // Tabs and settings
 
     private fun tabs(): List<Check> = HomeTab.entries.map { tab ->
-        Check("tab:${tab.name}", "tab ${tab.name}", { HomeScreen.selectTab(tab) })
+        Check(
+            "tab:${tab.name}",
+            "tab ${tab.name}",
+            { HomeScreen.selectTab(tab) },
+            // Every check renders the main window and its shell; the first tab's check names them
+            alsoCovers = if (tab == HomeTab.entries.first()) listOf("screen:HomeScreen", "state:shell") else emptyList(),
+        )
     } + BrowsePage.entries.map { page ->
         // The default preferences show every page (hiding the feed is a setting); clickTag fails
         // when the page's tab is not there
-        Check("browse:${page.name}", "browse ${page.name}", { HomeScreen.selectTab(HomeTab.Browse) }, drive = { clickTag("browse-page-${page.name}") })
+        Check(
+            "browse:${page.name}",
+            "browse ${page.name}",
+            { HomeScreen.selectTab(HomeTab.Browse) },
+            drive = {
+                clickTag("browse-page-${page.name}")
+                // The click must select this page, not leave another one showing
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(hasTestTag("browse-page-${page.name}") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+            },
+        )
     }
 
     /**
@@ -625,7 +648,14 @@ class ScreenSmokeTest {
                 // row, so it fails rather than pass on an empty page.
                 // Clicking the row only opens the follows dialog. Nothing here confirms it, signs in
                 // or syncs: those would call MangaDex's servers.
-                drive = { clickText(localized(SYMR.strings.mangadex_sync_follows_to_library)) },
+                drive = {
+                    val sync = localized(SYMR.strings.mangadex_sync_follows_to_library)
+                    clickText(sync)
+                    // The follows dialog's title repeats the row's text
+                    waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(sync).fetchSemanticsNodes().size >= 2 }
+                },
+                // The follows dialog opens only through this page
+                alsoCovers = listOf("dialog:settings.SyncFollowsDialog"),
                 // The page and its dialog close before the source goes away under them
                 cleanup = {
                     try {

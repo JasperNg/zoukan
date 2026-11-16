@@ -51,8 +51,7 @@ Notes:
 - `journeyTest` and `extensionWiringTest` never count as up to date. They always run.
 - Never run two `journeyTest` builds at the same time in one checkout. They share the build
   folder and the screenshot folder.
-- The journeys run one after another, one JVM each. Parallel forks and CI shards are not on this
-  branch yet.
+- Each journey runs in a JVM of its own.
 
 ## The coverage matrix
 
@@ -77,8 +76,9 @@ Each entry has a key. The key says what kind of thing the entry is and names it:
 The test finds the `screen:`, `tab:`, `browse:`, `settings:`, `dialog:` and `dialog-inline:` keys
 in the compiled app. Screens come from a class scan, tabs and pages from their enums, and named
 dialogs by reflection. You write the `state:` and `flow:` keys by hand. The test cannot find
-them, so it does not ask for them. `settings:search` is also written by hand. Each run writes what it found to
-`desktop/build/reports/coverage/discovered.txt`.
+them, so it does not ask for them. `settings:search` is also written by hand. Each run of
+`CoverageMatrixTest` writes what it found to `desktop/build/reports/coverage/discovered.txt`. Gradle
+skips the test when nothing changed, so add `--rerun` to get the file.
 
 For the three enums, the key uses the enum entry's name exactly as written in the code:
 `HomeTab` (`ui/ZoukanApp.kt`), `BrowsePage` (`ui/browse/BrowseTab.kt`) and `SettingsCategory`
@@ -102,14 +102,19 @@ For the three enums, the key uses the enum entry's name exactly as written in th
 - `smoke`: `true` if `ScreenSmokeTest` has a check with this key. The smoke test fails if a row
   says `true` and no check has the key.
 - `tests`: test classes under `zoukan.desktop`, such as `ui.ScreenSmokeTest` or
-  `e2e.DownloadJourneyTest`. Name one method with `#`: `ui.Foo#bar`. Each one must exist.
-  Do not list the live `EndToEnd*Test` classes: CI never runs them.
+  `e2e.DownloadJourneyTest`. Each one must exist and hold at least one `@Test`. List a test only
+  if breaking the key's feature makes it fail. A test of related logic goes in `gap:`, not here.
+  A test method can be named with `#` (`ui.Foo#bar`) only when its name has no spaces, so for the
+  usual backticked names list the class. Do not list the live `EndToEnd*Test` classes: CI never
+  runs them.
 - `gap` (optional): why nothing covers the key, or what is still not covered. It is required
-  when `tests` is `[]`.
+  when `tests` is `[]`, and when `tier` is `smoke` but `smoke` is `false`. Name a planned test by
+  its class (`planned: FooJourneyTest`), not by a planning document or ID.
 
 The file uses a small part of YAML, read line by line. A value that holds `": "` or `" #"`, or
-starts with `[`, `{`, `'` and similar characters, must be in double quotes. `tests` is always a
-list such as `[a, b]` or `[]`.
+starts with `[`, `{`, `'` and similar characters, must be in double quotes. So must a value that
+YAML reads as null or a boolean, such as `null`, `~`, `yes` or `no`. `tests` is always a list such
+as `[a, b]` or `[]`.
 
 ### Adding a row
 
@@ -138,8 +143,9 @@ The test lists every problem, one per line. The other messages:
   - tab:History (line 304): test class zoukan.desktop.ui.NoSuchTest does not exist; fix the name in tests: or remove it
   ```
 
-- Also: a key that appears twice, a tier that is not in the list, and a row with no tests and no
-  gap.
+- Also: a key that appears twice, a key with an unknown prefix (see [Keys](#keys)), a tier that is
+  not in the list, a row with no tests and no gap, a `smoke` tier row with `smoke: false` and no
+  gap, and a planning folder or ID in `feature` or `gap`.
 
 For a new action inside a screen, add a `flow:` row by hand. Nothing forces you to, so do it as
 part of the change.
@@ -152,15 +158,18 @@ function is not found, and counts as inline.
 
 An `AlertDialog(` or `Dialog(` call inside any other function is an inline dialog. The test
 cannot see what it is, so it is held to a baseline: `desktop/src/test/resources/coverage-inline-dialogs.txt`.
-That list may only shrink. A new inline dialog fails the second test, `inline dialogs stay within the baseline`:
+The baseline counts the sites in each function: a line is `<key>` for one site or `<key> <count>`
+for more. The function is the innermost `fun` whose body is open at the call. The counts may only
+shrink. A new inline dialog, also one in a function that already has a line, fails the second
+test, `inline dialogs stay within the baseline`:
 
 ```
 java.lang.AssertionError: 1 coverage problem(s):
-- new inline dialog dialog-inline:ScratchBreak.kt:ScratchPanel: extract it into a fun ...Dialog, so the coverage matrix sees it
+- new inline dialog in dialog-inline:ScratchBreak.kt:ScratchPanel (1 sites, the baseline allows 0): extract it into a fun ...Dialog, so the coverage matrix sees it
 ```
 
-When you extract an old inline dialog into a `...Dialog` function, remove its line from the
-baseline. The test fails until you do. Inline dialogs need a baseline line, not a matrix row, but
+When you extract an old inline dialog into a `...Dialog` function, lower its count or remove its
+line. The test fails until you do. Inline dialogs need a baseline line, not a matrix row, but
 they may have a row.
 
 ### Gaps
@@ -176,7 +185,7 @@ the matrix for `tests: []` and `gap:`.
 with two local entries, chapters and one category. Then it opens, one check at a time:
 
 - every Voyager screen of the app, found by the same class scan as the matrix;
-- every home tab, and every Browse page, opened by its tab's test tag `browse-page-<BrowsePage>`;
+- every home tab, and every Browse page, opened by its tab's test tag `browse-page-<BrowsePage>`, which must then be selected;
 - every Settings page, and Settings search;
 - the dialogs that other code can call, rendered directly (see `dialogs()`);
 - some dialogs private to a screen, opened through the UI (see `uiDialogs()`), and the app lock
@@ -187,15 +196,19 @@ throws: in composition, in an effect, in a screen model, or on any other thread.
 fails if the log holds Injekt's "No registered instance or factory".
 
 Each check has a `key`, its coverage-matrix key. Variants of one screen share a key. Before any
-check runs, the test makes two assertions:
+check runs, the test makes three assertions. Each one lists every key that breaks it:
 
-- Every screen, tab, Browse page and Settings page has a check. If not, it fails and names the key:
+- Every screen, tab, Browse page and Settings page has a check. `HomeScreen` is the exception:
+  every check renders it. If not, it fails and names the key:
 
   ```
-  org.opentest4j.AssertionFailedError: List should be empty but has 1 elements, first being: "tab:History"
+  java.lang.IllegalStateException: screens, tabs or pages that no smoke check opens:
+    tab:History
   ```
 
-- Every matrix row with `smoke: true` has a check with that key. If not, it names the row's key.
+- Every matrix row with `smoke: true` has a check with that key, or a check that lists the key in
+  `alsoCovers` (for something a check opens on the way, such as a dialog its `drive` waits for).
+- Every check's key has a matrix row.
 
 These run before the `-Pzoukan.smoke.only` filter, so a filtered run still checks them.
 

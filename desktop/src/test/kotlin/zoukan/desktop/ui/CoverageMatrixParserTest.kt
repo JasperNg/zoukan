@@ -25,7 +25,7 @@ class CoverageMatrixParserTest {
               tier: journey
               smoke: false
               tests: []
-              gap: "Only the gated test; 006_JOURNEYS/02_split_parity"
+              gap: "Only the gated test; planned: LibrarySelectionJourneyTest"
             """.trimIndent(),
         )
 
@@ -41,7 +41,7 @@ class CoverageMatrixParserTest {
         )
         rows[1].tests.shouldBeEmpty()
         rows[1].smoke shouldBe false
-        rows[1].gap shouldBe "Only the gated test; 006_JOURNEYS/02_split_parity"
+        rows[1].gap shouldBe "Only the gated test; planned: LibrarySelectionJourneyTest"
         rows[1].line shouldBe 9
     }
 
@@ -75,5 +75,14 @@ class CoverageMatrixParserTest {
         shouldThrow<IllegalArgumentException> {
             CoverageMatrix.parse("- key: a\n  feature: x\n  tests:\n    - ui.ScreenSmokeTest\n")
         }.message!! shouldStartWith "line 3:"
+    }
+
+    @Test
+    fun `a gap that YAML reads as no value, or too short to say why, fails`() {
+        listOf("null", "~", "\"\"", "NULL", "todo").forEach { gap ->
+            shouldThrow<IllegalArgumentException> {
+                CoverageMatrix.parse("- key: a\n  feature: x\n  tier: journey\n  smoke: false\n  tests: []\n  gap: $gap\n")
+            }.message!! shouldStartWith "line 6: gap"
+        }
     }
 }

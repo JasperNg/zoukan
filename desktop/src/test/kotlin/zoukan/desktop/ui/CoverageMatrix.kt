@@ -25,6 +25,11 @@ object CoverageMatrix {
     private val REQUIRED = FIELDS - "gap"
     private val ENTRY = Regex("""^- key: (.*)$""")
     private val FIELD = Regex("""^ {2}([a-z]+): (.*)$""")
+    private val NO_VALUE = setOf("null", "~", "")
+    private val BOOLEANS = setOf("true", "false", "yes", "no", "on", "off")
+
+    /** A gap shorter than this cannot say why nothing covers the key. */
+    private const val MIN_GAP = 10
 
     fun load(): List<CoverageRow> = parse(
         requireNotNull(CoverageMatrix::class.java.getResourceAsStream(RESOURCE)) { "$RESOURCE is not on the test classpath" }
@@ -70,7 +75,18 @@ object CoverageMatrix {
             current[name] = when (name) {
                 "tests" -> value.trim().also { list(it, n) }
                 "smoke" -> scalar(value, n).also { require(it == "true" || it == "false") { "line $n: smoke must be true or false" } }
-                else -> scalar(value, n)
+                // YAML reads a plain null or ~ as no value; a gap says why in words
+                "gap" -> scalar(value, n).also {
+                    require(it.trim().lowercase() !in NO_VALUE && it.trim().length >= MIN_GAP) {
+                        "line $n: gap \"$it\" must say why nothing covers the key, in $MIN_GAP characters or more"
+                    }
+                }
+                // YAML reads these plain words as null or a boolean, not as text
+                else -> scalar(value, n).also {
+                    require(value.trim().startsWith("\"") || it.lowercase() !in NO_VALUE + BOOLEANS) {
+                        "line $n: YAML reads a plain \"$it\" as null or a boolean; double-quote it"
+                    }
+                }
             }
         }
         finish()

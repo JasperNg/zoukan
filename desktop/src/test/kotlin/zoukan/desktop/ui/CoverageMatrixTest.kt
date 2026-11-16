@@ -8,7 +8,8 @@ import java.io.File
  * Keeps `coverage-matrix.yaml` honest without starting the app: every screen, home tab, Browse
  * page, Settings page and named dialog found in the compiled classes needs a row, every row must
  * name something that still exists, and every test a row names must exist. Inline dialogs (an
- * `AlertDialog(` outside a function named ...Dialog) are held to a baseline that may only shrink.
+ * `AlertDialog(` outside a function named ...Dialog) are counted per function and held to a
+ * baseline that may only shrink.
  */
 class CoverageMatrixTest {
     private val loader = javaClass.classLoader
@@ -42,16 +43,30 @@ class CoverageMatrixTest {
             }
 
         rows.forEach { row ->
+            val at = "${row.key} (line ${row.line})"
+            // A known kind of key, so a misspelt prefix is not taken for a hand-made row
+            if (!KEY.matches(row.key)) {
+                problems += "$at: the key must start with one of ${PREFIXES.joinToString(" ") { "$it:" }} and hold no space"
+            }
             // The tests exist
             row.tests.forEach { test ->
-                testProblem(test)?.let { problems += "${row.key} (line ${row.line}): $it" }
+                testProblem(test)?.let { problems += "$at: $it" }
             }
             // A valid tier, and a reason when nothing covers the row
             if (row.tier !in CoverageMatrix.TIERS) {
-                problems += "${row.key} (line ${row.line}): tier '${row.tier}' is not one of ${CoverageMatrix.TIERS.joinToString()}"
+                problems += "$at: tier '${row.tier}' is not one of ${CoverageMatrix.TIERS.joinToString()}"
             }
             if (row.tests.isEmpty() && row.gap.isNullOrBlank()) {
-                problems += "${row.key} (line ${row.line}): no tests and no gap; name a test or say why there is none in gap:"
+                problems += "$at: no tests and no gap; name a test or say why there is none in gap:"
+            }
+            // A smoke-tier row is one a smoke check opens, or says why not
+            if (row.tier == "smoke" && !row.smoke && row.gap.isNullOrBlank()) {
+                problems += "$at: tier smoke but smoke: false; give a smoke check this key, or change the tier, or say why in gap:"
+            }
+            // Gaps name planned test classes, not planning documents
+            listOfNotNull(row.feature, row.gap).firstOrNull { text -> PLANNING_NAMES.any { it.containsMatchIn(text) } }?.let {
+                problems += "$at: \"$it\" names a planning document or ID; name the planned test class instead " +
+                    "(\"planned: FooJourneyTest\")"
             }
         }
 
@@ -60,14 +75,21 @@ class CoverageMatrixTest {
 
     @Test
     fun `inline dialogs stay within the baseline`() {
-        val baseline = baselineKeys()
+        val baseline = baseline()
         val sites = inlineDialogs(namedDialogs().toSet())
         val problems = mutableListOf<String>()
-        (sites - baseline).sorted().forEach {
-            problems += "new inline dialog $it: extract it into a fun ...Dialog, so the coverage matrix sees it"
-        }
-        (baseline - sites).sorted().forEach {
-            problems += "$it is in coverage-inline-dialogs.txt but has no inline dialog any more; remove it from the baseline"
+        (sites.keys + baseline.keys).sorted().forEach { key ->
+            val now = sites[key] ?: 0
+            val allowed = baseline[key] ?: 0
+            when {
+                now > allowed ->
+                    problems += "new inline dialog in $key ($now sites, the baseline allows $allowed): " +
+                        "extract it into a fun ...Dialog, so the coverage matrix sees it"
+                now == 0 ->
+                    problems += "$key is in coverage-inline-dialogs.txt but has no inline dialog any more; " +
+                        "remove its line from the baseline"
+                now < allowed -> problems += "$key: update the baseline: $now sites now (coverage-inline-dialogs.txt says $allowed)"
+            }
         }
         assertNoProblems(problems)
     }
@@ -84,7 +106,7 @@ class CoverageMatrixTest {
             "screens" to screens.map(UiInventory::screenKey).sorted(),
             "tabs, Browse pages and Settings pages" to UiInventory.enumKeys(),
             "named dialogs" to named,
-            INLINE to inlineDialogs(named.toSet()).sorted(),
+            INLINE to inlineDialogs(named.toSet()).keys.sorted(),
         )
     }
 
@@ -113,49 +135,52 @@ class CoverageMatrixTest {
     }
 
     /**
-     * `dialog-inline:<File>.kt:<function>` for each `AlertDialog(`/`Dialog(` call whose enclosing
-     * function is not one of the [named] dialogs (a top-level fun ...Dialog, ...Dialogs or ...Sheet;
-     * a member fun ...Dialog is not found by reflection, so it counts as inline). The test runs in
-     * desktop/.
+     * How many `AlertDialog(`/`Dialog(` calls each function holds, by `dialog-inline:<File>.kt:<function>`,
+     * for the functions that are not one of the [named] dialogs (a top-level fun ...Dialog, ...Dialogs
+     * or ...Sheet; a member fun ...Dialog is not found by reflection, so it counts as inline). The
+     * enclosing function comes from [InlineDialogScanner]. The test runs in desktop/.
      */
-    private fun inlineDialogs(named: Set<String>): Set<String> {
+    private fun inlineDialogs(named: Set<String>): Map<String, Int> {
         val sources = File("src/main/kotlin/zoukan/desktop/ui")
         check(sources.isDirectory) { "${sources.absolutePath} not found; the test must run in desktop/" }
         return sources.walkTopDown().filter { it.isFile && it.extension == "kt" }.flatMap { file ->
-            val lines = file.readLines()
-            val pkg = lines.firstOrNull { it.startsWith("package ") }.orEmpty()
+            val text = file.readText()
+            val pkg = text.lineSequence().firstOrNull { it.startsWith("package ") }.orEmpty()
                 .removePrefix("package ").trim().removePrefix(UI_PACKAGE).removePrefix(".")
-            lines.indices.mapNotNull { i ->
-                val line = lines[i]
-                val code = line.trimStart()
-                if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) return@mapNotNull null
-                if (!DIALOG_CALL.containsMatchIn(line)) return@mapNotNull null
-                val function = FUN.find(line)?.groupValues?.get(1)
-                    ?: (i - 1 downTo 0).firstNotNullOfOrNull { j ->
-                        FUN.find(lines[j])?.takeIf { indent(lines[j]) < indent(line) }?.groupValues?.get(1)
-                    }
-                    ?: "<top level>"
+            InlineDialogScanner.sites(text).mapNotNull { site ->
+                val function = site.function ?: "<top level>"
                 val key = if (pkg.isEmpty()) "dialog:$function" else "dialog:$pkg.$function"
                 if (key in named) null else "dialog-inline:${file.name}:$function"
             }
-        }.toSet()
+        }.groupingBy { it }.eachCount()
     }
 
-    private fun baselineKeys(): Set<String> =
-        requireNotNull(javaClass.getResourceAsStream(BASELINE)) { "$BASELINE is not on the test classpath" }
+    /** coverage-inline-dialogs.txt: "<key>" for one site, "<key> <count>" for more. */
+    private fun baseline(): Map<String, Int> {
+        val lines = requireNotNull(javaClass.getResourceAsStream(BASELINE)) { "$BASELINE is not on the test classpath" }
             .reader().use { it.readLines() }
-            .map { it.trim() }
+        return lines.map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .toSet()
+            .associate { line ->
+                val parts = line.split(Regex("""\s+"""))
+                val count = parts.getOrNull(1)?.toIntOrNull()
+                require(parts.size <= 2 && (parts.size == 1 || (count != null && count > 1))) {
+                    "$BASELINE: \"$line\" is not \"<key>\" or \"<key> <count of 2 or more>\""
+                }
+                parts[0] to (count ?: 1)
+            }
+    }
 
     /** What is wrong with a `tests` entry ("ui.Foo" or "ui.Foo#bar", under zoukan.desktop), or null. */
     private fun testProblem(test: String): String? {
         val className = "zoukan.desktop." + test.substringBefore('#')
         val type = runCatching { Class.forName(className, false, loader) }.getOrNull()
             ?: return "test class $className does not exist; fix the name in tests: or remove it"
+        val tests = type.declaredMethods.filter { method -> method.annotations.any { it.annotationClass.java.name in TEST_ANNOTATIONS } }
+        if (tests.isEmpty()) return "$className has no @Test method; name a test class in tests:"
         val method = test.substringAfter('#', "").ifEmpty { return null }
-        return if (type.declaredMethods.none { it.name == method }) {
-            "$className has no test method '$method'; fix the name in tests: or remove it"
+        return if (tests.none { it.name == method }) {
+            "$className has no @Test method '$method'; fix the name in tests: or remove it"
         } else {
             null
         }
@@ -172,8 +197,6 @@ class CoverageMatrixTest {
         )
     }
 
-    private fun indent(line: String) = line.length - line.trimStart().length
-
     /** Fails listing every problem, one per line (a collection matcher would show only the first). */
     private fun assertNoProblems(problems: List<String>) {
         if (problems.isNotEmpty()) {
@@ -186,16 +209,25 @@ class CoverageMatrixTest {
         const val COMPOSER = "androidx.compose.runtime.Composer"
         const val BASELINE = "/coverage-inline-dialogs.txt"
 
+        /** Every kind of key; see desktop/TESTING.md, 'Keys'. */
+        val PREFIXES = listOf("screen", "tab", "browse", "settings", "dialog", "dialog-inline", "state", "flow")
+        val KEY = Regex("""^(${PREFIXES.joinToString("|")}):\S+$""")
+
         /** Row prefixes the test can check against the app; other rows (state:, flow:) are hand-made. */
         val DISCOVERABLE = listOf("screen:", "tab:", "browse:", "settings:", "dialog:", "dialog-inline:")
         val HAND_MADE = setOf("settings:search")
 
-        val DIALOG_NAME = Regex(""".*(Dialog|Dialogs|Sheet)""")
-        val DIALOG_CALL = Regex("""\b(AlertDialog|Dialog)\(""")
-        val FUN = Regex(
-            """^\s*(?:(?:@\w+|private|internal|public|protected|inline|override|suspend)\s+)*""" +
-                """fun\s+(?:<[^>]*>\s*)?(?:[\w.]+\.)?(\w+)\s*\(""",
+        /** A planning folder ("123_NAME/") or a planning ID ("(P13)"), which do not belong in the repo. */
+        val PLANNING_NAMES = listOf(Regex("""\b\d{3}_[A-Z]+/"""), Regex("""\([A-Z]\d+\)"""))
+
+        val TEST_ANNOTATIONS = setOf(
+            "org.junit.jupiter.api.Test",
+            "org.junit.jupiter.api.TestFactory",
+            "org.junit.jupiter.api.RepeatedTest",
+            "org.junit.jupiter.params.ParameterizedTest",
         )
+
+        val DIALOG_NAME = Regex(""".*(Dialog|Dialogs|Sheet)""")
         const val INLINE = "inline dialogs"
     }
 }
