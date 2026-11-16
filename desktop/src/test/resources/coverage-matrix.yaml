@@ -568,7 +568,7 @@
   feature: "Edit details, notes and cover"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, ui.manga.EditMangaDialogSaveTest]
 
 - key: dialog:manga.TrackerSelectDialog
   feature: "Edit details: tracker select (fill from tracker)"
@@ -580,31 +580,31 @@
   feature: "Cover dialog"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.EntryActionsDialogsTest]
 
 - key: dialog:manga.FetchIntervalDialog
   feature: "Update frequency (fetch interval)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.EntryActionsDialogsTest]
 
 - key: dialog:manga.DuplicateDialog
   feature: "Duplicate warning on add"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.EntryActionsDialogsTest]
 
 - key: dialog:manga.CustomDownloadDialog
   feature: "Custom download count"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.EntryDialogsConfirmTest]
 
 - key: dialog:manga.ClearMangaDialog
   feature: "Clear entry (delete downloads / chapters); local files only behind their own option and a second confirmation"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest, ui.manga.EntryDialogsConfirmTest]
 
 - key: dialog:common.ConfirmDestructiveDialog
   feature: "Second question before something the user cannot take back or that runs third-party code (local files to the trash, downloads deleted from Updates, a new download password, a sync reset, MangaDex follows, installing an extension, removing a store or a feed)"
@@ -617,13 +617,13 @@
   feature: "Categories: add"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.EntryDialogsConfirmTest]
 
 - key: dialog:manga.ChangeCategoryDialog
   feature: "Categories: change"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
+  tests: [ui.ScreenSmokeTest, ui.manga.EntryDialogsConfirmTest]
 
 - key: flow:manga.chapter-selection
   feature: "Chapter toolbar: select all, clear, read/unread, bookmark, download, delete"
