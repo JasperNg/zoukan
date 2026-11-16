@@ -109,8 +109,13 @@ object LocalFixtures {
             }
         }
         val updater = Injekt.get<LibraryUpdater>()
-        updater.start()
-        runBlocking { while (updater.progress.value != null || updater.lastResult.value == null) Thread.sleep(200) }
+        check(updater.start()) { "The library update did not start (another update, a sync or a restore is running)" }
+        // A failed run logs and never sets lastResult, so the wait is bounded
+        val deadline = System.currentTimeMillis() + 60_000
+        while (updater.progress.value != null || updater.lastResult.value == null) {
+            check(System.currentTimeMillis() < deadline) { "The library update gave no result within 60s; see the log" }
+            Thread.sleep(200)
+        }
         updater.lastResult.value!!.failures.shouldBeEmpty()
         return added
     }

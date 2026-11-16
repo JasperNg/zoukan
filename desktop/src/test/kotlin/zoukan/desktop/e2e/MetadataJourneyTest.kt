@@ -177,14 +177,16 @@ class MetadataJourneyTest {
                 }
             }
 
-            step("The metadata is still stored, and nothing went to E-Hentai") {
+            step("The metadata is still stored, and the sections that call E-Hentai stayed off") {
                 runBlocking {
                     val source = sources.get(EH_SOURCE_ID)!!.getMainSource<MetadataSource<*, *>>()!!
                     source.getFlatMetadataById.await(manga.id) shouldNotBe null
                 }
-                // The fixture server saw no request at all: the entry came from the database
-                println("Journey metadata: fixture requests ${server.requests}")
-                server.requests.none { it.contains("hentai", ignoreCase = true) } shouldBe true
+                // The journey kit has no host-level network guard (the fixture server only sees
+                // requests made to it), so what keeps this offline is these two settings staying
+                // off for the whole journey, with their sections absent in the first step
+                Injekt.get<SourcePreferences>().relatedMangas().get() shouldBe false
+                Injekt.get<UiPreferences>().previewsRowCount().get() shouldBe 0
             }
         }
     }

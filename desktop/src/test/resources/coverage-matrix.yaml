@@ -139,8 +139,7 @@
   feature: "Downloads button in the header"
   tier: journey
   smoke: false
-  tests: []
-  gap: "The Downloads screen opens in ScreenSmokeTest; no journey clicks the button"
+  tests: [e2e.LocalJourneyTest]
 
 - key: flow:library.stats-shortcut
   feature: "Stats shortcut"
@@ -836,7 +835,7 @@
   tier: journey
   smoke: false
   tests: []
-  gap: "Empty queue, planned: EmptyStatesJourneyTest"
+  gap: "The More tab's row is not clicked (LocalJourneyTest opens the queue from the Library header); empty queue, planned: EmptyStatesJourneyTest"
 
 - key: screen:downloads.DownloadsScreen
   feature: "Download queue screen: pause/start, cancel all, open folder, move top/bottom, cancel series, sort"

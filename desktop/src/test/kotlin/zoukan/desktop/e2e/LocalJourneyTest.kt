@@ -119,6 +119,20 @@ class LocalJourneyTest {
                     shotWithPopups("6-reader-menu")
                     runOnUiThread { navigator?.popUntilRoot() }
                 }
+
+                step("Downloads screen and settings") {
+                    onAllNodesWithText("Library").onFirst().performClick()
+                    byDescription("Downloads").performClick()
+                    waitFor(hasText("No downloads queued", substring = true))
+                    shot("7-downloads")
+                    runOnUiThread { navigator?.popUntilRoot() }
+                    // Settings is in the More tab, as on Android
+                    onAllNodesWithText("More").onFirst().performClick()
+                    waitFor(hasText("Downloaded only"))
+                    onAllNodesWithText("Settings").onFirst().performClick()
+                    waitFor(hasText("App theme"))
+                    shot("8-settings")
+                }
             }
         }
     }
