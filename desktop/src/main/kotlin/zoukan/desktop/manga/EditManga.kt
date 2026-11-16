@@ -9,7 +9,6 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.common.Images
 import java.io.File
 import java.time.Instant
 
@@ -91,7 +90,7 @@ class EditManga(
     /** Whether the entry can have a custom cover: library entries and local entries, as on Android. */
     fun canEditCover(manga: Manga) = manga.favorite || manga.source == LocalSource.ID
 
-    fun hasCustomCover(manga: Manga) = manga.source != LocalSource.ID && Images.customCoverFile(manga.id).isFile
+    fun hasCustomCover(manga: Manga) = manga.source != LocalSource.ID && CustomCovers.file(manga.id).isFile
 
     suspend fun setCover(manga: Manga, image: File) {
         if (manga.source == LocalSource.ID) {
@@ -102,7 +101,7 @@ class EditManga(
             updateManga.await(MangaUpdate(id = manga.id, thumbnailUrl = cover.toURI().toString()))
         } else {
             if (!manga.favorite) return
-            val target = Images.customCoverFile(manga.id)
+            val target = CustomCovers.file(manga.id)
             target.parentFile.mkdirs()
             image.copyTo(target, overwrite = true)
         }
@@ -110,7 +109,7 @@ class EditManga(
     }
 
     suspend fun deleteCustomCover(manga: Manga) {
-        Images.customCoverFile(manga.id).delete()
+        CustomCovers.file(manga.id).delete()
         updateManga.await(MangaUpdate(id = manga.id, coverLastModified = Instant.now().toEpochMilli()))
     }
 

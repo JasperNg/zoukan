@@ -1,6 +1,7 @@
 package zoukan.desktop.ui
 
 import cafe.adriel.voyager.core.screen.Screen
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -71,6 +72,27 @@ class ScreenSerializationTest {
         ).forEach {
             it.roundTrip() shouldBeSameInstanceAs it
         }
+    }
+
+    @Test
+    fun `every screen class round-trips with an equal key`() {
+        val variants = ScreenScan.variants()
+        val failures = ScreenScan.screenClasses().flatMap { type ->
+            val makers = variants[type] ?: listOfNotNull(ScreenScan.maker(type))
+            makers.mapNotNull { make ->
+                val screen = make()
+                val restored = runCatching { screen.roundTrip() as Screen }
+                    .getOrElse { return@mapNotNull "${type.simpleName}: ${it::class.simpleName} ${it.message}" }
+                when {
+                    restored.key != screen.key -> "${type.simpleName}: key ${restored.key} != ${screen.key}"
+                    // Objects come back as themselves; screens with arguments come back equal
+                    type.declaredConstructors.any { it.parameterCount > 0 } && restored != screen ->
+                        "${type.simpleName}: restored copy is not equal"
+                    else -> null
+                }
+            }
+        }
+        failures.shouldBeEmpty()
     }
 
     private fun Screen.roundTrip(): Any {

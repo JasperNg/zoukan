@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -55,16 +56,17 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.manga.EditManga
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
@@ -171,7 +173,7 @@ fun FetchIntervalDialog(manga: Manga, onDismiss: () -> Unit) {
                     }
                 }
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -204,7 +206,8 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 CoverImage(
                     Cover.of(manga),
-                    Modifier.width(320.dp).aspectRatio(2f / 3f).clip(Corners.Large),
+                    // Shrinks to the height the buttons leave in a short window, so they keep their own
+                    Modifier.weight(1f, fill = false).widthIn(max = 320.dp).aspectRatio(2f / 3f).clip(Corners.Large),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CoverAction(localized(MR.strings.copy), Icons.Outlined.ContentCopy) {
@@ -302,7 +305,7 @@ fun DuplicateDialog(
                                 Text(
                                     listOfNotNull(
                                         sourceManager.getOrStub(manga.source).toString(),
-                                        if (chapterCount == 1L) localized(DMR.strings.n_1_chapter) else localized(DMR.strings.chapters, chapterCount),
+                                        localizedPlural(DMR.plurals.chapters, chapterCount.toInt(), chapterCount.toInt()),
                                         statusLabel(manga.status),
                                     ).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,

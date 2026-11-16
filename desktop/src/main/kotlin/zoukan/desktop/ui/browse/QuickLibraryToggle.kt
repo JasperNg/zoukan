@@ -20,9 +20,9 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.manga.CategoryDialog
 import zoukan.desktop.ui.manga.DuplicateDialog
 import zoukan.desktop.ui.manga.MangaScreen
@@ -65,7 +65,7 @@ class QuickLibraryToggle internal constructor(private val scope: CoroutineScope)
     internal fun add(manga: Manga, categoryIds: List<Long>) {
         categories = null
         scope.launch {
-            runCatching { addToLibrary.add(manga, categoryIds, fetchOnAdd = true) }
+            zoukan.desktop.app.runCatchingCancellable { addToLibrary.add(manga, categoryIds, fetchOnAdd = true) }
                 .onSuccess { Toasts.show(localized(MR.strings.manga_added_library)) }
                 .onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
         }

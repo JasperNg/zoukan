@@ -8,6 +8,12 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.OutputStream;
+// ZOUKAN -->
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import java.nio.ShortBuffer;
+// ZOUKAN <--
 import java.util.Iterator;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -20,6 +26,9 @@ public final class Bitmap {
     private final int width;
     private final int height;
     private final BufferedImage image;
+    // ZOUKAN -->
+    private boolean opaque;
+    // ZOUKAN <--
 
     public Bitmap(BufferedImage image) {
         this.image = image;
@@ -99,6 +108,9 @@ public final class Bitmap {
                 return BufferedImage.TYPE_BYTE_GRAY;
             case RGB_565:
                 return BufferedImage.TYPE_USHORT_565_RGB;
+            // ZOUKAN -->
+            case ARGB_4444: // Android treats ARGB_4444 as ARGB_8888
+            // ZOUKAN <--
             case ARGB_8888:
                 return BufferedImage.TYPE_INT_ARGB;
             case _TYPE_3BYTE_BGR:
@@ -205,10 +217,18 @@ public final class Bitmap {
         // Android will make a copy when creating a sub image,
         // so we do the same here
         BufferedImage subImage = source.image.getSubimage(x, y, width, height);
-        BufferedImage newImage = new BufferedImage(subImage.getWidth(), subImage.getHeight(), subImage.getType());
-        newImage.setData(subImage.getData());
-
-        return new Bitmap(newImage);
+        // ZOUKAN -->
+        // Copy with the source colour model: a type-based copy recolours palette images and
+        // throws for custom types
+        java.awt.image.ColorModel cm = subImage.getColorModel();
+        java.awt.image.WritableRaster raster = cm.createCompatibleWritableRaster(width, height);
+        raster.setRect(subImage.getRaster()); // a subimage's raster starts at (0, 0)
+        BufferedImage newImage = new BufferedImage(cm, raster, cm.isAlphaPremultiplied(), null);
+        // A tile of an opaque page is opaque too, as on Android
+        Bitmap tile = new Bitmap(newImage);
+        tile.opaque = source.opaque;
+        return tile;
+        // ZOUKAN <--
     }
 
     public static Bitmap createBitmap(int[] colors, int width, int height, Config config) {
@@ -219,6 +239,78 @@ public final class Bitmap {
 
         return new Bitmap(image);
     }
+
+    // ZOUKAN -->
+    public static Bitmap createBitmap(@NonNull Bitmap src) {
+        return createBitmap(src, 0, 0, src.getWidth(), src.getHeight());
+    }
+
+    public static Bitmap createScaledBitmap(@NonNull Bitmap src, int dstWidth, int dstHeight, boolean filter) {
+        checkWidthHeight(dstWidth, dstHeight);
+        if (src.getWidth() == dstWidth && src.getHeight() == dstHeight) {
+            return src;
+        }
+        Bitmap dst = createBitmap(dstWidth, dstHeight, Config.ARGB_8888);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(filter);
+        new Canvas(dst).drawBitmap(src, new Rect(0, 0, src.getWidth(), src.getHeight()),
+                new Rect(0, 0, dstWidth, dstHeight), paint);
+        dst.opaque = src.opaque;
+        return dst;
+    }
+
+    public static Bitmap createBitmap(@NonNull Bitmap source, int x, int y, int width, int height,
+                                      @Nullable Matrix m, boolean filter) {
+        if (m == null || m.isIdentity()) {
+            return createBitmap(source, x, y, width, height);
+        }
+        checkXYSign(x, y);
+        checkWidthHeight(width, height);
+        if (x + width > source.getWidth()) {
+            throw new IllegalArgumentException("x + width must be <= bitmap.width()");
+        }
+        if (y + height > source.getHeight()) {
+            throw new IllegalArgumentException("y + height must be <= bitmap.height()");
+        }
+        RectF mapped = new RectF();
+        m.mapRect(mapped, new RectF(0, 0, width, height));
+        int w = Math.max(1, Math.round(mapped.width()));
+        int h = Math.max(1, Math.round(mapped.height()));
+        Bitmap result = createBitmap(w, h, Config.ARGB_8888);
+        Canvas canvas = new Canvas(result);
+        canvas.translate(-mapped.left, -mapped.top);
+        canvas.concat(m);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(filter);
+        canvas.drawBitmap(source, new Rect(x, y, x + width, y + height), new RectF(0, 0, width, height), paint);
+        return result;
+    }
+
+    private int density = 160; // DisplayMetrics.DENSITY_DEFAULT
+
+    public int getDensity() {
+        return density;
+    }
+
+    public void setDensity(int density) {
+        this.density = density;
+    }
+
+    /** ARGB images always carry an alpha channel here; the flag only marks a page as opaque. */
+    public void setHasAlpha(boolean hasAlpha) {
+        opaque = !hasAlpha;
+    }
+
+    public boolean sameAs(@Nullable Bitmap other) {
+        if (this == other) return true;
+        if (other == null || width != other.width || height != other.height
+                || getConfig() != other.getConfig()) {
+            return false;
+        }
+        return java.util.Arrays.equals(image.getRGB(0, 0, width, height, null, 0, width),
+                other.image.getRGB(0, 0, width, height, null, 0, width));
+    }
+    // ZOUKAN <--
 
     public boolean compress(CompressFormat format, int quality, OutputStream stream) {
         if (stream == null) {
@@ -235,8 +327,11 @@ public final class Bitmap {
             formatString = "png";
         } else if (format == Bitmap.CompressFormat.JPEG) {
             formatString = "jpg";
-        } else if (format == Bitmap.CompressFormat.WEBP || format == Bitmap.CompressFormat.WEBP_LOSSY) {
+        // ZOUKAN -->
+        } else if (format == Bitmap.CompressFormat.WEBP || format == Bitmap.CompressFormat.WEBP_LOSSY
+                || format == Bitmap.CompressFormat.WEBP_LOSSLESS) {
             formatString = "webp";
+        // ZOUKAN <--
         } else {
             throw new IllegalArgumentException("unsupported compression format! " + format);
         }
@@ -247,39 +342,80 @@ public final class Bitmap {
         }
         ImageWriter writer = writers.next();
 
-        ImageOutputStream ios;
+        // ZOUKAN -->
+        // An in-memory cache: ImageIO.createImageOutputStream may spill the page to a temp file
+        ImageOutputStream ios = new javax.imageio.stream.MemoryCacheImageOutputStream(stream);
+        // ZOUKAN <--
+        // ZOUKAN -->
+        // Android returns false when the stream fails; the writer and stream are released either way
+        boolean closeFailed = false;
         try {
-            ios = ImageIO.createImageOutputStream(stream);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-        writer.setOutput(ios);
+            writer.setOutput(ios);
 
-        BufferedImage img = image;
+            BufferedImage img = image;
 
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        if ("jpg".equals(formatString)) {
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(qualityFloat);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if ("jpg".equals(formatString)) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(qualityFloat);
 
-            img = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-            img.getGraphics().drawImage(image, 0, 0, null);
-        }
+                img = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D rgbGraphics = img.createGraphics();
+                try {
+                    rgbGraphics.drawImage(image, 0, 0, null);
+                } finally {
+                    rgbGraphics.dispose();
+                }
+            } else if ("webp".equals(formatString)) {
+                // WEBP_LOSSLESS is lossless; the deprecated WEBP is lossless at quality 100 (Android 10+)
+                boolean lossless = format == Bitmap.CompressFormat.WEBP_LOSSLESS
+                        || (format == Bitmap.CompressFormat.WEBP && quality == 100);
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                String[] types = param.getCompressionTypes();
+                if (types != null) {
+                    for (String type : types) {
+                        if (type.toLowerCase(java.util.Locale.ROOT).contains(lossless ? "lossless" : "lossy")) {
+                            param.setCompressionType(type);
+                            break;
+                        }
+                    }
+                }
+                if (!lossless) {
+                    param.setCompressionQuality(qualityFloat);
+                }
+            }
 
-        try {
             writer.write(null, new IIOImage(img, null, null), param);
-            ios.close();
-            writer.dispose();
+            ios.flush();
         } catch (IOException ex) {
-            throw new RuntimeException(ex);
+            return false;
+        } finally {
+            try {
+                ios.close();
+            } catch (IOException ex) {
+                // reported below only if nothing else failed
+                closeFailed = true;
+            }
+            writer.dispose();
         }
 
-        return true;
+        return !closeFailed;
     }
+    // ZOUKAN <--
 
     public Bitmap copy(Config config, boolean isMutable) {
+        // ZOUKAN -->
+        // Android copies to ARGB_8888; a palette, binary or custom type cannot be built by type
+        if (config == Config._TYPE_CUSTOM || config == Config._TYPE_BYTE_INDEXED
+                || config == Config._TYPE_BYTE_BINARY) {
+            config = Config.ARGB_8888;
+        }
+        // ZOUKAN <--
         Bitmap ret = createBitmap(width, height, config);
         ret.image.getGraphics().drawImage(image, 0, 0, null);
+        // ZOUKAN -->
+        ret.opaque = opaque; // a copy keeps hasAlpha(), as on Android
+        // ZOUKAN <--
         return ret;
     }
 
@@ -408,14 +544,191 @@ public final class Bitmap {
     public void eraseColor(int c) {
         java.awt.Color color = Color.valueOf(c).toJavaColor();
         Graphics2D graphics = image.createGraphics();
-        graphics.setColor(color);
-        graphics.fillRect(0, 0, width, height);
-        graphics.dispose();
+        // ZOUKAN -->
+        // Replace every pixel as Android does; the default SrcOver would blend over the old content
+        try {
+            graphics.setComposite(java.awt.AlphaComposite.Src);
+            graphics.setColor(color);
+            graphics.fillRect(0, 0, width, height);
+        } finally {
+            graphics.dispose();
+        }
+        // ZOUKAN <--
     }
 
     public void recycle() {
         // do nothing
     }
+
+    // ZOUKAN -->
+    public final boolean isRecycled() {
+        return false;
+    }
+
+    public final boolean isMutable() {
+        return true;
+    }
+
+    public boolean hasAlpha() {
+        // ALPHA_8 is held as TYPE_BYTE_GRAY, its gray samples being the alpha mask
+        if (opaque) return false;
+        return getConfig() == Config.ALPHA_8 || image.getColorModel().hasAlpha();
+    }
+
+    /** Set by the decoders for a page without transparency: held as ARGB, but hasAlpha() is false. */
+    void markOpaque() {
+        opaque = true;
+    }
+
+    private int bytesPerPixel() {
+        Config config = getConfig();
+        if (config == Config.RGB_565) return 2;
+        if (config == Config.ALPHA_8) return 1;
+        return 4;
+    }
+
+    public final int getRowBytes() {
+        return width * bytesPerPixel();
+    }
+
+    public final int getByteCount() {
+        return getRowBytes() * height;
+    }
+
+    public final int getAllocationByteCount() {
+        return getByteCount();
+    }
+
+    private static int bufferShift(Buffer buffer) {
+        if (buffer instanceof ByteBuffer) return 0;
+        if (buffer instanceof ShortBuffer) return 1;
+        if (buffer instanceof IntBuffer) return 2;
+        throw new RuntimeException("unsupported Buffer subclass");
+    }
+
+    /**
+     * Copies raw pixels in the bitmap's memory layout from [src], as Android does: ARGB_8888 is
+     * premultiplied R, G, B, A bytes (an IntBuffer holds them as little-endian ints, so 0xAABBGGRR),
+     * RGB_565 is little-endian 16-bit values and ALPHA_8 one byte each. The buffer's position
+     * moves past the pixels.
+     */
+    public void copyPixelsFromBuffer(@NonNull Buffer src) {
+        int shift = bufferShift(src);
+        int bpp = bytesPerPixel();
+        long byteCount = (long) getByteCount();
+        if (((long) src.remaining() << shift) < byteCount) {
+            throw new RuntimeException("Buffer not large enough for pixels");
+        }
+        byte[] bytes = new byte[(int) byteCount];
+        int position = src.position();
+        if (src instanceof ByteBuffer) {
+            ByteBuffer b = (ByteBuffer) src;
+            for (int i = 0; i < bytes.length; i++) bytes[i] = b.get(position + i);
+        } else if (src instanceof ShortBuffer) {
+            ShortBuffer s = (ShortBuffer) src;
+            for (int i = 0; i < bytes.length / 2; i++) {
+                short v = s.get(position + i);
+                bytes[i * 2] = (byte) v;
+                bytes[i * 2 + 1] = (byte) (v >> 8);
+            }
+        } else {
+            IntBuffer ib = (IntBuffer) src;
+            for (int i = 0; i < bytes.length / 4; i++) {
+                int v = ib.get(position + i);
+                bytes[i * 4] = (byte) v;
+                bytes[i * 4 + 1] = (byte) (v >> 8);
+                bytes[i * 4 + 2] = (byte) (v >> 16);
+                bytes[i * 4 + 3] = (byte) (v >> 24);
+            }
+        }
+        if (bpp == 1) {
+            // ALPHA_8: the mask bytes are the gray raster's samples, read and written directly
+            image.getRaster().setDataElements(0, 0, width, height, bytes);
+            src.position(position + (int) (byteCount >> shift));
+            return;
+        }
+        int[] pixels = new int[width * height];
+        for (int i = 0; i < pixels.length; i++) {
+            int o = i * bpp;
+            if (bpp == 4) {
+                int r = bytes[o] & 0xff, g = bytes[o + 1] & 0xff, b = bytes[o + 2] & 0xff, a = bytes[o + 3] & 0xff;
+                pixels[i] = (a << 24) | (unpremultiply(r, a) << 16) | (unpremultiply(g, a) << 8) | unpremultiply(b, a);
+            } else if (bpp == 2) {
+                int v = (bytes[o] & 0xff) | ((bytes[o + 1] & 0xff) << 8);
+                int r = (v >> 11) & 0x1f, g = (v >> 5) & 0x3f, b = v & 0x1f;
+                pixels[i] = 0xff000000 | (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+            } else {
+                int a = bytes[o] & 0xff;
+                pixels[i] = (a << 24) | (a << 16) | (a << 8) | a;
+            }
+        }
+        image.setRGB(0, 0, width, height, pixels, 0, width);
+        src.position(position + (int) (byteCount >> shift));
+    }
+
+    /** The reverse of {@link #copyPixelsFromBuffer}: writes the raw pixels into [dst]. */
+    public void copyPixelsToBuffer(@NonNull Buffer dst) {
+        int shift = bufferShift(dst);
+        int bpp = bytesPerPixel();
+        long byteCount = (long) getByteCount();
+        if (((long) dst.remaining() << shift) < byteCount) {
+            throw new RuntimeException("Buffer not large enough for pixels");
+        }
+        byte[] bytes = new byte[(int) byteCount];
+        int[] pixels;
+        if (bpp == 1) {
+            // ALPHA_8: the gray raster's samples are the mask bytes
+            image.getRaster().getDataElements(0, 0, width, height, bytes);
+            pixels = new int[0];
+        } else {
+            pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        }
+        for (int i = 0; i < pixels.length; i++) {
+            int p = pixels[i], o = i * bpp;
+            int a = p >>> 24, r = (p >> 16) & 0xff, g = (p >> 8) & 0xff, b = p & 0xff;
+            if (bpp == 4) {
+                bytes[o] = (byte) premultiply(r, a);
+                bytes[o + 1] = (byte) premultiply(g, a);
+                bytes[o + 2] = (byte) premultiply(b, a);
+                bytes[o + 3] = (byte) a;
+            } else if (bpp == 2) {
+                int v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+                bytes[o] = (byte) v;
+                bytes[o + 1] = (byte) (v >> 8);
+            } else {
+                bytes[o] = (byte) a;
+            }
+        }
+        int position = dst.position();
+        if (dst instanceof ByteBuffer) {
+            ByteBuffer b = (ByteBuffer) dst;
+            for (int i = 0; i < bytes.length; i++) b.put(position + i, bytes[i]);
+        } else if (dst instanceof ShortBuffer) {
+            ShortBuffer s = (ShortBuffer) dst;
+            for (int i = 0; i < bytes.length / 2; i++) {
+                s.put(position + i, (short) ((bytes[i * 2] & 0xff) | ((bytes[i * 2 + 1] & 0xff) << 8)));
+            }
+        } else {
+            IntBuffer ib = (IntBuffer) dst;
+            for (int i = 0; i < bytes.length / 4; i++) {
+                ib.put(position + i, (bytes[i * 4] & 0xff) | ((bytes[i * 4 + 1] & 0xff) << 8)
+                        | ((bytes[i * 4 + 2] & 0xff) << 16) | ((bytes[i * 4 + 3] & 0xff) << 24));
+            }
+        }
+        dst.position(position + (int) (byteCount >> shift));
+    }
+
+    private static int unpremultiply(int c, int a) {
+        if (a == 255) return c;
+        if (a == 0) return 0;
+        return Math.min(255, (c * 255 + a / 2) / a);
+    }
+
+    private static int premultiply(int c, int a) {
+        if (a == 255) return c;
+        return (c * a + 127) / 255;
+    }
+    // ZOUKAN <--
 
     @Nullable
     public final Config getConfig() {

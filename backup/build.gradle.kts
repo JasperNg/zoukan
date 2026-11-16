@@ -24,12 +24,13 @@ kotlin {
                 api(projects.data)
                 api(projects.sourceApi)
                 api(projects.core.common)
-                api(projects.i18n)
-                api(projects.i18nSy)
-                api(projects.i18nKmk)
+                // Only constants used inside; no i18n type appears in a public signature
+                implementation(projects.i18n)
+                implementation(projects.i18nSy)
+                implementation(projects.i18nKmk)
 
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
-                implementation(kotlinx.bundles.coroutines)
+                implementation(kotlinx.coroutines.core)
                 api(kotlinx.serialization.json)
                 api(kotlinx.serialization.protobuf)
                 implementation(kotlinx.immutables)
@@ -39,6 +40,14 @@ kotlin {
 
                 // Android types in shared code (SharedPreferences); see android-stubs.
                 compileOnly(projects.androidStubs)
+            }
+        }
+        androidMain {
+            dependencies {
+                // Android only: the desktop app uses Swing's main dispatcher
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.coroutines.android)
+                implementation(kotlinx.coroutines.guava)
             }
         }
     }

@@ -18,10 +18,11 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.common.DesktopPreferences
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.launchReporting
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import zoukan.i18n.desktop.DMR
@@ -95,20 +96,25 @@ class BrowseScreenModel(
                 name.contains(extensionQuery, ignoreCase = true) ||
                 pkgName.contains(extensionQuery, ignoreCase = true)
 
-        val visibleInstalled get() = installed.filter { it.matches() }.sortedWith(compareBy({ !it.hasUpdate }, { it.name.lowercase() }))
-        val visibleUntrusted get() = untrusted.filter { it.matches() }
-        val visibleAvailable: List<Extension.Available>
-            get() {
-                val installedPkgs = installed.mapTo(HashSet()) { it.pkgName } + untrusted.map { it.pkgName }
-                return available
-                    .filter { it.pkgName !in installedPkgs && it.matches() }
-                    .filter { showNsfw || !it.isNsfw }
-                    .filter { languages.isEmpty() || it.lang in languages }
-                    .sortedWith(compareBy({ it.lang }, { it.name.lowercase() }))
-            }
+        // Built once per state, not on every recomposition
+        val visibleInstalled: List<Extension.Installed> by lazy {
+            installed.filter { it.matches() }.sortedWith(compareBy({ !it.hasUpdate }, { it.name.lowercase() }))
+        }
+        val visibleUntrusted: List<Extension.Untrusted> by lazy { untrusted.filter { it.matches() } }
+        val visibleAvailable: List<Extension.Available> by lazy {
+            val installedPkgs = installed.mapTo(HashSet()) { it.pkgName } + untrusted.map { it.pkgName }
+            available
+                .filter { it.pkgName !in installedPkgs && it.matches() }
+                .filter { showNsfw || !it.isNsfw }
+                .filter { languages.isEmpty() || it.lang in languages }
+                .sortedWith(compareBy({ it.lang }, { it.name.lowercase() }))
+        }
 
         /** Every language the store lists, for the language filter */
-        val allLanguages get() = available.map { it.lang }.distinct().sorted()
+        val allLanguages: List<String> by lazy { available.map { it.lang }.distinct().sorted() }
+
+        /** Icon addresses of the store's extensions by package name */
+        val availableIcons: Map<String, String?> by lazy { available.associate { it.pkgName to it.iconUrl } }
     }
 
     init {
@@ -327,7 +333,7 @@ class BrowseScreenModel(
     }
 
     fun addStore(url: String) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.could_not_add_the_store) }) {
             addStore.invoke(url.trim())
                 .onSuccess {
                     Toasts.show(localized(DMR.strings.store_added))
@@ -338,8 +344,10 @@ class BrowseScreenModel(
     }
 
     fun removeStore(store: ExtensionStore) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_remove_store) }) {
             removeStore.invoke(store.indexUrl)
+            // Its extensions leave the available list, and stop being offered as updates
+            extensionManager.forgetStore(store.indexUrl)
             Toasts.show(localized(DMR.strings.removed, store.name))
         }
     }

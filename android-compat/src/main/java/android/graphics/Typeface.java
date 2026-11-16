@@ -167,7 +167,10 @@ public class Typeface {
             // In Java, regular weight is at 1.0 and bold at 2.0, compared to 400 and 700 in TTF
             // Typical range is 0 to 1000
 
-            float jWeight = (weight - NORMAL_WEIGHT) / (BOLD_WEIGHT - NORMAL_WEIGHT) * (TextAttribute.WEIGHT_BOLD - TextAttribute.WEIGHT_REGULAR) + TextAttribute.WEIGHT_REGULAR;
+            // ZOUKAN -->
+            // Divide in float: with ints every weight from 101 to 699 came out as regular
+            float jWeight = (weight - NORMAL_WEIGHT) / (float) (BOLD_WEIGHT - NORMAL_WEIGHT) * (TextAttribute.WEIGHT_BOLD - TextAttribute.WEIGHT_REGULAR) + TextAttribute.WEIGHT_REGULAR;
+            // ZOUKAN <--
             mAttributes.put(TextAttribute.WEIGHT, jWeight);
             return this;
         }
@@ -240,7 +243,12 @@ public class Typeface {
             family = getSystemDefaultTypeface(DEFAULT_FAMILY);
         }
 
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        Map<TextAttribute, Object> attributes = new HashMap<TextAttribute, Object>();
+        attributes.put(TextAttribute.WEIGHT, (style & BOLD) != 0 ? TextAttribute.WEIGHT_BOLD : TextAttribute.WEIGHT_REGULAR);
+        attributes.put(TextAttribute.POSTURE, (style & ITALIC) != 0 ? TextAttribute.POSTURE_OBLIQUE : TextAttribute.POSTURE_REGULAR);
+        return family.deriveFont(attributes);
+        // ZOUKAN <--
     }
 
     public static @NonNull Typeface create(@Nullable Typeface family,

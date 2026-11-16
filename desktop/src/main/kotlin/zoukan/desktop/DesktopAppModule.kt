@@ -52,13 +52,13 @@ import java.util.concurrent.Executors
 class DesktopAppModule(
     private val app: Application,
     private val dirs: ZoukanDirs,
+    private val secrets: SecretStore,
 ) : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
         addSingleton(app)
         addSingleton(dirs)
-        zoukan.desktop.local.Archives.cacheRoot = java.io.File(dirs.root, "cache/archives")
 
-        addSingletonFactory<SecretStore> { SecretStore.forPlatform(dirs.secrets) }
+        addSingleton(secrets)
 
         addSingletonFactory<PreferenceStore> {
             // The same file as Android's default SharedPreferences, so keys match
@@ -70,7 +70,7 @@ class DesktopAppModule(
         addSingletonFactory { SecurityPreferences(get()) }
         addSingletonFactory { ZoukanStorage(dirs, get()) }
         addSingletonFactory { CbzPassword(get(), get()) }
-        // Read by HttpSource and EnhancedHttpSource. Delegated sources are not wired on desktop yet.
+        // Read by HttpSource and EnhancedHttpSource.
         addSingletonFactory { DelegateSourcePreferences(get()) }
         addSingletonFactory { zoukan.desktop.exh.DelegatedSources(get(), get(), get(), /* ZOUKAN --> */get()/* ZOUKAN <-- */) }
         addSingletonFactory { zoukan.desktop.security.AppLock(get(), get()) }
@@ -108,7 +108,11 @@ class DesktopAppModule(
         addSingletonFactory<StubSourceRepository> { StubSourceRepositoryImpl(get()) }
 
         addSingletonFactory { ExtensionTrust(get()) }
-        addSingletonFactory { DesktopExtensionLoader(dirs.extensions, get()) }
+        addSingletonFactory {
+            // ZOUKAN: as ExtensionLoader, NSFW extensions stay unloaded while NSFW sources are hidden
+            val sourcePreferences = get<eu.kanade.domain.source.service.SourcePreferences>()
+            DesktopExtensionLoader(dirs.extensions, get()) { sourcePreferences.showNsfwSource().get() }
+        }
         addSingletonFactory { DesktopExtensionInstaller(dirs.extensions) { get<NetworkHelper>().client } }
         addSingletonFactory {
             val getStores = get<GetExtensionStores>()
@@ -147,6 +151,10 @@ class DesktopAppModule(
             object : KcefWebViewProvider.InitBrowserHandler {
                 override fun init(provider: KcefWebViewProvider) = CefCookieSync.copyToCef()
             }
+        }
+        // A clearance an extension's WebView got keeps the user agent the WebView ran with
+        CefCookieSync.onCopiedFromCef = { url, userAgent ->
+            zoukan.desktop.browser.recordClearanceUserAgent(url, userAgent)
         }
     }
 

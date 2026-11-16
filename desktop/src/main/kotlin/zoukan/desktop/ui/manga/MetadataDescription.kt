@@ -54,10 +54,10 @@ import exh.source.eHentaiSourceIds
 import exh.source.getMainSource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.SourceTags
 import zoukan.desktop.ui.common.Corners
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.onRightClick
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection

@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import zoukan.desktop.Platform
@@ -49,7 +51,14 @@ class UpdateChecker(
         val asset: Asset?,
     )
 
-    data class Asset(val name: String, val apiUrl: String, val size: Long, val sha256: String?)
+    data class Asset(
+        val name: String,
+        val apiUrl: String,
+        val size: Long,
+        val sha256: String?,
+        /** The API address of the installer's detached release signature (`<name>.sig`), if the release has one */
+        val signatureApiUrl: String? = null,
+    )
 
     var token: String?
         get() = runCatching { secrets.get(TOKEN_KEY) }.getOrNull()?.takeIf { it.isNotBlank() }
@@ -116,7 +125,7 @@ class UpdateChecker(
         val target = File(dir, asset.name)
         val partial = File(dir, "${asset.name}.part")
         // The asset's API URL redirects to storage; OkHttp drops the token on that other host
-        val request = request(asset.apiUrl).header("Accept", "application/octet-stream").build()
+        val request = assetRequest(asset.apiUrl).build()
         val context = coroutineContext
         try {
             downloadTo(request, partial, asset, progress) { context.ensureActive() }
@@ -129,6 +138,26 @@ class UpdateChecker(
         if (!partial.renameTo(target)) {
             partial.copyTo(target, overwrite = true)
             partial.delete()
+        }
+        target
+    }
+
+    /**
+     * Downloads the detached release signature of [asset] to `<name>.sig` in [dir], or returns null
+     * when the release lists none. The signature is 64 bytes; a larger body is refused.
+     */
+    suspend fun downloadSignature(asset: Asset, dir: File): File? = withContext(Dispatchers.IO) {
+        val url = asset.signatureApiUrl ?: return@withContext null
+        dir.mkdirs()
+        val target = File(dir, asset.name + ".sig")
+        val request = assetRequest(url).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            val body = response.body
+            if (body.contentLength() > MAX_SIGNATURE_BYTES) throw IOException("The release signature is too large")
+            val bytes = body.byteStream().use { it.readNBytes(MAX_SIGNATURE_BYTES + 1) }
+            if (bytes.size > MAX_SIGNATURE_BYTES) throw IOException("The release signature is too large")
+            target.writeBytes(bytes)
         }
         target
     }
@@ -168,6 +197,20 @@ class UpdateChecker(
         }
     }
 
+    /**
+     * A download request for a release asset. The address comes from the release's JSON, and the
+     * token is attached to it, so only an https address on the API host is accepted: no request is
+     * made, and no token sent, for anything else.
+     */
+    private fun assetRequest(url: String): Request.Builder {
+        val asset = url.toHttpUrlOrNull()
+        val api = apiUrl.toHttpUrl()
+        if (asset == null || !asset.isHttps || !asset.host.equals(api.host, ignoreCase = true)) {
+            throw IOException("The release names an unexpected download address; get the update from the release page instead")
+        }
+        return request(url).header("Accept", "application/octet-stream")
+    }
+
     private fun request(url: String) = Request.Builder().url(url)
         .header("X-GitHub-Api-Version", "2022-11-28")
         .apply { token?.let { header("Authorization", "Bearer $it") } }
@@ -194,6 +237,8 @@ class UpdateChecker(
     companion object {
         /** The GitHub token's name in the secret store. */
         const val TOKEN_KEY = "github-token"
+
+        private const val MAX_SIGNATURE_BYTES = 1024
 
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -223,8 +268,14 @@ class UpdateChecker(
                         name = release.name?.takeIf { it.isNotBlank() } ?: "Zoukan $version",
                         notes = release.body.orEmpty(),
                         pageUrl = release.htmlUrl,
-                        asset = installerFor(release.assets, platform)?.let {
-                            Asset(it.name, it.url, it.size, it.digest?.takeIf { d -> d.startsWith("sha256:") }?.removePrefix("sha256:"))
+                        asset = installerFor(release.assets, platform)?.let { installer ->
+                            Asset(
+                                installer.name,
+                                installer.url,
+                                installer.size,
+                                installer.digest?.takeIf { d -> d.startsWith("sha256:") }?.removePrefix("sha256:"),
+                                release.assets.firstOrNull { it.name == installer.name + ".sig" }?.url,
+                            )
                         },
                     )
                 }

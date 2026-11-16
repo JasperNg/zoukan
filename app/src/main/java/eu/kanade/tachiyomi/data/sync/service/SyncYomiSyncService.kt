@@ -5,6 +5,7 @@ import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.sync.SyncNotifier
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.PUT
 import eu.kanade.tachiyomi.network.await
@@ -20,7 +21,6 @@ import logcat.LogPriority
 import logcat.logcat
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.apache.http.HttpStatus
 import tachiyomi.core.common.i18n.stringResource
@@ -39,7 +39,10 @@ class SyncYomiSyncService(
 
     // KMK -->
     companion object {
-        private val client by lazy { OkHttpClient() }
+        // ZOUKAN -->
+        // The app's DNS (over HTTPS when it is on): OkHttpClient() would use the system's
+        private val client by lazy { Injekt.get<NetworkHelper>().plainClient }
+        // ZOUKAN <--
     }
     // KMK <--
 
@@ -141,9 +144,18 @@ class SyncYomiSyncService(
             val newETag = response.headers["ETag"]
                 .takeIf { it?.isNotEmpty() == true } ?: throw SyncYomiException("Missing ETag")
 
-            val byteArray = response.body.byteStream().use {
-                return@use it.readBytes()
+            // ZOUKAN -->
+            // A reply past the cap ends the sync with an error; it must not look like an invalid
+            // remote file, which the sync would overwrite
+            if (response.body.contentLength() > eu.kanade.tachiyomi.data.backup.BackupCodec.MAX_DECODED_BYTES) {
+                throw SyncYomiException("The sync data is too large")
             }
+            val byteArray = try {
+                response.body.byteStream().use { eu.kanade.tachiyomi.data.backup.BackupCodec.readBounded(it) }
+            } catch (e: eu.kanade.tachiyomi.data.backup.BackupCodec.InvalidBackupException) {
+                throw SyncYomiException("The sync data is too large")
+            }
+            // ZOUKAN <--
 
             return try {
                 val backup = protoBuf.decodeFromByteArray(Backup.serializer(), byteArray)

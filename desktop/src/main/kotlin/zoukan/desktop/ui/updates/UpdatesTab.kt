@@ -39,16 +39,13 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -95,11 +92,13 @@ import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
@@ -112,7 +111,7 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
@@ -122,6 +121,7 @@ import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.downloads.DownloadsButton
 import zoukan.desktop.ui.library.ClickKind
 import zoukan.desktop.ui.library.LibraryUpdateProgress
+import zoukan.desktop.ui.library.rememberLibraryUpdateRunning
 import zoukan.desktop.ui.library.selectableClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
@@ -253,7 +253,7 @@ class UpdatesScreenModel(
                 }
             // ZOUKAN -->
             // More > Downloaded only shows only downloaded chapters, as Android's Updates
-            val downloadedOnly = Injekt.get<zoukan.desktop.ui.common.DesktopPreferences>().downloadedOnly().changes()
+            val downloadedOnly = Injekt.get<zoukan.desktop.app.DesktopPreferences>().downloadedOnly().changes()
             // ZOUKAN <--
             combine(updates, filters, downloadedOnly, downloadManager.changes) { items, f, only, _ ->
                 items to if (only) f.copy(downloaded = TriState.ENABLED_IS) else f
@@ -353,7 +353,7 @@ class UpdatesScreenModel(
 
     fun download(items: List<UpdatesWithRelations>) {
         screenModelScope.launch {
-            byEntry(items).forEach { (manga, chapters) -> downloadManager.enqueue(manga, chapters) }
+            downloadManager.enqueueAll(byEntry(items))
         }
         done(items)
     }
@@ -415,9 +415,12 @@ class UpdatesScreenModel(
 fun UpdatesTab(model: UpdatesScreenModel) {
     val state by model.state.collectAsState()
     // Only whether an update runs, so each progress tick doesn't recompose the whole list
-    val progress = Injekt.get<LibraryUpdater>().progress.collectAsState()
-    val updating by remember(progress) { derivedStateOf { progress.value != null } }
+    val updating by rememberLibraryUpdateRunning()
     val navigator = LocalNavigator.currentOrThrow
+    // ZOUKAN -->
+    // The chapters a delete-downloads question is for: from the selection bar or a right-click
+    var confirmDelete by remember { mutableStateOf<List<UpdatesWithRelations>?>(null) }
+    // ZOUKAN <--
     // Ctrl/Cmd + A selects every chapter shown; Escape clears the selection before it means "back"
     zoukan.desktop.ui.OnShortcut { action ->
         when (action) {
@@ -431,7 +434,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
     }
     Column(Modifier.fillMaxSize()) {
         if (state.selecting) {
-            SelectionHeader(state, model)
+            SelectionHeader(state, model, onDeleteDownloads = { confirmDelete = it })
         } else {
             ScreenHeader(localized(MR.strings.label_recent_updates), subtitle = localized(DMR.strings.new_chapters_in_your_library_from), showBack = false) {
                 UpdatesFilterButton(model, state.filters)
@@ -508,6 +511,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                                 selected = selected,
                                 onOpen = { navigator.push(ReaderScreen(item.mangaId, item.chapterId)) },
                                 onOpenManga = { navigator.push(MangaScreen(item.mangaId)) },
+                                onDeleteDownloads = { confirmDelete = it },
                             )
                         }
                     }
@@ -515,6 +519,17 @@ fun UpdatesTab(model: UpdatesScreenModel) {
             }
         }
     }
+    // ZOUKAN -->
+    confirmDelete?.let { toDelete ->
+        ConfirmDestructiveDialog(
+            title = localized(DMR.strings.delete_downloads),
+            text = localized(MR.strings.confirm_delete_chapters),
+            confirmLabel = localized(DMR.strings.delete_downloads),
+            onConfirm = { model.deleteDownloads(toDelete) },
+            onDismiss = { confirmDelete = null },
+        )
+    }
+    // ZOUKAN <--
 }
 
 /** "Library last updated: 5 minutes ago", kept current each minute, as Android's updatesLastUpdatedItem. */
@@ -537,17 +552,14 @@ private fun LastUpdatedLine() {
 
 /** The toolbar while chapters are selected: the count and the bulk actions, as on Android. */
 @Composable
-private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel) {
+private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel, onDeleteDownloads: (List<UpdatesWithRelations>) -> Unit) {
     val selected = state.selectedItems
-    var confirmDelete by remember { mutableStateOf<List<UpdatesWithRelations>?>(null) }
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    SelectionBar(
+        count = selected.size,
+        onClear = model::clearSelection,
+        onSelectAll = model::selectAll,
+        onInvert = model::invertSelection,
     ) {
-        TooltipIconButton(Icons.Outlined.Close, localized(DMR.strings.clear_selection), onClick = model::clearSelection)
-        Text(localized(DMR.strings.selected, selected.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        TooltipIconButton(Icons.Outlined.SelectAll, localized(MR.strings.action_select_all), onClick = model::selectAll)
-        TooltipIconButton(Icons.Outlined.FlipToBack, localized(DMR.strings.invert_selection), onClick = model::invertSelection)
         if (selected.any { !it.read }) {
             TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.setRead(selected, true) })
         }
@@ -565,22 +577,8 @@ private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScree
             TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(remote) })
         }
         if (remote.any { it.chapterId in state.downloaded }) {
-            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { confirmDelete = remote })
+            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { onDeleteDownloads(remote) })
         }
-    }
-    // Android's UpdatesDeleteConfirmationDialog
-    confirmDelete?.let { toDelete ->
-        AlertDialog(
-            text = { Text(localized(MR.strings.confirm_delete_chapters)) },
-            onDismissRequest = { confirmDelete = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    model.deleteDownloads(toDelete)
-                    confirmDelete = null
-                }) { Text(localized(MR.strings.action_ok)) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(localized(MR.strings.action_cancel)) } },
-        )
     }
 }
 
@@ -595,6 +593,7 @@ private fun ColumnScope.UpdateContextMenu(
     selected: Boolean,
     onOpen: () -> Unit,
     onOpenManga: () -> Unit,
+    onDeleteDownloads: (List<UpdatesWithRelations>) -> Unit,
 ) {
     if (targets.size == 1) {
         ContextMenuItem(menu, localized(MR.strings.label_read_chapters), Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
@@ -626,7 +625,7 @@ private fun ColumnScope.UpdateContextMenu(
         ContextMenuItem(menu, localized(DMR.strings.cancel_download), Icons.Outlined.Close) { model.cancelDownload(remote.single()) }
     }
     if (remote.any { it.chapterId in state.downloaded }) {
-        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { model.deleteDownloads(remote) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { onDeleteDownloads(remote) }
     }
 }
 

@@ -131,7 +131,7 @@ public abstract class PackageManager {
             GET_UNINSTALLED_PACKAGES,
     })
     @Retention(RetentionPolicy.SOURCE)
-    public @interface PackageInfoFlags {}
+    public @interface PackageInfoFlagsBits {}
     /** @hide */
     @IntDef(flag = true, prefix = { "GET_", "MATCH_" }, value = {
             GET_META_DATA,
@@ -147,7 +147,7 @@ public abstract class PackageManager {
             GET_UNINSTALLED_PACKAGES,
     })
     @Retention(RetentionPolicy.SOURCE)
-    public @interface ApplicationInfoFlags {}
+    public @interface ApplicationInfoFlagsBits {}
     /** @hide */
     @IntDef(flag = true, prefix = { "GET_", "MATCH_" }, value = {
             GET_META_DATA,
@@ -2607,7 +2607,7 @@ public abstract class PackageManager {
      * @throws NameNotFoundException if a package with the given name cannot be
      *             found on the system.
      */
-    public abstract PackageInfo getPackageInfo(String packageName, @PackageInfoFlags int flags)
+    public abstract PackageInfo getPackageInfo(String packageName, @PackageInfoFlagsBits int flags)
             throws NameNotFoundException;
     /**
      * Retrieve overall information about an application package that is
@@ -2632,7 +2632,7 @@ public abstract class PackageManager {
      *             found on the system.
      */
     public abstract PackageInfo getPackageInfo(VersionedPackage versionedPackage,
-                                               @PackageInfoFlags int flags) throws NameNotFoundException;
+                                               @PackageInfoFlagsBits int flags) throws NameNotFoundException;
     /**
      * Retrieve overall information about an application package that is
      * installed on the system.
@@ -2653,7 +2653,7 @@ public abstract class PackageManager {
      * @hide
      */
     public abstract PackageInfo getPackageInfoAsUser(String packageName,
-                                                     @PackageInfoFlags int flags, @UserIdInt int userId) throws NameNotFoundException;
+                                                     @PackageInfoFlagsBits int flags, @UserIdInt int userId) throws NameNotFoundException;
     /**
      * Map from the current package names in use on the device to whatever
      * the current canonical name of that package is.
@@ -2728,7 +2728,7 @@ public abstract class PackageManager {
      * @throws NameNotFoundException if a package with the given name cannot be
      *             found on the system.
      */
-    public abstract int[] getPackageGids(String packageName, @PackageInfoFlags int flags)
+    public abstract int[] getPackageGids(String packageName, @PackageInfoFlagsBits int flags)
             throws NameNotFoundException;
     /**
      * Return the UID associated with the given package name.
@@ -2742,7 +2742,7 @@ public abstract class PackageManager {
      * @throws NameNotFoundException if a package with the given name can not be
      *             found on the system.
      */
-    public abstract int getPackageUid(String packageName, @PackageInfoFlags int flags)
+    public abstract int getPackageUid(String packageName, @PackageInfoFlagsBits int flags)
             throws NameNotFoundException;
     /**
      * Return the UID associated with the given package name.
@@ -2774,7 +2774,7 @@ public abstract class PackageManager {
      *             found on the system.
      * @hide
      */
-    public abstract int getPackageUidAsUser(String packageName, @PackageInfoFlags int flags,
+    public abstract int getPackageUidAsUser(String packageName, @PackageInfoFlagsBits int flags,
                                             @UserIdInt int userId) throws NameNotFoundException;
     /**
      * Retrieve all of the information we know about a particular permission.
@@ -2852,10 +2852,10 @@ public abstract class PackageManager {
      *             found on the system.
      */
     public abstract ApplicationInfo getApplicationInfo(String packageName,
-                                                       @ApplicationInfoFlags int flags) throws NameNotFoundException;
+                                                       @ApplicationInfoFlagsBits int flags) throws NameNotFoundException;
     /** {@hide} */
     public abstract ApplicationInfo getApplicationInfoAsUser(String packageName,
-                                                             @ApplicationInfoFlags int flags, @UserIdInt int userId) throws NameNotFoundException;
+                                                             @ApplicationInfoFlagsBits int flags, @UserIdInt int userId) throws NameNotFoundException;
     /**
      * Retrieve all of the information we know about a particular activity
      * class.
@@ -2928,7 +2928,7 @@ public abstract class PackageManager {
      *         applications with data directory i.e. applications which had been
      *         deleted with {@code DONT_DELETE_DATA} flag set).
      */
-    public abstract List<PackageInfo> getInstalledPackages(@PackageInfoFlags int flags);
+    public abstract List<PackageInfo> getInstalledPackages(@PackageInfoFlagsBits int flags);
     /**
      * Return a List of all installed packages that are currently holding any of
      * the given permissions.
@@ -2945,7 +2945,7 @@ public abstract class PackageManager {
      *         deleted with {@code DONT_DELETE_DATA} flag set).
      */
     public abstract List<PackageInfo> getPackagesHoldingPermissions(
-            String[] permissions, @PackageInfoFlags int flags);
+            String[] permissions, @PackageInfoFlagsBits int flags);
     /**
      * Return a List of all packages that are installed on the device, for a
      * specific user.
@@ -2963,7 +2963,7 @@ public abstract class PackageManager {
      * @hide
      */
     @SystemApi
-    public abstract List<PackageInfo> getInstalledPackagesAsUser(@PackageInfoFlags int flags,
+    public abstract List<PackageInfo> getInstalledPackagesAsUser(@PackageInfoFlagsBits int flags,
                                                                  @UserIdInt int userId);
     /**
      * Check whether a particular package has been granted a particular
@@ -3284,7 +3284,60 @@ public abstract class PackageManager {
      *         applications with data directory i.e. applications which had been
      *         deleted with {@code DONT_DELETE_DATA} flag set).
      */
-    public abstract List<ApplicationInfo> getInstalledApplications(@ApplicationInfoFlags int flags);
+    public abstract List<ApplicationInfo> getInstalledApplications(@ApplicationInfoFlagsBits int flags);
+
+    // ZOUKAN -->
+    /** The long flags of the API 33 overloads, as Android's PackageManager.Flags. */
+    public abstract static class Flags {
+        private final long value;
+
+        protected Flags(long value) {
+            this.value = value;
+        }
+
+        public long getValue() {
+            return value;
+        }
+    }
+
+    /** As Android (API 33): flags for getPackageInfo and getInstalledPackages. */
+    public static final class PackageInfoFlags extends Flags {
+        private PackageInfoFlags(long value) {
+            super(value);
+        }
+
+        public static PackageInfoFlags of(long value) {
+            return new PackageInfoFlags(value);
+        }
+    }
+
+    /** As Android (API 33): flags for getApplicationInfo and getInstalledApplications. */
+    public static final class ApplicationInfoFlags extends Flags {
+        private ApplicationInfoFlags(long value) {
+            super(value);
+        }
+
+        public static ApplicationInfoFlags of(long value) {
+            return new ApplicationInfoFlags(value);
+        }
+    }
+
+    public PackageInfo getPackageInfo(String packageName, PackageInfoFlags flags) throws NameNotFoundException {
+        return getPackageInfo(packageName, (int) flags.getValue());
+    }
+
+    public ApplicationInfo getApplicationInfo(String packageName, ApplicationInfoFlags flags) throws NameNotFoundException {
+        return getApplicationInfo(packageName, (int) flags.getValue());
+    }
+
+    public List<PackageInfo> getInstalledPackages(PackageInfoFlags flags) {
+        return getInstalledPackages((int) flags.getValue());
+    }
+
+    public List<ApplicationInfo> getInstalledApplications(ApplicationInfoFlags flags) {
+        return getInstalledApplications((int) flags.getValue());
+    }
+    // ZOUKAN <--
     /**
      * Return a List of all application packages that are installed on the
      * device, for a specific user. If flag GET_UNINSTALLED_PACKAGES has been
@@ -3306,7 +3359,7 @@ public abstract class PackageManager {
      * @hide
      */
     public abstract List<ApplicationInfo> getInstalledApplicationsAsUser(
-            @ApplicationInfoFlags int flags, @UserIdInt int userId);
+            @ApplicationInfoFlagsBits int flags, @UserIdInt int userId);
     /**
      * Gets the instant applications the user recently used.
      *
@@ -4225,7 +4278,7 @@ public abstract class PackageManager {
      * @return A PackageInfo object containing information about the package
      *         archive. If the package could not be parsed, returns null.
      */
-    public PackageInfo getPackageArchiveInfo(String archiveFilePath, @PackageInfoFlags int flags) {
+    public PackageInfo getPackageArchiveInfo(String archiveFilePath, @PackageInfoFlagsBits int flags) {
         //TODO
         throw new NotImplementedError();
         /*
@@ -4690,7 +4743,7 @@ public abstract class PackageManager {
      * @return A List of PackageInfo objects, one for each preferred
      *         application, in order of preference.
      */
-    public abstract List<PackageInfo> getPreferredPackages(@PackageInfoFlags int flags);
+    public abstract List<PackageInfo> getPreferredPackages(@PackageInfoFlagsBits int flags);
     /**
      * @deprecated This is a protected API that should not have been available
      * to third party applications.  It is the platform's responsibility for

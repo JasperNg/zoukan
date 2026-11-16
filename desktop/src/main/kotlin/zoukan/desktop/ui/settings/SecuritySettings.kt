@@ -37,10 +37,10 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.security.AppLock
 import zoukan.desktop.security.Incognito
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.security.secretStoreError
@@ -109,7 +109,20 @@ private fun SecuritySettings() {
                 ranges.mapNotNull(AppLock::parseRange).joinToString { localized(DMR.strings.to, hhmm(it.start), hhmm(it.endInclusive)) }.ifEmpty { localized(DMR.strings.all_day) },
                 onClick = { timesDialog = true },
             )
+        } else {
+            SearchTerms(
+                localized(DMR.strings.change_password),
+                localized(MR.strings.lock_when_idle),
+                localized(DMR.strings.lock_on_these_days),
+                localized(DMR.strings.lock_at_these_times),
+            )
         }
+        // Leaves the windows out of screenshots and screen sharing (see SecureScreen)
+        ChoicePreference(
+            localized(MR.strings.secure_screen),
+            preferences.secureScreen(),
+            SecurityPreferences.SecureScreenMode.entries.map { it to localized(it.titleRes) },
+        )
         SwitchPreference(localized(MR.strings.hide_notification_content), preferences.hideNotificationContent(), localized(DMR.strings.notifications_say_only_that_there_is))
         SwitchPreference(localized(MR.strings.pref_incognito_mode), incognito.mode(), localized(DMR.strings.reading_keeps_no_history_progress_or))
         SettingRow(localized(DMR.strings.incognito_extensions), localized(DMR.strings.always_read_these_sources_in_incognito), onClick = { extensionsDialog = true })
@@ -249,7 +262,7 @@ private fun DaysDialog(preferences: SecurityPreferences, onDismiss: () -> Unit) 
             TextButton(onClick = {
                 preferences.authenticatorDays().set(days)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -297,7 +310,7 @@ private fun TimesDialog(preferences: SecurityPreferences, onDismiss: () -> Unit)
             TextButton(onClick = {
                 preferences.authenticatorTimeRanges().set(ranges.toSet())
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

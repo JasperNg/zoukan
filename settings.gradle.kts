@@ -11,7 +11,10 @@ pluginManagement {
         gradlePluginPortal()
         google()
         mavenCentral()
-        maven(url = "https://www.jitpack.io")
+        // JitPack builds any GitHub repository on request; only ask it for the GitHub groups we use
+        maven(url = "https://www.jitpack.io") {
+            content { includeGroupByRegex("com\\.github\\..*") }
+        }
     }
 }
 
@@ -39,7 +42,10 @@ dependencyResolutionManagement {
     repositories {
         mavenCentral()
         google()
-        maven(url = "https://www.jitpack.io")
+        // JitPack builds any GitHub repository on request; only ask it for the GitHub groups we use
+        maven(url = "https://www.jitpack.io") {
+            content { includeGroupByRegex("com\\.github\\..*") }
+        }
         // ZOUKAN -->
         // Suwayomi's android.jar for the desktop runtime (the artifact Suwayomi-Server builds against).
         // Pinned to a commit of the android-jar branch, so the jar cannot change under the same

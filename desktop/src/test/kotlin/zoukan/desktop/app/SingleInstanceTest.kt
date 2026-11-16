@@ -71,23 +71,38 @@ class SingleInstanceTest {
         try {
             // The command only refuses: the app's port file stays the app's, so its "show"
             // channel is untouched
-            SingleInstance.acquireForCommand(root) shouldBe null
+            SingleInstance.acquireForCommand(root, "test") shouldBe null
             File(root, "zoukan.port").readText() shouldBe appPort
         } finally {
             app.instance.close()
         }
         // Alone, the command holds the folder and writes no port file of its own (a command has
         // no window to show), and the app starting beside it only refuses too
-        val command = SingleInstance.acquireForCommand(root).shouldNotBeNull()
+        val command = SingleInstance.acquireForCommand(root, "test").shouldNotBeNull()
         try {
             File(root, "zoukan.port").exists() shouldBe false
             SingleInstance.acquire(root) { error("the command must not be shown") }
-                .shouldBeInstanceOf<SingleInstance.Result.AlreadyRunning>()
+                .shouldBeInstanceOf<SingleInstance.Result.CommandRunning>()
         } finally {
             // And closing it frees the folder again
             command.close()
         }
-        SingleInstance.acquireForCommand(root).shouldNotBeNull().close()
+        SingleInstance.acquireForCommand(root, "test").shouldNotBeNull().close()
+    }
+
+    @Test
+    fun `acquire while a command holds the folder reports a command, not a window`() {
+        val command = SingleInstance.acquireForCommand(root, "library update").shouldNotBeNull()
+        try {
+            SingleInstance.acquire(root) { error("a command has no window") } shouldBe
+                SingleInstance.Result.CommandRunning("library update")
+        } finally {
+            command.close()
+        }
+        // Closing the command removes its marker: the app starts normally afterwards
+        val app = SingleInstance.acquire(root) {}
+        app.shouldBeInstanceOf<SingleInstance.Result.Acquired>()
+        app.instance.close()
     }
 
     @Test
@@ -118,14 +133,14 @@ class SingleInstanceTest {
             SingleInstance.acquire(root) { error("the other process holds the lock") } shouldBe
                 SingleInstance.Result.AlreadyRunning(shown = true)
             // A command refuses too
-            SingleInstance.acquireForCommand(root) shouldBe null
+            SingleInstance.acquireForCommand(root, "test") shouldBe null
             // And neither took over the other process's port file
             File(root, "zoukan.port").readText() shouldBe childPort
 
             // Once the other process ends, the folder is free
             process.outputStream.close()
             process.waitFor(30, TimeUnit.SECONDS) shouldBe true
-            SingleInstance.acquireForCommand(root).shouldNotBeNull().close()
+            SingleInstance.acquireForCommand(root, "test").shouldNotBeNull().close()
         } finally {
             process.destroyForcibly()
             process.waitFor(10, TimeUnit.SECONDS)

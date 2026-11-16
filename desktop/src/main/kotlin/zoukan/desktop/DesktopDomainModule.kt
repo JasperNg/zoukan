@@ -16,6 +16,8 @@ import mihon.domain.chapter.interactor.FilterChaptersForDownload
 import mihon.domain.extension.interactor.RemoveExtensionStore
 import mihon.domain.source.interactor.UpdateMangaFromRemote
 import mihon.domain.upcoming.interactor.GetUpcomingManga
+import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
@@ -100,6 +102,7 @@ import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.domain.SyncChapters
@@ -111,7 +114,6 @@ import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.track.TrackerLogin
-import zoukan.desktop.ui.common.DesktopPreferences
 
 /**
  * Repositories, interactors and preference groups of the shared domain and data modules, registered
@@ -121,6 +123,7 @@ import zoukan.desktop.ui.common.DesktopPreferences
  */
 class DesktopDomainModule : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
+        addFactory { zoukan.desktop.domain.ChaptersByEntry(get()) }
         addSingletonFactory { LibraryPreferences(get()) }
         addSingletonFactory { BackupPreferences(get()) }
         addSingletonFactory { DownloadPreferences(get()) }
@@ -206,7 +209,7 @@ class DesktopDomainModule : InjektModule {
         addFactory { RemoveExtensionStore(get()) }
         addFactory { GetExcludedScanlators(get()) }
         addFactory { SyncChapters(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-        addFactory { RefreshManga(get(), get(), get(), get(), get()) }
+        addFactory { RefreshManga(get(), get(), get(), get(), get(), get()) }
 
         // Downloads, library updates and background work (Phase 5)
         addFactory { FilterChaptersForDownload(get(), get(), get(), get()) }
@@ -219,7 +222,14 @@ class DesktopDomainModule : InjektModule {
                 { uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>() },
             )
         }
-        addSingletonFactory { AutoBackup(get(), get<ZoukanDirs>().android, get()) }
+        addSingletonFactory {
+            AutoBackup(
+                get(),
+                get<ZoukanDirs>().android,
+                get(),
+                get<PreferenceStore>().getString(Preference.appStateKey("zoukan_auto_backups_written"), ""),
+            )
+        }
         addSingletonFactory { BackgroundJobs(get(), get(), get(), get()) }
         addSingletonFactory { zoukan.desktop.discord.DiscordPresence(get(), get(), get()) }
 
@@ -300,6 +310,6 @@ class DesktopDomainModule : InjektModule {
         addFactory { zoukan.desktop.library.AddToLibrary(get(), get(), get(), get(), get(), get(), get(), get()) }
 
         // Migration (Phase 6)
-        addFactory { MigrateManga(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        addFactory { MigrateManga(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     }
 }

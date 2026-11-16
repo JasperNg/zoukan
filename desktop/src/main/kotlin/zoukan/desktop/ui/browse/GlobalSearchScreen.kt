@@ -23,6 +23,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +43,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences.GlobalSearchSourceFilter
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.CatalogueSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CoroutineScope
@@ -60,9 +62,9 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.collectAsState
@@ -72,6 +74,9 @@ import zoukan.desktop.ui.manga.SearchAgainField
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.desktop.ui.migration.MigrationPicks
 import zoukan.i18n.desktop.DMR
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeoutException
 
 /**
@@ -87,9 +92,16 @@ internal suspend fun <T> withSourceTimeout(millis: Long = 60_000, block: suspend
         throw TimeoutException(e.message)
     }
 
-/** A browse screen's error text for a source that failed: a timeout gets a translated message. */
+/**
+ * A browse screen's error text for a source that failed: a timeout, a site that blocks the request
+ * (HTTP 403 or 503, as a Cloudflare check answers) and a connection that fails get a translated
+ * message; other errors keep their own text.
+ */
 internal fun sourceErrorMessage(e: Throwable): String = when (e) {
-    is TimeoutException -> localized(DMR.strings.source_timed_out)
+    is TimeoutException, is SocketTimeoutException -> localized(DMR.strings.source_timed_out)
+    is HttpException ->
+        if (e.code == 403 || e.code == 503) localized(DMR.strings.source_blocked_open_the_site) else e.message.orEmpty()
+    is UnknownHostException, is ConnectException -> localized(DMR.strings.source_no_connection)
     else -> e.message ?: e::class.simpleName.orEmpty()
 }
 
@@ -157,33 +169,45 @@ class GlobalSearchScreenModel(
 
     fun toggleOnlyWithResults() = onlyWithResults.set(!onlyWithResults.get())
 
+    /** Searches one source again, after it failed; the other rows stay as they are */
+    fun retry(sourceId: Long) {
+        val source = allSources.firstOrNull { it.id == sourceId } ?: return
+        mutableState.update { it + (sourceId to Result.Loading) }
+        searchSource(source)
+    }
+
     /** Searches the sources the filter adds; results already in stay, as on Android */
     private fun search() {
         val missing = sources.filter { it.id !in state.value }
         mutableState.update { it + missing.associate { source -> source.id to Result.Loading } }
-        missing.forEach { source ->
-            // ZOUKAN <--
-            screenModelScope.launch {
-                val result = permits.withPermit {
-                    try {
-                        val page = withContext(Dispatchers.IO) {
-                            withSourceTimeout { source.getSearchManga(1, query, source.getFilterList()) }
-                        }
-                        val manga = withContext(Dispatchers.IO) {
-                            networkToLocalManga(page.mangas.map { it.toDomainManga(source.id) })
-                        }
-                        // A source can list the same title twice on a page; the row is keyed by id
-                        Result.Success(manga.distinctBy { it.id })
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        Result.Error(sourceErrorMessage(e))
+        missing.forEach(::searchSource)
+        // ZOUKAN <--
+    }
+
+    // ZOUKAN -->
+    /** Searches one source and puts its result in its row */
+    private fun searchSource(source: CatalogueSource) {
+        screenModelScope.launch {
+            val result = permits.withPermit {
+                try {
+                    val page = withContext(Dispatchers.IO) {
+                        withSourceTimeout { source.getSearchManga(1, query, source.getFilterList()) }
                     }
+                    val manga = withContext(Dispatchers.IO) {
+                        networkToLocalManga(page.mangas.map { it.toDomainManga(source.id) })
+                    }
+                    // A source can list the same title twice on a page; the row is keyed by id
+                    Result.Success(manga.distinctBy { it.id })
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Result.Error(sourceErrorMessage(e))
                 }
-                mutableState.update { it + (source.id to result) }
             }
+            mutableState.update { it + (source.id to result) }
         }
     }
+    // ZOUKAN <--
 }
 
 data class GlobalSearchScreen(
@@ -335,12 +359,20 @@ data class GlobalSearchScreen(
                                     }
                                 }
                             }
-                            is GlobalSearchScreenModel.Result.Error -> Text(
-                                result.message,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            // ZOUKAN -->
+                            is GlobalSearchScreenModel.Result.Error -> Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    result.message,
+                                    modifier = Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                TextButton(onClick = { model.retry(source.id) }) { Text(localized(MR.strings.action_retry)) }
+                            }
+                            // ZOUKAN <--
                             else -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(Modifier.size(28.dp))
                             }

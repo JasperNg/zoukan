@@ -87,6 +87,10 @@ fun PageContent(
     modifier: Modifier = Modifier,
     gap: Int = 0,
 ) {
+    // ZOUKAN -->
+    DrawsImage(image)
+    PlayAnimation(image)
+    // ZOUKAN <--
     Canvas(modifier.testTag("page-image")) {
         val shown = ReaderSpreads.shownSize(image, part, rotation, gap)
         val scale = size.width / shown.width.coerceAtLeast(1)

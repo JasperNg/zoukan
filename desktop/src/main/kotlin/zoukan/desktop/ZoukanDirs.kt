@@ -11,6 +11,8 @@ import java.io.File
  *
  * `-Dzoukan.dataDir=<path>` or the `ZOUKAN_DATA_DIR` environment variable overrides it, which the
  * harness and tests use to keep a separate profile.
+ *
+ * The harness keeps its own profile elsewhere, see [harness]: `%LOCALAPPDATA%\Zoukan\harness` on Windows.
  */
 class ZoukanDirs(val root: File) {
     val database = File(root, "zoukan.db")
@@ -23,6 +25,12 @@ class ZoukanDirs(val root: File) {
     val secrets = File(root, "secrets")
     val backups = File(root, "backups")
     val covers = File(root, "cache/covers")
+
+    /** Coil's disk cache: images fetched by address (extension icons, tracker covers, ...) */
+    val images = File(root, "cache/images")
+
+    /** FFmpeg's natives (AVIF and HEIF images), unpacked by JavaCPP */
+    val javacppCache = File(root, "cache/javacpp")
 
     // Phase 7: the log file, crash reports and downloaded updates
     val logs = File(root, "logs")
@@ -42,6 +50,25 @@ class ZoukanDirs(val root: File) {
                 Platform.WINDOWS -> File(System.getenv("APPDATA") ?: "$home\\AppData\\Roaming", "Zoukan")
                 Platform.MACOS -> File(home, "Library/Application Support/Zoukan")
                 Platform.LINUX -> File(System.getenv("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan")
+            }
+            return ZoukanDirs(root)
+        }
+
+        /**
+         * The harness profile, outside the data folder (and on Windows outside the roaming profile).
+         * With a data-folder override it is the sibling `<name>-harness`.
+         */
+        fun harness(): ZoukanDirs {
+            val override = System.getProperty("zoukan.dataDir") ?: System.getenv("ZOUKAN_DATA_DIR")
+            if (!override.isNullOrBlank()) {
+                val data = File(override).absoluteFile
+                return ZoukanDirs(File(data.parentFile, data.name + "-harness"))
+            }
+            val home = System.getProperty("user.home")
+            val root = when (Platform.current) {
+                Platform.WINDOWS -> File(System.getenv("LOCALAPPDATA") ?: "$home\\AppData\\Local", "Zoukan\\harness")
+                Platform.MACOS -> File(home, "Library/Application Support/Zoukan-harness")
+                Platform.LINUX -> File(System.getenv("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan-harness")
             }
             return ZoukanDirs(root)
         }

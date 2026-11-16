@@ -5,10 +5,14 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.isEhBasedManga
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import logcat.LogPriority
+import logcat.logcat
+import tachiyomi.data.DatabaseHandler
 import tachiyomi.data.chapter.ChapterSanitizer
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.ShouldUpdateDbChapter
-import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.chapter.model.toChapterUpdate
@@ -21,9 +25,11 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.download.DownloadPaths
+import java.io.IOException
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.TreeSet
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Saves a source's chapter list to the database, as the Android app's SyncChaptersWithSource:
@@ -34,16 +40,23 @@ class SyncChapters(
     private val chapterRepository: ChapterRepository,
     private val mangaRepository: MangaRepository,
     private val shouldUpdateDbChapter: ShouldUpdateDbChapter,
-    private val updateChapter: UpdateChapter,
     private val getChaptersByMangaId: GetChaptersByMangaId,
     private val fetchInterval: FetchInterval,
     private val libraryPreferences: LibraryPreferences,
     private val downloadManager: DownloadManager,
     private val downloadPaths: DownloadPaths,
     private val getExcludedScanlators: GetExcludedScanlators,
+    private val handler: DatabaseHandler,
 ) {
-    /** @return the new chapters */
-    suspend fun await(rawSourceChapters: List<SChapter>, manga: Manga, source: Source): List<Chapter> {
+    /**
+     * Syncs one entry at a time, across every instance (refresh, library update, fetch on add,
+     * migration), so two runs never both see the same chapters as new.
+     * @return the new chapters
+     */
+    suspend fun await(rawSourceChapters: List<SChapter>, manga: Manga, source: Source): List<Chapter> =
+        entryLocks.getOrPut(manga.id) { Mutex() }.withLock { sync(rawSourceChapters, manga, source) }
+
+    private suspend fun sync(rawSourceChapters: List<SChapter>, manga: Manga, source: Source): List<Chapter> {
         if (rawSourceChapters.isEmpty()) throw NoChaptersException()
 
         val now = ZonedDateTime.now()
@@ -63,6 +76,7 @@ class SyncChapters(
 
         val newChapters = mutableListOf<Chapter>()
         val updatedChapters = mutableListOf<Chapter>()
+        val renames = mutableListOf<Pair<Chapter, Chapter>>()
         val removedChapters = dbChapters.filterNot { it.url in sourceUrls }
         var maxSeenUploadDate = 0L
 
@@ -89,7 +103,7 @@ class SyncChapters(
             } else if (shouldUpdateDbChapter.await(dbChapter, chapter)) {
                 val shouldRenameChapter = downloadPaths.isChapterDirNameChanged(dbChapter, chapter) &&
                     downloadManager.isDownloaded(manga, dbChapter)
-                if (shouldRenameChapter) downloadManager.renameChapter(manga, dbChapter, chapter)
+                if (shouldRenameChapter) renames += dbChapter to chapter
 
                 var changed = dbChapter.copy(
                     name = chapter.name,
@@ -151,17 +165,44 @@ class SyncChapters(
         }
         // <-- EXH
 
-        if (removedChapters.isNotEmpty()) chapterRepository.removeChaptersWithIds(removedChapters.map { it.id })
-        if (toAdd.isNotEmpty()) toAdd = chapterRepository.addAll(toAdd)
-        if (updatedChapters.isNotEmpty()) updateChapter.awaitAll(updatedChapters.map { it.toChapterUpdate() })
-        mangaRepository.update(fetchInterval.toMangaUpdate(manga, now, fetchInterval.getWindow(now)))
-        mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = Instant.now().toEpochMilli()))
+        // Downloads are renamed only to free names; a rename that cannot happen leaves the old file
+        val done = mutableListOf<Pair<Chapter, Chapter>>()
+        renames.forEach { (old, new) ->
+            if (downloadManager.renameChapter(manga, old, new)) {
+                done += old to new
+            } else {
+                logcat(LogPriority.WARN) { "Download of '${old.name}' keeps its name; '${new.name}' is taken" }
+            }
+        }
+        try {
+            // One transaction: a failure rolls back, so removed chapters keep their read state
+            handler.await(inTransaction = true) {
+                if (removedChapters.isNotEmpty()) chapterRepository.removeChaptersWithIds(removedChapters.map { it.id })
+                if (toAdd.isNotEmpty()) {
+                    val added = chapterRepository.addAll(toAdd)
+                    // addAll swallows its errors and returns nothing, so check what came back
+                    if (added.size != toAdd.size) throw IOException("Saving the new chapters failed")
+                    toAdd = added
+                }
+                // Unlike the domain UpdateChapter, the repository throws when the update fails
+                if (updatedChapters.isNotEmpty()) chapterRepository.updateAll(updatedChapters.map { it.toChapterUpdate() })
+                mangaRepository.update(fetchInterval.toMangaUpdate(manga, now, fetchInterval.getWindow(now)))
+                mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = Instant.now().toEpochMilli()))
+            }
+        } catch (e: Throwable) {
+            // Put the downloads back under the names the database still has (also on cancellation)
+            done.forEach { (old, new) -> downloadManager.renameChapter(manga, new, old) }
+            throw e
+        }
 
         val excludedScanlators = getExcludedScanlators.await(manga.id).toHashSet()
         return toAdd.filterNot { it.url in duplicateOrRestoredUrls || it.scanlator in excludedScanlators }
     }
 
     companion object {
+        // The class is a factory (one instance per get()), so the per-entry locks live here
+        private val entryLocks = ConcurrentHashMap<Long, Mutex>()
+
         /**
          * Whether the chapter's upload date came from its source. A source without dates (MangaPill,
          * for one) leaves it 0, and syncing then sets it to the fetch time, as Android does: those

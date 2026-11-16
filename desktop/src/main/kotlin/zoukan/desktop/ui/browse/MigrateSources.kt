@@ -28,13 +28,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.core.model.StateScreenModel
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -42,7 +43,14 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences.MigrateSortingDirection
 import eu.kanade.domain.source.service.SourcePreferences.MigrateSortingMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
@@ -62,7 +70,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
-import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
@@ -78,59 +86,37 @@ data class MigrateSourceItem(val id: Long, val name: String, val lang: String, v
  * each has, sorted by name or count, then the entries of one source to migrate.
  */
 @Composable
-fun MigrateSourcesList() {
+fun MigrateSourcesList(model: MigrateSourcesModel) {
     val navigator = LocalNavigator.currentOrThrow
-    val preferences = remember { Injekt.get<SourcePreferences>() }
-    val sourceManager = remember { Injekt.get<SourceManager>() }
-    val mode by preferences.migrationSortingMode().collectAsState()
-    val direction by preferences.migrationSortingDirection().collectAsState()
-    var query by rememberSaveable { mutableStateOf("") }
-    val counts by remember {
-        Injekt.get<GetLibraryManga>().subscribe().map { library ->
-            library.distinctBy { it.manga.id }.groupingBy { it.manga.source }.eachCount()
-        }
-    }.collectAsState(null)
+    val state by model.state.collectAsState()
+    val mode by model.mode.collectAsState()
+    val direction by model.direction.collectAsState()
 
     Column(Modifier.fillMaxSize().testTag("migrate-sources")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            SearchField(query, { query = it }, localized(DMR.strings.search_sources), Modifier.weight(1f))
+            SearchField(state.query, model::search, localized(DMR.strings.find_a_source_by_name), Modifier.weight(1f), filter = true)
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = mode == MigrateSortingMode.ALPHABETICAL,
-                onClick = { preferences.migrationSortingMode().set(MigrateSortingMode.ALPHABETICAL) },
+                onClick = { model.setMode(MigrateSortingMode.ALPHABETICAL) },
                 label = { Text(localized(MR.strings.name)) },
             )
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = mode == MigrateSortingMode.TOTAL,
-                onClick = { preferences.migrationSortingMode().set(MigrateSortingMode.TOTAL) },
+                onClick = { model.setMode(MigrateSortingMode.TOTAL) },
                 label = { Text(localized(MR.strings.label_titles_section)) },
             )
             val ascending = direction == MigrateSortingDirection.ASCENDING
             TooltipIconButton(
                 if (ascending) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
                 if (ascending) localized(MR.strings.action_asc) else localized(MR.strings.action_desc),
-                onClick = {
-                    preferences.migrationSortingDirection().set(if (ascending) MigrateSortingDirection.DESCENDING else MigrateSortingDirection.ASCENDING)
-                },
+                onClick = model::toggleDirection,
             )
         }
-        val map = counts ?: return@Column LoadingScreen()
-        // As GetSourcesWithFavoriteCount: no local source, sources not installed first
-        val items = map.filterKeys { it != LocalSource.ID }.map { (id, count) ->
-            val source = sourceManager.get(id)
-            val stub = source ?: sourceManager.getOrStub(id)
-            MigrateSourceItem(id, stub.name.ifBlank { id.toString() }, stub.lang, source != null, count)
-        }
-            .filter { item ->
-                query.isBlank() || query.split(",").any {
-                    val input = it.trim()
-                    input.isNotEmpty() && (item.name.contains(input, ignoreCase = true) || item.id.toString() == input)
-                }
-            }
-            .sortedWith(migrateComparator(mode, direction))
+        val items = state.items ?: return@Column LoadingScreen()
         if (items.isEmpty()) {
-            EmptyScreen(if (map.isEmpty()) localized(DMR.strings.no_entries_in_the_library_to) else localized(DMR.strings.no_source_matches))
+            EmptyScreen(if (state.libraryEmpty) localized(DMR.strings.no_entries_in_the_library_to) else localized(DMR.strings.no_source_matches))
             return@Column
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -160,6 +146,77 @@ fun MigrateSourcesList() {
         }
     }
 }
+
+/**
+ * The state of Browse > Migrate: the sources of the library's entries with their counts, in the order
+ * and narrowed as the preferences and the search say. [State.items] is null until the library has loaded.
+ */
+class MigrateSourcesModel(
+    getLibraryManga: GetLibraryManga = Injekt.get(),
+    private val sourceManager: SourceManager = Injekt.get(),
+    private val preferences: SourcePreferences = Injekt.get(),
+) : StateScreenModel<MigrateSourcesModel.State>(State()) {
+
+    data class State(val items: List<MigrateSourceItem>? = null, val libraryEmpty: Boolean = false, val query: String = "")
+
+    private val query = MutableStateFlow("")
+
+    /** The sort mode and direction as the preferences hold them. */
+    val mode: StateFlow<MigrateSortingMode> = preferences.migrationSortingMode().stateIn(screenModelScope)
+    val direction: StateFlow<MigrateSortingDirection> = preferences.migrationSortingDirection().stateIn(screenModelScope)
+
+    init {
+        val libraryCounts = getLibraryManga.subscribe().map { library ->
+            library.distinctBy { it.manga.id }.groupingBy { it.manga.source }.eachCount()
+        }
+        screenModelScope.launch {
+            combine(libraryCounts, mode, direction, query) { counts, mode, direction, query ->
+                // As GetSourcesWithFavoriteCount: no local source, sources not installed first
+                counts.isEmpty() to migrateSourceItems(counts, sourceManager, query, mode, direction)
+            }
+                .flowOn(Dispatchers.Default)
+                .collect { (libraryEmpty, items) -> mutableState.update { it.copy(items = items, libraryEmpty = libraryEmpty) } }
+        }
+    }
+
+    fun search(query: String) {
+        // The text field shows this at once; the list follows
+        mutableState.update { it.copy(query = query) }
+        this.query.value = query
+    }
+
+    fun setMode(mode: MigrateSortingMode) {
+        preferences.migrationSortingMode().set(mode)
+    }
+
+    fun toggleDirection() {
+        val ascending = preferences.migrationSortingDirection().get() == MigrateSortingDirection.ASCENDING
+        preferences.migrationSortingDirection().set(if (ascending) MigrateSortingDirection.DESCENDING else MigrateSortingDirection.ASCENDING)
+    }
+}
+
+/**
+ * The list Browse > Migrate shows: [counts] (library entries per source id) without the local source,
+ * narrowed by [query] (comma-separated names or ids), in [mode] and [direction] order.
+ */
+internal fun migrateSourceItems(
+    counts: Map<Long, Int>,
+    sourceManager: SourceManager,
+    query: String,
+    mode: MigrateSortingMode,
+    direction: MigrateSortingDirection,
+): List<MigrateSourceItem> = counts.filterKeys { it != LocalSource.ID }.map { (id, count) ->
+    val source = sourceManager.get(id)
+    val stub = source ?: sourceManager.getOrStub(id)
+    MigrateSourceItem(id, stub.name.ifBlank { id.toString() }, stub.lang, source != null, count)
+}
+    .filter { item ->
+        query.isBlank() || query.split(",").any {
+            val input = it.trim()
+            input.isNotEmpty() && (item.name.contains(input, ignoreCase = true) || item.id.toString() == input)
+        }
+    }
+    .sortedWith(migrateComparator(mode, direction))
 
 /** GetSourcesWithFavoriteCount's order: by name or count, sources not installed first either way */
 fun migrateComparator(mode: MigrateSortingMode, direction: MigrateSortingDirection): Comparator<MigrateSourceItem> {
@@ -221,7 +278,7 @@ data class MigrateMangaScreen(val sourceId: Long) : Screen {
 @Composable
 private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Unit, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onToggle)
+        Modifier.fillMaxWidth().checkRow(selected) { onToggle() }
             // ZOUKAN -->
             // Android's long press on an entry selects it
             .onRightClick(onToggle)
@@ -229,7 +286,7 @@ private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Uni
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(selected, onCheckedChange = { onToggle() })
+        Checkbox(selected, onCheckedChange = null)
         Spacer(Modifier.width(8.dp))
         CoverImage(Cover.of(manga), Modifier.size(width = 40.dp, height = 56.dp).clip(Corners.Medium).coverOutline(Corners.Medium))
         Spacer(Modifier.width(12.dp))

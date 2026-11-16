@@ -17,8 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -42,6 +42,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.materialkolor.PaletteStyle
@@ -57,6 +60,8 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
+import zoukan.desktop.ui.common.LazyRow
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
@@ -74,7 +79,8 @@ fun LazyListScope.appearanceSettings() {
     item(key = "appearance-theme") { ThemeSection() }
     item(key = "appearance-display") { DisplaySection() }
     // ZOUKAN -->
-    // One "Entry page" group: a header's key is its title, and two with one key crash the list
+    // One "Entry page" group: a header's key is its id (the title by default), and two with one key
+    // crash the list, so a second group with the same title needs its own id
     settingsGroup(localized(DMR.strings.entry_page))
     item(key = "appearance-manga-info") { MangaInfoSection() }
     item(key = "appearance-previews") {
@@ -117,15 +123,23 @@ internal fun ThemeSection() {
     val shownTheme = if (theme == AppTheme.MONET) AppTheme.DEFAULT else theme
 
     Column {
+        // The theme names and modes are not rows, so search finds them by these terms
+        SearchTerms(
+            *pickableThemes.map(::themeLabel).toTypedArray(),
+            localized(MR.strings.theme_system),
+            localized(MR.strings.theme_light),
+            localized(MR.strings.theme_dark),
+        )
         SettingRow(localized(MR.strings.pref_app_theme))
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(horizontal = Spacing.SettingsRowInset), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(ThemeMode.SYSTEM to localized(MR.strings.theme_system), ThemeMode.LIGHT to localized(MR.strings.theme_light), ThemeMode.DARK to localized(MR.strings.theme_dark)).forEach { (value, label) ->
                 FilterChip(selected = mode == value, onClick = { ui.themeMode().set(value) }, label = { Text(label) })
             }
         }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.SettingsRowInset, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            scrollbarModifier = Modifier.testTag("theme-row-scrollbar").padding(horizontal = Spacing.SettingsRowInset),
         ) {
             items(pickableThemes, key = { it.name }) { appTheme ->
                 ThemePreview(
@@ -215,7 +229,8 @@ private fun ThemePreview(
                     shape = Corners.Large,
                 )
                 .background(scheme.background)
-                .clickable(onClick = onClick)
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+                .semantics { contentDescription = label }
                 .padding(8.dp),
         ) {
             // A miniature screen: top bar, a cover with badges, and the navigation bar
@@ -312,7 +327,8 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
                             colors.forEach { preset ->
                                 Box(
                                     Modifier.size(32.dp).clip(Corners.Small).background(Color(preset))
-                                        .clickable { setColor(Color(preset)) }
+                                        .clickable(role = Role.Button) { setColor(Color(preset)) }
+                                        .semantics { contentDescription = "#%06X".format(preset and 0xFFFFFF) }
                                         .testTag("theme-palette-%08X".format(preset)),
                                 )
                             }
@@ -355,7 +371,7 @@ private fun DisplaySection() {
         ChoiceSetting(
             localized(MR.strings.pref_date_format),
             format,
-            Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { "Default" }} (${Dates.format(now, pattern)})" },
+            Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { localized(MR.strings.label_default) }} (${Dates.format(now, pattern)})" },
         ) { ui.dateFormat().set(it) }
         SwitchPreference(
             localized(MR.strings.pref_relative_format),

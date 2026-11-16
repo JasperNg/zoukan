@@ -50,6 +50,8 @@ class TrackingSearchTest {
         deleteTrack = mockk(),
         sourceManager = mockk<SourceManager>(relaxed = true),
         insertTrack = mockk(),
+        trackPreferences = mockk { every { resolveUsingSourceMetadata() } returns mockk { every { get() } returns false } },
+        getFlatMetadataById = mockk(),
     ).also { models += it }
 
     private val model = newModel("Title")

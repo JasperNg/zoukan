@@ -50,13 +50,16 @@ class AppLock(private val preferences: SecurityPreferences, private val secrets:
         _locked.value = isEnabled && canLockNow(LocalDateTime.now())
     }
 
-    /** The window was minimized or hidden to the tray. */
+    /**
+     * The app went to the background: its window was minimized, hidden to the tray, or another
+     * app's window became the active one (see [LockTriggers]).
+     */
     fun onBackground() {
         if (!isEnabled || _locked.value) return
         preferences.lastAppClosed().set(System.currentTimeMillis())
     }
 
-    /** The window came back. */
+    /** The app came back to the foreground. */
     fun onForeground(now: Long = System.currentTimeMillis()) {
         if (!isEnabled || _locked.value) return
         val closed = preferences.lastAppClosed()

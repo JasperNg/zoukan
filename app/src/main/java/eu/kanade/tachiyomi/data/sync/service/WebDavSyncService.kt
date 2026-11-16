@@ -5,6 +5,7 @@ import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.sync.SyncNotifier
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.PUT
 import eu.kanade.tachiyomi.network.await
 import exh.log.xLogD
@@ -48,14 +49,17 @@ class WebDavSyncService(
         return if (folder.isNotEmpty()) "$cleanBase/$folder/$fileName" else "$cleanBase/$fileName"
     }
 
+    // ZOUKAN -->
+    // The app's DNS (over HTTPS when it is on): OkHttpClient.Builder() would use the system's
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        Injekt.get<NetworkHelper>().plainClient.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
             .build()
     }
+    // ZOUKAN <--
 
     private fun validateSettings(): Boolean {
         if (url.isEmpty() || !url.startsWith("http")) {
@@ -139,7 +143,18 @@ class WebDavSyncService(
             else -> {
                 if (response.isSuccessful) {
                     val newETag = response.headers["ETag"]?.trim('"') ?: ""
-                    val bytes = response.body.byteStream().use { it.readBytes() }
+                    // ZOUKAN -->
+                    // A reply past the cap ends the sync with an error; it must not look like an
+                    // invalid remote file, which the sync would overwrite
+                    if (response.body.contentLength() > eu.kanade.tachiyomi.data.backup.BackupCodec.MAX_DECODED_BYTES) {
+                        throw WebDavException("The sync file is too large")
+                    }
+                    val bytes = try {
+                        response.body.byteStream().use { eu.kanade.tachiyomi.data.backup.BackupCodec.readBounded(it) }
+                    } catch (e: eu.kanade.tachiyomi.data.backup.BackupCodec.InvalidBackupException) {
+                        throw WebDavException("The sync file is too large")
+                    }
+                    // ZOUKAN <--
                     try {
                         val backup = protoBuf.decodeFromByteArray(Backup.serializer(), bytes)
                         Pair(SyncData(backup = backup), newETag)

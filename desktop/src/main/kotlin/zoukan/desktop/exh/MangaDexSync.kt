@@ -25,6 +25,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
+import zoukan.desktop.backup.RestoreGate
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -62,33 +63,53 @@ class MangaDexSync(
 
     val isRunning: Boolean get() = guard.get()
 
-    /** Adds the follows with the statuses in mangadexSyncToLibraryIndexes. Returns how many it added or updated. */
-    suspend fun syncFollows(): Int = exclusive {
+    /** What a follow sync did: how many follows it added or updated, and the titles whose refresh failed. */
+    data class FollowSyncResult(val added: Int, val failed: List<String>)
+
+    /** Adds the follows with the statuses in mangadexSyncToLibraryIndexes. */
+    suspend fun syncFollows(): FollowSyncResult = exclusive {
         val mangaDex = MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager) ?: error("No MangaDex source is enabled")
         val statuses = sourcePreferences.mangadexSyncToLibraryIndexes().get().mapNotNull { it.toIntOrNull() }
         val follows = mangaDex.fetchAllFollows().filter { (_, metadata) -> metadata.followStatus in statuses }
+        val failed = mutableListOf<String>()
         follows.forEachIndexed { index, (networkManga, metadata) ->
             ensureActive()
             _progress.value = Progress(networkManga.title, index, follows.size)
-            var dbManga = getManga.await(networkManga.url, mangaDex.id)
-            if (dbManga == null) {
-                dbManga = networkToLocalManga(
-                    Manga.create().copy(
-                        url = networkManga.url,
-                        ogTitle = networkManga.title,
-                        source = mangaDex.id,
-                        favorite = true,
-                        dateAdded = System.currentTimeMillis(),
-                    ),
-                )
-            } else if (!dbManga.favorite) {
-                updateManga.awaitUpdateFavorite(dbManga.id, true)
-            }
-            updateMangaFromRemote(manga = dbManga, manualFetch = true)
-            metadata.mangaId = dbManga.id
-            insertFlatMetadata.await(metadata)
+            // One follow at a time under the restore gate, so a backup restore never overlaps a
+            // follow's writes; the follows already added stay, the rest wait for the next sync
+            RestoreGate.unlessRestoring {
+                var dbManga = getManga.await(networkManga.url, mangaDex.id)
+                if (dbManga == null) {
+                    dbManga = networkToLocalManga(
+                        Manga.create().copy(
+                            url = networkManga.url,
+                            ogTitle = networkManga.title,
+                            source = mangaDex.id,
+                            favorite = true,
+                            dateAdded = System.currentTimeMillis(),
+                        ),
+                    )
+                } else if (!dbManga.favorite) {
+                    updateManga.awaitUpdateFavorite(dbManga.id, true)
+                }
+                // The entry stays in the library either way (it is a real follow; the next library
+                // update fetches its chapters), but one whose details or chapters failed to load is
+                // reported, not counted as added. A cancellation is thrown, not returned.
+                val refreshed = updateMangaFromRemote(manga = dbManga, manualFetch = true)
+                refreshed.exceptionOrNull()?.let { e ->
+                    logcat(LogPriority.WARN, e) { "Loading MangaDex follow ${networkManga.title} failed" }
+                    failed += networkManga.title
+                }
+                metadata.mangaId = dbManga.id
+                insertFlatMetadata.await(metadata)
+            } ?: error("A backup restore is running; try again when it is done")
         }
-        follows.size
+        FollowSyncResult(added = follows.size - failed.size, failed = failed)
+    }
+
+    /** How many library entries [pushFavorites] goes through. Reads the library only: no network, no account change. */
+    suspend fun libraryEntriesToFollow(): Int = withContext(Dispatchers.IO) {
+        getFavorites.await().count { it.source in mangaDexSourceIds }
     }
 
     /** Follows the unfollowed MangaDex library entries. Returns how many it went through. */
@@ -110,7 +131,7 @@ class MangaDexSync(
         entries.size
     }
 
-    private suspend fun exclusive(block: suspend kotlinx.coroutines.CoroutineScope.() -> Int): Int {
+    private suspend fun <T> exclusive(block: suspend kotlinx.coroutines.CoroutineScope.() -> T): T {
         if (!guard.compareAndSet(false, true)) error("A MangaDex sync is already running")
         _running.value = true
         return try {

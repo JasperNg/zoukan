@@ -1,25 +1,35 @@
 package zoukan.desktop
 
 import android.os.Looper
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.migrateRemovedDohProvider
 import exh.log.EHLogLevel
 import logcat.LogPriority
 import logcat.LogcatLogger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.AndroidCompat
 import xyz.nulldev.androidcompat.AndroidCompatInitializer
 import xyz.nulldev.androidcompat.AndroidCompatModule
+import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import xyz.nulldev.androidcompat.network.ExtensionHttp
+import xyz.nulldev.androidcompat.pm.ExternalPackages
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManagerModule
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
+import zoukan.desktop.local.Archives
 import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
+import java.io.File
 import java.net.CookieHandler
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -34,7 +44,14 @@ object ZoukanRuntime {
     @Volatile
     private var started = false
 
+    @Volatile
+    private var failure: Throwable? = null
+
     lateinit var dirs: ZoukanDirs
+        private set
+
+    /** The OS secret store the runtime opened at start; the file cipher's key is in it. */
+    lateinit var secrets: SecretStore
         private set
 
     /**
@@ -43,8 +60,20 @@ object ZoukanRuntime {
      */
     @Synchronized
     fun start(dirs: ZoukanDirs = ZoukanDirs.default(), interactiveBrowser: Boolean = true) {
+        // A start that failed stays failed: some steps (the main looper, the Injekt modules) cannot
+        // run twice, so a later call reports the first failure instead of returning a half-built runtime
+        failure?.let { throw IllegalStateException("Zoukan's runtime failed to start earlier", it) }
         if (started) return
         started = true
+        try {
+            boot(dirs, interactiveBrowser)
+        } catch (e: Throwable) {
+            failure = e
+            throw e
+        }
+    }
+
+    private fun boot(dirs: ZoukanDirs, interactiveBrowser: Boolean) {
         this.dirs = dirs.create()
 
         if (!LogcatLogger.isInstalled) {
@@ -54,6 +83,11 @@ object ZoukanRuntime {
         // The log file, crash reports and the uncaught exception handler (Phase 7)
         CrashReporter.install(dirs)
         logcat { "Zoukan ${AppVersion.name} on ${Platform.id}, Java ${System.getProperty("java.runtime.version")}, data in ${dirs.root}" }
+
+        // FFmpeg's natives (AVIF and HEIF images) unpack into Zoukan's own cache, not ~/.javacpp
+        if (System.getProperty("org.bytedeco.javacpp.cachedir") == null) {
+            System.setProperty("org.bytedeco.javacpp.cachedir", dirs.javacppCache.absolutePath)
+        }
 
         // AndroidCompat keeps the emulated app's files (SharedPreferences, files, cache) here
         System.setProperty("$CONFIG_PREFIX.server.rootDir", dirs.android.absolutePath)
@@ -69,7 +103,8 @@ object ZoukanRuntime {
 
         // Cookies and the preference files (tracker tokens, sync passwords, source logins) are
         // encrypted with a key from the OS secret store. Set before any preference file is opened.
-        val fileCipher = FileCipher.fromStore(SecretStore.forPlatform(dirs.secrets))
+        secrets = SecretStore.forPlatform(dirs.secrets)
+        val fileCipher = FileCipher.fromStore(secrets)
         SettingsFileCodec.current = fileCipher
 
         // One cookie store for OkHttp, android.webkit.CookieManager and (copied) Chromium
@@ -77,23 +112,48 @@ object ZoukanRuntime {
 
         startMainLooper()
 
+        // An extension's android.widget.Toast shows in the window, as the app's own messages
+        ToastSink.set(Toasts::show)
+
         // Android ships Bouncy Castle's ciphers, which some extensions need
         // (Mangago: AES/CBC/ZeroBytePadding)
         Security.addProvider(BouncyCastleProvider())
 
         val app = ZoukanApplication()
+        // The app's PackageInfo, as extensions read it from the package manager
+        ExternalPackages.appVersionName = AppVersion.name
+        // 1.2.3 is 1002003
+        ExternalPackages.appVersionCode =
+            (AppVersion.version.parts + listOf(0, 0, 0))
+                .take(3).fold(0L) { code, part -> code * 1000 + part }
+        Archives.cacheRoot = File(dirs.root, "cache/archives")
+        // Clients extensions make for themselves (OkHttpClient(), rewritten to ExtensionHttp) resolve
+        // names with the app's DNS, over HTTPS when it is on; asked at each lookup, so never too early
+        ExtensionHttp.setDnsProvider { Injekt.get<NetworkHelper>().client.dns }
         Injekt.importModule(ConfigManagerModule())
         Injekt.importModule(AndroidCompatModule())
-        Injekt.importModule(DesktopAppModule(app, dirs))
+        Injekt.importModule(DesktopAppModule(app, dirs, secrets))
         Injekt.importModule(DesktopDomainModule())
 
         // Config modules, the Chromium WebView provider and http.agent
         AndroidCompatInitializer().init()
         AndroidCompat().startApp(app)
         EHLogLevel.init(app)
+        // Quad101 and Shecan are no longer offered: a stored choice of one moves to Cloudflare (after
+        // the config modules above, which the preference store needs; before any client is built)
+        Injekt.get<NetworkPreferences>().migrateRemovedDohProvider()
 
         JcefRuntime.install(dirs)
-        if (interactiveBrowser) BrowserWindow.installChallengeSolver()
+        if (interactiveBrowser) {
+            BrowserWindow.installChallengeSolver()
+            // ZOUKAN -->
+            // The browser windows hide while the app is locked, and a challenge waits for the unlock
+            BrowserWindow.followAppLock(
+                Injekt.get<zoukan.desktop.security.AppLock>().locked,
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+            )
+            // ZOUKAN <--
+        }
     }
 
     /** Like Suwayomi's LooperThread: extensions and the WebView post to Android's main looper. */

@@ -40,9 +40,9 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
@@ -183,7 +183,7 @@ object SourceCategoryScreen : Screen {
                         }
                         creating = false
                         editing = null
-                    }) { Text(if (original == null) localized(MR.strings.action_add) else "OK") }
+                    }) { Text(if (original == null) localized(MR.strings.action_add) else localized(MR.strings.action_ok)) }
                 },
                 dismissButton = {
                     TextButton(onClick = {
@@ -202,7 +202,7 @@ object SourceCategoryScreen : Screen {
                     TextButton(onClick = {
                         deleteSourceCategory(preferences, category)
                         deleting = null
-                    }) { Text("OK") }
+                    }) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = { deleting = null }) { Text(localized(MR.strings.action_cancel)) } },
             )
@@ -265,7 +265,7 @@ internal fun SourceCategoriesDialog(
                 TextButton(onClick = {
                     onConfirm(chosen)
                     onDismiss()
-                }) { Text("OK") }
+                }) { Text(localized(MR.strings.action_ok)) }
             }
         },
         dismissButton = {

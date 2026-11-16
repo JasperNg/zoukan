@@ -1,12 +1,22 @@
 package zoukan.desktop.extension
 
+import eu.kanade.tachiyomi.data.backup.models.Backup
+import eu.kanade.tachiyomi.data.backup.models.BackupExtensionStore
 import eu.kanade.tachiyomi.extension.model.Extension
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.mockk.coEvery
+import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import mihon.data.extension.service.requireSecureStoreUrl
+import mihon.domain.extension.interactor.GetExtensionStores
 import mihon.domain.extension.model.ExtensionStore
+import mihon.domain.extension.repository.ExtensionStoreRepository
 import org.junit.jupiter.api.Test
+import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.backup.NoStubSources
 import zoukan.extension.DesktopExtensionManager
+import java.io.File
 
 class ExtensionStoreSafetyTest {
     private fun store(name: String, key: String) = ExtensionStore(
@@ -75,5 +85,74 @@ class ExtensionStoreSafetyTest {
             "file:///tmp/repo.json",
             "repo.json",
         ).forEach { shouldThrow<IllegalArgumentException> { requireSecureStoreUrl(it) } }
+    }
+
+    @Test
+    fun `a restore that changes only a known store's list address needs confirmation`() {
+        val known = ExtensionStore(
+            indexUrl = "https://example.org/repo.json",
+            name = "Example",
+            badgeLabel = "Example",
+            signingKey = "a".repeat(64),
+            contact = ExtensionStore.Contact("https://example.org", null),
+            isLegacy = false,
+            extensionListUrl = "https://example.org/index.pb",
+        )
+        val repository = mockk<ExtensionStoreRepository> { coEvery { getAll() } returns listOf(known) }
+        fun backupStore(
+            list: String? = "https://example.org/index.pb",
+            website: String = "https://example.org",
+            discord: String? = null,
+        ) = BackupExtensionStore(
+            "https://example.org/repo.json",
+            "Example",
+            null,
+            "a".repeat(64),
+            website,
+            discord,
+            false,
+            list,
+        )
+        val same = backupStore()
+        val newList = backupStore(list = "https://evil.example/index.pb")
+        val newWebsite = backupStore(website = "https://phish.example")
+        val newDiscord = backupStore(discord = "https://discord.gg/phish")
+        val backup = Backup(backupManga = emptyList(), backupExtensionStores = listOf(same, newList, newWebsite, newDiscord))
+        val backups = DesktopBackups(File("unused"), NoStubSources)
+        runBlocking {
+            backups.newExtensionStores(backup, GetExtensionStores(repository)) shouldBe listOf(newList, newWebsite, newDiscord)
+            val (restorable, skipped) = backups.withoutNewExtensionStores(backup, GetExtensionStores(repository))
+            restorable.backupExtensionStores shouldBe listOf(same)
+            skipped shouldBe listOf(newList, newWebsite, newDiscord)
+        }
+    }
+
+    @Test
+    fun `an old backup of a legacy store with the same details needs no confirmation`() {
+        val known = ExtensionStore(
+            indexUrl = "https://example.org/repo.json",
+            name = "Example",
+            badgeLabel = "Example",
+            signingKey = "a".repeat(64),
+            contact = ExtensionStore.Contact("https://example.org", null),
+            isLegacy = true,
+            extensionListUrl = null,
+        )
+        val repository = mockk<ExtensionStoreRepository> { coEvery { getAll() } returns listOf(known) }
+        val old = BackupExtensionStore(
+            "https://example.org/index.min.json",
+            "Example",
+            null,
+            "a".repeat(64),
+            "https://example.org",
+            null,
+            null,
+            null,
+        )
+        val backup = Backup(backupManga = emptyList(), backupExtensionStores = listOf(old))
+        runBlocking {
+            DesktopBackups(File("unused"), NoStubSources)
+                .newExtensionStores(backup, GetExtensionStores(repository)) shouldBe emptyList()
+        }
     }
 }

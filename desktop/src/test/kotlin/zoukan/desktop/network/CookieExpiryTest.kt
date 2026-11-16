@@ -3,10 +3,12 @@ package zoukan.desktop.network
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
 import java.io.File
+import java.io.FileInputStream
 import java.net.HttpCookie
 import java.net.URI
 
@@ -71,6 +73,30 @@ class CookieExpiryTest {
         val names = PersistentCookieStore(file).get(URI("https://example.org/")).map { it.name }.toSet()
         names shouldBe setOf("first", "second")
         file.length() shouldNotBe 0L
+    }
+
+    @Test
+    fun `a save that fails while another program has the file open is tried again`() {
+        // Windows refuses to replace a file that a stream without delete sharing holds open, as a
+        // virus scanner or a backup tool may; elsewhere the replace never fails this way
+        Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+        val file = File(root, "cookies.json")
+        val store = PersistentCookieStore(file, saveDelayMillis = 50, retryDelayMillis = 100)
+        store.add(URI("https://example.org/"), cookie("session", value = "kept"))
+        save(store)
+        file.readText().contains("kept") shouldBe true
+
+        FileInputStream(file).use {
+            store.removeAll()
+            // The scheduled save meets the open file
+            Thread.sleep(300)
+            file.readText().contains("kept") shouldBe true
+        }
+
+        // A later try writes the cleared store
+        val deadline = System.currentTimeMillis() + 5_000
+        while (file.readText().contains("kept") && System.currentTimeMillis() < deadline) Thread.sleep(50)
+        file.readText().contains("kept") shouldBe false
     }
 
     private fun save(store: PersistentCookieStore) {

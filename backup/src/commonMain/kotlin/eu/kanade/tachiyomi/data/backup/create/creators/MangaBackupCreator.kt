@@ -114,8 +114,12 @@ class MangaBackupCreator(
         if (options.history) {
             val historyByMangaId = getHistory.await(manga.id)
             if (historyByMangaId.isNotEmpty()) {
-                val history = historyByMangaId.map { history ->
-                    val chapter = handler.awaitOne { chaptersQueries.getChapterById(history.chapterId) }
+                // ZOUKAN -->
+                // A library update running meanwhile may have removed the chapter: skip its history
+                val history = historyByMangaId.mapNotNull { history ->
+                    val chapter = handler.awaitOneOrNull { chaptersQueries.getChapterById(history.chapterId) }
+                        ?: return@mapNotNull null
+                    // ZOUKAN <--
                     BackupHistory(chapter.url, history.readAt?.time ?: 0L, history.readDuration)
                 }
                 if (history.isNotEmpty()) {

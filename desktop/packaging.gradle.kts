@@ -296,10 +296,16 @@ val createDistributable by tasks.registering {
 
 /** WiX Toolset 3, which jpackage needs for MSIs: from the PATH, else downloaded once. */
 val wixDir = layout.buildDirectory.dir("packaging/wix")
+/**
+ * SHA-256 of wix314-binaries.zip from the wix3141rtm release; change it together with the URL.
+ * WiX publishes no digest: the value was pinned from two downloads on 2026-11-16.
+ */
+val wixSha256 = "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31"
 val downloadWix by tasks.registering {
     group = "zoukan packaging"
     description = "Downloads WiX Toolset 3.14 for jpackage, unless it is on the PATH"
     onlyIf { isWindows }
+    inputs.property("sha256", wixSha256)
     outputs.dir(wixDir)
     doLast {
         val dir = wixDir.get().asFile
@@ -308,6 +314,12 @@ val downloadWix by tasks.registering {
         val zip = File(temporaryDir, "wix314-binaries.zip")
         URI("https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip").toURL().openStream().use { input ->
             zip.outputStream().use { input.copyTo(it) }
+        }
+        val actual = java.security.MessageDigest.getInstance("SHA-256").digest(zip.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        if (actual != wixSha256) {
+            zip.delete()
+            throw GradleException("wix314-binaries.zip has SHA-256 $actual, expected $wixSha256; it was not unpacked")
         }
         copy {
             from(zipTree(zip))

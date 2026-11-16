@@ -49,13 +49,27 @@ class DesktopExtensionManager(
     /** Why an installed package failed to load, by package name. */
     val loadErrorsFlow: StateFlow<Map<String, ExtensionException>> = errors.asStateFlow()
 
+    /** Files an install started after this are newer than this, and are not leftovers. */
+    private val createdAt = System.currentTimeMillis()
+
     /** Loads every installed extension. */
     suspend fun init() = withContext(Dispatchers.IO) {
         try {
+            try {
+                loader.removeLeftovers(createdAt)
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Could not remove leftover extension files" }
+            }
             val stores = getStores()
             loader.installedPackageNames().forEach { pkg ->
                 locked(pkg) {
                     // Read again under the lock: an uninstall may have run since the folder was listed
+                    // A reinstall that never confirmed (a crash): its kept-aside files come back first
+                    try {
+                        loader.restoreInterruptedReinstall(pkg)
+                    } catch (e: Exception) {
+                        logcat(LogPriority.WARN, e) { "Could not restore the files of $pkg" }
+                    }
                     loader.installedPackage(pkg)?.let { register(loader.load(it, stores)) }
                 }
             }
@@ -69,6 +83,8 @@ class DesktopExtensionManager(
     /** Fetches the extension lists of all added stores. */
     suspend fun findAvailableExtensions(): Map<ExtensionStore, Result<List<Extension.Available>>> =
         withContext(Dispatchers.IO) {
+            // A store removed while this fetches must not have its offers put back
+            val forgottenBefore = synchronized(stateLock) { forgottenStores.size }
             val results = getStores().associateWith { storeService.getExtensions(it) }
             results.forEach { (store, result) ->
                 result.onFailure { logcat(LogPriority.ERROR, it) { "Failed to get extensions of ${store.name}" } }
@@ -76,23 +92,44 @@ class DesktopExtensionManager(
             // Stores in the order they were added. When two offer one package, the copy signed like
             // the installed one counts; never simply the last store's (see chooseOffer)
             synchronized(stateLock) {
-                offers = results.values.flatMap { it.getOrDefault(emptyList()) }.groupBy { it.pkgName }
+                val forgotten = forgottenStores.subList(forgottenBefore, forgottenStores.size).toSet()
+                offers = results
+                    .filterKeys { it.indexUrl !in forgotten }
+                    .values
+                    .flatMap { it.getOrDefault(emptyList()) }
+                    .groupBy { it.pkgName }
                 chooseOffers()
             }
             results
         }
 
     /**
+     * Drops the offers of the removed store at [indexUrl], so its extensions are no longer listed
+     * or installable, and an installed extension it updated loses that update.
+     */
+    fun forgetStore(indexUrl: String) {
+        synchronized(stateLock) {
+            forgottenStores += indexUrl
+            offers = offers
+                .mapValues { (_, list) -> list.filterNot { it.store.indexUrl == indexUrl } }
+                .filterValues { it.isNotEmpty() }
+            chooseOffers()
+        }
+    }
+
+    /**
      * Installs or updates [extension] and loads it. An update whose new files fail to load leaves
      * the working version installed and listed: its new files are removed, so the next start loads
-     * the working version too, and the error is returned for the caller to report.
+     * the working version too, and the error is returned for the caller to report. A reinstall of
+     * the same version keeps the working files aside until the new ones load, and puts them back
+     * if they do not.
      */
     suspend fun installExtension(extension: Extension.Available, forceApk: Boolean = false): LoadResult =
         withContext(Dispatchers.IO) {
             val pkg = extension.pkgName
             locked(pkg) {
                 val previous = loader.installedPackage(pkg)
-                val files = try {
+                val done = try {
                     // An update must be signed like the version it replaces, as Android's package
                     // manager demands; otherwise any added store could replace an installed extension.
                     // And it must not be older, as Android refuses a downgrade
@@ -101,18 +138,31 @@ class DesktopExtensionManager(
                         forceApk,
                         requiredSigner = requiredSigner(pkg),
                         installedVersionCode = previous?.versionCode,
-                    ).files
+                    )
                 } catch (e: ExtensionException) {
                     // Refused before anything was replaced: the installed version stays listed (and
                     // pinned) as it was. The caller reports the error
                     return@withContext LoadResult.Error(pkg, e)
                 }
-                val result = loader.load(files, getStores())
-                if (result is LoadResult.Error && installed.value[pkg] != null) {
-                    if (previous != null && previous.versionCode != files.versionCode) {
+                val files = done.files
+                val result = try {
+                    loader.load(files, getStores())
+                } catch (e: Throwable) {
+                    // Also when cancelled: a same-version reinstall's working files come back
+                    installer.restorePrevious(done)
+                    throw e
+                }
+                if (result is LoadResult.Error) {
+                    if (installed.value[pkg] != null && previous != null && previous.versionCode != files.versionCode) {
                         loader.deleteVersion(pkg, files.versionCode)
+                    } else {
+                        // A same-version reinstall that does not load: what the user had stays, byte
+                        // for byte (a no-op when nothing was kept aside)
+                        installer.restorePrevious(done)
                     }
-                    return@withContext result
+                    if (installed.value[pkg] != null) return@withContext result
+                } else {
+                    installer.dropPrevious(done)
                 }
                 register(result)
                 result
@@ -221,7 +271,7 @@ class DesktopExtensionManager(
         val files = loader.installedPackage(pkgName) ?: return null
         return try {
             val signers = if (files.apk != null) {
-                ExtensionSignatures.verifyApk(files.apk)
+                ExtensionSignatures.verifyApk(readInstalledApk(files.apk))
             } else {
                 ExtensionSignatures.verifyJar(files.jar).signers
             }
@@ -240,6 +290,10 @@ class DesktopExtensionManager(
     @Volatile
     private var offers = emptyMap<String, List<Extension.Available>>()
 
+    /** Every store [forgetStore] removed, in order; a fetch drops those removed while it ran. */
+    // Guarded by stateLock
+    private val forgottenStores = mutableListOf<String>()
+
     /** Again after an install or uninstall: which store's copy counts depends on what is installed. */
     private fun chooseOffers() {
         available.value = offers.mapNotNull { (pkg, list) -> chooseOffer(list, installedSigner(pkg)) }
@@ -255,7 +309,8 @@ class DesktopExtensionManager(
         val availableExt = available.value[pkgName]
             // Only a store that signs with this extension's key can update it
             ?.takeIf { it.store.signingKey == signatureHash || it.store.signingKey == NO_SIGNING_KEY }
-            ?: return copy(hasUpdate = false)
+            // No store offers it any more (one was removed): no update, and no store to update from
+            ?: return copy(hasUpdate = false, store = null)
         return copy(
             hasUpdate = availableExt.versionCode > versionCode || availableExt.libVersion > libVersion,
             store = availableExt.store,

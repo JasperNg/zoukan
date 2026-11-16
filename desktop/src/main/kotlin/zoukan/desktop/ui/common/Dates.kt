@@ -30,7 +30,7 @@ object Dates {
 
     /** [epochMillis] as a relative date when that setting is on, else as [format]; 0 is "N/A". */
     fun relative(epochMillis: Long): String =
-        if (epochMillis == 0L) "N/A" else relative(toLocalDate(epochMillis), preferences.relativeTime().get())
+        if (epochMillis == 0L) localized(DMR.strings.date_unknown) else relative(toLocalDate(epochMillis), preferences.relativeTime().get())
 
     fun relative(date: LocalDate, relative: Boolean, today: LocalDate = LocalDate.now()): String {
         if (!relative) return format(date)

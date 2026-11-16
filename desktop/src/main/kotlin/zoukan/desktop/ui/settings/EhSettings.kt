@@ -34,17 +34,19 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.DeleteFavoriteEntries
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.EhGalleryUpdater
 import zoukan.desktop.exh.EhLogin
-import zoukan.desktop.ui.AppScope
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.manga.formatDateTime
@@ -72,7 +74,24 @@ private fun EhSettings() {
             preferences.isHentaiEnabled(),
             localized(DMR.strings.adds_the_built_in_e_hentai),
         )
-        if (!enabled) return@Column
+        if (!enabled) {
+            // Search finds the settings behind the switch, which opens the page at it
+            SearchTerms(
+                "ExHentai",
+                localized(DMR.strings.use_japanese_titles),
+                localized(DMR.strings.original_images),
+                localized(DMR.strings.watched_list_by_default),
+                localized(DMR.strings.enhanced_e_hentai_view),
+                localized(DMR.strings.incognito),
+                localized(SYMR.strings.eh_image_quality),
+                "Hentai@Home",
+                localized(DMR.strings.tag_filtering_threshold),
+                localized(DMR.strings.tag_watching_threshold),
+                localized(DMR.strings.language_filtering),
+                localized(DMR.strings.front_page_categories),
+            )
+            return@Column
+        }
         SettingRow(
             "ExHentai",
             if (exhentai) localized(DMR.strings.signed_in_exhentai_sources_are_in) else localized(DMR.strings.sign_in_with_an_e_hentai),
@@ -85,7 +104,7 @@ private fun EhSettings() {
                     OutlinedButton(onClick = {
                         busy = true
                         scope.launch {
-                            runCatching { login.login() }
+                            zoukan.desktop.app.runCatchingCancellable { login.login() }
                                 .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to_exhentai)) }
                                 .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_exhentai_failed), it) }
                             busy = false
@@ -122,9 +141,7 @@ private fun EhSettings() {
                         localized(DMR.strings.copy_these_cookies_of_e_hentai),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    OutlinedTextField(memberId, { memberId = it.trim() }, singleLine = true, label = { Text("ipb_member_id") })
-                    OutlinedTextField(passHash, { passHash = it.trim() }, singleLine = true, label = { Text("ipb_pass_hash") })
-                    OutlinedTextField(igneous, { igneous = it.trim() }, singleLine = true, label = { Text(localized(DMR.strings.igneous_optional)) })
+                    EhCookieFields(memberId, { memberId = it }, passHash, { passHash = it }, igneous, { igneous = it })
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -135,7 +152,7 @@ private fun EhSettings() {
                         busy = true
                         error = null
                         scope.launch {
-                            runCatching { login.loginWithCookies(memberId, passHash, igneous) }
+                            zoukan.desktop.app.runCatchingCancellable { login.loginWithCookies(memberId, passHash, igneous) }
                                 .onSuccess { ok ->
                                     if (ok) {
                                         cookieDialog = false
@@ -144,7 +161,10 @@ private fun EhSettings() {
                                         error = localized(DMR.strings.these_cookies_did_not_sign_in)
                                     }
                                 }
-                                .onFailure { error = it.message }
+                                .onFailure {
+                                    logcat(LogPriority.WARN, it) { "Signing in failed" }
+                                    error = localized(DMR.strings.could_not_sign_in)
+                                }
                             busy = false
                         }
                     },
@@ -153,6 +173,22 @@ private fun EhSettings() {
             dismissButton = { TextButton(onClick = { cookieDialog = false }, enabled = !busy) { Text(localized(MR.strings.action_cancel)) } },
         )
     }
+}
+
+/** The three cookies of the E-Hentai sign-in. */
+@Composable
+internal fun EhCookieFields(
+    memberId: String,
+    onMemberId: (String) -> Unit,
+    passHash: String,
+    onPassHash: (String) -> Unit,
+    igneous: String,
+    onIgneous: (String) -> Unit,
+) {
+    OutlinedTextField(memberId, { onMemberId(it.trim()) }, singleLine = true, label = { Text("ipb_member_id") })
+    // ipb_pass_hash and igneous sign in to the account, so they are masked
+    SecretTextField(passHash, { onPassHash(it.trim()) }, label = { Text("ipb_pass_hash") })
+    SecretTextField(igneous, { onIgneous(it.trim()) }, label = { Text(localized(DMR.strings.igneous_optional)) })
 }
 
 /** The site settings Zoukan uploads to the account (EHConfigurator), as Android's E-Hentai settings. */
@@ -184,7 +220,7 @@ private fun EhSiteSettings(preferences: ExhPreferences) {
             onClick = {
                 busy = true
                 scope.launch {
-                    runCatching { withContext(Dispatchers.IO) { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() } }
+                    zoukan.desktop.app.runCatchingCancellable { withContext(Dispatchers.IO) { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() } }
                         .onSuccess { Toasts.show(localized(DMR.strings.e_hentai_settings_applied)) }
                         .onFailure { Toasts.error(localized(DMR.strings.applying_the_e_hentai_settings_failed), it) }
                     busy = false
@@ -239,7 +275,7 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
             TextButton(onClick = {
                 preferences.exhSettingsLanguages().set(rows.joinToString("\n") { it.joinToString("*") })
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -270,7 +306,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
             TextButton(onClick = {
                 preferences.exhEnabledCategories().set(shown.joinToString(",") { (!it).toString() })
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

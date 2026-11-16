@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
+import eu.kanade.tachiyomi.network.withSystemFallback
 import eu.kanade.tachiyomi.source.Source
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
-import okhttp3.Dns
 import okhttp3.OkHttpClient
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
@@ -25,7 +25,10 @@ class Komga(id: Long) : BaseTracker(id, "Komga"), EnhancedTracker {
 
     override val client: OkHttpClient =
         networkService.client.newBuilder()
-            .dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
+            // ZOUKAN -->
+            // DNS over HTTPS for public names, the system's for a home server's (was Dns.SYSTEM for every name)
+            .dns(networkService.client.dns.withSystemFallback())
+            // ZOUKAN <--
             .build()
 
     val api by lazy { KomgaApi(id, client) }

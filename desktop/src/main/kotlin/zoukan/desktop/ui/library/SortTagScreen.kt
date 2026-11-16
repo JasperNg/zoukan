@@ -43,11 +43,11 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.i18n.desktop.DMR
 
@@ -63,7 +63,9 @@ object SortTagScreen : Screen {
     @Composable
     override fun Content() {
         val getSortTag = remember { Injekt.get<GetSortTag>() }
-        val tags by getSortTag.subscribe().collectAsState(getSortTag.await())
+        val tagsFlow = remember { getSortTag.subscribe() }
+        val initial = remember { getSortTag.await() }
+        val tags by tagsFlow.collectAsState(initial)
         var adding by remember { mutableStateOf(false) }
         var deleting by remember { mutableStateOf<String?>(null) }
         Column(Modifier.fillMaxSize()) {
@@ -104,7 +106,7 @@ object SortTagScreen : Screen {
                     TextButton(onClick = {
                         Injekt.get<DeleteSortTag>().await(tag)
                         deleting = null
-                    }) { Text("OK") }
+                    }) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = { deleting = null }) { Text(localized(MR.strings.action_cancel)) } },
             )

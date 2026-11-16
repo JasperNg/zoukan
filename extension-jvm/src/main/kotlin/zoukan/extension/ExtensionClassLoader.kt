@@ -1,5 +1,6 @@
 package zoukan.extension
 
+import suwayomi.tachidesk.manga.impl.util.BytecodeEditor
 import java.io.ByteArrayInputStream
 import java.io.Closeable
 import java.io.IOException
@@ -28,10 +29,11 @@ class JarContents(val entries: Map<String, ByteArray>) {
         /** Reads a jar from [bytes] without any signature check (for converted jars, checked by hash). */
         fun fromBytes(bytes: ByteArray): JarContents {
             val entries = LinkedHashMap<String, ByteArray>()
+            val budget = ZipBudget(ExtensionException.Stage.LOAD, "The extension jar")
             ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
                 generateSequence { zip.nextEntry }
                     .filterNot { it.isDirectory || ExtensionSignatures.isSigningRelated(it.name) }
-                    .forEach { entry -> entries[entry.name] = zip.readAllBytes() }
+                    .forEach { entry -> entries[entry.name] = budget.read(entry.name, zip) }
             }
             return JarContents(entries)
         }
@@ -109,7 +111,11 @@ class ExtensionClassLoader(
 
     override fun findClass(name: String): Class<*> {
         val current = contents ?: throw ExtensionUnloadedException(closedMessage())
-        val bytes = current[name.replace('.', '/') + ".class"] ?: throw ClassNotFoundException(name)
+        val stored = current[name.replace('.', '/') + ".class"] ?: throw ClassNotFoundException(name)
+        // The Android-behaviour rewrites an APK gets when it is converted (SimpleDateFormat to the
+        // ICU-backed copy), applied here for a store's jar, whose bytes stay as they were signed and
+        // verified. A class an APK conversion already rewrote comes back unchanged.
+        val bytes = BytecodeEditor.fixAndroidClass(stored)
         return defineClass(name, bytes, 0, bytes.size)
     }
 

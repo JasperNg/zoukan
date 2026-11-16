@@ -24,9 +24,7 @@ import eu.kanade.tachiyomi.network.PREF_DOH_DNSPOD
 import eu.kanade.tachiyomi.network.PREF_DOH_GOOGLE
 import eu.kanade.tachiyomi.network.PREF_DOH_MULLVAD
 import eu.kanade.tachiyomi.network.PREF_DOH_NJALLA
-import eu.kanade.tachiyomi.network.PREF_DOH_QUAD101
 import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
-import eu.kanade.tachiyomi.network.PREF_DOH_SHECAN
 import exh.log.EHLogLevel
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
@@ -45,13 +43,13 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.LocalWindow
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.extension.ExtensionTrust
 import zoukan.i18n.desktop.DMR
@@ -102,6 +100,8 @@ fun LazyListScope.advancedSettings() {
                 try {
                     withContext(Dispatchers.IO) { clearBrowserData() }
                     Toasts.show(localized(MR.strings.webview_data_deleted))
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Toasts.error(localized(MR.strings.cache_delete_error), e)
                 }
@@ -123,11 +123,9 @@ fun LazyListScope.advancedSettings() {
                 PREF_DOH_ALIDNS to "AliDNS",
                 PREF_DOH_DNSPOD to "DNSPod",
                 PREF_DOH_360 to "360",
-                PREF_DOH_QUAD101 to "Quad 101",
                 PREF_DOH_MULLVAD to "Mullvad",
                 PREF_DOH_CONTROLD to "Control D",
                 PREF_DOH_NJALLA to "Njalla",
-                PREF_DOH_SHECAN to "Shecan",
             ),
         ) {
             if (it != value) {
@@ -150,7 +148,7 @@ fun LazyListScope.advancedSettings() {
         )
     }
 
-    settingsGroup(localized(MR.strings.label_library) + " ")
+    settingsGroup(localized(MR.strings.label_library), id = "advanced-library")
     item(key = "advanced-refresh-covers") {
         val running by refreshingCovers.collectAsState()
         SettingRow(
@@ -163,7 +161,7 @@ fun LazyListScope.advancedSettings() {
     item(key = "advanced-reset-viewer") {
         SettingRow(localized(MR.strings.pref_reset_viewer_flags), localized(MR.strings.pref_reset_viewer_flags_summary), onClick = {
             AppScope.launch {
-                val success = runCatching { Injekt.get<ResetViewerFlags>().await() }.getOrDefault(false)
+                val success = zoukan.desktop.app.runCatchingCancellable { Injekt.get<ResetViewerFlags>().await() }.getOrDefault(false)
                 Toasts.show(if (success) localized(MR.strings.pref_reset_viewer_flags_success) else localized(MR.strings.pref_reset_viewer_flags_error))
             }
         })
@@ -185,7 +183,7 @@ fun LazyListScope.advancedSettings() {
         )
     }
 
-    settingsGroup(localized(MR.strings.pref_category_downloads) + " ")
+    settingsGroup(localized(MR.strings.pref_category_downloads), id = "advanced-downloads")
     item(key = "advanced-url-hash") {
         val preferences = remember { Injekt.get<DownloadPreferences>() }
         SwitchPreference(
@@ -273,7 +271,7 @@ private fun UserAgentPreference() {
                 } catch (_: IllegalArgumentException) {
                     Toasts.show(localized(MR.strings.error_user_agent_string_invalid))
                 }
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = { editing = false }) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -294,6 +292,8 @@ private fun CrashLogsPreference() {
             try {
                 withContext(Dispatchers.IO) { target.writeText(crashLogs(Injekt.get())) }
                 Toasts.show(localized(DMR.strings.saved_crash_logs_to, target.name))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toasts.error(localized(DMR.strings.could_not_save_the_crash_logs), e)
             }
@@ -327,9 +327,8 @@ internal fun clearCookies() {
 }
 
 private fun deleteBrowserCookies() {
-    // Only when Chromium is running: getting the cookie manager would start it
-    if (org.cef.CefApp.getState() != org.cef.CefApp.CefAppState.INITIALIZED) return
-    runCatching { org.cef.network.CefCookieManager.getGlobalManager()?.deleteCookies("", "") }
+    // Now when Chromium is running, else when it starts: it keeps its cookies on disk
+    xyz.nulldev.androidcompat.webkit.CefCookieSync.deleteFromCef("", "")
 }
 
 /**
@@ -355,7 +354,7 @@ private fun refreshLibraryCovers() {
             var failed = 0
             favorites.forEachIndexed { index, manga ->
                 refreshingCovers.value = localized(DMR.strings.refreshing_covers_of, index + 1, favorites.size)
-                runCatching {
+                zoukan.desktop.app.runCatchingCancellable {
                     zoukan.desktop.ui.common.Images.forget(manga)
                     val updated = refresh(manga, fetchDetails = true, fetchChapters = false).manga
                     zoukan.desktop.ui.common.Images.forget(updated)

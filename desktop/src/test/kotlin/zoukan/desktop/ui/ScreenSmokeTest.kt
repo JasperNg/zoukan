@@ -2,24 +2,27 @@ package zoukan.desktop.ui
 
 import android.app.Application
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
@@ -30,7 +33,11 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.sync.SyncPreferences
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
+import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
@@ -38,12 +45,18 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.all.MangaDex
 import exh.md.utils.MdUtil
 import exh.source.EnhancedHttpSource
+import exh.source.ExhPreferences
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
@@ -58,11 +71,14 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzWriter
@@ -73,6 +89,7 @@ import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.security.AppLock
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.track.TrackingModel
+import zoukan.desktop.ui.browse.BrowsePage
 import zoukan.desktop.ui.browse.ExtensionDetailsScreen
 import zoukan.desktop.ui.browse.FeedOrderDialog
 import zoukan.desktop.ui.browse.FeedScreenModel
@@ -85,7 +102,6 @@ import zoukan.desktop.ui.browse.SourceCategoriesDialog
 import zoukan.desktop.ui.browse.SourceFeedScreen
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.browse.rememberQuickLibraryToggle
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.library.LibraryScreenModel
 import zoukan.desktop.ui.library.LibrarySettingsDialog
 import zoukan.desktop.ui.library.SyncFavoritesConfirmDialog
@@ -131,10 +147,12 @@ import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
+import zoukan.desktop.update.Updates
+import zoukan.i18n.desktop.DMR
+import java.awt.EventQueue
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
@@ -158,7 +176,7 @@ import kotlin.time.Duration.Companion.seconds
  *   new screen is covered without a change here: an object screen or a class without arguments
  *   is created as it is, and a screen with arguments must be in [screensWithArguments], or the
  *   test fails and names it. Each screen's lists are scrolled to the end, so every row composes.
- * - The five home tabs and every page of the Browse tab.
+ * - The five home tabs and every page of the Browse tab, each page opened by its BrowsePage name.
  * - Every Settings page, and Settings search, which lists every page's settings at once.
  *   MangaDex's page only shows with a MangaDex source, so its check installs an offline stand-in
  *   for MangaDex while it runs (see [MangaDexStandIn]), and fails unless the page's rows show.
@@ -179,11 +197,30 @@ import kotlin.time.Duration.Companion.seconds
  *   ./gradlew :desktop:wiringTest
  *   ./gradlew :desktop:wiringTest --tests "*ScreenSmokeTest" -Pzoukan.smoke.only="dialog new category"
  *
+ * -Pzoukan.smoke.only matches a check's name or its coverage-matrix key ("browse:", "dialog:manga.CoverDialog").
+ * Every check carries that key, and the test fails when a screen, tab or page has no check, or
+ * when coverage-matrix.yaml says "smoke: true" for a key no check has.
+ *
  * A failed check prints the semantics tree that was on screen, to tell a crash from a test that
  * looked for the wrong node.
+ *
+ * Each check also runs the usability rules (see [usabilityChecks]) in the light and the dark theme:
+ * a new unlabelled clickable, clipped text or dialog that Escape cannot close fails the run, Tab
+ * traversal is only reported. [ScreenSmokeSmallWindowTest] runs the same checks at the app's minimum window
+ * size, in a JVM of its own beside this one. Failures name the window size: "[800x560] tab Library".
  */
 @OptIn(ExperimentalTestApi::class)
-class ScreenSmokeTest {
+open class ScreenSmokeTest {
+
+    /** The window the checks run in; [ScreenSmokeSmallWindowTest] runs them at the smallest one the app allows. */
+    protected open val width = 1280
+    protected open val height = 820
+
+    /** A small-window run: it skips scrolling the lists, which the default run already does. */
+    protected open val small = false
+
+    /** The window size, named in failures and usability findings. */
+    private val size get() = "${width}x$height"
 
     private companion object {
         /** Checks per Compose test: about a second each, well within its one-minute limit. */
@@ -191,6 +228,9 @@ class ScreenSmokeTest {
 
         /** Rows per scroll step: fewer than a screen holds, so every row composes on the way. */
         const val SCROLL_STEP = 6
+
+        /** The date of the seeded entries and chapters (2024-01-15), fixed so screenshots show the same dates every day. */
+        const val SEED_DATE = 1_705_314_000_000L
 
         /** Bounds a list's scrolling, at 3,000 rows. */
         const val MAX_SCROLL_STEPS = 500
@@ -203,12 +243,18 @@ class ScreenSmokeTest {
     /**
      * One screen or dialog to open: [open] runs on the UI thread, then [drive] in the test, and
      * [cleanup] on the UI thread even when they fail, to undo state that later checks would see.
+     * [key] is its coverage-matrix key (coverage-matrix.yaml); variants of one screen share it.
      */
     private class Check(
+        val key: String,
         val name: String,
         val open: (Navigator) -> Unit,
         val drive: ComposeUiTest.() -> Unit = {},
         val cleanup: () -> Unit = {},
+        /** Matrix keys this check also opens, such as a dialog its [drive] waits for. */
+        val alsoCovers: List<String> = emptyList(),
+        /** A dialog's dismiss, which the usability check's Escape rule asserts. */
+        val probe: DismissProbe? = null,
     )
 
     /** A screen that only shows [content], to render a dialog with a navigator and screen models around it. */
@@ -223,11 +269,36 @@ class ScreenSmokeTest {
     private var current = "starting"
     private val failures = Collections.synchronizedList(mutableListOf<String>())
 
+    /** Usability problems: reported in build/reports/usability/<size>.md; the new ones of the enforced rules fail the run (see [enforceFailures]). */
+    private val usabilityFindings = mutableListOf<UsabilityFinding>()
+
+    /** Null unless -Pzoukan.screenshots=verify|record: then no screenshot is taken, which costs nothing. */
+    private val screenshots = ScreenshotRun.fromProperty()
+
+    /** Screens that differ from their golden: reported in build/reports/screenshots/report.md, and a failure at the end in verify mode only. */
+    private val screenshotFindings = mutableListOf<ScreenshotFinding>()
+
+    /** Takes the curated screens only, once per key and variant, after the usability rules that only read the screen. */
+    private fun ComposeUiTest.screenshot(key: String, variant: String) {
+        val run = screenshots ?: return
+        if (key !in ScreenshotKeys.curated) return
+        run.check(captureAllRoots(), variant, key, ScreenshotKeys.masks(key, this))?.let { screenshotFindings += it }
+    }
+
+    @Test
+    fun `Dispatchers Main runs on the AWT event thread`() {
+        Dispatchers.Main.immediate.javaClass.name shouldContain "Swing"
+        // The timeout turns a looper that never runs into a failure instead of a hung build
+        runBlocking { withTimeout(10.seconds) { withContext(Dispatchers.Main) { EventQueue.isDispatchThread() } } } shouldBe true
+    }
+
     @Test
     fun `every screen and dialog opens without an error`() {
         System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
         val dirs = ZoukanDirs(Files.createTempDirectory("zoukan-smoke").toFile())
         ZoukanRuntime.start(dirs, interactiveBrowser = false)
+        // The run lasts minutes, and the daily update check would call GitHub after 30 s
+        Updates.autoCheck().set(false)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         // A background thread's error can come after the check that started its work has closed
         Thread.setDefaultUncaughtExceptionHandler { thread, e ->
@@ -241,11 +312,29 @@ class ScreenSmokeTest {
             val screens = screens(fixture)
             val all = screens + tabs() + settings() + dialogs(fixture) + uiDialogs()
             println("Smoke: ${screens.size} screens, ${all.size} checks")
-            // -Pzoukan.smoke.only=<regex> runs only the matching checks, to debug one
+            // Before the filter below, so a run that debugs one check still holds these
+            val keys = all.flatMap { listOf(it.key) + it.alsoCovers }.toSet()
+            val matrix = CoverageMatrix.load()
+            // Every key listed, so one run shows all the drift
+            fun mustBeEmpty(what: String, missing: Collection<String>) =
+                check(missing.isEmpty()) { "$what:\n" + missing.sorted().joinToString("\n") { "  $it" } }
+            // A screen, tab or page that no check opens
+            val discovered = UiInventory.screenClasses().filter { it != HomeScreen::class.java }.map(UiInventory::screenKey) +
+                UiInventory.enumKeys()
+            mustBeEmpty("screens, tabs or pages that no smoke check opens", discovered.toSet() - keys)
+            // A coverage-matrix row that says "smoke: true" but no check has its key
+            mustBeEmpty("coverage-matrix rows with smoke: true that no smoke check has", matrix.filter { it.smoke }.map { it.key }.toSet() - keys)
+            // A check whose key has no coverage-matrix row
+            mustBeEmpty("smoke check keys with no row in coverage-matrix.yaml", keys - matrix.map { it.key }.toSet())
+            // A curated screenshot key that no check has would never be compared
+            mustBeEmpty("screenshot keys (ScreenshotKeys.curated) that no smoke check has", ScreenshotKeys.curated - keys)
+            // A malformed allowlist (no reason, unknown rule, a key with no matrix row) is a real failure
+            val allowlist = UsabilityAllowlist.load(matrix.map { it.key })
+            // -Pzoukan.smoke.only=<regex> runs only the checks whose key or name matches, to debug one
             val only = System.getProperty("zoukan.smoke.only")?.toRegex()
-            val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) }
+            val checks = if (only == null) all else all.filter { only.containsMatchIn(it.name) || only.containsMatchIn(it.key) }
             // A filter that matches nothing would otherwise pass without opening anything
-            check(checks.isNotEmpty()) { "no check matches $only; checks are:\n" + all.joinToString("\n") { it.name } }
+            check(checks.isNotEmpty()) { "no check matches $only; checks are:\n" + all.joinToString("\n") { "${it.key}  ${it.name}" } }
             runChecks(checks)
 
             current = "log"
@@ -254,6 +343,21 @@ class ScreenSmokeTest {
                 .filter { it.isFile }
                 .flatMap { log -> log.readLines().filter { "No registered instance or factory" in it }.map { "${log.name}: $it" } }
                 .forEach { failures += "log: $it" }
+            // One file per window size: the default and the small-window runs are separate JVMs, side by side
+            val report = File("build/reports/usability/$size.md")
+            println("Usability: ${usabilityFindings.size} findings, in $report")
+            val classified = classify(usabilityFindings, allowlist)
+            writeUsabilityReport(classified, report)
+            // A new finding of an enforced rule fails the run; Tab traversal stays in the report only
+            failures += enforceFailures(classified)
+            screenshots?.let { run ->
+                // A filtered run skips screens on purpose; a full one must take every curated screen
+                if (only == null) screenshotFindings += run.notTaken(ScreenshotKeys.curated, listOf("$size/light", "$size/dark"))
+                run.writeReport(size, screenshotFindings)
+                println("Screenshots: ${screenshotFindings.size} differ, in build/reports/screenshots/report.md")
+                // Collected over the whole run, so one failure here never ended a batch; only verify fails
+                if (run.compares) screenshotFindings.forEach { failures += "screenshot [${it.variant}] ${it.key}: ${it.message}" }
+            }
             failures.shouldBeEmpty()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)
@@ -274,6 +378,9 @@ class ScreenSmokeTest {
      */
     private fun runChecks(checks: List<Check>) {
         val preferences = Injekt.get<DesktopPreferences>()
+        // Light, not SYSTEM: the result must not depend on the machine's theme. The dark pass of each check switches it.
+        val ui = Injekt.get<UiPreferences>()
+        ui.themeMode().set(ThemeMode.LIGHT)
         var next = 0
         var batch = 0
         while (next < checks.size) {
@@ -284,24 +391,53 @@ class ScreenSmokeTest {
             var open = -1
             val start = next
             try {
-                runDesktopComposeUiTest(width = 1280, height = 820, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
+                runDesktopComposeUiTest(width = width, height = height, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                     var navigator: Navigator? = null
-                    setContent { ZoukanContent(preferences) { navigator = it } }
+                    setContent {
+                        // Escape as the window turns it into Back, for the usability check's Escape rule
+                        InstallEscapeAsBack()
+                        ZoukanContent(preferences) { navigator = it }
+                    }
                     waitForIdle()
                     // A Compose test's body must finish within a minute (kotlinx-coroutines-test's
                     // default, which testTimeout doesn't lift here), so a new one every few checks
                     val end = minOf(next + BATCH, checks.size)
                     while (next < end) {
                         val check = checks[next]
-                        current = check.name
+                        current = "[$size] ${check.name}"
                         open = next
-                        println("Smoke: ${check.name}")
+                        println("Smoke: $current")
                         try {
                             try {
                                 runOnUiThread { check.open(navigator!!) }
                                 settle()
                                 check.drive(this)
-                                scrollLists()
+                                // What the user sees first, before the lists scroll; findings never fail the
+                                // check, but an exception while the theme switches does, as in any check.
+                                // The order matters: the rules that only read the screen run in light and
+                                // then in dark, and the ones that press Tab and Escape last, in light,
+                                // because Escape may close the dialog.
+                                usabilityFindings += staticUsabilityChecks(check.key, "$size/light")
+                                screenshot(check.key, "$size/light")
+                                // The theme preference reaches ZoukanTheme as Compose goes idle, so
+                                // waitForIdle is enough here; settle's sleeps would add ~1 s per check
+                                try {
+                                    // A failure while dark names the dark variant: "[1280x820/dark] tab Library"
+                                    current = "[$size/dark] ${check.name}"
+                                    ui.themeMode().set(ThemeMode.DARK)
+                                    waitForIdle()
+                                    usabilityFindings += staticUsabilityChecks(check.key, "$size/dark")
+                                    screenshot(check.key, "$size/dark")
+                                } finally {
+                                    // Light again for the next checks even when the dark pass threw; waiting
+                                    // here would throw again over a broken composition and hide the first error
+                                    ui.themeMode().set(ThemeMode.LIGHT)
+                                }
+                                waitForIdle()
+                                current = "[$size] ${check.name}"
+                                usabilityFindings += interactiveUsabilityChecks(check.key, "$size/light", check.probe)
+                                // The default run scrolls every list; the small window adds nothing there
+                                if (!small) scrollLists()
                                 settle()
                             } finally {
                                 runOnUiThread { check.cleanup() }
@@ -351,6 +487,20 @@ class ScreenSmokeTest {
             Thread.sleep(150)
             waitForIdle()
         }
+    }
+
+    /**
+     * One field searches every source; the in-tab fields only filter the list. So the page shows the
+     * global search's placeholder once, and the filter under [tag] does not start with the same word.
+     * A page whose filter is not on screen (the Sources filter shows only when there are sources) is skipped.
+     */
+    private fun ComposeUiTest.assertOneGlobalSearch(tag: String) {
+        if (onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) return
+        val global = localized(DMR.strings.search_all_sources)
+        onAllNodes(hasText(global), useUnmergedTree = true).fetchSemanticsNodes().size shouldBe 1
+        val verb = global.substringBefore(' ')
+        onAllNodes(hasAnyAncestor(hasTestTag(tag)) and hasText(verb, substring = true, ignoreCase = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().shouldBeEmpty()
     }
 
     /**
@@ -415,7 +565,8 @@ class ScreenSmokeTest {
         val storage = Injekt.get<ZoukanStorage>()
         listOf("Alpha", "Bravo").forEach { title ->
             val dir = File(storage.local, title).apply { mkdirs() }
-            (1..2).forEach { cbz(File(dir, "Chapter $it.cbz"), 3, title) }
+            // A fixed modified time too: it becomes the chapter's upload date, which a screenshot shows
+            (1..2).forEach { cbz(File(dir, "Chapter $it.cbz"), 3, title).setLastModified(SEED_DATE) }
         }
         Injekt.get<LibraryPreferences>().autoUpdateMangaRestrictions().set(emptySet())
         runBlocking {
@@ -424,7 +575,7 @@ class ScreenSmokeTest {
             val source = Injekt.get<SourceManager>().get(LocalSource.ID) as CatalogueSource
             val found = source.getPopularManga(1).mangas.map { it.toDomainManga(LocalSource.ID) }
             Injekt.get<NetworkToLocalManga>()(found).forEach { manga ->
-                Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = System.currentTimeMillis()))
+                Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true, dateAdded = SEED_DATE))
             }
         }
         updateLibrary()
@@ -459,7 +610,7 @@ class ScreenSmokeTest {
         }
     }
 
-    private fun cbz(file: File, pages: Int, label: String) {
+    private fun cbz(file: File, pages: Int, label: String): File {
         CbzWriter(file).use { writer ->
             (1..pages).forEach { i ->
                 val image = BufferedImage(300, 450, BufferedImage.TYPE_INT_RGB)
@@ -472,6 +623,7 @@ class ScreenSmokeTest {
                 writer.write("%03d.png".format(i), ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray())
             }
         }
+        return file
     }
 
     // Screens
@@ -512,78 +664,87 @@ class ScreenSmokeTest {
         ),
         MigrationConfigScreen::class.java to listOf({ MigrationConfigScreen(listOf(f.alpha.id, f.bravo.id)) }),
         RecommendsScreen::class.java to listOf({ RecommendsScreen(f.alpha.id) }),
-        CommonRecommendsScreen::class.java to listOf({ CommonRecommendsScreen(emptyList()) }),
+        CommonRecommendsScreen::class.java to listOf({ CommonRecommendsScreen(listOf(f.alpha.id)) }),
     )
 
     private fun screens(f: Fixture): List<Check> {
         val withArguments = screensWithArguments(f)
-        val classes = screenClasses()
+        val classes = ScreenScan.screenClasses()
         // About 30 when this was written; far fewer means the scan stopped finding them
         classes.size shouldBeGreaterThan 20
         val missing = mutableListOf<String>()
         val checks = classes.filter { it != HomeScreen::class.java }.flatMap { type ->
-            val makers = withArguments[type] ?: listOfNotNull(maker(type)).ifEmpty {
+            val makers = withArguments[type] ?: listOfNotNull(ScreenScan.maker(type)).ifEmpty {
                 missing += type.name
                 emptyList()
             }
             makers.mapIndexed { i, make ->
                 val variant = if (makers.size > 1) " ${i + 1}" else ""
-                Check("screen ${type.simpleName}$variant", { it.push(make()) })
+                Check(UiInventory.screenKey(type), "screen ${type.simpleName}$variant", { it.push(make()) })
             }
         }
         missing.shouldBeEmpty()
-        return checks
+        return checks + deletedEntryCheck()
     }
 
     /**
-     * How to get a screen of [type] without arguments: an object's instance, or a new one of a
-     * class without arguments; null for a class that needs arguments. Nothing is made yet.
+     * The entry screen of an entry the database then loses, as Settings > Clear database does it:
+     * the screen must say so, and no failure may reach a thread's uncaught handler.
      */
-    private fun maker(type: Class<out Screen>): (() -> Screen)? {
-        runCatching { type.getDeclaredField("INSTANCE") }.getOrNull()
-            ?.takeIf { Modifier.isStatic(it.modifiers) }
-            ?.let { field -> return { field.apply { isAccessible = true }.get(null) as Screen } }
-        return type.declaredConstructors.firstOrNull { it.parameterCount == 0 }
-            ?.let { constructor -> { constructor.apply { isAccessible = true }.newInstance() as Screen } }
-    }
-
-    /** The app's screen classes, from its compiled classes. */
-    @Suppress("UNCHECKED_CAST")
-    private fun screenClasses(): List<Class<out Screen>> {
-        val root = File(HomeScreen::class.java.protectionDomain.codeSource.location.toURI())
-        val loader = javaClass.classLoader
-        return root.walkTopDown()
-            .filter { it.isFile && it.name.endsWith(".class") }
-            .map { it.relativeTo(root).path.removeSuffix(".class").replace(File.separatorChar, '.') }
-            .mapNotNull { runCatching { Class.forName(it, false, loader) }.getOrNull() }
-            .filter { Screen::class.java.isAssignableFrom(it) && !it.isInterface && !Modifier.isAbstract(it.modifiers) }
-            .filter { !it.isAnonymousClass && !it.isLocalClass }
-            .map { it as Class<out Screen> }
-            .sortedBy { it.name }
-            .toList()
+    private fun deletedEntryCheck(): Check {
+        val message = localized(DMR.strings.this_entry_no_longer_exists)
+        return Check(
+            key = UiInventory.screenKey(MangaScreen::class.java),
+            name = "manga screen of a deleted entry",
+            open = { navigator ->
+                val gone = SManga.create().apply {
+                    url = "Gone"
+                    title = "Gone"
+                }.toDomainManga(LocalSource.ID)
+                val entry = runBlocking { Injekt.get<NetworkToLocalManga>()(listOf(gone)).single() }
+                navigator.push(MangaScreen(entry.id))
+            },
+            drive = {
+                runBlocking {
+                    Injekt.get<tachiyomi.data.DatabaseHandler>().await(inTransaction = true) {
+                        mangasQueries.deleteNonLibraryManga(listOf(LocalSource.ID), 0L)
+                    }
+                }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty() }
+            },
+        )
     }
 
     // Tabs and settings
 
     private fun tabs(): List<Check> = HomeTab.entries.map { tab ->
-        Check("tab ${tab.name}", { HomeScreen.selectTab(tab) })
-    } + Check(
-        "Browse pages",
-        { HomeScreen.selectTab(HomeTab.Browse) },
-        drive = {
-            // The Browse tab's own row, not the navigation rail's tabs
-            val tab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab) and hasAnyAncestor(hasTestTag("browse-pages"))
-            waitUntil(timeoutMillis = 10_000) { onAllNodes(tab).fetchSemanticsNodes().isNotEmpty() }
-            val count = onAllNodes(tab).fetchSemanticsNodes().size
-            count shouldBeGreaterThan 3
-            repeat(count) { index ->
-                current = "Browse page $index"
-                onAllNodes(tab)[index].performClick()
+        Check(
+            "tab:${tab.name}",
+            "tab ${tab.name}",
+            { HomeScreen.selectTab(tab) },
+            // Every check renders the main window and its shell; the first tab's check names them
+            alsoCovers = if (tab == HomeTab.entries.first()) listOf("screen:HomeScreen", "state:shell") else emptyList(),
+        )
+    } + BrowsePage.entries.map { page ->
+        // The default preferences show every page (hiding the feed is a setting); clickTag fails
+        // when the page's tab is not there
+        Check(
+            "browse:${page.name}",
+            "browse ${page.name}",
+            { HomeScreen.selectTab(HomeTab.Browse) },
+            drive = {
+                clickTag("browse-page-${page.name}")
+                // The click must select this page, not leave another one showing
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(hasTestTag("browse-page-${page.name}") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
                 settle()
-                scrollLists()
-            }
-        },
-    )
+                when (page) {
+                    BrowsePage.SOURCES -> assertOneGlobalSearch("source-search")
+                    BrowsePage.EXTENSIONS -> assertOneGlobalSearch("extension-search")
+                    else -> Unit
+                }
+            },
+        )
+    }
 
     /**
      * A MangaDex source for one check: the MangaDex extension's stand-in inside the app's enhanced
@@ -615,7 +776,7 @@ class ScreenSmokeTest {
     }
 
     private fun settings(): List<Check> = SettingsCategory.entries.filter { it != SettingsCategory.MangaDex }.map { page ->
-        Check("settings ${page.name}", {
+        Check("settings:${page.name}", "settings ${page.name}", {
             openSettingsCategory(page)
             HomeScreen.openSettings(it)
         })
@@ -624,6 +785,7 @@ class ScreenSmokeTest {
             val mangaDex = MangaDexStandIn()
             var navigator: Navigator? = null
             Check(
+                "settings:MangaDex",
                 "settings MangaDex",
                 {
                     navigator = it
@@ -635,7 +797,14 @@ class ScreenSmokeTest {
                 // row, so it fails rather than pass on an empty page.
                 // Clicking the row only opens the follows dialog. Nothing here confirms it, signs in
                 // or syncs: those would call MangaDex's servers.
-                drive = { clickText(localized(SYMR.strings.mangadex_sync_follows_to_library)) },
+                drive = {
+                    val sync = localized(SYMR.strings.mangadex_sync_follows_to_library)
+                    clickText(sync)
+                    // The follows dialog's title repeats the row's text
+                    waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(sync).fetchSemanticsNodes().size >= 2 }
+                },
+                // The follows dialog opens only through this page
+                alsoCovers = listOf("dialog:settings.SyncFollowsDialog"),
                 // The page and its dialog close before the source goes away under them
                 cleanup = {
                     try {
@@ -647,6 +816,7 @@ class ScreenSmokeTest {
             )
         },
         Check(
+            "settings:search",
             "settings search",
             { HomeScreen.openSettings(it) },
             drive = {
@@ -656,90 +826,178 @@ class ScreenSmokeTest {
                 onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
             },
         ),
+        Check(
+            "state:settings-theme-row",
+            "settings Appearance theme row scrolls",
+            {
+                openSettingsCategory(SettingsCategory.Appearance)
+                HomeScreen.openSettings(it)
+            },
+            drive = {
+                // More themes than fit: the row shows a scrollbar to reach them
+                waitUntil(timeoutMillis = 5_000) { onAllNodes(hasTestTag("theme-row-scrollbar")).fetchSemanticsNodes().isNotEmpty() }
+                onNodeWithTag("theme-row-scrollbar").assertIsDisplayed()
+            },
+        ),
+        run {
+            val exh by lazy { Injekt.get<ExhPreferences>().isHentaiEnabled() }
+            val sync by lazy { Injekt.get<SyncPreferences>().syncService() }
+            val lock by lazy { Injekt.get<SecurityPreferences>().useAuthenticator() }
+            var before = Triple(false, SyncManager.SyncService.NONE.value, false)
+            Check(
+                "settings:search-hidden",
+                "settings search finds hidden settings",
+                {
+                    // The switches that reveal these settings are off
+                    before = Triple(exh.get(), sync.get(), lock.get())
+                    exh.set(false)
+                    sync.set(SyncManager.SyncService.NONE.value)
+                    lock.set(false)
+                    HomeScreen.openSettings(it)
+                },
+                drive = {
+                    listOf(
+                        localized(DMR.strings.use_japanese_titles),
+                        localized(DMR.strings.lock_on_these_days),
+                        localized(KMR.strings.web_dav),
+                        localized(MR.strings.theme_nord),
+                    ).forEach { query ->
+                        onAllNodes(hasSetTextAction()).onFirst().performTextInput(query)
+                        settle()
+                        check(onAllNodes(hasText(localized(DMR.strings.no_settings_match, query))).fetchSemanticsNodes().isEmpty()) {
+                            "settings search found nothing for \"$query\""
+                        }
+                        onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+                    }
+                },
+                cleanup = {
+                    exh.set(before.first)
+                    sync.set(before.second)
+                    lock.set(before.third)
+                },
+            )
+        },
     )
 
     // Dialogs
 
-    private fun dialog(name: String, content: @Composable Screen.() -> Unit) =
-        Check("dialog $name", { it.push(Host(name, content)) })
+    /**
+     * A check that renders [content]; [key] is "dialog:" + the dialog function's package under ui and name.
+     * [content] gets the dialog's dismiss, which records its call for the usability check's Escape rule.
+     */
+    private fun dialog(key: String, name: String, content: @Composable Screen.(dismiss: () -> Unit) -> Unit): Check {
+        val probe = DismissProbe()
+        return Check(key, "dialog $name", {
+            probe.called = false
+            it.push(Host(name) { content(probe.dismiss) })
+        }, probe = probe)
+    }
 
     /** The dialogs that other code can show, rendered directly. */
     private fun dialogs(f: Fixture): List<Check> {
-        val categories = runBlocking { Injekt.get<GetCategories>().await() }
+        // As the app hands them to the dialogs: the nameless system category is never offered
+        val categories = runBlocking { Injekt.get<GetCategories>().await() }.filterNot { it.isSystemCategory }
         val noop = {}
         return listOf(
-            dialog("CategoryDialog") { CategoryDialog(categories, {}, noop) },
-            dialog("ChangeCategoryDialog") { ChangeCategoryDialog(categories, setOf(categories.last().id), {}, noop) },
-            dialog("PickDialog merge") { PickDialog(SearchPurpose.Merge(f.alpha.id), f.bravo, noop) },
-            dialog("PickDialog migrate") { PickDialog(SearchPurpose.Migrate(f.alpha.id, LocalSource.ID), f.bravo, noop) },
-            dialog("MigrateDialog") { MigrateDialog(f.alpha.id, f.bravo, noop) },
-            dialog("MergedEntriesDialog") { MergedEntriesDialog(f.alpha.id, noop) },
-            dialog("ClearMangaDialog") { ClearMangaDialog(noop) { _, _ -> } },
-            dialog("FetchIntervalDialog") { FetchIntervalDialog(f.alpha, noop) },
-            dialog("CoverDialog") { CoverDialog(f.alpha, noop) },
-            dialog("DuplicateDialog") { DuplicateDialog(f.alpha, listOf(MangaWithChapterCount(f.bravo, 2)), noop, {}, {}, noop) },
-            dialog("CustomDownloadDialog") { CustomDownloadDialog({}, noop) },
-            dialog("EditMangaDialog") { EditMangaDialog(f.alpha, noop) },
-            dialog("ChapterSettingsDialog") {
+            dialog("dialog:manga.CategoryDialog", "CategoryDialog") { CategoryDialog(categories, {}, it) },
+            dialog("dialog:manga.ChangeCategoryDialog", "ChangeCategoryDialog") {
+                ChangeCategoryDialog(categories, setOf(categories.last().id), {}, it)
+            },
+            dialog("dialog:manga.PickDialog", "PickDialog merge") { PickDialog(SearchPurpose.Merge(f.alpha.id), f.bravo, it) },
+            dialog("dialog:manga.PickDialog", "PickDialog migrate") {
+                PickDialog(SearchPurpose.Migrate(f.alpha.id, LocalSource.ID), f.bravo, it)
+            },
+            dialog("dialog:manga.MigrateDialog", "MigrateDialog") { MigrateDialog(f.alpha.id, f.bravo, it) },
+            dialog("dialog:manga.MergedEntriesDialog", "MergedEntriesDialog") { MergedEntriesDialog(f.alpha.id, it) },
+            dialog("dialog:common.ConfirmDestructiveDialog", "ConfirmDestructiveDialog") {
+                zoukan.desktop.ui.common.ConfirmDestructiveDialog("Title", "Text", "Confirm", {}, it)
+            },
+            dialog("dialog:manga.ClearMangaDialog", "ClearMangaDialog") { ClearMangaDialog(it, localFolders = listOf("Alpha")) { _, _, _ -> } },
+            dialog("dialog:manga.FetchIntervalDialog", "FetchIntervalDialog") { FetchIntervalDialog(f.alpha, it) },
+            dialog("dialog:manga.CoverDialog", "CoverDialog") { CoverDialog(f.alpha, it) },
+            dialog("dialog:manga.DuplicateDialog", "DuplicateDialog") {
+                DuplicateDialog(f.alpha, listOf(MangaWithChapterCount(f.bravo, 2)), noop, {}, {}, it)
+            },
+            dialog("dialog:manga.CustomDownloadDialog", "CustomDownloadDialog") { CustomDownloadDialog({}, it) },
+            dialog("dialog:manga.EditMangaDialog", "EditMangaDialog") { EditMangaDialog(f.alpha, it) },
+            dialog("dialog:manga.ChapterSettingsDialog", "ChapterSettingsDialog") { dismiss ->
                 val model = rememberScreenModel { MangaScreenModel(f.alpha.id) }
                 val state by model.state.collectAsState()
-                ChapterSettingsDialog(state, model, noop)
+                ChapterSettingsDialog(state, model, dismiss)
             },
-            dialog("TrackingDialog") { TrackingDialog(rememberScreenModel { TrackingModel(f.alpha) }, noop) },
-            dialog("LibrarySettingsDialog") { LibrarySettingsDialog(rememberScreenModel { LibraryScreenModel() }, noop) },
-            dialog("SyncFavoritesNotesDialog") { SyncFavoritesNotesDialog(noop, noop) },
-            dialog("SyncFavoritesConfirmDialog") { SyncFavoritesConfirmDialog(noop) },
-            dialog("PageActionsDialog") { PageActionsDialog(PageActionsTarget(0), noop, {}, {}, {}, noop, noop) },
-            dialog("PageActionsDialog double page") { PageActionsDialog(PageActionsTarget(0, 1), noop, {}, {}, {}, noop, noop) },
-            dialog("ReaderChapterListDialog") { ReaderChapterListDialog(f.chapters, f.chapters.first().id, {}, {}, noop) },
-            dialog("ReaderSettingsDialog") {
-                ReaderSettingsDialog(rememberScreenModel { ReaderScreenModel(f.alpha.id, f.chapters.first().id) }, noop)
+            dialog("dialog:track.TrackingDialog", "TrackingDialog") { TrackingDialog(rememberScreenModel { TrackingModel(f.alpha) }, it) },
+            dialog("dialog:library.LibrarySettingsDialog", "LibrarySettingsDialog") {
+                LibrarySettingsDialog(rememberScreenModel { LibraryScreenModel() }, it)
             },
-            dialog("FeedOrderDialog") { FeedOrderDialog(rememberScreenModel { FeedScreenModel() }, emptyList(), noop) },
-            dialog("SourceCategoriesDialog") {
+            dialog("dialog:library.SyncFavoritesNotesDialog", "SyncFavoritesNotesDialog") { SyncFavoritesNotesDialog(it, noop) },
+            dialog("dialog:library.SyncFavoritesConfirmDialog", "SyncFavoritesConfirmDialog") { SyncFavoritesConfirmDialog(it) },
+            dialog("dialog:reader.PageActionsDialog", "PageActionsDialog") {
+                PageActionsDialog(PageActionsTarget(0), it, {}, {}, {}, noop, noop)
+            },
+            dialog("dialog:reader.PageActionsDialog", "PageActionsDialog double page") {
+                PageActionsDialog(PageActionsTarget(0, 1), it, {}, {}, {}, noop, noop)
+            },
+            dialog("dialog:reader.ReaderChapterListDialog", "ReaderChapterListDialog") {
+                ReaderChapterListDialog(f.chapters, f.chapters.first().id, {}, {}, it)
+            },
+            dialog("dialog:reader.ReaderSettingsDialog", "ReaderSettingsDialog") {
+                ReaderSettingsDialog(rememberScreenModel { ReaderScreenModel(f.alpha.id, f.chapters.first().id) }, it)
+            },
+            dialog("dialog:browse.FeedOrderDialog", "FeedOrderDialog") {
+                FeedOrderDialog(rememberScreenModel { FeedScreenModel() }, emptyList(), it)
+            },
+            dialog("dialog:browse.SourceCategoriesDialog", "SourceCategoriesDialog") { dismiss ->
                 val source = remember { Injekt.get<SourceManager>().get(LocalSource.ID) as CatalogueSource }
-                SourceCategoriesDialog(source, listOf("Smoke", "Other"), setOf("Smoke"), {}, noop, noop)
+                SourceCategoriesDialog(source, listOf("Smoke", "Other"), setOf("Smoke"), {}, dismiss, noop)
             },
-            dialog("OpenUrlDialog") { OpenUrlDialog(noop) },
-            dialog("UpdatedDialog") { UpdatedDialog(noop, noop) },
-            dialog("CategoriesIncludeExcludeDialog") {
-                CategoriesIncludeExcludeDialog("Smoke", "Smoke", categories, setOf(categories.first().id.toString()), emptySet(), noop) { _, _ -> }
+            dialog("dialog:browse.OpenUrlDialog", "OpenUrlDialog") { OpenUrlDialog(it) },
+            dialog("dialog:whatsnew.UpdatedDialog", "UpdatedDialog") { UpdatedDialog(it, noop) },
+            dialog("dialog:settings.CategoriesIncludeExcludeDialog", "CategoriesIncludeExcludeDialog") {
+                CategoriesIncludeExcludeDialog("Smoke", "Smoke", categories, setOf(categories.first().id.toString()), emptySet(), it) { _, _ -> }
             },
-            dialog("RecommendationSearchDialog") { RecommendationSearchDialog(noop, noop) },
+            dialog("dialog:recs.RecommendationSearchDialog", "RecommendationSearchDialog") { RecommendationSearchDialog(it, noop) },
         ) + listOf(
             SearchStatus.Initializing,
             SearchStatus.Processing(SManga.create().apply { title = "Alpha" }, 1, 3),
             SearchStatus.Error("Smoke"),
             SearchStatus.Cancelling,
         ).map { status ->
-            dialog("RecommendationSearchProgressDialog ${status.javaClass.simpleName}") { RecommendationSearchProgressDialog(status, noop, noop) }
+            dialog("dialog:recs.RecommendationSearchProgressDialog", "RecommendationSearchProgressDialog ${status.javaClass.simpleName}") {
+                RecommendationSearchProgressDialog(status, it, noop)
+            }
         } + listOf(
-            dialog("QuickLibraryToggleDialogs remove") {
+            dialog("dialog:browse.QuickLibraryToggleDialogs", "QuickLibraryToggleDialogs remove") { dismiss ->
                 val toggle = rememberQuickLibraryToggle()
                 remember { toggle.removing = f.alpha }
                 QuickLibraryToggleDialogs(toggle)
+                if (toggle.removing == null) SideEffect(dismiss)
             },
-            dialog("QuickLibraryToggleDialogs duplicates") {
+            dialog("dialog:browse.QuickLibraryToggleDialogs", "QuickLibraryToggleDialogs duplicates") { dismiss ->
                 val toggle = rememberQuickLibraryToggle()
                 remember { toggle.duplicates = f.bravo to listOf(MangaWithChapterCount(f.alpha, 2)) }
                 QuickLibraryToggleDialogs(toggle)
+                if (toggle.duplicates == null) SideEffect(dismiss)
             },
-            dialog("QuickLibraryToggleDialogs categories") {
+            dialog("dialog:browse.QuickLibraryToggleDialogs", "QuickLibraryToggleDialogs categories") { dismiss ->
                 val toggle = rememberQuickLibraryToggle()
                 remember { toggle.categories = f.bravo to categories }
                 QuickLibraryToggleDialogs(toggle)
+                if (toggle.categories == null) SideEffect(dismiss)
             },
-            dialog("QuickLibraryToggleDialogs migrate") {
+            dialog("dialog:browse.QuickLibraryToggleDialogs", "QuickLibraryToggleDialogs migrate") { dismiss ->
                 val toggle = rememberQuickLibraryToggle()
                 remember { toggle.migrating = f.bravo to f.alpha }
                 QuickLibraryToggleDialogs(toggle)
+                if (toggle.migrating == null) SideEffect(dismiss)
             },
             Check(
+                "state:ChoiceSetting",
                 "dialog ChoiceSetting",
                 { it.push(Host("choice") { ChoiceSetting("Smoke choice", 1, listOf(1 to "One", 2 to "Two")) {} }) },
                 drive = { onAllNodesWithText("Smoke choice").onFirst().performClick() },
             ),
             Check(
+                "state:MultiSelectPreference",
                 "dialog MultiSelectPreference",
                 {
                     it.push(
@@ -755,6 +1013,7 @@ class ScreenSmokeTest {
                 val shown = Injekt.get<DesktopPreferences>().shownOnboardingFlow()
                 val before = shown.get()
                 Check(
+                    "state:first-run",
                     "dialog first-run setup",
                     {
                         it.push(
@@ -769,6 +1028,7 @@ class ScreenSmokeTest {
                 )
             },
             Check(
+                "state:onboarding",
                 "onboarding reopened",
                 { Onboarding.reopen.value = true },
                 cleanup = { Onboarding.reopen.value = false },
@@ -779,6 +1039,7 @@ class ScreenSmokeTest {
     /** Dialogs private to a screen, opened through the UI. */
     private fun uiDialogs(): List<Check> = listOf(
         Check(
+            "state:app-lock",
             "app lock",
             {
                 val lock = Injekt.get<AppLock>()
@@ -797,7 +1058,9 @@ class ScreenSmokeTest {
                 }
             },
         ),
+        // An AlertDialog inline in SettingsTab, so its key is a hand-made state: one
         Check(
+            "state:download-password",
             "dialog download password",
             {
                 openSettingsCategory(SettingsCategory.Downloads)
@@ -806,6 +1069,7 @@ class ScreenSmokeTest {
             drive = { clickText("Set the download password") },
         ),
         Check(
+            "dialog:category.CategoryNameDialog",
             "dialog new category",
             { it.push(zoukan.desktop.ui.category.CategoryScreen) },
             drive = {
@@ -814,11 +1078,13 @@ class ScreenSmokeTest {
             },
         ),
         Check(
+            "dialog:library.AddTagDialog",
             "dialog new sort tag",
             { it.push(zoukan.desktop.ui.library.SortTagScreen) },
             drive = { clickDescription("Add a tag") },
         ),
         Check(
+            "dialog:library.LibrarySettingsDialog",
             "library filter sheet",
             { HomeScreen.selectTab(HomeTab.Library) },
             drive = {

@@ -57,13 +57,14 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
+import zoukan.desktop.manga.CustomCovers
 import zoukan.desktop.migration.MigrateManga
-import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.browse.GlobalSearchScreen
-import zoukan.desktop.ui.common.Images
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.i18n.desktop.DMR
 import java.io.Serializable
 
@@ -173,7 +174,7 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
     var busy by remember { mutableStateOf(false) }
     // ZOUKAN -->
     // Android's MigrateMangaDialog: the Custom cover flag only applies when the entry has a custom cover
-    val hasCustomCover = remember(mangaId) { Images.customCoverFile(mangaId).isFile }
+    val hasCustomCover = remember(mangaId) { CustomCovers.file(mangaId).isFile }
     // ZOUKAN <--
     val run = { replace: Boolean ->
         busy = true
@@ -211,11 +212,11 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
                 Text(localized(DMR.strings.take_along), style = MaterialTheme.typography.bodyMedium)
                 migrationDialogFlags(hasCustomCover).forEach { flag ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { flags = if (flag in flags) flags - flag else flags + flag },
+                        Modifier.fillMaxWidth().checkRow(flag in flags) { flags = if (it) flags + flag else flags - flag },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(flag in flags, onCheckedChange = { flags = if (it) flags + flag else flags - flag })
-                        Text(MigrateManga.label(flag))
+                        Checkbox(flag in flags, onCheckedChange = null)
+                        Text(localized(MigrateManga.label(flag)))
                     }
                 }
                 if (busy) {

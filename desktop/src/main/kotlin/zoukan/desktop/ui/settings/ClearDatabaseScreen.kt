@@ -45,12 +45,12 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.i18n.desktop.DMR
 
@@ -127,7 +127,7 @@ object ClearDatabaseScreen : Screen {
                     TextButton(onClick = {
                         model.confirm(false)
                         model.delete(keepRead)
-                    }) { Text("OK") }
+                    }) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = { model.confirm(false) }) { Text(localized(MR.strings.action_cancel)) } },
             )

@@ -6,6 +6,8 @@ import io.kotest.matchers.shouldBe
 import okio.Buffer
 import okio.ForwardingSource
 import okio.Source
+import okio.buffer
+import okio.gzip
 import org.junit.jupiter.api.Test
 import java.io.IOException
 
@@ -72,5 +74,39 @@ class BackupCodecTest {
             override fun read(sink: Buffer, byteCount: Long): Long = throw readError
         }
         shouldThrow<IOException> { BackupCodec.decode(failingAtOnce) } shouldBe readError
+    }
+
+    /** Valid protobuf of an unknown field (number 99) repeated: it decodes as an empty backup, so only the cap can refuse it. */
+    private fun padding(size: Int) = ByteArray(size) { byteArrayOf(0x98.toByte(), 0x06, 0x01)[it % 3] }
+
+    @Test
+    fun `a gzip stream that inflates past the cap is refused as invalid`() {
+        val bomb = Buffer()
+        (bomb as okio.Sink).gzip().buffer().use { it.write(padding(64 * 1023)) }
+        shouldThrow<BackupCodec.InvalidBackupException> { BackupCodec.decode(bomb, maxBytes = 1024) }
+            .error shouldBe BackupCodec.Error.UNKNOWN
+    }
+
+    @Test
+    fun `a plain stream past the cap is refused as invalid`() {
+        val plain = Buffer().write(padding(4095))
+        shouldThrow<BackupCodec.InvalidBackupException> { BackupCodec.decode(plain, maxBytes = 1024) }
+            .error shouldBe BackupCodec.Error.UNKNOWN
+    }
+
+    @Test
+    fun `a sync reply past the cap is refused, one at the cap is read`() {
+        shouldThrow<BackupCodec.InvalidBackupException> {
+            BackupCodec.readBounded(ByteArray(1025).inputStream(), maxBytes = 1024)
+        }.error shouldBe BackupCodec.Error.UNKNOWN
+        BackupCodec.readBounded(ByteArray(1024) { it.toByte() }.inputStream(), maxBytes = 1024) shouldBe
+            ByteArray(1024) { it.toByte() }
+    }
+
+    @Test
+    fun `a backup under the cap still decodes`() {
+        val backup = SyntheticBackup.create()
+        val gzipped = Buffer().also { BackupCodec.write(backup, it) }
+        BackupCodec.decode(gzipped).backupManga.size shouldBe backup.backupManga.size
     }
 }

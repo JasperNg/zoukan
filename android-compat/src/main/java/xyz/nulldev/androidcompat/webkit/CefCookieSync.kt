@@ -3,6 +3,7 @@ package xyz.nulldev.androidcompat.webkit
 
 import android.webkit.CookieManager
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.cef.CefApp
 import org.cef.network.CefCookie
 import org.cef.network.CefCookieManager
 import java.net.CookieHandler
@@ -43,10 +44,12 @@ interface CookieExpirySource {
 /**
  * Calls [onDone] once a cookie visit ends: after its last cookie ([visited] with the last count), or
  * when no cookie came within [quietMillis] (Chromium does not call the visitor when there are none),
- * or at the latest after [maxMillis].
+ * or at the latest after [maxMillis]. [onDone] is told whether the visit was complete: only one that
+ * reached its last cookie is. One that ended by a timer may have missed cookies, or Chromium may
+ * have had none, so nothing may be concluded from the cookies it returned.
  */
 class CookieVisitEnd(
-    private val onDone: () -> Unit,
+    private val onDone: (complete: Boolean) -> Unit,
     scheduler: ScheduledExecutorService,
     quietMillis: Long,
     maxMillis: Long,
@@ -68,15 +71,112 @@ class CookieVisitEnd(
         total: Int,
     ) {
         visited = true
-        if (count + 1 >= total) finish()
+        if (count + 1 >= total) finish(complete = true)
     }
 
     /** Ends the visit now; only the first call runs [onDone]. */
-    fun finish() {
+    fun finish(complete: Boolean = false) {
         if (!done.compareAndSet(false, true)) return
         runCatching { timers.forEach { it.cancel(false) } }
-        runCatching { onDone() }.onFailure { logger.warn(it) { "Finishing a cookie copy failed" } }
+        runCatching { onDone(complete) }.onFailure { logger.warn(it) { "Finishing a cookie copy failed" } }
     }
+}
+
+/** A cookie as both stores identify it. */
+data class SyncedCookie(
+    val name: String,
+    val domain: String,
+    val path: String,
+    val value: String,
+)
+
+/**
+ * The app's cookies for a page to delete after a complete visit: copied to Chromium, and gone from
+ * it. A cookie the app got after the copy was never in Chromium and stays; one Chromium has with
+ * another value was changed there, and copying from Chromium updates it. Only cookies sent to
+ * [pagePath] count, as Chromium lists only those for the page.
+ */
+fun staleAppCookies(
+    appCookies: List<SyncedCookie>,
+    copiedToCef: Set<SyncedCookie>,
+    inChromium: List<SyncedCookie>,
+    pagePath: String,
+): List<SyncedCookie> {
+    fun SyncedCookie.key() = Triple(name, domain.trimStart('.').lowercase(), path)
+
+    fun SyncedCookie.exact() = copy(domain = domain.trimStart('.').lowercase())
+    val copied = copiedToCef.mapTo(HashSet()) { it.exact() }
+    val present = inChromium.mapTo(HashSet()) { it.key() }
+    // The app's store matches a page by domain only; Chromium lists only the cookies whose path
+    // matches the page, so a cookie for another path is not missing from it
+    return appCookies.filter { pathMatches(pagePath, it.path) && it.exact() in copied && it.key() !in present }
+}
+
+/** Whether a cookie for [cookiePath] is sent to [pagePath] (RFC 6265 5.1.4, as Chromium does). */
+private fun pathMatches(pagePath: String, cookiePath: String): Boolean {
+    val page = pagePath.ifEmpty { "/" }
+    if (page == cookiePath) return true
+    return page.startsWith(cookiePath) && (cookiePath.endsWith('/') || page[cookiePath.length] == '/')
+}
+
+/**
+ * A cookie the app deleted, to delete from Chromium: named [name] for [url]'s host (every cookie
+ * when both are empty), limited to [domain] and [path] when the expired Set-Cookie had them.
+ */
+data class CefCookieDeletion(
+    val url: String,
+    val name: String,
+    val domain: String? = null,
+    val path: String? = null,
+) {
+    /** Only cookies with the given Domain and Path go, not every cookie of that name. */
+    val isExact get() = domain != null || path != null
+
+    /** Whether Chromium's cookie ([cookieDomain] has a leading dot for a domain cookie) goes. */
+    fun matches(
+        host: String,
+        cookieName: String,
+        cookieDomain: String?,
+        cookiePath: String?,
+    ): Boolean {
+        if (!cookieName.equals(name, ignoreCase = true)) return false
+        val bare = cookieDomain.orEmpty().trimStart('.')
+        val domainOk =
+            if (domain != null) {
+                bare.equals(domain.trimStart('.'), ignoreCase = true)
+            } else {
+                // The cookies the URL would be sent, as the app's store matches them
+                host.equals(bare, ignoreCase = true) || host.endsWith(".$bare", ignoreCase = true)
+            }
+        return domainOk && (path == null || (cookiePath ?: "/") == path)
+    }
+}
+
+/**
+ * Deletions made while Chromium was not running. A deletion of every cookie replaces those before
+ * it.
+ */
+class PendingCefCookieDeletions {
+    private val deletions = mutableListOf<CefCookieDeletion>()
+
+    /**
+     * Keeps [deletion] for later unless [now] (checked under the same lock as [drain]) says to make
+     * it at once. Returns true when it should be made now.
+     */
+    @Synchronized
+    fun addUnless(
+        deletion: CefCookieDeletion,
+        now: () -> Boolean,
+    ): Boolean {
+        if (now()) return true
+        if (deletion.url.isEmpty() && deletion.name.isEmpty() && !deletion.isExact) deletions.clear()
+        deletions += deletion
+        return false
+    }
+
+    /** Every waiting deletion, in order; none wait after. */
+    @Synchronized
+    fun drain(): List<CefCookieDeletion> = deletions.toList().also { deletions.clear() }
 }
 
 /**
@@ -92,7 +192,10 @@ object CefCookieSync {
     fun copyToCef() {
         val store = (CookieHandler.getDefault() as? java.net.CookieManager)?.cookieStore ?: return
         val cef = CefCookieManager.getGlobalManager() ?: return
+        // Before the app's cookies: those set again since are copied back after their deletion
+        applyPendingDeletions(cef)
         val expiries = store as? CookieExpirySource
+        val copied = HashSet<SyncedCookie>()
         store.cookiesByUri().forEach { (uri, cookie) ->
             runCatching {
                 // A cookie without a Domain attribute is host-only: Chromium keeps it so
@@ -100,8 +203,36 @@ object CefCookieSync {
                 val host = (cookie.domain ?: uri.host).trimStart('.')
                 val expiresAt = expiresAt(cookie, expiries?.expiresAt(cookie), System.currentTimeMillis())
                 cef.setCookie("https://$host", cookie.toCefCookie(cookie.domain.orEmpty(), expiresAt))
+                copied += cookie.toSynced(uri)
             }.onFailure { logger.warn(it) { "Copying cookie ${cookie.name} to Chromium failed" } }
         }
+        synchronized(copiedToCef) {
+            copiedToCef.clear()
+            copiedToCef.addAll(copied)
+        }
+    }
+
+    /** What the last [copyToCef] put in Chromium. */
+    private val copiedToCef = HashSet<SyncedCookie>()
+
+    private fun HttpCookie.toSynced(uri: URI) =
+        SyncedCookie(name, (domain ?: uri.host).orEmpty().trimStart('.'), path ?: "/", value)
+
+    /**
+     * After a complete visit of [url], removes the app's cookies for it that were copied to Chromium
+     * and that Chromium no longer has: the user signed out there. Logs the count only.
+     */
+    private fun removeStaleAppCookies(
+        url: String,
+        inChromium: List<SyncedCookie>,
+    ) {
+        val store = (CookieHandler.getDefault() as? java.net.CookieManager)?.cookieStore ?: return
+        val uri = runCatching { URI(url) }.getOrNull() ?: return
+        val app = store.get(uri).associateBy { it.toSynced(uri) }
+        val copied = synchronized(copiedToCef) { copiedToCef.toSet() }
+        val stale = staleAppCookies(app.keys.toList(), copied, inChromium, uri.rawPath.orEmpty())
+        stale.forEach { app[it]?.let { cookie -> store.remove(uri, cookie) } }
+        if (stale.isNotEmpty()) logger.info { "Removed ${stale.size} cookies the built-in browser no longer has" }
     }
 
     /**
@@ -115,15 +246,31 @@ object CefCookieSync {
         url: String,
         onDone: () -> Unit = {},
     ) {
-        val end = CookieVisitEnd(onDone, scheduler, VISIT_QUIET_MILLIS, VISIT_MAX_MILLIS)
+        val seen = java.util.Collections.synchronizedList(mutableListOf<SyncedCookie>())
+        val end =
+            CookieVisitEnd(
+                { complete ->
+                    // Only a visit that reached its last cookie shows what Chromium has
+                    if (complete) {
+                        runCatching { removeStaleAppCookies(url, seen.toList()) }
+                            .onFailure { logger.warn(it) { "Removing cookies Chromium dropped failed" } }
+                    }
+                    onDone()
+                },
+                scheduler,
+                VISIT_QUIET_MILLIS,
+                VISIT_MAX_MILLIS,
+            )
         try {
             if (!url.startsWith("http")) return end.finish()
             val cef = CefCookieManager.getGlobalManager() ?: return end.finish()
+            applyPendingDeletions(cef)
             val manager = CookieManager.getInstance()
             val started =
                 cef.visitUrlCookies(url, true) { cookie, count, total, _ ->
                     runCatching { manager.setCookie(url, cookie.toSetCookieHeader()) }
                         .onFailure { logger.warn(it) { "Copying cookie ${cookie.name} from Chromium failed" } }
+                    seen += SyncedCookie(cookie.name, cookie.domain.orEmpty(), cookie.path ?: "/", cookie.value)
                     end.visited(count, total)
                     true
                 }
@@ -131,6 +278,61 @@ object CefCookieSync {
         } catch (e: Exception) {
             logger.warn(e) { "Copying cookies from Chromium failed" }
             end.finish()
+        }
+    }
+
+    /**
+     * Deletes Chromium's cookies named [name] for [url]'s host (every cookie when both are empty),
+     * so a cookie the app deleted is not copied back after the next page load. With a [domain] or
+     * [path] (the expired Set-Cookie's attributes) only the cookies with that Domain and Path go.
+     *
+     * Getting Chromium's cookie manager before it runs would start it, so until then the deletion
+     * waits in [pending] and is made when Chromium starts ([copyToCef]): Chromium keeps its
+     * cookies on disk, and would otherwise hand the deleted cookie back.
+     */
+    fun deleteFromCef(
+        url: String,
+        name: String,
+        domain: String? = null,
+        path: String? = null,
+    ) {
+        val deletion = CefCookieDeletion(url, name, domain, path)
+        runCatching {
+            if (!pending.addUnless(deletion) { CefApp.getState() == CefApp.CefAppState.INITIALIZED }) return
+            CefCookieManager.getGlobalManager()?.let { delete(it, deletion) }
+        }.onFailure { logger.warn(it) { "Deleting cookie $name from Chromium failed" } }
+    }
+
+    /** Deletions made before Chromium ran, made when it starts. */
+    private val pending = PendingCefCookieDeletions()
+
+    /**
+     * Called by an extension's WebView with its page URL and user agent once Chromium's cookies for
+     * it are copied to the app; the app uses it to remember which user agent a clearance was got with.
+     */
+    @Volatile
+    var onCopiedFromCef: ((url: String, userAgent: String) -> Unit)? = null
+
+    private fun applyPendingDeletions(cef: CefCookieManager) {
+        pending.drain().forEach { deletion ->
+            runCatching { delete(cef, deletion) }
+                .onFailure { logger.warn(it) { "Deleting cookie ${deletion.name} from Chromium failed" } }
+        }
+    }
+
+    private fun delete(
+        cef: CefCookieManager,
+        deletion: CefCookieDeletion,
+    ) {
+        if (!deletion.isExact) {
+            cef.deleteCookies(deletion.url, deletion.name)
+            return
+        }
+        // deleteCookies matches a host and name only; the visitor can delete one cookie
+        val host = runCatching { URI(deletion.url).host }.getOrNull() ?: return
+        cef.visitAllCookies { cookie, _, _, delete ->
+            if (deletion.matches(host, cookie.name, cookie.domain, cookie.path)) delete.set(true)
+            true
         }
     }
 

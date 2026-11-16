@@ -30,15 +30,17 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackerLogin
-import zoukan.desktop.ui.AppScope
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 
 /** Settings > Tracking: the tracking options and the trackers' sign-ins, as on Android. */
@@ -203,7 +205,8 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
-                                error = e.message ?: localized(DMR.strings.could_not_sign_in)
+                                logcat(LogPriority.WARN, e) { "Signing in failed" }
+                                error = localized(DMR.strings.could_not_sign_in)
                             }
                             busy = false
                         }
@@ -241,7 +244,7 @@ private fun TrackerSetting(tracker: Tracker) {
                         // In the app's scope, so leaving Settings doesn't stop the sign-in partway
                         val pasted = address
                         val attempt = AppScope.async {
-                            login.handleRedirect(pasted).also { ok -> if (ok) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
+                            login.handleRedirect(pasted, tracker).also { ok -> if (ok) Toasts.show(localized(DMR.strings.signed_in_to, tracker.name)) }
                         }
                         scope.launch {
                             try {
@@ -264,7 +267,8 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
-                                error = e.message
+                                logcat(LogPriority.WARN, e) { "Signing in failed" }
+                                error = localized(DMR.strings.could_not_sign_in)
                             }
                             busy = false
                         }

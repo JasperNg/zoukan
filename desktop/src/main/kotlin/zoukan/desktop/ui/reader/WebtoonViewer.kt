@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,8 +18,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -38,12 +42,25 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import zoukan.desktop.ui.common.ReadingModes
-import zoukan.desktop.ui.common.WebtoonScaleTypes
+import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.WebtoonScaleTypes
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.i18n.desktop.DMR
+
+/**
+ * A strip page that is queued or loading. It keeps the shape the page decoded to before (also after
+ * its bitmap was released), so scrolling back up does not shift the strip when it decodes again; the
+ * raw image shape is kept even where a split or rotated wide page shows another one.
+ */
+@Composable
+internal fun WebtoonPagePlaceholder(page: ReaderPage, number: Int, color: Color) {
+    PageLoading(number, color, Modifier.fillMaxWidth().aspectRatio(page.placeholderAspect).testTag("page-placeholder"))
+}
 
 /**
  * Webtoon and continuous vertical modes: every page in one scrolling strip. Webtoon has no gaps
@@ -52,7 +69,7 @@ import zoukan.desktop.ui.common.collectAsState
 @Composable
 fun WebtoonViewer(
     model: ReaderScreenModel,
-    state: ReaderScreenModel.State,
+    content: ViewerContent,
     actions: ReaderActions,
     sidePadding: Int,
     background: Color,
@@ -61,13 +78,21 @@ fun WebtoonViewer(
     tapZones: TapZonesOverlayState? = null,
     // ZOUKAN <--
 ) {
-    val pages = state.pages
-    val hasPrevious = state.previousChapter != null
+    val pages = content.pages
+    val hasPrevious = content.previousChapter != null
     // Item 0 is the previous chapter transition, then the pages, then the next chapter transition
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = state.startPage + 1)
+    // ZOUKAN -->
+    // With "Always show chapter transition" off, the one between back-to-back chapters is not shown,
+    // so the strip ends with a small next chapter button (an empty item before the first page), and
+    // the indices stay; keys, taps and auto scroll go on to that chapter directly
+    val alwaysTransition by model.preferences.alwaysShowChapterTransition().collectAsState()
+    val showPrevious = ChapterTransitions.shown(alwaysTransition, content.chapter, content.previousChapter, next = false, hasPages = pages.isNotEmpty())
+    val showNext = ChapterTransitions.shown(alwaysTransition, content.chapter, content.nextChapter, next = true, hasPages = pages.isNotEmpty())
+    // ZOUKAN <--
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = content.startPage + 1)
     val scope = rememberCoroutineScope()
     var zoom by remember { mutableFloatStateOf(1f) }
-    val gap = if (state.readingMode == ReadingModes.CONTINUOUS_VERTICAL) 16.dp else 0.dp
+    val gap = if (content.readingMode == ReadingModes.CONTINUOUS_VERTICAL) 16.dp else 0.dp
     val hScroll = rememberScrollState()
     // ZOUKAN -->
     val prefs = model.preferences
@@ -86,7 +111,8 @@ fun WebtoonViewer(
     // KMK's "Smart scale on wide screen", for Long strip with gaps only when its own setting is on
     val scaleType by prefs.webtoonScaleType().collectAsState()
     val gapScale by prefs.longStripGapSmartScale().collectAsState()
-    val smartScaleOn = state.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
+    val smartScaleOn = content.readingMode != ReadingModes.CONTINUOUS_VERTICAL || gapScale
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
     val minZoom = if (noZoomOut) 1f else 0.3f
     LaunchedEffect(minZoom) { if (zoom < minZoom) zoom = minZoom }
     // ZOUKAN <--
@@ -95,6 +121,9 @@ fun WebtoonViewer(
         val viewportHeight = constraints.maxHeight.toFloat()
         val viewportWidth = maxWidth
         // ZOUKAN -->
+        SideEffect { model.onViewport(constraints.maxWidth) }
+        // ZOUKAN <--
+        // ZOUKAN -->
         val smartScale = if (smartScaleOn) WebtoonScaleTypes.scale(scaleType, constraints.maxWidth.toFloat(), viewportHeight) else 1f
         val stripWidth = viewportWidth * (1f - 2f * sidePadding.coerceIn(0, 25) / 100f) * zoom * smartScale
         // ZOUKAN <--
@@ -102,33 +131,36 @@ fun WebtoonViewer(
         // ZOUKAN -->
         // Android's "Animate page transitions" (webtoon)
         fun scroll(by: Float) {
-            scope.launch { if (transitions) listState.animateScrollBy(by, tween(200)) else listState.scrollBy(by) }
+            scope.launch { if (transitions && !reduceMotion) listState.animateScrollBy(by, tween(200)) else listState.scrollBy(by) }
         }
-        actions.down = { scroll(viewportHeight * 0.8f) }
-        actions.up = { scroll(-viewportHeight * 0.8f) }
-        // SY's smooth auto scroll: a window's height over each interval
-        actions.smoothScroll = { millis ->
-            scope.launch {
-                if (listState.canScrollForward) {
-                    listState.animateScrollBy(viewportHeight, tween(millis.toInt(), easing = androidx.compose.animation.core.LinearEasing))
-                } else {
-                    model.nextChapter()
+        // Set after every successful composition, not during it
+        SideEffect {
+            actions.down = { scroll(viewportHeight * 0.8f) }
+            actions.up = { scroll(-viewportHeight * 0.8f) }
+            // SY's smooth auto scroll: a window's height over each interval
+            actions.smoothScroll = { millis ->
+                scope.launch {
+                    if (listState.canScrollForward) {
+                        listState.animateScrollBy(viewportHeight, tween(millis.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+                    } else {
+                        model.nextChapter()
+                    }
                 }
             }
+            actions.next = {
+                if (listState.canScrollForward) actions.down() else model.nextChapter()
+            }
+            actions.previous = {
+                if (listState.canScrollBackward) actions.up() else model.previousChapter(atEnd = true)
+            }
+            actions.first = { scope.launch { listState.scrollToItem(1) } }
+            actions.last = { scope.launch { listState.scrollToItem(pages.size) } }
+            actions.goTo = { index -> scope.launch { listState.scrollToItem(index + 1) } }
+            actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
+            actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
+            actions.zoomReset = { zoom = 1f }
         }
         // ZOUKAN <--
-        actions.next = {
-            if (listState.canScrollForward) actions.down() else model.nextChapter()
-        }
-        actions.previous = {
-            if (listState.canScrollBackward) actions.up() else model.previousChapter(atEnd = true)
-        }
-        actions.first = { scope.launch { listState.scrollToItem(1) } }
-        actions.last = { scope.launch { listState.scrollToItem(pages.size) } }
-        actions.goTo = { index -> scope.launch { listState.scrollToItem(index + 1) } }
-        actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
-        actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
-        actions.zoomReset = { zoom = 1f }
 
         // ZOUKAN -->
         var secondaryAt by remember { mutableStateOf(0L) }
@@ -221,14 +253,18 @@ fun WebtoonViewer(
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
                     item(key = "previous") {
-                        ChapterTransition(
-                            state.chapter,
-                            state.previousChapter,
-                            next = false,
-                            color = foreground,
-                            onGo = { model.previousChapter(atEnd = true) },
-                            modifier = Modifier.height(if (hasPrevious) 320.dp else 160.dp),
-                        )
+                        if (showPrevious) {
+                            ChapterTransition(
+                                content.chapter,
+                                content.previousChapter,
+                                next = false,
+                                color = foreground,
+                                onGo = { model.previousChapter(atEnd = true) },
+                                modifier = Modifier.height(if (hasPrevious) 320.dp else 160.dp),
+                            )
+                        } else {
+                            Spacer(Modifier.height(1.dp))
+                        }
                     }
                     items(pages.size, key = { "page-$it" }) { index ->
                         val page = pages[index]
@@ -262,30 +298,41 @@ fun WebtoonViewer(
                                 s.message,
                                 foreground,
                                 onRetry = { model.loadPage(index, retry = true) },
-                                modifier = Modifier.fillMaxWidth().aspectRatio(0.7f),
+                                modifier = Modifier.fillMaxWidth().aspectRatio(page.placeholderAspect),
                             )
                             else -> {
                                 LaunchedEffect(page) { model.loadPage(index) }
-                                PageLoading(index + 1, foreground, Modifier.fillMaxWidth().aspectRatio(0.7f))
+                                WebtoonPagePlaceholder(page, index + 1, foreground)
                             }
                         }
                     }
                     item(key = "next") {
-                        ChapterTransition(
-                            state.chapter,
-                            state.nextChapter,
-                            next = true,
-                            color = foreground,
-                            onGo = { model.nextChapter() },
-                            modifier = Modifier.fillMaxWidth().height(with(density) { (viewportHeight * 0.6f).toDp() }),
-                        )
+                        if (showNext) {
+                            ChapterTransition(
+                                content.chapter,
+                                content.nextChapter,
+                                next = true,
+                                color = foreground,
+                                onGo = { model.nextChapter() },
+                                modifier = Modifier.fillMaxWidth().height(with(density) { (viewportHeight * 0.6f).toDp() }),
+                            )
+                        } else if (content.nextChapter != null) {
+                            // A wheel or trackpad scroll stops at the strip's end: keep a way on there
+                            Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
+                                FilledTonalButton(onClick = { model.nextChapter() }) {
+                                    Text(localized(DMR.strings.next_chapter_button))
+                                }
+                            }
+                        } else {
+                            Spacer(Modifier.height(1.dp))
+                        }
                     }
                 }
             }
         }
         // ZOUKAN -->
         if (tapZones != null) {
-            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, verticalViewer = true, ReaderNavigation.Invert.of(navInvert), smallerZones))
+            TapZonesOverlay(tapZones, ReaderNavigation.zones(navLayout, verticalViewer = true, ReaderNavigation.Invert.of(navInvert), smallerZones), vertical = true)
         }
         // ZOUKAN <--
     }

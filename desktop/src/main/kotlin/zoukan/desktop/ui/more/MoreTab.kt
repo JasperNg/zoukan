@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,15 +53,16 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ExternalLinks
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.ui.category.CategoryScreen
-import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.LazyColumn
-import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel
@@ -192,7 +194,7 @@ private object HistoryScreen : Screen {
 /** The app icon and name at the top of More, as Android's LogoHeader. */
 @Composable
 private fun LogoHeader() {
-    val icon = remember { AppIcon.painter(128) }
+    val icon = remember { AppIcon.painter() }
     Column(
         Modifier.fillMaxWidth().padding(vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -211,8 +213,8 @@ private fun MoreRow(icon: ImageVector, title: String, subtitle: String? = null, 
 
 @Composable
 private fun MoreSwitch(icon: ImageVector, title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    MoreItem(icon, title, subtitle, Modifier.clickable { onCheckedChange(!checked) }) {
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    MoreItem(icon, title, subtitle, Modifier.checkRow(checked, role = Role.Switch, onChange = onCheckedChange)) {
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

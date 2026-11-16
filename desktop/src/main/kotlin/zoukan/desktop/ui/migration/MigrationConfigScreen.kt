@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.migration
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +59,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.languageName
 import zoukan.desktop.ui.common.DropdownMenu
@@ -69,6 +69,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.settings.SwitchPreference
 import zoukan.desktop.ui.settings.SwitchSetting
@@ -96,7 +97,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                 localized(SYMR.strings.select_sources),
                 subtitle = localized(
                     DMR.strings.migration_config_subtitle,
-                    if (mangaIds.size == 1) localized(DMR.strings.n_1_entry) else localized(DMR.strings.entries, mangaIds.size),
+                    localizedPlural(DMR.plurals.entries, mangaIds.size, mangaIds.size),
                     state.sources.count { it.selected }.let { if (it == 1) localized(DMR.strings.n_1_source) else localized(DMR.strings.sources, it) },
                 ),
             ) {
@@ -177,10 +178,10 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
         trailing: @Composable () -> Unit,
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable { model.toggle(source.id) }.padding(horizontal = 16.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().checkRow(source.selected) { model.toggle(source.id) }.padding(horizontal = 16.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(source.selected, onCheckedChange = { model.toggle(source.id) })
+            Checkbox(source.selected, onCheckedChange = null)
             Column(Modifier.weight(1f)) {
                 Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
@@ -210,7 +211,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                         FilterChip(
                             selected = flag in flags,
                             onClick = { flagsPreference.set(if (flag in flags) flags - flag else flags + flag) },
-                            label = { Text(MigrateManga.label(flag)) },
+                            label = { Text(localized(MigrateManga.label(flag))) },
                         )
                     }
                 }

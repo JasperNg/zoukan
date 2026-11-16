@@ -2,6 +2,7 @@ package zoukan.desktop.ui.reader
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -12,7 +13,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import org.jetbrains.skia.ColorFilter
 import org.jetbrains.skia.ColorMatrix
 import org.jetbrains.skia.ImageFilter
-import zoukan.desktop.ui.common.DesktopPreferences
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.common.collectAsState
 
 /** The reader's color settings, as Android's reader Filter tab: brightness, a color filter, grayscale and inverted colors. */
@@ -53,7 +54,14 @@ data class ReaderFilter(
             else -> BlendMode.SrcOver
         }
 
-        private fun matrix(filter: ReaderFilter): ColorMatrix? {
+        /** Counts the native colour filters built; tests read it to see how often they are rebuilt. */
+        internal var effectsBuilt = 0
+
+        /** The compositing the layer needs: only the blend overlay and the darkening rect draw over the content. */
+        internal fun compositingFor(filter: ReaderFilter): CompositingStrategy =
+            if (filter.color != null || (filter.brightness ?: 0) < 0) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+
+        internal fun matrix(filter: ReaderFilter): ColorMatrix? {
             var m: FloatArray? = null
             fun then(next: FloatArray) {
                 m = m?.let { concat(next, it) } ?: next
@@ -109,9 +117,13 @@ data class ReaderFilter(
         }
 
         /** Applies [filter] to everything the reader draws. */
+        @Composable
         fun Modifier.readerFilter(filter: ReaderFilter): Modifier {
+            // Built once per distinct setting, not on every recomposition
+            val effect = remember(filter) {
+                matrix(filter)?.let { ImageFilter.makeColorFilter(ColorFilter.makeMatrix(it), null, null).asComposeRenderEffect().also { effectsBuilt++ } }
+            }
             if (!filter.isActive) return this
-            val matrix = matrix(filter)
             // The overlays go over the filtered pages, as Android lays its filter views over the reader
             return this
                 .drawWithContent {
@@ -120,8 +132,8 @@ data class ReaderFilter(
                     filter.brightness?.takeIf { it < 0 }?.let { drawRect(Color.Black.copy(alpha = -it / 100f)) }
                 }
                 .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
-                    renderEffect = matrix?.let { ImageFilter.makeColorFilter(ColorFilter.makeMatrix(it), null, null).asComposeRenderEffect() }
+                    compositingStrategy = compositingFor(filter)
+                    renderEffect = effect
                 }
         }
     }

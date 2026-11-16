@@ -2,13 +2,16 @@ package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
@@ -21,9 +24,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
@@ -52,16 +60,22 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.BackupValidator
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.ReserveSnackbarSpace
 import zoukan.desktop.ui.common.ScreenHeader
-import zoukan.desktop.ui.common.Toasts
 import zoukan.i18n.desktop.DMR
 import java.awt.FileDialog
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Android's CreateBackupScreen: what goes in the backup (library entries and what belongs to them,
@@ -157,7 +171,7 @@ class CreateBackupScreenModel : StateScreenModel<CreateBackupScreenModel.State>(
  * Android's RestoreBackupScreen for the backup at [path]: what to restore, and the sources and
  * trackers the backup uses that are not installed or signed in.
  */
-class RestoreBackupScreen(private val path: String) : Screen {
+data class RestoreBackupScreen(private val path: String) : Screen {
 
     // Closed, so no key starts with another (see ScreenKeysTest)
     override val key: ScreenKey = "restore-backup($path)"
@@ -165,6 +179,13 @@ class RestoreBackupScreen(private val path: String) : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        // Read only: the file's name and modification time
+        val file = remember(path) { File(path) }
+        val modified = remember(file) {
+            DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+                .withZone(ZoneId.systemDefault())
+                .format(Instant.ofEpochMilli(file.lastModified()))
+        }
         val model = rememberScreenModel { RestoreBackupScreenModel(File(path)) }
         val state by model.state.collectAsState()
         val restoreStatus by backupStatusFlow.collectAsState()
@@ -182,6 +203,15 @@ class RestoreBackupScreen(private val path: String) : Screen {
                     if (state.restoreStarted) navigator.pop() else model.startRestore()
                 },
             ) {
+                // Which backup this is, so a wrong pick shows before Restore is pressed
+                item {
+                    SectionCard {
+                        Text(
+                            text = localized(DMR.strings.backup_file_and_date, file.name, modified),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
                 if (state.restoreStarted) {
                     item {
                         SectionCard {
@@ -375,6 +405,8 @@ class RestoreBackupScreenModel(
                 val backup = DesktopBackups(ZoukanRuntime.dirs.android).read(file)
                 BackupValidator().validate(backup)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             setError(
                 error = InvalidRestore(file, e.message.toString()),
@@ -446,23 +478,32 @@ private fun ColumnWithAction(
     actionTag: String,
     content: LazyListScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            content = content,
-        )
+    // Kept to the width the settings pages use, centred in wide windows
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = zoukan.desktop.ui.common.Spacing.SettingsPageMaxWidth).fillMaxHeight().testTag("restore-backup-content")) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                content = content,
+            )
 
-        HorizontalDivider()
+            // The app's messages show above this block, not over the button
+            val density = LocalDensity.current
+            var actionHeight by remember { mutableStateOf(0.dp) }
+            ReserveSnackbarSpace(actionHeight)
+            Column(Modifier.fillMaxWidth().onSizeChanged { actionHeight = with(density) { it.height.toDp() } }) {
+                HorizontalDivider()
 
-        Button(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
-                .testTag(actionTag),
-            enabled = actionEnabled,
-            onClick = onClickAction,
-        ) {
-            Text(text = actionLabel)
+                Button(
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .testTag(actionTag),
+                    enabled = actionEnabled,
+                    onClick = onClickAction,
+                ) {
+                    Text(text = actionLabel)
+                }
+            }
         }
     }
 }

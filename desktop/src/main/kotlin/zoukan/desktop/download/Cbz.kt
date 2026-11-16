@@ -32,10 +32,11 @@ class CbzPassword(
     }
 
     /**
-     * The password for a new download, or null when downloads are not encrypted: the setting is
-     * off, or no password is set. When the setting is on and the secret store fails (a locked
-     * Keychain, a cancelled prompt, a Credential Manager error), it throws
-     * [CbzPasswordUnavailableException], so the download fails instead of being saved unencrypted.
+     * The password for a new download, or null when the setting is off. When the setting is on,
+     * the download fails instead of being saved unencrypted: it throws
+     * [CbzPasswordUnavailableException] when the secret store fails (a locked Keychain, a
+     * cancelled prompt, a Credential Manager error), and [CbzPasswordMissingException] when no
+     * password is set.
      */
     private fun downloadPassword(): CharArray? {
         if (!preferences.passwordProtectDownloads().get()) return null
@@ -44,12 +45,12 @@ class CbzPassword(
         } catch (e: Exception) {
             throw CbzPasswordUnavailableException(e)
         }
-        return stored?.takeIf { it.isNotEmpty() }?.toCharArray()
+        return stored?.takeIf { it.isNotEmpty() }?.toCharArray() ?: throw CbzPasswordMissingException()
     }
 
     /**
-     * Whether new downloads are encrypted: the setting is on and a password is set. Throws
-     * [CbzPasswordUnavailableException] when the setting is on and the secret store fails.
+     * Whether new downloads are encrypted: the setting is on. Throws as [downloadPassword] when
+     * the password can't be had.
      */
     fun encryptDownloads(): Boolean = downloadPassword() != null
 
@@ -81,6 +82,16 @@ class CbzPasswordUnavailableException(cause: Throwable) :
         "Could not read the download password from the system's secret store, so the chapter was not saved " +
             "(password protect downloads is on). Unlock the secret store and retry. (${cause.message ?: cause::class.simpleName})",
         cause,
+    )
+
+/**
+ * "Password protect downloads" is on but no download password is set (Android disables the switch
+ * then; a backup or a removed password can still leave it on).
+ */
+class CbzPasswordMissingException :
+    IllegalStateException(
+        "Password protect downloads is on, but no download password is set, so the chapter was not saved. " +
+            "Set the download password in Settings > Downloads, or turn password protection off, and retry.",
     )
 
 class CbzEncryption(val password: CharArray, val type: SecurityPreferences.EncryptionType)

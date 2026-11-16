@@ -57,6 +57,26 @@ class ChapterDownloaderTest {
     }
 
     @Test
+    fun `a CBZ write that fails leaves no partial archive, keeps the pages and every other download`() = runBlocking<Unit> {
+        val other = kotlin.random.Random(5).nextBytes(4096)
+        File(temp, "Chapter 0.cbz").writeBytes(other) // an existing download in the same folder
+        var calls = 0
+        val failing = ChapterDownloader(
+            pageList = { pages.indices.map { Page(it, url = "p$it") } },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { pages[it.index] },
+            parallelPages = 4,
+            writeEntry = { writer, name, bytes -> if (++calls == 2) throw java.io.IOException("No space left on device") else writer.write(name, bytes) },
+        )
+        shouldThrow<java.io.IOException> { failing.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> } }
+
+        File(temp, "Chapter 1.cbz_tmp").exists() shouldBe false
+        File(temp, "Chapter 1.cbz").exists() shouldBe false
+        ChapterDownloader.imageFiles(File(temp, "Chapter 1_tmp")).size shouldBe 12
+        File(temp, "Chapter 0.cbz").readBytes() shouldBe other
+    }
+
+    @Test
     fun `downloads a folder`() = runBlocking<Unit> {
         val dir = downloader().download(temp, "Chapter 2", ChapterDownloader.Options(false, null, null)) { _, _ -> }
         dir.isDirectory shouldBe true
@@ -98,5 +118,58 @@ class ChapterDownloaderTest {
         ImageType.fromBytes("RIFF0000WEBPVP8 ".toByteArray()) shouldBe ImageType.WEBP
         ImageType.fromBytes("GIF89a".toByteArray()) shouldBe ImageType.GIF
         ImageType.fromBytes("hello".toByteArray()) shouldBe null
+    }
+
+    @Test
+    fun `an HTML body is retried, then fails the page instead of being saved as an image`() = runBlocking<Unit> {
+        val tries = AtomicInteger()
+        val html = "<!DOCTYPE html><html><body>Please log in</body></html>".toByteArray()
+        val downloader = ChapterDownloader(
+            pageList = { listOf(Page(0, url = "p0"), Page(1, url = "p1")) },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { page ->
+                if (page.index == 1) {
+                    tries.incrementAndGet()
+                    html
+                } else {
+                    pages[0]
+                }
+            },
+            parallelPages = 2,
+        )
+        val error = shouldThrow<java.io.IOException> {
+            downloader.download(temp, "Chapter 4", ChapterDownloader.Options(true, null, null)) { _, _ -> }
+        }
+        error.message shouldContain "not an image"
+        tries.get() shouldBe 3
+        val tmp = File(temp, "Chapter 4_tmp")
+        ChapterDownloader.imageFiles(tmp).map { it.name } shouldContainExactly listOf("001.png")
+        File(temp, "Chapter 4.cbz").exists() shouldBe false
+    }
+
+    @Test
+    fun `an HTML body that turns into an image on a retry is saved`() = runBlocking<Unit> {
+        val tries = AtomicInteger()
+        val downloader = ChapterDownloader(
+            pageList = { listOf(Page(0, url = "p0")) },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { if (tries.incrementAndGet() == 1) "<html>busy</html>".toByteArray() else pages[0] },
+            parallelPages = 1,
+        )
+        val dir = downloader.download(temp, "Chapter 5", ChapterDownloader.Options(false, null, null)) { _, _ -> }
+        ChapterDownloader.imageFiles(dir).map { it.name } shouldBe listOf("001.png")
+    }
+
+    @Test
+    fun `an unknown binary format is still kept`() = runBlocking<Unit> {
+        val bmp = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "bmp", it) }.toByteArray()
+        val downloader = ChapterDownloader(
+            pageList = { listOf(Page(0, url = "p0")) },
+            imageUrl = { "https://example.org/${it.url}.bmp" },
+            image = { bmp },
+            parallelPages = 1,
+        )
+        val dir = downloader.download(temp, "Chapter 6", ChapterDownloader.Options(false, null, null)) { _, _ -> }
+        ChapterDownloader.imageFiles(dir).size shouldBe 1
     }
 }

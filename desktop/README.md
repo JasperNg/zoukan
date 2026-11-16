@@ -139,12 +139,12 @@ Each release also starts the packaged app before publishing it: the release work
 `EndToEndDownloadTest` is the Phase 5 gate: it installs an extension, adds three entries, updates the
 library from the Updates tab, downloads chapters from an entry (as a CBZ, then an encrypted one),
 reads the download, downloads every entry's newest chapter, reads from the local source and makes
-an automatic backup. `EndToEndLocalTest` needs no network: it reads the local source, updates the
-library and opens the new screens.
+an automatic backup. The offline flows (the local source, browsing, migration, upcoming updates,
+metadata) are journeys that need no network and run in `journeyTest`.
 
 ```bash
 ./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndDownloadTest"
-./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndLocalTest"
+./gradlew :desktop:journeyTest
 ```
 
 `EndToEndReadTest` drives the real UI: it adds the Keiyoushi store, installs an extension, browses
@@ -158,8 +158,46 @@ the network and a display, so it is skipped unless asked for:
 
 It uses a throwaway data folder and saves screenshots to `desktop/build/reports/e2e/`.
 
-The harness writes its report to `<data>/harness/reports/extensions-<platform>.md` and uses its own
-profile in `<data>/harness`, so it never touches the app's extensions or database.
+## User journeys (offline)
+
+`./gradlew :desktop:journeyTest` drives the real UI through what a reader does, against a local
+fixture server instead of a website, so it runs offline and always sees the same titles:
+
+- `BrowseAndReadJourneyTest` browses the fixture source, opens a title, adds it to the library and
+  reads its JPEG, PNG and WebP chapters, checking from a screenshot that each page drew.
+- `AvifJourneyTest` does the same for the AVIF chapter.
+- `SourcePreferencesJourneyTest` changes the source's own settings (a switch and a list), checks the
+  catalogue follows them, that they are in the source's settings file and that they show again.
+- `DownloadJourneyTest` downloads three chapters from the title's screen, checks every page in the
+  files, then stops the server and reads a download.
+- `BackupRestoreJourneyTest` backs up a title with its category, progress and source settings,
+  removes them, restores from the Restore backup screen and checks they are back.
+
+The fixtures live in `src/test/resources/e2e-fixtures/`: `generate.py` makes the page images (one
+colour per page, one chapter per format) and `manifest.json`; `FixtureServer` serves them on
+127.0.0.1 and `FixtureSource` reads them as an extension would. Each journey runs in its own JVM
+with a throwaway data folder and saves screenshots to `desktop/build/reports/journeys/`. They take a
+few minutes, so `check` does not run them; the nightly check does.
+
+### Nightly check
+
+`./gradlew :desktop:nightlyCheck --continue` runs the journeys and, once it exists, the extension
+wiring check (`extensionWiringTest`). On Windows, `desktop\packaging\check\nightly-windows.ps1`
+runs it on a clone of master it keeps for itself and saves the log and reports to
+`%LOCALAPPDATA%\Zoukan-nightly\<date>`; `-Register` adds a scheduled task that runs it every night
+at 03:00 and `-Unregister` removes it.
+
+The harness uses its own profile, so it never touches the app's extensions or database, and its
+extension jars and browser profile stay out of the roaming profile. It writes its report to
+`reports/extensions-<platform>.md` in that profile:
+
+- Windows: `%LOCALAPPDATA%\Zoukan\harness`
+- macOS: `~/Library/Application Support/Zoukan-harness`
+- Linux: `$XDG_DATA_HOME/zoukan-harness` or `~/.local/share/zoukan-harness`
+- with `-Dzoukan.dataDir=<path>` or `ZOUKAN_DATA_DIR` set: the sibling folder `<path>-harness`
+
+The profile is locked while a run uses it, so a second harness run says so and exits with 1. Earlier
+versions kept the profile in `<data>/harness`. That folder is no longer used; it can be deleted by hand.
 
 ## Data folder
 
@@ -202,6 +240,11 @@ real export in `src/test/resources/backups/`; reports go to `desktop/build/repor
 | Built-in browser | `browser/` | Chromium through jcefmaven, downloaded on first use into `<data>/browser` |
 | Cloudflare | `CloudflareInterceptor` (core/common desktopMain) | Hidden WebView first, then a browser window (`--interactive`) |
 | Android app code | `app-shared.txt`, `compat/` | Trackers, E-Hentai, merged source and some interactors are copied from `app/src/main/java` at build time (`syncAppShared`) and compiled as they are; `compat/` has desktop versions of the Android pieces they call |
+
+Mac builds are unsigned, so after an update macOS may ask whether Zoukan may use its Keychain items
+(the database key, the file key and others). Allow it for Zoukan only. "Deny" stops the start with a
+message that names the Keychain and changes nothing: no key is replaced, and starting Zoukan again
+asks once more.
 
 ## Known limits
 

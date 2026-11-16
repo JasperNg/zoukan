@@ -19,9 +19,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.AppScope
-import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
@@ -55,7 +55,7 @@ object LibrarySync {
             Toasts.show(localized(SYMR.strings.sync_in_progress))
             return
         }
-        AppScope.launch { runCatching { manager.syncData() }.onFailure { Toasts.error(localized(DMR.strings.sync_failed), it) } }
+        AppScope.launch { zoukan.desktop.app.runCatchingCancellable { manager.syncData() }.onFailure { Toasts.error(localized(DMR.strings.sync_failed), it) } }
     }
 
     /** Whether "Sync EH favorites" first shows the sync notes, which it does once. */
@@ -77,7 +77,7 @@ fun SyncFavoritesNotesDialog(onDismiss: () -> Unit, onAccept: () -> Unit) {
             TextButton(onClick = {
                 Injekt.get<ExhPreferences>().exhShowSyncIntro().set(false)
                 onAccept()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
     )
 }
@@ -94,7 +94,7 @@ fun SyncFavoritesConfirmDialog(onDismiss: () -> Unit) {
                 onDismiss()
                 Injekt.get<FavoritesSyncHelper>().runSync(AppScope)
                 Toasts.show(localized(DMR.strings.syncing_favorites_settings_e_hentai_shows))
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

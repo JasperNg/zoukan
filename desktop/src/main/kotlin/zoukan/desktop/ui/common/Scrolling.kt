@@ -1,13 +1,16 @@
 package zoukan.desktop.ui.common
 
+import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.LocalScrollbarStyle
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.ScrollbarStyle
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -77,6 +80,34 @@ fun LazyColumn(
                 style = scrollbarStyle(),
             )
         }
+    }
+}
+
+/**
+ * A foundation LazyRow with a scrollbar under it, shown when the row is wider than its space.
+ * [scrollbarModifier] sets the scrollbar's inset, usually the same as the content's.
+ */
+@Composable
+fun LazyRow(
+    modifier: Modifier = Modifier,
+    state: LazyListState = rememberLazyListState(),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    scrollbarModifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit,
+) {
+    Column(modifier) {
+        androidx.compose.foundation.lazy.LazyRow(
+            state = state,
+            contentPadding = contentPadding,
+            horizontalArrangement = horizontalArrangement,
+            content = content,
+        )
+        HorizontalScrollbar(
+            rememberScrollbarAdapter(state),
+            scrollbarModifier.fillMaxWidth(),
+            style = scrollbarStyle(),
+        )
     }
 }
 

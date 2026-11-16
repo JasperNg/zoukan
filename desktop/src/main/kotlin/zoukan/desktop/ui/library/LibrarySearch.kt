@@ -147,7 +147,7 @@ class LibrarySearch(
                                     (manga.artist?.contains(query, true) != true) &&
                                     (manga.description?.contains(query, true) != true) &&
                                     (sourceName?.contains(query, true) != true) &&
-                                    (sourceIdString != null && sourceIdString != query) &&
+                                    (sourceIdString != query) &&
                                     (!loggedInTrackServices || tracks == null || !filterTracks(query, tracks)) &&
                                     (!genre.any { it.contains(query, true) }) &&
                                     (searchTags?.any { it.name.contains(query, true) } != true) &&

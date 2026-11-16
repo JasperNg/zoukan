@@ -1,13 +1,22 @@
 package android.graphics;
 
+import android.content.res.Resources;
+// ZOUKAN -->
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+// ZOUKAN <--
 import androidx.annotation.Nullable;
 
 public class BitmapFactory {
@@ -453,53 +462,176 @@ public class BitmapFactory {
         return decodeStream(inputStream, null, null);
     }
 
+    // ZOUKAN -->
+    /**
+     * Decodes with ImageIO. Like Android, returns null when no reader recognises the data or
+     * decoding fails, and on failure leaves outWidth/outHeight at -1 and outMimeType null.
+     * The caller's stream is not closed. Of the input options, only inJustDecodeBounds and
+     * inSampleSize are honoured.
+     */
     @Nullable
     public static Bitmap decodeStream(@Nullable InputStream is, @Nullable Rect outPadding,
             @Nullable Options opts) {
         if (is == null) return null;
         if (outPadding != null) throw new RuntimeException("OutPadding is not implemented");
         Options.validate(opts);
-        Bitmap bitmap = null;
-        // TODO: Support options with in parameters
-
-        try {
-            ImageInputStream imageInputStream = ImageIO.createImageInputStream(is);
-            Iterator<ImageReader> imageReaders = ImageIO.getImageReaders(imageInputStream);
-
-            if (!imageReaders.hasNext()) {
-                throw new IllegalArgumentException("no reader for image");
-            }
-
-            ImageReader imageReader = imageReaders.next();
-            imageReader.setInput(imageInputStream);
-
-            if (opts != null) {
-                opts.outHeight = imageReader.getHeight(0);
-                opts.outWidth = imageReader.getWidth(0);
-                opts.outMimeType = imageReader.getOriginatingProvider().getMIMETypes()[0];
-                opts.outColorSpace = null; // TODO: support? see imageReader.getImageTypeSpecifier().getColorSpace()
-                opts.outConfig = null; // TODO: support?
-            }
-
-            if (opts == null || !opts.inJustDecodeBounds) {
-                BufferedImage image = imageReader.read(0, imageReader.getDefaultReadParam());
-                bitmap = new Bitmap(image);
-            }
-
-            imageReader.dispose();
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
+        resetBounds(opts);
+        if (opts != null) {
+            opts.outColorSpace = null; // TODO: support? see imageReader.getImageTypeSpecifier().getColorSpace()
+            opts.outConfig = null; // TODO: support?
         }
 
-        return bitmap;
+        // An in-memory cache: ImageIO.createImageInputStream may spill to a temp file.
+        ImageInputStream imageInputStream = new MemoryCacheImageInputStream(is);
+        ImageReader imageReader = null;
+        try {
+            Iterator<ImageReader> imageReaders = ImageIO.getImageReaders(imageInputStream);
+            if (!imageReaders.hasNext()) return null;
+            imageReader = imageReaders.next();
+            imageReader.setInput(imageInputStream);
+
+            int sampleSize = sampleSize(opts);
+            int sampledWidth = ceilDiv(imageReader.getWidth(0), sampleSize);
+            int sampledHeight = ceilDiv(imageReader.getHeight(0), sampleSize);
+
+            if (opts != null && opts.inJustDecodeBounds) {
+                fillBounds(opts, imageReader, sampledWidth, sampledHeight);
+                return null;
+            }
+
+            // Refuse a header claiming too many pixels before anything is allocated
+            if (imageReader.getWidth(0) > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE
+                    || imageReader.getHeight(0) > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE) {
+                throw new IOException("Image too large to decode");
+            }
+            xyz.nulldev.androidcompat.graphics.ImageIoDecoding.checkSize(sampledWidth, sampledHeight);
+            ImageReadParam param = imageReader.getDefaultReadParam();
+            if (sampleSize > 1) param.setSourceSubsampling(sampleSize, sampleSize, 0, 0);
+            BufferedImage image = imageReader.read(0, param);
+            if (image == null) return null;
+            if (image.getWidth() > sampledWidth || image.getHeight() > sampledHeight) {
+                // The reader ignored the subsampling (the FFmpeg AVIF reader does).
+                image = scale(image, sampledWidth, sampledHeight);
+            }
+            if (opts != null) fillBounds(opts, imageReader, image.getWidth(), image.getHeight());
+            // Android decodes every page to ARGB_8888; ImageIO keeps palette, grey and 16-bit types
+            boolean sourceHasAlpha = image.getColorModel().hasAlpha();
+            if (image.getType() != BufferedImage.TYPE_INT_ARGB) image = toArgb(image);
+            Bitmap decoded = new Bitmap(image);
+            // A JPEG or opaque PNG reports no alpha, as on Android, though it is held as ARGB
+            if (!sourceHasAlpha) decoded.markOpaque();
+            return decoded;
+        } catch (IOException | RuntimeException ex) {
+            resetBounds(opts);
+            return null;
+        } finally {
+            if (imageReader != null) imageReader.dispose();
+            try {
+                imageInputStream.close(); // does not close the caller's stream
+            } catch (IOException ignored) {
+                // nothing to release
+            }
+        }
     }
+
+    private static void resetBounds(@Nullable Options opts) {
+        if (opts == null) return;
+        opts.outWidth = -1;
+        opts.outHeight = -1;
+        opts.outMimeType = null;
+    }
+
+    /** Android rounds inSampleSize down to a power of two; values below 1 mean 1. */
+    private static int sampleSize(@Nullable Options opts) {
+        if (opts == null || opts.inSampleSize <= 1) return 1;
+        return Integer.highestOneBit(opts.inSampleSize);
+    }
+
+    private static int ceilDiv(int value, int divisor) {
+        return (value + divisor - 1) / divisor;
+    }
+
+    private static void fillBounds(Options opts, ImageReader reader, int width, int height) {
+        opts.outWidth = width;
+        opts.outHeight = height;
+        String[] mimeTypes = reader.getOriginatingProvider() != null
+                ? reader.getOriginatingProvider().getMIMETypes() : null;
+        opts.outMimeType = mimeTypes != null && mimeTypes.length > 0 ? mimeTypes[0] : null;
+    }
+
+    private static BufferedImage toArgb(BufferedImage source) {
+        BufferedImage argb = new BufferedImage(
+                source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = argb.createGraphics();
+        try {
+            g.drawImage(source, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        return argb;
+    }
+
+    private static BufferedImage scale(BufferedImage source, int width, int height) {
+        int type = source.getColorModel().hasAlpha()
+                ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB;
+        BufferedImage scaled = new BufferedImage(Math.max(1, width), Math.max(1, height), type);
+        Graphics2D g = scaled.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(source, 0, 0, scaled.getWidth(), scaled.getHeight(), null);
+        } finally {
+            g.dispose();
+        }
+        return scaled;
+    }
+    // ZOUKAN <--
 
     public static Bitmap decodeByteArray(byte[] data, int offset, int length) {
         return decodeByteArray(data, offset, length, null);
     }
 
     public static Bitmap decodeByteArray(byte[] data, int offset, int length, Options opts) {
+        if ((offset | length) < 0 || data.length < offset + length) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
         ByteArrayInputStream byteArrayStream = new ByteArrayInputStream(data, offset, length);
         return decodeStream(byteArrayStream, null, opts);
+    }
+
+    public static Bitmap decodeFile(String pathName) {
+        return decodeFile(pathName, null);
+    }
+
+    /** Returns null, as Android does, when the file cannot be opened or decoded. */
+    public static Bitmap decodeFile(String pathName, Options opts) {
+        Options.validate(opts);
+        try (InputStream stream = new BufferedInputStream(new FileInputStream(pathName))) {
+            return decodeStream(stream, null, opts);
+        } catch (IOException ex) {
+            resetBounds(opts);
+            return null;
+        }
+    }
+
+    public static Bitmap decodeResource(Resources res, int id) {
+        return decodeResource(res, id, null);
+    }
+
+    /** Returns null, as Android does, when the resource cannot be opened or decoded. */
+    public static Bitmap decodeResource(Resources res, int id, Options opts) {
+        Options.validate(opts);
+        InputStream stream;
+        try {
+            stream = res.openRawResource(id);
+        } catch (RuntimeException ex) {
+            resetBounds(opts);
+            return null;
+        }
+        try (InputStream in = stream) {
+            return decodeStream(in, null, opts);
+        } catch (IOException ex) {
+            return null;
+        }
     }
 }

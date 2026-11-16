@@ -8,16 +8,26 @@
     "Dependencies"
   ],
   "extends": [
-    "config:best-practices",
-    "github>mihonapp/mihon//.github/renovate.json5"
+    "config:best-practices"
   ],
   "packageRules": [
     {
-      "groupName": "GitHub Actions",
       "matchManagers": [
         "github-actions"
       ],
-      "pinDigests": true
+      "enabled": false
+    },
+    {
+      "description": "The multiplatform modules still use com.android.library; a new major needs the migration in desktop/UPSTREAM-MERGES.md first",
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.android.library",
+        "com.android.application"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
     }
   ]
 }

@@ -26,10 +26,12 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.SourceCategoryScreen
 import zoukan.desktop.ui.browse.StoresList
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
@@ -38,9 +40,10 @@ import zoukan.i18n.desktop.DMR
  * categories, the latest button, local hidden folders), the feed, hiding library entries,
  * extension stores and NSFW sources.
  *
- * Android's "Expand related titles", "Related titles in the overflow menu" and "Show home on
- * related titles" lay out a related-titles row inside the entry screen; the desktop shows related
- * titles from the entry's More > Similar titles, so they are not shown (see PARITY.md).
+ * Android's related-titles options lay out a related-titles row inside the entry screen. The
+ * desktop shows "Expand related titles" and "Related titles in the overflow menu" for that row.
+ * "Show home on related titles" is not shown: the desktop lists related titles from the entry's
+ * More > Similar titles instead (see PARITY.md).
  */
 fun LazyListScope.browseSettings() {
     settingsGroup(localized(MR.strings.label_sources))
@@ -64,7 +67,7 @@ fun LazyListScope.browseSettings() {
         val categories by preferences.sourcesTabCategories().collectAsState()
         SettingRow(
             localized(MR.strings.action_edit_categories),
-            if (categories.size == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, categories.size),
+            localizedPlural(DMR.plurals.categories, categories.size, categories.size),
             onClick = { navigator.push(SourceCategoryScreen) },
         )
     }
@@ -114,8 +117,8 @@ fun LazyListScope.browseSettings() {
         SwitchPreference(localized(MR.strings.pref_hide_in_library_items), preferences.hideInLibraryFeedItems())
     }
 
-    // Android has a second "Sources" group here; the space keeps the list keys apart
-    settingsGroup(localized(MR.strings.label_sources) + " ")
+    // Android has a second "Sources" group here; its own id keeps the list keys apart
+    settingsGroup(localized(MR.strings.label_sources), id = "browse-sources-library")
     item(key = "browse-hide-library") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
         SwitchPreference(localized(MR.strings.pref_hide_in_library_items), preferences.hideInLibraryItems())
@@ -133,7 +136,12 @@ fun LazyListScope.browseSettings() {
     settingsGroup(localized(MR.strings.pref_category_nsfw_content))
     item(key = "browse-nsfw") {
         val preferences = remember { Injekt.get<SourcePreferences>() }
-        SwitchPreference(localized(MR.strings.pref_show_nsfw_source), preferences.showNsfwSource())
+        // Installed NSFW extensions load (or stop loading) on the next start, as in Komikku
+        SwitchPreference(
+            localized(MR.strings.pref_show_nsfw_source),
+            preferences.showNsfwSource(),
+            subtitle = localized(MR.strings.requires_app_restart),
+        )
     }
     item(key = "browse-nsfw-info") {
         InfoText(
@@ -151,7 +159,7 @@ fun InfoText(text: String) {
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
     )
 }
 
