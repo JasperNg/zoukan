@@ -162,7 +162,9 @@ Residual risk:
    junrar and Commons Compress parse the same hostile data in-process. The caps and symlink-skip
    bound the blast radius; they do not remove memory-safety exposure in those parsers.
 2. A crafted archive can still cost CPU and disk up to the caps (a budget of gigabytes), and a
-   same-user process can tamper with anything in the cache folders.
+   same-user process can tamper with anything in the cache folders. Memory is bounded per page:
+   a page or cover read into memory has its own, much smaller cap (`Limits.pageBytes`, 64 MiB),
+   and a larger one fails with a clear message instead of filling the heap.
 
 ## Secrets at rest
 

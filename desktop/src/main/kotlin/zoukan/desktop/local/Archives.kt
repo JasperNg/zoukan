@@ -50,10 +50,15 @@ object Archives {
     private const val MAX_TOTAL_BYTES = 4L shl 30
     private const val MAX_ENTRIES = 10_000
 
+    // What one page or cover may be when it is read into memory. Far above any real page, and low
+    // enough that a crafted archive cannot exhaust the heap.
+    private const val MAX_PAGE_BYTES = 64L shl 20
+
     internal data class Limits(
         val entryBytes: Long = MAX_ENTRY_BYTES,
         val totalBytes: Long = MAX_TOTAL_BYTES,
         val entries: Int = MAX_ENTRIES,
+        val pageBytes: Long = MAX_PAGE_BYTES,
     )
 
     /** The caps on unpacking; only tests change them. */
@@ -265,7 +270,7 @@ object Archives {
             null
         }
         if (direct != null) return direct
-        return open(file).use { lease -> zoukan.desktop.download.ChapterDownloader.imageFiles(lease.dir).firstOrNull()?.readBytes() }
+        return open(file).use { lease -> zoukan.desktop.download.ChapterDownloader.imageFiles(lease.dir).firstOrNull()?.let(::readPage) }
     }
 
     /** The archive's ComicInfo.xml, read without unpacking the pages where the format allows. */
@@ -356,10 +361,17 @@ object Archives {
 
     /** One entry's bytes, for a cover: no more than a page may unpack to. */
     private fun readCapped(file: File, input: InputStream): ByteArray {
-        val max = limits.entryBytes
+        val max = minOf(limits.entryBytes, limits.pageBytes)
         val bytes = input.readNBytes((max + 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
         if (bytes.size > max) throw TooLargeException("${file.name} has a page over $max bytes")
         return bytes
+    }
+
+    /** One unpacked page's bytes, read into memory: no more than [Limits.pageBytes]. */
+    internal fun readPage(file: File): ByteArray {
+        val max = limits.pageBytes
+        if (file.length() > max) throw TooLargeException("${file.name} is over $max bytes, more than a page may be")
+        return file.readBytes()
     }
 
     /**
