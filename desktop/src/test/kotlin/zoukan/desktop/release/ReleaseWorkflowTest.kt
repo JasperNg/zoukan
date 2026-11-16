@@ -34,4 +34,27 @@ class ReleaseWorkflowTest {
         }
         problems.shouldBeEmpty()
     }
+
+    @Test
+    fun `every action is pinned to a full commit SHA`() {
+        val pinned = Regex("""^[^@\s]+@[0-9a-f]{40}\s+#\s*v\d+(\.\d+)*\s*$""")
+        val usesLine = Regex("""^\s*-?\s*uses:\s*(.*)$""")
+        val problems = mutableListOf<String>()
+        for (file in workflowFiles()) {
+            file.readLines().forEachIndexed { index, line ->
+                val ref = usesLine.find(line)?.groupValues?.get(1) ?: return@forEachIndexed
+                if (ref.startsWith("./")) return@forEachIndexed
+                if (!pinned.matches(ref)) problems += "${file.name}:${index + 1} $ref"
+            }
+        }
+        problems.shouldBeEmpty()
+    }
+
+    @Test
+    fun `the update bots take no policy from another repository`() {
+        val file = File(root, "renovate.json")
+        if (!file.isFile) return
+        val remote = Regex(""""github>[^"]*"""").findAll(file.readText()).map { it.value }.toList()
+        remote.shouldBeEmpty()
+    }
 }

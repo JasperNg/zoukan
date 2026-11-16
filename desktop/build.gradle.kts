@@ -307,6 +307,7 @@ tasks.test {
     inputs.files(
         rootProject.fileTree(".github/workflows"),
         file("packaging.gradle.kts"),
+        rootProject.file("renovate.json"),
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
