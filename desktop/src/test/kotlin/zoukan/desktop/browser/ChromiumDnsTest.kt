@@ -103,6 +103,25 @@ class ChromiumDnsTest {
     }
 
     @Test
+    fun `apply with DoH on and a non-JSON Local State still sets secure mode`(@TempDir dir: File) {
+        File(dir, "Local State").writeText("{ damaged")
+        ChromiumDns.apply(dir, PREF_DOH_CLOUDFLARE)
+        val group = Json.parseToJsonElement(File(dir, "Local State").readText()).jsonObject["dns_over_https"]!!.jsonObject
+        group["mode"]!!.jsonPrimitive.content shouldBe "secure"
+        group["templates"]!!.jsonPrimitive.content shouldBe "https://cloudflare-dns.com/dns-query"
+        // The damaged file is kept beside it, not deleted
+        File(dir, "Local State.zoukan-bad").readText() shouldBe "{ damaged"
+    }
+
+    @Test
+    fun `apply with DoH off leaves a non-JSON Local State alone`(@TempDir dir: File) {
+        File(dir, "Local State").writeText("{ damaged")
+        ChromiumDns.apply(dir, -1)
+        File(dir, "Local State").readText() shouldBe "{ damaged"
+        File(dir, "Local State.zoukan-bad").exists() shouldBe false
+    }
+
+    @Test
     fun `apply writes the Local State file`(@TempDir dir: File) {
         ChromiumDns.apply(dir, PREF_DOH_CLOUDFLARE)
         val file = File(dir, "Local State")
