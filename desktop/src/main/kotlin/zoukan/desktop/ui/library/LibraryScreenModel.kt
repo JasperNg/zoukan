@@ -16,7 +16,6 @@ import exh.source.nHentaiSourceIds
 import exh.util.isLewd
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -65,7 +64,6 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Toasts
-import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
 import java.text.Collator
@@ -927,21 +925,8 @@ class LibraryScreenModel(
         clearSelection()
     }
 
-    val recommendationSearch = RecommendationSearchHelper()
-    private var recommendationSearchJob: Job? = null
-
     /** The selected entries in the library's order, as Android's selectedManga. */
     fun selectedManga(): List<Manga> = selected(state.value.selection)
-
-    fun runRecommendationSearch(selection: List<Manga>) {
-        recommendationSearch.runSearch(screenModelScope, selection)?.let {
-            recommendationSearchJob = it
-        }
-    }
-
-    fun cancelRecommendationSearch() {
-        recommendationSearchJob?.cancel()
-    }
     // SY <--
 
     // KMK -->

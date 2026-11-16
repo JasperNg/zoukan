@@ -937,4 +937,6 @@
     <string name="find_a_source_by_name">Find a source by name</string>
     <string name="find_an_extension_by_name">Find an extension by name</string>
     <string name="added_mangadex_follows_some_failed">Added %1$s MangaDex follows; %2$s could not be loaded</string>
+    <string name="a_zoukan_command_is_using_the_data_folder">\"zoukan %1$s\" is using the data folder. Wait for it to finish, or stop it, then open Zoukan again.</string>
+    <string name="backup_file_and_date">%1$s, saved %2$s</string>
 </resources>

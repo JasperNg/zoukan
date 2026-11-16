@@ -1,8 +1,7 @@
 package zoukan.desktop.e2e
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
@@ -11,11 +10,14 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.floats.shouldBeLessThan
+import io.kotest.matchers.floats.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
@@ -123,14 +125,26 @@ class BackupRestoreJourneyTest {
                 step("Restore the backup from the Restore backup screen") {
                     runOnUiThread { navigator?.push(RestoreBackupScreen(backup.absolutePath)) }
                     waitFor(hasTestTag("restore-backup-action") and isEnabled())
+                    // The screen names the file the user picked
+                    onAllNodes(hasText(backup.name, substring = true)).fetchSemanticsNodes().isNotEmpty() shouldBe true
+                    // Not stretched across the window: a normal button, and options within the settings width
+                    val button = onNodeWithTag("restore-backup-action").fetchSemanticsNode().boundsInRoot
+                    withClue("the action button spans the window") { button.width shouldBeLessThan Journey.WIDTH / 2f }
+                    val cap = with(density) { 900.dp.toPx() }
+                    val content = onNodeWithTag("restore-backup-content").fetchSemanticsNode().boundsInRoot
+                    withClue("the options are wider than the settings page") { content.width shouldBeLessThanOrEqual cap + 1f }
                     shot("1-restore")
                     onNodeWithTag("restore-backup-action").performClick()
                     // The action turns into Close once the restore ends
                     waitFor(hasTestTag("restore-backup-action") and hasText("Close"), timeout = 120_000)
                     shot("2-restored")
-                    // The "Restored 1 entries" toast sits over the middle of the button for a few
-                    // seconds, so click its left end, as a user would
-                    onNodeWithTag("restore-backup-action").performMouseInput { click(centerLeft + Offset(24f, 0f)) }
+                    // The "Restored 1 entries" message must not cover the only way out of the screen
+                    waitFor(hasText("Restored", substring = true) and hasAnyAncestor(hasTestTag("app-snackbar")))
+                    val close = onNodeWithTag("restore-backup-action").fetchSemanticsNode().boundsInRoot
+                    onAllNodes(hasAnyAncestor(hasTestTag("app-snackbar")) or hasTestTag("app-snackbar")).fetchSemanticsNodes().forEach { bar ->
+                        withClue("the message covers Close") { bar.boundsInRoot.overlaps(close) shouldBe false }
+                    }
+                    onNodeWithTag("restore-backup-action").performClick()
                     waitOrDump("for the restore screen to close") {
                         onAllNodes(hasTestTag("restore-backup-action")).fetchSemanticsNodes().isEmpty()
                     }

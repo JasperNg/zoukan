@@ -48,7 +48,9 @@ import zoukan.desktop.ui.common.onRightClick
  * app's exh.ui.metadata.MetadataViewScreen. Right-click copies a value.
  */
 data class MetadataViewScreen(val mangaId: Long, val sourceId: Long) : Screen {
-    override val key: ScreenKey = "metadata-$mangaId"
+    // Ends with / because Voyager disposes every screen model whose key starts with a
+    // disposed screen's key: without it, leaving metadata-1 cancelled metadata-12's work
+    override val key: ScreenKey = "metadata-$mangaId/"
 
     @Composable
     override fun Content() {

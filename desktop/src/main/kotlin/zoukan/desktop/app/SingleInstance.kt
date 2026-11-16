@@ -27,12 +27,14 @@ class SingleInstance private constructor(
     private val lock: FileLock,
     private val server: ServerSocket,
     private val portFile: File,
+    private val commandFile: File? = null,
 ) : AutoCloseable {
 
     override fun close() {
         held.remove(this)
         runCatching { server.close() }
         runCatching { portFile.delete() }
+        runCatching { commandFile?.delete() }
         runCatching { lock.release() }
         runCatching { channel.close() }
     }
@@ -43,11 +45,15 @@ class SingleInstance private constructor(
 
         /** Another instance runs; [shown] tells whether it was asked to show its window. */
         data class AlreadyRunning(val shown: Boolean) : Result
+
+        /** A Zoukan command (for example `library update`) holds the folder; there is no window to show. */
+        data class CommandRunning(val command: String) : Result
     }
 
     companion object {
         private const val LOCK = "zoukan.lock"
         private const val PORT = "zoukan.port"
+        private const val COMMAND = "zoukan.command"
 
         /**
          * Instances that hold their lock. The lock lives as long as its channel, and a channel
@@ -63,8 +69,16 @@ class SingleInstance private constructor(
 
         /** Takes the lock for [root], or asks the instance holding it to [onShow] its window. */
         fun acquire(root: File, onShow: () -> Unit): Result {
-            val (channel, lock) = takeLock(root)
-                ?: return Result.AlreadyRunning(shown = signal(File(root, PORT)))
+            val (channel, lock) = takeLock(root) ?: run {
+                val command = runCatching { File(root, COMMAND).readText().trim() }.getOrDefault("")
+                return if (command.isNotEmpty()) {
+                    Result.CommandRunning(command)
+                } else {
+                    Result.AlreadyRunning(shown = signal(File(root, PORT)))
+                }
+            }
+            // A command that was killed leaves its marker; the OS freed its lock
+            runCatching { File(root, COMMAND).delete() }
             val token = HexFormat.of().formatHex(ByteArray(16).also { SecureRandom().nextBytes(it) })
             val server = ServerSocket()
             server.bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 4)
@@ -82,11 +96,13 @@ class SingleInstance private constructor(
          * without showing its window, which a command has no use for. The command closes the
          * returned instance when it ends, freeing the folder again.
          */
-        fun acquireForCommand(root: File): SingleInstance? {
+        fun acquireForCommand(root: File, command: String): SingleInstance? {
             val (channel, lock) = takeLock(root) ?: return null
-            // No port file and no listener: Zoukan finding this lock later can only say that
-            // something is running, there is no window of ours to bring up
-            val instance = SingleInstance(channel, lock, ServerSocket(), File(root, PORT))
+            // No port file and no listener: there is no window of ours to bring up. A marker
+            // names the command, so Zoukan finding this lock later can say what holds the folder
+            val commandFile = File(root, COMMAND)
+            commandFile.writeText(command.ifBlank { "command" })
+            val instance = SingleInstance(channel, lock, ServerSocket(), File(root, PORT), commandFile)
             held += instance
             return instance
         }

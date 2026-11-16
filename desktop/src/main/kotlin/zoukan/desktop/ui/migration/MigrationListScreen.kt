@@ -52,6 +52,8 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.OnShortcut
+import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Cover
@@ -96,6 +98,16 @@ data class MigrationListScreen(
             if (runManually && !state.loading && !openedManualSearch) {
                 openedManualSearch = true
                 state.items.singleOrNull()?.let(searchManually)
+            }
+        }
+
+        // Escape, Alt+Left, the mouse back button and the tab shortcuts ask first, as the header's back button does
+        OnShortcut { action ->
+            if (action == Shortcuts.Action.Leave && state.items.isNotEmpty()) {
+                model.showExitDialog()
+                true
+            } else {
+                false
             }
         }
 

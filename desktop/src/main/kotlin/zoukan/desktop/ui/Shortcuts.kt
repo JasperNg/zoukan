@@ -39,6 +39,12 @@ object Shortcuts {
 
         /** Ctrl/Cmd + A where the screen has a selection */
         data object SelectAll : Action
+
+        /**
+         * Asked before a global shortcut or the mouse back button leaves the shown screen; a
+         * screen with unsaved work answers true and shows its own confirmation. No key gives this.
+         */
+        data object Leave : Action
     }
 
     /** The shown screen's own handlers for [Action.Find], [Action.SelectAll] and [Action.Back]; the newest is asked first. */
@@ -91,13 +97,33 @@ object Shortcuts {
         if (Injekt.get<zoukan.desktop.security.AppLock>().locked.value) return false
         if (event.type != KeyEventType.KeyDown) return false
         val ctrl = event.isCtrlPressed || event.isMetaPressed
-        return when (val action = actionFor(event.key, ctrl, event.isShiftPressed, event.isAltPressed)) {
-            is Action.OpenTab -> {
+        return perform(actionFor(event.key, ctrl, event.isShiftPressed, event.isAltPressed), navigator, escape = event.key == Key.Escape)
+    }
+
+    /** Goes back one screen, as the mouse back button does; returns whether there was a screen to go back to. */
+    fun goBack(navigator: Navigator?): Boolean {
+        // The shown screen may keep the user here, as the migration list does while it holds search results
+        if (screenHandled(Action.Leave)) return true
+        if (navigator != null && navigator.canPop) {
+            navigator.pop()
+            return true
+        }
+        return false
+    }
+
+    /** Does [action]; [escape] is whether the key was Escape. Returns whether it was used. */
+    internal fun perform(action: Action?, navigator: Navigator?, escape: Boolean): Boolean {
+        return when (action) {
+            is Action.OpenTab -> if (screenHandled(Action.Leave)) {
+                true
+            } else {
                 navigator?.popUntilRoot()
                 HomeScreen.selectTab(action.tab)
                 true
             }
-            Action.OpenSettings -> {
+            Action.OpenSettings -> if (screenHandled(Action.Leave)) {
+                true
+            } else {
                 navigator?.let { HomeScreen.openSettings(it) }
                 navigator != null
             }
@@ -111,14 +137,9 @@ object Shortcuts {
             }
             Action.Find, Action.SelectAll -> screenHandled(action)
             // Escape clears a screen's selection before it goes back; Alt + Left only goes back
-            Action.Back -> if (event.key == Key.Escape && screenHandled(action)) {
-                true
-            } else if (navigator != null && navigator.canPop) {
-                navigator.pop()
-                true
-            } else {
-                false
-            }
+            Action.Back -> if (escape && screenHandled(action)) true else goBack(navigator)
+            // Never produced by a key; screens are asked it through screenHandled
+            Action.Leave -> false
             null -> false
         }
     }

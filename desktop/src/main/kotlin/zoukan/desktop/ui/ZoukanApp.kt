@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -50,6 +51,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
@@ -96,13 +98,16 @@ import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.tray.Notifications
 import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.browse.BrowseTab
+import zoukan.desktop.ui.common.AppMessages
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.LocalAppMessages
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIf
 import zoukan.desktop.ui.common.WindowBounds
 import zoukan.desktop.ui.common.ZoukanTheme
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.showMessages
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.LibraryScreenModel
@@ -134,6 +139,10 @@ fun runZoukanApp() {
         is SingleInstance.Result.Acquired -> Unit
         is SingleInstance.Result.AlreadyRunning -> {
             if (!instance.shown) showAlreadyRunning()
+            return
+        }
+        is SingleInstance.Result.CommandRunning -> {
+            showCommandRunning(instance.command)
             return
         }
     }
@@ -310,8 +319,12 @@ fun runZoukanApp() {
     }
 }
 
-private fun showAlreadyRunning() {
-    val message = localized(DMR.strings.zoukan_is_already_running_open_it)
+private fun showAlreadyRunning() = showStartupMessage(localized(DMR.strings.zoukan_is_already_running_open_it))
+
+private fun showCommandRunning(command: String) =
+    showStartupMessage(localized(DMR.strings.a_zoukan_command_is_using_the_data_folder, command))
+
+private fun showStartupMessage(message: String) {
     if (java.awt.GraphicsEnvironment.isHeadless()) {
         System.err.println(message)
     } else {
@@ -376,7 +389,7 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
                 // The mouse's back button
                 // ZOUKAN -->
                 // Not while the app lock covers the window
-                if (event.button == PointerButton.Back && !appLock.locked.value) navigatorRef?.takeIf { it.canPop }?.pop()
+                if (event.button == PointerButton.Back && !appLock.locked.value) Shortcuts.goBack(navigatorRef)
                 // ZOUKAN <--
             }
                 // ZOUKAN -->
@@ -388,49 +401,61 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
             color = MaterialTheme.colorScheme.background,
         ) {
             val snackbar = remember { SnackbarHostState() }
+            val messages = remember { AppMessages() }
             LaunchedEffect(Unit) {
-                Toasts.flow.collect { message ->
-                    // ZOUKAN -->
-                    // Messages wait for the unlock: the lock shows nothing of the app
+                // ZOUKAN -->
+                // Messages wait for the unlock: the lock shows nothing of the app. A screen can hold
+                // them back too (the reader); the newest shows when it lets go
+                showMessages(Toasts.flow, snackbar) {
                     appLock.locked.first { !it }
-                    // ZOUKAN <--
-                    snackbar.showSnackbar(message)
+                    messages.held.first { it == 0 }
                 }
+                // ZOUKAN <--
             }
             // ZOUKAN -->
             LaunchedEffect(locked) { if (locked) snackbar.currentSnackbarData?.dismiss() }
+            // A message already shown when a screen holds them back goes too
+            val held by messages.held.collectAsState()
+            LaunchedEffect(held > 0) { if (held > 0) snackbar.currentSnackbarData?.dismiss() }
             // ZOUKAN <--
-            Box(Modifier.fillMaxSize()) {
-                // ZOUKAN -->
-                // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
-                Column(Modifier.fillMaxSize()) {
-                    if (!locked) AppStateBanners()
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        Navigator(HomeScreen) { navigator ->
-                            navigatorRef = navigator
-                            onNavigator(navigator)
-                            // While locked, the screens leave the composition, so none of their
-                            // controls, dialogs or menus can be clicked or reached with Tab (dialogs
-                            // are layers above the lock). The navigator stays: the back stack, the
-                            // screen models and the screens' saved state (tab, scroll) are kept, and
-                            // the unlock returns to the same screen. Plain `remember` state is not:
-                            // open dialogs, unsaved text, selection mode and coroutines in a
-                            // composable's own scope are lost, where Android keeps the whole activity
-                            // under its unlock screen (see PARITY.md, App lock)
-                            if (!locked) FadeTransition(navigator)
+            CompositionLocalProvider(LocalAppMessages provides messages) {
+                Box(Modifier.fillMaxSize()) {
+                    // ZOUKAN -->
+                    // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
+                    Column(Modifier.fillMaxSize()) {
+                        if (!locked) AppStateBanners()
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            Navigator(HomeScreen) { navigator ->
+                                navigatorRef = navigator
+                                onNavigator(navigator)
+                                // While locked, the screens leave the composition, so none of their
+                                // controls, dialogs or menus can be clicked or reached with Tab (dialogs
+                                // are layers above the lock). The navigator stays: the back stack, the
+                                // screen models and the screens' saved state (tab, scroll) are kept, and
+                                // the unlock returns to the same screen. Plain `remember` state is not:
+                                // open dialogs, unsaved text, selection mode and coroutines in a
+                                // composable's own scope are lost, where Android keeps the whole activity
+                                // under its unlock screen (see PARITY.md, App lock)
+                                if (!locked) FadeTransition(navigator)
+                            }
                         }
                     }
+                    // ZOUKAN <--
+                    // The first-run setup covers the app, but not its messages
+                    if (!locked) {
+                        if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
+                        zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
+                    }
+                    SnackbarHost(
+                        snackbar,
+                        Modifier.align(Alignment.BottomCenter)
+                            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + messages.bottomInset)
+                            .testTag("app-snackbar"),
+                    )
+                    // ZOUKAN -->
+                    zoukan.desktop.ui.security.LockOverlay()
+                    // ZOUKAN <--
                 }
-                // ZOUKAN <--
-                // The first-run setup covers the app, but not its messages
-                if (!locked) {
-                    if (firstRun) zoukan.desktop.ui.onboarding.FirstRun(preferences) { navigatorRef }
-                    zoukan.desktop.ui.onboarding.ReopenedOnboarding { navigatorRef }
-                }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
-                // ZOUKAN -->
-                zoukan.desktop.ui.security.LockOverlay()
-                // ZOUKAN <--
             }
         }
     }
@@ -448,8 +473,25 @@ enum class HomeTab(val label: String, val icon: ImageVector, val selectedIcon: I
 object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
     private fun readResolve(): Any = HomeScreen
 
-    /** Lets other screens switch the tab, for example "Browse" from an empty library. */
-    var selectTab: (HomeTab) -> Unit = {}
+    private var current: HomeTabState? = null
+    private var pending: HomeTab? = null
+
+    /** Lets other screens switch the tab, for example "Browse" from an empty library. Kept until the home screen shows. */
+    fun selectTab(tab: HomeTab) {
+        current?.select(tab) ?: run { pending = tab }
+    }
+
+    /** For the home screen's own effect. */
+    internal fun register(state: HomeTabState) {
+        current = state
+        pending?.let { state.select(it) }
+        pending = null
+    }
+
+    /** For the home screen's own effect. */
+    internal fun unregister(state: HomeTabState) {
+        if (current === state) current = null
+    }
 
     // ZOUKAN -->
     /** Opens the library with [query] in its search, as Android's HomeScreen.search (Library search). */
@@ -465,8 +507,12 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
 
     @Composable
     override fun Content() {
-        var tab by rememberSaveable { mutableStateOf(HomeTab.Library) }
-        selectTab = { tab = it }
+        val tabs = rememberSaveable(saver = HomeTabState.Saver) { HomeTabState() }
+        val tab = tabs.selected
+        DisposableEffect(tabs) {
+            HomeScreen.register(tabs)
+            onDispose { HomeScreen.unregister(tabs) }
+        }
         // ZOUKAN -->
         // Discord Rich Presence shows the tab in use, as Android's tabs set it
         LaunchedEffect(tab) {
@@ -484,7 +530,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val library = rememberScreenModel { LibraryScreenModel() }
         // ZOUKAN -->
         searchLibrary = { query ->
-            tab = HomeTab.Library
+            tabs.select(HomeTab.Library)
             library.search(query)
         }
         // ZOUKAN <--
@@ -509,6 +555,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val shownTabs = HomeTab.entries.filter {
             (it != HomeTab.Updates || showUpdates) && (it != HomeTab.History || showHistory)
         }
+        LaunchedEffect(shownTabs) { tabs.showOnly(shownTabs) }
         // Opening Updates clears the badge, as Android's Updates tab does
         LaunchedEffect(tab, newUpdates) {
             if (tab == HomeTab.Updates && newUpdates != 0) libraryPreferences.newUpdatesCount().set(0)
@@ -532,7 +579,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                         TooltipIf(!showLabels, item.label) {
                             NavigationRailItem(
                                 selected = tab == item,
-                                onClick = { tab = item },
+                                onClick = { tabs.select(item) },
                                 icon = {
                                     androidx.compose.material3.BadgedBox(
                                         badge = { if (badge > 0) androidx.compose.material3.Badge { Text(badge.toString()) } },
