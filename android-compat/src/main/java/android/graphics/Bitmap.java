@@ -26,6 +26,9 @@ public final class Bitmap {
     private final int width;
     private final int height;
     private final BufferedImage image;
+    // ZOUKAN -->
+    private boolean opaque;
+    // ZOUKAN <--
 
     public Bitmap(BufferedImage image) {
         this.image = image;
@@ -105,6 +108,9 @@ public final class Bitmap {
                 return BufferedImage.TYPE_BYTE_GRAY;
             case RGB_565:
                 return BufferedImage.TYPE_USHORT_565_RGB;
+            // ZOUKAN -->
+            case ARGB_4444: // Android treats ARGB_4444 as ARGB_8888
+            // ZOUKAN <--
             case ARGB_8888:
                 return BufferedImage.TYPE_INT_ARGB;
             case _TYPE_3BYTE_BGR:
@@ -211,10 +217,18 @@ public final class Bitmap {
         // Android will make a copy when creating a sub image,
         // so we do the same here
         BufferedImage subImage = source.image.getSubimage(x, y, width, height);
-        BufferedImage newImage = new BufferedImage(subImage.getWidth(), subImage.getHeight(), subImage.getType());
-        newImage.setData(subImage.getData());
-
-        return new Bitmap(newImage);
+        // ZOUKAN -->
+        // Copy with the source colour model: a type-based copy recolours palette images and
+        // throws for custom types
+        java.awt.image.ColorModel cm = subImage.getColorModel();
+        java.awt.image.WritableRaster raster = cm.createCompatibleWritableRaster(width, height);
+        raster.setRect(subImage.getRaster()); // a subimage's raster starts at (0, 0)
+        BufferedImage newImage = new BufferedImage(cm, raster, cm.isAlphaPremultiplied(), null);
+        // A tile of an opaque page is opaque too, as on Android
+        Bitmap tile = new Bitmap(newImage);
+        tile.opaque = source.opaque;
+        return tile;
+        // ZOUKAN <--
     }
 
     public static Bitmap createBitmap(int[] colors, int width, int height, Config config) {
@@ -225,6 +239,78 @@ public final class Bitmap {
 
         return new Bitmap(image);
     }
+
+    // ZOUKAN -->
+    public static Bitmap createBitmap(@NonNull Bitmap src) {
+        return createBitmap(src, 0, 0, src.getWidth(), src.getHeight());
+    }
+
+    public static Bitmap createScaledBitmap(@NonNull Bitmap src, int dstWidth, int dstHeight, boolean filter) {
+        checkWidthHeight(dstWidth, dstHeight);
+        if (src.getWidth() == dstWidth && src.getHeight() == dstHeight) {
+            return src;
+        }
+        Bitmap dst = createBitmap(dstWidth, dstHeight, Config.ARGB_8888);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(filter);
+        new Canvas(dst).drawBitmap(src, new Rect(0, 0, src.getWidth(), src.getHeight()),
+                new Rect(0, 0, dstWidth, dstHeight), paint);
+        dst.opaque = src.opaque;
+        return dst;
+    }
+
+    public static Bitmap createBitmap(@NonNull Bitmap source, int x, int y, int width, int height,
+                                      @Nullable Matrix m, boolean filter) {
+        if (m == null || m.isIdentity()) {
+            return createBitmap(source, x, y, width, height);
+        }
+        checkXYSign(x, y);
+        checkWidthHeight(width, height);
+        if (x + width > source.getWidth()) {
+            throw new IllegalArgumentException("x + width must be <= bitmap.width()");
+        }
+        if (y + height > source.getHeight()) {
+            throw new IllegalArgumentException("y + height must be <= bitmap.height()");
+        }
+        RectF mapped = new RectF();
+        m.mapRect(mapped, new RectF(0, 0, width, height));
+        int w = Math.max(1, Math.round(mapped.width()));
+        int h = Math.max(1, Math.round(mapped.height()));
+        Bitmap result = createBitmap(w, h, Config.ARGB_8888);
+        Canvas canvas = new Canvas(result);
+        canvas.translate(-mapped.left, -mapped.top);
+        canvas.concat(m);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(filter);
+        canvas.drawBitmap(source, new Rect(x, y, x + width, y + height), new RectF(0, 0, width, height), paint);
+        return result;
+    }
+
+    private int density = 160; // DisplayMetrics.DENSITY_DEFAULT
+
+    public int getDensity() {
+        return density;
+    }
+
+    public void setDensity(int density) {
+        this.density = density;
+    }
+
+    /** ARGB images always carry an alpha channel here; the flag only marks a page as opaque. */
+    public void setHasAlpha(boolean hasAlpha) {
+        opaque = !hasAlpha;
+    }
+
+    public boolean sameAs(@Nullable Bitmap other) {
+        if (this == other) return true;
+        if (other == null || width != other.width || height != other.height
+                || getConfig() != other.getConfig()) {
+            return false;
+        }
+        return java.util.Arrays.equals(image.getRGB(0, 0, width, height, null, 0, width),
+                other.image.getRGB(0, 0, width, height, null, 0, width));
+    }
+    // ZOUKAN <--
 
     public boolean compress(CompressFormat format, int quality, OutputStream stream) {
         if (stream == null) {
@@ -241,8 +327,11 @@ public final class Bitmap {
             formatString = "png";
         } else if (format == Bitmap.CompressFormat.JPEG) {
             formatString = "jpg";
-        } else if (format == Bitmap.CompressFormat.WEBP || format == Bitmap.CompressFormat.WEBP_LOSSY) {
+        // ZOUKAN -->
+        } else if (format == Bitmap.CompressFormat.WEBP || format == Bitmap.CompressFormat.WEBP_LOSSY
+                || format == Bitmap.CompressFormat.WEBP_LOSSLESS) {
             formatString = "webp";
+        // ZOUKAN <--
         } else {
             throw new IllegalArgumentException("unsupported compression format! " + format);
         }
@@ -253,39 +342,80 @@ public final class Bitmap {
         }
         ImageWriter writer = writers.next();
 
-        ImageOutputStream ios;
+        // ZOUKAN -->
+        // An in-memory cache: ImageIO.createImageOutputStream may spill the page to a temp file
+        ImageOutputStream ios = new javax.imageio.stream.MemoryCacheImageOutputStream(stream);
+        // ZOUKAN <--
+        // ZOUKAN -->
+        // Android returns false when the stream fails; the writer and stream are released either way
+        boolean closeFailed = false;
         try {
-            ios = ImageIO.createImageOutputStream(stream);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-        writer.setOutput(ios);
+            writer.setOutput(ios);
 
-        BufferedImage img = image;
+            BufferedImage img = image;
 
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        if ("jpg".equals(formatString)) {
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(qualityFloat);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if ("jpg".equals(formatString)) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(qualityFloat);
 
-            img = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-            img.getGraphics().drawImage(image, 0, 0, null);
-        }
+                img = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D rgbGraphics = img.createGraphics();
+                try {
+                    rgbGraphics.drawImage(image, 0, 0, null);
+                } finally {
+                    rgbGraphics.dispose();
+                }
+            } else if ("webp".equals(formatString)) {
+                // WEBP_LOSSLESS is lossless; the deprecated WEBP is lossless at quality 100 (Android 10+)
+                boolean lossless = format == Bitmap.CompressFormat.WEBP_LOSSLESS
+                        || (format == Bitmap.CompressFormat.WEBP && quality == 100);
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                String[] types = param.getCompressionTypes();
+                if (types != null) {
+                    for (String type : types) {
+                        if (type.toLowerCase(java.util.Locale.ROOT).contains(lossless ? "lossless" : "lossy")) {
+                            param.setCompressionType(type);
+                            break;
+                        }
+                    }
+                }
+                if (!lossless) {
+                    param.setCompressionQuality(qualityFloat);
+                }
+            }
 
-        try {
             writer.write(null, new IIOImage(img, null, null), param);
-            ios.close();
-            writer.dispose();
+            ios.flush();
         } catch (IOException ex) {
-            throw new RuntimeException(ex);
+            return false;
+        } finally {
+            try {
+                ios.close();
+            } catch (IOException ex) {
+                // reported below only if nothing else failed
+                closeFailed = true;
+            }
+            writer.dispose();
         }
 
-        return true;
+        return !closeFailed;
     }
+    // ZOUKAN <--
 
     public Bitmap copy(Config config, boolean isMutable) {
+        // ZOUKAN -->
+        // Android copies to ARGB_8888; a palette, binary or custom type cannot be built by type
+        if (config == Config._TYPE_CUSTOM || config == Config._TYPE_BYTE_INDEXED
+                || config == Config._TYPE_BYTE_BINARY) {
+            config = Config.ARGB_8888;
+        }
+        // ZOUKAN <--
         Bitmap ret = createBitmap(width, height, config);
         ret.image.getGraphics().drawImage(image, 0, 0, null);
+        // ZOUKAN -->
+        ret.opaque = opaque; // a copy keeps hasAlpha(), as on Android
+        // ZOUKAN <--
         return ret;
     }
 
@@ -414,9 +544,16 @@ public final class Bitmap {
     public void eraseColor(int c) {
         java.awt.Color color = Color.valueOf(c).toJavaColor();
         Graphics2D graphics = image.createGraphics();
-        graphics.setColor(color);
-        graphics.fillRect(0, 0, width, height);
-        graphics.dispose();
+        // ZOUKAN -->
+        // Replace every pixel as Android does; the default SrcOver would blend over the old content
+        try {
+            graphics.setComposite(java.awt.AlphaComposite.Src);
+            graphics.setColor(color);
+            graphics.fillRect(0, 0, width, height);
+        } finally {
+            graphics.dispose();
+        }
+        // ZOUKAN <--
     }
 
     public void recycle() {
@@ -434,8 +571,18 @@ public final class Bitmap {
 
     public boolean hasAlpha() {
         // ALPHA_8 is held as TYPE_BYTE_GRAY, its gray samples being the alpha mask
+        // ZOUKAN -->
+        if (opaque) return false;
+        // ZOUKAN <--
         return getConfig() == Config.ALPHA_8 || image.getColorModel().hasAlpha();
     }
+
+    // ZOUKAN -->
+    /** Set by the decoders for a page without transparency: held as ARGB, but hasAlpha() is false. */
+    void markOpaque() {
+        opaque = true;
+    }
+    // ZOUKAN <--
 
     private int bytesPerPixel() {
         Config config = getConfig();

@@ -45,9 +45,10 @@ class ImageDecoder private constructor(
         val image = compositor?.frame(index) ?: ImageIoDecoding.decode(data, crop, 1, index)
         val width = image.width
         val height = image.height
-        val pixels = IntArray(width * height)
+        ImageIoDecoding.checkSize(width, height)
+        val pixels = IntArray(Math.multiplyExact(width, height))
         image.getRGB(0, 0, width, height, pixels, 0, width)
-        val buffer = ByteBuffer.allocateDirect(pixels.size * 4)
+        val buffer = ByteBuffer.allocateDirect(Math.multiplyExact(pixels.size, 4))
         for (argb in pixels) {
             val a = argb ushr 24
             buffer.put(premultiply((argb shr 16) and 0xFF, a))

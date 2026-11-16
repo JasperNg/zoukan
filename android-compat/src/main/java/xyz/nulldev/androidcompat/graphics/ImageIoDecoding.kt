@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import javax.imageio.ImageIO
 import javax.imageio.ImageReader
+import javax.imageio.stream.MemoryCacheImageInputStream
 import org.w3c.dom.Node
 
 /**
@@ -20,7 +21,8 @@ internal object ImageIoDecoding {
         bytes: ByteArray,
         block: (ImageReader) -> T,
     ): T {
-        val input = ImageIO.createImageInputStream(ByteArrayInputStream(bytes)) ?: throw IOException("Cannot read the image")
+        // An in-memory cache: ImageIO.createImageInputStream may spill the page to a temp file
+        val input = MemoryCacheImageInputStream(ByteArrayInputStream(bytes))
         input.use {
             val readers = ImageIO.getImageReaders(input)
             if (!readers.hasNext()) throw IOException("No decoder for this image format")
@@ -34,8 +36,33 @@ internal object ImageIoDecoding {
         }
     }
 
-    /** The width and height of the first image in [bytes]. */
-    fun size(bytes: ByteArray): Pair<Int, Int> = withReader(bytes) { it.getWidth(0) to it.getHeight(0) }
+    /** Largest side decoded; a header claiming more is refused before any allocation. */
+    const val MAX_SIDE = 65_535
+
+    /** Largest pixel count decoded (about 400 MB as ARGB); real pages, long strips included, are far below. */
+    const val MAX_PIXELS = 100_000_000L
+
+    /** Throws an [IOException] when an image of [width] x [height] is too large (or empty) to decode. */
+    @JvmStatic
+    fun checkSize(
+        width: Int,
+        height: Int,
+    ) {
+        if (width <= 0 || height <= 0 || width > MAX_SIDE || height > MAX_SIDE ||
+            width.toLong() * height > MAX_PIXELS
+        ) {
+            throw IOException("Image too large to decode: ${width}x$height")
+        }
+    }
+
+    /** The width and height of the first image in [bytes]; throws when it is too large to decode. */
+    fun size(bytes: ByteArray): Pair<Int, Int> =
+        withReader(bytes) {
+            val w = it.getWidth(0)
+            val h = it.getHeight(0)
+            checkSize(w, h)
+            w to h
+        }
 
     /**
      * Decodes [region] of image [index] in [bytes] (the whole image when null), keeping one pixel in
@@ -49,8 +76,15 @@ internal object ImageIoDecoding {
     ): BufferedImage =
         withReader(bytes) { reader ->
             val param = reader.defaultReadParam
-            if (region != null) param.sourceRegion = region
             val sample = sampleSize.coerceAtLeast(1)
+            val headerWidth = reader.getWidth(index)
+            val headerHeight = reader.getHeight(index)
+            if (headerWidth > MAX_SIDE || headerHeight > MAX_SIDE) {
+                throw IOException("Image too large to decode: ${headerWidth}x$headerHeight")
+            }
+            val decoded = region?.intersection(Rectangle(0, 0, headerWidth, headerHeight)) ?: Rectangle(0, 0, headerWidth, headerHeight)
+            checkSize((decoded.width + sample - 1) / sample, (decoded.height + sample - 1) / sample)
+            if (region != null) param.sourceRegion = region
             if (sample > 1) param.setSourceSubsampling(sample, sample, 0, 0)
             toArgb(reader.read(index, param))
         }
@@ -73,7 +107,7 @@ internal object ImageIoDecoding {
                     val h = descriptor?.attr("logicalScreenHeight")?.toIntOrNull() ?: 0
                     if (w > 0 && h > 0) w to h else null
                 }.getOrNull()
-            screen ?: (reader.getWidth(0) to reader.getHeight(0))
+            (screen ?: (reader.getWidth(0) to reader.getHeight(0))).also { (w, h) -> checkSize(w, h) }
         }
 
     /**
@@ -86,7 +120,11 @@ internal object ImageIoDecoding {
         private val width: Int,
         private val height: Int,
     ) {
-        private val canvas = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        private val canvas =
+            run {
+                checkSize(width, height)
+                BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+            }
         private var nextIndex = 0
 
         // What to do to the canvas before drawing the next frame

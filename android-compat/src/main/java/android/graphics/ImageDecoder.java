@@ -120,7 +120,7 @@ public final class ImageDecoder implements AutoCloseable {
             this.mimeType = mimeType;
         }
 
-        /** Needs android.util.Size, which is a stub in android.jar. */
+        /** android.util.Size is shadowed in android-compat. */
         @NonNull
         public Size getSize() {
             return new Size(width, height);
@@ -369,7 +369,8 @@ public final class ImageDecoder implements AutoCloseable {
         }
         BufferedImage image;
         String mimeType;
-        try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+        // An in-memory cache: ImageIO.createImageInputStream may spill the page to a temp file
+        try (ImageInputStream in = new javax.imageio.stream.MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
             Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
                 throw new DecodeException(DecodeException.SOURCE_MALFORMED_DATA, "Failed to create image decoder with message 'unimplemented'Input contained an error.", null, src);
@@ -384,7 +385,20 @@ public final class ImageDecoder implements AutoCloseable {
                     listener.onHeaderDecoded(decoder, new ImageInfo(decoder.width, decoder.height, mimeType), src);
                 }
                 try {
-                    image = reader.read(0, reader.getDefaultReadParam());
+                    javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
+                    // Decode at a reduced size when a smaller target is set, and refuse a size too large to hold
+                    int sx = Math.max(1, Math.min(decoder.width / Math.max(1, decoder.targetWidth),
+                            decoder.height / Math.max(1, decoder.targetHeight)));
+                    if (decoder.width > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE
+                            || decoder.height > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE) {
+                        sx = Math.max(sx, Math.max(decoder.width, decoder.height) / xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE + 1);
+                    }
+                    if (sx > 1) param.setSourceSubsampling(sx, sx, 0, 0);
+                    xyz.nulldev.androidcompat.graphics.ImageIoDecoding.checkSize((decoder.width + sx - 1) / sx, (decoder.height + sx - 1) / sx);
+                    xyz.nulldev.androidcompat.graphics.ImageIoDecoding.checkSize(decoder.targetWidth, decoder.targetHeight);
+                    image = reader.read(0, param);
+                } catch (IOException e) {
+                    throw new DecodeException(DecodeException.SOURCE_MALFORMED_DATA, "Failed to decode the image: " + e, e, src);
                 } catch (RuntimeException e) {
                     throw new DecodeException(DecodeException.SOURCE_MALFORMED_DATA, "Failed to decode the image: " + e, e, src);
                 }
