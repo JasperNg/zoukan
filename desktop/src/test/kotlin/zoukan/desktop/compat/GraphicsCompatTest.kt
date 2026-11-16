@@ -343,6 +343,21 @@ class GraphicsCompatTest {
     }
 
     @Test
+    fun `ImageDecoder header listener reads info size and sets a target size`() {
+        val image = BufferedImage(8, 6, BufferedImage.TYPE_INT_ARGB)
+        val png = ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray()
+
+        val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(png)) { decoder, info, _ ->
+            decoder.setTargetSize(info.size.width / 2, info.size.height / 2)
+        }
+        bitmap.width shouldBe 4
+        bitmap.height shouldBe 3
+
+        android.util.Size(8, 6) shouldBe android.util.Size(8, 6)
+        android.util.Size(8, 6).toString() shouldBe "8x6"
+    }
+
+    @Test
     fun `ImageDecoder decodes a PNG`() {
         val image = BufferedImage(3, 2, BufferedImage.TYPE_INT_ARGB)
         image.setRGB(0, 0, 0xFFFF0000.toInt())

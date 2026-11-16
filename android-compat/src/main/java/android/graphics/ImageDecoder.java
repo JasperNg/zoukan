@@ -120,7 +120,7 @@ public final class ImageDecoder implements AutoCloseable {
             this.mimeType = mimeType;
         }
 
-        /** Needs android.util.Size, which is a stub in android.jar. */
+        /** android.util.Size is shadowed in android-compat. */
         @NonNull
         public Size getSize() {
             return new Size(width, height);
