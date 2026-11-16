@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.FeedRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.SavedSearchRestorer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -124,6 +125,17 @@ class BackupContentRestorer(
         return errors.toList()
     }
 
+    /** Runs one part of the restore. A failure goes to the error list so the other parts still run. */
+    private suspend fun section(label: String, block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errors.add(Date() to "$label: ${e.message}")
+        }
+    }
+
     private suspend fun progress(step: Step) {
         restoreProgress += 1
         onProgress(step, restoreProgress, restoreAmount)
@@ -131,7 +143,7 @@ class BackupContentRestorer(
 
     private suspend fun CoroutineScope.restoreCategories(backupCategories: List<BackupCategory>) {
         ensureActive()
-        categoriesRestorer(backupCategories)
+        section("Categories") { categoriesRestorer(backupCategories) }
 
         progress(Step.Section(MR.strings.categories))
     }
@@ -144,9 +156,9 @@ class BackupContentRestorer(
         // KMK <--
     ) = launch {
         ensureActive()
-        savedSearchRestorer.restoreSavedSearches(backupSavedSearches)
+        section("Saved searches") { savedSearchRestorer.restoreSavedSearches(backupSavedSearches) }
         // KMK -->
-        feedRestorer.restoreFeeds(backupFeeds)
+        section("Feeds") { feedRestorer.restoreFeeds(backupFeeds) }
         // KMK <--
 
         progress(Step.Section(KMR.strings.saved_searches_feeds))
@@ -178,10 +190,12 @@ class BackupContentRestorer(
     ) = launch {
         ensureActive()
         // ZOUKAN -->
-        preferenceRestorer.restoreApp(
-            preferences,
-            categories,
-        ).forEach { errors.add(Date() to it) }
+        section("App settings") {
+            preferenceRestorer.restoreApp(
+                preferences,
+                categories,
+            ).forEach { errors.add(Date() to it) }
+        }
         // ZOUKAN <--
 
         progress(Step.Section(MR.strings.app_settings))
@@ -190,7 +204,9 @@ class BackupContentRestorer(
     private fun CoroutineScope.restoreSourcePreferences(preferences: List<BackupSourcePreferences>) = launch {
         ensureActive()
         // ZOUKAN -->
-        preferenceRestorer.restoreSource(preferences).forEach { errors.add(Date() to it) }
+        section("Source settings") {
+            preferenceRestorer.restoreSource(preferences).forEach { errors.add(Date() to it) }
+        }
         // ZOUKAN <--
 
         progress(Step.Section(MR.strings.source_settings))
