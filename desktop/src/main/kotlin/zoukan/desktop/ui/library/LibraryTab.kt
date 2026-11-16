@@ -185,7 +185,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                 subtitle = if (state.loading) null else localized(DMR.strings.entries, state.entryCount),
                 showBack = false,
             ) {
-                SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp))
+                SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp).background(Color.Red))
                 TooltipIconButton(
                     Icons.Outlined.FilterList,
                     if (settings.hasFilter) localized(DMR.strings.filter_sort_and_display_filtered) else localized(DMR.strings.filter_sort_and_display),
