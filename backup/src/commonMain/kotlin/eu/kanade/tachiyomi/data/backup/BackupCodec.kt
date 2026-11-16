@@ -19,6 +19,9 @@ import java.io.IOException
  */
 object BackupCodec {
 
+    /** The most a backup or sync reply may hold once decompressed; far above any real library. */
+    const val MAX_DECODED_BYTES = 512L * 1024 * 1024
+
     /** Why a file could not be decoded. */
     enum class Error {
         /** A JSON backup from Tachiyomi before 0.10, which is not supported. */
@@ -38,10 +41,10 @@ object BackupCodec {
      * @throws IOException as thrown by [source], if reading it fails. A read error is not reported
      *   as an invalid backup, so the real cause reaches the user.
      */
-    fun decode(source: Source, parser: ProtoBuf = ProtoBuf): Backup {
+    fun decode(source: Source, parser: ProtoBuf = ProtoBuf, maxBytes: Long = MAX_DECODED_BYTES): Backup {
         val tracked = ReadErrorTrackingSource(source)
         val bytes = try {
-            tracked.buffer().use { it.readBackupBytes() }
+            tracked.buffer().use { it.readBackupBytes(maxBytes) }
         } catch (e: InvalidBackupException) {
             throw e
         } catch (e: IOException) {
@@ -91,15 +94,40 @@ object BackupCodec {
         sink.gzip().buffer().use { it.write(bytes) }
     }
 
-    private fun BufferedSource.readBackupBytes(): ByteArray {
+    private fun BufferedSource.readBackupBytes(maxBytes: Long): ByteArray {
         val peeked = peek().apply { require(2) }
         val id1id2 = peeked.readShort()
         return when (id1id2.toInt()) {
-            GZIP_MAGIC -> gzip().buffer().use { it.readByteArray() }
+            GZIP_MAGIC -> gzip().buffer().use { it.readAtMost(maxBytes) }
             MAGIC_JSON_SIGNATURE1, MAGIC_JSON_SIGNATURE2, MAGIC_JSON_SIGNATURE3 ->
                 throw InvalidBackupException(Error.JSON)
-            else -> readByteArray()
+            else -> readAtMost(maxBytes)
         }
+    }
+
+    /** Reads everything, failing as an invalid backup once more than [maxBytes] have come out. */
+    private fun BufferedSource.readAtMost(maxBytes: Long): ByteArray {
+        val out = Buffer()
+        while (read(out, 8192) != -1L) {
+            if (out.size > maxBytes) throw tooLarge(maxBytes)
+        }
+        return out.readByteArray()
+    }
+
+    private fun tooLarge(maxBytes: Long) =
+        InvalidBackupException(Error.UNKNOWN, IOException("decompressed size over $maxBytes bytes"))
+
+    /** Reads a sync reply fully, failing as an invalid backup once more than [maxBytes] have come out. */
+    fun readBounded(input: java.io.InputStream, maxBytes: Long = MAX_DECODED_BYTES): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(8192)
+        while (true) {
+            val n = input.read(chunk)
+            if (n < 0) break
+            out.write(chunk, 0, n)
+            if (out.size() > maxBytes) throw tooLarge(maxBytes)
+        }
+        return out.toByteArray()
     }
 
     private const val GZIP_MAGIC = 0x1f8b

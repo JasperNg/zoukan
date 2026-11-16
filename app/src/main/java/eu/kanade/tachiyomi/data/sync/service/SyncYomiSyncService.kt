@@ -144,9 +144,18 @@ class SyncYomiSyncService(
             val newETag = response.headers["ETag"]
                 .takeIf { it?.isNotEmpty() == true } ?: throw SyncYomiException("Missing ETag")
 
-            val byteArray = response.body.byteStream().use {
-                return@use it.readBytes()
+            // ZOUKAN -->
+            // A reply past the cap ends the sync with an error; it must not look like an invalid
+            // remote file, which the sync would overwrite
+            if (response.body.contentLength() > eu.kanade.tachiyomi.data.backup.BackupCodec.MAX_DECODED_BYTES) {
+                throw SyncYomiException("The sync data is too large")
             }
+            val byteArray = try {
+                response.body.byteStream().use { eu.kanade.tachiyomi.data.backup.BackupCodec.readBounded(it) }
+            } catch (e: eu.kanade.tachiyomi.data.backup.BackupCodec.InvalidBackupException) {
+                throw SyncYomiException("The sync data is too large")
+            }
+            // ZOUKAN <--
 
             return try {
                 val backup = protoBuf.decodeFromByteArray(Backup.serializer(), byteArray)

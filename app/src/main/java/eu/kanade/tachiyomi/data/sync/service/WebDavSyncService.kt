@@ -143,7 +143,18 @@ class WebDavSyncService(
             else -> {
                 if (response.isSuccessful) {
                     val newETag = response.headers["ETag"]?.trim('"') ?: ""
-                    val bytes = response.body.byteStream().use { it.readBytes() }
+                    // ZOUKAN -->
+                    // A reply past the cap ends the sync with an error; it must not look like an
+                    // invalid remote file, which the sync would overwrite
+                    if (response.body.contentLength() > eu.kanade.tachiyomi.data.backup.BackupCodec.MAX_DECODED_BYTES) {
+                        throw WebDavException("The sync file is too large")
+                    }
+                    val bytes = try {
+                        response.body.byteStream().use { eu.kanade.tachiyomi.data.backup.BackupCodec.readBounded(it) }
+                    } catch (e: eu.kanade.tachiyomi.data.backup.BackupCodec.InvalidBackupException) {
+                        throw WebDavException("The sync file is too large")
+                    }
+                    // ZOUKAN <--
                     try {
                         val backup = protoBuf.decodeFromByteArray(Backup.serializer(), bytes)
                         Pair(SyncData(backup = backup), newETag)
