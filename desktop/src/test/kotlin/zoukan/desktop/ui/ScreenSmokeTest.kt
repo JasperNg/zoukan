@@ -12,6 +12,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
@@ -31,9 +33,11 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
+import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
@@ -41,6 +45,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.all.MangaDex
 import exh.md.utils.MdUtil
 import exh.source.EnhancedHttpSource
+import exh.source.ExhPreferences
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -66,6 +71,8 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -818,6 +825,57 @@ open class ScreenSmokeTest {
                 onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
             },
         ),
+        Check(
+            "state:settings-theme-row",
+            "settings Appearance theme row scrolls",
+            {
+                openSettingsCategory(SettingsCategory.Appearance)
+                HomeScreen.openSettings(it)
+            },
+            drive = {
+                // More themes than fit: the row shows a scrollbar to reach them
+                waitUntil(timeoutMillis = 5_000) { onAllNodes(hasTestTag("theme-row-scrollbar")).fetchSemanticsNodes().isNotEmpty() }
+                onNodeWithTag("theme-row-scrollbar").assertIsDisplayed()
+            },
+        ),
+        run {
+            val exh by lazy { Injekt.get<ExhPreferences>().isHentaiEnabled() }
+            val sync by lazy { Injekt.get<SyncPreferences>().syncService() }
+            val lock by lazy { Injekt.get<SecurityPreferences>().useAuthenticator() }
+            var before = Triple(false, SyncManager.SyncService.NONE.value, false)
+            Check(
+                "settings:search-hidden",
+                "settings search finds hidden settings",
+                {
+                    // The switches that reveal these settings are off
+                    before = Triple(exh.get(), sync.get(), lock.get())
+                    exh.set(false)
+                    sync.set(SyncManager.SyncService.NONE.value)
+                    lock.set(false)
+                    HomeScreen.openSettings(it)
+                },
+                drive = {
+                    listOf(
+                        localized(DMR.strings.use_japanese_titles),
+                        localized(DMR.strings.lock_on_these_days),
+                        localized(KMR.strings.web_dav),
+                        localized(MR.strings.theme_nord),
+                    ).forEach { query ->
+                        onAllNodes(hasSetTextAction()).onFirst().performTextInput(query)
+                        settle()
+                        check(onAllNodes(hasText(localized(DMR.strings.no_settings_match, query))).fetchSemanticsNodes().isEmpty()) {
+                            "settings search found nothing for \"$query\""
+                        }
+                        onAllNodes(hasSetTextAction()).onFirst().performTextClearance()
+                    }
+                },
+                cleanup = {
+                    exh.set(before.first)
+                    sync.set(before.second)
+                    lock.set(before.third)
+                },
+            )
+        },
     )
 
     // Dialogs

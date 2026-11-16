@@ -271,7 +271,7 @@ private fun UserAgentPreference() {
                 } catch (_: IllegalArgumentException) {
                     Toasts.show(localized(MR.strings.error_user_agent_string_invalid))
                 }
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = { editing = false }) { Text(localized(MR.strings.action_cancel)) } },
     )

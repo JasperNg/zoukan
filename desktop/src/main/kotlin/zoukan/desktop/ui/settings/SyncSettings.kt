@@ -78,7 +78,29 @@ private fun SyncSettingsSection() {
                 SyncManager.SyncService.WEB_DAV.value to localized(KMR.strings.web_dav),
             ),
         )
-        when (SyncManager.SyncService.fromInt(service)) {
+        // Search finds the rows of the services and options that are not shown now
+        val syncService = SyncManager.SyncService.fromInt(service)
+        if (syncService != SyncManager.SyncService.SYNCYOMI) {
+            SearchTerms(localized(SYMR.strings.pref_sync_host), localized(SYMR.strings.pref_sync_api_key))
+        }
+        if (syncService != SyncManager.SyncService.WEB_DAV) {
+            SearchTerms(
+                localized(DMR.strings.server_url),
+                localized(MR.strings.username),
+                localized(MR.strings.password),
+                localized(DMR.strings.folder),
+            )
+        }
+        if (service == SyncManager.SyncService.NONE.value) {
+            SearchTerms(
+                localized(DMR.strings.automatic_sync),
+                localized(DMR.strings.what_to_sync),
+                localized(DMR.strings.when_to_sync),
+                localized(SYMR.strings.pref_sync_now),
+                localized(DMR.strings.reset_the_last_sync_time),
+            )
+        }
+        when (syncService) {
             SyncManager.SyncService.SYNCYOMI -> {
                 TextRow(localized(SYMR.strings.pref_sync_host), preferences.clientHost()) {
                     edit = it
@@ -264,7 +286,7 @@ private fun WhatDialog(preferences: SyncPreferences, onDismiss: () -> Unit) {
             TextButton(onClick = {
                 preferences.setSyncSettings(s)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
@@ -288,7 +310,7 @@ private fun TriggersDialog(preferences: SyncPreferences, onDismiss: () -> Unit) 
             TextButton(onClick = {
                 preferences.setSyncTriggerOptions(t)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

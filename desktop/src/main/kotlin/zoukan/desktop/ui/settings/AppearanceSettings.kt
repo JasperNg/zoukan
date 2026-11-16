@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -57,6 +56,8 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Dates
+import zoukan.desktop.ui.common.LazyRow
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.colorScheme
 import zoukan.desktop.ui.common.pickableThemes
@@ -118,15 +119,23 @@ internal fun ThemeSection() {
     val shownTheme = if (theme == AppTheme.MONET) AppTheme.DEFAULT else theme
 
     Column {
+        // The theme names and modes are not rows, so search finds them by these terms
+        SearchTerms(
+            *pickableThemes.map(::themeLabel).toTypedArray(),
+            localized(MR.strings.theme_system),
+            localized(MR.strings.theme_light),
+            localized(MR.strings.theme_dark),
+        )
         SettingRow(localized(MR.strings.pref_app_theme))
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(horizontal = Spacing.SettingsRowInset), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(ThemeMode.SYSTEM to localized(MR.strings.theme_system), ThemeMode.LIGHT to localized(MR.strings.theme_light), ThemeMode.DARK to localized(MR.strings.theme_dark)).forEach { (value, label) ->
                 FilterChip(selected = mode == value, onClick = { ui.themeMode().set(value) }, label = { Text(label) })
             }
         }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.SettingsRowInset, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            scrollbarModifier = Modifier.testTag("theme-row-scrollbar").padding(horizontal = Spacing.SettingsRowInset),
         ) {
             items(pickableThemes, key = { it.name }) { appTheme ->
                 ThemePreview(
@@ -356,7 +365,7 @@ private fun DisplaySection() {
         ChoiceSetting(
             localized(MR.strings.pref_date_format),
             format,
-            Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { "Default" }} (${Dates.format(now, pattern)})" },
+            Dates.formats.map { pattern -> pattern to "${pattern.ifEmpty { localized(MR.strings.label_default) }} (${Dates.format(now, pattern)})" },
         ) { ui.dateFormat().set(it) }
         SwitchPreference(
             localized(MR.strings.pref_relative_format),

@@ -192,7 +192,7 @@ fun LibraryTab(model: LibraryScreenModel) {
         } else {
             ScreenHeader(
                 title = localized(MR.strings.label_library),
-                subtitle = if (state.loading) null else localized(DMR.strings.entries, state.entryCount),
+                subtitle = if (state.loading) null else localizedPlural(DMR.plurals.entries, state.entryCount, state.entryCount),
                 showBack = false,
             ) {
                 SearchField(state.query, model::search, localized(DMR.strings.search_library), Modifier.width(280.dp).padding(end = 8.dp))

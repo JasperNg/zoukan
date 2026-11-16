@@ -60,6 +60,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.languageName
 import zoukan.desktop.ui.common.DropdownMenu
@@ -96,7 +97,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                 localized(SYMR.strings.select_sources),
                 subtitle = localized(
                     DMR.strings.migration_config_subtitle,
-                    if (mangaIds.size == 1) localized(DMR.strings.n_1_entry) else localized(DMR.strings.entries, mangaIds.size),
+                    localizedPlural(DMR.plurals.entries, mangaIds.size, mangaIds.size),
                     state.sources.count { it.selected }.let { if (it == 1) localized(DMR.strings.n_1_source) else localized(DMR.strings.sources, it) },
                 ),
             ) {

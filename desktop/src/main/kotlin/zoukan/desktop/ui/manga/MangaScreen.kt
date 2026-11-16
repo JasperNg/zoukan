@@ -439,7 +439,7 @@ private fun ChapterToolbar(state: MangaScreenModel.State, model: MangaScreenMode
             // ZOUKAN -->
             val shown = state.sortedChapters.size
             Text(
-                if (shown == state.chapters.size) localized(DMR.strings.chapters, state.chapters.size) else localized(DMR.strings.of_chapters, shown, state.chapters.size),
+                if (shown == state.chapters.size) localizedPlural(DMR.plurals.chapters, state.chapters.size, state.chapters.size) else localized(DMR.strings.of_chapters, shown, state.chapters.size),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )

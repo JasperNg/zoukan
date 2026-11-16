@@ -68,6 +68,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -100,11 +101,13 @@ import zoukan.desktop.backup.BackupJobs
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
 import java.awt.Desktop
@@ -157,9 +160,17 @@ fun openSettingsCategory(category: SettingsCategory) {
     selectedCategory = category
 }
 
+/** How wide the list of pages is when [available] width is shared with the open page. */
+internal fun settingsListWidth(available: Dp): Dp =
+    if (available < Spacing.TwoPaneBreakpoint) {
+        Spacing.SettingsListNarrowWidth.coerceAtMost(available / 2)
+    } else {
+        (available / 2).coerceAtMost(Spacing.SettingsListMaxWidth)
+    }
+
 /**
  * Settings, laid out as the Android app's tablet settings: the list of pages on the left (half the
- * width, at most 450dp) and the open page on the right.
+ * width, at most 450dp; a fixed narrower width in small windows) and the open page on the right.
  */
 @Composable
 fun SettingsTab() {
@@ -189,7 +200,7 @@ fun SettingsTab() {
                     val count = categories.count { !it.isSystemCategory }
                     SettingRow(
                         localized(MR.strings.action_edit_categories),
-                        if (count == 1) localized(DMR.strings.n_1_category) else localized(DMR.strings.categories, count),
+                        localizedPlural(DMR.plurals.categories, count, count),
                         onClick = { navigator.push(CategoryScreen) },
                     )
                 }
@@ -236,7 +247,7 @@ fun SettingsTab() {
         // Every item but the end spacer has no height when nothing matches
         val nothing by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.none { it.size > 0 && it.key != "search-end" } } }
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+            LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
                 pages.forEach { SearchScope(this, it, query, onOpen).settingsPage(it) }
                 item(key = "search-end") { Spacer(Modifier.height(24.dp)) }
             }
@@ -252,7 +263,7 @@ fun SettingsTab() {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val listWidth = (maxWidth / 2).coerceAtMost(450.dp)
+        val listWidth = settingsListWidth(maxWidth)
         Row(Modifier.fillMaxSize()) {
             Surface(color = palerSurface(), modifier = Modifier.width(listWidth).fillMaxHeight()) {
                 SettingsCategoryList(pages, if (searching) null else selected) {
@@ -275,7 +286,7 @@ fun SettingsTab() {
                         val state = rememberLazyListState()
                         val ids = remember { mutableListOf<Any>() }
                         val highlight = highlightedItem?.takeIf { it.first == selected }?.second
-                        LazyColumn(Modifier.fillMaxSize().widthIn(max = 900.dp), state = state) {
+                        LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
                             ids.clear()
                             HighlightScope(this, highlight, ids).settingsPage(selected)
                             item { Spacer(Modifier.height(24.dp)) }

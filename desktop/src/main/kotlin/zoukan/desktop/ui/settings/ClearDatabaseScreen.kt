@@ -127,7 +127,7 @@ object ClearDatabaseScreen : Screen {
                     TextButton(onClick = {
                         model.confirm(false)
                         model.delete(keepRead)
-                    }) { Text("OK") }
+                    }) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = { model.confirm(false) }) { Text(localized(MR.strings.action_cancel)) } },
             )

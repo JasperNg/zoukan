@@ -30,6 +30,8 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
@@ -203,7 +205,8 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
-                                error = e.message ?: localized(DMR.strings.could_not_sign_in)
+                                logcat(LogPriority.WARN, e) { "Signing in failed" }
+                                error = localized(DMR.strings.could_not_sign_in)
                             }
                             busy = false
                         }
@@ -264,7 +267,8 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
-                                error = e.message
+                                logcat(LogPriority.WARN, e) { "Signing in failed" }
+                                error = localized(DMR.strings.could_not_sign_in)
                             }
                             busy = false
                         }

@@ -12,8 +12,17 @@ import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
+import zoukan.desktop.compat.localizedPlural
 import zoukan.i18n.desktop.DMR
 import java.io.File
+
+/** The toast after a restore of [entries] entries that had [errors] errors, with both counts pluralised. */
+internal fun restoredMessage(entries: Int, errors: Int): String =
+    if (errors == 0) {
+        localizedPlural(DMR.plurals.restored_entries, entries, entries)
+    } else {
+        localizedPlural(DMR.plurals.restored_entries_with_errors, entries, entries, localizedPlural(DMR.plurals.restore_errors, errors, errors))
+    }
 
 /** How a restore that [BackupJobs.restore] started ended. */
 enum class RestoreOutcome { OK, FAILED, CANCELLED }
@@ -52,7 +61,7 @@ class BackupJobs(
         scope.launch {
             try {
                 val backup = backups().create(file, options)
-                Toasts.show(localized(DMR.strings.backed_up_entries_to, backup.backupManga.size, file.name))
+                Toasts.show(localizedPlural(DMR.plurals.backed_up_entries_to, backup.backupManga.size, backup.backupManga.size, file.name))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -115,13 +124,7 @@ class BackupJobs(
                             _status.value = localized(DMR.strings.restoring_of, file.name, progress, total)
                         }
                         result = RestoreOutcome.OK
-                        Toasts.show(
-                            if (errors.isEmpty()) {
-                                localized(DMR.strings.restored_entries, backup.backupManga.size)
-                            } else {
-                                localized(DMR.strings.restored_entries_with_errors, backup.backupManga.size, errors.size)
-                            },
-                        )
+                        Toasts.show(restoredMessage(backup.backupManga.size, errors.size))
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
