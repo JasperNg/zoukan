@@ -64,6 +64,12 @@ class DesktopExtensionManager(
             loader.installedPackageNames().forEach { pkg ->
                 locked(pkg) {
                     // Read again under the lock: an uninstall may have run since the folder was listed
+                    // A reinstall that never confirmed (a crash): its kept-aside files come back first
+                    try {
+                        loader.restoreInterruptedReinstall(pkg)
+                    } catch (e: Exception) {
+                        logcat(LogPriority.WARN, e) { "Could not restore the files of $pkg" }
+                    }
                     loader.installedPackage(pkg)?.let { register(loader.load(it, stores)) }
                 }
             }
@@ -114,14 +120,16 @@ class DesktopExtensionManager(
     /**
      * Installs or updates [extension] and loads it. An update whose new files fail to load leaves
      * the working version installed and listed: its new files are removed, so the next start loads
-     * the working version too, and the error is returned for the caller to report.
+     * the working version too, and the error is returned for the caller to report. A reinstall of
+     * the same version keeps the working files aside until the new ones load, and puts them back
+     * if they do not.
      */
     suspend fun installExtension(extension: Extension.Available, forceApk: Boolean = false): LoadResult =
         withContext(Dispatchers.IO) {
             val pkg = extension.pkgName
             locked(pkg) {
                 val previous = loader.installedPackage(pkg)
-                val files = try {
+                val done = try {
                     // An update must be signed like the version it replaces, as Android's package
                     // manager demands; otherwise any added store could replace an installed extension.
                     // And it must not be older, as Android refuses a downgrade
@@ -130,18 +138,31 @@ class DesktopExtensionManager(
                         forceApk,
                         requiredSigner = requiredSigner(pkg),
                         installedVersionCode = previous?.versionCode,
-                    ).files
+                    )
                 } catch (e: ExtensionException) {
                     // Refused before anything was replaced: the installed version stays listed (and
                     // pinned) as it was. The caller reports the error
                     return@withContext LoadResult.Error(pkg, e)
                 }
-                val result = loader.load(files, getStores())
-                if (result is LoadResult.Error && installed.value[pkg] != null) {
-                    if (previous != null && previous.versionCode != files.versionCode) {
+                val files = done.files
+                val result = try {
+                    loader.load(files, getStores())
+                } catch (e: Throwable) {
+                    // Also when cancelled: a same-version reinstall's working files come back
+                    installer.restorePrevious(done)
+                    throw e
+                }
+                if (result is LoadResult.Error) {
+                    if (installed.value[pkg] != null && previous != null && previous.versionCode != files.versionCode) {
                         loader.deleteVersion(pkg, files.versionCode)
+                    } else {
+                        // A same-version reinstall that does not load: what the user had stays, byte
+                        // for byte (a no-op when nothing was kept aside)
+                        installer.restorePrevious(done)
                     }
-                    return@withContext result
+                    if (installed.value[pkg] != null) return@withContext result
+                } else {
+                    installer.dropPrevious(done)
                 }
                 register(result)
                 result

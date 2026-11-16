@@ -330,6 +330,42 @@ class DesktopExtensionManagerTest {
     }
 
     @Test
+    fun `a same-version reinstall that fails to load keeps the working files`() = withStubbedSignatures {
+        val manager = manager()
+        manager.installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
+        val before = File(extensionsDir, pkgName).listFiles()!!.associate { it.name to it.readBytes() }
+
+        val result = manager.installExtension(offer(3, "key-a", sourceClass = "zoukan.extension.Missing"))
+
+        result.shouldBeInstanceOf<LoadResult.Error>().error.stage shouldBe ExtensionException.Stage.LOAD
+        manager.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>().versionCode shouldBe 3
+        manager.loadErrorsFlow.value[pkgName] shouldBe null
+        before.forEach { (name, bytes) ->
+            File(extensionsDir, "$pkgName/$name").readBytes().contentEquals(bytes) shouldBe true
+        }
+        installedVersions() shouldBe before.keys.sorted()
+
+        // The next start loads the working jar, not the broken one
+        manager().also { it.init() }.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>()
+    }
+
+    @Test
+    fun `start puts back the files of a reinstall that never confirmed`() = withStubbedSignatures {
+        val first = manager()
+        first.installExtension(offer(3, "key-a")).shouldBeInstanceOf<LoadResult.Success>()
+        val dir = File(extensionsDir, pkgName)
+        val working = File(dir, "3.jar").readBytes()
+        // The app stopped after the working jar was moved aside and a broken one put in its place
+        File(dir, "3.jar").renameTo(File(dir, "3.jar.previous"))
+        File(dir, "3.jar").writeBytes(byteArrayOf(1, 2, 3))
+
+        manager().also { it.init() }.installedExtensionsFlow.value[pkgName].shouldBeInstanceOf<Extension.Installed>()
+
+        File(dir, "3.jar").readBytes().contentEquals(working) shouldBe true
+        installedVersions() shouldBe listOf("3.jar")
+    }
+
+    @Test
     fun `an older version is refused`() = withStubbedSignatures {
         val manager = manager()
         manager.installExtension(offer(4, "key-a")).shouldBeInstanceOf<LoadResult.Success>()

@@ -31,7 +31,28 @@ class DesktopExtensionInstaller(
     /** How the extension was installed. */
     enum class Method { JAR, APK }
 
-    data class Installed(val files: DesktopExtensionLoader.InstalledFiles, val method: Method)
+    /**
+     * [keptAside] are the files of a same-version install that this install replaced, kept next to
+     * the new ones until the caller decides: [dropPrevious] once the new files load, [restorePrevious]
+     * when they do not. Empty for a fresh install or a new version.
+     */
+    data class Installed(
+        val files: DesktopExtensionLoader.InstalledFiles,
+        val method: Method,
+        val keptAside: List<File> = emptyList(),
+    )
+
+    /** Puts the files this install replaced back, as they were. Only touches this package's folder. */
+    fun restorePrevious(installed: Installed) {
+        if (installed.keptAside.isEmpty()) return
+        PreviousFiles.restore(checkedPackageDir(extensionsDir, installed.files.pkgName), installed.files.versionCode)
+    }
+
+    /** Deletes the files this install replaced: the new files work. Only touches this package's folder. */
+    fun dropPrevious(installed: Installed) {
+        if (installed.keptAside.isEmpty()) return
+        PreviousFiles.drop(checkedPackageDir(extensionsDir, installed.files.pkgName), installed.files.versionCode)
+    }
 
     /**
      * @param requiredSigner the signing certificate's SHA-256 of the installed version, when this
@@ -77,13 +98,20 @@ class DesktopExtensionInstaller(
                 .also { checkManifest(it, extension, installedVersionCode) }
             val dir = packageDir(extension.pkgName)
             val jar = File(dir, "${manifest.versionCode}.jar")
-            Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            File(dir, "${manifest.versionCode}.apk").delete()
+            // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
+            val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
+            try {
+                Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: Exception) {
+                PreviousFiles.restore(dir, manifest.versionCode)
+                throw e
+            }
             // The hash sidecar earlier versions of Zoukan wrote for an APK-method install
             File(dir, "${manifest.versionCode}.sha256").delete()
             return Installed(
                 DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, null),
                 Method.JAR,
+                kept,
             )
         } finally {
             tmp.delete()
@@ -117,14 +145,20 @@ class DesktopExtensionInstaller(
             tmpApk.writeBytes(apkBytes)
             val apk = File(dir, "${manifest.versionCode}.apk")
             val jar = File(dir, "${manifest.versionCode}.jar")
-            // The APK first: if the jar's move then fails, the old jar no longer matches its hash
-            // and the loader converts this APK again
-            Files.move(tmpApk.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
+            val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
+            try {
+                Files.move(tmpApk.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: Exception) {
+                PreviousFiles.restore(dir, manifest.versionCode)
+                throw e
+            }
             File(dir, "${manifest.versionCode}.sha256").delete()
             return Installed(
                 DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, apk, sha256),
                 Method.APK,
+                kept,
             )
         } finally {
             tmp.delete()

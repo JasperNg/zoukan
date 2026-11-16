@@ -150,6 +150,14 @@ class DesktopExtensionLoader(
         }
     }
 
+    /**
+     * Puts back the files a same-version reinstall kept aside when the app stopped before it knew
+     * whether the new files load. Only renames inside the package's own folder.
+     */
+    fun restoreInterruptedReinstall(pkgName: String) {
+        PreviousFiles.restoreAll(checkedPackageDir(extensionsDir, pkgName))
+    }
+
     /** Forgets what is recorded about an uninstalled package. */
     fun forget(pkgName: String) {
         hashes.forget(pkgName)
