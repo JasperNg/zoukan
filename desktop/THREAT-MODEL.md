@@ -172,7 +172,9 @@ Residual risk:
    junrar and Commons Compress parse the same hostile data in-process. The caps and symlink-skip
    bound the blast radius; they do not remove memory-safety exposure in those parsers.
 2. A crafted archive can still cost CPU and disk up to the caps (a budget of gigabytes), and a
-   same-user process can tamper with anything in the cache folders.
+   same-user process can tamper with anything in the cache folders. Memory is bounded per page:
+   a page or cover read into memory has its own, much smaller cap (`Limits.pageBytes`, 64 MiB),
+   and a larger one fails with a clear message instead of filling the heap.
 
 ## Secrets at rest
 
@@ -218,6 +220,11 @@ Residual risk:
    folder (a cloud drive, a NAS, another user with access) can read the library and reading
    history that the database encryption protects. Users who keep storage on a shared folder can
    switch automatic backups off. Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
+5. **Logs and crash reports are plain text.** `logs/` holds the rolling log (4 files of 5 MB) and
+   `crashes/` holds crash and error reports (the stack trace and the end of the log, with sign-in
+   codes, tokens and passwords redacted) and copies of JVM crash files (without environment
+   variable values). Titles of what was read and file paths can appear there, also in incognito.
+   The crash dialog says so. Anyone who can read the data folder can read them.
 
 ## Processes
 

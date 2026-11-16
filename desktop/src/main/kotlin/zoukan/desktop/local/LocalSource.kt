@@ -140,7 +140,7 @@ class LocalSource(
                 }
             }
         } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Reading the details of local ${manga.title} failed" }
+            logcat(LogPriority.ERROR, e) { "Reading the details of a local entry failed" }
         }
         return manga
     }

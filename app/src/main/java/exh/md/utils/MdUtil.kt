@@ -168,6 +168,9 @@ class MdUtil {
             }
         }
 
+        // ZOUKAN -->
+        @Volatile
+        // ZOUKAN <--
         private var codeVerifier: String? = null
 
         fun refreshTokenRequest(oauth: MALOAuth): Request {
@@ -192,6 +195,11 @@ class MdUtil {
         fun getPkceChallengeCode(): String {
             return codeVerifier ?: PkceUtil.generateCodeVerifier().also { codeVerifier = it }
         }
+
+        // ZOUKAN -->
+        /** Starts a sign-in with a new verifier, so a code from an earlier attempt cannot be redeemed with it. */
+        fun newPkceChallengeCode(): String = PkceUtil.generateCodeVerifier().also { codeVerifier = it }
+        // ZOUKAN <--
 
         fun getEnabledMangaDex(
             sourcePreferences: SourcePreferences = Injekt.get(),

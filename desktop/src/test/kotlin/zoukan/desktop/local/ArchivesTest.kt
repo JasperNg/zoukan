@@ -230,6 +230,28 @@ class ArchivesTest {
     }
 
     @Test
+    fun `firstImage refuses a page over the in-memory cap`() {
+        // The unpack caps allow the archive; only the in-memory cap is small
+        Archives.limits = Archives.Limits(pageBytes = 16)
+        listOf(tar(File(temp, "a.cbt")), sevenZ(File(temp, "b.cb7"))).forEach { file ->
+            val before = file.readBytes()
+            shouldThrow<Archives.TooLargeException> { Archives.firstImage(file) }
+            file.readBytes() shouldBe before
+        }
+    }
+
+    @Test
+    fun `an unpacked page over the in-memory cap is refused`() {
+        val file = tar(File(temp, "a.cbt"))
+        val before = file.readBytes()
+        Archives.limits = Archives.Limits(pageBytes = 16)
+        LocalFormat.open(file).use { format ->
+            shouldThrow<Archives.TooLargeException> { format.page(0) }
+        }
+        file.readBytes() shouldBe before
+    }
+
+    @Test
     fun `an unpacked folder is measured against the caps`() {
         val root = File(temp, "unpacked").apply { mkdirs() }
         File(root, "a/b").mkdirs()
