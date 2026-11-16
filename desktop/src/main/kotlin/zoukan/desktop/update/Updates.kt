@@ -134,33 +134,28 @@ object Updates {
      * Throws when the installer is not signed by this app's publisher (see [InstallerSignature]).
      */
     fun install(file: File, quit: () -> Unit) {
-        // Again, right before it runs: the file sat in a folder other programs can write to
-        val sigFile = File(file.parentFile, file.name + ".sig")
-        (releaseSignature.verify(file, sigFile) as? InstallerSignature.Verdict.Rejected)?.let {
-            file.delete()
-            sigFile.delete()
-            states.installRejected(file, it.reason)
-            throw IOException(it.reason)
-        }
+        // Again, right before it runs: the file sat in a folder other programs can write to.
         // Check and run one private copy, so the file cannot be swapped between the check and the run.
         // The copy stays for the installer to read after Zoukan quits; the next download's cleanup removes it.
+        val sigFile = File(file.parentFile, file.name + ".sig")
         val folder = Files.createTempDirectory(file.absoluteFile.parentFile.toPath(), "run", *privateDirAttributes())
         val copy = File(folder.toFile(), file.name)
-        Files.copy(file.toPath(), copy.toPath())
-        (releaseSignature.verify(copy, sigFile) as? InstallerSignature.Verdict.Rejected)?.let {
+
+        // Not kept: the same file would be rejected at every click, with no way to get another
+        fun reject(reason: String): Nothing {
             folder.toFile().deleteRecursively()
             file.delete()
             sigFile.delete()
-            states.installRejected(file, it.reason)
-            throw IOException(it.reason)
+            states.installRejected(file, reason)
+            throw IOException(reason)
         }
-        (signature.verify(copy) as? InstallerSignature.Verdict.Rejected)?.let {
-            // Not kept: the same file would be rejected at every click, with no way to get another
-            folder.toFile().deleteRecursively()
-            file.delete()
-            states.installRejected(file, it.reason)
-            throw IOException(it.reason)
+        try {
+            Files.copy(file.toPath(), copy.toPath())
+        } catch (e: IOException) {
+            reject("The downloaded update could not be read (${e.message}). It was not opened.")
         }
+        (releaseSignature.verify(copy, sigFile) as? InstallerSignature.Verdict.Rejected)?.let { reject(it.reason) }
+        (signature.verify(copy) as? InstallerSignature.Verdict.Rejected)?.let { reject(it.reason) }
         installerCommand(Platform.current, copy)?.let { ProcessBuilder(it).start() }
         if (Platform.current == Platform.WINDOWS) quit()
     }

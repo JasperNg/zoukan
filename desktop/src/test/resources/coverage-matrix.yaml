@@ -877,7 +877,7 @@
   feature: "About (also the More tab's row): what's new, check for updates, test releases, GitHub token"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest, update.UpdateCheckerTest, update.ReleaseSignatureTest, update.UpdatesInstallTest]
   gap: "The journey flips include test releases (a preference only: it matters when the app checks); What's new and check for updates need GitHub (manual or nightly), the GitHub token row is not driven"
 
 - key: flow:more.help

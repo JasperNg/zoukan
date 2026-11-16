@@ -104,7 +104,7 @@ Verified and trusted:
 | A detached Ed25519 release signature, `<installer name>.sig`, made by the release job with a key held as a repository secret that only that job reads (`ZOUKAN_RELEASE_SIGNING_KEY`), checked against the public key compiled into the app (`desktop/src/main/resources/zoukan-release-key.pem`). It covers the installer's name and the SHA-256 the app computes itself, so GitHub's digest is not part of the trust. A missing or wrong signature, or a packaged build without the key, is refused (fails closed), and the files are deleted. Releases made before it have no signature, and apps from before it do not check one | `desktop/.../update/ReleaseSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install`; `.github/workflows/desktop-build.yml` (`release` job) |
 | SHA-256 from GitHub's `digest` field checked while streaming; refused outright when GitHub lists none | `UpdateChecker.downloadTo`; the refusal in `desktop/.../update/Updates.kt` (`states.download`) |
 | Only when the running app is itself OS-signed (release builds are not): the installer's signer must match it, by the SHA-256 of the signer certificate's public key on Windows (a renewal that reuses the key passes; the thumbprint is not compared) and by Developer ID team on macOS. A build that says it shipped signed but has no readable signature fails closed. For an unsigned release this check is `Unchecked` and adds nothing | `desktop/.../update/InstallerSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install` |
-| The signatures are re-verified immediately before the installer runs — it sat in a folder other programs can write to | `Updates.install` |
+| The signatures are re-verified immediately before the installer runs — it sat in a folder other programs can write to. The installer is first copied into a new folder of its own (owner-only on macOS and Linux), the copy is checked, and that same copy is started by the tool's absolute path (`%SystemRoot%\System32\msiexec.exe` on Windows, `/usr/bin/open` on macOS), never by a bare name looked up on `PATH` | `Updates.install`, `Updates.installerCommand` |
 | The GitHub token lives in the OS secret store, never in a file | `UpdateChecker.token` (`TOKEN_KEY` in `SecretStore`) |
 
 Residual risk:
@@ -115,9 +115,11 @@ Residual risk:
    can sign what they like. Publishing a release without that key is not enough.
    Rotating the key needs one release signed with the old key (`desktop/RELEASING.md`).
 2. **The check and the run are not one step.** The installer and its signature sit in the updates
-   folder, which any same-user process can write to. They are checked again just before the
-   installer is started, but a swap in the moment between that check and `msiexec` or `open`
-   starting is not prevented. A same-user process can already do everything the installer can.
+   folder, which any same-user process can write to. The copy that is checked and started lives
+   in a fresh folder, so swapping the downloaded file no longer changes what runs, but a same-user
+   process can still write to that folder (on Windows it inherits the updates folder's access
+   rules) and replace the copy between the check and `msiexec` or `open` reading it. A same-user
+   process can already do everything the installer can.
 3. Apps from before the release signature do not check it and still update on the digest alone.
 
 ## Web and embedded Chromium

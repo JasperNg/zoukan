@@ -195,6 +195,8 @@ jobs:
           # nothing is published, so an unsigned release cannot go out
           [ -n "$ZOUKAN_RELEASE_SIGNING_KEY" ] || { echo "release signing key missing"; exit 1; }
           umask 077
+          # The private key is removed even when signing or checking fails
+          trap 'rm -f "$RUNNER_TEMP/release-key.pem"' EXIT
           printf '%s\n' "$ZOUKAN_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-key.pem"
           for f in installers/*.msi installers/*.dmg; do
             name=$(basename "$f")
