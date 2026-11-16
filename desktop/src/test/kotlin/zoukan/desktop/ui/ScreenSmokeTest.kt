@@ -44,8 +44,13 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
@@ -135,6 +140,7 @@ import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.update.Updates
+import java.awt.EventQueue
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -268,6 +274,13 @@ open class ScreenSmokeTest {
         val run = screenshots ?: return
         if (key !in ScreenshotKeys.curated) return
         run.check(captureAllRoots(), variant, key, ScreenshotKeys.masks(key, this))?.let { screenshotFindings += it }
+    }
+
+    @Test
+    fun `Dispatchers Main runs on the AWT event thread`() {
+        Dispatchers.Main.immediate.javaClass.name shouldContain "Swing"
+        // The timeout turns a looper that never runs into a failure instead of a hung build
+        runBlocking { withTimeout(10.seconds) { withContext(Dispatchers.Main) { EventQueue.isDispatchThread() } } } shouldBe true
     }
 
     @Test

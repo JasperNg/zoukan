@@ -175,10 +175,12 @@ sourceSets.test {
     kotlin.srcDir(syncAppSharedTests)
 }
 
-configurations.runtimeClasspath {
-    // Its MainDispatcherFactory outranks Swing's and would make Dispatchers.Main the emulated
-    // Android main looper; the UI needs the AWT event thread (see also Main.kt). AndroidCompat
-    // keeps its own HandlerDispatcher for Handler.asCoroutineDispatcher().
+// The Android dispatcher is declared for Android targets only. Its MainDispatcherFactory outranks
+// Swing's and would make Dispatchers.Main the emulated Android main looper; the UI needs the AWT
+// event thread (see also Main.kt). This exclude guards against a new dependency bringing it back,
+// for the app and for every test task (they all use the test runtime classpath). AndroidCompat
+// keeps its own HandlerDispatcher for Handler.asCoroutineDispatcher().
+configurations.matching { it.name == "runtimeClasspath" || it.name == "testRuntimeClasspath" }.configureEach {
     exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-android")
 }
 

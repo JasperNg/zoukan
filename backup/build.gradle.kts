@@ -29,7 +29,7 @@ kotlin {
                 api(projects.i18nKmk)
 
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
-                implementation(kotlinx.bundles.coroutines)
+                implementation(kotlinx.coroutines.core)
                 api(kotlinx.serialization.json)
                 api(kotlinx.serialization.protobuf)
                 implementation(kotlinx.immutables)
@@ -39,6 +39,14 @@ kotlin {
 
                 // Android types in shared code (SharedPreferences); see android-stubs.
                 compileOnly(projects.androidStubs)
+            }
+        }
+        androidMain {
+            dependencies {
+                // Android only: the desktop app uses Swing's main dispatcher
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+                implementation(kotlinx.coroutines.android)
+                implementation(kotlinx.coroutines.guava)
             }
         }
     }
