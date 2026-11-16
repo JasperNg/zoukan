@@ -938,6 +938,25 @@
   smoke: true
   tests: [ui.ScreenSmokeTest]
 
+- key: dialog:common.ConfirmDestructiveDialog
+  feature: "Confirmation before a destructive or hard-to-undo change"
+  tier: unit
+  smoke: false
+  tests: [ui.settings.DownloadPasswordDialogTest]
+  gap: "Opened by the download password dialog test; the sync reset and MangaDex confirmations are not opened by a test"
+
+- key: dialog:settings.DownloadPasswordDialog
+  feature: "Download password: set, change and remove"
+  tier: unit
+  smoke: false
+  tests: [ui.settings.DownloadPasswordDialogTest]
+
+- key: dialog:settings.StorageChangeDialog
+  feature: "Storage location: confirm a new folder, downloads stay in the old one"
+  tier: unit
+  smoke: false
+  tests: [ui.settings.StorageLocationTest]
+
 - key: dialog:settings.CleanupDownloadsDialog
   feature: "Clean up downloads dialog"
   tier: journey
