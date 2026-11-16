@@ -44,9 +44,9 @@ class ExtensionWiringTest {
             storeService = Injekt.get<ExtensionStoreService>(),
             installer = Injekt.get<DesktopExtensionInstaller>(),
             loader = Injekt.get<DesktopExtensionLoader>(),
-            // The screen smoke test puts a stand-in MangaDex class on the test class path, which
-            // the extension's class loader finds first; `harness --wiring` checks the real one
-            options = ExtensionWiringCheck.Options(packages = packages.orEmpty(), exclude = listOf("all.mangadex")),
+            // The screen smoke test puts stand-in MangaDex and Komga classes on the test class path,
+            // which the extension's class loader finds first; `harness --wiring` checks the real ones
+            options = ExtensionWiringCheck.Options(packages = packages.orEmpty(), exclude = listOf("all.mangadex", "all.komga")),
         )
         val (report, rows) = check.run()
         report.save(File("build/reports/e2e/extensions-wiring.md"))

@@ -561,6 +561,13 @@ class ExtensionWiringCheck(
             "android.app.Activity." to
                 "Needs the current Activity, to show a dialog (a captcha or login). The desktop has no Activity, " +
                 "so the extension's own lookup finds none and the call fails with its own error",
+            "org.chromium.support_lib_boundary." to
+                "Interfaces of androidx.webkit that the extension bundles and the app has too; the extension " +
+                "runs the app's copy, which declares the same interfaces",
+            "nl.adaptivity.xmlutil." to
+                "The XML library that the extension bundles and the app has too; the extension runs the app's copy",
+            "me.zhanghai.android.libarchive." to
+                "Android-only native archive library (all.jellyfin's own use of it): not available on the desktop",
             "android.os.ResultReceiver" to
                 "Gets a result back from the extension's own Activity (pt.mangalivre's reader check), which the " +
                 "desktop cannot open",
