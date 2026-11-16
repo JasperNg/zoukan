@@ -17,8 +17,9 @@ class ReleaseWorkflowTest {
     fun `the runtime and WiX downloads are checked against a pinned digest`() {
         val problems = mutableListOf<String>()
         val hex = Regex("[0-9a-f]{128}")
-        for (file in listOf(".github/workflows/ci.yml", ".github/workflows/desktop-build.yml")) {
-            val content = text(file)
+        for (workflow in workflowFiles()) {
+            val file = ".github/workflows/${workflow.name}"
+            val content = workflow.readText()
             val lines = content.lines()
             val names = Regex("""-o "[^"]*/(jbrsdk-[^"]+)"""").findAll(content).map { it.groupValues[1] }.toSet()
             for (name in names) {
@@ -107,6 +108,11 @@ class ReleaseWorkflowTest {
         }
         if ("desktop/build/packaging/app/Zoukan.app/Contents/MacOS/Zoukan" in build) {
             problems += "a step starts the app folder's macOS binary instead of the app from the DMG"
+        }
+        // The release step reads $LASTEXITCODE after the script; a script that ends without exit
+        // leaves it unchanged ($null in a fresh step), so a passing check would fail the release
+        if (!Regex("""(?m)^exit 0\s*$""").containsMatchIn(text("desktop/packaging/check/install-check-windows.ps1"))) {
+            problems += "install-check-windows.ps1 does not end with an explicit exit 0 when every check passes"
         }
         problems.shouldBeEmpty()
     }

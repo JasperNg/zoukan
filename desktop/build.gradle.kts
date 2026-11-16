@@ -317,6 +317,7 @@ tasks.test {
         file("build.gradle.kts"),
         rootProject.file("gradle.properties"),
         file("packaging/check/nightly-windows.ps1"),
+        file("packaging/check/install-check-windows.ps1"),
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
