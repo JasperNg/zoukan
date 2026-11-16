@@ -59,24 +59,22 @@
 
 - key: state:app-lock
   feature: "App lock overlay (password), lock on start"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, security.AppLockTest]
-  gap: "Unlock flow not driven end to end; planned: AppLockJourneyTest"
+  tests: [ui.ScreenSmokeTest, security.AppLockTest, e2e.AppLockJourneyTest]
 
 - key: state:first-run
   feature: "First-run setup"
-  tier: smoke
+  tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Steps not walked through; planned: OnboardingJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.OnboardingJourneyTest]
 
 - key: state:onboarding
   feature: "Reopened onboarding guide (from Advanced)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Steps not walked through; planned: OnboardingJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.OnboardingJourneyTest]
+  gap: "The journey walks the first-run steps; reopening the guide from Advanced is not driven"
 
 - key: dialog:whatsnew.UpdatedDialog
   feature: "Updated dialog after an update"
@@ -1091,15 +1089,14 @@
   feature: "Lock, password, days, times, hide notification content, incognito and extensions"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, security.SecureScreenTest]
-  gap: "The smoke test opens the page but drives none of its settings; planned: AppLockJourneyTest and SettingsPagesJourneyTest"
+  tests: [ui.ScreenSmokeTest, security.SecureScreenTest, e2e.AppLockJourneyTest]
+  gap: "AppLockJourneyTest drives the lock switch and lock-after delay; days, times, notification content, incognito and extensions: planned SettingsPagesJourneyTest"
 
 - key: dialog:settings.PasswordDialog
   feature: "Security: password dialog"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [security.AppLockTest]
-  gap: "Dialog not opened; planned: AppLockJourneyTest"
+  tests: [security.AppLockTest, e2e.AppLockJourneyTest]
 
 - key: dialog:settings.DaysDialog
   feature: "Security: lock days"
