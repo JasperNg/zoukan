@@ -106,9 +106,9 @@ internal class SyncSteps(private val journey: Journey) {
         scrollSettingsTo(title)
         onAllNodesWithText(title).onFirst().performClick()
         // The page's own search field has a text action too: the dialog's is the last one
-        with(journey) { waitFor(hasText("OK")) }
+        with(journey) { waitFor(hasText("Save")) }
         onAllNodes(hasSetTextAction()).onLast().performTextReplacement(value)
-        onAllNodesWithText("OK").onFirst().performClick()
+        onAllNodesWithText("Save").onFirst().performClick()
         waitForIdle()
     }
 
