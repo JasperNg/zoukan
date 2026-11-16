@@ -18,5 +18,7 @@ internal fun sourceErrorText(e: Throwable): String = when {
     // Extensions write user-facing text this way, for example "Log in via WebView"
     (e::class == Exception::class || e::class == java.io.IOException::class) && !e.message.isNullOrBlank() ->
         e.message.orEmpty()
+    // The reader's image decoder words this for the user ("unsupported image format")
+    e::class == IllegalArgumentException::class && !e.message.isNullOrBlank() -> e.message.orEmpty()
     else -> localized(DMR.strings.source_request_failed)
 }

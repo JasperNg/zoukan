@@ -765,7 +765,7 @@
   feature: "Retry failed pages, load this page first"
   tier: journey
   smoke: false
-  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest]
+  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest, e2e.ReaderErrorMessageJourneyTest]
   gap: "The bar's Retry failed pages (R) and Load this page first are not driven; the page's own Retry is"
 
 - key: flow:reader.chapter-nav

@@ -52,6 +52,7 @@ import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.ReadingModes
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
 import java.util.Date
 
@@ -356,7 +357,7 @@ class ReaderScreenModel(
                 throw e
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e) { "Loading pages of ${chapter.name} failed" }
-                mutableState.update { it.copy(loading = false, error = e.message ?: e::class.simpleName) }
+                mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }
             }
         }
     }
@@ -552,7 +553,7 @@ class ReaderScreenModel(
                 // ZOUKAN <--
                 logcat(LogPriority.WARN, e) { "Page ${index + 1} failed" }
                 page.bytes = null
-                page.state.value = ReaderPage.State.Error(e.message ?: e::class.simpleName.orEmpty())
+                page.state.value = ReaderPage.State.Error(sourceErrorText(e))
                 // ZOUKAN -->
                 // SY's "Instant retry": a failed page is tried once more at once
                 if (attempt == 0 && preferences.readerInstantRetry().get()) {
@@ -659,7 +660,7 @@ class ReaderScreenModel(
             ?.let { exh.util.DataSaver(source, it) } ?: exh.util.DataSaver.NoOp
         return with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
             // ZOUKAN <--
-            if (!response.isSuccessful) error("HTTP ${response.code}")
+            if (!response.isSuccessful) throw eu.kanade.tachiyomi.network.HttpException(response.code)
             response.body.bytes()
         }
     }

@@ -34,6 +34,12 @@ class SourceErrorsTest {
     }
 
     @Test
+    fun `the unsupported image format message of the page decoder is kept`() {
+        val text = localized(DMR.strings.unsupported_image_format, "JPEG XL")
+        sourceErrorText(IllegalArgumentException(text)) shouldBe text
+    }
+
+    @Test
     fun `a message the source wrote for the user is kept`() {
         sourceErrorText(Exception("Log in via WebView")) shouldBe "Log in via WebView"
     }
