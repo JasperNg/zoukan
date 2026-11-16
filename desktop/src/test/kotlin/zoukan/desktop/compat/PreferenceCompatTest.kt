@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceScreen
@@ -468,6 +469,15 @@ class PreferenceCompatTest {
         pref.isSelectable shouldBe false
         pref.hasKey() shouldBe true
         PreferenceCategory(null).isSelectable shouldBe false
+
+        val multi = MultiSelectListPreference(null).apply {
+            key = "transient_multi"
+            sharedPreferences = prefs
+            isPersistent = false
+        }
+        multi.values = setOf("a", "b")
+        prefs.contains("transient_multi") shouldBe false
+        multi.values shouldBe setOf("a", "b")
     }
 
     @Test

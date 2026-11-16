@@ -30,6 +30,7 @@ Every change is marked with `// ZOUKAN -->` / `// ZOUKAN <--` (or `/* ZOUKAN -->
 | An unreadable settings file is kept aside once (`<name>.xml.unreadable`, later ones with a timestamp) and never saved over: the first copy is never overwritten, and an encrypted file opened before the key is set is left untouched. | `JavaSharedPreferences.kt` |
 | A stale temporary settings file is removed and never replaces cleared settings: clearing a settings file also removes its `.tmp`, and a `.tmp` beside a main file is deleted when the file is opened. The main file is not rewritten. | `JavaSharedPreferences.kt` |
 | Editor and typed getters follow Android: the editor is emptied after a commit or apply, `clear()` runs before the puts of the same edit, `contains` and the `clear()` notification ignore a Set's internal entries, and a value read as another type than it was stored as throws `ClassCastException` (values written before types were kept are still read leniently). | `JavaSharedPreferences.kt` |
+| A non-persistent multi-select keeps its values in memory and reads them back (`getValues` and `setValues` check `shouldPersist()`, as `ListPreference` does). | `MultiSelectListPreference.java` |
 
 `AndroidCompatInitializer` and `AndroidCompat.startApp` are called by `zoukan.desktop.ZoukanRuntime`, after it registers the Injekt modules.
 
