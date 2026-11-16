@@ -608,7 +608,7 @@ private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categori
                 val remove = states.filterValues { it == ToggleableState.Off }.keys
                 model.setCategories(add, remove, ids)
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

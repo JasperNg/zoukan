@@ -872,4 +872,15 @@
     <string name="remove_feed_question">Remove %1$s from the feed?</string>
     <string name="source_blocked_open_the_site">The site blocked the request. Open the site to pass its check or sign in, then try again.</string>
     <string name="source_no_connection">Could not reach the site. Check the connection.</string>
+    <string name="store_url_placeholder">Store URL (repo.json or index.min.json)</string>
+    <string name="duration_days">%1$sd</string>
+    <string name="duration_hours">%1$sh</string>
+    <string name="duration_minutes">%1$sm</string>
+    <string name="migration_flag_chapters">Chapters read and history</string>
+    <string name="migration_flag_categories">Categories</string>
+    <string name="migration_flag_tracking">Tracking</string>
+    <string name="migration_flag_custom_cover">Custom cover</string>
+    <string name="migration_flag_notes">Notes</string>
+    <string name="migration_flag_extra">Chapter and reader settings</string>
+    <string name="enter_an_address_that_starts_with">Enter an address that starts with http:// or https://</string>
 </resources>

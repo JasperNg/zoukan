@@ -183,7 +183,7 @@ object SourceCategoryScreen : Screen {
                         }
                         creating = false
                         editing = null
-                    }) { Text(if (original == null) localized(MR.strings.action_add) else "OK") }
+                    }) { Text(if (original == null) localized(MR.strings.action_add) else localized(MR.strings.action_ok)) }
                 },
                 dismissButton = {
                     TextButton(onClick = {
@@ -202,7 +202,7 @@ object SourceCategoryScreen : Screen {
                     TextButton(onClick = {
                         deleteSourceCategory(preferences, category)
                         deleting = null
-                    }) { Text("OK") }
+                    }) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = { deleting = null }) { Text(localized(MR.strings.action_cancel)) } },
             )
@@ -265,7 +265,7 @@ internal fun SourceCategoriesDialog(
                 TextButton(onClick = {
                     onConfirm(chosen)
                     onDismiss()
-                }) { Text("OK") }
+                }) { Text(localized(MR.strings.action_ok)) }
             }
         },
         dismissButton = {

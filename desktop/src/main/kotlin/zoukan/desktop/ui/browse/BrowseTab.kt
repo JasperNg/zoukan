@@ -583,7 +583,7 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    placeholder = { Text("Store URL (repo.json or index.min.json)") },
+                    placeholder = { Text(localized(DMR.strings.store_url_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )

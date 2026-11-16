@@ -242,13 +242,13 @@ private fun Stat(value: String, label: String) {
 }
 
 internal fun formatDuration(ms: Long): String {
-    if (ms <= 0) return "0m"
+    if (ms <= 0) return localized(DMR.strings.duration_minutes, 0)
     val d = ms.milliseconds
     return d.toComponents { days, hours, minutes, _, _ ->
         listOfNotNull(
-            days.takeIf { it > 0 }?.let { "${it}d" },
-            hours.takeIf { it > 0 }?.let { "${it}h" },
-            "${minutes}m".takeIf { days == 0L },
+            days.takeIf { it > 0 }?.let { localized(DMR.strings.duration_days, it) },
+            hours.takeIf { it > 0 }?.let { localized(DMR.strings.duration_hours, it) },
+            localized(DMR.strings.duration_minutes, minutes).takeIf { days == 0L },
         ).joinToString(" ")
     }
 }

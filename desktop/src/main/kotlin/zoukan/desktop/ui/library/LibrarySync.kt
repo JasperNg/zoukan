@@ -77,7 +77,7 @@ fun SyncFavoritesNotesDialog(onDismiss: () -> Unit, onAccept: () -> Unit) {
             TextButton(onClick = {
                 Injekt.get<ExhPreferences>().exhShowSyncIntro().set(false)
                 onAccept()
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
     )
 }
@@ -94,7 +94,7 @@ fun SyncFavoritesConfirmDialog(onDismiss: () -> Unit) {
                 onDismiss()
                 Injekt.get<FavoritesSyncHelper>().runSync(AppScope)
                 Toasts.show(localized(DMR.strings.syncing_favorites_settings_e_hentai_shows))
-            }) { Text("OK") }
+            }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )

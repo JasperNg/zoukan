@@ -104,7 +104,7 @@ object SortTagScreen : Screen {
                     TextButton(onClick = {
                         Injekt.get<DeleteSortTag>().await(tag)
                         deleting = null
-                    }) { Text("OK") }
+                    }) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = { deleting = null }) { Text(localized(MR.strings.action_cancel)) } },
             )
