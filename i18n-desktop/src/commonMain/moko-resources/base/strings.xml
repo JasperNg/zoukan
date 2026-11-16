@@ -918,4 +918,5 @@
     <string name="enter_an_address_that_starts_with">Enter an address that starts with http:// or https://</string>
     <string name="find_a_source_by_name">Find a source by name</string>
     <string name="find_an_extension_by_name">Find an extension by name</string>
+    <string name="added_mangadex_follows_some_failed">Added %1$s MangaDex follows; %2$s could not be loaded</string>
 </resources>

@@ -21,6 +21,6 @@ class SparseArray<T>(@Suppress("UNUSED_PARAMETER") initialCapacity: Int = 10) {
 
     fun valueAt(index: Int): T = map.values.elementAt(index)
 
-    /** In key order; a member, so it wins over androidx's index-based extension. */
+    /** In key order. */
     fun forEach(action: (key: Int, value: T) -> Unit) = map.forEach(action)
 }

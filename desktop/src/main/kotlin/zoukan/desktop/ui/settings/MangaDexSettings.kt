@@ -145,7 +145,13 @@ private fun MangaDexSettings() {
                 sourcePreferences.mangadexSyncToLibraryIndexes().set(statuses)
                 AppScope.launch {
                     runCatching { sync.syncFollows() }
-                        .onSuccess { Toasts.show(localized(DMR.strings.added_mangadex_follows_to_the_library, it)) }
+                        .onSuccess {
+                            if (it.failed.isEmpty()) {
+                                Toasts.show(localized(DMR.strings.added_mangadex_follows_to_the_library, it.added))
+                            } else {
+                                Toasts.show(localized(DMR.strings.added_mangadex_follows_some_failed, it.added, it.failed.size))
+                            }
+                        }
                         .onFailure { Toasts.error(localized(DMR.strings.syncing_mangadex_follows_failed), it) }
                 }
             },

@@ -87,6 +87,17 @@ val javacppPlatform: String = run {
 val appSharedPatterns: List<String> = file("app-shared.txt").readLines()
     .map { it.substringBefore('#').trim() }
     .filter { it.isNotEmpty() }
+// Text rewrites applied to some of those files, from app-shared-rewrites.txt: path | search | replacement
+class AppSharedRewrite(val path: String, val from: String, val to: String) : java.io.Serializable
+val appSharedRewrites: List<AppSharedRewrite> = file("app-shared-rewrites.txt").readLines()
+    .map { it.substringBefore('#').trim() }
+    .filter { it.isNotEmpty() }
+    .map { line ->
+        // limit 3 keeps an empty replacement (the line then ends after the second bar)
+        val parts = line.split("|", limit = 3).map { it.trim() }
+        require(parts.size == 3) { "app-shared-rewrites.txt: expected 'path | search | replacement', got '$line'" }
+        AppSharedRewrite(parts[0], parts[1], parts[2])
+    }
 val syncAppShared by tasks.registering(Sync::class) {
     from(rootProject.file("app/src/main/java")) {
         appSharedPatterns.filterNot { it.startsWith("!") }.forEach { include(it) }
@@ -94,16 +105,41 @@ val syncAppShared by tasks.registering(Sync::class) {
     }
     into(layout.buildDirectory.dir("generated/app-shared"))
     inputs.file("app-shared.txt")
-    // android.util.SparseArray is only a stub on desktop. The replacement is an input so a change
-    // to it reruns the sync; filter lambdas are not.
-    val sparseArrayImport = "import zoukan.desktop.compat.SparseArray"
-    inputs.property("sparseArrayImport", sparseArrayImport)
-    filesMatching("exh/eh/MemAutoFlushingLookupTable.kt") {
-        filter { it.replace("import android.util.SparseArray", sparseArrayImport) }
+    // The rewrites (for example android.util.SparseArray, which is only a stub on desktop) are in
+    // app-shared-rewrites.txt. That file is an input so a change to it reruns the sync; filter
+    // lambdas are not.
+    inputs.file("app-shared-rewrites.txt")
+    appSharedRewrites.forEach { rewrite ->
+        val from = rewrite.from
+        val to = rewrite.to
+        filesMatching(rewrite.path) {
+            filter { it.replace(from, to) }
+        }
     }
-    // moko-resources' JVM StringResource has a key, not Android's resource id
-    filesMatching("exh/recs/sources/RecommendationPagingSource.kt") {
-        filter { it.replace("it.category.resourceId", "it.category.key") }
+    // Fail the build when a rewrite did not apply, so a changed upstream line cannot ship unrewritten.
+    val rewrites = appSharedRewrites
+    val outputDir = layout.buildDirectory.dir("generated/app-shared")
+    doLast {
+        val root = outputDir.get().asFile
+        rewrites.forEach { rewrite ->
+            val file = File(root, rewrite.path)
+            val text = if (file.isFile) file.readText() else null
+            if (text == null || rewrite.from in text || rewrite.to !in text) {
+                throw GradleException(
+                    "syncAppShared: '${rewrite.from}' no longer occurs in ${rewrite.path}; update app-shared-rewrites.txt",
+                )
+            }
+        }
+        // android.util.SparseArray is only a stub on desktop: no synced file may still use it
+        root.walkTopDown()
+            .filter { it.isFile && (it.extension == "kt" || it.extension == "java") }
+            .firstOrNull { "android.util.SparseArray" in it.readText() }
+            ?.let {
+                throw GradleException(
+                    "syncAppShared: ${it.relativeTo(root).invariantSeparatorsPath} uses android.util.SparseArray, " +
+                        "which is only a stub on desktop; add a rewrite to app-shared-rewrites.txt",
+                )
+            }
     }
 }
 sourceSets.main {
