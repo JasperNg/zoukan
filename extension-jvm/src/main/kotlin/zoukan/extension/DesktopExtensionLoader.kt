@@ -87,9 +87,9 @@ class DesktopExtensionLoader(
     /** The newest installed version of each package. Older versions left behind are deleted. */
     fun installedPackages(): List<InstalledFiles> = installedPackageNames().mapNotNull { installedPackage(it) }
 
-    /** The names of the package folders, without reading them. */
+    /** The names of the package folders, without reading them. A folder that is no package name is left alone. */
     fun installedPackageNames(): List<String> = extensionsDir.listFiles().orEmpty()
-        .filter { it.isDirectory }
+        .filter { it.isDirectory && it.name.matches(PACKAGE_NAME) }
         .map { it.name }
 
     fun installedPackage(pkgName: String): InstalledFiles? {
@@ -110,7 +110,7 @@ class DesktopExtensionLoader(
      * failed to load, so the next start loads the version that worked.
      */
     fun deleteVersion(pkgName: String, versionCode: Long) {
-        val dir = File(extensionsDir, pkgName)
+        val dir = checkedPackageDir(extensionsDir, pkgName)
         File(dir, "$versionCode.jar").delete()
         File(dir, "$versionCode.apk").delete()
         File(dir, "$versionCode.sha256").delete()
@@ -158,6 +158,12 @@ class DesktopExtensionLoader(
             ExtensionSignatures.verifyJar(files.jar).let { it.signers to it.contents }
         }
         val manifest = ExtensionManifest.fromContents(contents, files.jar.name)
+        if (manifest.packageName != files.pkgName) {
+            throw ExtensionException(
+                ExtensionException.Stage.MANIFEST,
+                "${files.jar.name} declares package ${manifest.packageName}, not ${files.pkgName}",
+            )
+        }
         val libVersion = manifest.validate()
         val storeName = stores.firstOrNull { store -> signatures.all { it == store.signingKey } }
             ?.let { store -> store.badgeLabel.takeIf(String::isNotBlank) ?: store.name }

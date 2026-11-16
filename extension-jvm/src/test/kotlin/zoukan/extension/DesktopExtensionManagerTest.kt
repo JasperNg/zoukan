@@ -1,6 +1,7 @@
 package zoukan.extension
 
 import eu.kanade.tachiyomi.extension.model.Extension
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -28,6 +29,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import kotlin.random.Random
 
 /**
  * Updates are pinned to the installed signer, as on Android: a build signed with another key is
@@ -134,7 +136,7 @@ class DesktopExtensionManagerTest {
         )
     }
 
-    private fun manager(): DesktopExtensionManager {
+    private fun manager(extensionsDir: File = this.extensionsDir): DesktopExtensionManager {
         val trust = mockk<ExtensionTrust> { every { isTrusted(any(), any(), any(), any()) } returns true }
         return DesktopExtensionManager(
             loader = DesktopExtensionLoader(extensionsDir, trust, FakeConvertedJarHashes()),
@@ -157,6 +159,35 @@ class DesktopExtensionManagerTest {
 
     private fun installedVersions(): List<String> =
         File(extensionsDir, pkgName).listFiles().orEmpty().map { it.name }.sorted()
+
+    @Test
+    fun `uninstall refuses a package name outside the extensions folder`() = withStubbedSignatures {
+        // The data root lives inside the test's temp folder, so only test files can be lost
+        val dataRoot = File(extensionsDir, "data-root")
+        val extDir = File(dataRoot, "extensions").apply { mkdirs() }
+        val random = Random(1)
+        val survivors = listOf(
+            File(dataRoot, "backups/zoukan_2026-11-15.tachibk"),
+            File(dataRoot, "zoukan.db"),
+            File(dataRoot, "downloads/Source/Manga/Chapter 1.cbz"),
+            File(extDir, "$pkgName/3.jar"),
+        ).associateWith { random.nextBytes(4096) }
+        survivors.forEach { (file, bytes) ->
+            file.parentFile.mkdirs()
+            file.writeBytes(bytes)
+        }
+        val manager = manager(extDir)
+
+        listOf("..", ".", "", "../backups", "a/../..").forEach { name ->
+            shouldThrow<IllegalArgumentException> { manager.uninstall(name) }
+        }
+
+        extDir.isDirectory shouldBe true
+        survivors.forEach { (file, bytes) ->
+            file.isFile shouldBe true
+            file.readBytes().contentEquals(bytes) shouldBe true
+        }
+    }
 
     @Test
     fun `an update signed by another key stays refused after a failed attempt`() = withStubbedSignatures {

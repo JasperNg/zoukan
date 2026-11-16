@@ -326,6 +326,22 @@ class DesktopExtensionLoaderTest {
     }
 
     @Test
+    fun `a jar whose manifest names another package fails to load`() {
+        val files = install(manifest(pkgName, sourceClass))
+        writeJar(files.jar, manifest("..", sourceClass))
+        recordHash(files)
+        withVerifiedApk(files) {
+            every { ApkConverter.convert(any(), any()) } just runs
+
+            val result = loader().load(files, emptyList())
+
+            val error = result.shouldBeInstanceOf<LoadResult.Error>()
+            error.error.stage shouldBe ExtensionException.Stage.MANIFEST
+            error.pkgName shouldBe pkgName
+        }
+    }
+
+    @Test
     fun `a failed re-conversion fails the load`() {
         val files = install(manifest(pkgName, sourceClass))
         recordHash(files)

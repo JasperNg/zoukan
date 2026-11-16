@@ -128,7 +128,7 @@ class DesktopExtensionInstaller(
 
     fun uninstall(pkgName: String) {
         // Loaded extensions run from memory (ExtensionClassLoader), so no file is held open
-        File(extensionsDir, pkgName).deleteRecursively()
+        checkedPackageDir(extensionsDir, pkgName).deleteRecursively()
     }
 
     private fun checkManifest(manifest: ExtensionManifest, extension: Extension.Available, installedVersionCode: Long?) {
@@ -178,9 +178,5 @@ class DesktopExtensionInstaller(
             throw ExtensionException(ExtensionException.Stage.DOWNLOAD, "Download of $url failed: ${e.message}", e)
         }
         return tmp
-    }
-
-    companion object {
-        private val PACKAGE_NAME = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
     }
 }
