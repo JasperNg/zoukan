@@ -25,4 +25,17 @@ class ScreenKeysTest {
         }
         clashes.shouldBeEmpty()
     }
+
+    /**
+     * A key that ends with a terminator ("/", or ")" where the argument is closed in brackets) can't
+     * be the start of another screen's key that names a longer ID. Object screens are left out: each
+     * has one fixed key, which the prefix-free test checks against every other key.
+     */
+    @Test
+    fun `every screen key with arguments ends with a terminator`() {
+        val open = ScreenScan.variants().values.flatten().map { it() }
+            .filterNot { it.key.endsWith("/") || it.key.endsWith(")") }
+            .map { "${it::class.simpleName}: ${it.key}" }
+        open.shouldBeEmpty()
+    }
 }
