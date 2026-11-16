@@ -26,6 +26,8 @@ public class HandlerThread extends Thread {
             mLooper = Looper.myLooper();
             notifyAll();
         }
+        // interrupt() sets the flag before it reads mLooper: if it read null, the flag is set now
+        if (isInterrupted()) mLooper.quit();
         onLooperPrepared();
         Looper.loop();
     }
@@ -36,12 +38,13 @@ public class HandlerThread extends Thread {
      */
     @Override
     public void interrupt() {
+        // The flag first: run() checks it after publishing the looper, so one of the two quits it
+        super.interrupt();
         Looper looper;
         synchronized (this) {
             looper = mLooper;
         }
         if (looper != null) looper.quit();
-        super.interrupt();
     }
 
     public Looper getLooper() {

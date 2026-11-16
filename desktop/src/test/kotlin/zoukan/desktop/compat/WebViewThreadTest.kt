@@ -68,7 +68,6 @@ class WebViewThreadTest {
     @Test
     fun `a WebView call made inside an off-thread client callback runs on the WebView looper`() {
         val provider = provider()
-        val ranOn = AtomicReference<Thread>()
         val probe = Probe()
 
         WebView.callClientOffThread {
@@ -78,10 +77,7 @@ class WebViewThreadTest {
         // Handed to the looper, not applied on the calling thread
         if (provider.mappings().isEmpty()) {
             val drained = CountDownLatch(1)
-            Handler(looper).post {
-                ranOn.set(Thread.currentThread())
-                drained.countDown()
-            }
+            Handler(looper).post { drained.countDown() }
             drained.await(5, TimeUnit.SECONDS) shouldBe true
             provider.mappings() shouldHaveSize 1
         } else {

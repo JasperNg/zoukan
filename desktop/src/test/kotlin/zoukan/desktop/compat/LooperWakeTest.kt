@@ -80,6 +80,16 @@ class LooperWakeTest {
     }
 
     @Test
+    fun `a HandlerThread interrupted before its looper is ready still ends`() {
+        repeat(200) { i ->
+            val thread = HandlerThread("probe-early-interrupt-$i").apply { start() }
+            thread.interrupt()
+            thread.join(5_000)
+            thread.isAlive shouldBe false
+        }
+    }
+
+    @Test
     fun `an interrupt does not make the looper spin`() {
         val ready = CompletableFuture<Looper>()
         val thread = Thread {
