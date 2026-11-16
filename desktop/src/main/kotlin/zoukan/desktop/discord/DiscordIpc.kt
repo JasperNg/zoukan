@@ -20,6 +20,7 @@ import java.nio.channels.SocketChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The Discord desktop client's local RPC connection: the named pipe `discord-ipc-N` on Windows,
@@ -48,15 +49,40 @@ class DiscordIpc private constructor(private val pipe: Pipe) : Closeable {
 
     override fun close() = pipe.close()
 
+    /**
+     * Runs [release] at most once. A raw Windows handle must never be closed twice: the value may
+     * already belong to another file of the app, which the second close would close instead.
+     */
+    internal class CloseOnce(private val release: () -> Unit) {
+        private val closed = AtomicBoolean(false)
+        val isClosed get() = closed.get()
+
+        fun close() {
+            if (closed.compareAndSet(false, true)) release()
+        }
+    }
+
     private interface Pipe : Closeable {
         fun write(bytes: ByteArray)
         fun readFully(count: Int): ByteArray
     }
 
     private class WindowsPipe(private val handle: WinNT.HANDLE) : Pipe {
+        // The presence read timeout closes the pipe, and its caller closes it again
+        private val closer = CloseOnce {
+            // Cancel first: a thread blocked in ReadFile is released, as closing a file object did
+            runCatching { PipeApi.INSTANCE.CancelIoEx(handle, null) }
+            Kernel32.INSTANCE.CloseHandle(handle)
+        }
+
+        private fun checkOpen() {
+            if (closer.isClosed) throw IOException("The Discord connection is closed")
+        }
+
         override fun write(bytes: ByteArray) {
             var offset = 0
             while (offset < bytes.size) {
+                checkOpen()
                 val chunk = bytes.copyOfRange(offset, bytes.size)
                 val written = IntByReference()
                 if (!Kernel32.INSTANCE.WriteFile(handle, chunk, chunk.size, written, null) || written.value <= 0) {
@@ -70,6 +96,7 @@ class DiscordIpc private constructor(private val pipe: Pipe) : Closeable {
             val bytes = ByteArray(count)
             var read = 0
             while (read < count) {
+                checkOpen()
                 val buffer = ByteArray(count - read)
                 val got = IntByReference()
                 if (!Kernel32.INSTANCE.ReadFile(handle, buffer, buffer.size, got, null) || got.value <= 0) {
@@ -81,12 +108,7 @@ class DiscordIpc private constructor(private val pipe: Pipe) : Closeable {
             return bytes
         }
 
-        // Cancel first: a thread blocked in ReadFile (the presence read timeout closes the pipe to
-        // free it) is released, as closing a file object did
-        override fun close() {
-            runCatching { PipeApi.INSTANCE.CancelIoEx(handle, null) }
-            Kernel32.INSTANCE.CloseHandle(handle)
-        }
+        override fun close() = closer.close()
     }
 
     @Suppress("FunctionName")

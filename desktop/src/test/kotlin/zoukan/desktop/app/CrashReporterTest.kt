@@ -61,6 +61,15 @@ class CrashReporterTest {
     }
 
     @Test
+    fun `a report does not contain a token from the exception message`() {
+        val e = IllegalStateException("Sign-in failed for komikku://myanimelist-auth?code=SECRETCODE4 with Bearer SECRETBEARER5")
+        val text = CrashReporter.report(Thread.currentThread(), e, fatal = true)
+        text shouldContain "IllegalStateException"
+        text shouldNotContain "SECRETCODE4"
+        text shouldNotContain "SECRETBEARER5"
+    }
+
+    @Test
     fun `a copied JVM crash file has no environment values`() {
         val dirs = ZoukanDirs(root)
         dirs.logs.mkdirs()

@@ -30,6 +30,17 @@ class DiscordConnectionCleanupTest {
     }
 
     @Test
+    fun `a pipe handle is released once however often the connection is closed`() {
+        var released = 0
+        val guard = DiscordIpc.CloseOnce { released++ }
+        guard.isClosed shouldBe false
+        guard.close()
+        guard.close()
+        released shouldBe 1
+        guard.isClosed shouldBe true
+    }
+
+    @Test
     fun `a pipe served by another user's process is refused`() {
         val users = mapOf(10L to "PC\\alice", 20L to "PC\\mallory")
         DiscordIpc.servedByCurrentUser(10L, "PC\\alice", users::get) shouldBe true

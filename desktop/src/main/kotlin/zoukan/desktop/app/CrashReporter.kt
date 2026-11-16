@@ -108,7 +108,8 @@ object CrashReporter {
         appendLine("Thread: ${thread.name}")
         appendLine()
         appendLine("Stack trace:")
-        appendLine(stackTrace(e))
+        // Exception messages can carry a sign-in address or a header, like the log
+        appendLine(redact(stackTrace(e)))
         val tail = logTail()
         if (tail.isNotBlank()) {
             appendLine("End of the log (${dirs?.logs?.resolve("zoukan.log")}):")
@@ -293,7 +294,7 @@ object CrashReporter {
             val message = buildString {
                 appendLine("Zoukan ran into a problem and has to close.")
                 appendLine()
-                appendLine("${e::class.simpleName}: ${e.message.orEmpty().take(300)}")
+                appendLine("${e::class.simpleName}: ${redact(e.message.orEmpty()).take(300)}")
                 if (report != null) {
                     appendLine()
                     appendLine("The log can include titles you read and file paths. Check it before you share it.")
