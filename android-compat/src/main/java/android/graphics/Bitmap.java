@@ -250,8 +250,11 @@ public final class Bitmap {
             formatString = "png";
         } else if (format == Bitmap.CompressFormat.JPEG) {
             formatString = "jpg";
-        } else if (format == Bitmap.CompressFormat.WEBP || format == Bitmap.CompressFormat.WEBP_LOSSY) {
+        // ZOUKAN -->
+        } else if (format == Bitmap.CompressFormat.WEBP || format == Bitmap.CompressFormat.WEBP_LOSSY
+                || format == Bitmap.CompressFormat.WEBP_LOSSLESS) {
             formatString = "webp";
+        // ZOUKAN <--
         } else {
             throw new IllegalArgumentException("unsupported compression format! " + format);
         }
@@ -266,29 +269,62 @@ public final class Bitmap {
         // An in-memory cache: ImageIO.createImageOutputStream may spill the page to a temp file
         ImageOutputStream ios = new javax.imageio.stream.MemoryCacheImageOutputStream(stream);
         // ZOUKAN <--
-        writer.setOutput(ios);
-
-        BufferedImage img = image;
-
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        if ("jpg".equals(formatString)) {
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(qualityFloat);
-
-            img = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-            img.getGraphics().drawImage(image, 0, 0, null);
-        }
-
+        // ZOUKAN -->
+        // Android returns false when the stream fails; the writer and stream are released either way
+        boolean closeFailed = false;
         try {
+            writer.setOutput(ios);
+
+            BufferedImage img = image;
+
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if ("jpg".equals(formatString)) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(qualityFloat);
+
+                img = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D rgbGraphics = img.createGraphics();
+                try {
+                    rgbGraphics.drawImage(image, 0, 0, null);
+                } finally {
+                    rgbGraphics.dispose();
+                }
+            } else if ("webp".equals(formatString)) {
+                // WEBP_LOSSLESS is lossless; the deprecated WEBP is lossless at quality 100 (Android 10+)
+                boolean lossless = format == Bitmap.CompressFormat.WEBP_LOSSLESS
+                        || (format == Bitmap.CompressFormat.WEBP && quality == 100);
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                String[] types = param.getCompressionTypes();
+                if (types != null) {
+                    for (String type : types) {
+                        if (type.toLowerCase(java.util.Locale.ROOT).contains(lossless ? "lossless" : "lossy")) {
+                            param.setCompressionType(type);
+                            break;
+                        }
+                    }
+                }
+                if (!lossless) {
+                    param.setCompressionQuality(qualityFloat);
+                }
+            }
+
             writer.write(null, new IIOImage(img, null, null), param);
-            ios.close();
-            writer.dispose();
+            ios.flush();
         } catch (IOException ex) {
-            throw new RuntimeException(ex);
+            return false;
+        } finally {
+            try {
+                ios.close();
+            } catch (IOException ex) {
+                // reported below only if nothing else failed
+                closeFailed = true;
+            }
+            writer.dispose();
         }
 
-        return true;
+        return !closeFailed;
     }
+    // ZOUKAN <--
 
     public Bitmap copy(Config config, boolean isMutable) {
         // ZOUKAN -->

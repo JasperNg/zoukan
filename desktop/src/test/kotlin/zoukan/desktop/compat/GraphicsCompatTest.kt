@@ -416,6 +416,32 @@ class GraphicsCompatTest {
     }
 
     @Test
+    fun `compress writes lossless WebP and returns false on a failing stream`() {
+        val bitmap = bitmapOf(16, 16) { x, y -> (0xFF shl 24) or (x * 16 shl 16) or (y * 16 shl 8) or ((x xor y) * 8) }
+
+        val lossless = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, lossless) shouldBe true
+        val decoded = ImageIO.read(lossless.toByteArray().inputStream())
+        for (y in 0 until 16) {
+            for (x in 0 until 16) {
+                decoded.getRGB(x, y) shouldBe bitmap.getPixel(x, y)
+            }
+        }
+
+        val low = ByteArrayOutputStream()
+        val high = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 5, low) shouldBe true
+        bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 95, high) shouldBe true
+        (low.size() < high.size()) shouldBe true
+
+        val failing = object : java.io.OutputStream() {
+            override fun write(b: Int) = throw java.io.IOException("disk full")
+            override fun write(b: ByteArray, off: Int, len: Int) = throw java.io.IOException("disk full")
+        }
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, failing) shouldBe false
+    }
+
+    @Test
     fun `eraseColor TRANSPARENT clears a drawn bitmap`() {
         val bitmap = bitmapOf(4, 4) { _, _ -> 0xFFFF0000.toInt() }
         bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
