@@ -23,6 +23,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
+import okhttp3.Dns
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -33,8 +35,10 @@ import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.ExtensionClassLoader
 import zoukan.extension.LoadResult
 import java.io.File
+import java.io.IOException
 import java.lang.reflect.ParameterizedType
 import java.net.InetSocketAddress
+import java.net.UnknownHostException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
@@ -44,8 +48,11 @@ import java.util.zip.ZipFile
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * Checks that every extension of a store is wired up on the desktop, without calling any manga
- * site: it installs and loads the extension, then checks
+ * Checks that every extension of a store is wired up on the desktop. The network probe never
+ * leaves this computer; building a source's client, its filters and its settings screen, and the
+ * settings' change listeners, run the extension's own code, which may contact its site.
+ *
+ * It installs and loads the extension, then checks
  *
  * - linkage: every class, method and field of the app that its bytecode uses exists ([ApiLinkage]),
  *   so no code path fails with NoClassDefFoundError or NoSuchMethodError;
@@ -89,6 +96,8 @@ class ExtensionWiringCheck(
         val network: MutableList<String> = mutableListOf(),
         /** Failures of the local network probe that are the extension's own rules (a login, https only), not the app's. */
         val networkNotes: MutableList<String> = mutableListOf(),
+        /** Hosts other than the local server that the network probe was sent to, and was stopped from reaching. */
+        val blockedHosts: MutableSet<String> = ConcurrentHashMap.newKeySet(),
         val settings: MutableList<String> = mutableListOf(),
         var settingsChecked: Int = 0,
         var interceptors: Int = 0,
@@ -127,6 +136,10 @@ class ExtensionWiringCheck(
             available.filter { it.pkgName in names }
         }.filterNot { it.pkgName in excluded }
         report.line("Store: ${store.name} (${options.storeUrl}), ${available.size} extensions, ${wanted.size} checked")
+        report.line(
+            "The network probe never leaves this computer. Building a source's client, its filters and its " +
+                "settings screen, and the settings' change listeners, run the extension's own code, which may contact its site.",
+        )
         report.line()
 
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
@@ -279,7 +292,7 @@ class ExtensionWiringCheck(
         val client = runCatching { source.client }.getOrNull() ?: return
         val path = "/wiring/${source.id}"
         try {
-            val call = client.newBuilder().callTimeout(30, TimeUnit.SECONDS).build()
+            val call = probeClient(client, row.blockedHosts)
                 .newCall(Request.Builder().url(base + path).headers(headers).build())
             call.execute().use { response ->
                 if (!response.isSuccessful) row.networkNotes += "${source.name}: HTTP ${response.code}"
@@ -287,7 +300,7 @@ class ExtensionWiringCheck(
             val received = requests[path]
             val ua = headers["User-Agent"]
             when {
-                // An interceptor may send it elsewhere (the site's own host), which is the extension's rule
+                // An interceptor that sends it elsewhere (the site's own host) is stopped by the probe client
                 received == null -> row.networkNotes += "${source.name}: the request did not reach the server"
                 ua != null && received["user-agent"] != ua ->
                     row.networkNotes += "${source.name}: User-Agent replaced by its client (sent ${received["user-agent"]})"
@@ -296,7 +309,12 @@ class ExtensionWiringCheck(
             // The probe is not the source's site: an interceptor may insist on a login, https or
             // the site's own responses. Only a failure of the app (a missing class or method, a
             // stub) counts
-            val note = "${source.name}: ${CompatibilityHarness.describe(e)}"
+            val blockedHost = blockedHostOf(e)
+            val note = if (blockedHost != null) {
+                "${source.name}: an interceptor sent the probe to $blockedHost; blocked"
+            } else {
+                "${source.name}: ${CompatibilityHarness.describe(e)}"
+            }
             if (isAppFailure(e)) row.network += note else row.networkNotes += note
             trace(row, "network", e)
         }
@@ -440,6 +458,9 @@ class ExtensionWiringCheck(
         )
         report.line()
         notes.sortedBy { it.pkg }.forEach { report.line("- ${it.pkg}: ${it.networkNotes.take(2).joinToString("; ")}") }
+        rows.filter { it.blockedHosts.isNotEmpty() }.sortedBy { it.pkg }.forEach { row ->
+            report.line("- ${row.pkg}: blocked ${row.blockedHosts.sorted().take(8).joinToString(", ")}")
+        }
         report.line()
     }
 
@@ -471,6 +492,45 @@ class ExtensionWiringCheck(
     companion object {
         private const val PREFIX = "eu.kanade.tachiyomi.extension."
         private val EXTENSION_TIMEOUT = 3.minutes
+
+        private val LOOPBACK = setOf("127.0.0.1", "localhost", "[::1]", "::1")
+
+        /** Why a probe was stopped: an interceptor sent it to a host that is not the local server. */
+        private const val BLOCKED = "blocked by the wiring check"
+
+        /**
+         * The source's client, set up for the local network probe. The probe may only reach the local
+         * server: a request that an interceptor sends to another host is stopped before any lookup or
+         * connection, and the host is added to [blocked].
+         */
+        internal fun probeClient(client: OkHttpClient, blocked: MutableCollection<String>): OkHttpClient =
+            client.newBuilder()
+                .callTimeout(30, TimeUnit.SECONDS)
+                // After the source's own interceptors: sees the request as they rewrote it
+                .addInterceptor { chain ->
+                    val host = chain.request().url.host
+                    if (host !in LOOPBACK && "[$host]" !in LOOPBACK) {
+                        blocked += host
+                        throw IOException("$BLOCKED: $host is not the local probe server")
+                    }
+                    chain.proceed(chain.request())
+                }
+                // Also covers a redirect or retry: every connection of this client resolves here
+                .dns { host ->
+                    if (host in LOOPBACK) {
+                        Dns.SYSTEM.lookup(host)
+                    } else {
+                        blocked += host
+                        throw UnknownHostException("$BLOCKED: $host")
+                    }
+                }
+                .build()
+
+        /** The host the probe was sent to, when [e] says the guard stopped it. */
+        internal fun blockedHostOf(e: Throwable): String? = generateSequence(e) { it.cause }
+            .mapNotNull { it.message }
+            .firstOrNull { it.startsWith("$BLOCKED: ") }
+            ?.removePrefix("$BLOCKED: ")?.substringBefore(' ')
 
         /** Android UI classes: see [GapKind.UI]. */
         private val UI_PREFIXES = listOf(
