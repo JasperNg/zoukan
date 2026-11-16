@@ -344,6 +344,18 @@ class GraphicsCompatTest {
     }
 
     @Test
+    fun `tiles, copies and scaled bitmaps of an opaque JPEG report no alpha`() {
+        val rgb = BufferedImage(16, 16, BufferedImage.TYPE_INT_RGB)
+        val jpeg = ByteArrayOutputStream().also { ImageIO.write(rgb, "jpg", it) }.toByteArray()
+        val page = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)!!
+        page.hasAlpha() shouldBe false
+
+        Bitmap.createBitmap(page, 0, 0, 8, 8).hasAlpha() shouldBe false
+        page.copy(Bitmap.Config.ARGB_8888, true).hasAlpha() shouldBe false
+        Bitmap.createScaledBitmap(page, 8, 8, false).hasAlpha() shouldBe false
+    }
+
+    @Test
     fun `ImageDecoder header listener reads info size and sets a target size`() {
         val image = BufferedImage(8, 6, BufferedImage.TYPE_INT_ARGB)
         val png = ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray()

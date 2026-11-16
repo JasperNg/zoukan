@@ -224,9 +224,11 @@ public final class Bitmap {
         java.awt.image.WritableRaster raster = cm.createCompatibleWritableRaster(width, height);
         raster.setRect(subImage.getRaster()); // a subimage's raster starts at (0, 0)
         BufferedImage newImage = new BufferedImage(cm, raster, cm.isAlphaPremultiplied(), null);
+        // A tile of an opaque page is opaque too, as on Android
+        Bitmap tile = new Bitmap(newImage);
+        tile.opaque = source.opaque;
+        return tile;
         // ZOUKAN <--
-
-        return new Bitmap(newImage);
     }
 
     public static Bitmap createBitmap(int[] colors, int width, int height, Config config) {
@@ -253,6 +255,7 @@ public final class Bitmap {
         paint.setFilterBitmap(filter);
         new Canvas(dst).drawBitmap(src, new Rect(0, 0, src.getWidth(), src.getHeight()),
                 new Rect(0, 0, dstWidth, dstHeight), paint);
+        dst.opaque = src.opaque;
         return dst;
     }
 
@@ -410,6 +413,9 @@ public final class Bitmap {
         // ZOUKAN <--
         Bitmap ret = createBitmap(width, height, config);
         ret.image.getGraphics().drawImage(image, 0, 0, null);
+        // ZOUKAN -->
+        ret.opaque = opaque; // a copy keeps hasAlpha(), as on Android
+        // ZOUKAN <--
         return ret;
     }
 
