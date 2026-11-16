@@ -6,8 +6,8 @@ This module implements those APIs on the JVM.
 
 It is [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server)'s `AndroidCompat` and
 `AndroidCompat/Config` modules, vendored at commit `d5215280158b9b78d2e3ca46312e39dccde6b97b`
-(7 Nov 2026), plus two files from Suwayomi's server (`BytecodeEditor.kt` and
-`ChildFirstURLClassLoader.kt` in `suwayomi/tachidesk/manga/impl/util/`).
+(7 Nov 2026), plus one file from Suwayomi's server (`BytecodeEditor.kt` in
+`suwayomi/tachidesk/manga/impl/util/`).
 
 ## License
 
@@ -52,6 +52,7 @@ Paths below are relative to `src/main/java`.
 | Graphics on `java.awt`: `Canvas` keeps the clip in `save()`, `Paint`, `Bitmap`, `Matrix`, `Rect`, `RectF`, `Path`, colour filters, `Typeface` and `Drawable` are Zoukan's, `BitmapFactory` decodes with ImageIO (AVIF through the FFmpeg reader, scaled when the reader ignores subsampling), and `ImageDecoder` reads through the same readers. | `android/graphics/Canvas.java`, `android/graphics/BitmapFactory.java`, `android/graphics/Bitmap.java`, `android/graphics/Paint.java`, `android/graphics/Matrix.java`, `android/graphics/Rect.java`, `android/graphics/RectF.java`, `android/graphics/Path.java`, `android/graphics/Typeface.java`, `android/graphics/ColorFilter.java`, `android/graphics/ColorMatrix.java`, `android/graphics/ColorMatrixColorFilter.java`, `android/graphics/ImageDecoder.java`, `android/graphics/drawable/Drawable.java`, `android/graphics/drawable/ColorDrawable.java`, `xyz/nulldev/androidcompat/graphics/ImageIoDecoding.kt`, `tachiyomi/decoder/ImageDecoder.kt`, `ca/mpreg/imagedecoder/ImageDecoder.kt` |
 | Text and ICU stand-ins (`BreakIterator`, `Collator`, `Normalizer2`, `StringSearch`, spans, `Linkify`, `Patterns`) run on the JVM. | `android/icu/text/BreakIterator.java`, `android/icu/text/Collator.java`, `android/icu/text/Normalizer2.java`, `android/icu/text/RuleBasedCollator.java`, `android/icu/text/SearchIterator.java`, `android/icu/text/StringSearch.java`, `android/text/SpannableString.java`, `android/text/style/CharacterStyle.java`, `android/text/style/MetricAffectingSpan.java`, `android/text/util/Linkify.java`, `android/util/Patterns.java` |
 | Handler, looper, bundle and toast stand-ins: `Toast`, `Bundle`, `HandlerThread`, `LocaleList` and the paused message queue shadow work without an Android runtime. An extension's default locale stays inside `LocaleList`; `Locale.getDefault()` is never changed. Interrupting a `HandlerThread` quits its looper (Android ignores interrupts; the poll still does, so a plain looper thread stops only with `quit()`). | `android/widget/Toast.java`, `android/os/Bundle.java`, `android/os/HandlerThread.java`, `android/os/LocaleList.java`, `android/os/shadows/ShadowPausedMessageQueue.java` |
+| Suwayomi's `ChildFirstURLClassLoader` removed: extensions load through `zoukan.extension.ExtensionClassLoader`, which reads jars into memory and holds no file open. | suwayomi/tachidesk/manga/impl/util/ChildFirstURLClassLoader.kt (removed) |
 
 `AndroidCompatInitializer` and `AndroidCompat.startApp` are called by `zoukan.desktop.ZoukanRuntime`, after it registers the Injekt modules.
 
