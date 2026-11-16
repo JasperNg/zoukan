@@ -53,7 +53,7 @@ class DesktopBackups(
     )
 
     /** Builds a backup and writes it to [file], gzipped, as the Android app does. */
-    suspend fun create(file: File, options: BackupOptions = BackupOptions()): Backup {
+    suspend fun create(file: File, options: BackupOptions = BackupOptions(), replaceExisting: Boolean = true): Backup {
         // Right after start-up (the command line) the stubs may not be read yet, and the backup
         // would list its sources with blank names
         awaitSourceNames()
@@ -64,7 +64,7 @@ class DesktopBackups(
             temp.sink().use { BackupCodec.write(backup, it) }
             // Make sure it reads back before it replaces anything
             temp.source().use { BackupCodec.decode(it) }
-            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            moveIntoPlace(temp, file, replaceExisting)
         } finally {
             // A failed write or check leaves nothing behind (automatic backups would pile them up)
             temp.delete()
@@ -133,6 +133,15 @@ class DesktopBackups(
             .map { it.name.removeSuffix(".xml") }
 
     companion object {
+        /** With [replaceExisting] false an existing [file] is kept and `FileAlreadyExistsException` is thrown. */
+        internal fun moveIntoPlace(temp: File, file: File, replaceExisting: Boolean) {
+            if (replaceExisting) {
+                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } else {
+                Files.move(temp.toPath(), file.toPath())
+            }
+        }
+
         /**
          * [backup] without the preferences a backup file must not set. The app never writes
          * app-state keys into a backup (trusted extensions, the storage folder and other state of
