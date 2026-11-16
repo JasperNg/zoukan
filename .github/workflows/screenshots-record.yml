@@ -11,6 +11,9 @@
 name: Screenshots
 
 on:
+  # TEMPORARY: a workflow can be dispatched only once it is on the default branch; this runs it from the branch
+  push:
+    branches: [claude/re-harness-05-screenshots]
   workflow_dispatch:
     inputs:
       mode:
@@ -24,7 +27,7 @@ permissions:
 
 jobs:
   screenshots:
-    name: Screenshots (${{ inputs.mode }})
+    name: Screenshots (${{ inputs.mode || 'record' }})
     # Pinned: a newer image can change fonts and the rasteriser, and so every golden
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -54,10 +57,10 @@ jobs:
           fc-cache -f
 
       - name: Screenshots
-        run: xvfb-run -a ./gradlew :desktop:wiringTest -Pzoukan.screenshots=${{ inputs.mode }}
+        run: xvfb-run -a ./gradlew :desktop:wiringTest -Pzoukan.screenshots=${{ inputs.mode || 'record' }}
 
       - name: Upload goldens
-        if: ${{ inputs.mode == 'record' && always() }}
+        if: ${{ (inputs.mode || 'record') == 'record' && always() }}
         uses: actions/upload-artifact@v5
         with:
           name: screenshot-goldens
@@ -65,7 +68,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload screenshot reports
-        if: ${{ inputs.mode == 'verify' && failure() }}
+        if: ${{ (inputs.mode || 'record') == 'verify' && failure() }}
         uses: actions/upload-artifact@v5
         with:
           name: screenshot-reports
