@@ -53,7 +53,7 @@ class SettingsBrowseDataAdvancedJourneyTest {
         journey = Journey.start("settings-browse-data-advanced")
         val preferences = Injekt.get<DesktopPreferences>()
         val sources = Injekt.get<SourcePreferences>()
-        LocalFixtures.seedParityLibrary(Injekt.get<ZoukanStorage>())
+        val favorites = LocalFixtures.seedParityLibrary(Injekt.get<ZoukanStorage>())
         var navigator: Navigator? = null
 
         with(journey) {
@@ -110,6 +110,8 @@ class SettingsBrowseDataAdvancedJourneyTest {
                     onAllNodesWithText("OK").onFirst().performClick()
                     waitFor(hasText("Nothing to clear"))
                     runBlocking { Injekt.get<GetManga>().await("Delta", LocalSource.ID) } shouldBe null
+                    // Only entries outside the library go: the library keeps all three
+                    runBlocking { favorites.map { Injekt.get<GetManga>().await(it.id)?.favorite } } shouldBe listOf(true, true, true)
                     runOnUiThread { navigator?.pop() }
                 }
             }

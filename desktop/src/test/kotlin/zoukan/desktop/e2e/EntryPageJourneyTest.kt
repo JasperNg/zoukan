@@ -147,6 +147,12 @@ class EntryPageJourneyTest {
                 }
 
                 step("Clear manga removes the chapters from the database, not the local files") {
+                    // Every chapter file with its bytes, to prove none is deleted or rewritten
+                    fun charlieFiles() = File(storage.local, "Charlie").listFiles().orEmpty()
+                        .filter { it.name.endsWith(".cbz") }
+                        .associate { it.name to it.readBytes().contentHashCode() }
+                    val filesBefore = charlieFiles()
+                    filesBefore.size shouldBe 4
                     byDescription("More").performClick()
                     onAllNodesWithText("Clear manga").onFirst().performClick()
                     waitFor(hasText("Chapters & History from Database"))
@@ -156,7 +162,7 @@ class EntryPageJourneyTest {
                     waitOrDump("for the chapters to go", 10_000) {
                         runBlocking { Injekt.get<GetChaptersByMangaId>().await(charlie.id).isEmpty() }
                     }
-                    File(storage.local, "Charlie").isDirectory shouldBe true
+                    charlieFiles() shouldBe filesBefore
                     runOnUiThread { navigator?.popUntilRoot() }
                 }
             }

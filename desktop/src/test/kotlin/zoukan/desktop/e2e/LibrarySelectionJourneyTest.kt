@@ -97,9 +97,11 @@ class LibrarySelectionJourneyTest {
                     waitFor(hasText("Select"))
                     onAllNodesWithText("Select").onFirst().performClick()
                     waitFor(hasText("1 selected"))
+                    // The seed's own update left a result; this one must replace it
+                    val seedResult = updater.lastResult.value
                     byDescription("Update").performClick()
                     waitOrDump("for the selection to end", 10_000) { onAllNodes(textMatches(Regex(".* selected"))).fetchSemanticsNodes().isEmpty() }
-                    waitOrDump("for the update to end", 60_000) { updater.progress.value == null }
+                    waitOrDump("for the update to end", 60_000) { updater.lastResult.value !== seedResult && updater.progress.value == null }
                     updater.lastResult.value!!.failures.shouldBeEmpty()
                 }
             }
