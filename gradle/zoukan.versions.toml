@@ -1,5 +1,6 @@
 # Zoukan (desktop) dependencies, kept apart from the upstream catalogs so upstream merges stay easy.
 # Versions of the Android compatibility layer follow Suwayomi-Server at d5215280.
+# Libraries whose group an upstream catalog owns take their version from it, not from here.
 
 [versions]
 graalvm = "25.4.4.1.1"
@@ -17,7 +18,6 @@ compose-material-icons = "1.7.3"
 # Android API for the desktop runtime: android.jar with the classes AndroidCompat replaces taken out
 android-jar = "com.github.Suwayomi:android-jar:1.0.0"
 xmlpull = "xmlpull:xmlpull:1.1.3.4a"
-androidx-annotation = "androidx.annotation:annotation:1.11.0"
 
 slf4j-api = "org.slf4j:slf4j-api:2.0.20"
 logback-classic = "ch.qos.logback:logback-classic:1.6.6"
@@ -49,7 +49,6 @@ jcefmaven = { module = "me.friwi:jcefmaven", version.ref = "jcefmaven" }
 jcef-api = { module = "me.friwi:jcef-api", version.ref = "jcef" }
 
 # Libraries extensions expect from the host
-okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.3.2"
 bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.86"
 
 # Extension install pipeline
@@ -63,7 +62,7 @@ asm-analysis = { module = "org.ow2.asm:asm-analysis", version.ref = "asm" }
 
 # Encrypted database: sqlite-jdbc built with SQLite3MultipleCiphers, SQLDelight's JDBC driver
 sqlite-jdbc-crypt = "io.github.willena:sqlite-jdbc:3.53.4.0"
-sqldelight-jvm-driver = "app.cash.sqldelight:sqlite-driver:2.3.2"
+sqldelight-jvm-driver = { module = "app.cash.sqldelight:sqlite-driver" }
 
 # CBZ downloads, including password-protected (AES) ones, and the local source's archives
 zip4j = "net.lingala.zip4j:zip4j:2.11.5"
@@ -86,7 +85,7 @@ compose-material-icons = { module = "org.jetbrains.compose.material:material-ico
 compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "compose-multiplatform" }
 # The version Compose Multiplatform brings at run time (dependencyInsight); move it with compose-multiplatform
 compose-navigationevent = "org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0"
-coroutines-swing = "org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0"
+coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing" }
 
 [bundles]
 twelvemonkeys = [

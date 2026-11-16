@@ -1,5 +1,4 @@
 // ZOUKAN -->
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.security.MessageDigest
 
 /**
@@ -11,19 +10,14 @@ import java.security.MessageDigest
  * this module is not formatted by Spotless.
  */
 plugins {
-    kotlin("jvm")
+    id("zoukan.jvm")
     kotlin("plugin.serialization")
 }
 
-// The desktop app runs on JDK 21 (JetBrains Runtime); AndroidCompat needs Java 21 language features
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
+// Java 21 (JetBrains Runtime, which the desktop app runs on) comes from the zoukan.jvm convention;
+// AndroidCompat needs its language features
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.add("-Xcontext-parameters")
         optIn.add("kotlin.concurrent.atomics.ExperimentalAtomicApi")
     }
@@ -44,7 +38,7 @@ dependencies {
     // android.jar's View classes (EditText, Button, ...) name org.xmlpull types in their signatures,
     // so extensions that touch a view (MangaDex's settings) need them at run time
     implementation(zoukanlibs.xmlpull)
-    compileOnly(zoukanlibs.androidx.annotation)
+    compileOnly(androidx.annotation)
 
     api(libs.injekt)
     implementation(kotlinx.reflect)
@@ -89,9 +83,9 @@ dependencies {
 }
 
 // Suwayomi's android.jar is served from a GitHub repository (pinned to a commit in
-// settings.gradle.kts), not from a signed Maven repository, and the build has no project-wide
-// dependency verification. Check this one artifact against a known SHA-256 before anything
-// compiles against it. To update the jar: change the commit and version, then put the new jar's
+// settings.gradle.kts), not from a signed Maven repository. The jar is also pinned in
+// gradle/verification-metadata.xml; this task checks it independently against a known SHA-256
+// before anything compiles against it. To update the jar: change the commit and version, then put the new jar's
 // `shasum -a 256` here.
 val androidJarSha256 = "d719e8c95a224f970e4d8d5ceabf1a0f90afa9e7b5da62b64bf76f29cad269f5"
 

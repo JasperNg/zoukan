@@ -1,6 +1,4 @@
 // ZOUKAN -->
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // Zoukan, the desktop app: the Compose UI and reader (Phase 4 of the desktop port) on top of the
 // runtime (the Android compatibility layer, Injekt wiring, the encrypted database, preferences,
 // networking, the extension runtime, the built-in browser) and the command-line tools.
@@ -11,7 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 //   ./gradlew :desktop:packageMsi                       # Windows installer (Phase 7, see RELEASING.md)
 //   ./gradlew :desktop:packageDmg                       # macOS disk image (notarizeDmg to notarize)
 plugins {
-    kotlin("jvm")
+    id("zoukan.jvm")
     kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
     id("mihon.code.lint")
@@ -39,14 +37,8 @@ val zoukanVersion: String = providers.gradleProperty("zoukan.version").orNull?.t
     }
     ?: zoukanVersionFloor
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
             "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
@@ -58,10 +50,13 @@ kotlin {
 
 // Compose's desktop runtime (Skia) for the OS and CPU that builds the app: Windows x64 and macOS
 // arm64 are the targets, Linux x64 is for development
+// zoukan.targetPlatform (windows-x64, macos-arm64, linux-x64) only exists to generate the dependency
+// checksums of another OS (gradle/verification-metadata.xml); it does not build another OS's app
+val targetPlatformOverride: String? = providers.gradleProperty("zoukan.targetPlatform").orNull
 val composeDesktopRuntime: String = run {
     val os = System.getProperty("os.name").lowercase()
     val arm = System.getProperty("os.arch").lowercase().let { it == "aarch64" || it == "arm64" }
-    val platform = when {
+    val platform = targetPlatformOverride ?: when {
         os.contains("win") -> "windows-x64"
         os.contains("mac") -> if (arm) "macos-arm64" else "macos-x64"
         else -> if (arm) "linux-arm64" else "linux-x64"
@@ -73,10 +68,15 @@ val composeDesktopRuntime: String = run {
 val javacppPlatform: String = run {
     val os = System.getProperty("os.name").lowercase()
     val arm = System.getProperty("os.arch").lowercase().let { it == "aarch64" || it == "arm64" }
-    when {
-        os.contains("win") -> "windows-x86_64"
-        os.contains("mac") -> if (arm) "macosx-arm64" else "macosx-x86_64"
-        else -> if (arm) "linux-arm64" else "linux-x86_64"
+    when (targetPlatformOverride) {
+        "windows-x64" -> "windows-x86_64"
+        "macos-arm64" -> "macosx-arm64"
+        "linux-x64" -> "linux-x86_64"
+        else -> when {
+            os.contains("win") -> "windows-x86_64"
+            os.contains("mac") -> if (arm) "macosx-arm64" else "macosx-x86_64"
+            else -> if (arm) "linux-arm64" else "linux-x86_64"
+        }
     }
 }
 
@@ -111,15 +111,17 @@ sourceSets.main {
 }
 
 // The version and the repository releases come from, for the update check and crash logs
+val zoukanSignedRelease = objects.property<Boolean>().convention(false)
 val zoukanBuildInfo by tasks.registering {
     val output = layout.buildDirectory.dir("generated/zoukan-build-info")
     val version = zoukanVersion
     val repo = providers.gradleProperty("zoukan.releaseRepo").orElse("JasperNg/zoukan")
     // Whether this OS's packaging signs the app (packaging.gradle.kts, applied below, decides);
     // the update check reads it to tell an unsigned release from a signed one that lost its
-    // signature. Read through a provider because packaging.gradle.kts sets it later in the
-    // configuration than this registration, on the project's extras, not this task's.
-    val signedRelease = provider { project.extra["zoukanSignedRelease"] == true }
+    // signature. packaging.gradle.kts sets it later in the configuration than this registration,
+    // on the project's extras: it is copied into this property right after that script is applied
+    // (below), and the task itself never reads the project.
+    val signedRelease = zoukanSignedRelease
     inputs.property("version", version)
     inputs.property("repo", repo)
     inputs.property("signedRelease", signedRelease)
@@ -172,10 +174,12 @@ sourceSets.test {
     kotlin.srcDir(syncAppSharedTests)
 }
 
-configurations.runtimeClasspath {
-    // Its MainDispatcherFactory outranks Swing's and would make Dispatchers.Main the emulated
-    // Android main looper; the UI needs the AWT event thread (see also Main.kt). AndroidCompat
-    // keeps its own HandlerDispatcher for Handler.asCoroutineDispatcher().
+// The Android dispatcher is declared for Android targets only. Its MainDispatcherFactory outranks
+// Swing's and would make Dispatchers.Main the emulated Android main looper; the UI needs the AWT
+// event thread (see also Main.kt). This exclude guards against a new dependency bringing it back,
+// for the app and for every test task (they all use the test runtime classpath). AndroidCompat
+// keeps its own HandlerDispatcher for Handler.asCoroutineDispatcher().
+configurations.matching { it.name == "runtimeClasspath" || it.name == "testRuntimeClasspath" }.configureEach {
     exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-android")
 }
 
@@ -193,6 +197,8 @@ dependencies {
     implementation(projects.i18nKmk)
     implementation(projects.i18nDesktop)
 
+    // One BOM version for every coroutines artifact, kotlinx-coroutines-swing included
+    implementation(platform(kotlinx.coroutines.bom))
     implementation(kotlinx.coroutines.core)
     implementation(kotlinx.serialization.json)
     implementation(kotlinx.serialization.protobuf)
@@ -201,11 +207,12 @@ dependencies {
     implementation(libs.injekt)
 
     // What extensions expect from the host besides extensions-lib
-    runtimeOnly(zoukanlibs.okhttp.zstd)
+    runtimeOnly(libs.okhttp.zstd)
     implementation(zoukanlibs.bouncycastle)
 
     implementation(zoukanlibs.sqlite.jdbc.crypt)
     implementation(zoukanlibs.sqldelight.jvm.driver) {
+        version { require(libs.versions.sqldelight.get()) }
         exclude(group = "org.xerial", module = "sqlite-jdbc")
     }
     implementation(zoukanlibs.jna)
@@ -277,6 +284,7 @@ application {
 extra["zoukanVersion"] = zoukanVersion
 extra["zoukanJvmFlags"] = jvmFlags
 apply(from = "packaging.gradle.kts")
+zoukanSignedRelease.set(extra["zoukanSignedRelease"] == true)
 
 tasks.named<JavaExec>("run") {
     workingDir = rootDir
@@ -287,8 +295,11 @@ tasks.named<JavaExec>("run") {
     }
 }
 
+/** The test classes [wiringTest] must run; a rename needs this one list changed. */
+val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ScreenSmokeSmallWindowTest")
+
 /** The tests [wiringTest] runs instead of `test`. */
-val wiringTests = listOf("*InjektRegistrationsTest", "*ScreenSmokeTest", "*ScreenSmokeSmallWindowTest")
+val wiringTests = expectedWiringClasses.map { "*$it" }
 
 /** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
@@ -306,6 +317,19 @@ tasks.test {
     providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
     providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    // The build-settings test reads these files, so a change to one reruns it
+    inputs.files(
+        rootProject.file("settings.gradle.kts"),
+        rootProject.file("gradle/wrapper/gradle-wrapper.properties"),
+        rootProject.file("gradle/verification-metadata.xml"),
+        rootProject.file("gradle.properties"),
+        rootProject.file("renovate.json"),
+        rootProject.file("desktop/UPSTREAM-MERGES.md"),
+        rootProject.file("extension-jvm/build.gradle.kts"),
+        rootProject.file("android-compat/build.gradle.kts"),
+        file("build.gradle.kts"),
+        rootProject.fileTree("gradle") { include("*.versions.toml") },
+    ).withPropertyName("releaseFiles")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")
     // The release tests read the workflow files and the packaging script
@@ -332,13 +356,26 @@ tasks.test {
 val wiringTest by tasks.registering(Test::class) {
     group = "verification"
     description = "Checks every Injekt lookup has a registration and every screen and dialog opens"
-    val test = tasks.test.get()
-    testClassesDirs = test.testClassesDirs
-    classpath = test.classpath
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
     filter {
         wiringTests.forEach { includeTestsMatching(it) }
-        isFailOnNoMatchingTests = false
+    }
+    // A class renamed out of the patterns would otherwise drop out of the wiring tests silently,
+    // unless the developer narrowed the run with --tests on purpose
+    val narrowedOnCommandLine = gradle.startParameter.taskRequests.any { "--tests" in it.args }
+    val wiringResults = reports.junitXml.outputLocation
+    // A local copy: the action must not reference the build script (configuration cache)
+    val expected = expectedWiringClasses
+    doLast {
+        if (!narrowedOnCommandLine) {
+            val ran = wiringResults.get().asFile.listFiles().orEmpty().map { it.name }
+            val missing = expected.filter { name ->
+                ran.none { it.startsWith("TEST-") && it.endsWith(".$name.xml") }
+            }
+            check(missing.isEmpty()) { "wiringTest did not run ${missing.joinToString()}: was a class renamed or moved?" }
+        }
     }
     // Only the test classes themselves, not their nested and lambda classes: Gradle hands the
     // classes it scans to the forks in turn, which would queue both smoke runs in one fork
@@ -470,9 +507,8 @@ tasks.register<UsabilityReport>("usabilityReport") {
 val extensionWiringTest by tasks.registering(Test::class) {
     group = "verification"
     description = "Installs every Keiyoushi extension and checks it is wired up on the desktop"
-    val test = tasks.test.get()
-    testClassesDirs = test.testClassesDirs
-    classpath = test.classpath
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
     filter { includeTestsMatching("*ExtensionWiringTest") }
     systemProperty("zoukan.e2e", "true")
@@ -494,9 +530,8 @@ val extensionWiringTest by tasks.registering(Test::class) {
 val journeyTest by tasks.registering(Test::class) {
     group = "verification"
     description = "Runs the offline user journeys against the fixture source"
-    val test = tasks.test.get()
-    testClassesDirs = test.testClassesDirs
-    classpath = test.classpath
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
     filter { journeyTests.forEach { includeTestsMatching(it) } }
     // Only the journey classes themselves, not their nested and lambda classes: Gradle hands the
