@@ -29,10 +29,11 @@ class JarContents(val entries: Map<String, ByteArray>) {
         /** Reads a jar from [bytes] without any signature check (for converted jars, checked by hash). */
         fun fromBytes(bytes: ByteArray): JarContents {
             val entries = LinkedHashMap<String, ByteArray>()
+            val budget = ZipBudget(ExtensionException.Stage.LOAD, "The extension jar")
             ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
                 generateSequence { zip.nextEntry }
                     .filterNot { it.isDirectory || ExtensionSignatures.isSigningRelated(it.name) }
-                    .forEach { entry -> entries[entry.name] = zip.readAllBytes() }
+                    .forEach { entry -> entries[entry.name] = budget.read(entry.name, zip) }
             }
             return JarContents(entries)
         }

@@ -167,10 +167,21 @@ class DesktopExtensionInstaller(
         try {
             // Code is downloaded over https only, also after redirects (see awaitSecureStoreResponse)
             client().awaitSecureStoreResponse(url).use { response ->
-                tmp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+                val limit = ExtensionLimits.MAX_DOWNLOAD_BYTES
+                val tooLarge = ExtensionException(
+                    ExtensionException.Stage.DOWNLOAD,
+                    "Download of $url is too large (over ${ExtensionLimits.megabytes(limit)} MB)",
+                )
+                if (response.body.contentLength() > limit) throw tooLarge
+                tmp.outputStream().use { out ->
+                    response.body.byteStream().copyAtMost(out, limit, ExtensionException.Stage.DOWNLOAD, url)
+                }
             }
         } catch (e: CancellationException) {
             // Cancelled, not failed: the caller's cancellation must go on
+            tmp.delete()
+            throw e
+        } catch (e: ExtensionException) {
             tmp.delete()
             throw e
         } catch (e: Exception) {

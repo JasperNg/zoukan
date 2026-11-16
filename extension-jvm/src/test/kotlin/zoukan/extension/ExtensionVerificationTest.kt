@@ -46,6 +46,25 @@ class ExtensionVerificationTest {
         }
     }
 
+    @Test
+    fun `an oversized entry is refused`() {
+        val jar = File(dir, "bomb.jar")
+        ZipOutputStream(jar.outputStream()).use { out ->
+            // 200 MB of zeros that compress to about 200 KB; never held in memory at once. It comes
+            // first: the jar is unsigned, so the check stops at the first entry it has read
+            out.putNextEntry(ZipEntry("assets/big.bin"))
+            val chunk = ByteArray(1024 * 1024)
+            repeat(200) { out.write(chunk) }
+            out.closeEntry()
+            out.putNextEntry(ZipEntry("AndroidManifest.xml"))
+            out.write("<manifest/>".toByteArray())
+            out.closeEntry()
+        }
+
+        shouldThrow<ExtensionException> { ExtensionSignatures.verifyJar(jar) }.message shouldContain "too large"
+        shouldThrow<ExtensionException> { JarContents.fromBytes(jar.readBytes()) }.message shouldContain "too large"
+    }
+
     private fun jdkTool(name: String): String = File(System.getProperty("java.home"), "bin/$name").path
 
     private fun run(vararg command: String) {

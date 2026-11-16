@@ -28,11 +28,19 @@ object ExtensionSignatures {
         val signers = mutableSetOf<String>()
         val entries = LinkedHashMap<String, ByteArray>()
         JarFile(jar, true).use { jf ->
+            if (jf.size() > ExtensionLimits.MAX_ENTRIES) {
+                throw ExtensionException(
+                    ExtensionException.Stage.SIGNATURE,
+                    "${jar.name} has too many entries (over ${ExtensionLimits.MAX_ENTRIES})",
+                )
+            }
+            val budget = ZipBudget(ExtensionException.Stage.SIGNATURE, jar.name)
             jf.entries().asSequence()
                 .filterNot { it.isDirectory || isSigningRelated(it.name) }
                 .forEach { entry ->
-                    // Reading the whole entry is what makes JarFile check its digest
-                    val bytes = jf.getInputStream(entry).use { it.readAllBytes() }
+                    // Reading the whole entry is what makes JarFile check its digest; the size is
+                    // capped, since an entry can be a zip bomb
+                    val bytes = jf.getInputStream(entry).use { budget.read(entry.name, it) }
                     val certs = entry.codeSigners?.map { it.signerCertPath.certificates.first() }
                         ?: throw ExtensionException(ExtensionException.Stage.SIGNATURE, "${entry.name} is not signed")
                     certs.forEach { signers += it.sha256() }

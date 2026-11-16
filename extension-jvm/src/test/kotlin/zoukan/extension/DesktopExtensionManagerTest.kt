@@ -20,7 +20,10 @@ import mihon.domain.extension.model.ExtensionStore
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.buffer
+import okio.source
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -247,6 +250,34 @@ class DesktopExtensionManagerTest {
             release.countDown()
             hangingClient.dispatcher.executorService.shutdown()
         }
+    }
+
+    @Test
+    fun `a store download over the size limit is refused and leaves no file`() {
+        val big = File(storeDir, "big.jar")
+        big.outputStream().use { out ->
+            val chunk = ByteArray(1024 * 1024)
+            repeat(60) { out.write(chunk) }
+        }
+        // Streams the body, so the test does not hold 60 MB in memory
+        val streamingClient = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(big.source().buffer().asResponseBody(null, big.length()))
+                    .build()
+            }
+            .build()
+        val installer = DesktopExtensionInstaller(extensionsDir) { streamingClient }
+        val offer = offer(3, "key-a").copy(jarUrl = "https://store-key-a.example/big.jar")
+
+        val error = shouldThrow<ExtensionException> { runBlocking { installer.install(offer) } }
+
+        error.stage shouldBe ExtensionException.Stage.DOWNLOAD
+        extensionsDir.listFiles().orEmpty().filter { it.isFile }.shouldBeEmpty()
     }
 
     @Test
