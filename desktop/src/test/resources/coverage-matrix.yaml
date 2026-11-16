@@ -38,10 +38,9 @@
 
 - key: flow:shell.shortcuts
   feature: "Global shortcuts: Ctrl+1..5 tabs, Ctrl+comma settings, Ctrl+Shift+U update, Ctrl+F find, Ctrl+A select all, Esc/Alt+Left back"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [ui.ShortcutsTest]
-  gap: "The handler is wired only on the Window, so no journey presses the keys; planned: KeyboardShortcutsJourneyTest"
+  tests: [ui.ShortcutsTest, e2e.KeyboardShortcutsJourneyTest]
 
 - key: flow:shell.theme
   feature: "Theme: system/light/dark, color schemes, custom color, pure black"
