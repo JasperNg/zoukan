@@ -39,7 +39,7 @@ object BackupCheck {
             val backups = DesktopBackups(dirs.android)
 
             val before = backups.read(file)
-            val errors = runBlocking { backups.restore(before) }
+            val errors = runBlocking { backups.restore(before, allowSensitive = true) }
             val exported = File(profile, "exported.tachibk")
             runBlocking { backups.create(exported, BackupOptions(privateSettings = true)) }
             val after = backups.read(exported)

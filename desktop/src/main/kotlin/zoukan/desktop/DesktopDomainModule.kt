@@ -16,6 +16,8 @@ import mihon.domain.chapter.interactor.FilterChaptersForDownload
 import mihon.domain.extension.interactor.RemoveExtensionStore
 import mihon.domain.source.interactor.UpdateMangaFromRemote
 import mihon.domain.upcoming.interactor.GetUpcomingManga
+import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
@@ -219,7 +221,14 @@ class DesktopDomainModule : InjektModule {
                 { uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>() },
             )
         }
-        addSingletonFactory { AutoBackup(get(), get<ZoukanDirs>().android, get()) }
+        addSingletonFactory {
+            AutoBackup(
+                get(),
+                get<ZoukanDirs>().android,
+                get(),
+                get<PreferenceStore>().getString(Preference.appStateKey("zoukan_auto_backups_written"), ""),
+            )
+        }
         addSingletonFactory { BackgroundJobs(get(), get(), get(), get()) }
         addSingletonFactory { zoukan.desktop.discord.DiscordPresence(get(), get(), get()) }
 

@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.Chapters
 import tachiyomi.data.DatabaseHandler
@@ -76,6 +77,40 @@ class SyncManager(
         /** The services desktop has; Google Drive needs the Android build's OAuth client. */
         val SUPPORTED = setOf(SyncService.SYNCYOMI, SyncService.WEB_DAV)
         const val RETRY_AFTER = 60 * 60_000L
+
+        private val IPV4 = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+
+        /**
+         * Whether a sync server address is safe to send the library and logins to: https anywhere, or
+         * plain http only to this computer or the local network. The host name is never resolved
+         * (a lookup would leak it outside DNS over HTTPS); only IP literals and local names count.
+         */
+        internal fun isAllowedSyncUrl(url: String): Boolean {
+            val parsed = url.trim().toHttpUrlOrNull() ?: return false
+            if (parsed.isHttps) return true
+            val host = parsed.host.lowercase().trimEnd('.')
+            if (host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".home.arpa")) {
+                return true
+            }
+            IPV4.matchEntire(host)?.let { m ->
+                val o = m.groupValues.drop(1).map { it.toInt() }
+                if (o.any { it > 255 }) return false
+                return o[0] == 127 || o[0] == 10 ||
+                    (o[0] == 172 && o[1] in 16..31) ||
+                    (o[0] == 192 && o[1] == 168) ||
+                    (o[0] == 169 && o[1] == 254)
+            }
+            if (host.contains(':')) {
+                // An IPv6 literal (HttpUrl gives it without brackets)
+                val a = runCatching { java.net.InetAddress.getByName(host) }.getOrNull() as? java.net.Inet6Address
+                    ?: return false
+                val first = a.address[0].toInt() and 0xFF
+                val second = a.address[1].toInt() and 0xFF
+                return a.isLoopbackAddress || a.isLinkLocalAddress || (first and 0xFE) == 0xFC ||
+                    (first == 0xFE && (second and 0xC0) == 0x80)
+            }
+            return false
+        }
     }
 
     /** When the last sync failed; a failed sync waits before it tries again, not the next minute's check. */
@@ -118,6 +153,27 @@ class SyncManager(
 
     /** Returns false when the sync failed (the services notify why). */
     private suspend fun doSync(): Boolean {
+        // ZOUKAN -->
+        // Checked before the database and the network are touched
+        val serverUrl = when (SyncService.fromInt(syncPreferences.syncService().get())) {
+            SyncService.WEB_DAV -> syncPreferences.webDavUrl().get()
+            SyncService.SYNCYOMI -> syncPreferences.clientHost().get()
+            else -> null
+        }
+        if (serverUrl != null) {
+            if (!isAllowedSyncUrl(serverUrl)) {
+                logcat(LogPriority.ERROR) { "Sync refused: plain http to a server outside the local network" }
+                // Only the host: the address may carry a user name and password
+                val host = serverUrl.trim().toHttpUrlOrNull()?.host?.take(100) ?: "?"
+                notifier.showSyncError(localized(DMR.strings.sync_refused_plain_http, host))
+                return false
+            }
+            if (serverUrl.trim().startsWith("http://", ignoreCase = true)) {
+                logcat(LogPriority.WARN) { "Syncing over plain http to a local network server" }
+            }
+        }
+        // ZOUKAN <--
+
         // Reset isSyncing in case it was left over or failed syncing during restore.
         handler.await(inTransaction = true) {
             mangasQueries.resetIsSyncing()

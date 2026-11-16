@@ -41,7 +41,9 @@ class FeedRestorer(
                                     currentFeed.global == backupFeed.global &&
                                     currentFeed.name == backupFeed.savedSearch.name &&
                                     currentFeed.query.orEmpty() == backupFeed.savedSearch.query &&
-                                    (currentFeed.filters_json ?: "[]") == backupFeed.savedSearch.filterList
+                                    // ZOUKAN -->
+                                    (currentFeed.filters_json ?: "[]") == backupFeed.savedSearch.filterList.ifBlank { "[]" }
+                                // ZOUKAN <--
                             }
                         )
             }.forEach { backupFeed ->
@@ -50,7 +52,9 @@ class FeedRestorer(
                         currentSavedSearch.source == backupFeed.source &&
                             currentSavedSearch.name == backupFeed.savedSearch.name &&
                             currentSavedSearch.query.orEmpty() == backupFeed.savedSearch.query &&
-                            (currentSavedSearch.filters_json ?: "[]") == backupFeed.savedSearch.filterList
+                            // ZOUKAN -->
+                            (currentSavedSearch.filters_json ?: "[]") == backupFeed.savedSearch.filterList.ifBlank { "[]" }
+                        // ZOUKAN <--
                     }?._id
 
                     existedSavedSearchId ?: handler.awaitOneExecutable(true) {

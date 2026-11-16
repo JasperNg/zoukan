@@ -508,7 +508,7 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                     val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
                     val chosen = when {
                         newStores.isEmpty() -> options
-                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
+                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.extensionListUrl ?: it.indexUrl}" })) {
                             true -> options
                             false -> options.copy(extensionStores = false)
                             null -> {
@@ -517,7 +517,26 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                             }
                         }
                     }
-                    val errors = backups.restore(backup, chosen) { _, progress, total ->
+                    // Security settings and logins change when the app locks and where data goes, so a
+                    // backup writes them only when the user has been told
+                    val sensitive = DesktopBackups.sensitiveKeys(
+                        backup.copy(
+                            backupPreferences = if (chosen.appSettings) backup.backupPreferences else emptyList(),
+                            backupSourcePreferences = if (chosen.sourceSettings) backup.backupSourcePreferences else emptyList(),
+                        ),
+                    )
+                    val allowSensitive = when {
+                        sensitive.isEmpty() -> false
+                        else -> when (sensitiveSettingsChoice(sensitive.size)) {
+                            true -> true
+                            false -> false
+                            null -> {
+                                result = RestoreOutcome.CANCELLED
+                                return@launch
+                            }
+                        }
+                    }
+                    val errors = backups.restore(backup, chosen, allowSensitive = allowSensitive) { _, progress, total ->
                         backupStatusFlow.value = localized(DMR.strings.restoring_of, file.name, progress, total)
                     }
                     result = RestoreOutcome.OK
@@ -539,6 +558,36 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
         }
     }
     return outcome
+}
+
+/** How a restore decides about security settings and logins; tests replace the native dialog. */
+internal var sensitiveSettingsChoice: (count: Int) -> Boolean? = ::confirmSensitive
+
+/**
+ * Asks whether a restore may also write the [count] security settings and logins a backup holds.
+ * True writes them, false restores without them, null cancels the restore.
+ */
+private fun confirmSensitive(count: Int): Boolean? {
+    val message = localized(DMR.strings.restore_sensitive_settings, count)
+    var choice = javax.swing.JOptionPane.CANCEL_OPTION
+    val ask = Runnable {
+        choice = javax.swing.JOptionPane.showOptionDialog(
+            null,
+            message,
+            localized(MR.strings.pref_restore_backup),
+            javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
+            javax.swing.JOptionPane.WARNING_MESSAGE,
+            null,
+            arrayOf(localized(MR.strings.action_restore), localized(DMR.strings.restore_without), localized(MR.strings.action_cancel)),
+            localized(DMR.strings.restore_without),
+        )
+    }
+    if (javax.swing.SwingUtilities.isEventDispatchThread()) ask.run() else javax.swing.SwingUtilities.invokeAndWait(ask)
+    return when (choice) {
+        0 -> true
+        1 -> false
+        else -> null
+    }
 }
 
 /**

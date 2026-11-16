@@ -996,7 +996,7 @@
   feature: "Restore backup screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, backup.BackupRoundTripTest, e2e.BackupRestoreJourneyTest]
+  tests: [ui.ScreenSmokeTest, backup.BackupRoundTripTest, e2e.BackupRestoreJourneyTest, extension.ExtensionStoreSafetyTest]
 
 - key: screen:settings.MissingExtensionsScreen
   feature: "Missing extensions screen"
