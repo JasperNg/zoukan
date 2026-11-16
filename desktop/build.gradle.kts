@@ -247,6 +247,8 @@ dependencies {
 
     testImplementation(libs.bundles.test)
     testImplementation(zoukanlibs.compose.ui.test)
+    // The smoke test's usability check presses Escape as the window does, as Back (Usability.kt)
+    testImplementation(zoukanlibs.compose.navigationevent)
     // On the compile classpath too: JourneyShardFilter is a launcher PostDiscoveryFilter
     testImplementation(libs.junit.platform.launcher)
 }
