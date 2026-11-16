@@ -108,6 +108,9 @@ public final class Bitmap {
                 return BufferedImage.TYPE_BYTE_GRAY;
             case RGB_565:
                 return BufferedImage.TYPE_USHORT_565_RGB;
+            // ZOUKAN -->
+            case ARGB_4444: // Android treats ARGB_4444 as ARGB_8888
+            // ZOUKAN <--
             case ARGB_8888:
                 return BufferedImage.TYPE_INT_ARGB;
             case _TYPE_3BYTE_BGR:
@@ -234,6 +237,77 @@ public final class Bitmap {
 
         return new Bitmap(image);
     }
+
+    // ZOUKAN -->
+    public static Bitmap createBitmap(@NonNull Bitmap src) {
+        return createBitmap(src, 0, 0, src.getWidth(), src.getHeight());
+    }
+
+    public static Bitmap createScaledBitmap(@NonNull Bitmap src, int dstWidth, int dstHeight, boolean filter) {
+        checkWidthHeight(dstWidth, dstHeight);
+        if (src.getWidth() == dstWidth && src.getHeight() == dstHeight) {
+            return src;
+        }
+        Bitmap dst = createBitmap(dstWidth, dstHeight, Config.ARGB_8888);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(filter);
+        new Canvas(dst).drawBitmap(src, new Rect(0, 0, src.getWidth(), src.getHeight()),
+                new Rect(0, 0, dstWidth, dstHeight), paint);
+        return dst;
+    }
+
+    public static Bitmap createBitmap(@NonNull Bitmap source, int x, int y, int width, int height,
+                                      @Nullable Matrix m, boolean filter) {
+        if (m == null || m.isIdentity()) {
+            return createBitmap(source, x, y, width, height);
+        }
+        checkXYSign(x, y);
+        checkWidthHeight(width, height);
+        if (x + width > source.getWidth()) {
+            throw new IllegalArgumentException("x + width must be <= bitmap.width()");
+        }
+        if (y + height > source.getHeight()) {
+            throw new IllegalArgumentException("y + height must be <= bitmap.height()");
+        }
+        RectF mapped = new RectF();
+        m.mapRect(mapped, new RectF(0, 0, width, height));
+        int w = Math.max(1, Math.round(mapped.width()));
+        int h = Math.max(1, Math.round(mapped.height()));
+        Bitmap result = createBitmap(w, h, Config.ARGB_8888);
+        Canvas canvas = new Canvas(result);
+        canvas.translate(-mapped.left, -mapped.top);
+        canvas.concat(m);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(filter);
+        canvas.drawBitmap(source, new Rect(x, y, x + width, y + height), new RectF(0, 0, width, height), paint);
+        return result;
+    }
+
+    private int density = 160; // DisplayMetrics.DENSITY_DEFAULT
+
+    public int getDensity() {
+        return density;
+    }
+
+    public void setDensity(int density) {
+        this.density = density;
+    }
+
+    /** ARGB images always carry an alpha channel here; the flag only marks a page as opaque. */
+    public void setHasAlpha(boolean hasAlpha) {
+        opaque = !hasAlpha;
+    }
+
+    public boolean sameAs(@Nullable Bitmap other) {
+        if (this == other) return true;
+        if (other == null || width != other.width || height != other.height
+                || getConfig() != other.getConfig()) {
+            return false;
+        }
+        return java.util.Arrays.equals(image.getRGB(0, 0, width, height, null, 0, width),
+                other.image.getRGB(0, 0, width, height, null, 0, width));
+    }
+    // ZOUKAN <--
 
     public boolean compress(CompressFormat format, int quality, OutputStream stream) {
         if (stream == null) {

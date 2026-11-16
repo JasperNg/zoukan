@@ -442,6 +442,59 @@ class GraphicsCompatTest {
     }
 
     @Test
+    fun `the Bitmap members extensions use for scaling and rotating exist`() {
+        val int = Int::class.javaPrimitiveType
+        val bool = Boolean::class.javaPrimitiveType
+        Bitmap::class.java.getMethod("createScaledBitmap", Bitmap::class.java, int, int, bool)
+        Bitmap::class.java.getMethod("createBitmap", Bitmap::class.java, int, int, int, int, Matrix::class.java, bool)
+        Bitmap::class.java.getMethod("createBitmap", Bitmap::class.java)
+        Bitmap::class.java.getMethod("setHasAlpha", bool)
+        Bitmap::class.java.getMethod("sameAs", Bitmap::class.java)
+        Bitmap::class.java.getMethod("getDensity")
+        Bitmap::class.java.getMethod("setDensity", int)
+    }
+
+    @Test
+    fun `createScaledBitmap without filtering repeats pixels and a same-size call returns the source`() {
+        val src = bitmapOf(2, 2) { x, y -> 0xFF000000.toInt() or (x * 100 shl 16) or (y * 100 shl 8) }
+        val scaled = Bitmap.createScaledBitmap(src, 4, 4, false)
+        scaled.width shouldBe 4
+        scaled.height shouldBe 4
+        for (y in 0 until 4) for (x in 0 until 4) scaled.getPixel(x, y) shouldBe src.getPixel(x / 2, y / 2)
+        (Bitmap.createScaledBitmap(src, 2, 2, true) === src) shouldBe true
+    }
+
+    @Test
+    fun `createBitmap with a rotation Matrix turns a 3x2 bitmap into 2x3`() {
+        val src = bitmapOf(3, 2) { x, y -> 0xFF000000.toInt() or (x shl 8) or y }
+        val rotated = Bitmap.createBitmap(src, 0, 0, 3, 2, Matrix().apply { setRotate(90f) }, false)
+        rotated.width shouldBe 2
+        rotated.height shouldBe 3
+        // A 90 degree clockwise turn sends source (x, y) to (height - 1 - y, x)
+        for (y in 0 until 2) for (x in 0 until 3) rotated.getPixel(1 - y, x) shouldBe src.getPixel(x, y)
+        // Without a matrix it is a plain copy
+        Bitmap.createBitmap(src, 0, 0, 3, 2, null, false).sameAs(src) shouldBe true
+        Bitmap.createBitmap(src).sameAs(src) shouldBe true
+    }
+
+    @Test
+    fun `sameAs is true for a copy and false after setPixel, density defaults to 160`() {
+        val src = bitmapOf(2, 2) { x, y -> 0xFF000000.toInt() or (x shl 8) or y }
+        val copy = Bitmap.createBitmap(src)
+        src.sameAs(copy) shouldBe true
+        copy.setPixel(0, 0, 0xFFFFFFFF.toInt())
+        src.sameAs(copy) shouldBe false
+        src.density shouldBe 160
+        src.density = 320
+        src.density shouldBe 320
+    }
+
+    @Test
+    fun `ARGB_4444 bitmaps are created as ARGB_8888`() {
+        Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_4444).config shouldBe Bitmap.Config.ARGB_8888
+    }
+
+    @Test
     fun `eraseColor TRANSPARENT clears a drawn bitmap`() {
         val bitmap = bitmapOf(4, 4) { _, _ -> 0xFFFF0000.toInt() }
         bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
