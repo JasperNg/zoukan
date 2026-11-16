@@ -191,7 +191,7 @@ class FixtureServerTest {
         Corruptible("jpeg-1.jpg", "image/jpeg", ImageType.JPEG, IIOException::class.java),
         Corruptible("png-1.png", "image/png", ImageType.PNG, IIOException::class.java),
         // No ImageIO reader takes it: the reader's own "unsupported image format"
-        Corruptible("webp-1.webp", "image/webp", ImageType.WEBP, IllegalArgumentException::class.java),
+        Corruptible("webp-1.webp", "image/webp", ImageType.WEBP, zoukan.desktop.ui.common.UnreadableImageException::class.java),
         // The AVIF reader's FFmpeg cannot open it
         Corruptible("avif-1.avif", "image/avif", ImageType.AVIF, IOException::class.java),
     )
