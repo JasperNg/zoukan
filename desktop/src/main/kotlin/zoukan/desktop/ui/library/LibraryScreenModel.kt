@@ -67,6 +67,7 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
@@ -643,7 +644,7 @@ class LibraryScreenModel(
     fun setCategories(add: Set<Long>, remove: Set<Long>, ids: Set<Long> = state.value.selection) {
         val current = state.value.items.filter { it.id in ids }.groupBy { it.id }
             .mapValues { (_, rows) -> rows.flatMap { it.categories }.toSet() }
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_set_categories) }) {
             current.forEach { (id, categories) ->
                 val updated = (categories - remove + add).filter { it != Category.UNCATEGORIZED_ID }
                 setMangaCategories.await(id, updated)
@@ -657,7 +658,7 @@ class LibraryScreenModel(
 
     fun markRead(read: Boolean, ids: Set<Long> = state.value.selection) {
         val mangas = selected(ids)
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_mark_read) }) {
             mangas.forEach { manga ->
                 val changed = chaptersOf(manga).filter { it.read != read }
                 val updates = changed.map { ChapterUpdate(id = it.id, read = read, lastPageRead = if (read) null else 0L) }
@@ -698,7 +699,7 @@ class LibraryScreenModel(
 
     fun removeFromLibrary(deleteDownloads: Boolean, ids: Set<Long> = state.value.selection) {
         val mangas = selected(ids)
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_remove_from_library) }) {
             mangas.forEach { manga ->
                 if (deleteDownloads && manga.source != LocalSource.ID) {
                     byEntry(manga, chaptersOf(manga)).forEach { (entry, chapters) -> downloadManager.delete(entry, chapters) }
@@ -752,7 +753,7 @@ class LibraryScreenModel(
         val regex3 = "\\{.*?\\}".toRegex()
         val regex4 = ".*\\|".toRegex()
         val mangas = selected(state.value.selection).filter { it.isEhBasedManga() || it.source in nHentaiSourceIds }
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_clean_titles) }) {
             mangas.forEach { manga ->
                 val editedTitle = manga.title
                     .replace(regex1, "").trim()
@@ -782,8 +783,9 @@ class LibraryScreenModel(
                 mangaRepository.update(MangaUpdate(id = manga.id, lastUpdate = manga.lastUpdate + 1))
                 // ZOUKAN <--
             }
+            // The selection stays when the action failed
+            clearSelection()
         }
-        clearSelection()
     }
 
     /** Sets the selected MangaDex entries to Reading in the MangaDex follows. */
@@ -899,7 +901,7 @@ class LibraryScreenModel(
 
     /** Takes [mangas] out of the library, keeping their downloads (the merge's "Remove" action). */
     fun removeMangas(mangas: List<Manga>) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_remove_from_library) }) {
             mangas.distinctBy { it.id }.forEach { manga ->
                 mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
             }

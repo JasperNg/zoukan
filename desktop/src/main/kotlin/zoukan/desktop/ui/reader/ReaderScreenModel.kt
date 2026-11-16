@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -406,7 +407,7 @@ class ReaderScreenModel(
         decision.toDelete.forEach { pendingDeletes[it.id] = it }
         val duplicates = decision.markRead
         if (duplicates.isNotEmpty()) {
-            appScope.launch { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
+            appScope.launch(CoroutineName("duplicate chapters read")) { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
             val ids = duplicates.mapTo(HashSet()) { it.id }
             mutableState.update { s -> s.copy(chapters = s.chapters.map { if (it.id in ids) it.copy(read = true) else it }) }
         }
@@ -426,7 +427,7 @@ class ReaderScreenModel(
         if (readerManga.source == LocalSource.ID) return
         val next = state.nextChapter ?: return
         downloadedAheadFor = current.id
-        appScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO + CoroutineName("download ahead")) {
             val mangas = HashMap<Long, Manga?>()
             suspend fun mangaOf(chapter: Chapter): Manga? =
                 if (chapter.mangaId == readerManga.id) readerManga else mangas.getOrPut(chapter.mangaId) { getManga.await(chapter.mangaId) }
@@ -789,7 +790,7 @@ class ReaderScreenModel(
         if (state.value.pages.isEmpty()) return
         val duration = System.currentTimeMillis() - chapterOpenedAt
         chapterOpenedAt = System.currentTimeMillis()
-        appScope.launch {
+        appScope.launch(CoroutineName("reading history")) {
             upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
         }
     }
@@ -819,7 +820,7 @@ class ReaderScreenModel(
         val chapter = state.value.chapter
         if (chapter != null && state.value.pages.isNotEmpty() && !incognito) {
             val duration = System.currentTimeMillis() - chapterOpenedAt
-            appScope.launch {
+            appScope.launch(CoroutineName("reading history")) {
                 upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
             }
         }
@@ -839,7 +840,7 @@ class ReaderScreenModel(
                 navigable = s.navigable.map { it.updated() },
             )
         }
-        appScope.launch {
+        appScope.launch(CoroutineName("bookmark")) {
             updateChapter.await(ChapterUpdate(id = chapter.id, bookmark = bookmark))
         }
     }

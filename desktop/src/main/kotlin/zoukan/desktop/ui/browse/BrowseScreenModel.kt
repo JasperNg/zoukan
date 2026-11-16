@@ -22,6 +22,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.launchReporting
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import zoukan.i18n.desktop.DMR
@@ -327,7 +328,7 @@ class BrowseScreenModel(
     }
 
     fun addStore(url: String) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.could_not_add_the_store) }) {
             addStore.invoke(url.trim())
                 .onSuccess {
                     Toasts.show(localized(DMR.strings.store_added))
@@ -338,7 +339,7 @@ class BrowseScreenModel(
     }
 
     fun removeStore(store: ExtensionStore) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_remove_store) }) {
             removeStore.invoke(store.indexUrl)
             // Its extensions leave the available list, and stop being offered as updates
             extensionManager.forgetStore(store.indexUrl)

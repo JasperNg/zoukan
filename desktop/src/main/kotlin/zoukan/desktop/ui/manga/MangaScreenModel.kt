@@ -48,6 +48,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Toasts
+import zoukan.desktop.ui.common.launchReporting
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -161,33 +162,47 @@ class MangaScreenModel(
     init {
         screenModelScope.launch {
             // ZOUKAN -->
-            // A merged entry's chapters belong to the entries it merges
-            val isMerged = getMangaWithChapters.awaitManga(mangaId).source == MERGED_SOURCE_ID
-            val flow = if (isMerged) {
-                getMangaWithChapters.subscribe(mangaId)
-                    .combine(getMergedChaptersByMangaId.subscribe(mangaId)) { (manga, _), merged -> manga to merged }
-            } else {
-                getMangaWithChapters.subscribe(mangaId)
+            // The entry can be gone when the screen opens, or be deleted while it is open: show
+            // an error, as the reader does, instead of failing on the UI thread
+            try {
+                loadEntry()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "The entry $mangaId is gone" }
+                mutableState.update { it.copy(refreshing = false, error = localized(DMR.strings.this_entry_no_longer_exists)) }
             }
             // ZOUKAN <--
-            flow.collect { (manga, chapters) ->
-                mutableState.update {
-                    it.copy(manga = manga, chapters = chapters, source = sourceManager.get(manga.source))
-                }
-                updateDownloaded()
-                if (firstLoad) {
-                    firstLoad = false
-                    // ZOUKAN -->
-                    // An entry outside the library takes the default chapter settings, as on Android
-                    if (!manga.favorite) chapterSettings.reset(manga)
-                    // ZOUKAN <--
-                    if (!manga.initialized || chapters.isEmpty()) {
-                        refresh(fetchDetails = !manga.initialized || manga.thumbnailUrl.isNullOrBlank(), manualFetch = false)
-                    }
+        }
+    }
+
+    // ZOUKAN -->
+    /** Shows the entry and follows it until it is deleted (which throws) or the screen closes. */
+    private suspend fun loadEntry() {
+        // A merged entry's chapters belong to the entries it merges
+        val isMerged = getMangaWithChapters.awaitManga(mangaId).source == MERGED_SOURCE_ID
+        val flow = if (isMerged) {
+            getMangaWithChapters.subscribe(mangaId)
+                .combine(getMergedChaptersByMangaId.subscribe(mangaId)) { (manga, _), merged -> manga to merged }
+        } else {
+            getMangaWithChapters.subscribe(mangaId)
+        }
+        flow.collect { (manga, chapters) ->
+            mutableState.update {
+                it.copy(manga = manga, chapters = chapters, source = sourceManager.get(manga.source))
+            }
+            updateDownloaded()
+            if (firstLoad) {
+                firstLoad = false
+                // An entry outside the library takes the default chapter settings, as on Android
+                if (!manga.favorite) chapterSettings.reset(manga)
+                if (!manga.initialized || chapters.isEmpty()) {
+                    refresh(fetchDetails = !manga.initialized || manga.thumbnailUrl.isNullOrBlank(), manualFetch = false)
                 }
             }
         }
     }
+    // ZOUKAN <--
 
     init {
         screenModelScope.launch {
@@ -354,7 +369,7 @@ class MangaScreenModel(
 
     fun toggleFavorite() {
         val manga = state.value.manga ?: return
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_toggle_favorite) }) {
             if (manga.favorite) {
                 // ZOUKAN -->
                 addToLibraryFlow.remove(manga)
@@ -394,7 +409,7 @@ class MangaScreenModel(
     fun addToLibrary(categoryIds: List<Long>) {
         val manga = state.value.manga ?: return
         mutableState.update { it.copy(categoryChoice = null) }
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_add_to_library) }) {
             // ZOUKAN -->
             // As on Android: bind the enhanced trackers, then offer tracking
             addToLibraryFlow.add(manga, categoryIds)
@@ -425,7 +440,9 @@ class MangaScreenModel(
     fun setCategories(chosen: Set<Long>) {
         val manga = state.value.manga ?: return
         mutableState.update { it.copy(categoryEdit = null) }
-        screenModelScope.launch(Dispatchers.IO) { setMangaCategories.await(manga.id, chosen.toList()) }
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_set_categories) }, context = Dispatchers.IO) {
+            setMangaCategories.await(manga.id, chosen.toList())
+        }
     }
 
     fun dismissCategoryEdit() = mutableState.update { it.copy(categoryEdit = null) }
@@ -479,7 +496,7 @@ class MangaScreenModel(
     }
 
     fun markRead(chapters: List<Chapter>, read: Boolean) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_mark_read) }) {
             updateChapter.awaitAll(
                 chapters.map { ChapterUpdate(id = it.id, read = read, lastPageRead = if (read) null else 0L) },
             )
@@ -511,7 +528,7 @@ class MangaScreenModel(
     }
 
     fun setBookmark(chapters: List<Chapter>, bookmark: Boolean) {
-        screenModelScope.launch {
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_bookmark) }) {
             updateChapter.awaitAll(chapters.map { ChapterUpdate(id = it.id, bookmark = bookmark) })
             done(chapters)
         }

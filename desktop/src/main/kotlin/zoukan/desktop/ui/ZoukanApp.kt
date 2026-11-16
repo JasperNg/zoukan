@@ -66,6 +66,8 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.FadeTransition
 import eu.kanade.tachiyomi.network.NetworkHelper
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -117,8 +119,17 @@ import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
 import java.awt.SystemTray
 
-/** The app's long-lived background work (extension loading, library refreshes). */
-val AppScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+/**
+ * The app's long-lived background work (extension loading, library refreshes). A failure that
+ * nothing catches is logged with the work's [CoroutineName] and still written as a report, as the
+ * default handler does.
+ */
+val AppScope = CoroutineScope(
+    SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { context, e ->
+        context.logcat(LogPriority.ERROR, e) { "Background work failed: ${context[CoroutineName]?.name ?: "unnamed"}" }
+        runCatching { zoukan.desktop.app.CrashReporter.write(Thread.currentThread(), e, fatal = false) }
+    },
+)
 
 /** The main window, for file dialogs; null in tests. */
 val LocalWindow = staticCompositionLocalOf<FrameWindowScope?> { null }

@@ -864,4 +864,12 @@
     <string name="missing_extensions_installed_list">Installed:</string>
     <string name="missing_extensions_failed">Failed:</string>
     <string name="missing_extensions_installed">Installed %1$s of %2$s missing extensions</string>
+    <string name="screen_action_failed_mark_read">Marking as read failed</string>
+    <string name="screen_action_failed_set_categories">Changing the categories failed</string>
+    <string name="screen_action_failed_remove_from_library">Removing from the library failed</string>
+    <string name="screen_action_failed_clean_titles">Cleaning the titles failed</string>
+    <string name="screen_action_failed_toggle_favorite">Changing the library entry failed</string>
+    <string name="screen_action_failed_add_to_library">Adding to the library failed</string>
+    <string name="screen_action_failed_bookmark">Changing the bookmark failed</string>
+    <string name="screen_action_failed_remove_store">Removing the extension store failed</string>
 </resources>
