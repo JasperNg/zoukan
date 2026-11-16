@@ -166,12 +166,19 @@ class ApiLinkage(private val host: ClassLoader) {
     }
 
     private fun isActivity(name: String, supers: Map<String, String>): Boolean {
-        var current: String? = name
+        var current: String = name
         repeat(16) {
             if (current == ACTIVITY) return true
-            current = supers[current] ?: return false
+            // Left the jar: an app class such as an AppCompat-style activity, which the app's own class decides
+            current = supers[current] ?: return isHostActivity(current)
         }
         return false
+    }
+
+    private fun isHostActivity(name: String): Boolean {
+        val cls = classOf(name).getOrNull() ?: return false
+        val activity = classOf(ACTIVITY).getOrNull() ?: return false
+        return activity.isAssignableFrom(cls)
     }
 
     private sealed interface Ref {
@@ -290,11 +297,58 @@ class ApiLinkage(private val host: ClassLoader) {
 
                 override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor =
                     object : MethodVisitor(Opcodes.ASM9) {
+                        // How far into `throw new RuntimeException("Stub!")` the instructions are:
+                        // 1 NEW, 2 DUP, 3 LDC "Stub!", 4 INVOKESPECIAL <init>(String), then ATHROW.
+                        // Any other instruction starts over, so a method that merely mentions the text is not a stub
+                        private var step = 0
+
+                        override fun visitTypeInsn(opcode: Int, type: String) {
+                            step = if (opcode == Opcodes.NEW && type == "java/lang/RuntimeException") 1 else 0
+                        }
+
+                        override fun visitInsn(opcode: Int) {
+                            when {
+                                opcode == Opcodes.DUP && step == 1 -> step = 2
+                                opcode == Opcodes.ATHROW && step == 4 -> {
+                                    methods += name + descriptor
+                                    step = 0
+                                }
+                                else -> step = 0
+                            }
+                        }
+
                         override fun visitLdcInsn(value: Any?) {
-                            if (value == "Stub!") methods += name + descriptor
+                            step = if (value == "Stub!" && (step == 1 || step == 2)) 3 else 0
+                        }
+
+                        override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, isInterface: Boolean) {
+                            step = if (step == 3 && opcode == Opcodes.INVOKESPECIAL && owner == "java/lang/RuntimeException" &&
+                                name == "<init>" && desc == "(Ljava/lang/String;)V"
+                            ) {
+                                4
+                            } else {
+                                0
+                            }
+                        }
+
+                        override fun visitVarInsn(opcode: Int, varIndex: Int) {
+                            step = 0
+                        }
+
+                        override fun visitIntInsn(opcode: Int, operand: Int) {
+                            step = 0
+                        }
+
+                        override fun visitJumpInsn(opcode: Int, label: org.objectweb.asm.Label?) {
+                            step = 0
+                        }
+
+                        override fun visitInvokeDynamicInsn(name: String?, desc: String?, handle: Handle?, vararg args: Any?) {
+                            step = 0
                         }
 
                         override fun visitFieldInsn(opcode: Int, owner: String, field: String, desc: String) {
+                            step = 0
                             if (opcode == Opcodes.PUTSTATIC) assigned += field
                         }
                     }

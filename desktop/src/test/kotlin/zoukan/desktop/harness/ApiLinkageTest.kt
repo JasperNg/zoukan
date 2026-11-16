@@ -92,7 +92,70 @@ class ApiLinkageTest {
 
     /** A class loader that defines the host-side classes of a test, in front of the test's own. */
     private class HostLoader(parent: ClassLoader) : ClassLoader(parent) {
-        fun define(name: String, bytes: ByteArray): Class<*> = defineClass(name, bytes, 0, bytes.size)
+        private val defined = HashMap<String, ByteArray>()
+
+        fun define(name: String, bytes: ByteArray): Class<*> {
+            defined[name.replace('.', '/') + ".class"] = bytes
+            return defineClass(name, bytes, 0, bytes.size)
+        }
+
+        /** The stub check reads the bytes of a host class this way. */
+        override fun getResourceAsStream(name: String): java.io.InputStream? =
+            defined[name]?.inputStream() ?: super.getResourceAsStream(name)
+    }
+
+    /** Host class `host/CompatActivity`, an app-side activity base class (as AppCompatActivity). */
+    private fun hostCompatActivity(): ByteArray {
+        val writer = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "host/CompatActivity", null, "android/app/Activity", null)
+        writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null).apply {
+            visitCode()
+            visitVarInsn(Opcodes.ALOAD, 0)
+            visitMethodInsn(Opcodes.INVOKESPECIAL, "android/app/Activity", "<init>", "()V", false)
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        writer.visitEnd()
+        return writer.toByteArray()
+    }
+
+    /** Host class `host/Messages` whose `describe()` returns the text "Stub!" and throws nothing. */
+    private fun hostMessages(): ByteArray {
+        val writer = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "host/Messages", null, "java/lang/Object", null)
+        writer.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "describe", "()Ljava/lang/String;", null, null).apply {
+            visitCode()
+            visitLdcInsn("Stub!")
+            visitInsn(Opcodes.ARETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        writer.visitEnd()
+        return writer.toByteArray()
+    }
+
+    @Test
+    fun `an activity extending an AppCompat-style host activity is activity-only`() {
+        val host = HostLoader(javaClass.classLoader).also { it.define("host.CompatActivity", hostCompatActivity()) }
+        val writer = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "ext/DeepLink", null, "host/CompatActivity", null)
+        writer.visitMethod(Opcodes.ACC_PUBLIC, "open", "()V", null, null).apply {
+            visitCode()
+            visitMethodInsn(Opcodes.INVOKESTATIC, "android/zoukan/Missing", "call", "()V", false)
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        writer.visitEnd()
+        val gaps = ApiLinkage(host).check(mapOf("ext/DeepLink" to writer.toByteArray()))
+        gaps.map { it.symbol to it.activityOnly } shouldContainExactlyInAnyOrder listOf("android.zoukan.Missing" to true)
+    }
+
+    @Test
+    fun `an app method that only mentions Stub is not a stub`() {
+        val host = HostLoader(javaClass.classLoader).also { it.define("host.Messages", hostMessages()) }
+        ApiLinkage(host).check(probe(Triple("host/Messages", "describe", "()Ljava/lang/String;"))).shouldBeEmpty()
     }
 
     /** A host interface `host/Api` with the abstract method `run()V`. */
