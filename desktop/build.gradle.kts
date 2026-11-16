@@ -251,6 +251,8 @@ dependencies {
     testImplementation(zoukanlibs.compose.navigationevent)
     // On the compile classpath too: JourneyShardFilter is a launcher PostDiscoveryFilter
     testImplementation(libs.junit.platform.launcher)
+    // ContextStubsTest builds the emulated Context's files config in a temporary folder
+    testImplementation(zoukanlibs.typesafe.config)
 }
 
 val jvmFlags = listOf(

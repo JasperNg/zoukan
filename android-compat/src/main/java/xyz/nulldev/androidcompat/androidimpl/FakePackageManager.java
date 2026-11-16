@@ -13,7 +13,6 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.UserHandle;
-import kotlin.NotImplementedError;
 import xyz.nulldev.androidcompat.info.ApplicationInfoImpl;
 import xyz.nulldev.androidcompat.pm.ExternalPackages;
 import xyz.nulldev.androidcompat.pm.InstalledPackage;
@@ -66,7 +65,9 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public PackageInfo getPackageInfo(VersionedPackage versionedPackage, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getPackageInfo(VersionedPackage, int) is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -76,22 +77,30 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public String[] currentToCanonicalPackageNames(String[] names) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.currentToCanonicalPackageNames is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public String[] canonicalToCurrentPackageNames(String[] names) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.canonicalToCurrentPackageNames is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public Intent getLaunchIntentForPackage(String packageName) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getLaunchIntentForPackage is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public Intent getLeanbackLaunchIntentForPackage(String packageName) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getLeanbackLaunchIntentForPackage is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -121,12 +130,16 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public PermissionInfo getPermissionInfo(String name, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getPermissionInfo is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public List<PermissionInfo> queryPermissionsByGroup(String group, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.queryPermissionsByGroup is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -136,12 +149,16 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public PermissionGroupInfo getPermissionGroupInfo(String name, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getPermissionGroupInfo is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public List<PermissionGroupInfo> getAllPermissionGroups(int flags) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getAllPermissionGroups is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -156,22 +173,30 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public ActivityInfo getActivityInfo(ComponentName component, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getActivityInfo is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public ActivityInfo getReceiverInfo(ComponentName component, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getReceiverInfo is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public ServiceInfo getServiceInfo(ComponentName component, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getServiceInfo is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public ProviderInfo getProviderInfo(ComponentName component, int flags) throws NameNotFoundException {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getProviderInfo is not supported");
+        // ZOUKAN <--
     }
 
     //TODO Return loaded extensions
@@ -202,12 +227,16 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public List<PackageInfo> getPackagesHoldingPermissions(String[] permissions, int flags) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getPackagesHoldingPermissions is not supported");
+        // ZOUKAN <--
     }
 
     @Override
     public List<PackageInfo> getInstalledPackagesAsUser(int flags, int userId) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getInstalledPackagesAsUser is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -254,7 +283,9 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public void updatePermissionFlags(String permissionName, String packageName, int flagMask, int flagValues, UserHandle user) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.updatePermissionFlags is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -309,7 +340,9 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public Drawable getInstantAppIcon(String packageName) {
-        throw new NotImplementedError();
+        // ZOUKAN -->
+        throw new UnsupportedOperationException("PackageManager.getInstantAppIcon is not supported");
+        // ZOUKAN <--
     }
 
     @Override
@@ -407,29 +440,31 @@ public class FakePackageManager extends PackageManager {
         return null;
     }
 
+    // ZOUKAN -->
+    // No app handles an intent here, as on a device without one: an empty list, not null
     @Override
     public List<ResolveInfo> queryIntentActivities(Intent intent, int flags) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryIntentActivitiesAsUser(Intent intent, int flags, int userId) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryIntentActivityOptions(ComponentName caller, Intent[] specifics, Intent intent, int flags) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryBroadcastReceivers(Intent intent, int flags) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryBroadcastReceiversAsUser(Intent intent, int flags, int userId) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
@@ -439,23 +474,24 @@ public class FakePackageManager extends PackageManager {
 
     @Override
     public List<ResolveInfo> queryIntentServices(Intent intent, int flags) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryIntentServicesAsUser(Intent intent, int flags, int userId) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryIntentContentProvidersAsUser(Intent intent, int flags, int userId) {
-        return null;
+        return new ArrayList<>();
     }
 
     @Override
     public List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags) {
-        return null;
+        return new ArrayList<>();
     }
+    // ZOUKAN <--
 
     @Override
     public ProviderInfo resolveContentProvider(String name, int flags) {

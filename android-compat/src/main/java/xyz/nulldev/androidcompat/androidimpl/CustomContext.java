@@ -80,6 +80,26 @@ public class CustomContext extends Context {
 
     private Logger logger = LoggerFactory.getLogger(CustomContext.class);
 
+    // ZOUKAN -->
+    private final java.util.Set<String> warnedUnsupported = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Logs once per method that an extension reached an API this Context does not implement (it returns null). */
+    private void warnUnsupported(String method) {
+        if (warnedUnsupported.add(method)) {
+            logger.warn("Context.{} is not supported and returns null", method);
+        }
+    }
+
+    /** A file name inside the app's private folders: as on Android, it has no path separator. */
+    private static String checkFileName(String name) {
+        if (name == null || name.isEmpty() || name.indexOf('/') >= 0 || name.indexOf('\\') >= 0 || name.indexOf(File.separatorChar) >= 0
+                || name.equals(".") || name.equals("..")) {
+            throw new IllegalArgumentException("File " + name + " contains a path separator");
+        }
+        return name;
+    }
+    // ZOUKAN <--
+
     private Map<String, Object> serviceMap = new HashMap<>();
     {
         serviceMap.put(Context.CONNECTIVITY_SERVICE, ConnectivityManager.INSTANCE);
@@ -94,6 +114,9 @@ public class CustomContext extends Context {
 
     @Override
     public AssetManager getAssets() {
+        // ZOUKAN -->
+        warnUnsupported("getAssets");
+        // ZOUKAN <--
         return null;
     }
 
@@ -111,6 +134,9 @@ public class CustomContext extends Context {
 
     @Override
     public ContentResolver getContentResolver() {
+        // ZOUKAN -->
+        warnUnsupported("getContentResolver");
+        // ZOUKAN <--
         return null;
     }
 
@@ -134,6 +160,9 @@ public class CustomContext extends Context {
 
     @Override
     public Resources.Theme getTheme() {
+        // ZOUKAN -->
+        warnUnsupported("getTheme");
+        // ZOUKAN <--
         return null;
     }
 
@@ -219,12 +248,18 @@ public class CustomContext extends Context {
 
     @Override
     public FileInputStream openFileInput(String s) throws FileNotFoundException {
-        return null;
+        // ZOUKAN -->
+        // Under the files folder, as on Android; a missing file is a FileNotFoundException
+        return new FileInputStream(getFileStreamPath(s));
+        // ZOUKAN <--
     }
 
     @Override
     public FileOutputStream openFileOutput(String s, int i) throws FileNotFoundException {
-        return null;
+        // ZOUKAN -->
+        // Under the files folder, as on Android; MODE_APPEND adds to the file
+        return new FileOutputStream(getFileStreamPath(s), (i & MODE_APPEND) != 0);
+        // ZOUKAN <--
     }
 
     @Override
@@ -234,7 +269,9 @@ public class CustomContext extends Context {
 
     @Override
     public File getFileStreamPath(String s) {
-        return null;
+        // ZOUKAN -->
+        return new File(getFilesDir(), checkFileName(s));
+        // ZOUKAN <--
     }
 
     @Override
@@ -316,7 +353,12 @@ public class CustomContext extends Context {
 
     @Override
     public File getDir(String s, int i) {
-        return null;
+        // ZOUKAN -->
+        // Android's name for it: app_<name> in the app's data folder
+        File dir = new File(getDataDir(), "app_" + checkFileName(s));
+        dir.mkdirs();
+        return dir;
+        // ZOUKAN <--
     }
 
     @Override
@@ -697,16 +739,25 @@ public class CustomContext extends Context {
 
     @Override
     public Context createPackageContext(String s, int i) throws PackageManager.NameNotFoundException {
+        // ZOUKAN -->
+        warnUnsupported("createPackageContext");
+        // ZOUKAN <--
         return null;
     }
 
     @Override
     public Context createPackageContextAsUser(String packageName, int flags, UserHandle user) throws PackageManager.NameNotFoundException {
+        // ZOUKAN -->
+        warnUnsupported("createPackageContextAsUser");
+        // ZOUKAN <--
         return null;
     }
 
     @Override
     public Context createApplicationContext(ApplicationInfo application, int flags) throws PackageManager.NameNotFoundException {
+        // ZOUKAN -->
+        warnUnsupported("createApplicationContext");
+        // ZOUKAN <--
         return null;
     }
 
@@ -717,11 +768,17 @@ public class CustomContext extends Context {
 
     @Override
     public Context createConfigurationContext(Configuration configuration) {
+        // ZOUKAN -->
+        warnUnsupported("createConfigurationContext");
+        // ZOUKAN <--
         return null;
     }
 
     @Override
     public Context createDisplayContext(Display display) {
+        // ZOUKAN -->
+        warnUnsupported("createDisplayContext");
+        // ZOUKAN <--
         return null;
     }
 
