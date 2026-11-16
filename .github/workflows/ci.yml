@@ -124,6 +124,8 @@ jobs:
           set -euo pipefail
           listed=$(sed -n 's/^val wiringTests = listOf(\(.*\))$/\1/p' desktop/build.gradle.kts | tr -d ' "' | tr ',' '\n')
           [ -n "$listed" ] || { echo "::error::Could not read wiringTests from desktop/build.gradle.kts"; exit 1; }
+          # The entries are test patterns, not file names: split them on newlines without expanding them
+          set -f
           for t in $listed; do
             case "$t" in
               '*InjektRegistrationsTest') ;;
