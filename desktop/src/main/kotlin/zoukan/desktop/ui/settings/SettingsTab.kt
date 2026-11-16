@@ -508,7 +508,7 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                     val newStores = if (options.extensionStores) backups.newExtensionStores(backup) else emptyList()
                     val chosen = when {
                         newStores.isEmpty() -> options
-                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.indexUrl}" })) {
+                        else -> when (confirmStores(newStores.map { "${it.name}: ${it.extensionListUrl ?: it.indexUrl}" })) {
                             true -> options
                             false -> options.copy(extensionStores = false)
                             null -> {

@@ -98,24 +98,31 @@ class DesktopBackups(
     }
 
     /**
-     * The extension stores in [backup] that a restore would add or change the signing key of, by
-     * the index address the restore writes. A restore replaces a known store's signing key, so a
-     * new key needs the same confirmation as a new store.
+     * The extension stores in [backup] that a restore would add or change, by the index address
+     * the restore writes. A restore replaces a known store's signing key, extension list address
+     * and website and Discord links, so a change to any of them needs the same confirmation as a
+     * new store.
      */
     suspend fun newExtensionStores(
         backup: Backup,
         getStores: GetExtensionStores = Injekt.get(),
     ): List<BackupExtensionStore> {
-        val known = getStores.get().associate { it.indexUrl to it.signingKey }
+        val known = getStores.get().associateBy { it.indexUrl }
         return backup.backupExtensionStores.filter {
-            known[ExtensionStoreRestorer.indexUrlOf(it)] != it.signingKey
+            val current = known[ExtensionStoreRestorer.indexUrlOf(it)]
+            current == null ||
+                current.signingKey != it.signingKey ||
+                current.extensionListUrl != it.extensionListUrl ||
+                current.contact.website != it.contactWebsite ||
+                current.contact.discord != it.contactDiscord
         }
     }
 
     /**
      * [backup] without the extension stores [newExtensionStores] reports, and those stores, for a
      * restore nobody is asked to confirm (data sync, the command line): it may keep stores the
-     * user already trusts with the same key, but never adds one or changes a signing key.
+     * user already trusts with the same details, but never adds one or changes a signing key,
+     * extension list address or website and Discord links.
      */
     suspend fun withoutNewExtensionStores(
         backup: Backup,
