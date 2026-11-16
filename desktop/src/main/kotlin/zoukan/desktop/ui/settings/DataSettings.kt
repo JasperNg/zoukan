@@ -165,24 +165,79 @@ internal fun StorageLocationPreference() {
     val storage = remember { Injekt.get<ZoukanStorage>() }
     val window = LocalWindow.current?.window
     val folder by storage.folderPreference.collectAsState()
+    val scope = rememberCoroutineScope()
+    // The folder asked for ("" for the data folder) and what is in it, waiting for the user's answer
+    var pending by remember { mutableStateOf<Pair<String, StorageLocation.Verdict.Ok>?>(null) }
     SettingRow(
         localized(MR.strings.pref_storage_location),
         // Read again when the setting changes
         remember(folder) { storage.root.path },
         onClick = {
-            chooseFolder(window, storage.root)?.let {
-                storage.folderPreference.set(it.path)
-                Injekt.get<DownloadManager>().invalidateCache()
+            chooseFolder(window, storage.root)?.let { picked ->
+                scope.launch {
+                    // The folder may be on a network drive
+                    when (val verdict = withContext(Dispatchers.IO) { StorageLocation.check(picked) }) {
+                        is StorageLocation.Verdict.Ok -> pending = picked.path to verdict
+                        StorageLocation.Verdict.NotWritable -> Toasts.show(localized(DMR.strings.storage_folder_not_writable, picked.path))
+                    }
+                }
             }
         },
     ) {
         if (folder.isNotBlank()) {
             TextButton(onClick = {
-                storage.folderPreference.set("")
-                Injekt.get<DownloadManager>().invalidateCache()
+                scope.launch {
+                    val hasDownloads = withContext(Dispatchers.IO) { File(Injekt.get<ZoukanDirs>().root, ZoukanStorage.DOWNLOADS).listFiles()?.isNotEmpty() == true }
+                    pending = "" to StorageLocation.Verdict.Ok(hasDownloads)
+                }
             }) { Text(localized(MR.strings.action_reset)) }
         }
     }
+    pending?.let { (path, verdict) ->
+        StorageChangeDialog(
+            oldRoot = storage.root,
+            newRoot = if (path.isBlank()) Injekt.get<ZoukanDirs>().root else File(path),
+            hasDownloads = verdict.hasDownloads,
+            onOpenOld = { openFolder(storage.root) },
+            onConfirm = { StorageLocation.apply(storage, path) { Injekt.get<DownloadManager>().invalidateCache() } },
+            onDismiss = { pending = null },
+        )
+    }
+}
+
+/**
+ * Asked before the storage folder changes: nothing in the old folder is moved, so its downloads,
+ * local entries and automatic backups stay there and show as not downloaded until the user moves
+ * them or switches back. A button opens the old folder.
+ */
+@Composable
+internal fun StorageChangeDialog(
+    oldRoot: File,
+    newRoot: File,
+    hasDownloads: Boolean,
+    onOpenOld: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(MR.strings.pref_storage_location)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(newRoot.path, style = MaterialTheme.typography.bodySmall)
+                Text(localized(DMR.strings.storage_change_warning, oldRoot.path))
+                if (hasDownloads) Text(localized(DMR.strings.storage_folder_has_downloads))
+                TextButton(onClick = onOpenOld) { Text(localized(DMR.strings.open_the_old_folder)) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss()
+                onConfirm()
+            }) { Text(localized(MR.strings.action_ok)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
 }
 
 /** Android's Create backup and Restore backup buttons, side by side. */

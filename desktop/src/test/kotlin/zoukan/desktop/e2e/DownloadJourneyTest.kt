@@ -20,11 +20,14 @@ import tachiyomi.domain.chapter.model.Chapter
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.download.DownloadManager
+import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.common.DesktopPreferences
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.settings.StorageLocation
 import java.io.File
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 import javax.imageio.ImageIO
 import kotlin.time.Duration.Companion.minutes
@@ -87,6 +90,29 @@ class DownloadJourneyTest {
                             imageMatches(image, page) shouldBe true
                         }
                     }
+                }
+
+                step("Changing the storage folder leaves the downloads where they are") {
+                    fun hashes(): Map<String, String> = formats.indices.flatMap { i ->
+                        val file = downloads.findChapter(manga, chapters()[i]).shouldNotBeNull()
+                        (if (file.isDirectory) file.walkTopDown().filter { it.isFile }.toList() else listOf(file)).map {
+                            it.path to MessageDigest.getInstance("SHA-256").digest(it.readBytes()).joinToString("") { b -> "%02x".format(b) }
+                        }
+                    }.toMap()
+                    val before = hashes()
+                    val storage = Injekt.get<ZoukanStorage>()
+                    val old = storage.folderPreference.get()
+
+                    StorageLocation.apply(storage, File(dirs.root, "moved").path) { downloads.invalidateCache() }
+                    downloads.downloadedIds(manga, chapters()).isEmpty() shouldBe true
+                    before.forEach { (path, hash) ->
+                        File(path).exists() shouldBe true
+                        MessageDigest.getInstance("SHA-256").digest(File(path).readBytes()).joinToString("") { b -> "%02x".format(b) } shouldBe hash
+                    }
+
+                    StorageLocation.apply(storage, old) { downloads.invalidateCache() }
+                    downloads.downloadedIds(manga, chapters()) shouldHaveSize formats.size
+                    hashes() shouldBe before
                 }
 
                 step("Read a download with the fixture server stopped") {
