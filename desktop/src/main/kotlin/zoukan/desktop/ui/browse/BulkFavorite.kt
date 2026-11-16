@@ -34,30 +34,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import eu.kanade.domain.track.interactor.AddTracks
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.manga.interactor.GetFavorites
+import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaUpdate
-import tachiyomi.domain.manga.repository.MangaRepository
-import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.ui.AppScope
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.Toasts
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
-import java.time.Instant
 
 /**
  * Komikku's bulk favorite (BulkFavoriteScreenModel): select entries in a source, the global search
@@ -65,7 +63,11 @@ import java.time.Instant
  * does on Android; while selecting, a click or right-click selects an entry.
  */
 @Stable
-class BulkFavorite {
+class BulkFavorite internal constructor(
+    private val adder: () -> BulkLibraryAdd,
+) {
+    constructor() : this({ BulkLibraryAdd(Injekt.get(), Injekt.get(), Injekt.get(), Injekt.get()) })
+
     val selection = mutableStateListOf<Manga>()
 
     /** The categories dialog, when the default category is "Always ask" */
@@ -119,9 +121,7 @@ class BulkFavorite {
         running = true
         AppScope.launch {
             try {
-                val titles = withContext(Dispatchers.IO) { Injekt.get<GetFavorites>().await() }
-                    .associateBy({ it.title.lowercase() }, { it.id })
-                val dupes = selection.filter { manga -> titles[manga.title.lowercase()]?.let { it != manga.id } == true }
+                val dupes = withContext(Dispatchers.IO) { adder().duplicates(selection.toList()) }
                 if (dupes.isNotEmpty()) {
                     duplicates = dupes
                 } else {
@@ -155,18 +155,14 @@ class BulkFavorite {
     private var pending: List<Manga> = emptyList()
 
     private suspend fun chooseCategories(list: List<Manga>) {
-        val categories = withContext(Dispatchers.IO) { Injekt.get<GetCategories>().await() }.filterNot { it.isSystemCategory }
-        // Settings > Library > Default category, as on Android: a category, the default one (0),
-        // or ask (-1)
-        val defaultId = Injekt.get<LibraryPreferences>().defaultCategory().get().toLong()
-        val defaultCategory = categories.find { it.id == defaultId }
-        when {
-            defaultCategory != null -> add(list, listOf(defaultCategory.id))
-            defaultId == 0L || categories.isEmpty() -> add(list, emptyList())
-            else -> {
-                pending = list
-                categoryChoice = categories
-            }
+        // Settings > Library > Default category, as on Android: a category, the default one, or ask
+        val plan = withContext(Dispatchers.IO) { adder().plan() }
+        val ask = plan.ask
+        if (ask == null) {
+            add(list, plan.categoryIds)
+        } else {
+            pending = list
+            categoryChoice = ask
         }
     }
 
@@ -189,26 +185,53 @@ class BulkFavorite {
         pending = emptyList()
     }
 
-    /** As BulkFavoriteScreenModel.setMangasCategories: the categories are added to each entry's own */
-    private suspend fun add(list: List<Manga>, categoryIds: List<Long>) = withContext(Dispatchers.IO) {
-        val repository = Injekt.get<MangaRepository>()
-        val getCategories = Injekt.get<GetCategories>()
-        val setCategories = Injekt.get<SetMangaCategories>()
-        val sourceManager = Injekt.get<SourceManager>()
-        val addTracks = Injekt.get<AddTracks>()
-        var added = 0
-        list.forEach { manga ->
-            val current = getCategories.await(manga.id).map { it.id }
-            setCategories.await(manga.id, (current + categoryIds).distinct())
-            if (manga.favorite) return@forEach
-            repository.update(MangaUpdate(id = manga.id, favorite = true, dateAdded = Instant.now().toEpochMilli()))
-            added++
-            sourceManager.get(manga.source)?.let { source ->
-                runCatching { addTracks.bindEnhancedTrackers(manga, source) }
-            }
-        }
+    private suspend fun add(list: List<Manga>, categoryIds: List<Long>) {
+        val added = withContext(Dispatchers.IO) { adder().add(list, categoryIds) }
         withContext(Dispatchers.Main) { clear() }
         Toasts.show(if (added == 1) localized(DMR.strings.added_1_entry_to_the_library) else localized(DMR.strings.added_entries_to_the_library, added))
+    }
+}
+
+/** Adds a bulk selection to the library; the selection and the dialogs stay in [BulkFavorite]. */
+internal class BulkLibraryAdd(
+    private val addToLibrary: AddToLibrary,
+    private val getManga: GetManga,
+    private val getCategories: GetCategories,
+    private val setMangaCategories: SetMangaCategories,
+) {
+    /** Where the new entries go: the default category, or a choice for the user ([AddToLibrary.plan]). */
+    suspend fun plan(): AddToLibrary.Plan = addToLibrary.plan()
+
+    /** Selected entries the library already has under another id, by the same check as a single add. */
+    suspend fun duplicates(list: List<Manga>): List<Manga> =
+        list.filter { addToLibrary.duplicates(it).isNotEmpty() }
+
+    /**
+     * As BulkFavoriteScreenModel.setMangasCategories: [categoryIds] are added to each entry's own
+     * categories. An entry that is a favourite in the database stays as it is (its date added
+     * too); a new one is added as a single add does, fetching what the settings ask for.
+     * Returns how many were new.
+     */
+    suspend fun add(list: List<Manga>, categoryIds: List<Long>): Int {
+        var added = 0
+        list.forEach { selected ->
+            try {
+                // The page's snapshot can be old: the database says whether it is a favourite now
+                val manga = getManga.await(selected.id) ?: return@forEach
+                val merged = (getCategories.await(manga.id).map { it.id } + categoryIds).distinct()
+                if (manga.favorite) {
+                    setMangaCategories.await(manga.id, merged)
+                } else {
+                    addToLibrary.add(manga, merged, fetchOnAdd = true)
+                    added++
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Could not add an entry to the library" }
+            }
+        }
+        return added
     }
 }
 
