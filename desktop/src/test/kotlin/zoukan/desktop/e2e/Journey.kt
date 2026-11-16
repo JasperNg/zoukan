@@ -205,8 +205,13 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
         ImageIO.write(image, "png", File(shots, "$name-$title.png"))
     }
 
-    /** The first node with content description [text] (icon buttons have no text). */
-    fun ComposeUiTest.byDescription(text: String) = onAllNodesWithContentDescription(text).onFirst()
+    /** The node [index] (the first by default) with content description [text] (icon buttons have no text). */
+    fun ComposeUiTest.byDescription(text: String, index: Int = 0) = onAllNodesWithContentDescription(text)[index]
+
+    /** A node whose whole text matches [regex]. */
+    fun textMatches(regex: Regex) = SemanticsMatcher("text matches $regex") { node ->
+        node.config.getOrNull(SemanticsProperties.Text)?.any { regex.matches(it.text) } == true
+    }
 
     /** The reader's page images that are on screen: off-screen pages have no visible bounds. */
     private fun ComposeUiTest.pagesOnScreen(): List<SemanticsNode> =

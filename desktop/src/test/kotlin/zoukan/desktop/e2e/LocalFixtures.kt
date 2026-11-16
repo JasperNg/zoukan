@@ -2,8 +2,11 @@ package zoukan.desktop.e2e
 
 import eu.kanade.tachiyomi.source.CatalogueSource
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import mihon.domain.manga.model.toDomainManga
+import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
@@ -94,6 +97,24 @@ object LocalFixtures {
     /** Writes `Chapter [number].cbz` in [dir], with the pages [pages] gives for "[title] [number]". */
     fun addChapter(dir: File, title: String, number: Int, pagesPerChapter: Int = 4): List<FixturePage> =
         pages("$title $number", pagesPerChapter).also { cbz(File(dir, "Chapter $number.cbz"), it) }
+
+    /**
+     * The library most library, reader and settings journeys start from: Alpha (3 chapters),
+     * Bravo (2) and Charlie (4), 4 pages each, all favourites and updated once. Needs a started
+     * [Journey]; returns the 3 entries.
+     */
+    fun seedParityLibrary(storage: ZoukanStorage): List<Manga> {
+        listOf("Alpha" to 3, "Bravo" to 2, "Charlie" to 4).forEach { (title, chapters) ->
+            localEntry(storage, title, chapters, pagesPerChapter = 4)
+        }
+        Injekt.get<LibraryPreferences>().autoUpdateMangaRestrictions().set(emptySet())
+        return addLocalToLibrary().also { it.size shouldBe 3 }
+    }
+
+    /** Every chapter of [favorites], for counts that used to be literals. */
+    fun chapterCount(favorites: List<Manga>): Int = runBlocking {
+        favorites.sumOf { Injekt.get<GetChaptersByMangaId>().await(it.id).size }
+    }
 
     /**
      * Adds every title the local source lists to the library (the popular list, saved as entries
