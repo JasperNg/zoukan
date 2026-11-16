@@ -3,7 +3,9 @@ package zoukan.desktop.prefs
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
+import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import java.io.File
 
@@ -60,5 +62,32 @@ class TypedSharedPreferencesTest {
         file.renameTo(File(root, "settings/atomic_test.xml.tmp"))
         JavaSharedPreferences("atomic_test").all shouldBe mapOf("a" to "1", "b" to "2")
         file.isFile shouldBe true
+    }
+
+    @OptIn(ForTestsOnly::class)
+    @Test
+    fun `a failed background save is retried and flushed at shutdown`() {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        // The first write fails (a file briefly held by a scanner), later ones work
+        val failures = java.util.concurrent.atomic.AtomicInteger(1)
+        val previousCodec = SettingsFileCodec.current
+        SettingsFileCodec.current = object : SettingsFileCodec {
+            override fun isEncoded(stored: ByteArray) = false
+            override fun encode(plain: ByteArray): ByteArray {
+                if (failures.getAndDecrement() > 0) throw java.io.IOException("file is locked")
+                return plain
+            }
+            override fun decode(stored: ByteArray) = stored
+        }
+        try {
+            val prefs = JavaSharedPreferences("retry_test")
+            prefs.edit().putString("a", "1").apply()
+            JavaSharedPreferences.awaitPendingSaves()
+        } finally {
+            SettingsFileCodec.current = previousCodec
+        }
+
+        File(root, "settings/retry_test.xml").isFile shouldBe true
+        JavaSharedPreferences("retry_test").getString("a", null) shouldBe "1"
     }
 }

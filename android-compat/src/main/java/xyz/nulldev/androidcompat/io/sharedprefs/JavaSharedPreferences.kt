@@ -18,6 +18,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -84,6 +85,11 @@ class JavaSharedPreferences(
                 "${SafePath.buildValidFilename(key)}.xml",
             ).toFile()
 
+        // ZOUKAN -->
+        /** Waits before the tries that follow a failed background write. */
+        private val SAVE_RETRY_DELAYS_MS = longArrayOf(250, 1_000, 4_000)
+        // ZOUKAN <--
+
         /** Files with an apply() not yet written; flushed when the JVM shuts down. */
         private val unsaved = java.util.concurrent.ConcurrentHashMap.newKeySet<JavaSharedPreferences>()
 
@@ -103,8 +109,14 @@ class JavaSharedPreferences(
             unsaved.toList().forEach { prefs ->
                 // save() takes the file's lock, so this never interleaves with the background writer;
                 // writing the latest snapshot again is harmless
-                prefs.save()
-                unsaved.remove(prefs)
+                // ZOUKAN -->
+                // Only a file that was written leaves the list
+                if (prefs.save()) {
+                    unsaved.remove(prefs)
+                } else {
+                    logger.error { "The settings file ${prefs.key} could not be written at shutdown; the latest changes are lost" }
+                }
+                // ZOUKAN <--
             }
         }
 
@@ -544,10 +556,27 @@ class JavaSharedPreferences(
 
         // ZOUKAN: the job is kept so tests can wait for it (awaitPendingSaves)
         val job = GlobalScope.launch(Dispatchers.IO) {
+            // ZOUKAN -->
+            var failedAttempts = 0
+            // ZOUKAN <--
             while (true) {
                 dirty.store(false)
 
-                save()
+                // ZOUKAN -->
+                // A failed write (a file briefly held by a scanner or sync client) stays on the
+                // pending list and is tried again, then once more by the shutdown flush
+                if (!save()) {
+                    if (failedAttempts < SAVE_RETRY_DELAYS_MS.size) {
+                        delay(SAVE_RETRY_DELAYS_MS[failedAttempts++])
+                        continue
+                    }
+                    logger.error { "The settings file $key could not be written; it stays pending until shutdown" }
+                    dirty.store(true)
+                    pendingAsyncSave.store(false)
+                    break
+                }
+                failedAttempts = 0
+                // ZOUKAN <--
 
                 if (!dirty.load()) {
                     // ZOUKAN: off the shutdown flush's list before the next apply() can start a
