@@ -86,6 +86,15 @@ class JavaSharedPreferences(
             ).toFile()
 
         // ZOUKAN -->
+        /** True for bytes that are not blank and do not start with the XML header (after a byte order mark and spaces). */
+        private fun ByteArray.isNotBlankNonXml(): Boolean {
+            var i = if (size >= 3 && this[0] == 0xEF.toByte() && this[1] == 0xBB.toByte() && this[2] == 0xBF.toByte()) 3 else 0
+            while (i < size && this[i].toInt().toChar().isWhitespace()) i++
+            if (i >= size) return false
+            val header = "<?xml".toByteArray()
+            return size - i < header.size || !header.indices.all { this[i + it] == header[it] }
+        }
+
         /** Waits before the tries that follow a failed background write. */
         private val SAVE_RETRY_DELAYS_MS = longArrayOf(250, 1_000, 4_000)
         // ZOUKAN <--
@@ -161,6 +170,9 @@ class JavaSharedPreferences(
 
     // ZOUKAN -->
     private var migrateToCodec = false
+
+    /** Set when the file on disk could not be read and is not safely kept aside: saving would replace it. */
+    private var saveBlocked = false
     // ZOUKAN <--
 
     private val file = fileFor(key).toPath()
@@ -179,6 +191,15 @@ class JavaSharedPreferences(
                     // ZOUKAN -->
                     val stored = file.readBytes()
                     val codec = SettingsFileCodec.current
+                    // ZOUKAN -->
+                    // Without a codec, bytes that are not XML are an encrypted file opened before
+                    // the host app set its key: keep it as it is, and do not save over it
+                    if (codec == null && stored.isNotBlankNonXml()) {
+                        logger.warn { "The settings file $key looks encrypted but no key is set yet; it is left untouched" }
+                        saveBlocked = true
+                        return@also
+                    }
+                    // ZOUKAN <--
                     val plain = if (codec != null && codec.isEncoded(stored)) codec.decode(stored) else stored
                     // A plain file from before encryption is encrypted when it is read
                     migrateToCodec = codec != null && plain === stored
@@ -190,9 +211,19 @@ class JavaSharedPreferences(
                 // ZOUKAN -->
                 // The next save would replace a file that could not be read (a lost key, a damaged
                 // file); keep it beside the new one
-                runCatching {
-                    file.copyTo(file.resolveSibling("${file.name}.unreadable"), overwrite = true)
+                // The first copy is never overwritten: a later failed load would replace the
+                // original with the defaults-only file saved in between
+                val firstCopy = file.resolveSibling("${file.name}.unreadable")
+                val copy = if (firstCopy.exists()) {
+                    file.resolveSibling("${file.name}.unreadable-${System.currentTimeMillis()}")
+                } else {
+                    firstCopy
                 }
+                val copied = runCatching { file.copyTo(copy) }.onFailure {
+                    logger.error(it) { "Could not keep a copy of the unreadable settings file $key" }
+                }.isSuccess
+                // No copy, no save: the original must stay on disk
+                if (!copied) saveBlocked = true
                 // ZOUKAN <--
             }
         }
@@ -498,6 +529,12 @@ class JavaSharedPreferences(
 
     private fun save(properties: Properties): Boolean =
         synchronized(file) {
+            // ZOUKAN -->
+            if (saveBlocked) {
+                logger.error { "The settings file $key is not saved: the file on disk could not be read and is kept as it is" }
+                return false
+            }
+            // ZOUKAN <--
             try {
                 if (properties.isEmpty) {
                     file.deleteIfExists()
