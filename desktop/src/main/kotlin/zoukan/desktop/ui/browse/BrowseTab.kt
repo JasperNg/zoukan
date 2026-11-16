@@ -429,7 +429,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 header?.let { sectionHeader(it) }
                 // ZOUKAN <--
                 items(extensions, key = { "i-${it.pkgName}" }) { ext ->
-                    val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
+                    val iconUrl = state.availableIcons[ext.pkgName]
                     // ZOUKAN -->
                     // Android's long press on an installed extension uninstalls it
                     ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { askUninstall(ext) }) {

@@ -45,4 +45,37 @@ class SourceSearchTest {
         shown("delta, 11") shouldBe listOf("Pinned" to listOf("Alpha Comics"), "English" to listOf("Charlie"))
         shown("nothing") shouldBe emptyList()
     }
+
+    private fun installed(pkg: String, ext: String, update: Boolean): Extension.Installed = mockk {
+        every { pkgName } returns pkg
+        every { name } returns ext
+        every { hasUpdate } returns update
+    }
+
+    private fun available(pkg: String, ext: String, language: String): Extension.Available = mockk {
+        every { pkgName } returns pkg
+        every { name } returns ext
+        every { lang } returns language
+        every { isNsfw } returns false
+    }
+
+    @Test
+    fun `the visible extension lists are built once per state`() {
+        val untrusted: Extension.Untrusted = mockk {
+            every { pkgName } returns "pkg.untrusted"
+            every { name } returns "Untrusted"
+        }
+        val state = BrowseScreenModel.State(
+            installed = listOf(installed("pkg.b", "Beta", false), installed("pkg.a", "Alpha", false), installed("pkg.z", "Zeta", true)),
+            untrusted = listOf(untrusted),
+            available = listOf(available("pkg.n", "Nine", "en"), available("pkg.m", "Mango", "en")),
+        )
+
+        (state.visibleInstalled === state.visibleInstalled) shouldBe true
+        (state.visibleUntrusted === state.visibleUntrusted) shouldBe true
+        (state.visibleAvailable === state.visibleAvailable) shouldBe true
+        // Updates first, then by name
+        state.visibleInstalled.map { it.name } shouldBe listOf("Zeta", "Alpha", "Beta")
+        state.visibleAvailable.map { it.name } shouldBe listOf("Mango", "Nine")
+    }
 }

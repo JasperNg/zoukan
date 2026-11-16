@@ -52,8 +52,10 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -167,7 +169,13 @@ class HistoryScreenModel(
         // ZOUKAN <--
     ) {
         val selecting: Boolean get() = selectionMode || selected.isNotEmpty()
-        val selectedItems: List<HistoryWithRelations> get() = items.filter { it.chapterId in selected }
+        // Built once per state, not on every recomposition
+        val selectedItems: List<HistoryWithRelations> by lazy { items.filter { it.chapterId in selected } }
+
+        /** The rows by the day they were read (null: unknown), in list order. */
+        val groups: List<Pair<java.time.LocalDate?, List<HistoryWithRelations>>> by lazy {
+            items.groupBy { it.readAt?.time?.let(zoukan.desktop.ui.common.Dates::toLocalDate) }.toList()
+        }
     }
 
     private val query = MutableStateFlow("")
@@ -198,10 +206,14 @@ class HistoryScreenModel(
                             selected = it.selected.filterTo(HashSet()) { id -> id in ids },
                         )
                     }
-                    loadChapterNames(items)
+                    // Off the collecting coroutine, so the next search is not held up by these lookups
+                    namesJob?.cancel()
+                    namesJob = screenModelScope.launch(Dispatchers.IO) { loadChapterNames(items) }
                 }
         }
     }
+
+    private var namesJob: Job? = null
 
     // History rows only carry the chapter number; sources name chapters like "Group 2 Chapter 1"
     private suspend fun loadChapterNames(items: List<HistoryWithRelations>) {
@@ -311,8 +323,8 @@ fun HistoryTab(model: HistoryScreenModel) {
             state.items.isEmpty() && state.filters.active -> EmptyScreen(localized(DMR.strings.no_history_matches_the_filters))
             state.items.isEmpty() -> EmptyScreen(localized(DMR.strings.nothing_read_yet))
             else -> LazyColumn(Modifier.fillMaxSize()) {
-                state.items.groupBy { it.readAt?.time?.let(zoukan.desktop.ui.common.Dates::relative) ?: localized(MR.strings.unknown) }.forEach { (date, items) ->
-                    sectionHeader(date)
+                state.groups.forEach { (_, items) ->
+                    sectionHeader(items.first().readAt?.time?.let(zoukan.desktop.ui.common.Dates::relative) ?: localized(MR.strings.unknown))
                     items(items, key = { it.id }) { item ->
                         val chapter = state.chapterNames[item.chapterId]?.takeIf { it.isNotBlank() }
                             ?: if (item.chapterNumber > -1) localized(MR.strings.display_mode_chapter, formatNumber(item.chapterNumber)) else localized(DMR.strings.chapter)

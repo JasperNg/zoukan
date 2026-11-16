@@ -95,20 +95,25 @@ class BrowseScreenModel(
                 name.contains(extensionQuery, ignoreCase = true) ||
                 pkgName.contains(extensionQuery, ignoreCase = true)
 
-        val visibleInstalled get() = installed.filter { it.matches() }.sortedWith(compareBy({ !it.hasUpdate }, { it.name.lowercase() }))
-        val visibleUntrusted get() = untrusted.filter { it.matches() }
-        val visibleAvailable: List<Extension.Available>
-            get() {
-                val installedPkgs = installed.mapTo(HashSet()) { it.pkgName } + untrusted.map { it.pkgName }
-                return available
-                    .filter { it.pkgName !in installedPkgs && it.matches() }
-                    .filter { showNsfw || !it.isNsfw }
-                    .filter { languages.isEmpty() || it.lang in languages }
-                    .sortedWith(compareBy({ it.lang }, { it.name.lowercase() }))
-            }
+        // Built once per state, not on every recomposition
+        val visibleInstalled: List<Extension.Installed> by lazy {
+            installed.filter { it.matches() }.sortedWith(compareBy({ !it.hasUpdate }, { it.name.lowercase() }))
+        }
+        val visibleUntrusted: List<Extension.Untrusted> by lazy { untrusted.filter { it.matches() } }
+        val visibleAvailable: List<Extension.Available> by lazy {
+            val installedPkgs = installed.mapTo(HashSet()) { it.pkgName } + untrusted.map { it.pkgName }
+            available
+                .filter { it.pkgName !in installedPkgs && it.matches() }
+                .filter { showNsfw || !it.isNsfw }
+                .filter { languages.isEmpty() || it.lang in languages }
+                .sortedWith(compareBy({ it.lang }, { it.name.lowercase() }))
+        }
 
         /** Every language the store lists, for the language filter */
-        val allLanguages get() = available.map { it.lang }.distinct().sorted()
+        val allLanguages: List<String> by lazy { available.map { it.lang }.distinct().sorted() }
+
+        /** Icon addresses of the store's extensions by package name */
+        val availableIcons: Map<String, String?> by lazy { available.associate { it.pkgName to it.iconUrl } }
     }
 
     init {
