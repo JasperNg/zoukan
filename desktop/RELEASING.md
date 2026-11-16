@@ -1,9 +1,9 @@
 # Releasing Zoukan desktop
 
-Phase 7 of the desktop port: the installers, signing, the update check and crash logs. Every
-check runs locally: the Windows x64 steps on the Windows desktop, the Apple Silicon steps on the
-Mac. GitHub Actions builds both installers and publishes a release after each merge (see below);
-that does not gate merges.
+Phase 7 of the desktop port: the installers, the update check and crash logs. GitHub Actions
+builds both installers and publishes the release on every merge to `master` that changes more
+than docs; the published installers are unsigned. The local checks below (the install checks and
+the nightly run) are extra: they run on the Windows desktop and the Mac and do not gate merges.
 
 ## Installers
 
@@ -26,24 +26,29 @@ Temurin 21 works too).
   the build downloads WiX 3.14 once into `desktop/build/packaging/wix`.
 - **macOS**: the DMG holds `Zoukan.app` (bundle id `app.zoukan.desktop`) to drag to Applications.
 
-Zoukan's version is `zoukanVersion` in `desktop/build.gradle.kts` (MAJOR.MINOR.PATCH, MAJOR from 1
-to 255). It is separate from the Android app's version, which extensions still see.
+Zoukan's version floor is `zoukan.versionFloor` in `gradle.properties` (MAJOR.MINOR.PATCH, MAJOR
+from 1 to 255). It is separate from the Android app's version, which extensions still see.
 
 Compose Multiplatform's Gradle plugin is not used: its `compose` extension clashes with the
 upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink and jpackage itself.
 
 ## Releases built on GitHub
 
-`.github/workflows/desktop-build.yml` builds the Windows x64 MSI (`windows-latest`) and the Apple
-Silicon DMG (`macos-latest`, which is Apple Silicon) with JetBrains Runtime 21 after every push to
+`.github/workflows/desktop-build.yml` picks the version and publishes on `ubuntu-26.04`, and builds
+the Windows x64 MSI (`windows-2025-vs2026`) and the Apple Silicon DMG (`macos-26`, an arm64 image)
+with JetBrains Runtime 21 after every push to
 `master` that changes more than docs (the same list `ci.yml` ignores), then publishes both as a
 GitHub release tagged `desktop-v<version>`, which the update check finds. Nothing is built on a
-local machine for a release. Runs on `master` queue, so two quick merges make two releases in
-order. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
-if it has no release yet; a re-run of a released commit only rebuilds.
+local machine for a release. A release is published only after the CI check of that commit passed.
+Runs on `master` queue in one group, and GitHub keeps at most one waiting run: when a merge lands
+while one release is building and another run is already waiting, the newer run replaces the
+waiting one, and the replaced commit ships in the next release instead of alone. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
+if it has no release yet; a re-run of a released commit only rebuilds. The runner images are
+pinned (`ci.yml` runs on `ubuntu-26.04` too); moving to a newer image is a deliberate change made in
+both workflows and here.
 
 The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to
-Gradle as `-Pzoukan.version`. `zoukanVersion` in `desktop/build.gradle.kts` is the floor: raise it
+Gradle as `-Pzoukan.version`. `zoukan.versionFloor` in `gradle.properties` is the floor: raise it
 there (to 1.1.0, say) and the next merge releases that version, then bumps from it. The release
 notes list the merged pull requests since the previous release.
 
@@ -51,9 +56,10 @@ These installers are unsigned on purpose: the project does not sign its builds, 
 secrets are set. A downloaded copy shows the usual warnings (SmartScreen on Windows; on macOS,
 System Settings > Privacy & Security > Open Anyway the first time).
 
-## Signing
+## Signing (local builds only, not used for published releases)
 
-Without these settings the build works and is unsigned, and says so. Each is an environment
+Published releases are unsigned by project decision; these settings exist for local experiments
+only. Without them the build works and is unsigned, and says so. Each is an environment
 variable or the Gradle property in brackets (`~/.gradle/gradle.properties` keeps them out of the
 repository).
 
@@ -119,11 +125,7 @@ database, extension loading, crash logs, the window (Skia's native code) and HTT
 
 ## Publishing a release
 
-Merge to `master`: the workflow above publishes the release. To release by hand instead (a
-signed build, say), build with `-Pzoukan.version=<version>` and create the release on
-`JasperNg/zoukan` tagged `desktop-v<version>` with both installers attached, for example
-`gh release create desktop-v1.0.0 Zoukan-1.0.0-windows-x64.msi Zoukan-1.0.0-macos-arm64.dmg
---title "Zoukan 1.0.0" --notes "..."`; the next merge bumps from that tag.
+Merge to `master`: the workflow publishes the release. Releases are never built or tagged by hand.
 
 ## Update check
 

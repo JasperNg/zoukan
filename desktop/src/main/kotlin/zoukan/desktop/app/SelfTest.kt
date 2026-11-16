@@ -43,8 +43,12 @@ object SelfTest {
 
     private data class Check(val name: String, val passed: Boolean, val detail: String)
 
-    /** JDK modules that extensions or libraries are known to use; the packaged runtime has all. */
-    private val modules = listOf(
+    /**
+     * JDK modules that extensions or libraries are known to use; the packaged runtime has all.
+     * When the bundled runtime moves past JDK 21, check this list: `jdk.crypto.ec` is empty and
+     * deprecated for removal from JDK 22 on.
+     */
+    internal val checkedModules = listOf(
         "java.desktop", "java.sql", "java.naming", "java.net.http", "java.scripting", "java.management",
         "java.xml", "java.logging", "jdk.unsupported", "jdk.zipfs", "jdk.crypto.ec", "jdk.charsets",
         "jdk.localedata", "jdk.accessibility",
@@ -69,9 +73,9 @@ object SelfTest {
                 if (System.getProperty("jpackage.app-version") != null) " (bundled, app ${System.getProperty("jpackage.app-version")})" else ""
         }
         check("JDK modules") {
-            val missing = modules.filter { ModuleLayer.boot().findModule(it).isEmpty }
+            val missing = checkedModules.filter { ModuleLayer.boot().findModule(it).isEmpty }
             require(missing.isEmpty()) { "missing ${missing.joinToString()}" }
-            "${ModuleLayer.boot().modules().size} modules, including ${modules.size} checked"
+            "${ModuleLayer.boot().modules().size} modules, including ${checkedModules.size} checked"
         }
         check("Version") { "Zoukan ${AppVersion.name}, releases from ${AppVersion.releaseRepo}" }
         check("OS secret store") {

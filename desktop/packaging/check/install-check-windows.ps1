@@ -93,3 +93,6 @@ if (Test-Path (Join-Path $out 'selftest-windows.md')) { $md += "`n" + (Get-Conte
 Set-Content -Path (Join-Path $out 'install-check-windows.md') -Value $md -Encoding UTF8
 Write-Host "Report: $out\install-check-windows.md"
 if ($failed) { exit 1 }
+# An explicit 0: a script that ends without exit leaves $LASTEXITCODE as it was, and the release
+# workflow reads $LASTEXITCODE after calling this script
+exit 0

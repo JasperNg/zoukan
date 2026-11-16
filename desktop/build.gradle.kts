@@ -18,21 +18,26 @@ plugins {
     application
 }
 
+/** The floor from gradle.properties; the release workflow reads the same entry. */
+val zoukanVersionFloor: String = providers.gradleProperty("zoukan.versionFloor").orNull?.trim()
+    ?.takeIf { Regex("""[1-9]\d*\.\d+\.\d+""").matches(it) }
+    ?: throw GradleException("gradle.properties must set zoukan.versionFloor=MAJOR.MINOR.PATCH")
+
 /**
  * Zoukan's own version, which the installers, the update check and crash logs use. Releases are
  * tagged desktop-v<version>. It is separate from the Android app's version, which extensions see.
  * MAJOR.MINOR.PATCH, MAJOR at least 1 (macOS) and at most 255 (MSI).
  *
  * The release workflow (.github/workflows/desktop-build.yml) passes the release's version as
- * -Pzoukan.version; the value here is the floor it bumps from, so raise it here for a new MINOR or
- * MAJOR. Local builds without the property use it as it is.
+ * -Pzoukan.version; the floor it bumps from is zoukan.versionFloor in gradle.properties, so raise
+ * it there for a new MINOR or MAJOR. Local builds without the property use the floor as it is.
  */
 val zoukanVersion: String = providers.gradleProperty("zoukan.version").orNull?.trim()
     ?.takeIf { it.isNotEmpty() }
     ?.also {
         require(Regex("""[1-9]\d*\.\d+\.\d+""").matches(it)) { "zoukan.version must be MAJOR.MINOR.PATCH: $it" }
     }
-    ?: "1.0.2"
+    ?: zoukanVersionFloor
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -303,6 +308,17 @@ tasks.test {
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")
+    // The release tests read the workflow files and the packaging script
+    inputs.files(
+        rootProject.fileTree(".github/workflows"),
+        file("packaging.gradle.kts"),
+        rootProject.file("renovate.json"),
+        rootProject.file("desktop/RELEASING.md"),
+        file("build.gradle.kts"),
+        rootProject.file("gradle.properties"),
+        file("packaging/check/nightly-windows.ps1"),
+        file("packaging/check/install-check-windows.ps1"),
+    ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
         filter { (wiringTests + journeyTests).forEach { excludeTestsMatching(it) } }
@@ -527,8 +543,7 @@ val journeyTest by tasks.registering(Test::class) {
 
 /**
  * The extension wiring check that installs every extension from the stores and starts each
- * source. The nightly run picks it up by this name once it exists; until then it runs the
- * journeys alone.
+ * source; the nightly run runs it by this name.
  */
 val extensionWiringTaskName = "extensionWiringTest"
 
@@ -542,7 +557,7 @@ val nightlyCheck by tasks.registering {
     dependsOn(tasks.matching { it.name == extensionWiringTaskName })
     val hasWiring = provider { tasks.names.contains(extensionWiringTaskName) }
     doLast {
-        if (!hasWiring.get()) logger.warn("nightlyCheck: there is no $extensionWiringTaskName task yet, so only the journeys ran")
+        if (!hasWiring.get()) logger.warn("nightlyCheck: no $extensionWiringTaskName task, so only the journeys ran")
     }
 }
 // ZOUKAN <--

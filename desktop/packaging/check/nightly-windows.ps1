@@ -8,7 +8,7 @@
 # Brings its own clone up to date with origin/master (it creates the clone on the first run and
 # resets it each night, so never point -Checkout at a folder you work in), then runs
 # `gradlew :desktop:nightlyCheck --continue`: the offline user journeys against the fixture source,
-# and the extension wiring check once that task exists. The log, the test reports and the journey
+# and the extension wiring check (`extensionWiringTest`). The log, the test reports and the journey
 # screenshots go to %LOCALAPPDATA%\Zoukan-nightly\<date>; the last 14 runs are kept. Exits 1 when a
 # check fails.
 param(

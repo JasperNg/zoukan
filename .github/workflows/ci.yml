@@ -21,10 +21,13 @@ on:
       - 'desktop/reports/**'
       - 'LICENSE'
   workflow_dispatch:
+  # desktop-build.yml calls this workflow, so a release waits for the check of its own commit
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Pull requests cancel their older runs; master runs queue, so every merged commit is tested
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -32,12 +35,13 @@ permissions:
 jobs:
   changes:
     name: Detect code changes
-    runs-on: ubuntu-latest
+    # Fixed image versions throughout: move them on purpose, together with RELEASING.md
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
       - name: Compare with the base branch
@@ -66,10 +70,10 @@ jobs:
     name: Spotless
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: ./.github/actions/setup-zoukan
         with:
           # Only master writes the shared cache, so PR runs cannot poison it
@@ -80,16 +84,16 @@ jobs:
     name: Build and unit tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       # distTar/distZip are built by assemble but nobody uses them in CI
       - run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest -x distTar -x distZip --continue
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
           name: reports-unit
@@ -104,7 +108,7 @@ jobs:
     name: Wiring (${{ matrix.name }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -117,7 +121,7 @@ jobs:
             tests: '*ScreenSmoke*Test'
             artifact: screen-smoke
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Every wiring test class has a shard
         shell: bash
         run: |
@@ -141,7 +145,7 @@ jobs:
       - name: The shard ran tests
         shell: bash
         run: ls desktop/build/test-results/wiringTest/TEST-*.xml
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: reports-wiring-${{ matrix.artifact }}
@@ -156,14 +160,14 @@ jobs:
     name: Journeys (shard ${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
@@ -172,7 +176,7 @@ jobs:
       - name: The shard ran tests
         shell: bash
         run: ls desktop/build/test-results/journeyTest/TEST-*.xml
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: journeys-${{ matrix.shard }}
@@ -186,7 +190,7 @@ jobs:
     name: PR gate
     needs: [changes, spotless, unit, wiring, journeys]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Check the needed jobs
