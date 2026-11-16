@@ -26,8 +26,8 @@ Temurin 21 works too).
   the build downloads WiX 3.14 once into `desktop/build/packaging/wix`.
 - **macOS**: the DMG holds `Zoukan.app` (bundle id `app.zoukan.desktop`) to drag to Applications.
 
-Zoukan's version is `zoukanVersion` in `desktop/build.gradle.kts` (MAJOR.MINOR.PATCH, MAJOR from 1
-to 255). It is separate from the Android app's version, which extensions still see.
+Zoukan's version floor is `zoukan.versionFloor` in `gradle.properties` (MAJOR.MINOR.PATCH, MAJOR
+from 1 to 255). It is separate from the Android app's version, which extensions still see.
 
 Compose Multiplatform's Gradle plugin is not used: its `compose` extension clashes with the
 upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink and jpackage itself.
@@ -48,7 +48,7 @@ pinned (`ci.yml` runs on `ubuntu-26.04` too); moving to a newer image is a delib
 both workflows and here.
 
 The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to
-Gradle as `-Pzoukan.version`. `zoukanVersion` in `desktop/build.gradle.kts` is the floor: raise it
+Gradle as `-Pzoukan.version`. `zoukan.versionFloor` in `gradle.properties` is the floor: raise it
 there (to 1.1.0, say) and the next merge releases that version, then bumps from it. The release
 notes list the merged pull requests since the previous release.
 

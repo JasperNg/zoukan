@@ -170,4 +170,40 @@ class ReleaseWorkflowTest {
             .filter { it !in paths }
         missing.shouldBeEmpty()
     }
+
+    @Test
+    fun `the version floor has one home that Gradle and the release workflow both read`() {
+        val problems = mutableListOf<String>()
+        val entries = text("gradle.properties").lines()
+            .filter { it.startsWith("zoukan.versionFloor") }
+        val floor = Regex("""^zoukan\.versionFloor=([1-9]\d*)\.(\d+)\.(\d+)\s*$""")
+        if (entries.size != 1 || !floor.matches(entries.single())) {
+            problems += "gradle.properties must hold exactly one zoukan.versionFloor=MAJOR.MINOR.PATCH line: $entries"
+        } else if (floor.matchEntire(entries.single())!!.groupValues[1].toInt() > 255) {
+            problems += "the floor's MAJOR is above 255, the MSI limit"
+        }
+
+        val script = text("desktop/build.gradle.kts")
+        if ("\"zoukan.versionFloor\"" !in script) problems += "desktop/build.gradle.kts does not read zoukan.versionFloor"
+        if (Regex(""""\d+\.\d+\.\d+"""").containsMatchIn(script)) {
+            problems += "desktop/build.gradle.kts holds a quoted version literal"
+        }
+
+        val build = text(".github/workflows/desktop-build.yml")
+        val start = build.indexOf("id: pick")
+        val pick = if (start < 0) {
+            ""
+        } else {
+            build.substring(start).let { rest ->
+                val end = Regex("""(?m)^ {2}\S|^ {6}- """).find(rest, 1)?.range?.first ?: rest.length
+                rest.substring(0, end)
+            }
+        }
+        if ("gradle.properties" !in pick || "zoukan.versionFloor" !in pick) {
+            problems += "the pick step does not read zoukan.versionFloor from gradle.properties"
+        }
+        if ("desktop/build.gradle.kts" in pick) problems += "the pick step still reads desktop/build.gradle.kts"
+        if ("floor: \$floor" !in pick && "Version floor" !in pick) problems += "the pick step does not print the floor it read"
+        problems.shouldBeEmpty()
+    }
 }

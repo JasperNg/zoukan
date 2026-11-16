@@ -18,21 +18,26 @@ plugins {
     application
 }
 
+/** The floor from gradle.properties; the release workflow reads the same entry. */
+val zoukanVersionFloor: String = providers.gradleProperty("zoukan.versionFloor").orNull?.trim()
+    ?.takeIf { Regex("""[1-9]\d*\.\d+\.\d+""").matches(it) }
+    ?: throw GradleException("gradle.properties must set zoukan.versionFloor=MAJOR.MINOR.PATCH")
+
 /**
  * Zoukan's own version, which the installers, the update check and crash logs use. Releases are
  * tagged desktop-v<version>. It is separate from the Android app's version, which extensions see.
  * MAJOR.MINOR.PATCH, MAJOR at least 1 (macOS) and at most 255 (MSI).
  *
  * The release workflow (.github/workflows/desktop-build.yml) passes the release's version as
- * -Pzoukan.version; the value here is the floor it bumps from, so raise it here for a new MINOR or
- * MAJOR. Local builds without the property use it as it is.
+ * -Pzoukan.version; the floor it bumps from is zoukan.versionFloor in gradle.properties, so raise
+ * it there for a new MINOR or MAJOR. Local builds without the property use the floor as it is.
  */
 val zoukanVersion: String = providers.gradleProperty("zoukan.version").orNull?.trim()
     ?.takeIf { it.isNotEmpty() }
     ?.also {
         require(Regex("""[1-9]\d*\.\d+\.\d+""").matches(it)) { "zoukan.version must be MAJOR.MINOR.PATCH: $it" }
     }
-    ?: "1.0.2"
+    ?: zoukanVersionFloor
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -310,6 +315,7 @@ tasks.test {
         rootProject.file("renovate.json"),
         rootProject.file("desktop/RELEASING.md"),
         file("build.gradle.kts"),
+        rootProject.file("gradle.properties"),
         file("packaging/check/nightly-windows.ps1"),
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs

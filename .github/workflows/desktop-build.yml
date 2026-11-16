@@ -2,7 +2,7 @@
 # Windows x64 MSI and the Apple Silicon DMG, and publishes them as a GitHub release, which the
 # in-app update check finds (tag desktop-v<version>).
 #
-# Each release bumps PATCH over the newest desktop-v* tag. zoukanVersion in desktop/build.gradle.kts
+# Each release bumps PATCH over the newest desktop-v* tag. zoukan.versionFloor in gradle.properties
 # is the floor: raise it there for a new MINOR or MAJOR and the next merge releases that version.
 # The installers are unsigned on purpose: the project does not sign its builds.
 # Before anything is published, each job installs the installer it built (the MSI, or the app
@@ -61,8 +61,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          floor=$(sed -nE 's/^[[:space:]]*\?: "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' desktop/build.gradle.kts | head -n1)
-          [ -n "$floor" ] || { echo "No zoukanVersion found in desktop/build.gradle.kts"; exit 1; }
+          floor=$(sed -nE 's/^zoukan\.versionFloor=([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$/\1/p' gradle.properties)
+          if [ "$(printf '%s' "$floor" | grep -c '^')" != 1 ]; then
+            echo "::error::gradle.properties must hold exactly one zoukan.versionFloor=MAJOR.MINOR.PATCH line (found: '$floor')"
+            exit 1
+          fi
+          echo "Version floor from gradle.properties: $floor"
           latest=$(git tag --list 'desktop-v*' | sed 's/^desktop-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           if [ -z "$latest" ]; then
             version=$floor
