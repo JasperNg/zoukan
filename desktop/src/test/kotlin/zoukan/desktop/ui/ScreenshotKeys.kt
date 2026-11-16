@@ -41,6 +41,8 @@ object ScreenshotKeys {
         "tab:History" to listOf(DATE_TEXT),
         "screen:manga.MangaScreen" to listOf(DATE_TEXT),
         "settings:Appearance" to listOf(DATE_TEXT),
+        // The run's random data folder, and when the automatic backup last ran
+        "settings:Data" to listOf(Regex("""(?is).*zoukan-smoke.*"""), Regex("""(?is).*last automatically backed up.*""")),
     )
 
     /**
