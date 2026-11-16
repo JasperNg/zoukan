@@ -316,15 +316,33 @@ class JavaSharedPreferences(
         }
     // ZOUKAN <--
 
+    // ZOUKAN -->
+    /**
+     * As on Android, a value read as another type than it was stored as is a ClassCastException.
+     * A value written before types were kept has no type and is still read leniently.
+     */
+    private fun checkType(
+        key: String,
+        vararg allowed: String,
+    ) {
+        val stored = synchronized(properties) { preferences.getStringOrNull(TYPE_PREFIX + key) } ?: return
+        if (stored !in allowed) throw ClassCastException("$key is a $stored")
+    }
+    // ZOUKAN <--
+
     override fun getString(
         key: String,
         defValue: String?,
-    ): String? =
-        if (defValue != null) {
+    ): String? {
+        // ZOUKAN -->
+        checkType(key, TYPE_STRING)
+        // ZOUKAN <--
+        return if (defValue != null) {
             preferences.getString(key, defValue)
         } else {
             preferences.getStringOrNull(key)
         }
+    }
 
     override fun getStringSet(
         key: String,
@@ -344,25 +362,49 @@ class JavaSharedPreferences(
     override fun getInt(
         key: String,
         defValue: Int,
-    ): Int = preferences.getInt(key, defValue)
+    ): Int {
+        // ZOUKAN -->
+        checkType(key, TYPE_INT)
+        // ZOUKAN <--
+        return preferences.getInt(key, defValue)
+    }
 
     override fun getLong(
         key: String,
         defValue: Long,
-    ): Long = preferences.getLong(key, defValue)
+    ): Long {
+        // ZOUKAN -->
+        checkType(key, TYPE_LONG)
+        // ZOUKAN <--
+        return preferences.getLong(key, defValue)
+    }
 
     override fun getFloat(
         key: String,
         defValue: Float,
-    ): Float = preferences.getFloat(key, defValue)
+    ): Float {
+        // ZOUKAN -->
+        checkType(key, TYPE_FLOAT, TYPE_DOUBLE)
+        // ZOUKAN <--
+        return preferences.getFloat(key, defValue)
+    }
 
     override fun getBoolean(
         key: String,
         defValue: Boolean,
-    ): Boolean = preferences.getBoolean(key, defValue)
+    ): Boolean {
+        // ZOUKAN -->
+        checkType(key, TYPE_BOOLEAN)
+        // ZOUKAN <--
+        return preferences.getBoolean(key, defValue)
+    }
 
     override fun contains(key: String): Boolean =
-        key in preferences.keys /* ZOUKAN --> */ || "$key.size" in preferences.keys /* ZOUKAN <-- */
+        // ZOUKAN -->
+        // A key.size of its own type is not a Set: only a Set's marker (or, before types were kept,
+        // its entries) makes the base key present
+        synchronized(properties) { key in preferences.keys || storedAsSet(key) }
+    // ZOUKAN <--
 
     // ZOUKAN -->
     // Called after the properties' lock is released, on the writer's thread. A listener that throws
@@ -496,19 +538,31 @@ class JavaSharedPreferences(
             Action.Clear -> {
                 val keys = preferences.keys
 
+                // ZOUKAN -->
+                // Listeners are told about the user's keys: a Set once under its own key, not
+                // for its entries (key.0, key.size) or its type marker
+                val setKeys =
+                    keys
+                        .filter { it.endsWith(".size") }
+                        .map { it.removeSuffix(".size") }
+                        .filter { storedAsSet(it) }
+                        .toSet() +
+                        keys
+                            .filter { it.startsWith(TYPE_PREFIX) }
+                            .map { it.removePrefix(TYPE_PREFIX) }
+                            .filter { preferences.getStringOrNull(TYPE_PREFIX + it) == TYPE_STRING_SET }
+                // ZOUKAN <--
+
                 preferences.clear()
 
+                // ZOUKAN -->
                 keys.forEach { key ->
-                    // ZOUKAN -->
                     if (key.startsWith(TYPE_PREFIX)) return@forEach
-                    // ZOUKAN <--
+                    if (setKeys.any { isSetEntry(it, key) }) return@forEach
                     changed += key
-
-                    val isSetKey = key.endsWith(".size")
-                    if (isSetKey) {
-                        changed += key.removeSuffix(".size")
-                    }
                 }
+                changed += setKeys.filter { it !in changed }
+                // ZOUKAN <--
             }
         }
     }
@@ -517,7 +571,11 @@ class JavaSharedPreferences(
     private fun saveActions(actions: List<Action>): List<String> =
         synchronized(properties) {
             val changed = mutableListOf<String>()
-            actions.forEach { saveAction(it, changed) }
+            // ZOUKAN -->
+            // As on Android, clear() takes effect before the puts and removes of the same edit
+            val (clears, others) = actions.partition { it is Action.Clear }
+            (clears + others).forEach { saveAction(it, changed) }
+            // ZOUKAN <--
             changed
         }
 
@@ -743,11 +801,18 @@ class JavaSharedPreferences(
             return this
         }
 
-        override fun commit(): Boolean = save(actions)
+        // ZOUKAN -->
+        // As on Android, an editor is empty after a commit or apply: a reused editor does not
+        // write its earlier changes again
+        private fun takeActions(): List<Action> =
+            synchronized(actions) { actions.toList().also { actions.clear() } }
+
+        override fun commit(): Boolean = save(takeActions())
 
         override fun apply() {
-            saveAsync(actions)
+            saveAsync(takeActions())
         }
+        // ZOUKAN <--
     }
 
     override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

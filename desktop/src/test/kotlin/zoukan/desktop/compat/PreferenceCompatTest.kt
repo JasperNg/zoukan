@@ -10,11 +10,13 @@ import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceScreen
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import tachiyomi.core.common.preference.DesktopPreferenceStore
 import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
@@ -383,6 +385,66 @@ class PreferenceCompatTest {
         pref.saveNewValue(3)
         prefs.getInt("page_count", 0) shouldBe 3
         pref.value shouldBe 3
+    }
+
+    @Test
+    fun `an editor is empty after apply, and clear runs before puts`() {
+        val prefs = prefs("editor_semantics")
+
+        // A reused editor does not replay what it already wrote
+        val editor = prefs.edit()
+        editor.putString("a", "1").commit()
+        prefs.edit().remove("a").commit()
+        editor.putString("b", "2").commit()
+        prefs.contains("a") shouldBe false
+        prefs.getString("b", null) shouldBe "2"
+
+        // clear() runs first whatever its place in the chain
+        prefs.edit().putString("c", "x").clear().commit()
+        prefs.getString("c", null) shouldBe "x"
+
+        // A key of its own that ends in .size is not a Set
+        prefs.edit().clear().commit()
+        prefs.edit().putString("domain.size", "3").commit()
+        prefs.contains("domain") shouldBe false
+        prefs.contains("domain.size") shouldBe true
+
+        // clear() tells listeners about user keys only
+        prefs.edit().clear().putStringSet("s", mutableSetOf("x", "y")).putInt("n", 1).commit()
+        val keys = mutableListOf<String?>()
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key -> keys += key }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        prefs.edit().clear().commit()
+        keys.toSet() shouldBe setOf("s", "n")
+        keys.size shouldBe 2
+    }
+
+    @Test
+    fun `a mistyped value is deleted and reads as the default, as on Android`() {
+        val prefs = prefs("mistyped")
+        prefs.edit().putInt("n", 5).commit()
+
+        shouldThrow<ClassCastException> { prefs.getString("n", "d") }
+        shouldThrow<ClassCastException> { prefs.getBoolean("n", false) }
+        prefs.getInt("n", 0) shouldBe 5
+
+        DesktopPreferenceStore(prefs).getString("n", "d").get() shouldBe "d"
+        prefs.contains("n") shouldBe false
+
+        // A value written before types were kept is still read leniently, and kept
+        val settings = File(root, "settings").apply { mkdirs() }
+        File(settings, "legacy_untyped.xml").writeText(
+            """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<entry key="n">5</entry>
+</properties>
+""",
+        )
+        val legacy = JavaSharedPreferences("legacy_untyped")
+        legacy.getInt("n", 0) shouldBe 5
+        legacy.getString("n", null) shouldBe "5"
+        legacy.contains("n") shouldBe true
     }
 
     @Test
