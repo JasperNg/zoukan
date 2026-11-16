@@ -376,7 +376,7 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
                 // The mouse's back button
                 // ZOUKAN -->
                 // Not while the app lock covers the window
-                if (event.button == PointerButton.Back && !appLock.locked.value) navigatorRef?.takeIf { it.canPop }?.pop()
+                if (event.button == PointerButton.Back && !appLock.locked.value) Shortcuts.goBack(navigatorRef)
                 // ZOUKAN <--
             }
                 // ZOUKAN -->
