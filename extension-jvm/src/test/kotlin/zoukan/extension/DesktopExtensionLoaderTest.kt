@@ -27,9 +27,10 @@ class TestExtensionFactory : SourceFactory {
 /** Hashes kept in memory, standing in for the app's encrypted preferences. */
 class FakeConvertedJarHashes : ConvertedJarHashes {
     val map = mutableMapOf<String, String>()
-    override fun matches(pkgName: String, versionCode: Long, sha256: String) = map[pkgName] == "$versionCode:$sha256"
-    override fun record(pkgName: String, versionCode: Long, sha256: String) {
-        map[pkgName] = "$versionCode:$sha256"
+    override fun matches(pkgName: String, versionCode: Long, apkSha256: String, jarSha256: String) =
+        map[pkgName] == "$versionCode:$apkSha256:$jarSha256"
+    override fun record(pkgName: String, versionCode: Long, apkSha256: String, jarSha256: String) {
+        map[pkgName] = "$versionCode:$apkSha256:$jarSha256"
     }
     override fun forget(pkgName: String) {
         map -= pkgName
@@ -124,19 +125,22 @@ class DesktopExtensionLoaderTest {
 
     private val hashes = FakeConvertedJarHashes()
 
-    private fun loader() = DesktopExtensionLoader(
-        extensionsDir,
-        mockk<ExtensionTrust> { every { isTrusted(any(), any(), any(), any()) } returns true },
-        hashes,
-    )
+    private fun loader(
+        trust: ExtensionTrust = mockk { every { isTrusted(any(), any(), any(), any()) } returns true },
+    ) = DesktopExtensionLoader(extensionsDir, trust, hashes)
 
     private fun recordHash(files: DesktopExtensionLoader.InstalledFiles) =
-        hashes.record(files.pkgName, files.versionCode, ApkConverter.sha256Of(files.jar))
+        hashes.record(
+            files.pkgName,
+            files.versionCode,
+            ApkConverter.sha256Of(files.apk!!),
+            ApkConverter.sha256Of(files.jar),
+        )
 
     private fun recordedHash(files: DesktopExtensionLoader.InstalledFiles) = hashes.map[files.pkgName]
 
     private fun expectedHash(files: DesktopExtensionLoader.InstalledFiles) =
-        "${files.versionCode}:${ApkConverter.sha256Of(files.jar)}"
+        "${files.versionCode}:${ApkConverter.sha256Of(files.apk!!)}:${ApkConverter.sha256Of(files.jar)}"
 
     /** The APK is signature-verified; only dex2jar is stubbed, since tests have no dex code. */
     private fun withVerifiedApk(files: DesktopExtensionLoader.InstalledFiles, block: () -> Unit) {
@@ -287,6 +291,37 @@ class DesktopExtensionLoaderTest {
             every { ApkConverter.convert(any(), any()) } just runs
             loader().load(working, emptyList()).shouldBeInstanceOf<LoadResult.Success>()
             verify(exactly = 0) { ApkConverter.convert(any(), any()) }
+        }
+    }
+
+    @Test
+    fun `a recorded jar does not load under a different APK`() {
+        val marker = "zoukan.extension.generated.AttackerMarker"
+        val trust = mockk<ExtensionTrust> {
+            every { isTrusted(any(), any(), any(), any()) } answers { "store-key" in thirdArg<List<String>>() }
+        }
+        val installed = install(manifest(pkgName, sourceClass))
+        writeJar(installed.jar, manifest(pkgName, sourceClass), mapOf(marker to generatedClass(marker)))
+        val files = installed.copy(convertedSha256 = ApkConverter.sha256Of(installed.jar))
+        mockkObject(ExtensionSignatures) {
+            mockkObject(ApkConverter) {
+                every { ExtensionSignatures.verifyApk(files.apk!!) } returns listOf("attacker-key")
+                loader(trust).load(files, emptyList()).shouldBeInstanceOf<LoadResult.Untrusted>()
+                recordedHash(files) shouldBe null
+
+                // A genuine, store-signed APK replaces the attacker's
+                files.apk!!.writeText("genuine store apk")
+                every { ExtensionSignatures.verifyApk(files.apk) } returns listOf("store-key")
+                every { ApkConverter.convert(any(), any()) } answers {
+                    writeJar(secondArg(), manifest(pkgName, sourceClass))
+                }
+
+                val result = loader(trust).load(files.copy(convertedSha256 = null), emptyList())
+
+                verify(exactly = 1) { ApkConverter.convert(any(), any()) }
+                val success = result.shouldBeInstanceOf<LoadResult.Success>()
+                shouldThrow<ClassNotFoundException> { success.classLoader!!.loadClass(marker) }
+            }
         }
     }
 

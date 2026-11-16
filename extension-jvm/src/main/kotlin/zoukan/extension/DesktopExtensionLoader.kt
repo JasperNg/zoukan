@@ -40,8 +40,10 @@ sealed interface LoadResult {
  * runs, and `<versionCode>.apk` is kept next to it when the jar was converted from an APK (its
  * signature is then checked on the APK). The APK's signature does not cover the converted jar, so
  * it only runs while it matches the SHA-256 recorded in [hashes] when it was converted, which is
- * kept outside the extensions folder; a stale or missing hash converts the verified APK again
- * before the load.
+ * kept outside the extensions folder. The record also holds the SHA-256 of the APK the jar was
+ * converted from, so a jar is tied to its APK: under any other APK it is converted again. A stale
+ * or missing hash converts the verified APK again before the load. Nothing is recorded for a jar
+ * that is untrusted or refused; it is converted again on each load until it is trusted.
  *
  * The jar is read into memory once: the signature or hash is checked on those bytes, and the same
  * bytes are what [ExtensionClassLoader] runs, so a jar swapped on disk after the check never runs,
@@ -142,12 +144,14 @@ class DesktopExtensionLoader(
         // The converted jar's hash to record once the load succeeds. There is one hash per
         // package: an update that fails to load must not replace the working version's hash
         var hashToRecord: String? = null
+        var apkSha256 = ""
         val (signatures, contents) = if (files.apk != null) {
             val signers = ExtensionSignatures.verifyApk(files.apk)
+            apkSha256 = ApkConverter.sha256Of(files.apk)
             // The manifest is read only after the checks that decide whether the jar may run at
             // all: a swapped jar must not fail the load before it was converted again, and then the
             // manifest of the healed jar is the one that counts
-            val jar = verifiedConvertedJar(files)
+            val jar = verifiedConvertedJar(files, apkSha256)
             hashToRecord = jar.hashToRecord
             signers to JarContents.fromBytes(jar.bytes)
         } else {
@@ -160,8 +164,7 @@ class DesktopExtensionLoader(
 
         if (!trust.isTrusted(manifest.packageName, manifest.versionCode, signatures, stores)) {
             logcat(LogPriority.WARN) { "Extension ${manifest.packageName} isn't trusted" }
-            // The jar itself is fine and is the installed version now; only the user's trust is missing
-            hashToRecord?.let { record(files, it) }
+            // Nothing is recorded: an untrusted jar is converted again on each load until it is trusted
             return LoadResult.Untrusted(
                 Extension.Untrusted(
                     name = manifest.name,
@@ -177,8 +180,7 @@ class DesktopExtensionLoader(
 
         if (!loadNsfwSource && manifest.isNsfw) {
             logcat(LogPriority.WARN) { "NSFW extension ${manifest.packageName} not allowed" }
-            // Like an untrusted one, the jar is fine and stays the installed version
-            hashToRecord?.let { record(files, it) }
+            // Like an untrusted one, nothing is recorded: the jar is converted again on each load
             return LoadResult.Error(
                 manifest.packageName,
                 ExtensionException(
@@ -192,7 +194,7 @@ class DesktopExtensionLoader(
         val classLoader = ExtensionClassLoader(contents, manifest.packageName)
         try {
             val extension = installedExtension(manifest, libVersion, signatures, storeName, classLoader)
-            hashToRecord?.let { record(files, it) }
+            hashToRecord?.let { record(files, apkSha256, it) }
             return LoadResult.Success(extension, classLoader)
         } catch (e: Throwable) {
             // A failed load keeps nothing: its sources were never handed out
@@ -242,13 +244,13 @@ class DesktopExtensionLoader(
      * failure fails the load. Nothing is deleted on the way. A hash to record is returned, not
      * recorded: the caller records it only once the extension loaded.
      */
-    private fun verifiedConvertedJar(files: InstalledFiles): VerifiedJar {
+    private fun verifiedConvertedJar(files: InstalledFiles, apkSha256: String): VerifiedJar {
         val apk = checkNotNull(files.apk)
         val jar = files.jar
         val bytes = jar.readBytes()
         val sha256 = ApkConverter.sha256Of(bytes)
         if (files.convertedSha256 == sha256) return VerifiedJar(bytes, sha256)
-        if (hashes.matches(files.pkgName, files.versionCode, sha256)) return VerifiedJar(bytes, null)
+        if (hashes.matches(files.pkgName, files.versionCode, apkSha256, sha256)) return VerifiedJar(bytes, null)
         logcat(LogPriority.WARN) {
             "Extension ${files.pkgName}: ${jar.name} has no matching recorded hash, converting ${apk.name} again"
         }
@@ -260,8 +262,8 @@ class DesktopExtensionLoader(
     /** A converted jar's bytes, and the hash to record for them once the load succeeds (null: already recorded). */
     private class VerifiedJar(val bytes: ByteArray, val hashToRecord: String?)
 
-    private fun record(files: InstalledFiles, sha256: String) {
-        hashes.record(files.pkgName, files.versionCode, sha256)
+    private fun record(files: InstalledFiles, apkSha256: String, jarSha256: String) {
+        hashes.record(files.pkgName, files.versionCode, apkSha256, jarSha256)
         // The sidecar earlier versions wrote next to the jar; it is not read any more
         File(files.jar.parentFile, "${files.versionCode}.sha256").delete()
     }
