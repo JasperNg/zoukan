@@ -5,8 +5,9 @@
 # Each release bumps PATCH over the newest desktop-v* tag. zoukanVersion in desktop/build.gradle.kts
 # is the floor: raise it there for a new MINOR or MAJOR and the next merge releases that version.
 # The installers are unsigned on purpose: the project does not sign its builds.
-# Before anything is published, each job starts the packaged app (`Zoukan selftest --ui`), so a
-# build that crashes on startup is never released. The release is also published only after the
+# Before anything is published, each job installs the installer it built (the MSI, or the app
+# copied out of the mounted DMG) and runs the installed app's self-test, so an installer that
+# fails to install or an app that crashes on startup is never released. The release is also published only after the
 # CI check (ci.yml, called as the tests job) passed on the same commit.
 name: Desktop installers
 
@@ -21,7 +22,10 @@ on:
       - 'desktop/reports/**'
       - 'LICENSE'
   pull_request:
-    paths: [.github/workflows/desktop-build.yml]
+    paths:
+      - .github/workflows/desktop-build.yml
+      - desktop/packaging/**
+      - desktop/packaging.gradle.kts
   workflow_dispatch:
 
 # Pull requests cancel their older runs. Runs on master queue instead, so each release sees the
@@ -109,19 +113,22 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat :desktop:packageMsi "-Pzoukan.version=${{ needs.version.outputs.version }}"
 
-      # Start the packaged app (the folder the MSI installs) before it can be released: its
-      # self-test starts the runtime in a throwaway profile, opens the encrypted database, loads
-      # extensions and draws the main window, so a build that crashes on startup fails here.
-      # The launcher has no console on Windows, so the result comes from the report and exit code.
-      - name: Start the packaged app
+      # Install the MSI it will publish (per user, silently) and run the installed app's self-test
+      # (throwaway profile, database, extensions, main window, network), then uninstall. A broken
+      # installer or a build that crashes on startup fails here and is never released.
+      - name: Install the MSI and start the installed app
         shell: pwsh
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
-          $report = Join-Path $env:RUNNER_TEMP "selftest-windows.md"
-          $app = Start-Process -FilePath "desktop\build\packaging\app\Zoukan\Zoukan.exe" `
-            -ArgumentList "selftest", "--ui", "--report", "`"$report`"" -Wait -PassThru
-          if (Test-Path $report) { Get-Content $report } else { Write-Host "No self-test report was written" }
-          if ($app.ExitCode -ne 0) { Write-Error "The packaged app's self-test failed (exit code $($app.ExitCode))"; exit 1 }
+          & desktop\packaging\check\install-check-windows.ps1 -SkipBuild
+          if ($LASTEXITCODE -ne 0) { Write-Error "The installed app's check failed"; exit 1 }
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: install-check-windows
+          path: desktop/build/reports/install/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
@@ -159,18 +166,17 @@ jobs:
       - name: Build the DMG
         run: ./gradlew :desktop:packageDmg "-Pzoukan.version=${{ needs.version.outputs.version }}"
 
-      # Start the packaged app (the one inside the DMG) before it can be released, as on Windows
-      - name: Start the packaged app
-        timeout-minutes: 10
-        run: |
-          report="$RUNNER_TEMP/selftest-macos.md"
-          status=0
-          desktop/build/packaging/app/Zoukan.app/Contents/MacOS/Zoukan selftest --ui --report "$report" || status=$?
-          if [ "$status" -ne 0 ]; then
-            [ -f "$report" ] || echo "No self-test report was written"
-            echo "::error::The packaged app's self-test failed (exit code $status)"
-            exit 1
-          fi
+      # Mount the DMG it will publish, copy the app out and run its self-test, as on Windows
+      - name: Mount the DMG and start the app from it
+        timeout-minutes: 15
+        run: desktop/packaging/check/install-check-macos.sh --skip-build
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: install-check-macos
+          path: desktop/build/reports/install/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:

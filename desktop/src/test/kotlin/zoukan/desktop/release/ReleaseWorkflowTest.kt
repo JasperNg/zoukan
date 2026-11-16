@@ -85,4 +85,39 @@ class ReleaseWorkflowTest {
         val remote = Regex(""""github>[^"]*"""").findAll(file.readText()).map { it.value }.toList()
         remote.shouldBeEmpty()
     }
+
+    private fun job(workflow: String, name: String): String {
+        val start = Regex("(?m)^ {2}$name:\\s*$").find(workflow)?.range?.first ?: return ""
+        val next = Regex("(?m)^ {2}[\\w-]+:\\s*$").findAll(workflow).map { it.range.first }.firstOrNull { it > start }
+        return workflow.substring(start, next ?: workflow.length)
+    }
+
+    @Test
+    fun `the release jobs self-test the installers they publish`() {
+        val build = text(".github/workflows/desktop-build.yml")
+        val problems = mutableListOf<String>()
+        if (!Regex("""install-check-windows\.ps1\s+-SkipBuild""").containsMatchIn(job(build, "windows"))) {
+            problems += "windows job does not run install-check-windows.ps1 -SkipBuild"
+        }
+        if (!Regex("""install-check-macos\.sh\s+--skip-build""").containsMatchIn(job(build, "macos"))) {
+            problems += "macos job does not run install-check-macos.sh --skip-build"
+        }
+        if ("""desktop\build\packaging\app\Zoukan\Zoukan.exe""" in build) {
+            problems += "a step starts the app folder's Zoukan.exe instead of the installed app"
+        }
+        if ("desktop/build/packaging/app/Zoukan.app/Contents/MacOS/Zoukan" in build) {
+            problems += "a step starts the app folder's macOS binary instead of the app from the DMG"
+        }
+        problems.shouldBeEmpty()
+    }
+
+    @Test
+    fun `packaging changes build the installers on pull requests`() {
+        val build = text(".github/workflows/desktop-build.yml")
+        val paths = Regex("""(?m)^ {2}pull_request:\s*\n {4}paths:\s*(\[[^\]]*]|(?:\n {6}- .*)+)""")
+            .find(build)?.groupValues?.get(1).orEmpty()
+        val missing = listOf(".github/workflows/desktop-build.yml", "desktop/packaging/**", "desktop/packaging.gradle.kts")
+            .filter { it !in paths }
+        missing.shouldBeEmpty()
+    }
 }
