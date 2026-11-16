@@ -194,6 +194,11 @@ Residual risk:
    locked-down) — a known nit, harmless while the lock is enabled and the hash exists. When the
    secret store itself cannot be read and the lock is on, `AppLock.isEnabled` fails closed: the
    app stays locked.
+4. **Logs and crash reports are plain text.** `logs/` holds the rolling log (4 files of 5 MB) and
+   `crashes/` holds crash and error reports (the stack trace and the end of the log, with sign-in
+   codes, tokens and passwords redacted) and copies of JVM crash files (without environment
+   variable values). Titles of what was read and file paths can appear there, also in incognito.
+   The crash dialog says so. Anyone who can read the data folder can read them.
 
 ## Processes
 
