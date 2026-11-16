@@ -126,6 +126,8 @@ fun LibraryTab(model: LibraryScreenModel) {
     val removeMerged by model.removeMergedPrompt.collectAsState()
     // KMK <--
     val settings = state.settings
+    // The overflow-menu flags, found once per selection instead of on every recomposition
+    val selectionFlags by remember(state.selection, state.items) { derivedStateOf { model.selectionFlags(state) } }
     val visible = state.visible
     // Ctrl/Cmd + A selects everything shown; Escape clears the selection before it means "back"
     OnShortcut { action ->
@@ -181,10 +183,10 @@ fun LibraryTab(model: LibraryScreenModel) {
                 },
                 // KMK <--
                 // SY -->
-                onCleanTitles = model::cleanTitles.takeIf { model.showCleanTitles() },
+                onCleanTitles = model::cleanTitles.takeIf { selectionFlags.cleanTitles },
                 onCollectRecommendations = { recommendationDialog = model.selectedManga() }.takeIf { state.selection.size > 1 },
-                onAddToMangaDex = model::syncMangaToDex.takeIf { model.showAddToMangadex() },
-                onResetInfo = model::resetInfo.takeIf { model.showResetInfo() },
+                onAddToMangaDex = model::syncMangaToDex.takeIf { selectionFlags.addToMangadex },
+                onResetInfo = model::resetInfo.takeIf { selectionFlags.resetInfo },
                 // SY <--
             )
         } else {
@@ -477,7 +479,10 @@ private fun ColumnScope.EntryContextMenu(
     ContextMenuItem(menu, localized(DMR.strings.change_categories), Icons.AutoMirrored.Outlined.Label, onClick = onCategories)
     ContextMenuItem(menu, localized(MR.strings.action_mark_as_read), Icons.Outlined.DoneAll) { model.markRead(true, ids) }
     ContextMenuItem(menu, localized(MR.strings.action_mark_as_unread), Icons.Outlined.RemoveDone) { model.markRead(false, ids) }
-    if (ids.any { id -> model.state.value.items.any { it.id == id && it.manga.source != LocalSource.ID } }) {
+    val remoteIds = remember(model.state.value.items) {
+        model.state.value.items.filterNot { it.manga.source == LocalSource.ID }.mapTo(HashSet()) { it.id }
+    }
+    if (ids.any { it in remoteIds }) {
         DropdownMenuItem(
             text = { Text(localized(MR.strings.action_download)) },
             leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
