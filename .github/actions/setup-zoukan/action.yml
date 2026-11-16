@@ -1,0 +1,34 @@
+# Downloads the pinned JetBrains Runtime for this runner's OS from JetBrains' CDN (setup-java's
+# jetbrains distribution hits GitHub API rate limits), hands it to setup-java as a local file and
+# sets up Gradle. Keep the version in step with desktop-build.yml, which still has its own copy.
+name: Set up JDK and Gradle
+description: Pinned JetBrains Runtime 21 plus gradle/actions/setup-gradle
+inputs:
+  cache-read-only:
+    description: "'true' to only read the Gradle cache (PRs, nightly); 'false' on master pushes"
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Download JetBrains Runtime
+      id: jbr
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in
+          Linux)   file=jbrsdk-21.0.11-linux-x64-b1163.125.tar.gz ;;
+          Windows) file=jbrsdk-21.0.11-windows-x64-b1163.125.zip ;;
+          macOS)   file=jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz ;;
+          *) echo "::error::No JetBrains Runtime pinned for $RUNNER_OS"; exit 1 ;;
+        esac
+        curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/$file" "https://cache-redirector.jetbrains.com/intellij-jbr/$file"
+        echo "file=$RUNNER_TEMP/$file" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-java@v5
+      with:
+        distribution: jdkfile
+        jdkFile: ${{ steps.jbr.outputs.file }}
+        java-version: 21
+    - uses: gradle/actions/setup-gradle@v5
+      with:
+        cache-read-only: ${{ inputs.cache-read-only }}
