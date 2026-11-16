@@ -140,7 +140,7 @@
   tier: journey
   smoke: false
   tests: []
-  gap: "Downloads screen reached only in the gated EndToEndLocalTest; planned: LocalJourneyTest"
+  gap: "The Downloads screen opens in ScreenSmokeTest; no journey clicks the button"
 
 - key: flow:library.stats-shortcut
   feature: "Stats shortcut"
@@ -153,8 +153,7 @@
   feature: "Update library / category"
   tier: unit
   smoke: false
-  tests: [library.LibraryUpdaterTest]
-  gap: "The button is driven only in the gated EndToEndLocalTest; planned: LocalJourneyTest"
+  tests: [library.LibraryUpdaterTest, e2e.LocalJourneyTest]
 
 - key: flow:library.overflow
   feature: "Overflow menu: random entry, select all, edit categories, update errors, sync favorites, sync library"
@@ -256,8 +255,7 @@
   feature: "View upcoming / update library buttons"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndUpcomingTest; planned: UpcomingJourneyTest"
+  tests: [e2e.UpcomingJourneyTest]
 
 - key: flow:updates.selection
   feature: "Selection: clear, select all, invert, read/unread, bookmark, download, delete"
@@ -291,8 +289,7 @@
   feature: "Upcoming calendar (previous/next month, guide)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.upcoming.UpcomingUIModelTest, ui.UpcomingCalendarDayTest]
-  gap: "Calendar navigation only in the gated EndToEndUpcomingTest; planned: UpcomingJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.upcoming.UpcomingUIModelTest, ui.UpcomingCalendarDayTest, e2e.UpcomingJourneyTest]
 
 - key: screen:more.UpdatesScreen
   feature: "Updates as a More screen (when hidden from the rail)"
@@ -362,8 +359,8 @@
   feature: "Sources page: search, sections, latest, settings, disable, move category"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.browse.SourceSearchTest, e2e.BrowseAndReadJourneyTest, e2e.SourcePreferencesJourneyTest]
-  gap: "Search box, disable and move category only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.browse.SourceSearchTest, e2e.BrowseAndReadJourneyTest, e2e.SourcePreferencesJourneyTest, e2e.BrowseFeaturesJourneyTest]
+  gap: "Disable and move category are not driven by any journey"
 
 - key: browse:FEED
   feature: "Feed page"
@@ -383,8 +380,7 @@
   feature: "Feed page: reorder"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Reordering only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: browse:EXTENSIONS
   feature: "Extensions page: languages, refresh, install, update, update all, uninstall, trust"
@@ -402,8 +398,7 @@
   feature: "Migrate page (sources with entries)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Migrating by source only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: browse:STORES
   feature: "Stores page: add, add Keiyoushi, remove"
@@ -415,8 +410,7 @@
   feature: "Header: filter sources, batch add, open from URL"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Only the gated EndToEndBrowseTest and EndToEndMigrationTest; planned: BrowseFeaturesJourneyTest"
+  tests: [e2e.BrowseFeaturesJourneyTest, e2e.MigrationJourneyTest]
 
 - key: screen:browse.SourcesFilterScreen
   feature: "Sources filter screen"
@@ -442,8 +436,8 @@
   feature: "Source browsing: popular / latest / search, filters, saved searches, random, MangaDex follows, load more, retry"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.browse.SourceTimeoutTest, e2e.BrowseAndReadJourneyTest, e2e.HtmlDescriptionJourneyTest, e2e.CookieJourneyTest]
-  gap: "Display modes only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest; errors and retry, planned: SourceErrorJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.browse.SourceTimeoutTest, e2e.BrowseAndReadJourneyTest, e2e.HtmlDescriptionJourneyTest, e2e.CookieJourneyTest, e2e.BrowseFeaturesJourneyTest]
+  gap: "Errors and retry, planned: SourceErrorJourneyTest"
 
 - key: dialog-inline:SourceScreen.kt:Content
   feature: "Delete saved search dialog"
@@ -477,50 +471,43 @@
   feature: "Global search (pinned only, all, has results; merge/migrate purposes)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Has-results filter only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: screen:browse.ExtensionDetailsScreen
   feature: "Extension details: enable/disable all, clear cookies, incognito, uninstall"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Missing-extension details only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: screen:browse.MigrateMangaScreen
   feature: "Migrate entries of a source"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Select and migrate only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: dialog:browse.OpenUrlDialog
   feature: "Open from URL dialog"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Entering a URL only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: screen:browse.OpenUrlScreen
   feature: "Open from URL screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Resolving a URL only in the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: screen:browse.BatchAddScreen
   feature: "E-Hentai batch add"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "An unknown URL only in the gated EndToEndMigrationTest; planned: MigrationJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MigrationJourneyTest]
 
 - key: dialog:browse.BulkFavoriteDialogs
   feature: "Bulk favorite (add many to library, duplicates, categories)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndBrowseTest; planned: BrowseFeaturesJourneyTest"
+  tests: [e2e.BrowseFeaturesJourneyTest]
 
 # --- Entry (manga) screen ---
 
@@ -689,8 +676,7 @@
   feature: "Migrate dialog"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.manga.MergeAndMigrateFlagsTest, ui.manga.ReportOutcomeTest]
-  gap: "Migrating only in the gated EndToEndMigrationTest; planned: MigrationJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.manga.MergeAndMigrateFlagsTest, ui.manga.ReportOutcomeTest, e2e.MigrationJourneyTest]
 
 - key: dialog:manga.MergedEntriesDialog
   feature: "Merged entries dialog"
@@ -851,7 +837,7 @@
   tier: journey
   smoke: false
   tests: []
-  gap: "Only the gated EndToEndLocalTest; planned: LocalJourneyTest; empty queue, planned: EmptyStatesJourneyTest"
+  gap: "Empty queue, planned: EmptyStatesJourneyTest"
 
 - key: screen:downloads.DownloadsScreen
   feature: "Download queue screen: pause/start, cancel all, open folder, move top/bottom, cancel series, sort"
@@ -1209,22 +1195,19 @@
   feature: "Migration config (sources, extra search query, start)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Starting a migration only in the gated EndToEndMigrationTest; planned: MigrationJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MigrationJourneyTest]
 
 - key: screen:migration.MigrationListScreen
   feature: "Migration list: progress, stop, search manually, skip, migrate now, copy now"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Progress and results only in the gated EndToEndMigrationTest; planned: MigrationJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MigrationJourneyTest]
 
 - key: dialog-inline:MigrationListScreen.kt:Content
   feature: "Migrate-confirm, progress (cannot be dismissed) and exit dialogs"
   tier: journey
   smoke: false
-  tests: []
-  gap: "covered only by the gated EndToEndMigrationTest; planned: MigrationJourneyTest"
+  tests: [e2e.MigrationJourneyTest]
 
 - key: dialog:recs.RecommendationSearchDialog
   feature: "Recommendation search dialog (hide library entries)"
