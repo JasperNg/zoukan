@@ -95,6 +95,15 @@ class BackupCodecTest {
     }
 
     @Test
+    fun `a sync reply past the cap is refused, one at the cap is read`() {
+        shouldThrow<BackupCodec.InvalidBackupException> {
+            BackupCodec.readBounded(ByteArray(1025).inputStream(), maxBytes = 1024)
+        }.error shouldBe BackupCodec.Error.UNKNOWN
+        BackupCodec.readBounded(ByteArray(1024) { it.toByte() }.inputStream(), maxBytes = 1024) shouldBe
+            ByteArray(1024) { it.toByte() }
+    }
+
+    @Test
     fun `a backup under the cap still decodes`() {
         val backup = SyntheticBackup.create()
         val gzipped = Buffer().also { BackupCodec.write(backup, it) }

@@ -192,14 +192,14 @@ class DesktopBackups(
 
         /**
          * Settings a restore writes only when the user confirms them: they decide when the app
-         * locks, which DNS it uses, where sync sends the library, and whether the app talks to
-         * Discord or checks for updates. Never written by a restore nobody confirms (data sync,
-         * the command line).
+         * locks, which DNS it uses, where sync sends the library and whether it sends logins too,
+         * and whether the app talks to Discord or checks for updates. Never written by a restore
+         * nobody confirms (data sync, the command line).
          */
         internal val SENSITIVE_KEYS = setOf(
             "biometric_days", "biometric_time_ranges", "lock_app_after", "secure_screen_v2",
             "doh_provider",
-            "sync_service", "connection_sync_client_host", "connection_sync_client_api_key",
+            "sync_service", "connection_sync_client_host", "connection_sync_client_api_key", "sync_privateSettings",
             "connection_webdav_url", "connection_webdav_username", "connection_webdav_password", "connection_webdav_folder",
             "zoukan_update_check", "zoukan_update_prereleases",
             "pref_enable_discord_rpc",

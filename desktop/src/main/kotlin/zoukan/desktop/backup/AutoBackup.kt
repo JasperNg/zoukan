@@ -60,7 +60,7 @@ class AutoBackup(
             DesktopBackups(androidDir).create(file, BackupOptions(), replaceExisting = false)
             preferences.lastAutoBackupTimestamp().set(System.currentTimeMillis())
             // Record the name before pruning, so a crash in between never forgets a file it wrote
-            val own = written.get().lines().filter { it.isNotBlank() } + file.name
+            val own = written.get().lines().filter { it.isNotBlank() && it != file.name } + file.name
             written.set(own.joinToString("\n"))
             written.set(prune(folder, own, file).joinToString("\n"))
             logcat { "Automatic backup saved to $file" }

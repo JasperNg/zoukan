@@ -77,6 +77,14 @@ class RestoreFilterTest {
     }
 
     @Test
+    fun `a sync or backup cannot switch on sending private settings to the sync server`() {
+        val sendPrivate = BackupPreference("sync_privateSettings", BooleanPreferenceValue(true))
+        filtered(sendPrivate, theme) shouldBe listOf(theme)
+        DesktopBackups.sensitiveKeys(Backup(backupManga = emptyList(), backupPreferences = listOf(sendPrivate))) shouldBe
+            listOf("sync_privateSettings")
+    }
+
+    @Test
     fun `a restore does not switch the app lock off`() {
         filtered(lockOff, lockIsOn = true) shouldBe emptyList()
         filtered(lockOff, lockIsOn = false) shouldBe listOf(lockOff)

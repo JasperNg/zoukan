@@ -163,7 +163,9 @@ class SyncManager(
         if (serverUrl != null) {
             if (!isAllowedSyncUrl(serverUrl)) {
                 logcat(LogPriority.ERROR) { "Sync refused: plain http to a server outside the local network" }
-                notifier.showSyncError(localized(DMR.strings.sync_refused_plain_http, serverUrl.take(100)))
+                // Only the host: the address may carry a user name and password
+                val host = serverUrl.trim().toHttpUrlOrNull()?.host?.take(100) ?: "?"
+                notifier.showSyncError(localized(DMR.strings.sync_refused_plain_http, host))
                 return false
             }
             if (serverUrl.trim().startsWith("http://", ignoreCase = true)) {

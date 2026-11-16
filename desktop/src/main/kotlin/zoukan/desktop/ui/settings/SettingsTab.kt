@@ -519,7 +519,12 @@ internal fun restoreBackup(file: File, options: RestoreOptions): Deferred<Restor
                     }
                     // Security settings and logins change when the app locks and where data goes, so a
                     // backup writes them only when the user has been told
-                    val sensitive = if (chosen.appSettings || chosen.sourceSettings) DesktopBackups.sensitiveKeys(backup) else emptyList()
+                    val sensitive = DesktopBackups.sensitiveKeys(
+                        backup.copy(
+                            backupPreferences = if (chosen.appSettings) backup.backupPreferences else emptyList(),
+                            backupSourcePreferences = if (chosen.sourceSettings) backup.backupSourcePreferences else emptyList(),
+                        ),
+                    )
                     val allowSensitive = when {
                         sensitive.isEmpty() -> false
                         else -> when (sensitiveSettingsChoice(sensitive.size)) {
