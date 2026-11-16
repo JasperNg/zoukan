@@ -319,7 +319,10 @@ tasks.test {
     providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
     providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
-    // The build-settings test reads these files, so a change to one reruns it
+    // The UI text comes from string resources in the system language; the tests check the English text
+    systemProperty("user.language", "en")
+    // The build-settings and release tests read these files (the workflows, the packaging script),
+    // so a change to one reruns them
     inputs.files(
         rootProject.file("settings.gradle.kts"),
         rootProject.file("gradle/wrapper/gradle-wrapper.properties"),
@@ -327,21 +330,13 @@ tasks.test {
         rootProject.file("gradle.properties"),
         rootProject.file("renovate.json"),
         rootProject.file("desktop/UPSTREAM-MERGES.md"),
+        rootProject.file("desktop/RELEASING.md"),
         rootProject.file("extension-jvm/build.gradle.kts"),
         rootProject.file("android-compat/build.gradle.kts"),
-        file("build.gradle.kts"),
         rootProject.fileTree("gradle") { include("*.versions.toml") },
-    ).withPropertyName("releaseFiles")
-    // The UI text comes from string resources in the system language; the tests check the English text
-    systemProperty("user.language", "en")
-    // The release tests read the workflow files and the packaging script
-    inputs.files(
         rootProject.fileTree(".github/workflows"),
-        file("packaging.gradle.kts"),
-        rootProject.file("renovate.json"),
-        rootProject.file("desktop/RELEASING.md"),
         file("build.gradle.kts"),
-        rootProject.file("gradle.properties"),
+        file("packaging.gradle.kts"),
         file("packaging/check/nightly-windows.ps1"),
         file("packaging/check/install-check-windows.ps1"),
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)

@@ -485,7 +485,6 @@ private fun confirmSensitive(count: Int): Boolean? {
     }
 }
 
-
 /** A folder picker: the native one on macOS, Swing's on Windows (AWT's FileDialog picks only files there). */
 internal fun chooseFolder(window: java.awt.Window?, start: File): File? {
     if (zoukan.desktop.Platform.current == zoukan.desktop.Platform.MACOS) {

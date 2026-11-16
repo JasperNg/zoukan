@@ -499,14 +499,12 @@ public class BitmapFactory {
                 return null;
             }
 
-            // ZOUKAN -->
             // Refuse a header claiming too many pixels before anything is allocated
             if (imageReader.getWidth(0) > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE
                     || imageReader.getHeight(0) > xyz.nulldev.androidcompat.graphics.ImageIoDecoding.MAX_SIDE) {
                 throw new IOException("Image too large to decode");
             }
             xyz.nulldev.androidcompat.graphics.ImageIoDecoding.checkSize(sampledWidth, sampledHeight);
-            // ZOUKAN <--
             ImageReadParam param = imageReader.getDefaultReadParam();
             if (sampleSize > 1) param.setSourceSubsampling(sampleSize, sampleSize, 0, 0);
             BufferedImage image = imageReader.read(0, param);
@@ -516,7 +514,6 @@ public class BitmapFactory {
                 image = scale(image, sampledWidth, sampledHeight);
             }
             if (opts != null) fillBounds(opts, imageReader, image.getWidth(), image.getHeight());
-            // ZOUKAN -->
             // Android decodes every page to ARGB_8888; ImageIO keeps palette, grey and 16-bit types
             boolean sourceHasAlpha = image.getColorModel().hasAlpha();
             if (image.getType() != BufferedImage.TYPE_INT_ARGB) image = toArgb(image);
@@ -524,7 +521,6 @@ public class BitmapFactory {
             // A JPEG or opaque PNG reports no alpha, as on Android, though it is held as ARGB
             if (!sourceHasAlpha) decoded.markOpaque();
             return decoded;
-            // ZOUKAN <--
         } catch (IOException | RuntimeException ex) {
             resetBounds(opts);
             return null;
@@ -563,7 +559,6 @@ public class BitmapFactory {
         opts.outMimeType = mimeTypes != null && mimeTypes.length > 0 ? mimeTypes[0] : null;
     }
 
-    // ZOUKAN -->
     private static BufferedImage toArgb(BufferedImage source) {
         BufferedImage argb = new BufferedImage(
                 source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
@@ -575,7 +570,6 @@ public class BitmapFactory {
         }
         return argb;
     }
-    // ZOUKAN <--
 
     private static BufferedImage scale(BufferedImage source, int width, int height) {
         int type = source.getColorModel().hasAlpha()

@@ -595,10 +595,11 @@
   tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest]
 
 - key: dialog:common.ConfirmDestructiveDialog
-  feature: "Second question before something the user cannot take back (local files to the trash, downloads deleted from Updates)"
+  feature: "Second question before something the user cannot take back (local files to the trash, downloads deleted from Updates, a new download password, a sync reset, MangaDex follows)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest, ui.settings.DownloadPasswordDialogTest]
+  gap: "The sync reset and MangaDex follow confirmations are not opened by a test"
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"
@@ -943,12 +944,6 @@
   smoke: true
   tests: [ui.ScreenSmokeTest]
 
-- key: dialog:common.ConfirmDestructiveDialog
-  feature: "Confirmation before a destructive or hard-to-undo change"
-  tier: unit
-  smoke: false
-  tests: [ui.settings.DownloadPasswordDialogTest]
-  gap: "Opened by the download password dialog test; the sync reset and MangaDex confirmations are not opened by a test"
 
 - key: dialog:settings.DownloadPasswordDialog
   feature: "Download password: set, change and remove"
