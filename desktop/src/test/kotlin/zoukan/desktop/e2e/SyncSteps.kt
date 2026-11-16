@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -40,9 +41,9 @@ internal class SyncSteps(private val journey: Journey) {
     val notices: MutableList<Notifications.Message> = Collections.synchronizedList(mutableListOf())
 
     init {
-        // A shared flow keeps nothing for a late collector: collect before the first sync
-        AppScope.launch { Notifications.flow.collect { notices += it } }
-        Thread.sleep(200)
+        // A shared flow keeps nothing for a late collector: collect before the first sync. Undispatched,
+        // the collector has subscribed by the time launch returns
+        AppScope.launch(start = CoroutineStart.UNDISPATCHED) { Notifications.flow.collect { notices += it } }
     }
 
     /** The titles in the library, as the Library tab lists them. */
