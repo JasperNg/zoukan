@@ -492,6 +492,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val history = rememberScreenModel { HistoryScreenModel() }
         val browse = rememberScreenModel { BrowseScreenModel() }
         val feed = rememberScreenModel { zoukan.desktop.ui.browse.FeedScreenModel() }
+        val migrate = rememberScreenModel { zoukan.desktop.ui.browse.MigrateSourcesModel() }
         // ZOUKAN -->
         // Settings > Appearance > Navigation, and the new chapters badge, as on Android
         val ui = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
@@ -562,7 +563,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                     HomeTab.Library -> LibraryTab(library)
                     HomeTab.Updates -> UpdatesTab(updates)
                     HomeTab.History -> HistoryTab(history)
-                    HomeTab.Browse -> BrowseTab(browse, feed)
+                    HomeTab.Browse -> BrowseTab(browse, feed, migrate)
                     HomeTab.More -> MoreTab()
                 }
             }

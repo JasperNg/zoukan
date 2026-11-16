@@ -215,7 +215,7 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(flag in flags, onCheckedChange = { flags = if (it) flags + flag else flags - flag })
-                        Text(MigrateManga.label(flag))
+                        Text(localized(MigrateManga.label(flag)))
                     }
                 }
                 if (busy) {

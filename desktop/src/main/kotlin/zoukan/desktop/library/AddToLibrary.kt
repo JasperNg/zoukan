@@ -4,6 +4,8 @@ import eu.kanade.domain.track.interactor.AddTracks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
@@ -74,7 +76,10 @@ class AddToLibrary(
                 .onFailure { if (it !is CancellationException) Toasts.error("Tracking failed", it) }
             if (fetchDetails || fetchChapters) {
                 try {
-                    refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = fetchChapters, source = source)
+                    // A bulk add starts one of these per entry; a few at a time keeps the site from blocking them
+                    fetches.withPermit {
+                        refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = fetchChapters, source = source)
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
@@ -86,5 +91,12 @@ class AddToLibrary(
 
     suspend fun remove(manga: Manga) {
         mangaRepository.update(MangaUpdate(id = manga.id, favorite = false, dateAdded = 0))
+    }
+
+    companion object {
+        /** How many entries fetch their details and chapters after adding at once, across all adds */
+        internal const val PARALLEL_FETCHES = 3
+
+        private val fetches = Semaphore(PARALLEL_FETCHES)
     }
 }

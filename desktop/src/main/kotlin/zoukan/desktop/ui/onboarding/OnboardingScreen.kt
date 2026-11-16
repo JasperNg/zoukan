@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -57,6 +58,7 @@ import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.ui.whatsnew.WhatsNew
 import zoukan.desktop.ui.whatsnew.WhatsNewScreen
 import zoukan.i18n.desktop.DMR
+import java.io.File
 
 /** Komikku's getting started guide, which Android's onboarding links to; it covers Zoukan too. */
 const val GETTING_STARTED_URL = "https://komikku-app.github.io/docs/guides/getting-started"
@@ -116,6 +118,10 @@ fun OnboardingScreen(
     var step by rememberSaveable { mutableIntStateOf(0) }
     val steps = remember { OnboardingStep.entries }
     val last = step == steps.lastIndex
+    // Whether the storage folder can be used, checked once per change of the path and off the UI thread
+    val storage = remember { Injekt.get<ZoukanStorage>() }
+    val storagePath by storage.folderPreference.collectAsState()
+    val storageReady by produceState(false, storagePath) { value = withContext(Dispatchers.IO) { storageFolderReady(storage.root) } }
     val window = LocalWindow.current?.window
     Surface(
         Modifier.fillMaxSize().testTag("onboarding")
@@ -128,7 +134,7 @@ fun OnboardingScreen(
             headingText = localized(MR.strings.onboarding_heading),
             subtitleText = localized(DMR.strings.lets_set_some_things_up_first),
             acceptText = if (last) localized(MR.strings.onboarding_action_finish) else localized(MR.strings.nav_zone_next),
-            canAccept = steps[step].isComplete(),
+            canAccept = if (steps[step] == OnboardingStep.Storage) storageReady else true,
             onAcceptClick = { if (last) onComplete() else step++ },
             secondaryButton = {
                 when {
@@ -177,14 +183,20 @@ enum class OnboardingStep {
     Theme,
     Storage,
     Guides,
-    ;
-
-    /** Whether Next can be pressed: the storage step needs a folder Zoukan can write to. */
-    fun isComplete(): Boolean = when (this) {
-        Storage -> runCatching { Injekt.get<ZoukanStorage>().root.let { it.mkdirs() || it.isDirectory } }.getOrDefault(false)
-        else -> true
-    }
 }
+
+/**
+ * Whether Zoukan can use [folder] for its storage: it is a writable folder, or it does not exist yet
+ * and the nearest folder above it that does exist is writable. Creates nothing; the code that
+ * writes to the folder creates it.
+ */
+internal fun storageFolderReady(folder: File): Boolean = runCatching {
+    if (folder.exists()) {
+        folder.isDirectory && folder.canWrite()
+    } else {
+        generateSequence(folder.parentFile) { it.parentFile }.firstOrNull { it.exists() }?.let { it.isDirectory && it.canWrite() } == true
+    }
+}.getOrDefault(false)
 
 @Composable
 private fun StorageStep() {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.PushPin
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -51,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -59,12 +62,13 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import mihon.domain.extension.model.ExtensionStore
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.DropdownMenu
@@ -81,7 +85,7 @@ import zoukan.i18n.desktop.DMR
 import java.util.Locale
 
 @Composable
-fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
+fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel, migrate: MigrateSourcesModel) {
     val state by model.state.collectAsState()
     var tab by rememberSaveable { mutableStateOf(BrowsePage.SOURCES) }
     val navigator = LocalNavigator.currentOrThrow
@@ -115,7 +119,7 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
                 globalQuery,
                 { globalQuery = it },
                 localized(DMR.strings.search_all_sources),
-                Modifier.width(320.dp),
+                Modifier.width(320.dp).testTag("global-search"),
                 onSearch = {
                     if (globalQuery.isNotBlank()) {
                         // ZOUKAN -->
@@ -169,7 +173,7 @@ fun BrowseTab(model: BrowseScreenModel, feed: FeedScreenModel) {
             BrowsePage.STORES -> StoresList(state, model)
             BrowsePage.FEED -> FeedTab(feed)
             // ZOUKAN -->
-            BrowsePage.MIGRATE -> MigrateSourcesList()
+            BrowsePage.MIGRATE -> MigrateSourcesList(migrate)
             // ZOUKAN <--
         }
     }
@@ -195,8 +199,9 @@ private fun SourcesList(state: BrowseScreenModel.State, model: BrowseScreenModel
             SearchField(
                 state.sourceQuery,
                 model::searchSources,
-                localized(KMR.strings.action_search_for_source),
+                localized(DMR.strings.find_a_source_by_name),
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).testTag("source-search"),
+                filter = true,
             )
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
                 state.visibleSections.forEachIndexed { index, (title, sources) ->
@@ -311,6 +316,22 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
     confirmUninstall?.let { request ->
         ConfirmUninstallDialog(request.name, onConfirm = request.uninstall, onDismiss = { confirmUninstall = null })
     }
+    // Trusting lets the extension's code run with full access, so it asks first and shows the signer
+    var confirmTrust by remember { mutableStateOf<Extension.Untrusted?>(null) }
+    confirmTrust?.let { ext ->
+        ConfirmTrustDialog(ext, onConfirm = { model.trust(ext) }, onDismiss = { confirmTrust = null })
+    }
+    // Installing runs third-party code, so a right-click on an available row asks first; the Install button is explicit
+    var confirmInstall by remember { mutableStateOf<Extension.Available?>(null) }
+    confirmInstall?.let { ext ->
+        ConfirmDestructiveDialog(
+            title = localized(DMR.strings.install_extension_question, ext.name),
+            text = null,
+            confirmLabel = localized(MR.strings.action_install),
+            onConfirm = { model.install(ext) },
+            onDismiss = { confirmInstall = null },
+        )
+    }
     fun askUninstall(ext: Extension) {
         confirmUninstall = UninstallRequest(ext.name) { model.uninstall(ext) }
     }
@@ -320,8 +341,9 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             SearchField(
                 state.extensionQuery,
                 model::searchExtensions,
-                localized(DMR.strings.search_extensions),
+                localized(DMR.strings.find_an_extension_by_name),
                 Modifier.weight(1f).testTag("extension-search"),
+                filter = true,
             )
             Spacer(Modifier.width(8.dp))
             Box {
@@ -354,11 +376,11 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 items(state.visibleUntrusted, key = { "u-${it.pkgName}" }) { ext ->
                     // ZOUKAN -->
                     // Android's long press on an untrusted extension uninstalls it
-                    ExtensionRow(ext, null, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { askUninstall(ext) }) {
+                    ExtensionRow(ext, null, state.stores, subtitle = localized(DMR.strings.signed_with_an_unknown_key_trust), busy = ext.pkgName in state.busy, onSecondaryClick = { askUninstall(ext) }) {
                         // ZOUKAN <--
-                        OutlinedButton(onClick = { askUninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
+                        Button(onClick = { askUninstall(ext) }) { Text(localized(MR.strings.ext_uninstall)) }
                         Spacer(Modifier.width(8.dp))
-                        Button(onClick = { model.trust(ext) }) { Text(localized(MR.strings.ext_trust)) }
+                        OutlinedButton(onClick = { confirmTrust = ext }) { Text(localized(MR.strings.ext_trust)) }
                     }
                 }
             }
@@ -409,10 +431,10 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                 header?.let { sectionHeader(it) }
                 // ZOUKAN <--
                 items(extensions, key = { "i-${it.pkgName}" }) { ext ->
-                    val iconUrl = state.available.firstOrNull { it.pkgName == ext.pkgName }?.iconUrl
+                    val iconUrl = state.availableIcons[ext.pkgName]
                     // ZOUKAN -->
                     // Android's long press on an installed extension uninstalls it
-                    ExtensionRow(ext, iconUrl, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { askUninstall(ext) }) {
+                    ExtensionRow(ext, iconUrl, state.stores, busy = ext.pkgName in state.busy, onClick = { navigator.push(ExtensionDetailsScreen(ext.pkgName)) }, onSecondaryClick = { askUninstall(ext) }) {
                         // ZOUKAN <--
                         if (ext.hasUpdate) {
                             Button(onClick = { model.update(ext) }) { Text(localized(MR.strings.ext_update)) }
@@ -427,7 +449,7 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
             items(available, key = { "a-${it.pkgName}" }) { ext ->
                 // ZOUKAN -->
                 // Android's long press on an available extension installs it
-                ExtensionRow(ext, ext.iconUrl, busy = ext.pkgName in state.busy, onSecondaryClick = { model.install(ext) }) {
+                ExtensionRow(ext, ext.iconUrl, state.stores, busy = ext.pkgName in state.busy, onSecondaryClick = { confirmInstall = ext }) {
                     // ZOUKAN <--
                     FilledTonalButton(onClick = { model.install(ext) }) { Text(localized(MR.strings.action_install)) }
                 }
@@ -455,12 +477,51 @@ private fun ConfirmUninstallDialog(name: String, onConfirm: () -> Unit, onDismis
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
+
+/** Trust question: names the extension, its store when known, and the signer's full fingerprint. */
+@Composable
+private fun ConfirmTrustDialog(ext: Extension.Untrusted, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(DMR.strings.trust_extension, ext.name)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(localized(DMR.strings.trust_extension_warning))
+                ext.storeName?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                SelectionContainer {
+                    Text(ext.signatureHash, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onDismiss()
+                    onConfirm()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ),
+            ) { Text(localized(MR.strings.ext_trust)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
+    )
+}
 // ZOUKAN <--
+
+/**
+ * The store name to show under [extension]: the name the Stores tab shows, found by the signing
+ * key (as the loader matches them). The extension's own short name stays when its store is gone.
+ */
+internal fun storeLabel(extension: Extension, stores: List<ExtensionStore>): String? =
+    stores.firstOrNull { it.signingKey == extension.signatureHash }?.name?.takeIf(String::isNotBlank) ?: extension.storeName
 
 @Composable
 private fun ExtensionRow(
     extension: Extension,
     iconUrl: String?,
+    stores: List<ExtensionStore>,
     subtitle: String? = null,
     busy: Boolean,
     // ZOUKAN -->
@@ -487,7 +548,7 @@ private fun ExtensionRow(
                 extension.lang?.let(::languageName),
                 extension.versionName,
                 if (extension.isNsfw) "18+" else null,
-                extension.storeName,
+                storeLabel(extension, stores),
             )
             Text(
                 subtitle ?: details.joinToString(" · "),
@@ -506,6 +567,19 @@ private fun ExtensionRow(
 @Composable
 internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel) {
     var url by remember { mutableStateOf("") }
+    // ZOUKAN -->
+    // Removing a store hides its extensions from Available and from updates, so it asks first
+    var confirmRemoveStore by remember { mutableStateOf<ExtensionStore?>(null) }
+    confirmRemoveStore?.let { store ->
+        ConfirmDestructiveDialog(
+            title = localized(DMR.strings.remove_store_question, store.name),
+            text = localized(DMR.strings.remove_store_body),
+            confirmLabel = localized(MR.strings.action_remove),
+            onConfirm = { model.removeStore(store) },
+            onDismiss = { confirmRemoveStore = null },
+        )
+    }
+    // ZOUKAN <--
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text(
@@ -519,7 +593,7 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    placeholder = { Text("Store URL (repo.json or index.min.json)") },
+                    placeholder = { Text(localized(DMR.strings.store_url_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
@@ -546,8 +620,17 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // The full key, selectable, so it can be compared with the one an extension shows
+                        SelectionContainer {
+                            Text(
+                                store.signingKey,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
-                    TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_remove), onClick = { model.removeStore(store) })
+                    TooltipIconButton(Icons.Outlined.Delete, localized(MR.strings.action_remove), onClick = { confirmRemoveStore = store })
                 }
             }
         }

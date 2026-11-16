@@ -1,5 +1,6 @@
 package zoukan.desktop.migration
 
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
@@ -21,8 +22,10 @@ import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.repository.TrackRepository
+import tachiyomi.i18n.MR
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
+import zoukan.i18n.desktop.DMR
 import java.time.Instant
 
 /**
@@ -163,14 +166,14 @@ class MigrateManga(
     }
 
     companion object {
-        fun label(flag: MigrationFlag): String = when (flag) {
-            MigrationFlag.CHAPTER -> "Chapters read and history"
-            MigrationFlag.CATEGORY -> "Categories"
-            MigrationFlag.TRACK -> "Tracking"
-            MigrationFlag.CUSTOM_COVER -> "Custom cover"
-            MigrationFlag.NOTES -> "Notes"
-            MigrationFlag.REMOVE_DOWNLOAD -> "Delete the old downloads"
-            MigrationFlag.EXTRA -> "Chapter and reader settings"
+        fun label(flag: MigrationFlag): StringResource = when (flag) {
+            MigrationFlag.CHAPTER -> DMR.strings.migration_flag_chapters
+            MigrationFlag.CATEGORY -> DMR.strings.migration_flag_categories
+            MigrationFlag.TRACK -> DMR.strings.migration_flag_tracking
+            MigrationFlag.CUSTOM_COVER -> DMR.strings.migration_flag_custom_cover
+            MigrationFlag.NOTES -> DMR.strings.migration_flag_notes
+            MigrationFlag.REMOVE_DOWNLOAD -> MR.strings.migrationConfigScreen_removeDownloadsTitle
+            MigrationFlag.EXTRA -> DMR.strings.migration_flag_extra
         }
     }
 }

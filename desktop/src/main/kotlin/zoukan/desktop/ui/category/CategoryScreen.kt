@@ -190,7 +190,7 @@ object CategoryScreen : Screen {
             )
             is CategoryDialog.Rename -> CategoryNameDialog(
                 title = localized(MR.strings.action_rename_category),
-                confirmLabel = "OK",
+                confirmLabel = localized(MR.strings.action_ok),
                 initial = dialog.category.name,
                 existing = names,
                 onDismiss = model::dismissDialog,
@@ -207,7 +207,7 @@ object CategoryScreen : Screen {
                             model.dismissDialog()
                         },
                         modifier = Modifier.testTag("category-confirm"),
-                    ) { Text("OK") }
+                    ) { Text(localized(MR.strings.action_ok)) }
                 },
                 dismissButton = { TextButton(onClick = model::dismissDialog) { Text(localized(MR.strings.action_cancel)) } },
             )

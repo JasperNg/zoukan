@@ -897,4 +897,25 @@
     <string name="download_queue_unreadable">The download queue could not be read</string>
     <string name="download_queue_unreadable_kept">It was kept as %1$s; queue the chapters again.</string>
     <string name="download_disk_full">Not enough free disk space for the download</string>
+    <string name="trust_extension">Trust %1$s?</string>
+    <string name="trust_extension_warning">It is signed with a key no store you added uses. Once trusted, its code runs in Zoukan with full access.</string>
+    <string name="install_extension_question">Install %1$s?</string>
+    <string name="remove_store_question">Remove %1$s?</string>
+    <string name="remove_store_body">Its extensions leave Available and stop getting updates. Installed ones stay.</string>
+    <string name="remove_feed_question">Remove %1$s from the feed?</string>
+    <string name="source_blocked_open_the_site">The site blocked the request. Open the site to pass its check or sign in, then try again.</string>
+    <string name="source_no_connection">Could not reach the site. Check the connection.</string>
+    <string name="store_url_placeholder">Store URL (repo.json or index.min.json)</string>
+    <string name="duration_days">%1$sd</string>
+    <string name="duration_hours">%1$sh</string>
+    <string name="duration_minutes">%1$sm</string>
+    <string name="migration_flag_chapters">Chapters read and history</string>
+    <string name="migration_flag_categories">Categories</string>
+    <string name="migration_flag_tracking">Tracking</string>
+    <string name="migration_flag_custom_cover">Custom cover</string>
+    <string name="migration_flag_notes">Notes</string>
+    <string name="migration_flag_extra">Chapter and reader settings</string>
+    <string name="enter_an_address_that_starts_with">Enter an address that starts with http:// or https://</string>
+    <string name="find_a_source_by_name">Find a source by name</string>
+    <string name="find_an_extension_by_name">Find an extension by name</string>
 </resources>

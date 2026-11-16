@@ -210,7 +210,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
                         FilterChip(
                             selected = flag in flags,
                             onClick = { flagsPreference.set(if (flag in flags) flags - flag else flags + flag) },
-                            label = { Text(MigrateManga.label(flag)) },
+                            label = { Text(localized(MigrateManga.label(flag))) },
                         )
                     }
                 }

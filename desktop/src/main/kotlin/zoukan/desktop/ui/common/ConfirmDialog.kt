@@ -16,9 +16,10 @@ import zoukan.desktop.compat.localized
 
 // ZOUKAN -->
 /**
- * A second question before something the user cannot take back: a title, what will happen to
- * what, and a confirm button in the error colour. Cancel has the focus, so Enter or Space on a
- * freshly opened dialog keeps everything as it is.
+ * A second question before something the user cannot take back or that runs third-party code: a
+ * title, what will happen to what (when [text] is not null), and a confirm button in the error
+ * colour. Cancel has the focus, so Enter or Space on a freshly opened dialog keeps everything as
+ * it is.
  *
  * [onDismiss] runs for Cancel, Escape, a click outside and after a confirm; [onConfirm] runs only
  * for the confirm button, after [onDismiss].
@@ -26,7 +27,7 @@ import zoukan.desktop.compat.localized
 @Composable
 fun ConfirmDestructiveDialog(
     title: String,
-    text: String,
+    text: String?,
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -36,7 +37,7 @@ fun ConfirmDestructiveDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { Text(text) },
+        text = text?.let { { Text(it) } },
         confirmButton = {
             TextButton(
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),

@@ -12,6 +12,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
@@ -140,6 +141,7 @@ import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.update.Updates
+import zoukan.i18n.desktop.DMR
 import java.awt.EventQueue
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -481,6 +483,20 @@ open class ScreenSmokeTest {
     }
 
     /**
+     * One field searches every source; the in-tab fields only filter the list. So the page shows the
+     * global search's placeholder once, and the filter under [tag] does not start with the same word.
+     * A page whose filter is not on screen (the Sources filter shows only when there are sources) is skipped.
+     */
+    private fun ComposeUiTest.assertOneGlobalSearch(tag: String) {
+        if (onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) return
+        val global = localized(DMR.strings.search_all_sources)
+        onAllNodes(hasText(global), useUnmergedTree = true).fetchSemanticsNodes().size shouldBe 1
+        val verb = global.substringBefore(' ')
+        onAllNodes(hasAnyAncestor(hasTestTag(tag)) and hasText(verb, substring = true, ignoreCase = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().shouldBeEmpty()
+    }
+
+    /**
      * Scrolls every lazy list on screen to its end, so each of its rows composes. A lazy list
      * doesn't report its length (its CollectionInfo has -1 rows), so this steps through it until
      * Compose's bounds check says an index is past the end, and then goes to the last row.
@@ -697,6 +713,12 @@ open class ScreenSmokeTest {
                 clickTag("browse-page-${page.name}")
                 // The click must select this page, not leave another one showing
                 waitUntil(timeoutMillis = 10_000) { onAllNodes(hasTestTag("browse-page-${page.name}") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+                settle()
+                when (page) {
+                    BrowsePage.SOURCES -> assertOneGlobalSearch("source-search")
+                    BrowsePage.EXTENSIONS -> assertOneGlobalSearch("extension-search")
+                    else -> Unit
+                }
             },
         )
     }

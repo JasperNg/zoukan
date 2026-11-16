@@ -368,6 +368,18 @@
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.StoreInstallJourneyTest]
 
+- key: dialog:browse.ConfirmTrustDialog
+  feature: "Trust confirmation for an extension with an unknown signing key"
+  tier: journey
+  smoke: false
+  tests: [e2e.StoreInstallJourneyTest]
+
+- key: dialog:browse.OpenUrlEntryDialog
+  feature: "Open from URL entry form: accepts only addresses, opens once"
+  tier: unit
+  smoke: false
+  tests: [ui.browse.OpenUrlDialogTest]
+
 - key: dialog:browse.ConfirmUninstallDialog
   feature: "Uninstall confirmation"
   tier: journey
@@ -595,10 +607,10 @@
   tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest]
 
 - key: dialog:common.ConfirmDestructiveDialog
-  feature: "Second question before something the user cannot take back (local files to the trash, downloads deleted from Updates, a new download password, a sync reset, MangaDex follows)"
+  feature: "Second question before something the user cannot take back or that runs third-party code (local files to the trash, downloads deleted from Updates, a new download password, a sync reset, MangaDex follows, installing an extension, removing a store or a feed)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest, ui.settings.DownloadPasswordDialogTest]
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest, ui.settings.DownloadPasswordDialogTest, e2e.StoreInstallJourneyTest]
   gap: "The sync reset and MangaDex follow confirmations are not opened by a test"
 
 - key: dialog:manga.CategoryDialog

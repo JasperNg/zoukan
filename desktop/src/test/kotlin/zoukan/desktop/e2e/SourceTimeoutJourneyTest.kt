@@ -73,7 +73,7 @@ class SourceTimeoutJourneyTest {
         const val READ_TIMEOUT_SECONDS = 3L
         const val SLOW_MILLIS = 5_000L
 
-        /** What OkHttp's read timeout says (a SocketTimeoutException), as the source screen shows it. */
-        const val TIMEOUT_MESSAGE = "timeout"
+        /** What the source screen shows for OkHttp's read timeout (a SocketTimeoutException). */
+        const val TIMEOUT_MESSAGE = "The source took too long to answer"
     }
 }

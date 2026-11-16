@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -172,8 +173,11 @@ fun BrowseSourceContent(
     onMangaClick: (Manga) -> Unit,
     onMangaSecondaryClick: (Manga) -> Unit,
     onNearEnd: () -> Unit,
+    /** How many entries the model has loaded, before any filtering of [items]; a page that is filtered out entirely still counts. */
+    loadedCount: Int = items.size,
     footer: @Composable () -> Unit,
 ) {
+    val loaded = rememberUpdatedState(loadedCount)
     // SY -->
     val ehentaiList = source?.isEhBasedSource() == true && ehentaiBrowseDisplayMode
     // SY <--
@@ -183,8 +187,9 @@ fun BrowseSourceContent(
             snapshotFlow {
                 val info = listState.layoutInfo
                 val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-                last >= info.totalItemsCount - 8
-            }.distinctUntilChanged().collect { nearEnd -> if (nearEnd) onNearEnd() }
+                // The counts are part of the value so a page that lands with the end still visible asks again
+                Triple(last >= info.totalItemsCount - 8, info.totalItemsCount, loaded.value)
+            }.distinctUntilChanged().collect { (nearEnd, _, _) -> if (nearEnd) onNearEnd() }
         }
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(vertical = if (ehentaiList) 0.dp else 8.dp)) {
             items(items.size, key = { items[it].id }) { index ->
@@ -219,8 +224,8 @@ fun BrowseSourceContent(
         snapshotFlow {
             val info = gridState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= info.totalItemsCount - 8
-        }.distinctUntilChanged().collect { nearEnd -> if (nearEnd) onNearEnd() }
+            Triple(last >= info.totalItemsCount - 8, info.totalItemsCount, loaded.value)
+        }.distinctUntilChanged().collect { (nearEnd, _, _) -> if (nearEnd) onNearEnd() }
     }
     LazyVerticalGrid(
         columns = browseColumns(),
