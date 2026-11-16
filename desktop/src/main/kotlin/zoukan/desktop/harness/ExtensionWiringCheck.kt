@@ -23,7 +23,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
-import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
@@ -37,6 +36,7 @@ import zoukan.extension.LoadResult
 import java.io.File
 import java.io.IOException
 import java.lang.reflect.ParameterizedType
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.UnknownHostException
 import java.util.concurrent.ConcurrentHashMap
@@ -525,7 +525,8 @@ class ExtensionWiringCheck(
                 // Also covers a redirect or retry: every connection of this client resolves here
                 .dns { host ->
                     if (host in LOOPBACK) {
-                        Dns.SYSTEM.lookup(host)
+                        // Only loopback names get here: nothing leaves the computer
+                        InetAddress.getAllByName(host.removeSurrounding("[", "]")).toList()
                     } else {
                         blocked += host
                         throw UnknownHostException("$BLOCKED: $host")
