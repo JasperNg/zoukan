@@ -428,9 +428,16 @@ public final class Bitmap {
     public void eraseColor(int c) {
         java.awt.Color color = Color.valueOf(c).toJavaColor();
         Graphics2D graphics = image.createGraphics();
-        graphics.setColor(color);
-        graphics.fillRect(0, 0, width, height);
-        graphics.dispose();
+        // ZOUKAN -->
+        // Replace every pixel as Android does; the default SrcOver would blend over the old content
+        try {
+            graphics.setComposite(java.awt.AlphaComposite.Src);
+            graphics.setColor(color);
+            graphics.fillRect(0, 0, width, height);
+        } finally {
+            graphics.dispose();
+        }
+        // ZOUKAN <--
     }
 
     public void recycle() {

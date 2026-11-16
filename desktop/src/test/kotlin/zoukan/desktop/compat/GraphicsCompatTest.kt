@@ -397,4 +397,14 @@ class GraphicsCompatTest {
         (52 until 100).all { x -> (0 until 30).all { y -> result.getPixel(x, y) == 0 } } shouldBe true
         (0 until 50).any { x -> (0 until 30).any { y -> result.getPixel(x, y) != 0 } } shouldBe true
     }
+
+    @Test
+    fun `eraseColor TRANSPARENT clears a drawn bitmap`() {
+        val bitmap = bitmapOf(4, 4) { _, _ -> 0xFFFF0000.toInt() }
+        bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+        bitmap.pixels().all { it == 0 } shouldBe true
+        // A translucent colour replaces the old content instead of blending over it
+        bitmap.eraseColor(0x800000FF.toInt())
+        bitmap.pixels().all { it == 0x800000FF.toInt() } shouldBe true
+    }
 }
