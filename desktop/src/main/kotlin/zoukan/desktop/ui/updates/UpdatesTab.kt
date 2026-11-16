@@ -39,13 +39,11 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -100,6 +98,7 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.ContextMenu
 import zoukan.desktop.ui.common.ContextMenuDivider
 import zoukan.desktop.ui.common.ContextMenuItem
@@ -418,6 +417,10 @@ fun UpdatesTab(model: UpdatesScreenModel) {
     val progress = Injekt.get<LibraryUpdater>().progress.collectAsState()
     val updating by remember(progress) { derivedStateOf { progress.value != null } }
     val navigator = LocalNavigator.currentOrThrow
+    // ZOUKAN -->
+    // The chapters a delete-downloads question is for: from the selection bar or a right-click
+    var confirmDelete by remember { mutableStateOf<List<UpdatesWithRelations>?>(null) }
+    // ZOUKAN <--
     // Ctrl/Cmd + A selects every chapter shown; Escape clears the selection before it means "back"
     zoukan.desktop.ui.OnShortcut { action ->
         when (action) {
@@ -431,7 +434,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
     }
     Column(Modifier.fillMaxSize()) {
         if (state.selecting) {
-            SelectionHeader(state, model)
+            SelectionHeader(state, model, onDeleteDownloads = { confirmDelete = it })
         } else {
             ScreenHeader(localized(MR.strings.label_recent_updates), subtitle = localized(DMR.strings.new_chapters_in_your_library_from), showBack = false) {
                 UpdatesFilterButton(model, state.filters)
@@ -508,6 +511,7 @@ fun UpdatesTab(model: UpdatesScreenModel) {
                                 selected = selected,
                                 onOpen = { navigator.push(ReaderScreen(item.mangaId, item.chapterId)) },
                                 onOpenManga = { navigator.push(MangaScreen(item.mangaId)) },
+                                onDeleteDownloads = { confirmDelete = it },
                             )
                         }
                     }
@@ -515,6 +519,17 @@ fun UpdatesTab(model: UpdatesScreenModel) {
             }
         }
     }
+    // ZOUKAN -->
+    confirmDelete?.let { toDelete ->
+        ConfirmDestructiveDialog(
+            title = localized(DMR.strings.delete_downloads),
+            text = localized(MR.strings.confirm_delete_chapters),
+            confirmLabel = localized(DMR.strings.delete_downloads),
+            onConfirm = { model.deleteDownloads(toDelete) },
+            onDismiss = { confirmDelete = null },
+        )
+    }
+    // ZOUKAN <--
 }
 
 /** "Library last updated: 5 minutes ago", kept current each minute, as Android's updatesLastUpdatedItem. */
@@ -537,9 +552,8 @@ private fun LastUpdatedLine() {
 
 /** The toolbar while chapters are selected: the count and the bulk actions, as on Android. */
 @Composable
-private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel) {
+private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScreenModel, onDeleteDownloads: (List<UpdatesWithRelations>) -> Unit) {
     val selected = state.selectedItems
-    var confirmDelete by remember { mutableStateOf<List<UpdatesWithRelations>?>(null) }
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -565,22 +579,8 @@ private fun SelectionHeader(state: UpdatesScreenModel.State, model: UpdatesScree
             TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { model.download(remote) })
         }
         if (remote.any { it.chapterId in state.downloaded }) {
-            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { confirmDelete = remote })
+            TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.delete_downloads), onClick = { onDeleteDownloads(remote) })
         }
-    }
-    // Android's UpdatesDeleteConfirmationDialog
-    confirmDelete?.let { toDelete ->
-        AlertDialog(
-            text = { Text(localized(MR.strings.confirm_delete_chapters)) },
-            onDismissRequest = { confirmDelete = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    model.deleteDownloads(toDelete)
-                    confirmDelete = null
-                }) { Text(localized(MR.strings.action_ok)) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(localized(MR.strings.action_cancel)) } },
-        )
     }
 }
 
@@ -595,6 +595,7 @@ private fun ColumnScope.UpdateContextMenu(
     selected: Boolean,
     onOpen: () -> Unit,
     onOpenManga: () -> Unit,
+    onDeleteDownloads: (List<UpdatesWithRelations>) -> Unit,
 ) {
     if (targets.size == 1) {
         ContextMenuItem(menu, localized(MR.strings.label_read_chapters), Icons.AutoMirrored.Outlined.MenuBook, onClick = onOpen)
@@ -626,7 +627,7 @@ private fun ColumnScope.UpdateContextMenu(
         ContextMenuItem(menu, localized(DMR.strings.cancel_download), Icons.Outlined.Close) { model.cancelDownload(remote.single()) }
     }
     if (remote.any { it.chapterId in state.downloaded }) {
-        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { model.deleteDownloads(remote) }
+        ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.Delete) { onDeleteDownloads(remote) }
     }
 }
 

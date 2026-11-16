@@ -272,13 +272,6 @@
   tests: [ui.updates.UpdatesUiModelTest]
   gap: "covered only by the gated EndToEndParityTest; planned: UpdatesJourneyTest"
 
-- key: dialog-inline:UpdatesTab.kt:SelectionHeader
-  feature: "Delete chapters confirmation"
-  tier: journey
-  smoke: false
-  tests: []
-  gap: "Delete from the selection is not driven; planned: UpdatesJourneyTest"
-
 - key: flow:updates.row-actions
   feature: "Row read/unread toggle"
   tier: journey
@@ -617,10 +610,10 @@
   gap: "Clearing downloads and chapters of an online entry only in the gated EndToEndParityTest; planned: EntryPageJourneyTest"
 
 - key: dialog:common.ConfirmDestructiveDialog
-  feature: "Second question before something the user cannot take back (local files to the trash)"
+  feature: "Second question before something the user cannot take back (local files to the trash, downloads deleted from Updates)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest]
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"
