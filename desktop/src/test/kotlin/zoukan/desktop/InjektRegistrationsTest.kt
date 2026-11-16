@@ -57,13 +57,14 @@ class InjektRegistrationsTest {
     }
 
     /**
-     * A lookup that passes a Class (Injekt.getInstance(Foo::class.java)) makes no TypeReference, so
-     * the scan above cannot see it; every lookup names its type with a reified call instead.
+     * A lookup that passes a Class (Injekt.getInstance(Foo::class.java), with or without a type
+     * argument, getInstanceOrNull, or Foo.class from Java) makes no TypeReference, so the scan above
+     * cannot see it; every lookup names its type with a reified call instead.
      */
     @Test
     fun `every lookup names its type so the scan sees it`() {
         val repo = File(System.getProperty("user.dir")).absoluteFile.parentFile
-        val byClass = Regex("""getInstance\s*<[^>]*>\s*\(\s*[\w.]+::class\.java\s*\)""")
+        val byClass = Regex("""getInstance(OrNull)?\s*(<[^>]*>)?\s*\(\s*[\w.]+(::class\.java|\.class)\s*\)""")
         val found = listOf("desktop/src/main", "extension-jvm/src/main", "android-compat/src/main")
             .map { File(repo, it) }.filter { it.isDirectory }
             .flatMap { dir ->
