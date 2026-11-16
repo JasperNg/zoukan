@@ -23,6 +23,10 @@ import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.attribute.FileAttribute
+import java.nio.file.attribute.PosixFilePermissions
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -42,12 +46,24 @@ object Updates {
             download = { asset, progress ->
                 val dir = Injekt.get<ZoukanDirs>().updates
                 // Only the newest download is kept
-                dir.listFiles()?.filter { it.name != asset.name }?.forEach { it.deleteRecursively() }
+                dir.listFiles()?.filter { it.name != asset.name && it.name != asset.name + ".sig" }?.forEach { it.deleteRecursively() }
                 // Without GitHub's checksum the download cannot be told from a damaged or swapped one
                 if (asset.sha256 == null) {
                     throw IOException("GitHub lists no checksum for ${asset.name}; get it from the release page instead")
                 }
                 checker.download(asset, dir, progress).also { file ->
+                    val sig = try {
+                        checker.downloadSignature(asset, dir)
+                    } catch (e: IOException) {
+                        file.delete()
+                        File(dir, asset.name + ".sig").delete()
+                        throw IOException("The release signature could not be downloaded: ${e.message}", e)
+                    }
+                    (releaseSignature.verify(file, sig) as? InstallerSignature.Verdict.Rejected)?.let {
+                        file.delete()
+                        sig?.delete()
+                        throw IOException(it.reason)
+                    }
                     val verdict = signature.verify(file)
                     if (verdict is InstallerSignature.Verdict.Rejected) {
                         file.delete()
@@ -60,6 +76,8 @@ object Updates {
     }
 
     private val signature by lazy { InstallerSignature() }
+
+    private val releaseSignature by lazy { ReleaseSignature.builtIn() }
 
     val state: StateFlow<UpdateStates.State> get() = states.state
 
@@ -116,22 +134,49 @@ object Updates {
      * Throws when the installer is not signed by this app's publisher (see [InstallerSignature]).
      */
     fun install(file: File, quit: () -> Unit) {
-        // Again, right before it runs: the file sat in a folder other programs can write to
-        (signature.verify(file) as? InstallerSignature.Verdict.Rejected)?.let {
-            // Not kept: the same file would be rejected at every click, with no way to get another
+        // Again, right before it runs: the file sat in a folder other programs can write to.
+        // Check and run one private copy, so the file cannot be swapped between the check and the run.
+        // The copy stays for the installer to read after Zoukan quits; the next download's cleanup removes it.
+        val sigFile = File(file.parentFile, file.name + ".sig")
+        val folder = Files.createTempDirectory(file.absoluteFile.parentFile.toPath(), "run", *privateDirAttributes())
+        val copy = File(folder.toFile(), file.name)
+
+        // Not kept: the same file would be rejected at every click, with no way to get another
+        fun reject(reason: String): Nothing {
+            folder.toFile().deleteRecursively()
             file.delete()
-            states.installRejected(file, it.reason)
-            throw IOException(it.reason)
+            sigFile.delete()
+            states.installRejected(file, reason)
+            throw IOException(reason)
         }
-        when (Platform.current) {
-            Platform.WINDOWS -> {
-                ProcessBuilder("msiexec", "/i", file.absolutePath).start()
-                quit()
-            }
-            Platform.MACOS -> ProcessBuilder("open", file.absolutePath).start()
-            Platform.LINUX -> Unit
+        try {
+            Files.copy(file.toPath(), copy.toPath())
+        } catch (e: IOException) {
+            reject("The downloaded update could not be read (${e.message}). It was not opened.")
         }
+        (releaseSignature.verify(copy, sigFile) as? InstallerSignature.Verdict.Rejected)?.let { reject(it.reason) }
+        (signature.verify(copy) as? InstallerSignature.Verdict.Rejected)?.let { reject(it.reason) }
+        installerCommand(Platform.current, copy)?.let { ProcessBuilder(it).start() }
+        if (Platform.current == Platform.WINDOWS) quit()
     }
+
+    private fun privateDirAttributes(): Array<FileAttribute<*>> =
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            arrayOf(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+        } else {
+            emptyArray()
+        }
+
+    internal fun installerCommand(
+        platform: Platform,
+        file: File,
+        systemRoot: String? = System.getenv("SystemRoot"),
+    ): List<String>? =
+        when (platform) {
+            Platform.WINDOWS -> listOf(File(systemRoot ?: "C:\\Windows", "System32\\msiexec.exe").path, "/i", file.absolutePath)
+            Platform.MACOS -> listOf("/usr/bin/open", file.absolutePath)
+            Platform.LINUX -> null
+        }
 
     private val CHECK_EVERY = 24.hours
 }
