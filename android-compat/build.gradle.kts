@@ -44,7 +44,7 @@ dependencies {
     // android.jar's View classes (EditText, Button, ...) name org.xmlpull types in their signatures,
     // so extensions that touch a view (MangaDex's settings) need them at run time
     implementation(zoukanlibs.xmlpull)
-    compileOnly(zoukanlibs.androidx.annotation)
+    compileOnly(androidx.annotation)
 
     api(libs.injekt)
     implementation(kotlinx.reflect)

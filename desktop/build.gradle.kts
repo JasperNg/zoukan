@@ -198,6 +198,8 @@ dependencies {
     implementation(projects.i18nKmk)
     implementation(projects.i18nDesktop)
 
+    // One BOM version for every coroutines artifact, kotlinx-coroutines-swing included
+    implementation(platform(kotlinx.coroutines.bom))
     implementation(kotlinx.coroutines.core)
     implementation(kotlinx.serialization.json)
     implementation(kotlinx.serialization.protobuf)
@@ -206,11 +208,12 @@ dependencies {
     implementation(libs.injekt)
 
     // What extensions expect from the host besides extensions-lib
-    runtimeOnly(zoukanlibs.okhttp.zstd)
+    runtimeOnly(libs.okhttp.zstd)
     implementation(zoukanlibs.bouncycastle)
 
     implementation(zoukanlibs.sqlite.jdbc.crypt)
     implementation(zoukanlibs.sqldelight.jvm.driver) {
+        version { require(libs.versions.sqldelight.get()) }
         exclude(group = "org.xerial", module = "sqlite-jdbc")
     }
     implementation(zoukanlibs.jna)
@@ -316,6 +319,7 @@ tasks.test {
         rootProject.file("settings.gradle.kts"),
         rootProject.file("gradle/wrapper/gradle-wrapper.properties"),
         rootProject.file("gradle/verification-metadata.xml"),
+        rootProject.fileTree("gradle") { include("*.versions.toml") },
     ).withPropertyName("releaseFiles")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")

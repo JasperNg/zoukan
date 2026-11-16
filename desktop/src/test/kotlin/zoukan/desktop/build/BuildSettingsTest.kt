@@ -1,6 +1,7 @@
 package zoukan.desktop.build
 
 import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -29,5 +30,23 @@ class BuildSettingsTest {
             Regex("""(?m)^distributionSha256Sum=[0-9a-f]{64}$""")
                 .containsMatchIn(text("gradle/wrapper/gradle-wrapper.properties")) shouldBe true
         }
+    }
+
+    @Test
+    fun `the Zoukan catalog leaves the versions of upstream libraries to the upstream catalogs`() {
+        val upstream = listOf("libs", "androidx", "kotlinx", "compose", "sy").map { text("gradle/$it.versions.toml") }
+        val zoukan = text("gradle/zoukan.versions.toml")
+
+        // "group:name:version" or { module = "group:name" ... }
+        fun modules(toml: String) =
+            Regex("""(?m)^[\w-]+\s*=\s*(?:"([\w.-]+:[\w.-]+)(?::[^"]+)?"|\{\s*module\s*=\s*"([\w.-]+:[\w.-]+)")""")
+                .findAll(toml).map { it.groupValues[1].ifEmpty { it.groupValues[2] } }.toSet()
+
+        val upstreamModules = upstream.flatMap(::modules).toSet()
+        val upstreamGroups = setOf("com.squareup.okhttp3", "app.cash.sqldelight", "org.jetbrains.kotlinx")
+        val pinned = Regex("""(?m)^([\w-]+)\s*=\s*"([\w.-]+):([\w.-]+):[^"]+"""").findAll(zoukan)
+            .filter { m -> m.groupValues[2] in upstreamGroups || "${m.groupValues[2]}:${m.groupValues[3]}" in upstreamModules }
+            .map { it.groupValues[1] }.toList()
+        withClue("Zoukan catalog entries that pin a version an upstream catalog owns") { pinned.shouldBeEmpty() }
     }
 }
