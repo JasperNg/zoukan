@@ -223,6 +223,13 @@ object CefCookieSync {
     /** Deletions made before Chromium ran, made when it starts. */
     private val pending = PendingCefCookieDeletions()
 
+    /**
+     * Called by an extension's WebView with its page URL and user agent once Chromium's cookies for
+     * it are copied to the app; the app uses it to remember which user agent a clearance was got with.
+     */
+    @Volatile
+    var onCopiedFromCef: ((url: String, userAgent: String) -> Unit)? = null
+
     private fun applyPendingDeletions(cef: CefCookieManager) {
         pending.drain().forEach { deletion ->
             runCatching { delete(cef, deletion) }

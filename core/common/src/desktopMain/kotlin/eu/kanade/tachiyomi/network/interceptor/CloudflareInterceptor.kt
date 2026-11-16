@@ -42,15 +42,7 @@ class CloudflareInterceptor(
 
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
-    private val clearanceUserAgents by lazy {
-        val preferences = context.getSharedPreferences("cloudflare_clearance", Context.MODE_PRIVATE)
-        ClearanceUserAgents(
-            object : ClearanceUserAgents.Store {
-                override fun get(key: String): String? = preferences.getString(key, null)
-                override fun put(key: String, value: String) = preferences.edit().putString(key, value).apply()
-            },
-        )
-    }
+    private val clearanceUserAgents by lazy { ClearanceUserAgents.forContext(context) }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()

@@ -52,6 +52,23 @@ class ClearanceUserAgentsTest {
     }
 
     @Test
+    fun `a clearance obtained in the browser window keeps the window's user agent`() {
+        val agents = ClearanceUserAgents(MapStore())
+        val cookie = clearance("solved-by-hand")
+        agents.recordIfUnknown(cookie, extensionUa) // the window ran with the source's user agent
+        ClearanceUserAgents.overrideFor(extensionUa, agents.userAgentOf(cookie), chromiumUa) shouldBe null
+    }
+
+    @Test
+    fun `a browser window does not replace a known record`() {
+        val agents = ClearanceUserAgents(MapStore())
+        val cookie = clearance("solved-headless")
+        agents.record(cookie, chromiumUa)
+        agents.recordIfUnknown(cookie, extensionUa)
+        agents.userAgentOf(cookie) shouldBe chromiumUa
+    }
+
+    @Test
     fun `the recorded user agent belongs to the cookie it was recorded for`() {
         val store = MapStore()
         val records = ClearanceUserAgents(store)

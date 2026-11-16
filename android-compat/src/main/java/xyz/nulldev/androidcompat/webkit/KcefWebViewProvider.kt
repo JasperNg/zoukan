@@ -414,7 +414,11 @@ class KcefWebViewProvider(
                 // its onPageStarted, as on Android
                 val finish = PageFinish(url)
                 pendingFinish = finish
-                CefCookieSync.copyFromCef(url) { handler.post { finish.run() } }
+                val userAgent = settings.userAgentString
+                CefCookieSync.copyFromCef(url) {
+                    runCatching { CefCookieSync.onCopiedFromCef?.invoke(url, userAgent) }
+                    handler.post { finish.run() }
+                }
                 // ZOUKAN <--
             }
         }

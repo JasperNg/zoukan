@@ -106,7 +106,10 @@ class BrowserWindow(
             })
             client.addLoadHandler(object : CefLoadHandlerAdapter() {
                 override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
-                    if (frame.isMain) CefCookieSync.copyFromCef(frame.url)
+                    if (frame.isMain) {
+                        val url = frame.url
+                        CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, userAgent) }
+                    }
                 }
             })
             if (interceptNavigation != null) {
@@ -252,7 +255,9 @@ class BrowserWindow(
             shownForDiscord = false
             discord()?.setWebView(false)
         }
-        browser?.url?.let { runCatching { CefCookieSync.copyFromCef(it) } }
+        browser?.url?.let { url ->
+            runCatching { CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, userAgent) } }
+        }
         browser?.run {
             setCloseAllowed()
             close(true)

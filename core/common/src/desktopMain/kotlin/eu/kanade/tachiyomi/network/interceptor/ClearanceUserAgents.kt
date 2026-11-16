@@ -1,6 +1,7 @@
 // ZOUKAN -->
 package eu.kanade.tachiyomi.network.interceptor
 
+import android.content.Context
 import eu.kanade.tachiyomi.util.lang.Hash
 import okhttp3.Cookie
 
@@ -24,6 +25,12 @@ class ClearanceUserAgents(private val store: Store) {
         store.put(cookie.domain, "${fingerprint(cookie)}$SEPARATOR$userAgent")
     }
 
+    /** Records [userAgent] for [clearance] when it has no record yet: a clearance the user got in a browser window. */
+    fun recordIfUnknown(clearance: Cookie?, userAgent: String?) {
+        if (clearance == null || userAgent == null || userAgentOf(clearance) != null) return
+        record(clearance, userAgent)
+    }
+
     /** The user agent [cookie] was obtained with, or null when it is not known. */
     fun userAgentOf(cookie: Cookie): String? {
         val value = store.get(cookie.domain) ?: return null
@@ -35,6 +42,17 @@ class ClearanceUserAgents(private val store: Store) {
     private fun fingerprint(cookie: Cookie): String = Hash.sha256(cookie.value)
 
     companion object {
+        /** The app's records, kept in the `cloudflare_clearance` preferences. */
+        fun forContext(context: Context): ClearanceUserAgents {
+            val preferences = context.getSharedPreferences("cloudflare_clearance", Context.MODE_PRIVATE)
+            return ClearanceUserAgents(
+                object : Store {
+                    override fun get(key: String): String? = preferences.getString(key, null)
+                    override fun put(key: String, value: String) = preferences.edit().putString(key, value).apply()
+                },
+            )
+        }
+
         // A user agent never contains a line break
         private const val SEPARATOR = '\n'
 
