@@ -1,0 +1,9 @@
+# Text rewrites syncAppShared applies to the shared Android files (see build.gradle.kts).
+# One per line: <path relative to app/src/main/java> | <search text> | <replacement>
+# The sync fails when a search text no longer occurs in its file, so an upstream change to
+# one of these lines is caught at build time, not at run time.
+
+# android.util.SparseArray is only a stub on desktop
+exh/eh/MemAutoFlushingLookupTable.kt | import android.util.SparseArray | import zoukan.desktop.compat.SparseArray
+# moko-resources' JVM StringResource has a key, not Android's resource id
+exh/recs/sources/RecommendationPagingSource.kt | it.category.resourceId | it.category.key
