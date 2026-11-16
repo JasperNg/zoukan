@@ -11,6 +11,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -185,6 +186,27 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
         waitForIdle()
         ImageIO.write(root().captureToImage().toAwtImage(), "png", File(shots, "$name-$title.png"))
     }
+
+    /**
+     * Like [shot], with the popups on it: a dialog or a menu is a root of its own, which [shot]
+     * leaves out. Every other root is drawn over the window's at its place in the window.
+     */
+    fun ComposeUiTest.shotWithPopups(title: String) {
+        waitForIdle()
+        val roots = onAllNodes(isRoot())
+        val count = roots.fetchSemanticsNodes().size
+        val image = roots[0].captureToImage().toAwtImage()
+        val g = image.createGraphics()
+        (1 until count).forEach { i ->
+            val bounds = roots[i].fetchSemanticsNode().boundsInWindow
+            g.drawImage(roots[i].captureToImage().toAwtImage(), bounds.left.toInt(), bounds.top.toInt(), null)
+        }
+        g.dispose()
+        ImageIO.write(image, "png", File(shots, "$name-$title.png"))
+    }
+
+    /** The first node with content description [text] (icon buttons have no text). */
+    fun ComposeUiTest.byDescription(text: String) = onAllNodesWithContentDescription(text).onFirst()
 
     /** The reader's page images that are on screen: off-screen pages have no visible bounds. */
     private fun ComposeUiTest.pagesOnScreen(): List<SemanticsNode> =
