@@ -388,6 +388,11 @@ class KcefWebViewProvider(
             frame: CefFrame,
             httpStatusCode: Int,
         ) {
+            // ZOUKAN -->
+            // Only the main frame ends the page, as on Android: an iframe (Turnstile, an ad) that
+            // finishes must not run onPageFinished, the error callbacks or the cookie copy
+            if (!frame.isMain) return
+            // ZOUKAN <--
             val url = frame.url ?: ""
             Log.v(TAG, "Load end $url")
             handler.post {
@@ -433,6 +438,8 @@ class KcefWebViewProvider(
             Log.w(TAG, "Load error ($failedUrl) [$errorCode]: $errorText")
             // TODO: translate correctly
             // ZOUKAN -->
+            // Only the main frame's error reaches the client, as Android's onReceivedError
+            if (!frame.isMain) return
             // Read the URL now; the frame can be gone when the main looper runs this
             val frameUrl = frame.url ?: failedUrl ?: ""
             handler.post {
@@ -485,6 +492,9 @@ class KcefWebViewProvider(
             }
 
             // ZOUKAN -->
+            // The mappings above go to every frame (an iframe's page may call them), but only the
+            // main frame starts the page, as on Android
+            if (!frame.isMain) return
             // Read the URL now; the frame can be gone when the main looper runs this
             val frameUrl = frame.url ?: ""
             handler.post {
@@ -659,7 +669,13 @@ class KcefWebViewProvider(
         }
     }
 
-    private inner class ResourceRequestHandler : CefResourceRequestHandlerAdapter() {
+    // ZOUKAN -->
+    // isNavigation: whether the request loads a page (the main frame or an iframe) and not a
+    // subresource such as an image or a script
+    private inner class ResourceRequestHandler(
+        private val isNavigation: Boolean,
+    ) : CefResourceRequestHandlerAdapter() {
+        // ZOUKAN <--
         override fun onBeforeResourceLoad(
             browser: CefBrowser?,
             frame: CefFrame?,
@@ -672,20 +688,25 @@ class KcefWebViewProvider(
             // thus if a client tried to use WebView#loadUrl as the docs suggest, this fails
             val cancel =
                 // ZOUKAN -->
+                // Asked about navigations only, as on Android, not about every image or script.
                 // Android calls it on the WebView's thread, so it may call WebView methods
-                WebView.callClientOffThread {
-                    viewClient.shouldOverrideUrlLoading(
-                        view,
-                        CefWebResourceRequest(request, frame, false),
-                    )
+                if (isNavigation) {
+                    WebView.callClientOffThread {
+                        viewClient.shouldOverrideUrlLoading(
+                            view,
+                            CefWebResourceRequest(request, frame, false),
+                        )
+                    }
+                } else {
+                    false
                 }
             // ZOUKAN <--
             Log.v(TAG, "Resource ${request.url}, result is cancel? $cancel")
 
             // ZOUKAN -->
-            // Read the URL now; the frame can be gone when the main looper runs this
-            val frameUrl = frame?.url ?: ""
-            handler.post { viewClient.onLoadResource(view, frameUrl) }
+            // The resource's URL, read now: the request can change when the main looper runs this
+            val resourceUrl = request.url ?: ""
+            handler.post { viewClient.onLoadResource(view, resourceUrl) }
             // ZOUKAN <--
 
             return cancel || settings.blockNetworkLoads
@@ -730,7 +751,7 @@ class KcefWebViewProvider(
             isDownload: Boolean,
             requestInitiator: String,
             disableDefaultHandling: BoolRef,
-        ): CefResourceRequestHandler = ResourceRequestHandler()
+        ): CefResourceRequestHandler = /* ZOUKAN --> */ResourceRequestHandler(isNavigation)/* ZOUKAN <-- */
 
         override fun onRenderProcessTerminated(
             browser: CefBrowser,
