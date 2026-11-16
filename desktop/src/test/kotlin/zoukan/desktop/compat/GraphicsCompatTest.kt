@@ -399,6 +399,23 @@ class GraphicsCompatTest {
     }
 
     @Test
+    fun `Typeface Builder setWeight 500 is heavier than 400`() {
+        // Not a font, so the builder takes the fallback family path
+        val file = java.io.File.createTempFile("not-a-font", ".ttf").also {
+            it.deleteOnExit()
+            it.writeBytes(byteArrayOf(1, 2, 3, 4))
+        }
+        fun weightOf(w: Int) = android.graphics.Typeface.Builder(file).setFallback("Dialog").setWeight(w).build()
+            .font.attributes[java.awt.font.TextAttribute.WEIGHT] as Float? ?: java.awt.font.TextAttribute.WEIGHT_REGULAR // AWT omits the default weight
+
+        (weightOf(500) > weightOf(400)) shouldBe true
+        weightOf(400) shouldBe java.awt.font.TextAttribute.WEIGHT_REGULAR
+        weightOf(700) shouldBe java.awt.font.TextAttribute.WEIGHT_BOLD
+        val mid = weightOf(550)
+        (mid > java.awt.font.TextAttribute.WEIGHT_REGULAR && mid < java.awt.font.TextAttribute.WEIGHT_BOLD) shouldBe true
+    }
+
+    @Test
     fun `eraseColor TRANSPARENT clears a drawn bitmap`() {
         val bitmap = bitmapOf(4, 4) { _, _ -> 0xFFFF0000.toInt() }
         bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
