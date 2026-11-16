@@ -43,13 +43,13 @@ and its native libraries differ per OS) and commit the changed file with the dep
 
 ```
 ./gradlew --write-verification-metadata sha256 spotlessCheck :desktop:build :desktop:createDistributable --continue
-./gradlew --write-verification-metadata sha256 -Pzoukan.targetPlatform=linux-x64 :desktop:resolveDesktopClasspaths
-./gradlew --write-verification-metadata sha256 -Pzoukan.targetPlatform=macos-arm64 :desktop:resolveDesktopClasspaths
+./gradlew -I gradle/resolve-desktop-classpaths.init.gradle.kts --write-verification-metadata sha256 -Pzoukan.targetPlatform=linux-x64 :desktop:resolveDesktopClasspaths
+./gradlew -I gradle/resolve-desktop-classpaths.init.gradle.kts --write-verification-metadata sha256 -Pzoukan.targetPlatform=macos-arm64 :desktop:resolveDesktopClasspaths
 ```
 
-The last two need a small init script (`-I`) that registers `:desktop:resolveDesktopClasspaths`, a task
-that resolves the `runtimeClasspath`, `testRuntimeClasspath`, `compileClasspath` and
-`testCompileClasspath` configurations of `:desktop`. The `zoukan.targetPlatform` property
+The init script in the last two registers `:desktop:resolveDesktopClasspaths`, a task that resolves the
+`runtimeClasspath`, `testRuntimeClasspath`, `compileClasspath` and `testCompileClasspath`
+configurations of `:desktop`. The `zoukan.targetPlatform` property
 (`windows-x64`, `macos-arm64` or `linux-x64`) exists only for this; it does not build another OS's app.
 
 A build that fails with "Dependency verification failed" means a checksum is missing or an artifact

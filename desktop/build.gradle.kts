@@ -350,10 +350,12 @@ val wiringTest by tasks.registering(Test::class) {
     // unless the developer narrowed the run with --tests on purpose
     val narrowedOnCommandLine = gradle.startParameter.taskRequests.any { "--tests" in it.args }
     val wiringResults = reports.junitXml.outputLocation
+    // A local copy: the action must not reference the build script (configuration cache)
+    val expected = expectedWiringClasses
     doLast {
         if (!narrowedOnCommandLine) {
             val ran = wiringResults.get().asFile.listFiles().orEmpty().map { it.name }
-            val missing = expectedWiringClasses.filter { name ->
+            val missing = expected.filter { name ->
                 ran.none { it.startsWith("TEST-") && it.endsWith(".$name.xml") }
             }
             check(missing.isEmpty()) { "wiringTest did not run ${missing.joinToString()}: was a class renamed or moved?" }
