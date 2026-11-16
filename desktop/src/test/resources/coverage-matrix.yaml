@@ -535,7 +535,7 @@
   feature: "Description, notes, cover-based theme"
   tier: journey
   smoke: false
-  tests: [e2e.HtmlDescriptionJourneyTest, ui.manga.DescriptionImagesTest, ui.manga.EntryCoverTest]
+  tests: [e2e.HtmlDescriptionJourneyTest, e2e.MetadataJourneyTest, ui.manga.DescriptionImagesTest, ui.manga.EntryCoverTest]
   gap: "Notes and the cover-based theme are not driven; planned: EntryPageJourneyTest"
 
 - key: flow:manga.info-menus
@@ -703,8 +703,7 @@
   feature: "Metadata view"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest]
-  gap: "Opening it from an entry only in the gated EndToEndMetadataTest; planned: MetadataJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MetadataJourneyTest]
 
 - key: screen:recs.RecommendsScreen
   feature: "Recommendations (one entry)"
@@ -878,8 +877,8 @@
   feature: "Data and storage (also the More tab's row): storage location, downloads folder; backup create, restore, folder; storage usage, chapter and cover cache, data folder; export library list; data sync; data saver"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest]
-  gap: "Storage and export only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest; data saver, planned: MetadataJourneyTest; sync, planned: SyncWebDavJourneyTest and SyncYomiJourneyTest"
+  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.MetadataJourneyTest]
+  gap: "Storage and export only in the gated EndToEndParityTest; planned: SettingsBrowseDataAdvancedJourneyTest; sync, planned: SyncWebDavJourneyTest and SyncYomiJourneyTest"
 
 - key: screen:more.SettingsScreen
   feature: "Settings row"
