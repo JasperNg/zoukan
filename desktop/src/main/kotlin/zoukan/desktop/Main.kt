@@ -244,7 +244,26 @@ private fun harness(args: List<String>): Int {
         }
     }
     // A separate profile, so the harness never touches the user's library or trusted extensions
-    val dirs = ZoukanDirs(File(ZoukanDirs.default().root, "harness"))
+    val dirs = harnessDirs()
+    val lock = lockHarness(dirs) ?: return 1
+    try {
+        return runHarness(dirs, options, wiring)
+    } finally {
+        lock.close()
+    }
+}
+
+/** The harness profile: outside the user's data folder, so its jars and browser profile do not roam. */
+internal fun harnessDirs(): ZoukanDirs = ZoukanDirs.harness()
+
+/** Takes the harness profile's lock; null (after saying so) when another harness run holds it. */
+internal fun lockHarness(dirs: ZoukanDirs): AutoCloseable? =
+    SingleInstance.acquireForCommand(dirs.root) ?: run {
+        System.err.println("Another harness run is using ${dirs.root}; wait for it to finish.")
+        null
+    }
+
+private fun runHarness(dirs: ZoukanDirs, options: CompatibilityHarness.Options, wiring: Boolean): Int {
     ZoukanRuntime.start(dirs, interactiveBrowser = options.interactive)
     if (wiring) {
         Injekt.get<NetworkHelper>()
