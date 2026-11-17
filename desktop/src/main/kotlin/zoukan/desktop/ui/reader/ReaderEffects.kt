@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import logcat.LogPriority
@@ -61,22 +62,7 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
         delay(1500)
         modeShown = false
     }
-    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
-    AnimatedVisibility(
-        modeShown,
-        enter = if (reduceMotion) EnterTransition.None else fadeIn(),
-        exit = if (reduceMotion) ExitTransition.None else fadeOut(),
-        modifier = Modifier.align(Alignment.Center),
-    ) {
-        Text(
-            ReadingModes.label(state.readingMode),
-            color = OverlayColors.OnScrim,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier
-                .background(OverlayColors.ToastScrim, Corners.Large)
-                .padding(horizontal = Spacing.Large, vertical = Spacing.Small),
-        )
-    }
+    ReadingModeToast(modeShown, ReadingModes.label(state.readingMode))
 
     // "Flash on page change": a black or white screen for a moment every few pages, as Android's
     // e-ink option (it clears ghosting on e-ink monitors)
@@ -112,6 +98,31 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
             color = null
         }
         color?.let { Box(Modifier.fillMaxSize().background(it)) }
+    }
+}
+
+/**
+ * The reading mode's name in the middle of the reader ("Show reading mode"). The tap zones overlay,
+ * which can show at the same time, leaves the centre clear for it.
+ */
+@Composable
+internal fun BoxScope.ReadingModeToast(visible: Boolean, label: String) {
+    val reduceMotion = zoukan.desktop.ui.common.LocalReducedMotion.current
+    AnimatedVisibility(
+        visible,
+        enter = if (reduceMotion) EnterTransition.None else fadeIn(),
+        exit = if (reduceMotion) ExitTransition.None else fadeOut(),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
+        Text(
+            label,
+            color = OverlayColors.OnScrim,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier
+                .testTag("reading-mode-toast")
+                .background(OverlayColors.ToastScrim, Corners.Large)
+                .padding(horizontal = Spacing.Large, vertical = Spacing.Small),
+        )
     }
 }
 
