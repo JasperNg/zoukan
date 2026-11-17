@@ -251,9 +251,32 @@ jobs:
             desktop/build/test-results/
           if-no-files-found: ignore
 
+  # The desktop port edits shared Android code (app/.../data/track/, data/, domain/), so compile the
+  # Android app and the Android targets of the shared modules: a desktop change must not break the
+  # Android build. The image's preinstalled Android SDK (ANDROID_HOME, licences already accepted)
+  # has the compileSdk platform and build tools, so nothing is installed here.
+  android-compile:
+    name: Android compile
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: ./.github/actions/setup-zoukan
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      - name: Check the Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/platforms" ] || { echo "::error::No Android SDK at ANDROID_HOME on this image"; exit 1; }
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+      - run: ./gradlew :app:compileDebugKotlin :data:compileDebugKotlinAndroid :domain:compileDebugKotlinAndroid :core:common:compileDebugKotlinAndroid :source-api:compileDebugKotlinAndroid
+
   pr-gate:
     name: PR gate
-    needs: [changes, spotless, unit, files-os, wiring, journeys, button-crawl]
+    needs: [changes, spotless, unit, files-os, wiring, journeys, button-crawl, android-compile]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5
