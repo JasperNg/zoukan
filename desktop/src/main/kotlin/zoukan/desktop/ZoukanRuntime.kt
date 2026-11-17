@@ -82,7 +82,7 @@ object ZoukanRuntime {
         }
         // The log file, crash reports and the uncaught exception handler (Phase 7)
         CrashReporter.install(dirs)
-        logcat { "Zoukan ${AppVersion.name} on ${Platform.id}, Java ${System.getProperty("java.runtime.version")}, data in ${dirs.root}" }
+        logcat(LogPriority.INFO) { "Zoukan ${AppVersion.name} on ${Platform.id}, Java ${System.getProperty("java.runtime.version")}, data in ${dirs.root}" }
 
         // FFmpeg's natives (AVIF and HEIF images) unpack into Zoukan's own cache, not ~/.javacpp
         if (System.getProperty("org.bytedeco.javacpp.cachedir") == null) {
