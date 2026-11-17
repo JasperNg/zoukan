@@ -1,5 +1,6 @@
 package zoukan.desktop.backup
 
+import app.cash.sqldelight.db.SqlDriver
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.create.BackupContentCreator
@@ -21,6 +22,7 @@ import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.db.DesktopSqliteDriver
 import zoukan.extension.DesktopSourceManager
 import java.io.File
 import java.nio.file.Files
@@ -44,6 +46,10 @@ class DesktopBackups(
     /** Waits until the source manager knows the names of sources without an extension. */
     private val awaitSourceNames: suspend () -> Unit = {
         (Injekt.get<SourceManager>() as? DesktopSourceManager)?.awaitStubs()
+    },
+    /** Holds the open screens' refreshes back during a restore; see [DesktopSqliteDriver.deferNotifications]. */
+    private val deferNotifications: () -> AutoCloseable? = {
+        (runCatching { Injekt.get<SqlDriver>() }.getOrNull() as? DesktopSqliteDriver)?.deferNotifications()
     },
 ) {
 
@@ -94,7 +100,9 @@ class DesktopBackups(
                     stubSourceRepository.upsertStubSource(source.sourceId, "", source.name)
                 }
             }
-        return BackupContentRestorer(isSync = isSync, onProgress = onProgress).restore(withSafePreferences(backup, allowSensitive), options)
+        return deferNotifications().use {
+            BackupContentRestorer(isSync = isSync, onProgress = onProgress).restore(withSafePreferences(backup, allowSensitive), options)
+        }
     }
 
     /**

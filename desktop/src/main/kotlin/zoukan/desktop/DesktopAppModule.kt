@@ -32,6 +32,7 @@ import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
 import xyz.nulldev.androidcompat.webkit.KcefWebViewProvider
+import zoukan.desktop.db.DatabaseThread
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.exh.BuiltInSources
@@ -43,7 +44,6 @@ import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.DesktopSourceManager
 import zoukan.extension.ExtensionTrust
-import java.util.concurrent.Executors
 
 /**
  * The desktop app's Injekt module: the same types the Android AppModule registers, as far as the
@@ -79,15 +79,12 @@ class DesktopAppModule(
         addSingletonFactory { eu.kanade.tachiyomi.data.sync.SyncManager() }
         addSingletonFactory { eu.kanade.domain.source.service.SourcePreferences(get()) }
 
-        addSingletonFactory<SqlDriver> { DesktopDatabase.createDriver(dirs.database, get()) }
+        // All database work runs on one thread; see DatabaseThread
+        addSingletonFactory { DatabaseThread() }
+        addSingletonFactory<SqlDriver> { DesktopDatabase.createDriver(dirs.database, get(), get<DatabaseThread>()) }
         addSingletonFactory<Database> { DesktopDatabase.createDatabase(get()) }
         addSingletonFactory<DatabaseHandler> {
-            // SQLDelight's JDBC driver gives each thread its own connection and begins
-            // transactions DEFERRED, so two coroutines writing at once (a backup restore does)
-            // fail with SQLITE_BUSY. On Android the driver serializes them; here all database work
-            // runs on one thread instead.
-            val dispatcher = Executors.newSingleThreadExecutor { Thread(it, "zoukan-database").apply { isDaemon = true } }
-                .asCoroutineDispatcher()
+            val dispatcher = get<DatabaseThread>().executor.asCoroutineDispatcher()
             AndroidDatabaseHandler(get(), get(), queryDispatcher = dispatcher, transactionDispatcher = dispatcher)
         }
 

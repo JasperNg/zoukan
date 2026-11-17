@@ -1249,8 +1249,11 @@ class ButtonCrawlTest {
         if (after.updates > before.updates) tokens += "job:library-update"
         if (after.tab != before.tab && after.tab != null) tokens += "tab:${after.tab.name}"
         if (after.selection != before.selection) tokens += "selection"
-        // Only for a key: a click or typing moves the focus as a side effect
-        if (kind is Kind.Press && after.focus != before.focus && after.focus != null) tokens += "focus:" + ButtonCrawl.stable(after.focus)
+        // Only for a key: a click or typing moves the focus as a side effect. A node known only by its
+        // position (@x,y) is left out: where focus lands after a key that switches screens varies
+        // from run to run, so it would make the inventory flaky
+        val focus = after.focus?.let(ButtonCrawl::stable)
+        if (kind is Kind.Press && after.focus != before.focus && focus != null && !focus.startsWith("@")) tokens += "focus:$focus"
         if (before.reader != null && after.reader != null) {
             val (b, a) = before.reader to after.reader
             listOf(
