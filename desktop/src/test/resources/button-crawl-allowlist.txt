@@ -14,3 +14,4 @@ screen:migration.MigrationListScreen/"Search"  # searches again for the query al
 dialog:reader.ReaderSettingsDialog/"Shift double pages Pairs from the first page, for this ch..."  # kept for the open chapter only, in the reader's model, as on Android; the reader shows it on its pages
 screen:upcoming.UpcomingScreen/tag:upcoming-#-#  # a calendar day with no expected chapter: nothing to show
 screen:upcoming.UpcomingScreen/tag:upcoming-#-# #2  # a calendar day with no expected chapter: nothing to show
+state:app-lock/tag:app-lock  # the lock screen's background: it takes clicks so that none reach the app under it

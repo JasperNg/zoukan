@@ -2,7 +2,6 @@ package zoukan.desktop.download
 
 import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.shouldBe
-import io.mockk.every
 import io.mockk.mockk
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -49,10 +48,7 @@ class DownloadIndexBenchmarkTest {
             override fun get(sourceKey: Long) = source
             override fun getOrStub(sourceKey: Long) = source
         }
-        val storage = mockk<ZoukanStorage> {
-            every { downloads } returns File(temp, "downloads")
-            every { isAvailable } returns true
-        }
+        val storage = ZoukanStorage(ZoukanDirs(temp), InMemoryPreferenceStore())
         val libraryPreferences = LibraryPreferences(InMemoryPreferenceStore())
         val downloadPreferences = DownloadPreferences(InMemoryPreferenceStore())
         val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
@@ -67,23 +63,67 @@ class DownloadIndexBenchmarkTest {
             chapters.getValue(m.id).forEach { File(dir, "${it.name}.cbz").writeBytes(byteArrayOf(1)) }
         }
 
+        // An existing library: no folder changed in the last seconds
+        mangas.forEach { paths.mangaDir(it).setLastModified(System.currentTimeMillis() - 60_000) }
+
         fun manager() = DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, mockk(), mockk(), mockk(), mockk(relaxed = true))
-        fun load(manager: DownloadManager): Long {
-            val start = System.nanoTime()
-            var total = 0
-            mangas.forEach { m ->
-                total += manager.downloadCount(m)
-                total += manager.downloadedIds(m, chapters.getValue(m.id)).size
-            }
-            total shouldBe entries * perEntry * 2
-            return (System.nanoTime() - start) / 1_000_000
+        fun ms(block: () -> Unit): Long {
+            val t = System.nanoTime()
+            block()
+            return (System.nanoTime() - t) / 1_000_000
         }
 
-        // The first manager warms the JIT and the disk cache, as an app that ran before
+        /** As the library and then the entries' pages do: the badges' counts for every entry, then each entry's chapters. */
+        fun load(manager: DownloadManager): Pair<Long, Long> {
+            var total = 0
+            val counts = ms { total += manager.downloadCounts(mangas).values.sum() }
+            val ids = ms { mangas.forEach { m -> total += manager.downloadedIds(m, chapters.getValue(m.id)).size } }
+            total shouldBe entries * perEntry * 2
+            return counts to ids
+        }
+
+        /** The previous index, for a before figure on the same machine at the same time: one listing per folder, names in a set. */
+        fun oldLoad(): Pair<Long, Long> {
+            var total = 0
+            val sets = HashMap<Long, Set<String>>()
+            val counts = ms {
+                mangas.forEach { m ->
+                    val names = paths.mangaDir(m).list()!!.toHashSet().also { sets[m.id] = it }
+                    total += names.count { n -> !n.endsWith("_tmp") && !n.startsWith(".") && DownloadIndex.NOT_CHAPTER.none { n.endsWith(it, true) } }
+                }
+            }
+            val ids = ms {
+                mangas.forEach { m ->
+                    val names = sets.getValue(m.id)
+                    total += chapters.getValue(m.id).count { c ->
+                        val current = DownloadPaths.chapterDirName(c.name, c.scanlator, c.url, false, false)
+                        val v1 = FileNames.buildValidFilename(c.name)
+                        val other = DownloadPaths.chapterDirName(c.name, c.scanlator, c.url, true, true)
+                        listOf(current, v1, other).distinct().flatMap { listOf(it, "$it.cbz") }.any { it in names }
+                    }
+                }
+            }
+            total shouldBe entries * perEntry * 2
+            return counts to ids
+        }
+
+        fun Pair<Long, Long>.text() = "${first + second}ms (counts $first + chapters $second)"
+
+        // Warms the JIT and the disk cache, as an app that ran before
         load(manager())
+        oldLoad()
+        val oldCold = oldLoad()
         val manager = manager()
         val cold = load(manager)
-        val warm = (1..3).minOf { load(manager) }
-        println("DownloadIndexBenchmark: cold load ${cold}ms, warm refresh ${warm}ms ($entries entries x $perEntry chapters)")
+        val warm = (1..3).map { load(manager) }.minBy { it.first + it.second }
+        // Past the recheck time every folder's modified time is read again (nothing changed)
+        Thread.sleep(DownloadIndex.RECHECK_MILLIS + 100)
+        val readBefore = manager.foldersRead
+        val rechecked = load(manager)
+        println("DownloadIndexBenchmark recheck: ${manager.foldersRead - readBefore} folders read again")
+        println(
+            "DownloadIndexBenchmark: previous index ${oldCold.text()}; cold load ${cold.text()}, warm refresh ${warm.text()}, " +
+                "refresh after the recheck time ${rechecked.text()} ($entries entries x $perEntry chapters)",
+        )
     }
 }

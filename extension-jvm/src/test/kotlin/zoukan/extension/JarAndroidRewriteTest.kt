@@ -124,8 +124,11 @@ class JarAndroidRewriteTest {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES or ClassWriter.COMPUTE_MAXS)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, internal, null, "java/lang/Object", null)
         cw.visitField(
-            Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "formats", "Ljava/util/List;",
-            "Ljava/util/List<Ljava/text/SimpleDateFormat;>;", null,
+            Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+            "formats",
+            "Ljava/util/List;",
+            "Ljava/util/List<Ljava/text/SimpleDateFormat;>;",
+            null,
         ).visitEnd()
         cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "pick", "(Z)Ljava/lang/Object;", null, null).apply {
             val start = Label()

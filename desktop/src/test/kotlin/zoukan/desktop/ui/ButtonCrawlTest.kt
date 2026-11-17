@@ -200,6 +200,20 @@ class ButtonCrawlTest {
     /** Whether each button is a switch, checkbox or choice. */
     private val toggles = mutableMapOf<String, Boolean>()
 
+    /** Whether each button is in a dialog or menu over the window. */
+    private val inDialog = mutableMapOf<String, Boolean>()
+
+    /**
+     * The key the contracts match: with " (toggle)" for a switch, checkbox or choice on a screen,
+     * which stores its value at once, and " (dialog toggle)" for one in a dialog, which may keep
+     * it until the dialog's OK.
+     */
+    private fun contractKey(key: String) = when {
+        toggles[key] != true -> key
+        inDialog[key] == true -> "$key (dialog toggle)"
+        else -> "$key (toggle)"
+    }
+
     /** The buttons found again after a fresh open but not on screen when it was time to click them. */
     private val unreached = sortedSetOf<String>()
 
@@ -269,11 +283,53 @@ class ButtonCrawlTest {
         }
     }
 
+    /**
+     * The exceptions printed to stderr without the logger: an e.printStackTrace() in a screen
+     * model or a library, which the log capture never sees. A trace printed under a log line is
+     * the logger's, already in [ErrorLog], so it is left out.
+     */
+    private class StderrTap(private val original: java.io.PrintStream) : java.io.OutputStream() {
+        val exceptions = ConcurrentLinkedQueue<String>()
+        private val line = java.io.ByteArrayOutputStream()
+        private var underLogLine = false
+
+        override fun write(b: Int) {
+            original.write(b)
+            synchronized(line) {
+                if (b == '\n'.code) {
+                    take(line.toString(Charsets.UTF_8).trimEnd('\r'))
+                    line.reset()
+                } else {
+                    line.write(b)
+                }
+            }
+        }
+
+        override fun flush() = original.flush()
+
+        private fun take(text: String) {
+            when {
+                LOG_LINE.containsMatchIn(text) -> underLogLine = true
+                STACK_LINE.containsMatchIn(text) -> Unit
+                EXCEPTION.containsMatchIn(text) -> if (!underLogLine) exceptions += text.trim()
+                else -> underLogLine = false
+            }
+        }
+
+        private companion object {
+            val LOG_LINE = Regex("""^\d\d:\d\d:\d\d\.\d{3} """)
+            val STACK_LINE = Regex("""^(\s+at |\s*\.\.\. \d+ more|Caused by: |\s+Suppressed: )""")
+            val EXCEPTION = Regex("""^(Exception in thread |[\w.$]+(Exception|Error)(: |$))""")
+        }
+    }
+
     private val toasts = ConcurrentLinkedQueue<String>()
     private val notifications = ConcurrentLinkedQueue<String>()
 
     /** Library updates started: LibraryUpdater's progress turned from none to some. */
     private val updates = AtomicInteger()
+
+    private lateinit var tap: StderrTap
 
     @Test
     fun `every button does something without an error`() {
@@ -285,8 +341,13 @@ class ButtonCrawlTest {
             previous?.uncaughtException(thread, e)
         }
         val listeners = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val stderr = System.err
+        val tap = StderrTap(stderr)
+        System.setErr(java.io.PrintStream(tap, true))
+        this.tap = tap
         val trash = zoukan.desktop.ui.manga.systemTrash
         val sensitive = zoukan.desktop.ui.settings.sensitiveSettingsChoice
+        val snapshotFailed = zoukan.desktop.ui.common.snapshotFailedPrompt
         val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
         try {
             SystemEffects.current = Recorder
@@ -294,7 +355,16 @@ class ButtonCrawlTest {
                 Recorder.calls += "trash:${file.name}"
                 false
             }
-            zoukan.desktop.ui.settings.sensitiveSettingsChoice = { null }
+            // A restore asks whether to restore security settings and logins: without them, recorded
+            zoukan.desktop.ui.settings.sensitiveSettingsChoice = {
+                Recorder.calls += "asks:sensitive-settings"
+                false
+            }
+            // A safety snapshot that fails asks whether to go on (a Swing dialog): no, recorded
+            zoukan.desktop.ui.common.snapshotFailedPrompt = zoukan.desktop.backup.SnapshotFailedPrompt {
+                Recorder.calls += "asks:snapshot-failed"
+                false
+            }
             listeners.launch { Toasts.flow.collect { toasts += it } }
             listeners.launch { Notifications.flow.collect { notifications += it.title } }
             startUi(dirs)
@@ -335,11 +405,13 @@ class ButtonCrawlTest {
             failures.forEach { println("Crawl: FAILED $it") }
             failures.shouldBeEmpty()
         } finally {
+            System.setErr(stderr)
             root.detachAppender(ErrorLog)
             listeners.cancel()
             SystemEffects.current = SystemEffects.Native
             zoukan.desktop.ui.manga.systemTrash = trash
             zoukan.desktop.ui.settings.sensitiveSettingsChoice = sensitive
+            zoukan.desktop.ui.common.snapshotFailedPrompt = snapshotFailed
             Thread.setDefaultUncaughtExceptionHandler(previous)
         }
     }
@@ -408,7 +480,12 @@ class ButtonCrawlTest {
                     }
                     waitForIdle()
                     val end = System.currentTimeMillis() + BATCH_MILLIS
-                    while (queue.isNotEmpty() && System.currentTimeMillis() < end) {
+                    var first = true
+                    // Each check starts in a Compose test of its own: what one check's clicks left
+                    // in the composition (a Settings page, a tab's state) never reaches the next,
+                    // so a button's key does not depend on which checks ran before (or on the shard)
+                    while (queue.isNotEmpty() && System.currentTimeMillis() < end && (first || queue.first() !is Task.Collect)) {
+                        first = false
                         val task = queue.removeFirst()
                         when (task) {
                             is Task.Collect -> queue.addAll(0, collect(task.check))
@@ -438,6 +515,13 @@ class ButtonCrawlTest {
     /** Opens [check] as the smoke test does: [SmokeCheck.open] on the UI thread, then its drive. */
     private fun ComposeUiTest.open(check: SmokeCheck, restore: Boolean = true) {
         if (restore) restoreState()
+        runOnUiThread {
+            // From the root and the Library tab, as the smoke test opens each check: the app
+            // restores its last screens when it starts, so a new Compose test may not start there
+            navigator.popUntilRoot()
+            HomeScreen.selectTab(HomeTab.Library)
+        }
+        waitForIdle()
         runOnUiThread { check.open(navigator) }
         // As the smoke test waits: a Settings page or a screen model may take a few frames to load
         settle()
@@ -459,6 +543,8 @@ class ButtonCrawlTest {
             runOnUiThread {
                 navigator.popUntilRoot()
                 HomeScreen.selectTab(HomeTab.Library)
+                // Settings > Advanced > Onboarding guide opens the guide over every screen until closed
+                zoukan.desktop.ui.onboarding.Onboarding.reopen.value = false
             }
             waitForIdle()
             // A selection (library, updates, history) stays on its tab: Escape ends it
@@ -500,6 +586,8 @@ class ButtonCrawlTest {
         }
         try {
             open(check)
+            // -Pzoukan.crawl.debug=true prints what each check shows when its buttons are collected
+            if (System.getProperty("zoukan.crawl.debug") == "true") println(onAllNodes(isRoot()).printToString(maxDepth = Int.MAX_VALUE))
             val seen = mutableSetOf<Int>()
             clickables().forEach {
                 seen += it.node.id
@@ -556,8 +644,9 @@ class ButtonCrawlTest {
 
     /**
      * Clicks [target] from a fresh open of its check and records its effect signature; returns
-     * the items of a menu it opened. A click that wrote a setting or the database is followed by
-     * the round trip: the check opens again, and the button must show what was stored.
+     * the items of a menu it opened. A switch, checkbox or choice whose click wrote a setting or
+     * the database is followed by the round trip: the check opens again, and it must show what
+     * was stored.
      */
     private fun ComposeUiTest.click(target: Target): List<Task> {
         current = "${target.check.name}: ${target.key}"
@@ -574,10 +663,12 @@ class ButtonCrawlTest {
             val fromRoot = target.fromRoot
             val found = find(target, fromRoot) ?: return unreached(target)
             toggles[target.key] = isToggle(found.node)
+            inDialog[target.key] = found.root > 0
             val selected = found.node.config.getOrNull(SemanticsProperties.Selected) == true
             val field = SemanticsActions.SetText in found.node.config
             val before = snapshot()
             val errors = ErrorLog.lines.size
+            val printed = tap.exceptions.size
             val problems = Recorder.problems.size
             press(found)
             settleQuickly()
@@ -595,7 +686,7 @@ class ButtonCrawlTest {
                 signature = again
                 if (still && signature.tokens.isNotEmpty()) break
             }
-            val logged = ErrorLog.lines.drop(errors)
+            val logged = ErrorLog.lines.drop(errors) + tap.exceptions.drop(printed).map { "printed $it" }
             logged.filterNot { OFFLINE.containsMatchIn(it) }.forEach { failures += "${target.key}: logged an error: $it" }
             Recorder.problems.drop(problems).forEach { failures += "${target.key}: $it" }
             checkPersisted(target, before, after)
@@ -621,7 +712,8 @@ class ButtonCrawlTest {
             // The round trip, for a click that stored something and stayed on the same screen
             val stored = signature.tokens.any { it.startsWith("pref:") || it.startsWith("db:") }
             val moved = signature.tokens.any { it.startsWith("nav:") || it.startsWith("dialog:") || it == "menu" || it == "close" }
-            if (target.parent == null && stored && !moved) {
+            // Only for a switch, checkbox or choice: a button's own label (Restore, then Close) may rightly start over
+            if (target.parent == null && stored && !moved && toggles[target.key] == true) {
                 val shown = find(target, fromRoot)?.let { state(it.node) }
                 if (shown != null) roundTrip(target, fromRoot, shown)
             }
@@ -680,9 +772,12 @@ class ButtonCrawlTest {
         ).joinToString(", ")
     }
 
-    /** A switch, checkbox or choice: a tab is selectable too, but choosing one only shows its page. */
+    /**
+     * A switch, checkbox or choice (a radio button). Tabs and the Settings page list are selectable
+     * too, but choosing one only shows a page: that is navigation, not a setting.
+     */
     private fun isToggle(node: SemanticsNode) = SemanticsProperties.ToggleableState in node.config ||
-        (SemanticsProperties.Selected in node.config && node.config.getOrNull(SemanticsProperties.Role) != androidx.compose.ui.semantics.Role.Tab)
+        (SemanticsProperties.Selected in node.config && node.config.getOrNull(SemanticsProperties.Role) == androidx.compose.ui.semantics.Role.RadioButton)
 
     private fun unreached(target: Target): List<Task> {
         unreached += target.key
@@ -692,19 +787,19 @@ class ButtonCrawlTest {
 
     /**
      * The clickable nodes on every root from [fromRoot] on, in tree order. Without [fromRoot], those
-     * of the topmost root: a dialog or menu over the window is modal, so a user can only click in it.
+     * of the topmost root that has any: a dialog or menu over the window is modal, so a user can
+     * only click in it.
      */
     private fun ComposeUiTest.clickables(fromRoot: Int? = null): List<Found> {
         val counts = mutableMapOf<String, Int>()
         val roots = roots(merged = true)
-        val first = fromRoot ?: (roots.size - 1)
+        fun clickable(node: SemanticsNode) = SemanticsActions.OnClick in node.config &&
+            SemanticsProperties.Disabled !in node.config &&
+            SemanticsProperties.HideFromAccessibility !in node.config
+        // The topmost root with something to click: a tooltip over the window is a root too
+        val first = fromRoot ?: roots.indexOfLast { root -> root.descendants().any(::clickable) }.coerceAtLeast(0)
         return roots.withIndex().filter { it.index >= first }.flatMap { (index, root) ->
-            root.descendants().filter { node ->
-                val config = node.config
-                SemanticsActions.OnClick in config &&
-                    SemanticsProperties.Disabled !in config &&
-                    SemanticsProperties.HideFromAccessibility !in config
-            }.map { node ->
+            root.descendants().filter(::clickable).map { node ->
                 val raw = nodeId(node)
                 Found(node, raw, counts.merge(raw, 1, Int::plus)!!, index)
             }
@@ -931,17 +1026,19 @@ class ButtonCrawlTest {
         seedState = after
     }
 
-    /** A click may start a library update; the next click waits for it to end. */
+    /** A click may start a library update, a backup or a restore; the next click waits for it to end. */
     private fun waitForLibraryUpdate() {
         val updater = Injekt.get<LibraryUpdater>()
         val deadline = System.currentTimeMillis() + 30_000
-        while (updater.isRunning && System.currentTimeMillis() < deadline) Thread.sleep(100)
+        while ((updater.isRunning || zoukan.desktop.ui.settings.backupStatusFlow.value != null) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100)
+        }
     }
 
     // Report and baseline
 
     /** A label that says the button changes data: such a button must do more than change the screen. */
-    private val DATA_ACTION = Regex("""(?i)^"(mark as|bookmark|add to library|in library|remove|delete|download|save|restore|clear(?! (selection|search))|reset|migrate|merge)\b""")
+    private val dataAction = Regex("""(?i)^"(mark as|bookmark|add to library|in library|remove|delete|download|save|restore|clear(?! (selection|search))|reset|migrate|merge)\b""")
 
     /**
      * Writes the report, then fails on: clicks with no effect, and clicks that only changed the
@@ -975,11 +1072,11 @@ class ButtonCrawlTest {
         effects.forEach { (key, signature) ->
             if (key in allowlist) return@forEach
             val label = key.substringAfterLast('/').substringAfterLast(" > ")
-            val settingToggle = toggles[key] == true && (key.startsWith("settings:") || Contracts.all.any { it.button.containsMatchIn("$key (toggle)") })
+            val settingToggle = toggles[key] == true && Contracts.all.any { it.button.containsMatchIn(contractKey(key)) }
             when {
                 signature == NO_EFFECT -> failures += "$key: the click did nothing (if that is on purpose, add it to ${ButtonCrawl.ALLOWLIST} with the reason)"
                 signature == "ui" && settingToggle -> failures += "$key: a setting's switch or choice that changed the screen but stored nothing"
-                signature == "ui" && toggles[key] != true && DATA_ACTION.containsMatchIn(label) -> failures += "$key: the label says it changes data, but the click only changed the screen"
+                signature == "ui" && toggles[key] != true && dataAction.containsMatchIn(label) -> failures += "$key: the label says it changes data, but the click only changed the screen"
             }
         }
         // The allowlist names only buttons that still need it
@@ -990,9 +1087,10 @@ class ButtonCrawlTest {
         }
         // The contracts: the right row, the right preference
         Contracts.all.forEach { contract ->
-            val matched = effects.keys.filter { contract.button.containsMatchIn(if (toggles[it] == true) "$it (toggle)" else it) }
+            val matched = effects.keys.filter { contract.button.containsMatchIn(contractKey(it)) }
             matched.forEach { key ->
-                if (key !in allowlist && evidence[key].orEmpty().none { contract.expects.containsMatchIn(it) }) {
+                // Choosing what is already chosen rightly writes nothing
+                if (key !in allowlist && effects[key] != "selected-already" && evidence[key].orEmpty().none { contract.expects.containsMatchIn(it) }) {
                     failures += "$key: ${contract.means}, but it left ${evidence[key].orEmpty().ifEmpty { listOf(effects[key].orEmpty()) }}"
                 }
             }
@@ -1001,6 +1099,9 @@ class ButtonCrawlTest {
         }
 
         fun ofThisRun(key: String) = key.substringBefore('/') in keys
+        // What this run found, in the inventory's format: CI uploads it, so a shard's part of a
+        // new inventory can be taken from there without crawling locally
+        File(report.parentFile, "button-inventory-found.txt").writeText(ButtonCrawl.formatInventory(effects))
         val baseline = ButtonCrawl.parseInventory(ButtonCrawl.resource(ButtonCrawl.INVENTORY))
         if (System.getProperty("zoukan.crawl.updateBaseline") == "true") {
             val file = File(ButtonCrawl.sources, ButtonCrawl.INVENTORY)

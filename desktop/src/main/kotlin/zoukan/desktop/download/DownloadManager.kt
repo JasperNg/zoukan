@@ -117,6 +117,9 @@ class DownloadManager(
     /** What is in each entry's download folder, read once and checked again by its modified time */
     private val index = DownloadIndex()
 
+    /** How many folders were listed, for the benchmark. */
+    internal val foldersRead: Int get() = index.listingsRead
+
     // Downloaded chapters --------------------------------------------------------------------
 
     /** When [index] was last emptied, for the download cache renew interval. */
@@ -147,8 +150,12 @@ class DownloadManager(
      */
     fun findChapter(manga: Manga, chapter: Chapter): File? {
         renewIfDue()
-        val names = paths.validChapterNames(chapter)
-        for (dir in paths.mangaDirs(manga)) {
+        return findIn(root, dirsOf(manga), chapter)
+    }
+
+    private fun findIn(root: File, dirs: List<File>, chapter: Chapter): File? {
+        val names = paths.chapterNameCandidates(chapter)
+        for (dir in dirs) {
             index.findValid(root, dir, names)?.let { return File(dir, it) }
         }
         return null
@@ -158,8 +165,13 @@ class DownloadManager(
     fun isDownloaded(manga: Manga, chapter: Chapter): Boolean = findChapter(manga, chapter) != null
 
     /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
-    fun downloadedIds(manga: Manga, chapters: List<Chapter>): Set<Long> =
-        chapters.filter { isDownloaded(manga, it) }.mapTo(HashSet()) { it.id }
+    fun downloadedIds(manga: Manga, chapters: List<Chapter>): Set<Long> {
+        renewIfDue()
+        // The folders and the downloads folder once per entry, not per chapter
+        val root = root
+        val dirs = dirsOf(manga)
+        return chapters.filter { findIn(root, dirs, it) != null }.mapTo(HashSet()) { it.id }
+    }
 
     /**
      * How many chapters of [manga] are downloaded, for the library's download badge and filter:
@@ -169,7 +181,28 @@ class DownloadManager(
      */
     fun downloadCount(manga: Manga): Int {
         renewIfDue()
-        return paths.mangaDirs(manga).flatMapTo(HashSet()) { index.chapterKeys(root, it) }.size
+        val root = root
+        return dirsOf(manga).flatMapTo(HashSet()) { index.chapterKeys(root, it) }.size
+    }
+
+    /**
+     * [downloadCount] of each of [mangas], for the library's badges and the statistics: the folders
+     * are read on several threads at once (the common pool, one per core), as a first read is mostly
+     * waiting for the disk. An entry whose folder cannot be read counts 0.
+     * Reads the folders on a cache miss: call off the UI thread.
+     */
+    fun downloadCounts(mangas: List<Manga>): Map<Long, Int> {
+        renewIfDue()
+        val counts = ConcurrentHashMap<Long, Int>()
+        mangas.distinctBy { it.id }.parallelStream().forEach { manga ->
+            counts[manga.id] = try {
+                downloadCount(manga)
+            } catch (e: RuntimeException) {
+                logcat(LogPriority.WARN, e) { "Counting the downloads of ${manga.ogTitle} failed" }
+                0
+            }
+        }
+        return counts
     }
 
     /**
@@ -180,6 +213,15 @@ class DownloadManager(
     fun sharesDownloadFolder(a: Manga, b: Manga): Boolean {
         fun keys(m: Manga) = paths.mangaDirs(m).mapTo(HashSet()) { index.key(root, it.parentFile.name) + "/" + index.key(root, it.name) }
         return keys(a).any { it in keys(b) }
+    }
+
+    /**
+     * The entry's download folders ([DownloadPaths.mangaDirs]) as named on disk: a source or entry
+     * folder named in another Unicode form or case is the same folder (see [DownloadIndex.resolve]).
+     */
+    private fun dirsOf(manga: Manga): List<File> {
+        val root = root
+        return paths.mangaDirs(manga).map { index.resolve(root, it) }.distinct()
     }
 
     /** The names on disk of every copy of [chapter] in [dir], complete or not, unfinished ones included. */
@@ -198,7 +240,7 @@ class DownloadManager(
      * download keeps its old name and this returns false. True when renamed or nothing to rename.
      */
     fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter): Boolean {
-        val dir = paths.mangaDir(manga)
+        val dir = index.resolve(root, paths.mangaDir(manga))
         if (!dir.isDirectory) return true
         // Assume there's only 1 version of the chapter name formats present
         index.invalidate(dir)
@@ -292,7 +334,7 @@ class DownloadManager(
 
     /** Under the entry's lock: [chapters]' files in each of the entry's folders, then the folder if empty. */
     private fun deleteChapterFiles(manga: Manga, chapters: List<Chapter>) {
-        paths.mangaDirs(manga).forEach { dir ->
+        dirsOf(manga).forEach { dir ->
             index.invalidate(dir)
             if (!dir.isDirectory) return@forEach
             chapters.flatMap { namesOnDisk(dir, it) }.distinct().forEach { name ->
@@ -427,7 +469,10 @@ class DownloadManager(
             val sourceMangas = bySourceDir[sourceDir].orEmpty()
             // Nothing in the database for this folder: it is not the desktop's to judge
             if (sourceMangas.isEmpty()) return@forEach
-            val folders = sourceDir.listFiles()?.filter { Files.isDirectory(it.toPath(), LinkOption.NOFOLLOW_LINKS) }.orEmpty()
+            // A linked folder (or a Windows junction) is not walked into: what it points to is not the desktop's
+            val folders = sourceDir.listFiles()
+                ?.filter { Files.isDirectory(it.toPath(), LinkOption.NOFOLLOW_LINKS) && !SafeDelete.isLink(it.toPath()) }
+                .orEmpty()
             if (folders.isEmpty()) return@forEach
             val byFolder = HashMap<String, MutableSet<Manga>>()
             sourceMangas.forEach { m ->
@@ -538,9 +583,11 @@ class DownloadManager(
 
     private fun sizeOf(file: File): Long = try {
         Files.walk(file.toPath()).use { s ->
-            s.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }.mapToLong { runCatching { Files.size(it) }.getOrDefault(0L) }.sum()
+            s.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }.mapToLong { it.toFile().length() }.sum()
         }
-    } catch (e: Exception) {
+    } catch (e: IOException) {
+        0L
+    } catch (e: java.io.UncheckedIOException) {
         0L
     }
 
@@ -666,7 +713,7 @@ class DownloadManager(
                 entryLock(id).withLock {
                     val queued = _queue.value.mapTo(HashSet()) { it.chapter.id }
                     downloads.filterNot { it.chapter.id in queued }.forEach { d ->
-                        val dir = paths.mangaDir(d.manga)
+                        val dir = index.resolve(root, paths.mangaDir(d.manga))
                         val name = paths.chapterDirName(d.chapter)
                         listOf(name + DownloadPaths.TMP_SUFFIX, "$name.cbz" + DownloadPaths.TMP_SUFFIX).forEach {
                             SafeDelete.delete(root, File(dir, it), minDepth = 3)
@@ -796,13 +843,14 @@ class DownloadManager(
         return try {
             val source = sourceManager.get(manga.source) as? HttpSource
                 ?: error("The source of ${manga.title} is not installed")
-            val dir = paths.mangaDir(manga)
             // Nothing is created on the system disk when the chosen storage folder is unplugged
             paths.requireStorage()
+            // The folder as named on disk, so a copy from macOS (NFD names) gets no second folder
+            val dir = index.resolve(root, paths.mangaDir(manga))
             // The gate is the disk, not the cache: a chapter copied in since the folder was listed
             // is kept as it is. The entry's lock keeps a clean-up away from the files being written.
             entryLock(manga.id).withLock {
-                paths.mangaDirs(manga).forEach { index.invalidate(it) }
+                dirsOf(manga).forEach { index.invalidate(it) }
                 if (findChapter(manga, chapter) != null) {
                     invalidate(dir)
                 } else {

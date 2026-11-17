@@ -90,6 +90,17 @@ class DownloadPaths(
         return names
     }
 
+    /**
+     * [validChapterNames] in the same order, made only as far as they are read: a lookup that finds
+     * the current name never builds the older ones (each costs an MD5 of the URL).
+     */
+    fun chapterNameCandidates(chapter: Chapter): Sequence<String> = sequence {
+        val current = chapterDirName(chapter)
+        yield(current)
+        yield("$current.cbz")
+        yieldAll(validChapterNames(chapter).asSequence().drop(2))
+    }
+
     private data class NamesKey(val name: String, val scanlator: String?, val url: String, val ascii: Boolean, val hash: Boolean)
 
     /** The last few thousand chapters' names, so a library refresh does not hash every URL again. */

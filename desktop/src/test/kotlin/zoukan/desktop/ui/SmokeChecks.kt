@@ -163,13 +163,6 @@ import javax.imageio.ImageIO
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-
-/**
- * What [ScreenSmokeTest] and [ButtonCrawlTest] share: the runtime they start, the library they
- * seed and the list of checks, one per screen, tab, Settings page and dialog of the app. See
- * [ScreenSmokeTest] for what the checks open and why.
- */
-
 /**
  * One screen or dialog to open: [open] runs on the UI thread, then [drive] in the test, and
  * [cleanup] on the UI thread even when they fail, to undo state that later checks would see.
@@ -220,6 +213,11 @@ private const val MAX_SCROLL_STEPS = 500
 
 private val OUT_OF_BOUNDS = Regex("""^Can't scroll to index -?\d+, it is out of bounds \[0, (\d+)\)""")
 
+/**
+ * What [ScreenSmokeTest] and [ButtonCrawlTest] share: the runtime they start, the library they
+ * seed and the list of checks, one per screen, tab, Settings page and dialog of the app. See
+ * [ScreenSmokeTest] for what the checks open and why.
+ */
 @OptIn(ExperimentalTestApi::class)
 internal object SmokeChecks {
     /** The date of the seeded entries and chapters (2024-01-15), fixed so screenshots show the same dates every day. */

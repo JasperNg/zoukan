@@ -102,10 +102,10 @@ internal object Contracts {
         Contract(Regex("""^flow:reader\.bars/"Scale type: .*" > """), Regex("""^pref:pref_image_scale_type_key$"""), "the reader's scale type writes its preference"),
         Contract(Regex("""^screen:manga\.MangaScreen/"In library""""), Regex("""^mangas\.favorite\[Alpha]$"""), "In library on Alpha's screen removes Alpha"),
         Contract(Regex("""^flow:library\.selection/"Mark as read""""), Regex("""^chapters\.read\[Alpha/"""), "the library selection's Mark as read writes the selected entry's chapters"),
-        // Settings that write their preference at once
-        Contract(Regex("""^dialog:library\.LibrarySettingsDialog/.*\(toggle\)$"""), Regex("""^(pref:|db:categories\.)"""), "the library's filter, sort and display options write their preference"),
-        Contract(Regex("""^dialog:reader\.ReaderSettingsDialog/.*\(toggle\)$"""), Regex("""^(pref:|mangas\.viewer\[Alpha]$)"""), "the reader settings write their preference, or Alpha's own reading mode"),
-        Contract(Regex("""^dialog:manga\.ChapterSettingsDialog/.*\(toggle\)$"""), Regex("""^(mangas\.chapter_flags\[Alpha]|pref:)"""), "the chapter filter and sort write Alpha's chapter flags"),
-        Contract(Regex("""^settings:[A-Za-z]+/.*\(toggle\)$"""), Regex("""^(pref:|calls|dialog:|menu$|nav:)"""), "a Settings switch or choice writes its preference (or asks first)"),
+        // Settings that write their preference at once: these dialogs apply each choice as it is made
+        Contract(Regex("""^dialog:library\.LibrarySettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(pref:|db:categories\.)"""), "the library's filter, sort and display options write their preference"),
+        Contract(Regex("""^dialog:reader\.ReaderSettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(pref:|mangas\.viewer\[Alpha]$)"""), "the reader settings write their preference, or Alpha's own reading mode"),
+        Contract(Regex("""^dialog:manga\.ChapterSettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(mangas\.chapter_flags\[Alpha]|pref:)"""), "the chapter filter and sort write Alpha's chapter flags"),
+        Contract(Regex("""^settings:[A-Za-z]+/.*\(toggle\)$"""), Regex("""^(pref:|calls|dialog:|menu$|nav:)"""), "a Settings switch or choice on the page writes its preference (or asks first); one in a dialog may wait for OK"),
     )
 }

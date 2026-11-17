@@ -570,7 +570,7 @@ class LibraryScreenModel(
     }
 
     private fun downloadCounts(items: List<LibraryManga>): Map<Long, Int> =
-        items.distinctBy { it.id }.associate { it.id to runCatching { downloadManager.downloadCount(it.manga) }.getOrDefault(0) }
+        runCatching { downloadManager.downloadCounts(items.map { it.manga }) }.getOrDefault(emptyMap())
 
     /** The trackers the library can filter by: the ones signed in. */
     fun trackers() = trackerManager.loggedInTrackers()

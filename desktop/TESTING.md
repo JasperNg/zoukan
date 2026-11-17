@@ -365,7 +365,7 @@ every run (digits become `#`). The tokens:
 | `selected-already`, `field` | Nothing changed, rightly: the page, tab or option was already chosen, or the text field already had the focus. |
 | `logs:offline` | The app logged an error only because the crawl runs offline or without Chromium. Any other error fails the click. |
 
-A click that changed a preference or the database and stayed on its screen gets a round trip:
+A switch, checkbox or choice whose click changed a preference or the database gets a round trip:
 the crawl opens the check again without putting the state back, and the button must show the
 stored state (a switch stays on).
 
@@ -385,7 +385,10 @@ Two files in `desktop/src/test/resources/` go with it:
   item. The crawl fails when a button appears, goes or does something else. After a change on
   purpose, regenerate it with `-Pzoukan.crawl.updateBaseline=true` (a filtered or sharded run
   rewrites only the buttons it crawled) and review the diff: each changed line is a change in
-  what a button does.
+  what a button does. Each run also writes what it found, in the same format, to
+  `desktop/build/reports/coverage/button-inventory-found.txt`, and CI uploads it with each shard
+  (artifact `button-crawl-<shard>`), so a new inventory can be put together from CI without a
+  local crawl: keep the header and append the sorted lines of the four shards' files.
 - `button-crawl-allowlist.txt`: buttons allowed to do nothing, or only change the screen,
   `<button key>  # <reason>`. Such a button is usually a bug, so fix it rather than list it. A line
   whose button now does something more fails a full run.

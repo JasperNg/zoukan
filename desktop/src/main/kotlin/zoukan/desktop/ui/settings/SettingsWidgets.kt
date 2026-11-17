@@ -1,8 +1,5 @@
 package zoukan.desktop.ui.settings
 
-import androidx.compose.foundation.selection.triStateToggleable
-import zoukan.desktop.ui.common.radioRow
-import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ColorScheme
@@ -42,7 +40,9 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt

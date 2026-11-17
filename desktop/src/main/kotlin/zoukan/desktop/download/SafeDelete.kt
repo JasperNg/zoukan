@@ -4,11 +4,9 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import java.io.File
 import java.io.IOException
-import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
 /**
@@ -24,7 +22,10 @@ object SafeDelete {
     fun canTrash(): Boolean = try {
         java.awt.Desktop.isDesktopSupported() &&
             java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.MOVE_TO_TRASH)
-    } catch (e: Throwable) {
+    } catch (e: RuntimeException) {
+        // HeadlessException, UnsupportedOperationException, SecurityException
+        false
+    } catch (e: LinkageError) {
         false
     }
 
@@ -33,7 +34,7 @@ object SafeDelete {
     internal var trash: (File) -> Boolean = { file ->
         try {
             canTrash() && java.awt.Desktop.getDesktop().moveToTrash(file)
-        } catch (e: Exception) {
+        } catch (e: RuntimeException) {
             logcat(LogPriority.WARN, e) { "Could not move ${file.name} to the trash" }
             false
         }
@@ -72,10 +73,13 @@ object SafeDelete {
             return !Files.exists(target.toPath(), LinkOption.NOFOLLOW_LINKS)
         }
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return true
-        if (toTrash && !Files.isSymbolicLink(path) && trash(path.toFile())) return true
+        // Only a plain file or folder goes to the trash: a link or a Windows junction is removed as itself
+        if (toTrash && isPlain(path) && trash(path.toFile())) return true
         deleteTreeNoFollow(path)
         return !Files.exists(path, LinkOption.NOFOLLOW_LINKS)
     }
+
+    private fun isPlain(path: Path): Boolean = !isLink(path)
 
     /** Removes [dir] only when it is an empty folder inside [root], at least [minDepth] levels down. */
     fun deleteIfEmpty(root: File, dir: File, minDepth: Int = 1): Boolean {
@@ -90,30 +94,49 @@ object SafeDelete {
         }
     }
 
-    /** Deletes [path] and, for a real folder, everything in it, never following a link. */
+    /**
+     * Deletes [path] and, for a real folder, everything in it, never following a link. Not
+     * walkFileTree: it walks into a Windows junction (which Java reports as a folder), and would
+     * delete the files the junction points to.
+     */
     fun deleteTreeNoFollow(path: Path) {
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
-        // walkFileTree does not follow links by default: a link is visited as a file and deleted as one
-        runCatching {
-            Files.walkFileTree(
-                path,
-                object : SimpleFileVisitor<Path>() {
-                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                        runCatching { Files.delete(file) }
-                        return FileVisitResult.CONTINUE
-                    }
+        if (!isLink(path) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                Files.newDirectoryStream(path).use { children -> children.forEach { deleteTreeNoFollow(it) } }
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not delete everything in ${path.fileName}" }
+            }
+        }
+        // A link or a junction is removed as itself
+        deleteQuietly(path)
+    }
 
-                    override fun visitFileFailed(file: Path, e: IOException): FileVisitResult {
-                        runCatching { Files.delete(file) }
-                        return FileVisitResult.CONTINUE
-                    }
+    /**
+     * A symbolic link, a Windows junction or another reparse point: anything whose real location is
+     * not the folder it is listed in.
+     */
+    internal fun isLink(path: Path): Boolean = try {
+        val attrs = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        when {
+            attrs.isSymbolicLink || attrs.isOther -> true
+            !attrs.isDirectory -> false
+            else -> {
+                val parent = path.toAbsolutePath().parent
+                parent != null && path.toRealPath() != parent.toRealPath().resolve(path.fileName.toString())
+            }
+        }
+    } catch (e: IOException) {
+        // Unreadable: treated as a link, so nothing behind it is touched
+        true
+    }
 
-                    override fun postVisitDirectory(d: Path, e: IOException?): FileVisitResult {
-                        runCatching { Files.delete(d) }
-                        return FileVisitResult.CONTINUE
-                    }
-                },
-            )
+    /** What is left is reported by the caller, which checks the path is gone. */
+    private fun deleteQuietly(path: Path) {
+        try {
+            Files.delete(path)
+        } catch (e: IOException) {
+            logcat(LogPriority.DEBUG, e) { "Could not delete ${path.fileName}" }
         }
     }
 }

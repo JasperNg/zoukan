@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.settings
 
-import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +40,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.MangaDexSync
 import zoukan.desktop.track.TrackerLogin
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 
