@@ -48,8 +48,7 @@ while one release is building and another run is already waiting, the newer run 
 waiting one, and the replaced commit ships in the next release instead of alone. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
 if it has no release yet; a re-run of a released commit only rebuilds. The runner images are
 pinned (`ci.yml` runs on `ubuntu-26.04` too); moving to a newer image is a deliberate change made in
-both workflows and here. `ci.yml`'s "Android compile" job (see `desktop/TESTING.md`) uses the
-image's preinstalled Android SDK, so a new Linux image must still ship the `compileSdk` platform.
+both workflows and here.
 
 The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to
 Gradle as `-Pzoukan.version`. `zoukan.versionFloor` in `gradle.properties` is the floor: raise it
