@@ -108,6 +108,16 @@ class DesktopPreferences(private val store: PreferenceStore) {
 
     fun cropBordersWebtoon() = store.getBoolean("crop_borders_webtoon", false)
 
+    /** SY's crop borders for continuous vertical (long strip with gaps), its Vertical+ group */
+    fun cropBordersContinuousVertical() = store.getBoolean("crop_borders_continues_vertical", false)
+
+    /** The crop borders setting [readingMode] follows, as Android's toggleCropBorders and viewers */
+    fun cropBordersFor(readingMode: Int) = when (readingMode) {
+        ReadingModes.WEBTOON -> cropBordersWebtoon()
+        ReadingModes.CONTINUOUS_VERTICAL -> cropBordersContinuousVertical()
+        else -> cropBorders()
+    }
+
     /** Seconds between page turns (or screens in webtoon modes) when auto scroll is on, as SY's */
     fun autoscrollInterval() = store.getFloat("eh_util_autoscroll_interval", 3f)
 

@@ -1294,7 +1294,7 @@ tab:Library/"Statistics"  nav:stats.StatsScreen
 tab:Library/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
 tab:Library/"Updates"  tab:Updates
 tab:Library/key:Ctrl+,  nav:more.SettingsScreen
-tab:Library/key:Ctrl+2  focus:@#,# tab:Updates
+tab:Library/key:Ctrl+2  tab:Updates
 tab:Library/key:Ctrl+3  tab:History
 tab:Library/key:Ctrl+4  tab:Browse
 tab:Library/key:Ctrl+5  tab:More

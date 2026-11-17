@@ -90,7 +90,8 @@ class ReaderSettingsParityTest {
         val settings = ReaderSettingRows.settings(prefs)
         val settingsKeys = keys(settings)
         val pagerKeys = keys(group(settings, "pager"))
-        val webtoonKeys = keys(group(settings, "webtoon"))
+        // SY's Vertical+ group sits under the webtoon viewers on the sheet, as on Android
+        val webtoonKeys = keys(group(settings, "webtoon")) + keys(group(settings, "vertical_plus"))
         for (mode in ReadingModes.all) {
             val sheetKeys = keys(ReaderSettingRows.sheet(prefs, mode))
             val webtoon = isWebtoon(mode)
@@ -100,6 +101,15 @@ class ReaderSettingsParityTest {
                 if (webtoon) pagerKeys + settingsOnlyWebtoonMode else webtoonKeys
             (sheetKeys - settingsKeys) shouldBe sheetOnly
             (settingsKeys - sheetKeys) shouldBe settingsOnly
+        }
+    }
+
+    @Test
+    fun `continuous vertical crop borders is in Settings and the webtoon sheets, under Vertical+`() {
+        val key = prefs.cropBordersContinuousVertical().key()
+        keys(group(ReaderSettingRows.settings(prefs), "vertical_plus")) shouldBe setOf(key)
+        for (mode in ReadingModes.all) {
+            (key in keys(ReaderSettingRows.sheet(prefs, mode))) shouldBe isWebtoon(mode)
         }
     }
 }

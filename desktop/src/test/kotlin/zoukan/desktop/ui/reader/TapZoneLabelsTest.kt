@@ -1,10 +1,23 @@
 package zoukan.desktop.ui.reader
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
@@ -40,13 +53,36 @@ class TapZoneLabelsTest {
     }
 
     @Test
-    fun `the overlay labels the centre as the menu`() = runDesktopComposeUiTest {
-        val state = TapZonesOverlayState(DesktopPreferences(InMemoryPreferenceStore()))
+    fun `the overlay leaves the centre clear, as Android, so the reading mode toast can be read`() = runDesktopComposeUiTest(1000, 800) {
+        val mode = localized(MR.strings.right_to_left_viewer)
+        var layout by mutableIntStateOf(ReaderNavigation.DEFAULT)
+        var vertical by mutableStateOf(false)
+        var generation by mutableIntStateOf(0)
         setContent {
-            TapZonesOverlay(state, ReaderNavigation.zones(ReaderNavigation.DEFAULT, verticalViewer = false))
+            key(generation) {
+                // A fresh state per layout: it shows the zones on start, as when a chapter opens
+                val state = remember { TapZonesOverlayState(DesktopPreferences(InMemoryPreferenceStore())) }
+                Box(Modifier.fillMaxSize()) {
+                    TapZonesOverlay(state, ReaderNavigation.zones(layout, verticalViewer = vertical))
+                    ReadingModeToast(visible = true, label = mode)
+                }
+            }
         }
-        waitForIdle()
-        // The label is drawn twice, an outline and the fill
-        onAllNodesWithText(localized(MR.strings.action_menu)).onFirst().assertIsDisplayed()
+        for (v in listOf(false, true)) {
+            for (l in ReaderNavigation.DEFAULT until ReaderNavigation.DISABLED) {
+                vertical = v
+                layout = l
+                generation++
+                waitForIdle()
+                val toast = onNodeWithTag("reading-mode-toast").fetchSemanticsNode().boundsInRoot
+                val labels = onAllNodesWithTag("tap-zone-label", useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+                withClue("layout $l, vertical $v") {
+                    labels.shouldNotBeEmpty()
+                    labels.forEach { it.overlaps(toast) shouldBe false }
+                    // Android names only the zones; the menu (everything else) has no label
+                    onAllNodesWithText(localized(MR.strings.action_menu)).fetchSemanticsNodes().shouldBeEmpty()
+                }
+            }
+        }
     }
 }

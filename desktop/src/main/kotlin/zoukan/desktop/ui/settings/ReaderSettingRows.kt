@@ -140,6 +140,9 @@ object ReaderSettingRows {
             webtoonPinchToZoom,
             webtoonDisableZoomOut,
             pageTransitionsWebtoon,
+            // SY's Vertical+ group: continuous vertical's own crop borders
+            ReaderSettingRow.Group("vertical_plus", localized(MR.strings.vertical_plus_viewer)),
+            cropBordersContinuousVertical,
             ReaderSettingRow.Group("loading", localized(DMR.strings.page_loading)),
             preloadSize,
             readerThreads,
@@ -171,6 +174,9 @@ object ReaderSettingRows {
                 webtoonPinchToZoom,
                 webtoonDisableZoomOut,
                 pageTransitionsWebtoon,
+                // As Android's sheet, under both webtoon modes: SY's Vertical+ crop borders
+                ReaderSettingRow.Group("vertical_plus", localized(MR.strings.vertical_plus_viewer)),
+                cropBordersContinuousVertical,
             )
         } else {
             listOf(
@@ -290,6 +296,7 @@ object ReaderSettingRows {
         // The sheet's Viewer tab
         val webtoonSidePadding = ReaderSettingRow.Slider(localized(MR.strings.pref_webtoon_side_padding), p.webtoonSidePadding(), 0..25, { "$it%" })
         val cropBordersWebtoon = ReaderSettingRow.Switch(localized(MR.strings.pref_crop_borders), p.cropBordersWebtoon())
+        val cropBordersContinuousVertical = ReaderSettingRow.Switch(localized(MR.strings.pref_crop_borders), p.cropBordersContinuousVertical())
         val cropBorders = ReaderSettingRow.Switch(localized(MR.strings.pref_crop_borders), p.cropBorders())
         val imageScaleType = ReaderSettingRow.Choice(localized(MR.strings.pref_image_scale_type), p.imageScaleType(), FitModes.all.map { it to FitModes.label(it) })
         val pageLayout = ReaderSettingRow.Choice(

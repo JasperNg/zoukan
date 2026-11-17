@@ -73,6 +73,9 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
     // Read once: whether this launch follows an update, and whether to set up a new install
     var updatedDialog by remember { mutableStateOf(false) }
     var checked by remember { mutableStateOf(false) }
+    // The setup's state as the check below left it: the preference's flow can reach
+    // [onboardingDone] a frame after [checked], which would show the setup for that frame
+    var doneAtCheck by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val updated = WhatsNew.updatedFrom(preferences) != null
         if (!preferences.shownOnboardingFlow().get()) {
@@ -82,11 +85,12 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
             }
             if (hasLibrary) preferences.shownOnboardingFlow().set(true)
         }
-        updatedDialog = updated && preferences.shownOnboardingFlow().get()
+        doneAtCheck = preferences.shownOnboardingFlow().get()
+        updatedDialog = updated && doneAtCheck
         checked = true
     }
     if (!checked) return
-    if (!onboardingDone) {
+    if (!onboardingDone && !doneAtCheck) {
         OnboardingScreen(
             onComplete = { preferences.shownOnboardingFlow().set(true) },
             onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
