@@ -176,6 +176,23 @@ class KcefWebViewProvider(
         const val QUERY_CANCEL_FN = "__\$_suwayomiQueryCancel"
 
         // ZOUKAN -->
+        /**
+         * The host of [url] for the log, without the path, query or user info that can carry a
+         * sign-in code or token. A URL without a host gives its scheme ("about:"), and one that
+         * does not parse gives "?". Never throws.
+         */
+        fun hostForLog(url: String?): String {
+            if (url.isNullOrBlank()) return "?"
+            return try {
+                val uri = java.net.URI(url.trim())
+                uri.host ?: uri.scheme?.let { "$it:" } ?: "?"
+            } catch (e: Exception) {
+                "?"
+            }
+        }
+        // ZOUKAN <--
+
+        // ZOUKAN -->
         // Characters per message of a JavaScript-interface call
         private const val CHUNK_CHARS = 16_000
         // ZOUKAN <--
@@ -480,7 +497,10 @@ class KcefWebViewProvider(
             errorText: String,
             failedUrl: String,
         ) {
-            Log.w(TAG, "Load error ($failedUrl) [$errorCode]: $errorText")
+            // ZOUKAN -->
+            // Only the host: the path and query of a failed load can carry a sign-in code or token
+            Log.w(TAG, "Load error (${hostForLog(failedUrl)}) [$errorCode]: $errorText")
+            // ZOUKAN <--
             // TODO: translate correctly
             // ZOUKAN -->
             // Only the main frame's error reaches the client, as Android's onReceivedError

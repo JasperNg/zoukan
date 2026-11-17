@@ -1,8 +1,9 @@
 package zoukan.desktop.app
 
 import ch.qos.logback.classic.LoggerContext
-import ch.qos.logback.classic.encoder.PatternLayoutEncoder
+import ch.qos.logback.classic.PatternLayout
 import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.encoder.LayoutWrappingEncoder
 import ch.qos.logback.core.rolling.FixedWindowRollingPolicy
 import ch.qos.logback.core.rolling.RollingFileAppender
 import ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy
@@ -237,7 +238,17 @@ object CrashReporter {
             .flatMap { it.listFiles { f -> f.name == "hs_err_pid$pid.log" }.orEmpty().toList() }
             .firstOrNull { it.lastModified() >= since }
         jvmCrash?.let { src ->
-            return File(dirs.crashes, "jvm-crash-${src.name}").also { copyRedacted(src, it) }
+            val dest = File(dirs.crashes, "jvm-crash-${src.name}")
+            val copied = runCatching { copyRedacted(src, dest) }
+                .onFailure {
+                    logcat(LogPriority.WARN, it) { "Could not copy the JVM crash file ${src.name}" }
+                    dest.delete()
+                }
+                .isSuccess
+            if (copied) {
+                deleteJvmCrashOriginal(src)
+                return dest
+            }
         }
         // A fatal report from that run is already there; otherwise note the unclean end
         dirs.crashes.listFiles { f -> f.name.startsWith("crash-") && f.lastModified() >= since }
@@ -253,13 +264,53 @@ object CrashReporter {
         }
     }
 
+    private val HS_ERR_NAME = Regex("""hs_err_pid\d+\.log""")
+
+    /**
+     * Deletes the JVM's crash file once its redacted copy is in the crash folder: the original keeps
+     * the values of environment variables. Only a `hs_err_pid*.log` directly in the temp or working
+     * folder is deleted (never one in the data folder); a failure is logged and the file stays.
+     */
+    internal fun deleteJvmCrashOriginal(src: File) {
+        runCatching {
+            if (!HS_ERR_NAME.matches(src.name) || !src.isFile) return
+            val parent = src.absoluteFile.parentFile?.canonicalFile ?: return
+            val allowed = listOfNotNull(System.getProperty("java.io.tmpdir"), System.getProperty("user.dir"))
+                .mapNotNull { runCatching { File(it).canonicalFile }.getOrNull() }
+            if (parent !in allowed) return
+            if (!src.delete()) logcat(LogPriority.WARN) { "Could not delete the JVM crash file ${src.name} after copying it" }
+        }.onFailure { logcat(LogPriority.WARN, it) { "Could not delete the JVM crash file ${src.name} after copying it" } }
+    }
+
+    /**
+     * The main log's layout: every line, with its stack trace, goes through [redact] before it is
+     * written. A line that cannot be formatted or redacted is replaced by a note, never written as
+     * it was, and never throws into the code that logged it.
+     */
+    internal class RedactingPatternLayout : PatternLayout() {
+        override fun doLayout(event: ILoggingEvent): String = try {
+            redact(super.doLayout(event))
+        } catch (e: Exception) {
+            UNREDACTABLE_LINE
+        } catch (e: StackOverflowError) {
+            UNREDACTABLE_LINE
+        }
+    }
+
+    private const val UNREDACTABLE_LINE = "<a log line could not be written>\n"
+
     private fun installLogFile(dir: File) {
         val context = LoggerFactory.getILoggerFactory() as? LoggerContext ?: return
         val root = context.getLogger(Logger.ROOT_LOGGER_NAME)
         if (root.getAppender("FILE") != null) return
-        val encoder = PatternLayoutEncoder().apply {
+        val layout = RedactingPatternLayout().apply {
             this.context = context
             pattern = "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{24} - %msg%n"
+            start()
+        }
+        val encoder = LayoutWrappingEncoder<ILoggingEvent>().apply {
+            this.context = context
+            this.layout = layout
             start()
         }
         val appender = RollingFileAppender<ILoggingEvent>()
