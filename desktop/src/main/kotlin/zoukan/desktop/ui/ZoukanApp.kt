@@ -48,7 +48,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.testTag
@@ -198,24 +197,20 @@ fun runZoukanApp() {
         // ZOUKAN -->
         // The app lock: away (minimized, in the tray, or another app in front) and back, as
         // Android's background and foreground; "Lock when idle" counts from leaving the app
-        val appLock = remember { Injekt.get<zoukan.desktop.security.AppLock>() }
+        // The decisions are in AppLifecycle; the window only reports its events
+        val lifecycle = remember {
+            val appLock = Injekt.get<zoukan.desktop.security.AppLock>()
+            val sync = Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>()
+            zoukan.desktop.app.AppLifecycle(sync::syncOn, appLock::onBackground) { appLock.onForeground() }
+        }
         val hidden = !visible || windowState.isMinimized
         val appActive by zoukan.desktop.security.AppActivity.active.collectAsState()
         val away = hidden || !appActive
-        LaunchedEffect(away) { if (away) appLock.onBackground() else appLock.onForeground() }
+        LaunchedEffect(away) { lifecycle.onAwayChanged(away) }
         // Data sync on start and when the window comes back, as Android's sync triggers
-        val sync = remember { Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>() }
-        var wasAway by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { sync.syncOn { it.syncOnAppStart } }
+        LaunchedEffect(Unit) { lifecycle.onStart() }
         remember { Injekt.get<zoukan.desktop.discord.DiscordPresence>().apply { start() } }
-        // Only for a window that was hidden: switching to another app and back is no resume to sync on
-        LaunchedEffect(hidden) {
-            if (hidden) {
-                wasAway = true
-            } else if (wasAway) {
-                sync.syncOn { it.syncOnAppResume }
-            }
-        }
+        LaunchedEffect(hidden) { lifecycle.onHiddenChanged(hidden) }
         // ZOUKAN <--
 
         if (trayAvailable) {
@@ -225,15 +220,19 @@ fun runZoukanApp() {
                 tooltip = "Zoukan",
                 onAction = { visible = true },
                 menu = {
-                    Item(localized(DMR.strings.open_zoukan), onClick = { visible = true })
-                    Item(localized(MR.strings.action_update_library), onClick = { updater.start() })
-                    if (downloading) {
-                        Item(localized(DMR.strings.pause_downloads), onClick = { downloads.pause() })
-                    } else {
-                        Item(localized(DMR.strings.start_downloads), onClick = { downloads.start() })
+                    trayMenu(
+                        downloading = downloading,
+                        open = { visible = true },
+                        updateLibrary = { updater.start() },
+                        pauseDownloads = { downloads.pause() },
+                        startDownloads = { downloads.start() },
+                        quit = ::quit,
+                    ).forEach { entry ->
+                        when (entry) {
+                            is TrayEntry.Item -> Item(localized(entry.label), onClick = entry.onClick)
+                            TrayEntry.Separator -> Separator()
+                        }
                     }
-                    Separator()
-                    Item(localized(DMR.strings.quit), onClick = ::quit)
                 },
             )
             LaunchedEffect(Unit) {
@@ -262,17 +261,17 @@ fun runZoukanApp() {
         ) {
             Window(
                 onCloseRequest = {
-                    if (trayAvailable && preferences.closeToTray().get()) {
-                        visible = false
-                        if (!preferences.toldAboutTray().get()) {
-                            preferences.toldAboutTray().set(true)
+                    onWindowClose(
+                        trayAvailable = trayAvailable,
+                        preferences = preferences,
+                        hide = { visible = false },
+                        notifyStillRunning = {
                             trayState.sendNotification(
                                 Notification(localized(DMR.strings.zoukan_is_still_running), localized(DMR.strings.library_updates_and_downloads_go_on)),
                             )
-                        }
-                    } else {
-                        quit()
-                    }
+                        },
+                        quit = ::quit,
+                    )
                 },
                 visible = visible,
                 icon = icon,
@@ -385,7 +384,7 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
                 // The mouse's back button
                 // ZOUKAN -->
                 // Not while the app lock covers the window
-                if (event.button == PointerButton.Back && !appLock.locked.value) Shortcuts.goBack(navigatorRef)
+                Shortcuts.mouseBack(event.button, appLock.locked.value, navigatorRef)
                 // ZOUKAN <--
             }
                 // ZOUKAN -->
@@ -476,6 +475,9 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
     fun selectTab(tab: HomeTab) {
         current?.select(tab) ?: run { pending = tab }
     }
+
+    /** The tab the home screen shows; null before it shows. For the tests. */
+    internal val selectedTab: HomeTab? get() = current?.selected
 
     /** For the home screen's own effect. */
     internal fun register(state: HomeTabState) {

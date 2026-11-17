@@ -339,6 +339,17 @@ class LibraryScreenModel(
         val entryCount: Int
             get() = slot.let { it.entryCount ?: items.distinctBy { i -> i.id }.size.also { n -> it.entryCount = n } }
 
+        /**
+         * Whether the selection bar shows Download: as Android's LibraryTab, only when no selected
+         * entry is from the local source, whose chapters are files already and cannot be downloaded.
+         */
+        val selectionCanDownload: Boolean
+            get() = selection.isNotEmpty() && items.none { it.id in selection && it.manga.source == LocalSource.ID }
+
+        /** Whether a selected entry is not from the local source, so Delete downloads can delete something */
+        val selectionHasRemote: Boolean
+            get() = items.any { it.id in selection && it.manga.source != LocalSource.ID }
+
         val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }.takeIf { !grouped }
 
         /** The sort in effect: the category's own when categories keep their own settings. */
@@ -692,16 +703,12 @@ class LibraryScreenModel(
 
     fun toggleSelection(id: Long) {
         anchor = id
-        mutableState.update { it.copy(selection = if (id in it.selection) it.selection - id else it.selection + id) }
+        mutableState.update { it.copy(selection = toggledSelection(it.selection, id)) }
     }
 
     /** Selects from the last selected entry to [id], as Shift + click does in a file manager. */
     fun selectRange(id: Long) {
-        val ids = state.value.visible.map { it.id }
-        val from = ids.indexOf(anchor ?: id).takeIf { it >= 0 } ?: ids.indexOf(id)
-        val to = ids.indexOf(id)
-        if (from < 0 || to < 0) return toggleSelection(id)
-        val range = ids.subList(minOf(from, to), maxOf(from, to) + 1)
+        val range = rangeSelection(state.value.visible.map { it.id }, anchor, id) ?: return toggleSelection(id)
         mutableState.update { it.copy(selection = it.selection + range) }
     }
 
@@ -780,7 +787,8 @@ class LibraryScreenModel(
 
     fun deleteDownloads(ids: Set<Long> = state.value.selection) {
         val mangas = selected(ids).filter { it.source != LocalSource.ID }
-        screenModelScope.launch {
+        // A failure (the storage drive unplugged) is shown and keeps the selection, as the other actions do
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_delete_downloads) }) {
             mangas.forEach { manga ->
                 byEntry(manga, chaptersOf(manga)).forEach { (entry, chapters) -> downloadManager.delete(entry, chapters) }
             }
@@ -1027,3 +1035,17 @@ private val STATUS_GROUPS: Map<Long, Pair<String, Long>> = mapOf(
     SManga.CANCELLED.toLong() to (localized(MR.strings.cancelled) to 6L),
 )
 // ZOUKAN <--
+
+/** Ctrl/Cmd + click: [selection] with [id] added, or removed when it was selected. */
+internal fun toggledSelection(selection: Set<Long>, id: Long): Set<Long> = if (id in selection) selection - id else selection + id
+
+/**
+ * Shift + click: the entries of [ids] from [anchor] (the last toggled entry; [id] itself when
+ * there is none or it is no longer shown) to [id], or null when [id] is not shown.
+ */
+internal fun rangeSelection(ids: List<Long>, anchor: Long?, id: Long): List<Long>? {
+    val from = ids.indexOf(anchor ?: id).takeIf { it >= 0 } ?: ids.indexOf(id)
+    val to = ids.indexOf(id)
+    if (from < 0 || to < 0) return null
+    return ids.subList(minOf(from, to), maxOf(from, to) + 1)
+}

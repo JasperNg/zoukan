@@ -18,7 +18,6 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -67,6 +66,7 @@ import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -125,7 +125,7 @@ fun MigrateSourcesList(model: MigrateSourcesModel) {
                     Modifier.fillMaxWidth().clickable { navigator.push(MigrateMangaScreen(item.id)) }
                         // ZOUKAN -->
                         // Android's long press on a migration source copies its ID
-                        .onRightClick { copyToClipboard(item.id.toString()) }
+                        .onRightClick(localized(MR.strings.action_copy_to_clipboard)) { copyToClipboard(item.id.toString()) }
                         // ZOUKAN <--
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -286,7 +286,7 @@ private fun MigrateMangaRow(manga: Manga, selected: Boolean, onToggle: () -> Uni
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(selected, onCheckedChange = null)
+        RowCheckbox(selected, onCheckedChange = null)
         Spacer(Modifier.width(8.dp))
         CoverImage(Cover.of(manga), Modifier.size(width = 40.dp, height = 56.dp).clip(Corners.Medium).coverOutline(Corners.Medium))
         Spacer(Modifier.width(12.dp))

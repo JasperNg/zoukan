@@ -198,6 +198,12 @@ class MangaScreenModel(
 
     private var firstLoad = true
 
+    /**
+     * Bumped by each check of the downloads, so an older check that ends last is dropped. Before
+     * the init blocks: the entry can load (and check its downloads) before the constructor ends.
+     */
+    private val downloadedCheck = AtomicInteger()
+
     init {
         screenModelScope.launch {
             // ZOUKAN -->
@@ -300,9 +306,6 @@ class MangaScreenModel(
         }
     }
 
-    /** Bumped by each check of the downloads, so an older check that ends last is dropped. */
-    private val downloadedCheck = AtomicInteger()
-
     private fun updateDownloaded() {
         val manga = state.value.manga ?: return
         if (manga.source == LocalSource.ID) return
@@ -343,7 +346,8 @@ class MangaScreenModel(
 
     fun deleteDownloads(chapters: List<Chapter>) {
         val manga = state.value.manga ?: return
-        screenModelScope.launch {
+        // A failure (the storage drive unplugged) is shown and keeps the selection, as markRead does
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_delete_downloads) }) {
             byEntry(manga, chapters).forEach { (entry, list) -> downloadManager.delete(entry, list) }
             done(chapters)
         }
@@ -702,7 +706,9 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                logcat(LogPriority.ERROR, e)
+                // The storage drive unplugged, a file that cannot be deleted: said, not only logged
+                logcat(LogPriority.ERROR, e) { "Deleting the downloads of ${manga.title} failed" }
+                Toasts.error(localized(DMR.strings.screen_action_failed_delete_downloads), e)
             }
         }
     }

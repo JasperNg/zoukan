@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -57,7 +55,9 @@ import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
 import java.io.File
@@ -410,10 +410,10 @@ private fun ExportLibraryPreference() {
 @Composable
 private fun CheckRow(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().checkRow(checked, enabled, onChange = onChange).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        RowCheckbox(checked = checked, onCheckedChange = null, enabled = enabled)
         Spacer(Modifier.width(12.dp))
         Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
     }

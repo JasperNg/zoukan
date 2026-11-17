@@ -38,7 +38,6 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.download.DownloadManager.CleanupItem
 import zoukan.desktop.download.DownloadManager.CleanupPlan
 import zoukan.desktop.download.DownloadManager.CleanupReason
-import zoukan.desktop.download.SafeDelete
 import zoukan.i18n.desktop.DMR
 import java.io.File
 
@@ -74,7 +73,8 @@ fun CleanupDownloadsPreference() {
     preview?.let { plan ->
         CleanupPreviewDialog(
             plan,
-            canTrash = remember { SafeDelete.canTrash() },
+            // Found with the plan, for the downloads folder's volume: the delete does what this says
+            canTrash = plan.toTrash,
             onDismiss = { cleanupPreview.value = null },
         ) { orphans ->
             cleanupPreview.value = null
@@ -124,14 +124,17 @@ private fun runCleanup(plan: CleanupPlan, orphans: Set<File>) {
     Toasts.show(localized(SYMR.strings.starting_cleanup))
     AppScope.launch {
         try {
-            val cleared = Injekt.get<DownloadManager>().applyCleanup(plan, orphans, toTrash = true)
+            // Into the trash only when the preview said so; a file the trash refuses is kept, never deleted for good
+            val result = Injekt.get<DownloadManager>().applyCleanupResult(plan, orphans, toTrash = plan.toTrash)
             Toasts.show(
-                when (cleared) {
+                when (result.deleted) {
                     0 -> localized(SYMR.strings.no_folders_to_cleanup)
                     1 -> localized(DMR.strings.cleanup_done_removed_1_folder)
-                    else -> localized(DMR.strings.cleanup_done_removed_folders, cleared)
+                    else -> localized(DMR.strings.cleanup_done_removed_folders, result.deleted)
                 },
             )
+            if (result.notDeleted > 0) Toasts.show(localized(DMR.strings.cleanup_not_deleted, result.notDeleted))
+            if (result.skipped > 0) Toasts.show(localized(DMR.strings.cleanup_skipped_changed, result.skipped))
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Toasts.error(localized(DMR.strings.cleaning_up_downloads_failed), e)

@@ -237,14 +237,44 @@ private val EH_LANGUAGES = listOf(
     localized(DMR.strings.polish), localized(DMR.strings.portuguese), localized(DMR.strings.russian), localized(DMR.strings.spanish), localized(DMR.strings.thai), localized(DMR.strings.vietnamese), "N/A", localized(MR.strings.other_source),
 )
 
+/**
+ * The two E-Hentai filter settings in Android's format, which backups carry between the apps
+ * (SettingsEhScreen's LanguageDialogState and FrontPageCategoriesDialogState). A value with lines
+ * or parts missing (an older or hand-edited backup) reads them as off and is written back whole,
+ * so a dialog never shows fewer rows than it can save.
+ */
+internal object EhSettingsFormat {
+    const val LANGUAGES = 17
+    const val CATEGORIES = 10
+
+    /** Per language, original, translated and rewrite; Japanese has no "original" filter. */
+    fun parseLanguages(value: String): List<List<Boolean>> {
+        val lines = value.split("\n")
+        return List(LANGUAGES) { row ->
+            val parts = lines.getOrNull(row)?.split("*").orEmpty()
+            List(3) { column -> !(row == 0 && column == 0) && parts.getOrNull(column)?.toBoolean() == true }
+        }
+    }
+
+    /** "original*translated*rewrite" per language, one line each; Japanese's "original" is always false, as on Android. */
+    fun formatLanguages(rows: List<List<Boolean>>): String = List(LANGUAGES) { row ->
+        List(3) { column -> !(row == 0 && column == 0) && rows.getOrNull(row)?.getOrNull(column) == true }.joinToString("*")
+    }.joinToString("\n")
+
+    /** Whether each category shows on the front page; the setting stores "is hidden". */
+    fun parseShownCategories(value: String): List<Boolean> {
+        val hidden = value.split(",")
+        return List(CATEGORIES) { hidden.getOrNull(it)?.toBoolean() != true }
+    }
+
+    fun formatShownCategories(shown: List<Boolean>): String =
+        List(CATEGORIES) { (shown.getOrNull(it) == false).toString() }.joinToString(",")
+}
+
 /** "original*translated*rewrite" per language, one line each; Japanese has no "original" filter. */
 @Composable
 private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) {
-    val rows = remember {
-        mutableStateListOf(
-            *preferences.exhSettingsLanguages().get().split("\n").map { line -> line.split("*").map { it.toBoolean() } }.toTypedArray(),
-        )
-    }
+    val rows = remember { mutableStateListOf(*EhSettingsFormat.parseLanguages(preferences.exhSettingsLanguages().get()).toTypedArray()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(localized(DMR.strings.language_filtering)) },
@@ -255,7 +285,7 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
                     listOf(localized(DMR.strings.original), localized(SYMR.strings.translated), localized(DMR.strings.rewrite)).forEach { Text(it, Modifier.width(90.dp)) }
                 }
                 EH_LANGUAGES.forEachIndexed { index, language ->
-                    val row = rows.getOrNull(index) ?: listOf(false, false, false)
+                    val row = rows[index]
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(language, Modifier.width(120.dp))
                         (0..2).forEach { column ->
@@ -273,7 +303,7 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
         },
         confirmButton = {
             TextButton(onClick = {
-                preferences.exhSettingsLanguages().set(rows.joinToString("\n") { it.joinToString("*") })
+                preferences.exhSettingsLanguages().set(EhSettingsFormat.formatLanguages(rows))
                 onDismiss()
             }) { Text(localized(MR.strings.action_ok)) }
         },
@@ -288,7 +318,7 @@ private val EH_CATEGORIES = listOf(
 /** Stored as "is hidden" per category, comma separated. */
 @Composable
 private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) {
-    val shown = remember { mutableStateListOf(*preferences.exhEnabledCategories().get().split(",").map { !it.toBoolean() }.toTypedArray()) }
+    val shown = remember { mutableStateListOf(*EhSettingsFormat.parseShownCategories(preferences.exhEnabledCategories().get()).toTypedArray()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(localized(DMR.strings.front_page_categories)) },
@@ -296,7 +326,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
             Column {
                 EH_CATEGORIES.forEachIndexed { index, name ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(shown.getOrElse(index) { true }, onCheckedChange = { if (index < shown.size) shown[index] = it })
+                        Checkbox(shown[index], onCheckedChange = { shown[index] = it })
                         Text(name)
                     }
                 }
@@ -304,7 +334,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
         },
         confirmButton = {
             TextButton(onClick = {
-                preferences.exhEnabledCategories().set(shown.joinToString(",") { (!it).toString() })
+                preferences.exhEnabledCategories().set(EhSettingsFormat.formatShownCategories(shown))
                 onDismiss()
             }) { Text(localized(MR.strings.action_ok)) }
         },

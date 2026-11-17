@@ -6,10 +6,14 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
@@ -26,7 +30,8 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * Browse through the real UI, offline: the source categories on the Sources tab (with the local
  * source in one), the source filter screen, the Extensions tab and the Extension stores screen
- * (Browse keeps the open tab), hiding the Feed tab, and the local source's feed.
+ * (Browse keeps the open tab), hiding the Feed tab, the local source's feed, and a source's menu:
+ * set its categories, then disable it.
  *
  *   ./gradlew :desktop:journeyTest --tests "*BrowseCategoriesJourneyTest"
  */
@@ -85,6 +90,40 @@ class BrowseCategoriesJourneyTest {
                     waitFor(hasText("This source's latest, popular and saved searches"))
                     shot("source-feed")
                     runOnUiThread { navigator?.popUntilRoot() }
+                }
+
+                step("A source's menu: set its categories, then disable it") {
+                    fun rows() = onAllNodesWithText(source.name).fetchSemanticsNodes()
+                    runOnUiThread { HomeScreen.selectTab(HomeTab.Browse) }
+                    onAllNodesWithText("Sources").onFirst().performClick()
+                    waitFor(hasText(source.name))
+                    rows() shouldHaveSize 1
+                    // Android's long press: a right-click on the row opens its menu
+                    onAllNodesWithText(source.name).onFirst().performMouseInput { rightClick() }
+                    waitFor(hasText("Set categories"))
+                    onAllNodesWithText("Set categories").onFirst().performClick()
+                    waitFor(hasText("OK"))
+                    // The dialog's row, after the section header on the page
+                    val comics = onAllNodesWithText("Comics")
+                    comics[comics.fetchSemanticsNodes().size - 1].performClick()
+                    shot("source-set-categories")
+                    onAllNodesWithText("OK").onFirst().performClick()
+                    waitOrDump("for the stored source category", 10_000) {
+                        "${source.id}|Comics" in sources.sourcesTabSourcesInCategories().get()
+                    }
+                    sources.sourcesTabSourcesInCategories().get() shouldBe setOf("${LocalSource.ID}|Comics", "${source.id}|Comics")
+                    // Listed under Comics and still under its language (Android's "Filter sources in categories" is off)
+                    waitOrDump("for the source under Comics too", 10_000) { rows().size == 2 }
+                    shot("source-in-category")
+
+                    onAllNodesWithText(source.name).onFirst().performMouseInput { rightClick() }
+                    waitFor(hasText("Disable"))
+                    onAllNodesWithText("Disable").onFirst().performClick()
+                    waitOrDump("for the stored disabled source", 10_000) { source.id.toString() in sources.disabledSources().get() }
+                    waitOrDump("for the source to leave every section", 10_000) { rows().isEmpty() }
+                    // The local source keeps its category
+                    waitFor(hasText("Local source"))
+                    shot("source-disabled")
                 }
             }
         }

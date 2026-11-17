@@ -13,16 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,6 +42,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
+import zoukan.desktop.ui.common.RowTriStateCheckbox
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.radioRow
@@ -121,7 +121,7 @@ internal fun TriStateRow(label: String, preference: Preference<TriState>, notLab
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TriStateCheckbox(state = state, onClick = null)
+        RowTriStateCheckbox(state = state, onClick = null)
         Text(if (value == TriState.ENABLED_NOT) notLabel ?: localized(DMR.strings.not, label).replaceFirstChar { it.uppercase() } else label)
     }
 }
@@ -193,7 +193,7 @@ private fun CheckRow(label: String, preference: Preference<Boolean>) {
         Modifier.fillMaxWidth().checkRow(value) { preference.set(it) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(value, onCheckedChange = null)
+        RowCheckbox(value, onCheckedChange = null)
         Text(label)
     }
 }
@@ -208,7 +208,7 @@ private fun DisplayPage(model: LibraryScreenModel) {
             Modifier.fillMaxWidth().radioRow(mode == value) { p.displayMode().set(value) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(mode == value, onClick = null)
+            RowRadioButton(mode == value, onClick = null)
             Text(label)
         }
     }
@@ -265,7 +265,7 @@ private fun GroupPage(model: LibraryScreenModel) {
             Modifier.fillMaxWidth().radioRow(group == value) { p.set(value) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(group == value, onClick = null)
+            RowRadioButton(group == value, onClick = null)
             Text(label)
         }
     }
@@ -289,7 +289,7 @@ private fun CategoriesFilter(model: LibraryScreenModel) {
         Modifier.fillMaxWidth().checkRow(enabled) { p.filterCategories().set(it) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(enabled, onCheckedChange = null)
+        RowCheckbox(enabled, onCheckedChange = null)
         Text(localized(MR.strings.categories), Modifier.weight(1f))
         TextButton(onClick = { dialog = true }) { Text(localized(MR.strings.action_edit)) }
     }

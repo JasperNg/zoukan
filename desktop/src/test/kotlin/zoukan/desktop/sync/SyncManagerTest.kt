@@ -2,18 +2,28 @@ package zoukan.desktop.sync
 
 import android.app.Application
 import eu.kanade.domain.sync.SyncPreferences
+import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.sync.SyncManager
+import eu.kanade.tachiyomi.data.sync.models.SyncTriggerOptions
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.data.DatabaseHandler
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
+import tachiyomi.domain.manga.model.Manga
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.addSingleton
+import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.backup.SafetySnapshot
+import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 
@@ -59,6 +69,30 @@ class SyncManagerTest {
     }
 
     @Test
+    fun `sync on start or on resume runs only with a supported service and that trigger on`() {
+        coEvery { handler.await<Any>(any(), any()) } throws IOException("offline")
+        // A server the sync may reach: an empty address is refused before the database is read
+        preferences.webDavUrl().set("https://dav.example.com")
+        preferences.setSyncTriggerOptions(SyncTriggerOptions(syncOnAppStart = false, syncOnAppResume = true))
+
+        // No service: never, whatever the trigger
+        preferences.syncService().set(SyncManager.SyncService.NONE.value)
+        manager.syncOn { it.syncOnAppResume }
+        // A service the desktop cannot sync with
+        preferences.syncService().set(SyncManager.SyncService.GOOGLE_DRIVE.value)
+        manager.syncOn { it.syncOnAppResume }
+        // WebDAV, but the start trigger is off
+        preferences.syncService().set(SyncManager.SyncService.WEB_DAV.value)
+        manager.syncOn { it.syncOnAppStart }
+        Thread.sleep(500)
+        coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
+
+        // WebDAV and the resume trigger on: a sync starts in the background
+        manager.syncOn { it.syncOnAppResume }
+        coVerify(timeout = 10_000, exactly = 1) { handler.await<Any>(any(), any()) }
+    }
+
+    @Test
     fun `plain http is allowed only for this computer and the local network`() {
         listOf(
             "https://example.com",
@@ -100,5 +134,76 @@ class SyncManagerTest {
         runBlocking { manager.syncData() }
         coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
         manager.isDue(System.currentTimeMillis() + 60_000) shouldBe false
+    }
+
+    // A favorite Manga reads its custom info through Injekt; Injekt keeps the first one registered
+    private val local by lazy {
+        if (runCatching { Injekt.get<GetCustomMangaInfo>() }.isFailure) {
+            Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
+        }
+        Manga.create().copy(id = 7, source = 1, url = "/a", ogTitle = "A", favorite = true)
+    }
+
+    /** A manager whose snapshots go to [writes] (or fail with [fail]) and whose entry writes go to [written]. */
+    private fun withSnapshots(writes: MutableList<String>, written: MutableList<Manga>, fail: Boolean = false): SyncManager {
+        coEvery { handler.awaitList<Manga>(any(), any()) } returns listOf(local)
+        val snapshot = SafetySnapshot(
+            folder = { File(root, "safety") },
+            write = { file ->
+                if (fail) throw IOException("disk full")
+                writes += "snapshot"
+                file.writeText("x")
+            },
+        )
+        return SyncManager(
+            context = mockk<Application>(relaxed = true),
+            handler = handler,
+            syncPreferences = preferences,
+            getCategories = mockk(),
+            dirs = ZoukanDirs(root),
+            safetySnapshot = snapshot,
+            updateLocalManga = { manga ->
+                writes += "update"
+                written += manga
+            },
+        )
+    }
+
+    @Test
+    fun `a remote with no favorites that unfavorites a local entry takes a snapshot first`() = runBlocking {
+        val writes = mutableListOf<String>()
+        val written = mutableListOf<Manga>()
+        val manager = withSnapshots(writes, written)
+        val remote = BackupManga(source = 1, url = "/a", title = "A").apply { favorite = false }
+
+        manager.snapshotThenUpdateNonFavorites(favorites = emptyList(), nonFavorites = listOf(remote)) shouldBe true
+
+        writes shouldBe listOf("snapshot", "update")
+        written.single().favorite shouldBe false
+    }
+
+    @Test
+    fun `without a snapshot the sync unfavorites nothing`() = runBlocking {
+        val writes = mutableListOf<String>()
+        val written = mutableListOf<Manga>()
+        val manager = withSnapshots(writes, written, fail = true)
+        val remote = BackupManga(source = 1, url = "/a", title = "A").apply { favorite = false }
+
+        manager.snapshotThenUpdateNonFavorites(favorites = emptyList(), nonFavorites = listOf(remote)) shouldBe false
+
+        written shouldBe emptyList()
+    }
+
+    @Test
+    fun `a sync that changes nothing takes no snapshot`() = runBlocking {
+        val writes = mutableListOf<String>()
+        val written = mutableListOf<Manga>()
+        val manager = withSnapshots(writes, written)
+        // A non-favorite the desktop does not have: nothing local changes
+        val remote = BackupManga(source = 1, url = "/b", title = "B").apply { favorite = false }
+
+        manager.snapshotThenUpdateNonFavorites(favorites = emptyList(), nonFavorites = listOf(remote)) shouldBe true
+
+        writes shouldBe emptyList()
     }
 }

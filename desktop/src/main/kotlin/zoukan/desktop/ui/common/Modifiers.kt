@@ -7,15 +7,43 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 
-/** Calls [onClick] on a secondary (right) mouse click. */
-fun Modifier.onRightClick(onClick: () -> Unit): Modifier = onRightClickAt { onClick() }
+/**
+ * Calls [onClick] on a secondary (right) mouse click. The same action is a semantics custom action
+ * named [label], so a screen reader or keyboard user (and the tests) can reach what only a mouse
+ * could: see [onRightClickAt].
+ */
+fun Modifier.onRightClick(onClick: () -> Unit): Modifier = onRightClickAt(null) { onClick() }
 
-/** Calls [onClick] on a secondary (right) mouse click, with where it landed in this element. */
-fun Modifier.onRightClickAt(onClick: (Offset) -> Unit): Modifier = onPointerEvent(PointerEventType.Press) { event ->
-    if (event.button == PointerButton.Secondary) onClick(event.changes.firstOrNull()?.position ?: Offset.Zero)
-}
+/** [onRightClick], with [label] naming the action for screen readers and keyboard users. */
+fun Modifier.onRightClick(label: String, onClick: () -> Unit): Modifier = onRightClickAt(label) { onClick() }
+
+/**
+ * Calls [onClick] on a secondary (right) mouse click, with where it landed in this element. The
+ * action is also a semantics custom action named [label] ("More actions" when null), which runs it
+ * at the element's top left corner, for screen readers, keyboard users and the button crawl.
+ */
+fun Modifier.onRightClickAt(onClick: (Offset) -> Unit): Modifier = onRightClickAt(null, onClick)
+
+/** [onRightClickAt], with [label] naming the action for screen readers and keyboard users. */
+fun Modifier.onRightClickAt(label: String?, onClick: (Offset) -> Unit): Modifier = this
+    .semantics {
+        customActions = listOf(
+            CustomAccessibilityAction(label ?: localized(DMR.strings.more_actions)) {
+                onClick(Offset.Zero)
+                true
+            },
+        )
+    }
+    .onPointerEvent(PointerEventType.Press) { event ->
+        if (event.button == PointerButton.Secondary) onClick(event.changes.firstOrNull()?.position ?: Offset.Zero)
+    }
 
 /**
  * A row with a checkbox or switch in it: the whole row is the control, with the row's text as its

@@ -94,7 +94,7 @@ class FixtureServer : AutoCloseable {
     /** Every path asked for, in order. */
     val requests: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-    /** Every request, in order, with its Cookie headers. */
+    /** Every request, in order, with its Cookie and User-Agent headers. */
     val requestLog: MutableList<FixtureRequest> = Collections.synchronizedList(mutableListOf())
 
     val baseUrl: String get() = "http://127.0.0.1:${server.address.port}"
@@ -142,7 +142,7 @@ class FixtureServer : AutoCloseable {
     private fun handle(exchange: HttpExchange) {
         val path = exchange.requestURI.path
         requests += path
-        requestLog += FixtureRequest(path, exchange.requestHeaders["Cookie"].orEmpty())
+        requestLog += FixtureRequest(path, exchange.requestHeaders["Cookie"].orEmpty(), exchange.requestHeaders["User-Agent"].orEmpty())
         val parts = path.trim('/').split('/')
         // Taken before the rules are read, so a clearFailures in between still releases this request
         val heal = healSignal.get()
@@ -329,8 +329,11 @@ class FixtureServer : AutoCloseable {
     }
 }
 
-/** A request the server got: its path and its Cookie headers (none when it sent no cookie). */
-data class FixtureRequest(val path: String, val cookieHeaders: List<String>) {
+/**
+ * A request the server got: its path, its Cookie headers (none when it sent no cookie) and its
+ * User-Agent headers.
+ */
+data class FixtureRequest(val path: String, val cookieHeaders: List<String>, val userAgents: List<String> = emptyList()) {
     /** The value of each cookie named [name] it sent, in order; more than one is a duplicate. */
     fun cookieValues(name: String): List<String> = cookieHeaders.flatMap { it.split(';') }
         .map { it.trim() }

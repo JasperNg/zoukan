@@ -78,8 +78,7 @@
   feature: "Reopened onboarding guide (from Advanced)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.OnboardingJourneyTest]
-  gap: "The journey walks the first-run steps; reopening the guide from Advanced is not driven"
+  tests: [ui.ScreenSmokeTest, e2e.OnboardingJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: dialog:whatsnew.UpdatedDialog
   feature: "Updated dialog after an update"
@@ -91,8 +90,7 @@
   feature: "What's new screen (release notes)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.whatsnew.WhatsNewTest]
-  gap: "Accepted gap: the release notes are read from the GitHub release, so an offline journey cannot open it (SettingsPagesJourneyTest leaves What's new alone); manual or nightly only"
+  tests: [ui.ScreenSmokeTest, ui.whatsnew.WhatsNewTest, e2e.SettingsPagesJourneyTest]
 
 - key: flow:app.self-test
   feature: "Self-test window"
@@ -144,8 +142,7 @@
   feature: "Stats shortcut"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: StatsJourneyTest"
+  tests: [e2e.StatsJourneyTest]
 
 - key: flow:library.update
   feature: "Update library / category"
@@ -171,7 +168,7 @@
   tier: journey
   smoke: false
   tests: [e2e.LibrarySelectionJourneyTest]
-  gap: "merging, planned: MergeEntriesJourneyTest"
+  gap: "Merge is driven with two entries (merged references and the originals' removal); clean titles, MangaDex follows and reset info need E-Hentai or MangaDex entries"
 
 - key: flow:library.selection-download
   feature: "Download menu for the selection (unread, bookmarked, ...)"
@@ -183,15 +180,13 @@
   feature: "Move to category dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: CategoriesJourneyTest (category assignment from the library)"
+  tests: [e2e.CategoriesJourneyTest]
 
 - key: dialog:library.RemoveDialog
   feature: "Remove from library dialog (also delete downloads)"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: LibrarySelectionJourneyTest"
+  tests: [e2e.LibrarySelectionJourneyTest]
 
 - key: dialog:library.LibraryDeleteDownloadsDialog
   feature: "Delete downloads of the selected entries: asks first, with the entry count"
@@ -203,8 +198,8 @@
   feature: "Remove merged entry confirmation"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Needs a merged entry; planned: MergeEntriesJourneyTest"
+  tests: [e2e.LibrarySelectionJourneyTest]
+  gap: "Remove is driven; Cancel (keep the originals) is not"
 
 - key: dialog:library.SyncFavoritesNotesDialog
   feature: "Sync favorites notes (E-Hentai)"
@@ -266,8 +261,7 @@
   feature: "Row read/unread toggle"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not driven; planned: UpdatesJourneyTest"
+  tests: [e2e.UpdatesJourneyTest]
 
 - key: dialog:updates.UpdatesFilterDialog
   feature: "Updates filter dialog"
@@ -325,7 +319,7 @@
   tier: journey
   smoke: false
   tests: [ui.history.HistoryFiltersTest, e2e.HistoryJourneyTest]
-  gap: "The journey toggles the not-in-library filter; the unfinished filters and the panorama switch are not driven"
+  gap: "The panorama switch is checked as a stored preference; the wide cover it shows is not (the fixture covers are not wide)"
 
 - key: screen:more.HistoryScreen
   feature: "History as a More screen"
@@ -345,22 +339,20 @@
   feature: "Sources page: search, sections, latest, settings, disable, move category"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.browse.SourceSearchTest, e2e.BrowseAndReadJourneyTest, e2e.SourcePreferencesJourneyTest, e2e.BrowseFeaturesJourneyTest]
-  gap: "Disable and move category are not driven by any journey"
+  tests: [ui.ScreenSmokeTest, ui.browse.SourceSearchTest, e2e.BrowseAndReadJourneyTest, e2e.SourcePreferencesJourneyTest, e2e.BrowseFeaturesJourneyTest, e2e.BrowseCategoriesJourneyTest]
 
 - key: browse:FEED
   feature: "Feed page"
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
-  gap: "Only the feed order is driven; feed content is not; planned: a feed content journey"
+  gap: "Removing a feed and the feed's bulk selection are not driven"
 
 - key: dialog:browse.AddFeedDialog
   feature: "Feed page: add feed"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test (BrowseFeaturesJourneyTest seeds feeds directly); planned: a feed content journey"
+  tests: [e2e.BrowseFeaturesJourneyTest]
 
 - key: dialog:browse.FeedOrderDialog
   feature: "Feed page: reorder"
@@ -439,15 +431,13 @@
   feature: "Delete saved search dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Saved searches are not driven; planned: BrowseFeaturesJourneyTest"
+  tests: [e2e.BrowseFeaturesJourneyTest]
 
 - key: dialog-inline:SourceScreen.kt:FilterPanel
   feature: "Save search dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Saved searches are not driven; planned: BrowseFeaturesJourneyTest"
+  tests: [e2e.BrowseFeaturesJourneyTest]
 
 - key: flow:browse.source-error-retry
   feature: "Source catalogue fails (500): the error shows, Retry lists the titles"
@@ -465,8 +455,8 @@
   feature: "Open website (sign in / Cloudflare), source feed, source settings"
   tier: journey
   smoke: false
-  tests: []
-  gap: "No test opens the source feed or settings from the header; planned: BrowseFeaturesJourneyTest; the website opens the Chromium window (manual)"
+  tests: [e2e.BrowseFeaturesJourneyTest]
+  gap: "The website button opens the Chromium window (manual)"
 
 - key: screen:browse.SourceFeedScreen
   feature: "Source feed screen"
@@ -554,8 +544,7 @@
   feature: "Description, notes, cover-based theme"
   tier: journey
   smoke: false
-  tests: [e2e.HtmlDescriptionJourneyTest, e2e.MetadataJourneyTest, ui.manga.DescriptionImagesTest, ui.manga.EntryCoverTest]
-  gap: "Notes and the cover-based theme are not driven; planned: EntryPageJourneyTest"
+  tests: [e2e.HtmlDescriptionJourneyTest, e2e.MetadataJourneyTest, e2e.EntryPageJourneyTest, ui.manga.DescriptionImagesTest, ui.manga.EntryCoverTest]
 
 - key: flow:manga.info-menus
   feature: "Title/author menus: library search, global search, copy"
@@ -616,8 +605,8 @@
   feature: "Second question before something the user cannot take back or that runs third-party code (local files to the trash, downloads deleted from Updates, a new download password, a sync reset, MangaDex follows, installing an extension, removing a store or a feed)"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest, ui.settings.DownloadPasswordDialogTest, e2e.StoreInstallJourneyTest]
-  gap: "The sync reset and MangaDex follow confirmations are not opened by a test"
+  tests: [ui.ScreenSmokeTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.DownloadJourneyTest, ui.settings.DownloadPasswordDialogTest, e2e.StoreInstallJourneyTest, ui.settings.SyncSettingsValidationTest, e2e.SyncWebDavJourneyTest, ui.settings.MangaDexSettingsTest]
+  gap: "The MangaDex follow confirmation is unit tested (MangaDexSettingsTest: Cancel follows nothing, Follow runs it once); confirming in the app would call MangaDex, so no journey confirms it"
 
 - key: dialog:manga.CategoryDialog
   feature: "Categories: add"
@@ -636,21 +625,19 @@
   tier: journey
   smoke: false
   tests: [e2e.MangaDeleteSelectionJourneyTest]
-  gap: "Only select all and delete downloads (toolbar and right-click menu, with its confirmation) are driven; the rest planned: EntryPageJourneyTest"
 
 - key: flow:manga.chapter-row
   feature: "Chapter row (read, bookmark, download state, context menu)"
   tier: journey
   smoke: false
-  tests: [e2e.BrowseAndReadJourneyTest, e2e.DownloadJourneyTest, ui.manga.ChapterListTest]
-  gap: "Bookmark and the context menu are only driven from plain values (ChapterListTest); planned: EntryPageJourneyTest"
+  tests: [e2e.BrowseAndReadJourneyTest, e2e.DownloadJourneyTest, e2e.MangaDeleteSelectionJourneyTest, ui.manga.ChapterListTest]
 
 - key: flow:manga.download-menu
   feature: "Download menu (next, unread, bookmarked, custom)"
   tier: journey
   smoke: false
-  tests: [e2e.DownloadJourneyTest]
-  gap: "Only Next chapter is driven; planned: EntryPageJourneyTest"
+  tests: [e2e.DownloadJourneyTest, e2e.EntryPageJourneyTest]
+  gap: "Next 25 chapters is not driven (with twelve chapters it queues what Unread chapters does)"
 
 - key: dialog:manga.ChapterSettingsDialog
   feature: "Chapter settings (filter, sort, display)"
@@ -660,31 +647,27 @@
 
 - key: dialog:manga.ScanlatorFilterDialog
   feature: "Chapter settings: scanlator filter"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [ui.manga.ChapterSettingsTest]
-  gap: "Dialog not opened; planned: EntryPageJourneyTest"
+  tests: [ui.manga.ChapterSettingsTest, e2e.EntryPageJourneyTest]
 
 - key: dialog:manga.SetAsDefaultDialog
   feature: "Chapter settings: set as default"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: EntryPageJourneyTest"
+  tests: [e2e.EntryPageJourneyTest]
 
 - key: dialog-inline:MangaScreen.kt:Content
   feature: "Update tracking prompt after reading"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Needs a bound tracker; planned: KomgaTrackingJourneyTest"
+  tests: [e2e.KomgaTrackingJourneyTest]
 
 - key: dialog:manga.PickDialog
   feature: "Merge / migrate pick"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.MergeEntriesJourneyTest]
-  gap: "Only the merge pick is driven; picking for a migration, planned: MigrationJourneyTest"
+  tests: [ui.ScreenSmokeTest, e2e.MergeEntriesJourneyTest, e2e.MigrationJourneyTest]
 
 - key: dialog:manga.MergeDialog
   feature: "Merge dialog"
@@ -703,21 +686,20 @@
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.MergeEntriesJourneyTest]
-  gap: "Only removing a source from the merge is driven (the dialog has no on/off switch for a source); the update and download checkboxes and choosing the info entry are not"
+  gap: "Choosing the info entry is not driven, nor a new chapter downloaded by a refresh through the Downloads box (needs a source that gains a chapter)"
 
 - key: dialog:track.TrackingDialog
   feature: "Tracking dialog"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.KomgaTrackingJourneyTest, track.TrackingSearchTest, track.TrackChaptersTest]
-  gap: "Komga bind, progress sync, error and unbind are driven offline; hosted trackers (AniList, MyAnimeList, Kitsu, MangaUpdates, Shikimori, Bangumi) are accepted gaps: their hosts are hard-coded, covered by unit tests (TrackerLoginTest, TrackingSearchTest, TrackChaptersTest) and smoke"
+  tests: [ui.ScreenSmokeTest, e2e.KomgaTrackingJourneyTest, track.TrackingSearchTest, track.TrackChaptersTest, track.AnilistApiTest]
+  gap: "Komga bind, progress sync, error and unbind are driven offline; for the hosted trackers (AniList, MyAnimeList, Kitsu, MangaUpdates, Shikimori, Bangumi) the API addresses are constants in the shared Android code, so the dialog is not driven against them: AniList's search, bind, progress, unbind and error mapping are unit tested with recorded answers (AnilistApiTest); the others by TrackerLoginTest, TrackingSearchTest, TrackChaptersTest and smoke"
 
 - key: screen:manga.PagePreviewScreen
   feature: "Page previews screen"
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.PagePreviewsJourneyTest, ui.manga.PagePreviewScreenTest]
-  gap: "Only the first page of previews loads (the fixture has one); loading the next page as the grid scrolls is not driven. Related titles on the entry screen: e2e.PagePreviewsJourneyTest"
 
 - key: screen:manga.MetadataViewScreen
   feature: "Metadata view"
@@ -755,8 +737,7 @@
   feature: "Keys: arrows, J/K, space, PgUp/PgDn, Home/End, N/P chapters, zoom, M menu, F/F11 full screen"
   tier: unit
   smoke: false
-  tests: [ui.reader.ReaderNavigationTest, e2e.ReaderKeyboardJourneyTest]
-  gap: "Journeys press only Left to turn pages; planned: KeyboardShortcutsJourneyTest (reader keys and Esc)"
+  tests: [ui.reader.ReaderNavigationTest, ui.reader.ReaderKeysTest, e2e.ReaderKeyboardJourneyTest]
 
 - key: dialog-inline:ReaderScreen.kt:KeyboardHelp
   feature: "Keyboard help dialog"
@@ -848,15 +829,14 @@
   feature: "Download queue row"
   tier: journey
   smoke: false
-  tests: []
-  gap: "The More tab's row is not clicked (LocalJourneyTest opens the queue from the Library header); the empty queue is in EmptyStatesJourneyTest"
+  tests: [e2e.DownloadJourneyTest]
 
 - key: screen:downloads.DownloadsScreen
   feature: "Download queue screen: pause/start, cancel all, open folder, move top/bottom, cancel series, sort"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, download.DownloadQueueOrderTest, download.DownloadQueueStatesTest]
-  gap: "Queue actions are not driven; the empty queue is in EmptyStatesJourneyTest"
+  tests: [ui.ScreenSmokeTest, download.DownloadQueueOrderTest, download.DownloadQueueStatesTest, e2e.DownloadJourneyTest]
+  gap: "The queue sort, the series moves and open folder are not driven by a journey (the sort is in DownloadQueueOrderTest)"
 
 - key: screen:category.CategoryScreen
   feature: "Categories row and Category screen: add, rename, delete, reorder, default"
@@ -880,15 +860,15 @@
   feature: "Statistics row and Stats screen"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.StatsJourneyTest]
-  gap: "The journey checks the library, read chapter, total chapter, downloaded and read time counts; tracker figures and the all-read-entries switch are not driven"
+  tests: [ui.ScreenSmokeTest, e2e.StatsJourneyTest, ui.stats.StatsScreenModelTest]
+  gap: "Tracker figures are unit tested (StatsScreenModelTest), not shown with a logged-in tracker"
 
 - key: settings:Data
   feature: "Data and storage (also the More tab's row): storage location, downloads folder; backup create, restore, folder; storage usage, chapter and cover cache, data folder; export library list; data sync; data saver"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest, e2e.MetadataJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest, manga.CoverCacheClearTest, storage.StorageUnavailableTest]
-  gap: "sync on start and on resume stays Window-level (accepted gap until a later refactor); the missing-storage-folder banner is unit tested through ZoukanStorage, not shown by a UI test"
+  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest, e2e.MetadataJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest, manga.CoverCacheClearTest, storage.StorageUnavailableTest, sync.SyncManagerTest, app.AppLifecycleTest]
+  gap: "Sync on start and on resume are unit tested through the window's lifecycle hooks (AppLifecycleTest, with the real SyncManager); only the Window composable's own wiring of its events to AppLifecycle is not driven by a test (journeys render ZoukanContent); the missing-storage-folder banner is unit tested through ZoukanStorage, not shown by a UI test"
 
 - key: screen:more.SettingsScreen
   feature: "Settings row"
@@ -900,8 +880,8 @@
   feature: "About (also the More tab's row): what's new, check for updates, test releases, GitHub token"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest, update.UpdateCheckerTest, update.ReleaseSignatureTest, update.UpdatesInstallTest]
-  gap: "The journey flips include test releases (a preference only: it matters when the app checks); What's new and check for updates need GitHub (manual or nightly), the GitHub token row is not driven"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest, update.UpdateCheckerTest, update.ReleaseSignatureTest, update.UpdatesInstallTest, update.UpdatesDownloadTest]
+  gap: "Offline, against GitHub's API addresses served by the fixture server (FixtureReleases): the journey checks for updates (test releases off and on), opens What's new, downloads an update signed with a test release key and clicks Install, which hands the checked file to the system (a recorder: nothing starts); UpdatesDownloadTest rejects a changed installer, another key's signature, a missing signature and a checksum mismatch. Running the real installer (msiexec, open) and the built-in key on a real release stay manual"
 
 - key: flow:more.help
   feature: "Help row (opens the browser)"
@@ -959,7 +939,7 @@
   tier: journey
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
-  gap: "The journey checks the default reading mode (Webtoon opens a chapter in the webtoon reader); the other reader settings are not driven"
+  gap: "Driven from this page and seen in the reader: the default reading mode (Webtoon), Show reading mode off, page scaling (Original size), background (White, by pixel), tap zones (Kindle-ish turns the page where the default opens the menu), keep screen on (the reader holds the display) and page transitions off (set, not timed: the slide itself is ReaderReducedMotionTest's). Page layout and crop borders are not on this page (the reader's sheet only, ReaderSettingsParityTest) and are driven by ReaderSettingsJourneyTest and CropBordersTest"
 
 - key: settings:Downloads
   feature: "Download location and password (CBZ); delete chapters, auto download, download ahead, cache renew"
@@ -988,24 +968,24 @@
 
 - key: dialog:settings.CleanupPreviewDialog
   feature: "Clean up downloads preview: counts and sizes, orphaned folders unticked until ticked, trash or permanent"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [ui.settings.CleanupPreviewDialogTest, download.DownloadCleanupSafetyTest]
-  gap: "Not reached from the Settings row by a test; planned with the Clean up downloads journey"
+  tests: [ui.settings.CleanupPreviewDialogTest, download.DownloadCleanupSafetyTest, e2e.DownloadJourneyTest]
+  gap: "The journey trashes through a test hook; the real system trash is manual"
 
 - key: dialog:settings.CleanupDownloadsDialog
   feature: "Clean up downloads: options, preview with counts and sizes, orphaned folders ticked one by one, trash"
-  tier: unit
+  tier: journey
   smoke: false
-  tests: [ui.settings.CleanupPreviewDialogTest, download.DownloadCleanupSafetyTest, download.DownloadQueueOrderTest, download.DownloadCleanupRaceTest]
-  gap: "The Settings row and the options dialog are not clicked through to the preview; planned: a journey (Settings > Advanced > preview > confirm), SettingsPagesJourneyTest is its nearest home"
+  tests: [ui.settings.CleanupPreviewDialogTest, download.DownloadCleanupSafetyTest, download.DownloadQueueOrderTest, download.DownloadCleanupRaceTest, e2e.DownloadJourneyTest]
+  gap: "The journey trashes through a test hook; the real system trash is manual"
 
 - key: settings:Tracking
   feature: "Trackers, login dialogs, auto update"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest, track.TrackingSearchTest, track.TrackChaptersTest, e2e.SettingsPagesJourneyTest]
-  gap: "The journey flips track when adding to the library (a preference; no tracker is signed in, so nothing shows elsewhere offline); hosted trackers (AniList, MyAnimeList and the others) are accepted gaps: hosts are hard-coded, covered by unit tests (TrackerLoginTest, TrackingSearchTest, TrackChaptersTest) and smoke"
+  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest, track.TrackingSearchTest, track.TrackChaptersTest, e2e.SettingsPagesJourneyTest, e2e.KomgaTrackingJourneyTest, track.AnilistApiTest]
+  gap: "The journey flips track when adding to the library; KomgaTrackingJourneyTest shows its effect with Komga bound (on: the tracking dialog opens after adding; off: it does not) and Update tracking: Ask; hosted trackers are driven only through unit tests (AnilistApiTest with recorded answers, TrackerLoginTest, TrackingSearchTest, TrackChaptersTest): their API addresses are constants in the shared Android code"
 
 - key: dialog-inline:TrackingSettings.kt:TrackerSetting
   feature: "Tracker login dialogs"
@@ -1025,8 +1005,7 @@
   feature: "Discord Rich Presence: hidden categories"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Needs Discord Rich Presence on; planned: SettingsPagesJourneyTest (Connections)"
+  tests: [e2e.SettingsPagesJourneyTest, discord.DiscordPresenceTest]
 
 - key: settings:Browse
   feature: "Sources, feed, hide library items, NSFW"
@@ -1063,8 +1042,7 @@
   feature: "Missing extensions card dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Needs a restore with missing extensions; planned: BackupRestoreJourneyTest (missing source)"
+  tests: [e2e.BackupRestoreJourneyTest]
 
 - key: dialog-inline:DataSettings.kt:ExportLibraryPreference
   feature: "Export library list dialog"
@@ -1088,8 +1066,8 @@
   feature: "Data sync: when to sync"
   tier: journey
   smoke: false
-  tests: [e2e.SyncYomiJourneyTest]
-  gap: "The dialog sets the triggers; sync on start and on resume stays Window-level (accepted gap until a later refactor)"
+  tests: [e2e.SyncYomiJourneyTest, app.AppLifecycleTest]
+  gap: "The journey sets the triggers in the dialog; AppLifecycleTest checks what they do on start and on resume"
 
 - key: dialog-inline:DataSaverSettings.kt:DataSaverSettings
   feature: "Data saver dialogs"
@@ -1134,8 +1112,8 @@
   feature: "Security: incognito extensions"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Accepted gap: no test sets an extension incognito (ReaderIncognitoTest covers merged entries only; IncognitoJourneyTest covers the global switch). Per-extension incognito keys on the extension package, which a testSources source does not have; it needs the StoreInstall jar source"
+  tests: [e2e.IncognitoJourneyTest, security.IncognitoTest]
+  gap: "The journey picks the Local source in the dialog; an installed extension's package is matched to its sources in IncognitoTest"
 
 - key: settings:EHentai
   feature: "E-Hentai options, languages, front page categories, favorites sync"
@@ -1148,15 +1126,13 @@
   feature: "E-Hentai: languages"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: SettingsPagesJourneyTest (E-Hentai)"
+  tests: [e2e.SettingsPagesJourneyTest, ui.settings.EhSettingsFormatTest]
 
 - key: dialog:settings.CategoriesDialog
   feature: "E-Hentai: front page categories"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: SettingsPagesJourneyTest (E-Hentai)"
+  tests: [e2e.SettingsPagesJourneyTest, ui.settings.EhSettingsFormatTest]
 
 - key: settings:MangaDex
   feature: "MangaDex login, sync follows"
@@ -1183,15 +1159,13 @@
   feature: "Advanced: user agent dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: SettingsBrowseDataAdvancedJourneyTest"
+  tests: [e2e.SettingsBrowseDataAdvancedJourneyTest]
 
 - key: dialog-inline:AboutSettings.kt:TokenRow
   feature: "About: GitHub token dialog"
   tier: journey
   smoke: false
-  tests: []
-  gap: "Not opened by any test; planned: SettingsPagesJourneyTest (About)"
+  tests: [e2e.SettingsPagesJourneyTest]
 
 - key: screen:settings.SourceSettingsScreen
   feature: "Source settings screen"

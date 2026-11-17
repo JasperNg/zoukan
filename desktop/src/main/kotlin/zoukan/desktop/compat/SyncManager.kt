@@ -53,6 +53,8 @@ class SyncManager(
     private val dirs: ZoukanDirs = Injekt.get(),
     // ZOUKAN -->
     private val safetySnapshot: SafetySnapshot = SafetySnapshot.forApp(),
+    /** Writes a local entry's new favorite state; tests replace it. */
+    private val updateLocalManga: (suspend (Manga) -> Unit)? = null,
     // ZOUKAN <--
 ) {
     private val json = Json {
@@ -250,17 +252,8 @@ class SyncManager(
 
         val (favorites, nonFavorites) = splitFavorites(remoteBackup)
         // ZOUKAN -->
-        // A copy of the library before the remote one overwrites it, so the sync can be undone.
-        // Nobody is there to ask, so without one the library is left as it is and the sync tries
-        // again later; the notification says why
-        if (favorites.isNotEmpty()) {
-            safetySnapshot.take(SnapshotReason.SYNC).onFailure { e ->
-                notifier.showSyncError(localized(DMR.strings.sync_skipped_no_safety_backup, SafetySnapshot.errorText(e)))
-                return false
-            }
-        }
+        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites)) return false
         // ZOUKAN <--
-        updateNonFavorites(nonFavorites)
 
         if (favorites.isEmpty()) {
             syncPreferences.lastSyncTimestamp().set(Date().time)
@@ -355,12 +348,40 @@ class SyncManager(
         return favorites to nonFavorites
     }
 
-    private suspend fun updateNonFavorites(nonFavorites: List<BackupManga>) {
-        val local = allManga().associateBy { Triple(it.source, it.url, it.title) }
-        nonFavorites.forEach { remote ->
-            local[Triple(remote.source, remote.url, remote.title)]?.let { manga ->
-                if (manga.favorite != remote.favorite) mangaRestorer.updateManga(manga.copy(favorite = remote.favorite))
+    // ZOUKAN -->
+    /**
+     * Takes a safety snapshot before the sync changes the library, then writes the remote's
+     * non-favorites over the local entries (which can take a local entry out of the library). A
+     * copy of the library comes first so the sync can be undone; nobody is there to ask, so without
+     * one the library is left as it is, the sync tries again later and the notification says why.
+     *
+     * The snapshot is taken when [favorites] will be restored or any local entry's favorite state
+     * changes, even when the remote has no favorites at all.
+     *
+     * @return false when the snapshot failed and nothing was written
+     */
+    internal suspend fun snapshotThenUpdateNonFavorites(favorites: List<BackupManga>, nonFavorites: List<BackupManga>): Boolean {
+        val changes = nonFavoriteChanges(nonFavorites)
+        if (favorites.isNotEmpty() || changes.isNotEmpty()) {
+            safetySnapshot.take(SnapshotReason.SYNC).onFailure { e ->
+                notifier.showSyncError(localized(DMR.strings.sync_skipped_no_safety_backup, SafetySnapshot.errorText(e)))
+                return false
             }
         }
+        val update = updateLocalManga ?: { manga -> mangaRestorer.updateManga(manga) }
+        changes.forEach { update(it) }
+        return true
     }
+
+    /** The local entries whose favorite state the remote's [nonFavorites] change, as they will be written. */
+    private suspend fun nonFavoriteChanges(nonFavorites: List<BackupManga>): List<Manga> {
+        if (nonFavorites.isEmpty()) return emptyList()
+        val local = allManga().associateBy { Triple(it.source, it.url, it.title) }
+        return nonFavorites.mapNotNull { remote ->
+            local[Triple(remote.source, remote.url, remote.title)]
+                ?.takeIf { it.favorite != remote.favorite }
+                ?.copy(favorite = remote.favorite)
+        }
+    }
+    // ZOUKAN <--
 }

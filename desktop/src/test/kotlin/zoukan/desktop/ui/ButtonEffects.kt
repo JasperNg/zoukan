@@ -100,12 +100,27 @@ internal object Contracts {
         Contract(Regex("""^flow:reader\.bars/"Bookmark \(B\)""""), Regex("""^chapters\.bookmark\[Alpha/"""), "the reader's Bookmark writes a chapter of the open entry"),
         Contract(Regex("""^flow:reader\.bars/"Reading mode: .*" > "Paged \(left to right\)""""), Regex("""^mangas\.viewer\[Alpha]$"""), "the reader's reading mode writes Alpha's own reading mode"),
         Contract(Regex("""^flow:reader\.bars/"Scale type: .*" > """), Regex("""^pref:pref_image_scale_type_key$"""), "the reader's scale type writes its preference"),
-        Contract(Regex("""^screen:manga\.MangaScreen/"In library""""), Regex("""^mangas\.favorite\[Alpha]$"""), "In library on Alpha's screen removes Alpha"),
+        Contract(Regex("""^screen:manga\.MangaScreen/"In library"$"""), Regex("""^mangas\.favorite\[Alpha]$"""), "In library on Alpha's screen removes Alpha"),
         Contract(Regex("""^flow:library\.selection/"Mark as read""""), Regex("""^chapters\.read\[Alpha/"""), "the library selection's Mark as read writes the selected entry's chapters"),
         // Settings that write their preference at once: these dialogs apply each choice as it is made
         Contract(Regex("""^dialog:library\.LibrarySettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(pref:|db:categories\.)"""), "the library's filter, sort and display options write their preference"),
         Contract(Regex("""^dialog:reader\.ReaderSettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(pref:|mangas\.viewer\[Alpha]$)"""), "the reader settings write their preference, or Alpha's own reading mode"),
         Contract(Regex("""^dialog:manga\.ChapterSettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(mangas\.chapter_flags\[Alpha]|pref:)"""), "the chapter filter and sort write Alpha's chapter flags"),
         Contract(Regex("""^settings:[A-Za-z]+/.*\(toggle\)$"""), Regex("""^(pref:|calls|dialog:|menu$|nav:)"""), "a Settings switch or choice on the page writes its preference (or asks first); one in a dialog may wait for OK"),
+        // The keyboard shortcuts (ButtonCrawlTest.KEYS): the app's on the library, the reader's on the reader
+        Contract(Regex("""^tab:Library/key:Ctrl\+[2-5]$"""), Regex("""^tab:"""), "Ctrl/Cmd + a number opens that tab"),
+        Contract(Regex("""^tab:More/key:Ctrl\+1$"""), Regex("""^tab:Library$"""), "Ctrl/Cmd + 1 opens the library"),
+        Contract(Regex("""^tab:Library/key:Ctrl\+Shift\+U$"""), Regex("""^job:library-update$"""), "Ctrl/Cmd + Shift + U starts a library update"),
+        Contract(Regex("""^flow:library\.selection/key:Ctrl\+A$"""), Regex("""^selection$"""), "Ctrl/Cmd + A selects the library"),
+        Contract(Regex("""^tab:Library/key:Ctrl\+F$"""), Regex("""^focus:"""), "Ctrl/Cmd + F puts the cursor in the search box"),
+        Contract(Regex("""^screen:manga\.MangaScreen/key:(Escape|Alt\+Left)$"""), Regex("""^nav:back$"""), "Escape and Alt + Left go back"),
+        Contract(Regex("""^flow:reader\.keys/key:(Right|Space|Page Down|End)$"""), Regex("""^reader:page$"""), "the reader's next and last page keys turn the page"),
+        Contract(Regex("""^flow:reader\.keys/key:=$"""), Regex("""^reader:zoom$"""), "= zooms in"),
+        Contract(Regex("""^flow:reader\.keys/key:M$"""), Regex("""^reader:menu$"""), "M shows the reader's bars"),
+        Contract(Regex("""^flow:reader\.keys/key:F$"""), Regex("""^reader:fullscreen$"""), "F makes the reader fullscreen"),
+        Contract(Regex("""^flow:reader\.keys/key:/$"""), Regex("""^reader:help$"""), "/ shows the keyboard help"),
+        Contract(Regex("""^flow:reader\.keys/key:A$"""), Regex("""^reader:auto-scroll$"""), "A starts auto scroll"),
+        Contract(Regex("""^flow:reader\.keys/key:B$"""), Regex("""^chapters\.bookmark\[Alpha/"""), "B bookmarks the open chapter"),
+        Contract(Regex("""^flow:reader\.keys/key:Escape$"""), Regex("""^nav:back$"""), "Escape leaves the reader when nothing is open over it"),
     )
 }

@@ -115,7 +115,7 @@ private fun TrackerRow(item: TrackingModel.Item, model: TrackingModel) {
                 Text(
                     tracker.name,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f).onRightClick { track?.remoteUrl?.takeIf { it.isNotBlank() }?.let(::copyToClipboard) },
+                    modifier = Modifier.weight(1f).onRightClick(localized(MR.strings.action_copy_to_clipboard)) { track?.remoteUrl?.takeIf { it.isNotBlank() }?.let(::copyToClipboard) },
                 )
                 // ZOUKAN <--
                 if (track == null) {
@@ -138,7 +138,7 @@ private fun TrackerRow(item: TrackingModel.Item, model: TrackingModel) {
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.onRightClick { copyToClipboard(track.title) },
+                modifier = Modifier.onRightClick(localized(MR.strings.action_copy_to_clipboard)) { copyToClipboard(track.title) },
             )
             // ZOUKAN <--
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

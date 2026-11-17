@@ -667,6 +667,10 @@ val journeyTest by tasks.registering(Test::class) {
     doFirst { screenshots.asFile.deleteRecursively() }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
+    // A journey that hangs (a deadlock waits forever, so no waitUntil timeout fires) fails after 10
+    // minutes with its stack, instead of holding its shard until the CI job's timeout. The longest
+    // journeys take about 2 minutes. -Pzoukan.journey.timeout=30m raises it to debug a slow machine
+    systemProperty("junit.jupiter.execution.timeout.default", providers.gradleProperty("zoukan.journey.timeout").getOrElse("10m"))
     shouldRunAfter(tasks.test, wiringTest)
 }
 

@@ -3,12 +3,16 @@ package zoukan.desktop.e2e
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.source.service.SourcePreferences
+import exh.source.LOCAL_SOURCE_PACKAGE
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -23,17 +27,24 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
+import zoukan.desktop.local.LocalSource
 import zoukan.desktop.security.Incognito
+import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.settings.SettingsCategory
+import zoukan.desktop.ui.settingsPage
 import zoukan.i18n.desktop.DMR
 import kotlin.time.Duration.Companion.minutes
 
 /**
  * Global incognito mode (More > Incognito mode): a chapter read with it on leaves no history and
- * no read progress; with it off again the same reading is recorded. (Per-extension incognito keys
- * on the extension package, which a test source lacks: an accepted gap, see the coverage matrix.)
+ * no read progress; with it off again the same reading is recorded. Then per-extension incognito
+ * (Settings > Security > Incognito extensions): the Local source picked there reads without
+ * history while the global switch stays off. An installed extension's package is matched to its
+ * sources in IncognitoTest.
  *
  *   ./gradlew :desktop:journeyTest --tests "*IncognitoJourneyTest"
  */
@@ -41,6 +52,10 @@ import kotlin.time.Duration.Companion.minutes
 class IncognitoJourneyTest {
 
     private lateinit var journey: Journey
+
+    private companion object {
+        const val LOCAL_TITLE = "Delta"
+    }
 
     @AfterEach
     fun close() {
@@ -54,6 +69,9 @@ class IncognitoJourneyTest {
         val incognito = Injekt.get<Incognito>()
         var navigator: Navigator? = null
         val manga = journey.addToLibrary(FixtureCatalog.FORMATS_TITLE)
+        // A local entry, for the per-extension incognito of the Local source
+        LocalFixtures.localEntry(Injekt.get<ZoukanStorage>(), LOCAL_TITLE, chapters = 1)
+        val local = LocalFixtures.addLocalToLibrary().single { it.title == LOCAL_TITLE }
         fun chapters() = runBlocking { Injekt.get<GetChaptersByMangaId>().await(manga.id) }.sortedBy { it.chapterNumber }
         fun history() = runBlocking { Injekt.get<GetHistory>().subscribe("", null, null, null).first() }
         val title = localized(MR.strings.pref_incognito_mode)
@@ -118,6 +136,41 @@ class IncognitoJourneyTest {
                     onAllNodesWithText(localized(MR.strings.history)).onFirst().performClick()
                     waitFor(hasText(FixtureCatalog.FORMATS_TITLE))
                     shot("5-history")
+                }
+
+                step("Per extension: the Local source set incognito in Security keeps no history; the global switch stays off") {
+                    val recorded = history().map { it.chapterId }
+                    runOnUiThread { HomeScreen.openSettings(navigator!!) }
+                    val list = settingsPage(SettingsCategory.Security)
+                    val row = localized(DMR.strings.incognito_extensions)
+                    list.performScrollToNode(hasText(row))
+                    onAllNodesWithText(row).onFirst().performClick()
+                    waitFor(hasText(localized(MR.strings.action_display_local_badge)))
+                    // The dialog lists the Local source, then E-Hentai (no extension is installed):
+                    // its boxes are the last two toggleable nodes
+                    val boxes = onAllNodes(isToggleable())
+                    boxes[boxes.fetchSemanticsNodes().size - 2].performClick()
+                    waitOrDump("for the Local source to be incognito") {
+                        LOCAL_SOURCE_PACKAGE in Injekt.get<SourcePreferences>().incognitoExtensions().get()
+                    }
+                    shot("6-incognito-extensions")
+                    onAllNodesWithText(localized(DMR.strings.done)).onFirst().performClick()
+                    Injekt.get<SourcePreferences>().incognitoExtensions().get() shouldBe setOf(LOCAL_SOURCE_PACKAGE)
+                    incognito.mode().get() shouldBe false
+                    incognito.isOn(LocalSource.ID) shouldBe true
+                    incognito.isOn(manga.source) shouldBe false
+                    home()
+
+                    runOnUiThread { navigator?.push(MangaScreen(local.id)) }
+                    waitFor(hasText("Start") and isEnabled())
+                    onAllNodesWithText("Start").onFirst().performClick()
+                    readThrough(LocalFixtures.pages("$LOCAL_TITLE 1", 4), "7-local-incognito")
+                    runOnUiThread { navigator?.pop() }
+                    waitFor(hasText("In library"))
+                    history().map { it.chapterId } shouldContainExactly recorded
+                    val localChapters = runBlocking { Injekt.get<GetChaptersByMangaId>().await(local.id) }
+                    localChapters.none { it.read } shouldBe true
+                    localChapters.all { it.lastPageRead == 0L } shouldBe true
                 }
             }
         }

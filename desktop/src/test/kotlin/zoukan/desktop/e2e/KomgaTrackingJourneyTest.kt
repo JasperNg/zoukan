@@ -9,8 +9,10 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
@@ -18,6 +20,8 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.track.model.AutoTrackState
+import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.extension.all.komga.Komga
 import exh.source.getMainSource
@@ -30,21 +34,28 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.manga.interactor.GetFavorites
+import tachiyomi.domain.manga.model.MangaUpdate
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
+import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.i18n.desktop.DMR
 import kotlin.time.Duration.Companion.minutes
 
 /**
  * Tracking against a Komga server, offline: a Komga title added to the library binds the Komga
  * tracker by itself, reading a chapter sends the progress to the server, a server error shows and
- * leaves the stored progress alone (a later update gets through), and stopping tracking removes
- * the track. The Komga tracker is the one tracker that needs no site of its own: it calls the
+ * leaves the stored progress alone (a later update gets through), "Update tracking: Ask" asks
+ * after a chapter is marked read and sends only on Update, stopping tracking removes the track,
+ * and with "Track when adding to the library" off adding binds again without the dialog. The Komga tracker is the one tracker that needs no site of its own: it calls the
  * series URL the source gave it, here the [FixtureKomga] on the [FixtureServer].
  *
  * The hosted trackers (AniList, MyAnimeList and the others) have fixed hosts and are covered by
@@ -68,12 +79,13 @@ class KomgaTrackingJourneyTest {
     fun bindSyncAndUnbindAKomgaTitle() {
         journey = Journey.start("komga-tracking")
         val komga = FixtureKomga(journey.server).also { komgaServer = it }
-        komga.series(SERIES_ID, SERIES_TITLE, books = 3)
+        komga.series(SERIES_ID, SERIES_TITLE, books = 4)
         val source = Komga(journey.server.baseUrl)
         installSource(source)
         // The Settings > Tracking switch ("Turn on") calls this
         Injekt.get<TrackerManager>().komga.loginNoop()
         val preferences = Injekt.get<DesktopPreferences>()
+        val trackPreferences = Injekt.get<TrackPreferences>()
         var navigator: Navigator? = null
 
         with(journey) {
@@ -88,7 +100,7 @@ class KomgaTrackingJourneyTest {
                     waitFor(hasText(SERIES_TITLE))
                     onAllNodesWithText(SERIES_TITLE).onFirst().performClick()
                     // The books come as chapters, newest first
-                    (1..3).forEach { waitFor(hasText("Book $it")) }
+                    (1..4).forEach { waitFor(hasText("Book $it")) }
                     waitFor(hasText("Start") and isEnabled())
                 }
 
@@ -142,6 +154,33 @@ class KomgaTrackingJourneyTest {
                     shot("5-retried")
                 }
 
+                step("Update tracking set to Ask: marking Book 4 read asks; Not now sends nothing, Update sends chapter 4") {
+                    trackPreferences.autoUpdateTrackOnMarkRead().set(AutoTrackState.ASK)
+                    closeDialog()
+                    val question = localized(DMR.strings.update_tracking)
+                    markBook4(read = true)
+                    waitFor(hasText(question))
+                    waitFor(hasText(localized(DMR.strings.set_the_trackers_progress_to_chapter, "4")))
+                    shot("6-ask")
+                    onNode(hasText(localized(MR.strings.action_not_now)) and hasClickAction()).performClick()
+                    waitUntil(timeoutMillis = 10_000) { onAllNodes(hasText(question)).fetchSemanticsNodes().isEmpty() }
+                    tracks(mangaId()).single().lastChapterRead shouldBe 3.0
+
+                    // Unread asks nothing; read again asks again
+                    markBook4(read = false)
+                    waitForIdle()
+                    onAllNodes(hasText(question)).fetchSemanticsNodes().isEmpty() shouldBe true
+                    markBook4(read = true)
+                    waitFor(hasText(question))
+                    onAllNodes(hasText(localized(MR.strings.ext_update)) and hasClickAction()).onLast().performClick()
+                    waitOrDump("for the server to get chapter 4") { komga.progressUpdates.size == 3 }
+                    // Not now sent nothing: only the one Update went out
+                    komga.progressUpdates shouldContainExactly listOf(SERIES_ID to 2.0, SERIES_ID to 3.0, SERIES_ID to 4.0)
+                    waitOrDump("for the stored progress") { tracks(mangaId()).singleOrNull()?.lastChapterRead == 4.0 }
+                    openTracking()
+                    waitFor(chapterField("4"))
+                }
+
                 step("Stop tracking: the row and the track go, and the server hears nothing more") {
                     onNode(hasContentDescription("Stop tracking") and hasClickAction()).performClick()
                     waitFor(hasText("Stop tracking on Komga?"))
@@ -152,14 +191,40 @@ class KomgaTrackingJourneyTest {
                     waitForIdle()
                     Thread.sleep(1_000)
                     komgaCalls() shouldBe after
-                    komga.progressUpdates shouldHaveSize 2
-                    shot("6-unbound")
+                    komga.progressUpdates shouldHaveSize 3
+                    shot("7-unbound")
+                    closeDialog()
+                }
+
+                step("Track when adding to the library off: adding binds Komga again, without opening the tracking dialog") {
+                    trackPreferences.trackOnAddingToLibrary().set(false)
+                    val id = mangaId()
+                    runBlocking { Injekt.get<MangaRepository>().update(MangaUpdate(id = id, favorite = false)) }
+                    // The entry's screen afresh, out of the library
+                    runOnUiThread { navigator?.pop() }
+                    runOnUiThread { navigator?.push(MangaScreen(id)) }
+                    waitFor(hasText("Add to library") and isEnabled())
+                    onAllNodesWithText("Add to library").onFirst().performClick()
+                    waitFor(hasText("In library"))
+                    // The enhanced tracker binds whatever the setting says, as on Android
+                    waitOrDump("for the track in the database") { tracks(mangaId()).isNotEmpty() }
+                    waitForIdle()
+                    onAllNodes(hasText("Close") and hasClickAction()).fetchSemanticsNodes().isEmpty() shouldBe true
+                    shot("8-added-without-dialog")
+                    trackPreferences.trackOnAddingToLibrary().set(true)
                 }
             }
         }
     }
 
     private fun ComposeUiTest.chapterField(text: String): SemanticsMatcher = hasSetTextAction() and hasText(text)
+
+    /** Selects Book 4 by its checkbox and marks it read or unread from the selection's bar. */
+    private fun ComposeUiTest.markBook4(read: Boolean) {
+        onNode(hasContentDescription("Book 4") and isToggleable()).performClick()
+        with(journey) { byDescription(localized(if (read) MR.strings.action_mark_as_read else MR.strings.action_mark_as_unread)).performClick() }
+        waitForIdle()
+    }
 
     private fun ComposeUiTest.closeDialog() {
         onNode(hasText("Close") and hasClickAction()).performClick()

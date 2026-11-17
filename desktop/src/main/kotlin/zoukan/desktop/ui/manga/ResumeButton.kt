@@ -90,7 +90,7 @@ internal fun ResumeButton(
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 // Dock to the side the button's center ended on, as on Android
-                                onMoveState(buttonX - areaX + buttonSize.width / 2f < areaSize.width / 2f)
+                                onMoveState(docksAtStart(buttonX - areaX, buttonSize.width, areaSize.width))
                                 offsetX = 0f
                             },
                         ) { change, dragAmount ->
@@ -109,4 +109,10 @@ internal fun ResumeButton(
         }
     }
 }
+
+/**
+ * The side a dropped button docks to: the start when its center, [buttonX] from the area's start,
+ * is in the area's start half.
+ */
+internal fun docksAtStart(buttonX: Float, buttonWidth: Int, areaWidth: Int): Boolean = buttonX + buttonWidth / 2f < areaWidth / 2f
 // ZOUKAN <--

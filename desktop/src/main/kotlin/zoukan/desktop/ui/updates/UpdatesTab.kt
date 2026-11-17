@@ -116,6 +116,7 @@ import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.coverOutline
+import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.desktop.ui.downloads.DownloadsButton
@@ -359,7 +360,8 @@ class UpdatesScreenModel(
     }
 
     fun deleteDownloads(items: List<UpdatesWithRelations>) {
-        screenModelScope.launch {
+        // A failure (the storage drive unplugged) is shown; the selection is cleared at once, as the other actions here do
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_delete_downloads) }) {
             byEntry(items).forEach { (manga, chapters) -> downloadManager.delete(manga, chapters) }
         }
         done(items)
