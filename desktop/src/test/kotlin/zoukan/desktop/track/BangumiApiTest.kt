@@ -16,6 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.io.IOException
 
 /**
  * Bangumi's search, bind and update, as the requests the shared tracker sends to api.bgm.tv and
@@ -62,7 +63,7 @@ class BangumiApiTest {
               {"id": 2, "type": 1, "name": "Some Novel", "name_cn": "", "summary": "s", "date": null, "platform": "小说",
                "images": null, "volumes": 1, "eps": 0, "rating": null, "infobox": []},
               {"id": 3, "type": 1, "name": "Untitled", "name_cn": "", "summary": " plain ", "date": null, "platform": "漫画",
-               "images": null, "volumes": 0, "eps": 0, "rating": {"score": null}, "infobox": []}
+               "images": null, "volumes": 0, "eps": 0, "rating": {"score": null}}
             ]}
             """.trimIndent(),
         )
@@ -189,12 +190,32 @@ class BangumiApiTest {
     }
 
     @Test
-    fun `a refused token fails the call with its status, without a crash`() = runBlocking<Unit> {
+    fun `a refused token marks the login expired, as MyAnimeList does, until the user signs in again`() = runBlocking<Unit> {
         signIn(createdAt = 1_000)
         http.answer("""{"error":"invalid_grant"}""", code = 400)
         http.answer("""{"title":"Unauthorized","description":"access token has expired"}""", code = 401)
 
-        shouldThrow<HttpException> { bangumi.update(track().apply { status = Bangumi.READING }) }.code shouldBe 401
+        shouldThrow<IOException> { bangumi.update(track().apply { status = Bangumi.READING }) }
+            .message shouldBe "Bangumi: Login has expired"
+        env.preferences.trackAuthExpired(bangumi).get() shouldBe true
+
+        // Later calls stop before the network
+        shouldThrow<IOException> { bangumi.search("x") }.message shouldBe "Bangumi: Login has expired"
+        http.requests.size shouldBe 2
+
+        env.preferences.setCredentials(bangumi, USERNAME, ACCESS)
+        env.preferences.trackAuthExpired(bangumi).get() shouldBe false
+    }
+
+    @Test
+    fun `missing tokens fail the call with an IOException of their own, not a crash on OkHttp's thread`() = runBlocking<Unit> {
+        // Signed out
+        shouldThrow<IOException> { bangumi.search("x") }.message shouldBe "Not authenticated with Bangumi"
+
+        // An expired token with no refresh token
+        env.preferences.trackToken(bangumi).set("""{"access_token":"$ACCESS","token_type":"Bearer","created_at":1000,"expires_in":604800}""")
+        shouldThrow<IOException> { Bangumi(5L).search("x") }.message shouldBe "Bangumi: No refresh token"
+        http.requests.size shouldBe 0
     }
 
     @Test

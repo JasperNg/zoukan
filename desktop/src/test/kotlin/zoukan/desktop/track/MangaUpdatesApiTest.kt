@@ -203,10 +203,32 @@ class MangaUpdatesApiTest {
     }
 
     @Test
-    fun `an expired session fails the call with its status, without a crash`() = runBlocking<Unit> {
+    fun `an expired session marks the login expired, as MyAnimeList does, until the user signs in again`() = runBlocking<Unit> {
         signIn()
         http.answer("""{"status":"exception","reason":"You must be logged in."}""", code = 401)
-        shouldThrow<HttpException> { mangaUpdates.delete(mockk<DomainTrack> { every { remoteId } returns SERIES }) }.code shouldBe 401
+        shouldThrow<IOException> { mangaUpdates.delete(mockk<DomainTrack> { every { remoteId } returns SERIES }) }
+            .message shouldBe "MangaUpdates: Login has expired"
+        env.preferences.trackAuthExpired(mangaUpdates).get() shouldBe true
+
+        // Later calls stop before the network
+        shouldThrow<IOException> { mangaUpdates.update(track().apply { status = MangaUpdates.READING_LIST }) }
+            .message shouldBe "MangaUpdates: Login has expired"
+        http.requests.size shouldBe 1
+
+        env.preferences.setCredentials(mangaUpdates, "4242", SESSION)
+        env.preferences.trackAuthExpired(mangaUpdates).get() shouldBe false
+    }
+
+    @Test
+    fun `a record without a type or year leaves them empty, not the text null`() = runBlocking<Unit> {
+        http.answer(
+            """{"total_hits": 1, "page": 1, "per_page": 25, "results": [
+                 {"record": {"series_id": $SERIES, "title": "Untitled"}, "hit_title": "Untitled"}]}""",
+        )
+
+        val untitled = mangaUpdates.search("untitled").single()
+        untitled.publishing_type shouldBe ""
+        untitled.start_date shouldBe ""
     }
 
     @Test

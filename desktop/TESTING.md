@@ -11,7 +11,7 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
 | Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Every pull request and every push to master: CI runs it in 4 shards under `xvfb-run -a`. Not in `check`: it takes about half an hour in one JVM. |
 | Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Every pull request and every push to master: CI runs them in 3 shards under `xvfb-run -a`. Also in the nightly check. |
-| Nightly | `:desktop:nightlyCheck` | The journeys, plus `extensionWiringTest`, which downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | By hand, or by `desktop/packaging/check/nightly-windows.ps1`. |
+| Nightly | `:desktop:nightlyCheck` | The journeys, plus `extensionWiringTest`, which downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Every day at 18:00 UTC by `.github/workflows/nightly.yml`: on Windows and macOS the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`; on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. A failed scheduled run opens or updates the nightly-failure issue. Also by hand, or on a local Windows machine by `desktop/packaging/check/nightly-windows.ps1`. |
 | Live | `:desktop:test -Pzoukan.e2e=true` | The `EndToEnd*Test` classes. Most of them use real sites and need the network. | Only when you ask for them. Never in CI. |
 
 Use the cheapest tier that can catch the bug:
@@ -532,7 +532,8 @@ time, with `--tests`:
   `.sig`, and checks that the release signature verifies under the committed
   `zoukan-release-key.pem` and that a copy with one byte flipped, or a changed signature, is
   refused. When the newest release has no `.sig` (releases from before the release signature), it
-  checks that the installer is refused and then skips the signature checks. It uses an in-memory
+  checks that the installer is refused and then skips the signature checks. 1.1.0 is the first
+  release with `.sig` files, so the positive path can pass only once 1.1.0 is published. It uses an in-memory
   secret store and a temporary folder, so it touches no app data and no OS secret store.
 
 ```bash
@@ -564,3 +565,17 @@ of yuzono's. `--store keiyoushi` or `--store yuzono` (repeatable, or a store URL
 Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile. Over
 several stores, a `--packages` entry is tested in the stores that list it, and fails the run only
 when no store lists it.
+
+`--doh <name|off>` sets DNS over HTTPS for the run, for OkHttp and the hidden Chromium alike:
+`cloudflare`, `google`, `adguard`, `quad9`, `alidns`, `dnspod`, `360`, `mullvad`, `controld`,
+`njalla`, or `off` for the system's DNS. It sets the DNS preference of the harness profile, so later
+runs without `--doh` keep it; the app's own profile is never touched. Without it the run uses the
+harness profile's setting. The run prints the server it uses. Use it when the local DNS blocks or
+redirects a site, or to check a provider:
+
+```bash
+./gradlew :desktop:run --args="harness --doh quad9 --store keiyoushi --packages en.comix"
+```
+
+The "First image" column gives the first page's type, size and size in pixels (`ok image/webp
+1 KB 720x40`, say), so a placeholder, a tiny tile or a scrambled image shows apart from a real page.

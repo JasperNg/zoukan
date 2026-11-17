@@ -72,9 +72,22 @@ foreach ($file in @($msi.FullName, $exe) | Where-Object { $_ }) {
 if ($exe) {
     $report = Join-Path $out 'selftest-windows.md'
     Remove-Item $report -ErrorAction SilentlyContinue
-    $p = Start-Process $exe -ArgumentList "selftest --ui --network --report `"$report`"" -Wait -PassThru
+    # With CI's GITHUB_TOKEN the update check has its own rate limit, so it is a real check; the
+    # token reaches the app through its environment only and is never printed
+    $setToken = $env:GITHUB_TOKEN -and -not $env:ZOUKAN_SELFTEST_GITHUB_TOKEN
+    if ($setToken) { $env:ZOUKAN_SELFTEST_GITHUB_TOKEN = $env:GITHUB_TOKEN }
+    try {
+        $p = Start-Process $exe -ArgumentList "selftest --ui --network --report `"$report`"" -Wait -PassThru
+    } finally {
+        if ($setToken) { Remove-Item Env:ZOUKAN_SELFTEST_GITHUB_TOKEN -ErrorAction SilentlyContinue }
+    }
     $passed = ($p.ExitCode -eq 0) -and (Test-Path $report)
     Add-Result 'Self-test of the installed app' $passed "exit $($p.ExitCode), report $report"
+    # A rate-limited update check is neither a pass nor a failure: say so
+    if ((Test-Path $report) -and (Select-String -Path $report -Pattern '^\| Update check \| skipped \|' -Quiet)) {
+        $results.Add([pscustomobject]@{ Check = 'Update check'; Result = 'skipped'; Detail = 'rate limited, see the self-test report' })
+        Write-Host '[skipped] Update check: skipped (rate limited)'
+    }
 }
 
 if (-not $KeepInstalled) {

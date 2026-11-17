@@ -3,10 +3,14 @@ package eu.kanade.tachiyomi.data.track.bangumi
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.track.bangumi.dto.BGMOAuth
 import eu.kanade.tachiyomi.data.track.bangumi.dto.isExpired
+import eu.kanade.tachiyomi.data.track.checkTokenAccepted
+import eu.kanade.tachiyomi.data.track.clearLoginExpired
+import eu.kanade.tachiyomi.data.track.throwIfLoginExpired
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 
 class BangumiInterceptor(private val bangumi: Bangumi) : Interceptor {
 
@@ -18,14 +22,21 @@ class BangumiInterceptor(private val bangumi: Bangumi) : Interceptor {
     private var oauth: BGMOAuth? = bangumi.restoreToken()
 
     override fun intercept(chain: Interceptor.Chain): Response {
+        // ZOUKAN: a refused token marks the login expired, as MAL does (TrackerAuthExpired.kt)
+        bangumi.throwIfLoginExpired()
         val originalRequest = chain.request()
 
-        var currAuth: BGMOAuth = oauth ?: throw Exception("Not authenticated with Bangumi")
+        // ZOUKAN -->
+        // IOExceptions, which OkHttp hands to the caller; a plain Exception or `!!` crashed its thread
+        var currAuth: BGMOAuth = oauth ?: throw IOException("Not authenticated with Bangumi")
 
         if (currAuth.isExpired()) {
-            val response = chain.proceed(BangumiApi.refreshTokenRequest(currAuth.refreshToken!!))
+            val refreshToken = currAuth.refreshToken ?: throw IOException("Bangumi: No refresh token")
+            val response = bangumi.checkTokenAccepted(chain.proceed(BangumiApi.refreshTokenRequest(refreshToken)))
             if (response.isSuccessful) {
-                currAuth = json.decodeFromString<BGMOAuth>(response.body.string())
+                currAuth = runCatching { json.decodeFromString<BGMOAuth>(response.body.string()) }
+                    .getOrElse { throw IOException("Bangumi: Failed to refresh account token", it) }
+                // ZOUKAN <--
                 newAuth(currAuth)
             } else {
                 response.close()
@@ -42,6 +53,8 @@ class BangumiInterceptor(private val bangumi: Bangumi) : Interceptor {
             }
             .build()
             .let(chain::proceed)
+            // ZOUKAN: a 401 marks the login expired
+            .let(bangumi::checkTokenAccepted)
     }
 
     fun newAuth(oauth: BGMOAuth?) {
@@ -59,5 +72,7 @@ class BangumiInterceptor(private val bangumi: Bangumi) : Interceptor {
         }
 
         bangumi.saveToken(oauth)
+        // ZOUKAN: a new token, from signing in or a refresh, is no longer expired
+        if (oauth != null) bangumi.clearLoginExpired()
     }
 }

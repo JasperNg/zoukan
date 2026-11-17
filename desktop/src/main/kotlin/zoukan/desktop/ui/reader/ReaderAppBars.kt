@@ -93,6 +93,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -115,6 +116,7 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.chapterStateDescription
+import zoukan.desktop.ui.common.selectedMenuItem
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
 
@@ -420,6 +422,8 @@ private fun <T> ChoiceButton(
                 DropdownMenuItem(
                     text = { Text(text) },
                     leadingIcon = { RadioButton(selected = selected == value, onClick = null) },
+                    // The radio button has no callback, so the item says whether it is the one chosen
+                    modifier = Modifier.selectedMenuItem(selected == value),
                     onClick = {
                         open = false
                         onSelect(value)
@@ -541,7 +545,7 @@ private fun PageSlider(menu: ReaderMenuState, actions: ReaderMenuActions, modifi
         valueRange = 0f..(count - 1).toFloat(),
         steps = (count - 2).coerceAtLeast(0),
         interactionSource = interaction,
-        modifier = modifier,
+        modifier = modifier.semantics { contentDescription = localized(DMR.strings.page, menu.currentPageText) },
     )
 }
 

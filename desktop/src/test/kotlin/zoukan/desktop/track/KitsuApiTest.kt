@@ -21,6 +21,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.io.IOException
+import java.util.TimeZone
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 /**
@@ -241,13 +243,63 @@ class KitsuApiTest {
     }
 
     @Test
-    fun `a refused token fails the call with its status, without a crash`() = runBlocking<Unit> {
+    fun `a refused refresh marks the login expired and later calls stop before the network`() = runBlocking<Unit> {
         signIn(createdAt = 1_000)
         http.answer("""{"error":"invalid_grant"}""", code = 401)
+
+        // As MyAnimeList does: the call fails with an IOException that says the login expired
+        shouldThrow<IOException> { kitsu.search("one piece") }.message shouldBe "Kitsu: Login has expired"
+        env.preferences.trackAuthExpired(kitsu).get() shouldBe true
+
+        shouldThrow<IOException> { kitsu.search("one piece") }.message shouldBe "Kitsu: Login has expired"
+        http.requests.size shouldBe 1
+    }
+
+    @Test
+    fun `a revoked token marks the login expired, and signing in again clears it`() = runBlocking<Unit> {
+        signIn()
         http.answer("""{"errors":[{"title":"Invalid token","status":"401"}]}""", code = 401)
 
-        shouldThrow<HttpException> { kitsu.search("one piece") }.code shouldBe 401
-        http.requests.size shouldBe 2
+        shouldThrow<IOException> { kitsu.search("one piece") }.message shouldBe "Kitsu: Login has expired"
+        env.preferences.trackAuthExpired(kitsu).get() shouldBe true
+
+        // Signing in sets the new token before it reads the user id with it
+        http.answer("""{"access_token":"new-access","token_type":"Bearer","created_at":${System.currentTimeMillis() / 1000},"expires_in":2592000,"refresh_token":"new-refresh"}""")
+        http.answer("""{"data": [{"id": "$USER_ID"}]}""")
+        kitsu.login("reader", "password")
+
+        env.preferences.trackAuthExpired(kitsu).get() shouldBe false
+        http.requests.last().headers["Authorization"] shouldBe "Bearer new-access"
+    }
+
+    @Test
+    fun `missing tokens fail the call with an IOException of their own, not a crash on OkHttp's thread`() = runBlocking<Unit> {
+        // Signed out
+        shouldThrow<IOException> { kitsu.search("one piece") }.message shouldBe "Not authenticated with Kitsu"
+
+        // An expired token with no refresh token
+        env.preferences.trackToken(kitsu).set("""{"access_token":"$ACCESS","token_type":"Bearer","created_at":1000,"expires_in":2592000}""")
+        shouldThrow<IOException> { Kitsu(TrackerManager.KITSU).search("one piece") }.message shouldBe "Kitsu: No refresh token"
+        http.requests.size shouldBe 0
+    }
+
+    @Test
+    fun `the start date is Algolia's UTC day in every time zone`() = runBlocking<Unit> {
+        val zone = TimeZone.getDefault()
+        TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+        try {
+            signIn()
+            http.answer("""{"media": {"key": "algolia-search-key", "index": "production_media"}}""")
+            // Recorded from Algolia: One Piece's start date, 1997-07-22, as midnight UTC in seconds
+            http.answer(
+                """{"hits": [{"id": 38, "canonicalTitle": "One Piece", "chapterCount": null, "subtype": "manga",
+                   "posterImage": null, "synopsis": null, "averageRating": null, "startDate": 869529600, "endDate": null}]}""",
+            )
+
+            kitsu.search("one piece").single().start_date shouldBe "1997-07-22"
+        } finally {
+            TimeZone.setDefault(zone)
+        }
     }
 
     @Test

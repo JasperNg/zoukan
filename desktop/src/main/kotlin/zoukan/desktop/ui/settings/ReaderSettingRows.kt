@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
@@ -111,6 +113,10 @@ object ReaderSettingRows {
             navigationModePager,
             pagerNavInverted,
             zoomStart,
+            // Where Android's Settings page has them: crop borders after zoom start, and page
+            // layout (SY's fork group there) before the center margin
+            cropBorders,
+            pageLayout,
             centerMargin,
             dualPageSplitPaged,
             dualPageInvertPaged,
@@ -125,6 +131,7 @@ object ReaderSettingRows {
             webtoonNavInverted,
             webtoonScaleType,
             longStripGapSmartScale,
+            cropBordersWebtoon,
             dualPageSplitWebtoon,
             dualPageInvertWebtoon,
             dualPageRotateToFitWebtoon,
@@ -402,6 +409,7 @@ internal fun FlashDurationPreference(preferences: DesktopPreferences) {
             onValueChangeFinished = { pref.set(steps.roundToInt() * 100) },
             valueRange = 1f..15f,
             steps = 13,
+            modifier = Modifier.semantics { contentDescription = localized(MR.strings.pref_flash_duration) },
         )
     }
 }
@@ -433,6 +441,7 @@ private fun AutoScrollIntervalRow(prefs: DesktopPreferences) {
             value = interval,
             onValueChange = { prefs.autoscrollInterval().set((it * 2).roundToInt() / 2f) },
             valueRange = 0.5f..30f,
+            modifier = Modifier.semantics { contentDescription = localized(DMR.strings.every_seconds_a_starts_and_stops, "%.1f".format(interval)) },
         )
     }
 }
@@ -446,6 +455,7 @@ private fun BrightnessRow(prefs: DesktopPreferences) {
             value = value.toFloat(),
             onValueChange = { prefs.customBrightnessValue().set(it.roundToInt()) },
             valueRange = -75f..100f,
+            modifier = Modifier.semantics { contentDescription = localized(DMR.strings.brightness) },
         )
     }
 }
@@ -473,6 +483,7 @@ private fun ColorFilterRow(prefs: DesktopPreferences) {
                     prefs.colorFilterValue().set((argb and (0xFF shl shift).inv()) or (c shl shift))
                 },
                 valueRange = 0f..255f,
+                modifier = Modifier.semantics { contentDescription = name },
             )
         }
     }

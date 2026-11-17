@@ -16,6 +16,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 /**
@@ -211,12 +212,31 @@ class ShikimoriApiTest {
     }
 
     @Test
-    fun `a refused token fails the call with its status, without a crash`() = runBlocking<Unit> {
+    fun `a refused token marks the login expired, as MyAnimeList does, until the user signs in again`() = runBlocking<Unit> {
         signIn(createdAt = 1_000)
         http.answer("""{"error":"invalid_grant"}""", code = 400)
         http.answer("""{"error":"invalid_token"}""", code = 401)
 
-        shouldThrow<HttpException> { shikimori.search("x") }.code shouldBe 401
+        shouldThrow<IOException> { shikimori.search("x") }.message shouldBe "Shikimori: Login has expired"
+        env.preferences.trackAuthExpired(shikimori).get() shouldBe true
+
+        // Later calls stop before the network
+        shouldThrow<IOException> { shikimori.search("x") }.message shouldBe "Shikimori: Login has expired"
+        http.requests.size shouldBe 2
+
+        env.preferences.setCredentials(shikimori, USER_ID, ACCESS)
+        env.preferences.trackAuthExpired(shikimori).get() shouldBe false
+    }
+
+    @Test
+    fun `missing tokens fail the call with an IOException of their own, not a crash on OkHttp's thread`() = runBlocking<Unit> {
+        // Signed out
+        shouldThrow<IOException> { shikimori.search("x") }.message shouldBe "Not authenticated with Shikimori"
+
+        // An expired token with no refresh token
+        env.preferences.trackToken(shikimori).set("""{"access_token":"$ACCESS","token_type":"Bearer","created_at":1000,"expires_in":86400}""")
+        shouldThrow<IOException> { Shikimori(4L).search("x") }.message shouldBe "Shikimori: No refresh token"
+        http.requests.size shouldBe 0
     }
 
     @Test

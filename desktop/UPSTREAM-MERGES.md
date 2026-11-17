@@ -84,6 +84,31 @@ Renovate does not propose Android Gradle Plugin majors (a rule in `renovate.json
 updates still come. Before raising the major, migrate these modules to the new plugin. Check what
 upstream Komikku did first, since the `buildSrc` conventions come from upstream.
 
+## Zoukan fixes in shared tracker code
+
+The desktop app shares the tracker code in `app/src/main/java/eu/kanade/tachiyomi/data/track/`, so
+these bugs are fixed there, for Android too. Each edit is marked with a `// ZOUKAN:` comment or a
+`// ZOUKAN -->` / `// ZOUKAN <--` block. On a merge conflict in these files, keep the fix unless
+upstream fixed the same bug; once it has, take upstream's version and remove the entry here.
+The tests are in `desktop/src/test/kotlin/zoukan/desktop/track/`.
+
+- `bangumi/dto/BGMSearch.kt`: `infobox` defaults to an empty list. Bangumi's API marks it optional,
+  and one search result without it failed the whole search.
+- `data/track/TrackerAuthExpired.kt` (new file): MyAnimeList's handling of a refused token (the
+  `trackAuthExpired` preference and an `IOException` that says the login has expired) as helpers
+  for the other OAuth trackers. Signing in again or signing out clears it, as for MAL.
+- `kitsu/KitsuInterceptor.kt`, `shikimori/ShikimoriInterceptor.kt`, `bangumi/BangumiInterceptor.kt`,
+  `mangaupdates/MangaUpdatesInterceptor.kt`: a 401 from the refresh or the call marks the login
+  expired, and later calls fail before the network until the user signs in again (upstream stayed
+  signed in and every call failed). A new token clears the flag. Missing tokens and a refresh answer
+  that does not parse throw an `IOException` instead of `Exception`/`!!`, which OkHttp rethrew on its
+  own thread.
+- `kitsu/dto/KitsuSearch.kt`: Algolia's `startDate` is midnight UTC in epoch seconds; it is now
+  formatted in UTC (in the local zone it showed the day before, west of UTC).
+- `mangaupdates/dto/MURecord.kt`: a missing `type` or `year` gives an empty text, not `"null"`.
+- `suwayomi/SuwayomiApi.kt`: the cover address joins the server address and the thumbnail path
+  with one slash, and keeps an absolute thumbnail address.
+
 ## Full list
 
 The exact list of moved files:

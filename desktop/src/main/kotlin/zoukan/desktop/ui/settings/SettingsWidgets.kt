@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
@@ -190,6 +191,8 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
             onValueChangeFinished = { preference.set(value.roundToInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = (range.last - range.first - 1).coerceAtLeast(0),
+            // The title above names the slider for screen readers (and the button crawl)
+            modifier = Modifier.semantics { contentDescription = title },
         )
     }
 }

@@ -6,16 +6,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import ch.qos.logback.classic.LoggerContext
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tachiyomi.data.Database
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.secrets.MacKeychainStore
 import zoukan.desktop.secrets.SecretStore
@@ -26,6 +32,8 @@ import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.extension.DesktopExtensionManager
 import java.io.File
+import java.net.CookieHandler
+import java.net.CookieManager
 import java.nio.file.Files
 import java.util.UUID
 
@@ -41,7 +49,18 @@ import java.util.UUID
 object SelfTest {
     data class Options(val report: File? = null, val ui: Boolean = false, val network: Boolean = false, val keep: Boolean = false)
 
-    private data class Check(val name: String, val passed: Boolean, val detail: String)
+    internal enum class Status(val label: String) { PASS("pass"), SKIPPED("skipped"), FAIL("FAIL") }
+
+    internal data class Outcome(val status: Status, val detail: String)
+
+    private data class Check(val name: String, val status: Status, val detail: String)
+
+    /**
+     * A GitHub token for the update check, from this environment variable (the install checks set
+     * it from CI's GITHUB_TOKEN): the request then has its own rate limit, so the check is real.
+     * It is kept in memory only and never written to the report or the log.
+     */
+    internal const val TOKEN_ENV = "ZOUKAN_SELFTEST_GITHUB_TOKEN"
 
     /**
      * JDK modules that extensions or libraries are known to use; the packaged runtime has all.
@@ -56,9 +75,13 @@ object SelfTest {
 
     fun run(options: Options): Int {
         val checks = mutableListOf<Check>()
+        fun checkOutcome(name: String, block: () -> Outcome) {
+            val outcome = block()
+            checks += Check(name, outcome.status, outcome.detail)
+        }
         fun check(name: String, block: () -> String) {
             val result = runCatching(block)
-            checks += Check(name, result.isSuccess, result.getOrElse { "${it::class.simpleName}: ${it.message}" })
+            checks += Check(name, if (result.isSuccess) Status.PASS else Status.FAIL, result.getOrElse { "${it::class.simpleName}: ${it.message}" })
         }
 
         val profile = Files.createTempDirectory("zoukan-selftest").toFile()
@@ -120,17 +143,14 @@ object SelfTest {
             "reports in ${dirs.crashes}, log in ${dirs.logs}"
         }
         if (options.network) {
-            check("Update check") {
-                // The profile has no GitHub token, so a private repository answers "not found":
-                // that still shows HTTPS to GitHub works from the bundled runtime
-                when (val result = runBlocking { Updates.checker.check() }) {
-                    UpdateChecker.Result.UpToDate -> "GitHub reached, up to date"
-                    is UpdateChecker.Result.Available -> "GitHub reached, ${result.release.name} available (${result.release.asset?.name ?: "no installer"})"
-                    is UpdateChecker.Result.Failed -> {
-                        require(!result.message.startsWith("Could not reach")) { result.message }
-                        "GitHub reached: ${result.message}"
-                    }
-                }
+            checkOutcome("Update check") {
+                runCatching {
+                    val token = System.getenv(TOKEN_ENV)?.takeIf { it.isNotBlank() }
+                    val checker = token
+                        ?.let { UpdateChecker(Injekt.get<NetworkHelper>().client, MemorySecretStore(UpdateChecker.TOKEN_KEY, it)) }
+                        ?: Updates.checker
+                    updateCheckOutcome(runBlocking { checker.check() }, withToken = token != null)
+                }.getOrElse { Outcome(Status.FAIL, "${it::class.simpleName}: ${it.message}") }
             }
         }
         if (options.ui) {
@@ -152,7 +172,7 @@ object SelfTest {
             }
         }
 
-        val passed = checks.all { it.passed }
+        val passed = checks.none { it.status == Status.FAIL }
         val markdown = buildString {
             appendLine("# Zoukan self-test: ${if (passed) "passed" else "FAILED"}")
             appendLine()
@@ -160,14 +180,62 @@ object SelfTest {
             appendLine()
             appendLine("| Check | Result | Detail |")
             appendLine("|---|---|---|")
-            checks.forEach { appendLine("| ${it.name} | ${if (it.passed) "pass" else "FAIL"} | ${it.detail.replace("|", "\\|").replace("\n", " ")} |") }
+            checks.forEach { appendLine("| ${it.name} | ${it.status.label} | ${it.detail.replace("|", "\\|").replace("\n", " ")} |") }
         }
         println(markdown)
         options.report?.let {
             it.absoluteFile.parentFile?.mkdirs()
             it.writeText(markdown)
         }
-        if (!options.keep) profile.deleteRecursively()
+        if (!options.keep) deleteProfile(profile)
         return if (passed) 0 else 1
+    }
+
+    /**
+     * How the update check went. A rate limit says nothing about this installation, so it is
+     * skipped, not passed. Without a token a private repository answers "not found", which still
+     * shows HTTPS to GitHub works from the bundled runtime; with one, any failure fails.
+     */
+    internal fun updateCheckOutcome(result: UpdateChecker.Result, withToken: Boolean): Outcome {
+        val how = if (withToken) " (with a token)" else ""
+        return when (result) {
+            UpdateChecker.Result.UpToDate -> Outcome(Status.PASS, "GitHub reached$how, up to date")
+            is UpdateChecker.Result.Available ->
+                Outcome(Status.PASS, "GitHub reached$how, ${result.release.name} available (${result.release.asset?.name ?: "no installer"})")
+            is UpdateChecker.Result.Failed -> when {
+                result.rateLimited -> Outcome(Status.SKIPPED, "skipped (rate limited)$how: ${result.message}")
+                withToken || result.message.startsWith("Could not reach") -> Outcome(Status.FAIL, result.message + how)
+                else -> Outcome(Status.PASS, "GitHub reached: ${result.message}")
+            }
+        }
+    }
+
+    /** Holds one secret in memory, so a token given for the check never reaches a file. */
+    private class MemorySecretStore(private val key: String, private val value: String) : SecretStore {
+        override val name = "memory"
+
+        override fun get(key: String): String? = value.takeIf { key == this.key }
+
+        override fun set(key: String, value: String) = Unit
+
+        override fun delete(key: String) = Unit
+    }
+
+    /**
+     * Deletes the throwaway profile. What would write into it later is stopped first: the cookie
+     * store's shutdown save and the settings files' shutdown flush would create the folder again,
+     * and on Windows the open log file can't be deleted.
+     */
+    internal fun deleteProfile(profile: File): Boolean {
+        runCatching { ((CookieHandler.getDefault() as? CookieManager)?.cookieStore as? PersistentCookieStore)?.close() }
+        runCatching { JavaSharedPreferences.flushPendingSaves() }
+        runCatching {
+            val root = (LoggerFactory.getILoggerFactory() as? LoggerContext)?.getLogger(Logger.ROOT_LOGGER_NAME)
+            root?.getAppender("FILE")?.let {
+                root.detachAppender(it)
+                it.stop()
+            }
+        }
+        return profile.deleteRecursively()
     }
 }

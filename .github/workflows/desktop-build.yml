@@ -126,6 +126,9 @@ jobs:
       - name: Install the MSI and start the installed app
         shell: pwsh
         timeout-minutes: 15
+        env:
+          # The self-test's update check uses it for its own rate limit; never printed
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           & desktop\packaging\check\install-check-windows.ps1 -SkipBuild
           if ($LASTEXITCODE -ne 0) { Write-Error "The installed app's check failed"; exit 1 }
@@ -177,6 +180,9 @@ jobs:
       # Mount the DMG it will publish, copy the app out and run its self-test, as on Windows
       - name: Mount the DMG and start the app from it
         timeout-minutes: 15
+        env:
+          # The self-test's update check uses it for its own rate limit; never printed
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: desktop/packaging/check/install-check-macos.sh --skip-build
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0

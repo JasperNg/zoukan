@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 data class KitsuSearchResult(
@@ -48,6 +49,8 @@ data class KitsuAlgoliaSearchItem(
             publishing_type = subtype ?: ""
             start_date = startDate?.let {
                 val outputDf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                // ZOUKAN: Algolia's startDate is the date at midnight UTC; the local zone shifted it a day west of UTC
+                outputDf.timeZone = TimeZone.getTimeZone("UTC")
                 outputDf.format(Date(it * 1000))
             } ?: ""
         }

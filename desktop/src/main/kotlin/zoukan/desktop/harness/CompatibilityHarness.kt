@@ -299,7 +299,8 @@ class CompatibilityHarness(
                         !response.isSuccessful -> "HTTP ${response.code}"
                         // As the reader decodes it: a format the app cannot show (AVIF, JPEG XL) fails here
                         else -> runCatching { PageImage.decode(bytes) }.fold(
-                            onSuccess = { "ok $type ${bytes.size / 1024} KB" },
+                            // The size in pixels tells a real page from a placeholder or a scrambled tile
+                            onSuccess = { "ok $type ${bytes.size / 1024} KB ${it.width}x${it.height}" },
                             onFailure = { "undecodable $type: ${describe(it)}" },
                         )
                     }
