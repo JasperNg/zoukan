@@ -7,11 +7,11 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 
 | Tier | Gradle task | What it catches | When it runs |
 | --- | --- | --- | --- |
-| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build and every pull request. |
+| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub on every pull request and every push to master (`.github/workflows/ci.yml`). |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
-| Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Every pull request and every push to master: CI runs it in 4 shards under `xvfb-run -a`. Not in `check`: it takes about half an hour in one JVM. |
-| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Every pull request and every push to master: CI runs them in 3 shards under `xvfb-run -a`. Also in the nightly check. |
-| Nightly | `:desktop:nightlyCheck` | The journeys, plus `extensionWiringTest`, which downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Every day at 18:00 UTC by `.github/workflows/nightly.yml`: on Windows and macOS the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`; on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. A failed scheduled run opens or updates the nightly-failure issue. Also by hand, or on a local Windows PC by `desktop/packaging/check/nightly-windows.ps1`. |
+| Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On the Windows PC before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
+| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Not on GitHub. On the Windows PC before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`. |
+| Extension wiring | `:desktop:extensionWiringTest` (with the journeys: `:desktop:nightlyCheck`) | Downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Not on GitHub on its own. On the Windows PC before each merge to master, by `:desktop:longChecks`; on that PC every night too if `desktop/packaging/check/nightly-windows.ps1 -Register` was run. `.github/workflows/nightly.yml` has no schedule: start it by hand to run, on Windows and macOS, the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`, and on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. |
 | Android compile | `:app:compileDebugKotlin` and `compileDebugKotlinAndroid` of `:data`, `:domain`, `:core:common`, `:source-api` | A desktop change to shared Android code (`app/.../data/track/`, `data/`, `domain/`) that breaks the Android build. Compiles only; runs no Android tests. | Every pull request and every push to master: the "Android compile" job in `.github/workflows/ci.yml`, described in the comment above it. Locally it needs `ANDROID_HOME` set to an Android SDK. |
 | Live | `:desktop:test -Pzoukan.e2e=true` | The `EndToEnd*Test` classes. Most of them use real sites and need the network. | Only when you ask for them. Never in CI. |
 
@@ -26,6 +26,26 @@ Use the cheapest tier that can catch the bug:
 - Use a live test only when the behaviour depends on a real site. Live tests do not count as
   coverage, because CI never runs them.
 
+## The release gate
+
+The release gate on GitHub (`ci.yml`, which `desktop-build.yml` runs before it publishes) is the
+fast set only: Spotless, the build and unit tests, the wiring shards, the file tests on Windows and
+macOS and the Android compile. Its jobs run side by side and it takes about 10 minutes.
+
+## Before merging to master
+
+The long tiers, the journeys, the button crawl and the extension wiring check, do not run on
+GitHub. They must pass on the Windows PC before a pull request is merged to master (and so before
+it is released). On the PC, in a checkout of the pull request's branch:
+
+```powershell
+.\gradlew.bat :desktop:longChecks --continue
+```
+
+It runs `journeyTest` (up to 4 journeys side by side), then the whole button crawl in one JVM,
+then `extensionWiringTest` (needs the network), one after the other: well over an hour. It refuses `-Pzoukan.shard`. Reports go to `desktop/build/reports/journeys/`,
+`desktop/build/reports/coverage/buttons.md` and `desktop/build/reports/e2e/`.
+
 ## Commands
 
 ```bash
@@ -36,20 +56,21 @@ Use the cheapest tier that can catch the bug:
 ./gradlew :desktop:wiringTest --tests "*ScreenSmokeTest" -Pzoukan.smoke.only="tab:Library"
 ./gradlew :desktop:wiringTest --tests "*ScreenSmokeSmallWindowTest" -Pzoukan.smoke.only="settings:"   # at 800x560
 ./gradlew :desktop:journeyTest                       # every offline journey
-./gradlew :desktop:buttonCrawlTest                   # click every button (long: CI runs it in shards)
+./gradlew :desktop:buttonCrawlTest                   # click every button (long: about half an hour)
 ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.only="settings:Library"
-./gradlew :desktop:buttonCrawlTest -Pzoukan.shard=2/4                     # the second of four shards
+./gradlew :desktop:buttonCrawlTest -Pzoukan.shard=2/4                     # the second of four shards (to debug)
 ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true     # rewrite button-inventory.txt
 ./gradlew :desktop:journeyTest --tests "*BrowseAndReadJourneyTest"
-./gradlew :desktop:nightlyCheck --continue           # nightly only: journeys and every extension
+./gradlew :desktop:nightlyCheck --continue           # journeys and every extension
+./gradlew :desktop:longChecks --continue             # before merging to master: journeys, crawl, every extension
 ```
 
 Notes:
 
 - `:desktop:test` leaves out the wiring tests and the journeys. They start the app's runtime,
   which can start only once per JVM, so their own tasks run them.
-- The wiring tests and the journeys open real windows, so they need a display. On Linux without
-  one, run Gradle under `xvfb-run -a`, as CI does.
+- The wiring tests, the journeys and the crawl open real windows, so they need a display. On Linux
+  without one, run Gradle under `xvfb-run -a`, as CI does for the wiring tests.
 - `-Pzoukan.smoke.only` is a regular expression. It runs only the smoke checks whose name or
   coverage-matrix key matches it, for example `"tab:Library"`, `"browse:"` or `"dialog new category"`.
   Without `--tests`, `wiringTest` runs `InjektRegistrationsTest` and both smoke classes:
@@ -410,20 +431,24 @@ Two files in `desktop/src/test/resources/` go with it:
 
 - `button-inventory.txt`: every button and its signature, `<button key>  <signature>` (two spaces
   between). A button key is `<check key>/<node id>`, and `<check key>/<button> > <item>` for a menu
-  item. The crawl fails when a button appears, goes or does something else. After a change on
-  purpose, regenerate it with `-Pzoukan.crawl.updateBaseline=true` (a filtered or sharded run
-  rewrites only the buttons it crawled) and review the diff: each changed line is a change in
-  what a button does. Each run also writes what it found, in the same format, to
-  `desktop/build/reports/coverage/button-inventory-found.txt`, and CI uploads it with each shard
-  (artifact `button-crawl-<shard>`), so a new inventory can be put together from CI without a
-  local crawl: keep the header and append the sorted lines of the four shards' files.
+  item. The crawl fails when a button appears, goes or does something else. Some signatures
+  depend on the platform (paths, dates) and on which buttons ran before in the same JVM, so the
+  inventory is recorded on the Windows PC, in one unsharded run, the same way `longChecks` runs
+  the crawl. After a change on purpose, regenerate it there:
+  `.\gradlew.bat :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true`, and review the
+  diff: each changed line is a change in what a button does. A filtered or sharded run rewrites
+  only the buttons it crawled, and a sharded run can give other signatures, so do not record the
+  inventory with one. Each run also writes what it found, in the same format, to
+  `desktop/build/reports/coverage/button-inventory-found.txt`. The crawl's data folder is
+  `<temp>/zoukan-crawl<18 digits>`, always the same number of digits, so two runs on the PC give the
+  same keys.
 - `button-crawl-allowlist.txt`: buttons allowed to do nothing, or only change the screen,
   `<button key>  # <reason>`. Such a button is usually a bug, so fix it rather than list it. A line
   whose button now does something more fails a full run.
 
 Each run writes every button with what clicking it did to `desktop/build/reports/coverage/buttons.md`.
 `-Pzoukan.crawl.only=<regex>` crawls only the checks whose name or key matches, to debug one, and
-`-Pzoukan.shard=i/n` crawls every n-th check key, as CI does.
+`-Pzoukan.shard=i/n` crawls every n-th check key, to split a debug run.
 
 ### What the crawl leaves to other tests
 
@@ -541,8 +566,8 @@ time, with `--tests`:
 ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
 ```
 
-`extensionWiringTest` downloads every extension of two stores, so it is part of the nightly
-check only. The stores are `CompatibilityHarness.SAMPLE_STORES`: Keiyoushi (about 1,700
+`extensionWiringTest` downloads every extension of two stores, so it runs only in `nightlyCheck`
+and `longChecks` (on the Windows PC before each merge to master). The stores are `CompatibilityHarness.SAMPLE_STORES`: Keiyoushi (about 1,700
 extensions) and yuzono's "Cursed" store (six NSFW extensions with their own signing key). Only the
 tests and the harness use the yuzono store; the app does not add or trust it. Each store runs in a
 test task and JVM of its own (`extensionWiringTestKeiyoushi`, `extensionWiringTestYuzono`), one
