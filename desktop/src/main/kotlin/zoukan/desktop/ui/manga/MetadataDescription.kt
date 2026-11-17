@@ -301,4 +301,4 @@ fun copyToClipboard(text: String) {
         .onSuccess { Toasts.show(localized(MR.strings.copied_to_clipboard, text.take(50))) }
 }
 
-private fun Modifier.copyOnRightClick(text: String): Modifier = onRightClick { copyToClipboard(text) }
+private fun Modifier.copyOnRightClick(text: String): Modifier = onRightClick(localized(MR.strings.action_copy_to_clipboard)) { copyToClipboard(text) }

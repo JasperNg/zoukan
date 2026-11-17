@@ -76,13 +76,15 @@ class DesktopDatabaseKeyTest {
     }
 
     @Test
-    fun `an empty database file with only its shared-memory file is refused too`() {
+    fun `a stale shared-memory file alone, or an empty WAL, does not block start-up`() {
         file.writeBytes(ByteArray(0))
         File(dir, "zoukan.db-shm").writeBytes(ByteArray(32))
+        File(dir, "zoukan.db-wal").writeBytes(ByteArray(0))
         val store = MapStore()
 
-        shouldThrow<DesktopDatabase.JournalWithoutKeyException> { DesktopDatabase.createDriver(file, store) }
-        store.values shouldBe emptyMap()
+        DesktopDatabase.createDriver(file, store).use { it.userVersion() shouldBe Database.Schema.version }
+
+        store.values.keys shouldBe setOf(DesktopDatabase.KEY_NAME)
     }
 
     @Test
@@ -128,6 +130,35 @@ class DesktopDatabaseKeyTest {
         e.version shouldBe newer
         file.readBytes().contentEquals(before) shouldBe true
         preCopies() shouldBe emptyList()
+    }
+
+    @Test
+    fun `a newer database with pages still in its WAL is refused and its files left byte-identical`() {
+        val store = MapStore()
+        createDatabase(store)
+        val key = HexFormat.of().parseHex(store.values.getValue(DesktopDatabase.KEY_NAME))
+        // A crash while a newer build had it open: the new version is only in the WAL. The files are
+        // copied while that connection is open, as closing it would checkpoint them
+        val crashed = File(dir, "crashed").apply { mkdirs() }
+        val copy = File(crashed, "zoukan.db")
+        // A plain connection: SQLDelight's driver closes its connection (and checkpoints) after each statement
+        java.sql.DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}", DesktopDatabase.properties(key)).use { connection ->
+            connection.createStatement().use {
+                it.execute("PRAGMA wal_autocheckpoint = 0")
+                it.execute("PRAGMA user_version = ${Database.Schema.version + 3}")
+            }
+            file.copyTo(copy)
+            File(dir, "zoukan.db-wal").copyTo(File(crashed, "zoukan.db-wal"))
+        }
+        val wal = File(crashed, "zoukan.db-wal")
+        (wal.length() > 0) shouldBe true
+        val before = copy.readBytes()
+        val walBefore = wal.readBytes()
+
+        shouldThrow<DesktopDatabase.TooNewException> { DesktopDatabase.createDriver(copy, store) }
+
+        copy.readBytes().contentEquals(before) shouldBe true
+        wal.readBytes().contentEquals(walBefore) shouldBe true
     }
 
     @Test

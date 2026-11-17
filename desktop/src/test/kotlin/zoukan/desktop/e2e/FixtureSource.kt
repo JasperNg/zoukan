@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.PagePreviewInfo
 import eu.kanade.tachiyomi.source.PagePreviewPage
 import eu.kanade.tachiyomi.source.PagePreviewSource
 import eu.kanade.tachiyomi.source.PreferenceScreen
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -71,6 +72,8 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * With [previews] it serves page previews for the entry screen, and with [related] related
  * titles. Both are off by default, so a journey that does not ask for them sees no extra requests.
+ * With [filters] it has one search filter, a genre ([GENRE_FILTER]), off by default too so the
+ * source screen of other journeys shows no filter button.
  */
 class FixtureSource(
     override val baseUrl: String,
@@ -88,6 +91,18 @@ class FixtureSource(
      * timeout error without waiting that long. The app's own default when null.
      */
     val readTimeoutSeconds: Long? = null,
+    /** A "Genre" select filter ([GENRE_FILTER]) that keeps only the titles of that genre. Off by default. */
+    val filters: Boolean = false,
+    /**
+     * How many pages of previews there are; each but the last says it has a next page. One by
+     * default, as before; more lets the previews screen load the next page as its grid scrolls.
+     */
+    val previewPages: Int = 1,
+    /**
+     * How many previews a page holds, numbered on from the page before and cycling through the
+     * first chapter's pages; 0 (the default) is that chapter's page count.
+     */
+    val previewsPerPage: Int = 0,
 ) : HttpSource(),
     ConfigurableSource,
     PagePreviewSource {
@@ -208,19 +223,36 @@ class FixtureSource(
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(searchUrl(baseUrl, query), headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selected
+        return GET(searchUrl(baseUrl, query) + genre?.let { "&genre=$it" }.orEmpty(), headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage =
-        catalog(response, query = response.request.url.queryParameter("q").orEmpty())
+        catalog(response, query = response.request.url.queryParameter("q").orEmpty(), genre = response.request.url.queryParameter("genre"))
 
-    private fun catalog(response: Response, query: String): MangasPage = catalogPage(
+    private fun catalog(response: Response, query: String, genre: String? = null): MangasPage = catalogPage(
         body = response.body.string(),
         query = query,
         showBonus = preferences.getBoolean(SHOW_BONUS, false),
         hiddenGenres = preferences.getStringSet(HIDDEN_GENRES, emptySet()).orEmpty(),
         prefix = preferences.getString(TITLE_PREFIX, "").orEmpty(),
         zToA = preferences.getString(ORDER, "az") == "za",
+        genre = genre,
     )
+
+    /** The genre filter: "Any", then the three genres; [selected] is the genre's key, null for "Any". */
+    class GenreFilter : Filter.Select<String>(GENRE_FILTER, arrayOf(GENRE_ANY, GENRE_ACTION, GENRE_COMEDY, GENRE_DRAMA)) {
+        val selected: String?
+            get() = when (state) {
+                1 -> FixtureCatalog.GENRE_ACTION
+                2 -> FixtureCatalog.GENRE_COMEDY
+                3 -> FixtureCatalog.GENRE_DRAMA
+                else -> null
+            }
+    }
+
+    override fun getFilterList(): FilterList = if (filters) FilterList(GenreFilter()) else FilterList()
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
@@ -264,12 +296,23 @@ class FixtureSource(
     // Page previews, as E-Hentai serves them: the pages of the title's first chapter (in reading
     // order), all on one preview page. A title that is not in the catalogue (a migrated entry) has none.
 
+    /** The preview pages the app asked for, in order. */
+    val previewPagesAsked: MutableList<Int> = Collections.synchronizedList(mutableListOf())
+
     override suspend fun getPagePreviewList(manga: SManga, chapters: List<SChapter>, page: Int): PagePreviewPage {
+        previewPagesAsked += page
         val chapter = FixtureCatalog.manga(manga.url.removePrefix("/manga/"))?.chapters?.firstOrNull()
-        if (!previews || chapter == null) return PagePreviewPage(page, emptyList(), hasNextPage = false, pagePreviewPages = 0)
+        if (!previews || chapter == null || page !in 1..previewPages) {
+            return PagePreviewPage(page, emptyList(), hasNextPage = false, pagePreviewPages = 0)
+        }
+        val images = FixtureCatalog.pages(chapter.format)
+        val perPage = previewsPerPage.takeIf { it > 0 } ?: images.size
         // Numbered from 1, as the app opens the reader at a preview's index - 1
-        val infos = FixtureCatalog.pages(chapter.format).mapIndexed { i, p -> PagePreviewInfo(i + 1, "$baseUrl/images/${p.file}") }
-        return PagePreviewPage(page, infos, hasNextPage = false, pagePreviewPages = 1)
+        val infos = (0 until perPage).map { i ->
+            val number = (page - 1) * perPage + i + 1
+            PagePreviewInfo(number, "$baseUrl/images/${images[(number - 1) % images.size].file}")
+        }
+        return PagePreviewPage(page, infos, hasNextPage = page < previewPages, pagePreviewPages = previewPages)
     }
 
     // Through the source's client (the descrambling interceptor too), reporting progress to the preview
@@ -331,12 +374,14 @@ class FixtureSource(
             hiddenGenres: Set<String> = emptySet(),
             prefix: String = "",
             zToA: Boolean = false,
+            genre: String? = null,
         ): MangasPage {
             val entries = Json.parseToJsonElement(body).jsonArray.map { it.jsonObject }
                 .filter { showBonus || !it.getValue("bonus").jsonPrimitive.boolean }
                 .filter { query.isNotBlank() || !it.getValue("searchOnly").jsonPrimitive.boolean }
                 .filter { query.isBlank() || it.string("title").contains(query, ignoreCase = true) }
                 .filter { it.string("genre") !in hiddenGenres }
+                .filter { genre == null || it.string("genre") == genre }
                 .map { json ->
                     SManga.create().apply {
                         url = "/manga/${json.string("key")}"
@@ -365,6 +410,8 @@ class FixtureSource(
         const val GENRE_ACTION = "Action"
         const val GENRE_COMEDY = "Comedy"
         const val GENRE_DRAMA = "Drama"
+        const val GENRE_ANY = "Any"
+        const val GENRE_FILTER = "Genre"
         const val TITLE_PREFIX = "title_prefix"
         const val TITLE_PREFIX_TITLE = "Title prefix"
         const val EXPERIMENTAL = "experimental"

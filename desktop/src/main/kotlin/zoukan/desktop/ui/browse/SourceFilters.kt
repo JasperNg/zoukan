@@ -45,6 +45,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.checkRow
@@ -251,7 +252,7 @@ internal fun SourceCategoriesDialog(
                             Modifier.fillMaxWidth().checkRow(category in chosen) { chosen = if (category in chosen) chosen - category else chosen + category }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(checked = category in chosen, onCheckedChange = null)
+                            RowCheckbox(checked = category in chosen, onCheckedChange = null)
                             Spacer(Modifier.width(12.dp))
                             Text(category)
                         }

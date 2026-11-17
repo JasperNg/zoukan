@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -40,6 +39,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.MangaDexSync
 import zoukan.desktop.track.TrackerLogin
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
@@ -212,7 +212,7 @@ private fun SyncFollowsDialog(onDismiss: () -> Unit, onConfirm: (Set<String>) ->
                         Modifier.fillMaxWidth().checkRow(selection[index]) { selection[index] = it },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = selection[index], onCheckedChange = null)
+                        RowCheckbox(checked = selection[index], onCheckedChange = null)
                         Text(localized(option), Modifier.padding(horizontal = 16.dp))
                     }
                 }

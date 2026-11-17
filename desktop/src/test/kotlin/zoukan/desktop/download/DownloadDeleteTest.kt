@@ -95,4 +95,42 @@ class DownloadDeleteTest {
         File(kit.downloads, "A (EN)").exists() shouldBe false
         kit.awaitBackground()
     }
+
+    @Test
+    fun `deleting one entry's chapter keeps a same-named chapter of another entry in the shared folder`() = runBlocking<Unit> {
+        lateinit var two: tachiyomi.domain.manga.model.Manga
+        lateinit var twos: List<tachiyomi.domain.chapter.model.Chapter>
+        val kit = DownloadKit(temp, coOwners = { manga -> if (manga.id == 1L) listOf(two to twos) else emptyList() })
+        val one = kit.manga(1, "Same")
+        two = kit.manga(2, "Same.")
+        // Titles that give one folder, chapters with the same name: one file on disk for both
+        val ones = listOf(kit.chapter(1, 1, name = "Chapter 1"), kit.chapter(3, 1, name = "Chapter 3"))
+        twos = listOf(kit.chapter(2, 2, name = "Chapter 1"))
+        val shared = kit.write("A (EN)/Same/Chapter 1.cbz")
+        val own = kit.write("A (EN)/Same/Chapter 3.cbz")
+
+        kit.manager.delete(one, ones)
+        shared.exists() shouldBe true
+        own.exists() shouldBe false
+
+        // Clear manga (deleteManga) keeps it too
+        kit.manager.deleteManga(one, ones)
+        shared.exists() shouldBe true
+        kit.manager.isDownloaded(two, twos.single()) shouldBe true
+        kit.awaitBackground()
+    }
+
+    @Test
+    fun `an automatic deletion with the storage folder missing deletes nothing and does not fail`() = runBlocking<Unit> {
+        var available = true
+        val kit = DownloadKit(temp, available = { available })
+        val file = kit.write("A (EN)/Entry/Chapter 1.cbz")
+        available = false
+
+        // Marking chapters read must not fail because the drive is unplugged
+        kit.manager.deleteRead(listOf(kit.chapter(1, 1, read = true)))
+
+        file.exists() shouldBe true
+        kit.awaitBackground()
+    }
 }

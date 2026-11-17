@@ -1,14 +1,20 @@
 package zoukan.desktop.ui
 
 import android.content.Context
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.InternalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SkikoComposeUiTest
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -22,6 +28,9 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowState
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import cafe.adriel.voyager.navigator.Navigator
@@ -59,6 +68,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.tray.Notifications
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.reader.ReaderKeys
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.i18n.desktop.DMR
 import java.awt.EventQueue
@@ -90,6 +100,10 @@ import kotlin.time.Duration.Companion.minutes
  * clipboard, an update's installer, quitting) go to a recorder in place of [SystemEffects], so a
  * click never leaves the test; pickers answer "cancelled". A button that may do nothing on purpose
  * goes in button-crawl-allowlist.txt with the reason.
+ *
+ * The same pass covers the other inputs (desktop/TESTING.md, 'Other inputs'): right clicks and
+ * other custom actions, text fields (type, then Enter or Escape), sliders (maximum,
+ * then minimum) and the keyboard shortcuts in [KEYS].
  *
  * A button that opens a menu (a popup that is not a dialog) gets its items clicked too, one level
  * down. Dialogs opened by a click are not crawled: the named ones have checks of their own.
@@ -152,12 +166,85 @@ class ButtonCrawlTest {
          */
         val OFFLINE = Regex("""(?i)(connect|refused|unknownhost|proxy|timed? ?out|chromium|unable to resolve|failed to connect|java\.io\.IOException|SocketException)""")
 
-        /** App-state keys that a user switches, as Android keeps incognito mode: the others are the app's timestamps and caches. */
-        val USER_APP_STATE = setOf(tachiyomi.core.common.preference.Preference.appStateKey("incognito_mode"))
+        /** A coroutine's cancellation, logged as an error by shared code that catches every Exception. */
+        val CANCELLED = Regex("""\b(Job)?CancellationException\b""")
+
+        /** App-state keys that a user switches, as Android keeps incognito mode and Downloaded only: the others are the app's timestamps and caches. */
+        val USER_APP_STATE = setOf("incognito_mode", "pref_downloaded_only").map { tachiyomi.core.common.preference.Preference.appStateKey(it) }.toSet()
 
         val SELECTED = Regex("""\d+ selected""")
 
         val DUPLICATES = setOf("settings:search", "settings:search-hidden", "state:settings-theme-row", "screen:more.SettingsScreen")
+
+        /** What a text field task types: the seeded entry's title, so a search finds something. */
+        const val TYPED = "Alpha"
+
+        /** What an empty field of a dialog gets before its buttons are collected, so a Save it disables shows. */
+        const val FILLED = "Crawl"
+
+        /** Fallbacks that say what a text field or slider task saw when nothing changed (see TESTING.md, 'Effect signatures'). */
+        const val REJECTED = "field"
+        const val OWN_VALUE = "own-value"
+        const val FIELD_LOCAL = "field-local"
+        const val KEY_UNUSED = "key-unused"
+        const val AT_END = "at-end-already"
+
+        /** The check of the reader on a middle page with no bars shown, where its keys are pressed. */
+        const val READER = "flow:reader.keys"
+
+        /**
+         * The keyboard shortcuts pressed, on the check where each applies: every
+         * [zoukan.desktop.ui.Shortcuts.actionFor] action, and every [ReaderKeys] binding.
+         */
+        val KEYS: List<Pair<String, KeySpec>> = listOf(
+            "tab:More" to KeySpec("Ctrl+1", Key.One, ctrl = true),
+            "tab:Library" to KeySpec("Ctrl+2", Key.Two, ctrl = true),
+            "tab:Library" to KeySpec("Ctrl+3", Key.Three, ctrl = true),
+            "tab:Library" to KeySpec("Ctrl+4", Key.Four, ctrl = true),
+            "tab:Library" to KeySpec("Ctrl+5", Key.Five, ctrl = true),
+            "tab:Library" to KeySpec("Ctrl+,", Key.Comma, ctrl = true),
+            "tab:Library" to KeySpec("Ctrl+Shift+U", Key.U, ctrl = true, shift = true),
+            "tab:Library" to KeySpec("Ctrl+F", Key.F, ctrl = true),
+            // Where the library has a selection: without one, Ctrl/Cmd + A rightly does nothing
+            "flow:library.selection" to KeySpec("Ctrl+A", Key.A, ctrl = true),
+            "screen:manga.MangaScreen" to KeySpec("Escape", Key.Escape),
+            "screen:manga.MangaScreen" to KeySpec("Alt+Left", Key.DirectionLeft, alt = true),
+        ) + ReaderKeys.bindings.map { READER to KeySpec(it.name, it.key, shift = it.shift) }
+    }
+
+    /** A key and its modifiers; [name] goes in the key of the crawl task. Ctrl is Ctrl on every OS here, which the app takes as Cmd too. */
+    private data class KeySpec(val name: String, val key: Key, val ctrl: Boolean = false, val shift: Boolean = false, val alt: Boolean = false)
+
+    /**
+     * How a crawl task reaches its node; [suffix] is what it adds to the node's key (nothing for a
+     * click, so the click keys stay as they were).
+     */
+    private sealed interface Kind {
+        val suffix: String
+
+        data object Click : Kind {
+            override val suffix = ""
+        }
+
+        /** A semantics custom action, such as the "More actions" of a right click (Modifiers.kt). */
+        data class Custom(val label: String) : Kind {
+            override val suffix get() = " [action: $label]"
+        }
+
+        /** Types [TYPED] into a text field, then presses Enter, or with [escape] Escape. */
+        data class Type(val escape: Boolean) : Kind {
+            override val suffix get() = if (escape) " [type, escape]" else " [type]"
+        }
+
+        /** Sets a slider to its maximum, then to its minimum. */
+        data object Slide : Kind {
+            override val suffix = " [slider max]"
+        }
+
+        /** Presses a key on the check, with no node: the focused one gets it, as in the window. */
+        data class Press(val spec: KeySpec) : Kind {
+            override val suffix = ""
+        }
     }
 
     /** Where a list must be scrolled to for a button to compose: the list's index among the lists on screen, and the row. */
@@ -176,6 +263,7 @@ class ButtonCrawlTest {
         val parent: Target? = null,
         /** The first root its node is looked for in: null for the topmost one (a dialog is modal), else a menu's. */
         val fromRoot: Int? = null,
+        val kind: Kind = Kind.Click,
     )
 
     private sealed interface Task {
@@ -218,6 +306,9 @@ class ButtonCrawlTest {
     private val unreached = sortedSetOf<String>()
 
     private lateinit var navigator: Navigator
+
+    /** The window state the screens see: the reader's F key makes it fullscreen, and [close] puts it back. */
+    private val window = WindowState()
 
     // What a click can do outside the window
 
@@ -451,6 +542,18 @@ class ButtonCrawlTest {
             },
         ),
         SmokeCheck(
+            READER,
+            "reader on a middle page, for its keys",
+            // The middle one of three pages, one page at a time (a wide window shows two), so
+            // every page key has a page to go to. The setting is put back before the next open
+            {
+                Injekt.get<DesktopPreferences>().pageLayout().set(0)
+                it.push(ReaderScreen(f.alpha.id, f.chapters.first().id, page = 1))
+            },
+            // Until the viewer shows the pages: before that, a page key has no viewer to turn
+            drive = { waitUntil(timeoutMillis = 10_000) { readerState()?.ready == true } },
+        ),
+        SmokeCheck(
             "flow:reader.bars",
             "reader with its bars shown",
             { it.push(ReaderScreen(f.alpha.id, f.chapters.first().id)) },
@@ -476,7 +579,9 @@ class ButtonCrawlTest {
                 runDesktopComposeUiTest(width = WIDTH, height = HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                     setContent {
                         InstallEscapeAsBack()
-                        ZoukanContent(preferences) { navigator = it }
+                        CompositionLocalProvider(LocalWindowState provides window) {
+                            ZoukanContent(preferences) { navigator = it }
+                        }
                     }
                     waitForIdle()
                     val end = System.currentTimeMillis() + BATCH_MILLIS
@@ -533,6 +638,26 @@ class ButtonCrawlTest {
             throw e
         }
         settleQuickly()
+        fillDialogFields()
+    }
+
+    /**
+     * A dialog with a disabled button and an empty text field (a new category's name) gets
+     * [FILLED] in the field, so the button it holds back is crawled too.
+     */
+    private fun ComposeUiTest.fillDialogFields() {
+        val roots = roots(merged = true)
+        var filled = false
+        roots.drop(1).forEach { root ->
+            val nodes = root.descendants()
+            if (nodes.none { SemanticsActions.OnClick in it.config && SemanticsProperties.Disabled in it.config }) return@forEach
+            nodes.filter { matches(Kind.Type(false), it) && it.config.getOrNull(SemanticsProperties.EditableText)?.text.isNullOrEmpty() }.forEach { node ->
+                val set = node.config[SemanticsActions.SetText].action ?: return@forEach
+                runOnUiThread { set(AnnotatedString(FILLED)) }
+                filled = true
+            }
+        }
+        if (filled) settleQuickly()
     }
 
     /** Closes [check] as the smoke test does, then whatever dialog or menu a click left open. */
@@ -545,7 +670,14 @@ class ButtonCrawlTest {
                 HomeScreen.selectTab(HomeTab.Library)
                 // Settings > Advanced > Onboarding guide opens the guide over every screen until closed
                 zoukan.desktop.ui.onboarding.Onboarding.reopen.value = false
+                // The reader's F key made the window fullscreen
+                window.placement = WindowPlacement.Floating
             }
+            waitForIdle()
+            // A field of the root screen keeps what a text field task typed (the library's search)
+            roots(merged = true).first().descendants()
+                .filter { matches(Kind.Type(false), it) && !it.config.getOrNull(SemanticsProperties.EditableText)?.text.isNullOrEmpty() }
+                .forEach { node -> node.config[SemanticsActions.SetText].action?.let { set -> runOnUiThread { set(AnnotatedString("")) } } }
             waitForIdle()
             // A selection (library, updates, history) stays on its tab: Escape ends it
             repeat(2) {
@@ -578,20 +710,24 @@ class ButtonCrawlTest {
         println("Crawl: ${check.name}")
         val targets = mutableListOf<Target>()
         val keys = mutableSetOf<String>()
-        val raws = mutableSetOf<String>()
-        fun add(found: Found, position: ListPosition?) {
-            raws += found.raw
-            val key = uniqueKey("${check.key}/${ButtonCrawl.stable(found.raw)}", keys) ?: return
-            targets += Target(check, key, found.raw, found.ordinal, position)
+        val raws = mutableSetOf<Pair<Kind, String>>()
+        fun add(kind: Kind, found: Found, position: ListPosition?) {
+            raws += kind to found.raw
+            // A text field gets two tasks: type and Enter, and type and Escape
+            val kinds = if (kind is Kind.Type) listOf(Kind.Type(false), Kind.Type(true)) else listOf(kind)
+            kinds.forEach { k ->
+                val key = uniqueKey("${check.key}/${ButtonCrawl.stable(found.raw + k.suffix)}", keys) ?: return@forEach
+                targets += Target(check, key, found.raw, found.ordinal, position, kind = k)
+            }
         }
         try {
             open(check)
             // -Pzoukan.crawl.debug=true prints what each check shows when its buttons are collected
             if (System.getProperty("zoukan.crawl.debug") == "true") println(onAllNodes(isRoot()).printToString(maxDepth = Int.MAX_VALUE))
-            val seen = mutableSetOf<Int>()
-            clickables().forEach {
-                seen += it.node.id
-                add(it, null)
+            val seen = mutableSetOf<Pair<Kind, Int>>()
+            interactables().forEach { (kind, found) ->
+                seen += kind to found.node.id
+                add(kind, found, null)
             }
             val lists = onAllNodes(hasScrollToIndexAction()).fetchSemanticsNodes().size
             for (list in 0 until lists) {
@@ -599,13 +735,17 @@ class ButtonCrawlTest {
                 for (step in 1..MAX_LIST_STEPS) {
                     if (!scroll(ListPosition(list, row))) break
                     // A row that scrolled out and back composes again as a new node with the same id: not a new button
-                    clickables().filter { it.node.id !in seen }.forEach {
-                        seen += it.node.id
-                        if (it.raw !in raws) add(it, ListPosition(list, row))
+                    interactables().filter { (kind, found) -> (kind to found.node.id) !in seen }.forEach { (kind, found) ->
+                        seen += kind to found.node.id
+                        if ((kind to found.raw) !in raws) add(kind, found, ListPosition(list, row))
                     }
                     row += LIST_STEP
                 }
                 scroll(ListPosition(list, 0))
+            }
+            // The keyboard shortcuts that apply on this check
+            KEYS.filter { it.first == check.key }.forEach { (_, spec) ->
+                targets += Target(check, "${check.key}/key:${spec.name}", "", 0, null, kind = Kind.Press(spec))
             }
         } catch (e: Throwable) {
             failures += "${check.name}: could not open it to collect its buttons: $e"
@@ -643,79 +783,31 @@ class ButtonCrawlTest {
     }
 
     /**
-     * Clicks [target] from a fresh open of its check and records its effect signature; returns
-     * the items of a menu it opened. A switch, checkbox or choice whose click wrote a setting or
-     * the database is followed by the round trip: the check opens again, and it must show what
-     * was stored.
+     * Runs [target] from a fresh open of its check and records its effect signature; returns the
+     * items of a menu it opened. A click or custom action presses the node; a text
+     * field is typed into, then gets Enter or Escape; a slider goes to its maximum, then its
+     * minimum; a shortcut is pressed as the window would pass it on.
      */
     private fun ComposeUiTest.click(target: Target): List<Task> {
         current = "${target.check.name}: ${target.key}"
-        var next = emptyList<Task>()
         var hung = false
         try {
             open(target.check)
-            target.position?.let { scroll(it) }
-            target.parent?.let { parent ->
-                val opener = find(parent, parent.fromRoot) ?: return unreached(target)
-                press(opener)
-                settleQuickly()
-            }
-            val fromRoot = target.fromRoot
-            val found = find(target, fromRoot) ?: return unreached(target)
-            toggles[target.key] = isToggle(found.node)
-            inDialog[target.key] = found.root > 0
-            val selected = found.node.config.getOrNull(SemanticsProperties.Selected) == true
-            val field = SemanticsActions.SetText in found.node.config
-            val before = snapshot()
-            val errors = ErrorLog.lines.size
-            val printed = tap.exceptions.size
-            val problems = Recorder.problems.size
-            press(found)
-            settleQuickly()
-            // Until the signature holds still: a click's work may land over several frames
-            var after = snapshot()
-            var signature = signatureOf(before, after)
-            val deadline = System.currentTimeMillis() + SLOW_EFFECT_MILLIS
-            while (System.currentTimeMillis() < deadline) {
-                Thread.sleep(250)
-                waitForIdle()
-                val later = snapshot()
-                val again = signatureOf(before, later)
-                val still = again == signature
-                after = later
-                signature = again
-                if (still && signature.tokens.isNotEmpty()) break
-            }
-            val logged = ErrorLog.lines.drop(errors) + tap.exceptions.drop(printed).map { "printed $it" }
-            logged.filterNot { OFFLINE.containsMatchIn(it) }.forEach { failures += "${target.key}: logged an error: $it" }
-            Recorder.problems.drop(problems).forEach { failures += "${target.key}: $it" }
-            checkPersisted(target, before, after)
-            // Choosing what is already chosen (the current page, tab or option) does nothing, rightly
-            // A text field that already has the focus: clicking it only places the cursor
-            if (logged.any { OFFLINE.containsMatchIn(it) }) signature = Signature(signature.tokens + "logs:offline", signature.details)
-            val none = when {
-                selected -> "selected-already"
-                field -> "field"
-                else -> NO_EFFECT
-            }
-            effects[target.key] = signature.tokens.ifEmpty { listOf(none) }.joinToString(" ")
-            evidence[target.key] = signature.tokens + signature.details
-            println("  ${target.key}  ${effects[target.key]}")
-            // A menu, not a dialog: its items, one level down
-            if (target.parent == null && after.menus > before.menus) {
-                val keys = mutableSetOf<String>()
-                next = clickables(fromRoot = before.roots).mapNotNull {
-                    val key = uniqueKey("${target.key} > ${ButtonCrawl.stable(it.raw)}", keys) ?: return@mapNotNull null
-                    Task.Click(Target(target.check, key, it.raw, it.ordinal, target.position, parent = target, fromRoot = before.roots))
+            return when (val kind = target.kind) {
+                is Kind.Press -> {
+                    // N and P on the last or first chapter have nowhere to go, rightly
+                    val reader = readerState()
+                    val none = when (ReaderKeys.actionFor(kind.spec.key, shift = kind.spec.shift).takeIf { target.check.key == READER }) {
+                        ReaderKeys.Action.NEXT_CHAPTER -> if (reader?.hasNext == false) AT_END else NO_EFFECT
+                        ReaderKeys.Action.PREVIOUS_CHAPTER -> if (reader?.hasPrevious == false) AT_END else NO_EFFECT
+                        else -> NO_EFFECT
+                    }
+                    measure(target.key, kind, none) { sendKey(kind.spec) }
+                    emptyList()
                 }
-            }
-            // The round trip, for a click that stored something and stayed on the same screen
-            val stored = signature.tokens.any { it.startsWith("pref:") || it.startsWith("db:") }
-            val moved = signature.tokens.any { it.startsWith("nav:") || it.startsWith("dialog:") || it == "menu" || it == "close" }
-            // Only for a switch, checkbox or choice: a button's own label (Restore, then Close) may rightly start over
-            if (target.parent == null && stored && !moved && toggles[target.key] == true) {
-                val shown = find(target, fromRoot)?.let { state(it.node) }
-                if (shown != null) roundTrip(target, fromRoot, shown)
+                is Kind.Type -> type(target, kind)
+                Kind.Slide -> slide(target)
+                else -> press(target)
             }
         } catch (e: Unresponsive) {
             hung = true
@@ -730,7 +822,156 @@ class ButtonCrawlTest {
             // Not while the UI thread is stuck: closing would wait for it
             if (!hung) runCatching { close(target.check) }
         }
+    }
+
+    /**
+     * A click or custom action. A switch, checkbox or choice whose click wrote a
+     * setting or the database is followed by the round trip: the check opens again, and it must
+     * show what was stored.
+     */
+    private fun ComposeUiTest.press(target: Target): List<Task> {
+        target.position?.let { scroll(it) }
+        target.parent?.let { parent ->
+            val opener = find(parent, parent.fromRoot) ?: return unreached(target)
+            press(opener, parent.kind)
+            settleQuickly()
+        }
+        val fromRoot = target.fromRoot
+        val found = find(target, fromRoot) ?: return unreached(target)
+        toggles[target.key] = isToggle(found.node)
+        inDialog[target.key] = found.root > 0
+        // Choosing what is already chosen (the current page, tab or option) does nothing, rightly
+        // A text field that already has the focus: clicking it only places the cursor
+        val none = when {
+            found.node.config.getOrNull(SemanticsProperties.Selected) == true -> "selected-already"
+            SemanticsActions.SetText in found.node.config -> REJECTED
+            else -> NO_EFFECT
+        }
+        val (before, after, signature) = measure(target.key, target.kind, none) { press(found, target.kind) }
+        var next = emptyList<Task>()
+        // A menu, not a dialog: its items, one level down
+        if (target.parent == null && after.menus > before.menus) {
+            val keys = mutableSetOf<String>()
+            next = clickables(fromRoot = before.roots).mapNotNull {
+                val key = uniqueKey("${target.key} > ${ButtonCrawl.stable(it.raw)}", keys) ?: return@mapNotNull null
+                Task.Click(Target(target.check, key, it.raw, it.ordinal, target.position, parent = target, fromRoot = before.roots))
+            }
+        }
+        // The round trip, for a click that stored something and stayed on the same screen
+        val stored = signature.tokens.any { it.startsWith("pref:") || it.startsWith("db:") }
+        val moved = signature.tokens.any { it.startsWith("nav:") || it.startsWith("dialog:") || it == "menu" || it == "close" }
+        // Only for a switch, checkbox or choice: a button's own label (Restore, then Close) may rightly start over
+        if (target.parent == null && stored && !moved && toggles[target.key] == true) {
+            val shown = find(target, fromRoot)?.let { state(it.node) }
+            if (shown != null) roundTrip(target, fromRoot, shown)
+        }
         return next
+    }
+
+    /**
+     * Types [TYPED] into a text field, as a user does (the field takes the focus first), then
+     * presses Enter; the other task of the field types and presses Escape. A field in a dialog
+     * that only shows what was typed is [FIELD_LOCAL]: the dialog's button stores it.
+     */
+    private fun ComposeUiTest.type(target: Target, kind: Kind.Type): List<Task> {
+        target.position?.let { scroll(it) }
+        val found = find(target, target.fromRoot) ?: return unreached(target)
+        val local = found.root > 0
+        inDialog[target.key] = local
+        val config = found.node.config
+        fun typeIt() = onUi {
+            config.getOrNull(SemanticsActions.RequestFocus)?.action?.invoke()
+            config[SemanticsActions.SetText].action?.invoke(AnnotatedString(TYPED))
+        }
+        if (kind.escape) {
+            typeIt()
+            settleQuickly()
+            measure(target.key, kind, KEY_UNUSED, local) { sendKey(KeySpec("Escape", Key.Escape)) }
+        } else {
+            measure(target.key, kind, REJECTED, local) { typeIt() }
+            measure(target.key.replace(Kind.Type(false).suffix, " [type, enter]"), kind, KEY_UNUSED, local) { sendKey(KeySpec("Enter", Key.Enter)) }
+        }
+        return emptyList()
+    }
+
+    /** Sets a slider to its maximum, then to its minimum, as Material's setProgress does (with onValueChangeFinished). */
+    private fun ComposeUiTest.slide(target: Target): List<Task> {
+        target.position?.let { scroll(it) }
+        val found = find(target, target.fromRoot) ?: return unreached(target)
+        inDialog[target.key] = found.root > 0
+        fun set(node: SemanticsNode, max: Boolean) {
+            val info = node.config[SemanticsProperties.ProgressBarRangeInfo]
+            val value = if (max) info.range.endInclusive else info.range.start
+            if (info.current == value) return
+            val action = node.config[SemanticsActions.SetProgress].action ?: return
+            onUi { action(value) }
+        }
+        measure(target.key, Kind.Slide, AT_END) { set(found.node, max = true) }
+        // The slider's label may show its value: found again by its position when its id changed
+        val again = find(target, target.fromRoot)?.node ?: found.node
+        measure(target.key.replace(Kind.Slide.suffix, " [slider min]"), Kind.Slide, AT_END) { set(again, max = false) }
+        return emptyList()
+    }
+
+    private data class Measured(val before: Snapshot, val after: Snapshot, val signature: Signature)
+
+    /**
+     * Runs [act], waits until its effect signature holds still, checks the errors it logged and the
+     * settings it wrote, and records the signature under [key], or [none] when nothing changed.
+     * [local] is a text field in a dialog.
+     */
+    private fun ComposeUiTest.measure(key: String, kind: Kind, none: String, local: Boolean = false, act: () -> Unit): Measured {
+        val before = snapshot()
+        val errors = ErrorLog.lines.size
+        val printed = tap.exceptions.size
+        val problems = Recorder.problems.size
+        act()
+        settleQuickly()
+        // Until the signature holds still: a click's work may land over several frames
+        var after = snapshot()
+        var signature = signatureOf(before, after, kind)
+        val deadline = System.currentTimeMillis() + SLOW_EFFECT_MILLIS
+        while (System.currentTimeMillis() < deadline) {
+            Thread.sleep(250)
+            waitForIdle()
+            val later = snapshot()
+            val again = signatureOf(before, later, kind)
+            val still = again == signature
+            after = later
+            signature = again
+            if (still && signature.tokens.isNotEmpty()) break
+        }
+        val logged = ErrorLog.lines.drop(errors) + tap.exceptions.drop(printed).map { "printed $it" }
+        // A screen's job cancelled as the crawl leaves the screen: shared code (GetChapter, from
+        // Android) catches every Exception and logs it, the cancellation too, as Android's logcat does
+        logged.filterNot { OFFLINE.containsMatchIn(it) || CANCELLED.containsMatchIn(it) }.forEach { failures += "$key: logged an error: $it" }
+        Recorder.problems.drop(problems).forEach { failures += "$key: $it" }
+        checkPersisted(key, before, after)
+        if (logged.any { OFFLINE.containsMatchIn(it) }) signature = Signature(signature.tokens + "logs:offline", signature.details)
+        if (local && signature.tokens == listOf(OWN_VALUE)) signature = Signature(listOf(FIELD_LOCAL), signature.details)
+        effects[key] = signature.tokens.ifEmpty { listOf(none) }.joinToString(" ")
+        evidence[key] = signature.tokens + signature.details
+        println("  $key  ${effects[key]}")
+        return Measured(before, after, signature)
+    }
+
+    /**
+     * Presses [spec] as the window passes a key on: into the Compose scene, where the focused node
+     * (and then the app's shortcuts on the root) may use it, and an Escape nothing used goes Back.
+     * The scene is internal API, as in [pressEscape].
+     */
+    @OptIn(InternalTestApi::class, InternalComposeUiApi::class)
+    private fun ComposeUiTest.sendKey(spec: KeySpec) {
+        val scene = (this as SkikoComposeUiTest).scene
+        listOf(KeyEventType.KeyDown, KeyEventType.KeyUp).forEach { type ->
+            val event = KeyEvent(spec.key, type, isCtrlPressed = spec.ctrl, isShiftPressed = spec.shift, isAltPressed = spec.alt)
+            onUi {
+                val plainEscape = spec.key == Key.Escape && !spec.ctrl && !spec.shift && !spec.alt
+                if (!scene.sendKeyEvent(event) && type == KeyEventType.KeyUp && plainEscape) {
+                    checkNotNull(EscapeAsBack.current) { "no InstallEscapeAsBack() in the test's content" }.back()
+                }
+            }
+        }
     }
 
     /**
@@ -751,13 +992,13 @@ class ButtonCrawlTest {
 
     /** A setting the click changed must be on disk, not only in memory. */
     @OptIn(xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly::class)
-    private fun checkPersisted(target: Target, before: Snapshot, after: Snapshot) {
+    private fun checkPersisted(key: String, before: Snapshot, after: Snapshot) {
         val changed = (after.settings.keys + before.settings.keys).filter { after.settings[it] != before.settings[it] }
         if (changed.isEmpty()) return
         xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences.awaitPendingSaves()
         val stored = xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences(PREFERENCES).all
         changed.filter { stored[it] != after.settings[it] }.forEach {
-            failures += "${target.key}: the setting $it changed to ${after.settings[it]} but the file holds ${stored[it]}"
+            failures += "$key: the setting $it changed to ${after.settings[it]} but the file holds ${stored[it]}"
         }
     }
 
@@ -790,31 +1031,68 @@ class ButtonCrawlTest {
      * of the topmost root that has any: a dialog or menu over the window is modal, so a user can
      * only click in it.
      */
-    private fun ComposeUiTest.clickables(fromRoot: Int? = null): List<Found> {
+    private fun ComposeUiTest.clickables(fromRoot: Int? = null, kind: Kind = Kind.Click): List<Found> {
         val counts = mutableMapOf<String, Int>()
         val roots = roots(merged = true)
-        fun clickable(node: SemanticsNode) = SemanticsActions.OnClick in node.config &&
-            SemanticsProperties.Disabled !in node.config &&
-            SemanticsProperties.HideFromAccessibility !in node.config
-        // The topmost root with something to click: a tooltip over the window is a root too
-        val first = fromRoot ?: roots.indexOfLast { root -> root.descendants().any(::clickable) }.coerceAtLeast(0)
+        val first = fromRoot ?: topRoot(roots)
         return roots.withIndex().filter { it.index >= first }.flatMap { (index, root) ->
-            root.descendants().filter(::clickable).map { node ->
+            root.descendants().filter { matches(kind, it) }.map { node ->
                 val raw = nodeId(node)
                 Found(node, raw, counts.merge(raw, 1, Int::plus)!!, index)
             }
         }
     }
 
+    /** The topmost root with something to click: a tooltip over the window is a root too. */
+    private fun topRoot(roots: List<SemanticsNode>) = roots.indexOfLast { root -> root.descendants().any { matches(Kind.Click, it) } }.coerceAtLeast(0)
+
+    /** Whether [node] takes [kind]: enabled, shown to accessibility, and, for a text field, not a password. */
+    private fun matches(kind: Kind, node: SemanticsNode): Boolean {
+        val c = node.config
+        if (SemanticsProperties.HideFromAccessibility in c) return false
+        val enabled = SemanticsProperties.Disabled !in c
+        return when (kind) {
+            Kind.Click -> SemanticsActions.OnClick in c && enabled
+            is Kind.Custom -> c.getOrNull(SemanticsActions.CustomActions).orEmpty().any { it.label == kind.label }
+            is Kind.Type ->
+                SemanticsActions.SetText in c && enabled && SemanticsProperties.Password !in c &&
+                    c.getOrNull(SemanticsProperties.IsEditable) != false
+            Kind.Slide -> SemanticsActions.SetProgress in c && SemanticsProperties.ProgressBarRangeInfo in c && enabled
+            is Kind.Press -> false
+        }
+    }
+
+    /**
+     * Every node a user can act on, with how: click, custom action, text, slider. Long presses are
+     * left out: the one that opens a menu (the entry's title) has the same menu as its right-click
+     * action, and the others show a tooltip.
+     */
+    private fun ComposeUiTest.interactables(): List<Pair<Kind, Found>> {
+        val roots = roots(merged = true)
+        val labels = roots.drop(topRoot(roots)).flatMap { it.descendants() }
+            .flatMap { it.config.getOrNull(SemanticsActions.CustomActions).orEmpty() }.map { it.label }.distinct()
+        val kinds = listOf(Kind.Click, Kind.Type(false), Kind.Slide) + labels.map { Kind.Custom(it) }
+        return kinds.flatMap { kind -> clickables(kind = kind).map { kind to it } }
+    }
+
     private fun ComposeUiTest.find(target: Target, fromRoot: Int?): Found? =
-        clickables(fromRoot).firstOrNull { it.raw == target.raw && it.ordinal == target.ordinal }
+        clickables(fromRoot, target.kind).firstOrNull { it.raw == target.raw && it.ordinal == target.ordinal }
 
     /**
      * Runs the node's click action on the UI thread, as a click does, and waits for it. A click
      * that keeps the UI thread (a modal native dialog) is [Unresponsive]; one that throws fails.
      */
-    private fun press(found: Found) {
-        val action = found.node.config[SemanticsActions.OnClick].action ?: return
+    private fun press(found: Found, kind: Kind = Kind.Click) {
+        val c = found.node.config
+        val action: (() -> Boolean)? = when (kind) {
+            is Kind.Custom -> c[SemanticsActions.CustomActions].first { it.label == kind.label }.action
+            else -> c[SemanticsActions.OnClick].action
+        }
+        if (action != null) onUi { action() }
+    }
+
+    /** Runs [action] on the UI thread, as an input does, and waits for it; see [press]. */
+    private fun onUi(action: () -> Unit) {
         val done = CountDownLatch(1)
         var error: Throwable? = null
         EventQueue.invokeLater {
@@ -864,6 +1142,15 @@ class ButtonCrawlTest {
         val queue: Int,
         val files: Map<String, Int>,
         val updates: Int,
+        /** The screen without the text fields and sliders: what changed besides a control's own value. */
+        val others: String,
+        val tab: HomeTab?,
+        /** The "2 selected" titles. */
+        val selection: String,
+        /** The focused node's id: what a shortcut moved the focus to. */
+        val focus: String?,
+        /** What the reader's keys change that the screen does not name. */
+        val reader: ReaderKeys.State?,
     )
 
     private fun ComposeUiTest.snapshot(): Snapshot {
@@ -886,8 +1173,21 @@ class ButtonCrawlTest {
             queue = Injekt.get<zoukan.desktop.download.DownloadManager>().queue.value.size,
             files = mapOf("downloads" to storage.downloads, "local" to storage.local).mapValues { (_, dir) -> dir.walk().count { it.isFile } },
             updates = updates.get(),
+            others = roots.joinToString("\n") { root ->
+                // A field's or slider's own nodes (its text, its placeholder, its value) are its value
+                val own = root.descendants().filter { matches(Kind.Type(false), it) || matches(Kind.Slide, it) }.flatMap { it.descendants() }.map { it.id }.toSet()
+                root.descendants().filter { it.id !in own }.joinToString("|", transform = ::describe)
+            },
+            tab = runOnUiThread { HomeScreen.selectedTab },
+            selection = onAllNodes(selectionCount).fetchSemanticsNodes().joinToString { it.config.getOrNull(SemanticsProperties.Text).orEmpty().joinToString { t -> t.text } },
+            focus = onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().lastOrNull()?.let(::nodeId),
+            reader = readerState(),
         )
     }
+
+    /** The open reader's [ReaderKeys.State], read on the UI thread; null with no reader on screen. */
+    private fun ComposeUiTest.readerState(): ReaderKeys.State? = roots(merged = false).flatMap { it.descendants() }
+        .firstNotNullOfOrNull { it.config.getOrNull(ReaderKeys.StateKey) }?.let { state -> runOnUiThread { state() } }
 
     /** What a node shows: what changes when a click changes the screen. */
     private fun describe(node: SemanticsNode): String {
@@ -917,7 +1217,7 @@ class ButtonCrawlTest {
 
     private fun quoted(text: String) = "\"" + ButtonCrawl.stable(text.replace(Regex("\\s+"), " ").trim().take(50)) + "\""
 
-    private fun signatureOf(before: Snapshot, after: Snapshot): Signature {
+    private fun signatureOf(before: Snapshot, after: Snapshot, kind: Kind): Signature {
         val details = db.diff(before.rows, after.rows)
         val tokens = sortedSetOf<String>()
         val prefix = after.stack.size <= before.stack.size && after.stack == before.stack.take(after.stack.size)
@@ -947,7 +1247,24 @@ class ButtonCrawlTest {
             if (count < was) tokens += "files:$dir-"
         }
         if (after.updates > before.updates) tokens += "job:library-update"
-        if (tokens.isEmpty() && after.screen != before.screen) tokens += "ui"
+        if (after.tab != before.tab && after.tab != null) tokens += "tab:${after.tab.name}"
+        if (after.selection != before.selection) tokens += "selection"
+        // Only for a key: a click or typing moves the focus as a side effect
+        if (kind is Kind.Press && after.focus != before.focus && after.focus != null) tokens += "focus:" + ButtonCrawl.stable(after.focus)
+        if (before.reader != null && after.reader != null) {
+            val (b, a) = before.reader to after.reader
+            listOf(
+                "page" to (a.page != b.page),
+                "menu" to (a.menu != b.menu),
+                "zoom" to (a.zoom != b.zoom),
+                "fullscreen" to (a.fullscreen != b.fullscreen),
+                "help" to (a.help != b.help),
+                "auto-scroll" to (a.autoScroll != b.autoScroll),
+                "settings" to (a.settings != b.settings),
+                "chapters" to (a.chapters != b.chapters),
+            ).filter { it.second }.forEach { tokens += "reader:${it.first}" }
+        }
+        if (tokens.isEmpty() && after.screen != before.screen) tokens += if (after.others == before.others) OWN_VALUE else "ui"
         return Signature(tokens.toList(), details + tokens.filter { it.startsWith("pref:") })
     }
 
@@ -1037,6 +1354,32 @@ class ButtonCrawlTest {
 
     // Report and baseline
 
+    /** Signatures of a text field or slider task that changed nothing but the control itself. */
+    private val inert = setOf(REJECTED, OWN_VALUE, KEY_UNUSED, AT_END)
+
+    /**
+     * Why [key]'s [signature] fails the run, or null: no effect; only the screen changed where a
+     * setting or data should have; a text field on a screen where typing and Enter changed nothing
+     * but the field; a slider that neither stored nor showed anything at either end.
+     */
+    private fun problem(key: String, signature: String): String? {
+        val label = key.substringAfterLast('/').substringAfterLast(" > ")
+        val settingToggle = toggles[key] == true && Contracts.all.any { it.button.containsMatchIn(contractKey(key)) }
+        return when {
+            signature == NO_EFFECT -> "it did nothing"
+            signature == "ui" && settingToggle -> "a setting's switch or choice that changed the screen but stored nothing"
+            signature == "ui" && toggles[key] != true && dataAction.containsMatchIn(label) -> "the label says it changes data, but the click only changed the screen"
+            typeKey.containsMatchIn(key) && inDialog[key] != true && signature in inert &&
+                effects[key.replace(" [type]", " [type, enter]")] in inert -> "typing and Enter changed nothing but the field: no setting, search or screen took it"
+            sliderKey.containsMatchIn(key) && signature in inert &&
+                effects[key.replace(" [slider max]", " [slider min]")] in inert -> "the slider stored nothing and changed nothing else at either end"
+            else -> null
+        }
+    }
+
+    private val typeKey = Regex(""" \[type]( #2)?$""")
+    private val sliderKey = Regex(""" \[slider max]( #2)?$""")
+
     /** A label that says the button changes data: such a button must do more than change the screen. */
     private val dataAction = Regex("""(?i)^"(mark as|bookmark|add to library|in library|remove|delete|download|save|restore|clear(?! (selection|search))|reset|migrate|merge)\b""")
 
@@ -1071,19 +1414,15 @@ class ButtonCrawlTest {
         // No effect, or only the screen changed where data should have
         effects.forEach { (key, signature) ->
             if (key in allowlist) return@forEach
-            val label = key.substringAfterLast('/').substringAfterLast(" > ")
-            val settingToggle = toggles[key] == true && Contracts.all.any { it.button.containsMatchIn(contractKey(key)) }
-            when {
-                signature == NO_EFFECT -> failures += "$key: the click did nothing (if that is on purpose, add it to ${ButtonCrawl.ALLOWLIST} with the reason)"
-                signature == "ui" && settingToggle -> failures += "$key: a setting's switch or choice that changed the screen but stored nothing"
-                signature == "ui" && toggles[key] != true && dataAction.containsMatchIn(label) -> failures += "$key: the label says it changes data, but the click only changed the screen"
-            }
+            problem(key, signature)?.let { failures += "$key: $it (if that is on purpose, add it to ${ButtonCrawl.ALLOWLIST} with the reason)" }
         }
-        // The allowlist names only buttons that still need it
         if (!partial && System.getProperty("zoukan.shard") == null) {
-            allowlist.keys.filter { effects[it] != NO_EFFECT && effects[it] != "ui" }.forEach {
+            // The allowlist names only buttons that still need it
+            allowlist.keys.filter { key -> effects[key].let { it == null || (it != "ui" && problem(key, it) == null) } }.forEach {
                 failures += "$it is in ${ButtonCrawl.ALLOWLIST} but the click now does something (or the button is gone): remove its line"
             }
+            // Every shortcut is pressed on a check that exists
+            KEYS.map { it.first }.distinct().filter { it !in keys }.forEach { failures += "the shortcuts of $it have no check to be pressed on: update KEYS" }
         }
         // The contracts: the right row, the right preference
         Contracts.all.forEach { contract ->

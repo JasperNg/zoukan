@@ -24,6 +24,8 @@ class DownloadIndexTest {
 
     private fun kit() = DownloadKit(temp).also { kits += it }
 
+    private val isMac = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+
     @AfterEach
     fun waitForSaves() = kits.forEach { it.awaitBackground() }
 
@@ -53,24 +55,37 @@ class DownloadIndexTest {
         val kit = kit()
         val nfc = Normalizer.normalize("Café", Normalizer.Form.NFC)
         val nfd = Normalizer.normalize("Café", Normalizer.Form.NFD)
+        (nfc == nfd) shouldBe false
         val entry = kit.manga(1, nfc)
-        kit.write("A (EN)/$nfd/Chapitre $nfd.cbz")
+        val sourceDir = File(kit.downloads, "A (EN)").apply { mkdirs() }
+        // Made the way that keeps NFD on this system: Java on Linux and Windows passes the name as it
+        // is (ext4 and NTFS store it so); the JDK on macOS turns a name into NFC, so there mkdir makes it
+        if (isMac) {
+            ProcessBuilder("mkdir", "-p", "$nfd/Chapitre $nfd").directory(sourceDir).start().waitFor() shouldBe 0
+        } else {
+            File(sourceDir, "$nfd/Chapitre $nfd").mkdirs() shouldBe true
+        }
+        File(sourceDir, "$nfd/Chapitre $nfd/001.png").writeBytes(byteArrayOf(1))
         val chapter = kit.chapter(1, 1, name = "Chapitre $nfc")
 
-        // The names as the system reports them (ext4 and NTFS keep NFD apart from NFC; the JDK on
-        // macOS may hand them back in NFC): found under those, never under a name made from the title
-        val onDisk = File(kit.downloads, "A (EN)").list()!!.single()
-        val chapterOnDisk = File(kit.downloads, "A (EN)/$onDisk").list()!!.single()
+        // The real names, as the system lists them
+        val onDisk = sourceDir.list()!!.single()
+        val chapterOnDisk = File(sourceDir, onDisk).list()!!.single()
+        // Where the system lists NFD, the title's NFC name is not the folder's: only the lookup by key finds it
+        if (!isMac) {
+            onDisk shouldBe nfd
+            chapterOnDisk shouldBe "Chapitre $nfd"
+        }
         kit.downloaded(entry, chapter) shouldBe true
         val found = kit.manager.findChapter(entry, chapter)!!
         found.parentFile.name shouldBe onDisk
         found.name shouldBe chapterOnDisk
-        found.isFile shouldBe true
+        found.isDirectory shouldBe true
         kit.manager.downloadCount(entry) shouldBe 1
 
         // And it is deleted from where it is, with no second folder made
         kit.manager.delete(entry, listOf(chapter))
-        File(kit.downloads, "A (EN)").list().orEmpty().toList() shouldBe emptyList()
+        sourceDir.walk().map { it.relativeTo(sourceDir).path }.toList().filter { it.isNotEmpty() } shouldBe emptyList()
     }
 
     @Test

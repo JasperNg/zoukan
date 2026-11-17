@@ -9,12 +9,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -64,6 +62,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowSwitch
 import zoukan.desktop.ui.common.checkRow
 import java.net.URI
 import java.util.Collections
@@ -331,7 +331,7 @@ fun RecommendationSearchDialog(onDismissRequest: () -> Unit, onSearchRequest: ()
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(localized(SYMR.strings.rec_hide_library_entries), Modifier.weight(1f))
-                    Switch(hideLibrary, onCheckedChange = null)
+                    RowSwitch(hideLibrary, onCheckedChange = null)
                 }
             }
         },
@@ -346,7 +346,7 @@ fun RecommendationSearchDialog(onDismissRequest: () -> Unit, onSearchRequest: ()
 @Composable
 private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().checkRow(checked, onChange = onChange), verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked, onCheckedChange = null)
+        RowCheckbox(checked, onCheckedChange = null)
         Text(label)
     }
 }

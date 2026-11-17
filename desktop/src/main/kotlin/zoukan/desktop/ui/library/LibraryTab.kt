@@ -31,7 +31,6 @@ import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,7 +40,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -86,6 +84,8 @@ import zoukan.desktop.ui.common.ContextMenuState
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LoadingScreen
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowTriStateCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.SelectionBar
@@ -131,6 +131,8 @@ fun LibraryTab(model: LibraryScreenModel) {
     val settings = state.settings
     // The overflow-menu flags, found once per selection instead of on every recomposition
     val selectionFlags by remember(state.selection, state.items) { derivedStateOf { model.selectionFlags(state) } }
+    val canDownload = remember(state.selection, state.items) { state.selectionCanDownload }
+    val hasRemote = remember(state.selection, state.items) { state.selectionHasRemote }
     val visible = state.visible
     // Ctrl/Cmd + A selects everything shown; Escape clears the selection before it means "back"
     OnShortcut { action ->
@@ -152,8 +154,9 @@ fun LibraryTab(model: LibraryScreenModel) {
                 onCategories = { categoryDialog = state.selection },
                 onRemove = { removeDialog = state.selection },
                 // ZOUKAN -->
-                onDeleteDownloads = { deleteDownloadsDialog = state.selection },
+                onDeleteDownloads = { deleteDownloadsDialog = state.selection }.takeIf { hasRemote },
                 // ZOUKAN <--
+                showDownload = canDownload,
                 // ZOUKAN -->
                 onMigrate = {
                     // In the library's order, as the Android app's selection
@@ -462,13 +465,16 @@ private fun ColumnScope.EntryContextMenu(
     val remoteIds = remember(model.state.value.items) {
         model.state.value.items.filterNot { it.manga.source == LocalSource.ID }.mapTo(HashSet()) { it.id }
     }
-    if (ids.any { it in remoteIds }) {
+    // Download only when no entry is from the local source, as Android's selection bar
+    if (ids.all { it in remoteIds }) {
         DropdownMenuItem(
             text = { Text(localized(MR.strings.action_download)) },
             leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
             trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
             onClick = { downloads = true },
         )
+    }
+    if (ids.any { it in remoteIds }) {
         ContextMenuItem(menu, localized(DMR.strings.delete_downloads), Icons.Outlined.FolderDelete, onClick = onDeleteDownloads)
     }
     // ZOUKAN -->
@@ -485,9 +491,11 @@ private fun LibrarySelectionBar(
     onCategories: () -> Unit,
     onRemove: () -> Unit,
     // ZOUKAN -->
-    onDeleteDownloads: () -> Unit,
+    onDeleteDownloads: (() -> Unit)?,
     onMigrate: () -> Unit,
     // ZOUKAN <--
+    /** False for a selection with a local-source entry, as Android's LibraryTab */
+    showDownload: Boolean,
     // KMK -->
     onMerge: () -> Unit,
     onSelectionUpdate: () -> Unit,
@@ -506,29 +514,33 @@ private fun LibrarySelectionBar(
             TooltipIconButton(Icons.AutoMirrored.Outlined.Label, localized(DMR.strings.change_categories), onClick = onCategories)
             TooltipIconButton(Icons.Outlined.DoneAll, localized(MR.strings.action_mark_as_read), onClick = { model.markRead(true) })
             TooltipIconButton(Icons.Outlined.RemoveDone, localized(MR.strings.action_mark_as_unread), onClick = { model.markRead(false) })
-            Row {
-                TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { downloadMenu = true })
-                DropdownMenu(downloadMenu, onDismissRequest = { downloadMenu = false }) {
-                    downloadChoices
-                        .forEach { (n, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    downloadMenu = false
-                                    model.download(n)
-                                },
-                            )
-                        }
-                    DropdownMenuItem(
-                        text = { Text(localized(MR.strings.download_bookmarked)) },
-                        onClick = {
-                            downloadMenu = false
-                            model.downloadBookmarked()
-                        },
-                    )
+            if (showDownload) {
+                Row {
+                    TooltipIconButton(Icons.Outlined.Download, localized(MR.strings.action_download), onClick = { downloadMenu = true })
+                    DropdownMenu(downloadMenu, onDismissRequest = { downloadMenu = false }) {
+                        downloadChoices
+                            .forEach { (n, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        downloadMenu = false
+                                        model.download(n)
+                                    },
+                                )
+                            }
+                        DropdownMenuItem(
+                            text = { Text(localized(MR.strings.download_bookmarked)) },
+                            onClick = {
+                                downloadMenu = false
+                                model.downloadBookmarked()
+                            },
+                        )
+                    }
                 }
             }
-            TooltipIconButton(Icons.Outlined.FolderDelete, localized(DMR.strings.delete_downloads), onClick = onDeleteDownloads)
+            if (onDeleteDownloads != null) {
+                TooltipIconButton(Icons.Outlined.FolderDelete, localized(DMR.strings.delete_downloads), onClick = onDeleteDownloads)
+            }
             // KMK -->
             TooltipIconButton(Icons.Outlined.Refresh, localized(KMR.strings.action_update), onClick = onSelectionUpdate)
             // KMK <--
@@ -599,7 +611,7 @@ private fun CategoriesDialog(model: LibraryScreenModel, ids: Set<Long>, categori
                             Modifier.fillMaxWidth().triStateToggleable(state = value, role = Role.Checkbox, onClick = next),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            TriStateCheckbox(value, onClick = null)
+                            RowTriStateCheckbox(value, onClick = null)
                             Text(c.name)
                         }
                     }
@@ -640,7 +652,7 @@ private fun RemoveDialog(count: Int, onConfirm: (Boolean) -> Unit, onDismiss: ()
         title = { Text(if (count == 1) localized(DMR.strings.remove_from_library) else localized(DMR.strings.remove_entries_from_library, count)) },
         text = {
             Row(Modifier.checkRow(deleteDownloads) { deleteDownloads = it }, verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(deleteDownloads, onCheckedChange = null)
+                RowCheckbox(deleteDownloads, onCheckedChange = null)
                 Text(localized(DMR.strings.also_delete_downloaded_chapters))
             }
         },

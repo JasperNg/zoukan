@@ -31,6 +31,41 @@ class FixtureSourcePreviewsTest {
     }
 
     @Test
+    fun `with more preview pages each page goes on numbering, cycling the chapter's pages, and the last has no next`() = runBlocking<Unit> {
+        val source = FixtureSource(baseUrl, previews = true, previewPages = 2, previewsPerPage = 5)
+        val jpeg = FixtureCatalog.pages("jpeg").map { "$baseUrl/images/${it.file}" }
+
+        val first = source.getPagePreviewList(formats, emptyList(), 1)
+        first.pagePreviews.map { it.index } shouldContainExactly listOf(1, 2, 3, 4, 5)
+        first.pagePreviews.map { it.imageUrl } shouldContainExactly listOf(jpeg[0], jpeg[1], jpeg[2], jpeg[0], jpeg[1])
+        first.hasNextPage shouldBe true
+        first.pagePreviewPages shouldBe 2
+
+        val second = source.getPagePreviewList(formats, emptyList(), 2)
+        second.pagePreviews.map { it.index } shouldContainExactly listOf(6, 7, 8, 9, 10)
+        second.pagePreviews.first().imageUrl shouldBe jpeg[2]
+        second.hasNextPage shouldBe false
+
+        source.getPagePreviewList(formats, emptyList(), 3).pagePreviews.shouldBeEmpty()
+        source.previewPagesAsked shouldContainExactly listOf(1, 2, 3)
+    }
+
+    @Test
+    fun `the genre filter is there only when asked for, and keeps that genre's titles`() {
+        FixtureSource(baseUrl).getFilterList().shouldBeEmpty()
+        val filter = FixtureSource(baseUrl, filters = true).getFilterList().single() as FixtureSource.GenreFilter
+        filter.selected shouldBe null
+        filter.state = filter.values.indexOf(FixtureSource.GENRE_DRAMA)
+        filter.selected shouldBe FixtureCatalog.GENRE_DRAMA
+
+        val body = FixtureCatalog.manga.joinToString(",", "[", "]") {
+            """{"key":"${it.key}","title":"${it.title}","cover":"c","bonus":${it.bonus},"searchOnly":${it.searchOnly},"genre":"${it.genre}"}"""
+        }
+        FixtureSource.catalogPage(body, query = "Fixture", genre = FixtureCatalog.GENRE_DRAMA).mangas.map { it.title } shouldContainExactly
+            listOf("Fixture Second")
+    }
+
+    @Test
     fun `no previews by default`() = runBlocking<Unit> {
         val page = FixtureSource(baseUrl).getPagePreviewList(formats, emptyList(), 1)
 

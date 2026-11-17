@@ -21,6 +21,11 @@ import java.util.concurrent.ConcurrentHashMap
 internal class DownloadIndex(
     private val recheckMillis: Long = RECHECK_MILLIS,
     private val clock: () -> Long = System::currentTimeMillis,
+    /**
+     * Whether names ignore case, for tests: true or false makes the case-insensitive (macOS,
+     * Windows) or case-sensitive path run on any disk; null checks the disk. Set before any use.
+     */
+    @Volatile internal var ignoreCase: Boolean? = null,
 ) {
     private class Listing(
         /** Key to the names on disk with that key (two only on a case-sensitive disk with NFC and NFD copies) */
@@ -170,7 +175,7 @@ internal class DownloadIndex(
      * that exists is looked up with its name's case changed. Without such a folder, the system's
      * default (macOS and Windows ignore case).
      */
-    private fun isCaseInsensitive(root: File): Boolean = caseInsensitive.getOrPut(root) {
+    private fun isCaseInsensitive(root: File): Boolean = ignoreCase ?: caseInsensitive.getOrPut(root) {
         generateSequence(root.absoluteFile) { it.parentFile }
             .firstOrNull { it.exists() && it.parentFile != null && it.name.lowercase() != it.name.uppercase() }
             ?.let { existing ->

@@ -159,6 +159,7 @@ fun WebtoonViewer(
             actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
             actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
             actions.zoomReset = { zoom = 1f }
+            actions.zoom = { zoom }
         }
         // ZOUKAN <--
 

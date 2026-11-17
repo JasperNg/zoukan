@@ -77,6 +77,7 @@ dependencies {
     implementation(zoukanlibs.dex2jar.tools)
     // BytecodeEditor (extension bytecode rewrites)
     implementation(zoukanlibs.asm)
+    implementation(zoukanlibs.asm.commons)
     // ExtensionHttp: the clients extensions make for themselves (the app provides OkHttp at run time)
     implementation(libs.okhttp.core)
     implementation(libs.okio)

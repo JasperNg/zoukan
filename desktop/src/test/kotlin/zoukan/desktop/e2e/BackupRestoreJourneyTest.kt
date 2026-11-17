@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -33,6 +34,7 @@ import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.floats.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import mihon.domain.extension.interactor.AddExtensionStore
 import okio.sink
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -45,15 +47,19 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.backup.SafetySnapshot
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.settings.CreateBackupScreen
 import zoukan.desktop.ui.settings.RestoreBackupScreen
 import zoukan.desktop.ui.settings.backupStatusFlow
 import zoukan.desktop.ui.settings.createBackup
+import zoukan.extension.DesktopExtensionManager
 import java.io.File
 import kotlin.time.Duration.Companion.minutes
 
@@ -63,7 +69,9 @@ import kotlin.time.Duration.Companion.minutes
  * from the Restore backup screen, and checks the library shows the title again with its category,
  * progress and settings. Last, the backup screens' choices: Create backup's options (and that
  * nothing chosen means nothing to create), Restore backup for a backup that needs a source that
- * is not installed and a tracker that is not signed in, and a file that is not a backup.
+ * is not installed and a tracker that is not signed in, and a file that is not a backup. The
+ * restore writes a safety backup of the library first; and a restored entry whose extension a
+ * store offers gets the missing extensions card, which installs it only after its confirmation.
  *
  * The backup is made with what Create backup runs once its file is chosen (the file chooser is a
  * native dialog a test cannot drive).
@@ -74,9 +82,11 @@ import kotlin.time.Duration.Companion.minutes
 class BackupRestoreJourneyTest {
 
     private lateinit var journey: Journey
+    private var fixtureStore: FixtureStore? = null
 
     @AfterEach
     fun close() {
+        fixtureStore?.close()
         if (::journey.isInitialized) journey.close()
     }
 
@@ -139,7 +149,11 @@ class BackupRestoreJourneyTest {
                     onAllNodesWithTag("manga-item").fetchSemanticsNodes().size shouldBe 0
                 }
 
+                val safety = SafetySnapshot.folder(dirs)
+                fun restoreSnapshots() = safety.listFiles().orEmpty().filter { it.name.startsWith("safety_restore_") && it.name.endsWith(".tachibk") }
+
                 step("Restore the backup from the Restore backup screen") {
+                    restoreSnapshots() shouldBe emptyList()
                     runOnUiThread { navigator?.push(RestoreBackupScreen(backup.absolutePath)) }
                     waitFor(hasTestTag("restore-backup-action") and isEnabled())
                     // The screen names the file the user picked
@@ -165,6 +179,16 @@ class BackupRestoreJourneyTest {
                     waitOrDump("for the restore screen to close") {
                         onAllNodes(hasTestTag("restore-backup-action")).fetchSemanticsNodes().isEmpty()
                     }
+                }
+
+                step("A safety backup of the library as it was came before the restore") {
+                    val snapshot = restoreSnapshots().single()
+                    // Inside the app's data folder, never the storage folder the Android app shares
+                    snapshot.parentFile shouldBe File(dirs.backups, "safety")
+                    val before = DesktopBackups(dirs.android).read(snapshot)
+                    // The library was empty then; the category was still there
+                    before.backupManga.filter { it.favorite } shouldBe emptyList()
+                    before.backupCategories.map { it.name } shouldContainExactly listOf(SHELF)
                 }
 
                 step("Progress, category and settings are back") {
@@ -258,11 +282,56 @@ class BackupRestoreJourneyTest {
                     onNodeWithTag("restore-backup-action").assertIsNotEnabled()
                     runOnUiThread { navigator?.pop() }
                 }
+
+                step("Missing extensions: the card installs the one a store offers, only after its confirmation") {
+                    val store = FixtureStore(server).also { fixtureStore = it }
+                    runBlocking { Injekt.get<AddExtensionStore>()(store.indexUrl).getOrThrow() }
+                    val manager = Injekt.get<DesktopExtensionManager>()
+                    // The id of the trusted extension's source, which the store's index lists
+                    val sourceId = FixtureStore.sourceId(FixtureStore.TRUSTED_NAME)
+                    val file = File(dirs.root, "needs-extension.tachibk")
+                    val needsExtension = Backup(
+                        backupManga = listOf(BackupManga(source = sourceId, url = "/manga/store", title = STORE_TITLE, favorite = true)),
+                        backupSources = listOf(BackupSource(FixtureStore.TRUSTED_NAME, sourceId)),
+                    )
+                    file.sink().use { BackupCodec.write(needsExtension, it) }
+                    runOnUiThread { navigator?.push(RestoreBackupScreen(file.path)) }
+                    waitFor(hasTestTag("restore-backup-action") and isEnabled())
+                    onNodeWithTag("restore-backup-action").performClick()
+                    waitFor(hasTestTag("install-missing-extensions"), timeout = 120_000)
+                    shot("6-missing-extensions")
+                    runBlocking { Injekt.get<GetFavorites>().await() }.any { it.title == STORE_TITLE } shouldBe true
+                    (FixtureStore.TRUSTED_PKG in manager.installedExtensionsFlow.value) shouldBe false
+
+                    // The confirmation names what will be installed; Cancel installs nothing
+                    onNodeWithTag("install-missing-extensions").performClick()
+                    waitFor(hasTestTag("install-missing-extensions-confirm"))
+                    waitFor(hasText(FixtureStore.TRUSTED_NAME, substring = true) and hasAnyAncestor(isDialog()))
+                    shot("7-missing-extensions-confirm")
+                    onAllNodes(hasText("Cancel") and hasAnyAncestor(isDialog())).onFirst().performClick()
+                    waitOrDump("for the confirmation to close") { onAllNodes(hasTestTag("install-missing-extensions-confirm")).fetchSemanticsNodes().isEmpty() }
+                    waitForIdle()
+                    (FixtureStore.TRUSTED_PKG in manager.installedExtensionsFlow.value) shouldBe false
+                    server.requests.none { it == store.jarPath(store.trusted) } shouldBe true
+
+                    // Install: through the manager's own install, signer checks and all
+                    onNodeWithTag("install-missing-extensions").performClick()
+                    waitFor(hasTestTag("install-missing-extensions-confirm"))
+                    onNodeWithTag("install-missing-extensions-confirm").performClick()
+                    waitOrDump("for the extension to install", timeout = 60_000) { FixtureStore.TRUSTED_PKG in manager.installedExtensionsFlow.value }
+                    waitFor(hasText("- ${FixtureStore.TRUSTED_NAME}"))
+                    manager.installedExtensionsFlow.value.getValue(FixtureStore.TRUSTED_PKG).signatureHash shouldBe store.storeKey.fingerprint
+                    waitOrDump("for the restored entry's source") { Injekt.get<SourceManager>().get(sourceId) != null }
+                    onAllNodes(hasTestTag("install-missing-extensions")).fetchSemanticsNodes().isEmpty() shouldBe true
+                    shot("8-missing-extensions-installed")
+                    onNodeWithTag("restore-backup-action").performClick()
+                }
             }
         }
     }
 
     private companion object {
         const val SHELF = "Journey Shelf"
+        const val STORE_TITLE = "Store Title"
     }
 }

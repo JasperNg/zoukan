@@ -28,7 +28,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -62,6 +61,7 @@ import zoukan.desktop.security.Incognito
 import zoukan.desktop.tray.AppIcon
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.RowSwitch
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.downloads.DownloadsScreen
@@ -214,7 +214,7 @@ private fun MoreRow(icon: ImageVector, title: String, subtitle: String? = null, 
 @Composable
 private fun MoreSwitch(icon: ImageVector, title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     MoreItem(icon, title, subtitle, Modifier.checkRow(checked, role = Role.Switch, onChange = onCheckedChange)) {
-        Switch(checked = checked, onCheckedChange = null)
+        RowSwitch(checked = checked, onCheckedChange = null)
     }
 }
 

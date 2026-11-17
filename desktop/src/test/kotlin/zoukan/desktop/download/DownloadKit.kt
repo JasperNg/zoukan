@@ -25,6 +25,10 @@ internal class DownloadKit(
     sources: List<HttpSource> = listOf(TestSource("A", 1)),
     installed: List<HttpSource> = sources,
     available: () -> Boolean = { true },
+    /** Whether names ignore case (see [DownloadIndex.ignoreCase]); null checks the disk. */
+    ignoreCase: Boolean? = null,
+    /** The other entries in an entry's folder, with their chapters (see [DownloadManager]); null: none (no database here). */
+    coOwners: (suspend (Manga) -> List<Pair<Manga, List<Chapter>>>)? = null,
 ) {
     class TestSource(override val name: String, override val id: Long, override val lang: String = "en") : HttpSource() {
         override val supportsLatest = false
@@ -53,7 +57,8 @@ internal class DownloadKit(
 
     val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
 
-    val manager = DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, mockk(), mockk(), mockk(), mockk(relaxed = true))
+    val manager = DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, mockk(), mockk(), mockk(), mockk(relaxed = true), coOwners ?: { emptyList() })
+        .also { it.index.ignoreCase = ignoreCase }
 
     // A real favorite Manga reads its custom title through Injekt, which these tests do not start
     fun manga(id: Long, title: String, source: Long = 1, favorite: Boolean = true): Manga = mockk<Manga>(relaxed = true) {

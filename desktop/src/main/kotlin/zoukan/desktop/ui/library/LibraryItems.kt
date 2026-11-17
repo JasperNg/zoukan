@@ -50,7 +50,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.isCtrlPressed
@@ -76,6 +75,7 @@ import zoukan.desktop.ui.common.LazyVerticalGrid
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.languageIconPainter
+import zoukan.desktop.ui.common.onRightClickAt
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.i18n.desktop.DMR
 
@@ -90,26 +90,22 @@ enum class ClickKind { Plain, Toggle, Range }
 fun Modifier.selectableClick(onContextMenu: ((Offset) -> Unit)? = null, onClick: (ClickKind) -> Unit): Modifier {
     var mods: PointerKeyboardModifiers? = null
     return this
-        .onPointerEvent(PointerEventType.Press) { event ->
-            mods = event.keyboardModifiers
-            if (event.button == PointerButton.Secondary) {
-                if (onContextMenu != null) {
-                    onContextMenu(event.changes.firstOrNull()?.position ?: Offset.Zero)
-                } else {
-                    onClick(ClickKind.Toggle)
-                }
-            }
+        .onPointerEvent(PointerEventType.Press) { event -> mods = event.keyboardModifiers }
+        // Also a custom action, so keyboard and screen-reader users reach the menu (or the toggle)
+        .onRightClickAt(if (onContextMenu != null) null else localized(DMR.strings.select)) { at ->
+            if (onContextMenu != null) onContextMenu(at) else onClick(ClickKind.Toggle)
         }
         .clickable {
             val m = mods
-            onClick(
-                when {
-                    m?.isShiftPressed == true -> ClickKind.Range
-                    m?.isCtrlPressed == true || m?.isMetaPressed == true -> ClickKind.Toggle
-                    else -> ClickKind.Plain
-                },
-            )
+            onClick(clickKind(shift = m?.isShiftPressed == true, ctrl = m?.isCtrlPressed == true, meta = m?.isMetaPressed == true))
         }
+}
+
+/** The kind of a click from the keys held: Shift selects a range, Ctrl or Cmd toggles one entry. */
+internal fun clickKind(shift: Boolean, ctrl: Boolean, meta: Boolean): ClickKind = when {
+    shift -> ClickKind.Range
+    ctrl || meta -> ClickKind.Toggle
+    else -> ClickKind.Plain
 }
 
 /** A badge on an entry: a count or label, or (KMK) a language flag or a source icon. */

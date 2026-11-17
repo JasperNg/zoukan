@@ -19,16 +19,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.history.model.HistoryWithRelations
+import tachiyomi.domain.history.service.HistoryPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -192,6 +195,63 @@ class HistoryJourneyTest {
                     waitOrDump("for the filter to be off") {
                         onAllNodes(hasContentDescription(filter)).fetchSemanticsNodes().isNotEmpty()
                     }
+                }
+
+                step("The unfinished filters narrow the list and are stored; the panorama switch is stored") {
+                    val history = Injekt.get<HistoryPreferences>()
+                    // Two rows: chapter 1 of Formats is read (Formats still has unread chapters), Second's chapter is not
+                    seed(formatsChapters[0])
+                    waitOrDump("for two rows") { rowCount() == 2 }
+                    fun titlesShown() = listOf(FixtureCatalog.FORMATS_TITLE, SECOND_TITLE)
+                        .filter { onAllNodesWithText(it).fetchSemanticsNodes().isNotEmpty() }
+                    fun openFilter() {
+                        onAllNodes(hasContentDescription(filter) or hasContentDescription(localized(DMR.strings.filter_filtered))).onFirst().performClick()
+                        waitFor(hasText(localized(KMR.strings.action_panorama_cover)))
+                    }
+                    fun closeFilter() {
+                        onAllNodesWithText(localized(MR.strings.action_close)).onFirst().performClick()
+                        waitOrDump("for the filter dialog to close") { onAllNodesWithText(localized(KMR.strings.action_panorama_cover)).fetchSemanticsNodes().isEmpty() }
+                    }
+
+                    // Unfinished chapters: Second's row only; then Finished chapters: Formats' only
+                    openFilter()
+                    onAllNodesWithText(localized(DMR.strings.unfinished_chapters)).onFirst().performClick()
+                    waitOrDump("for the stored filter") { history.filterUnfinishedChapter().get() == TriState.ENABLED_IS }
+                    closeFilter()
+                    waitOrDump("for the unfinished chapter alone") { rowCount() == 1 && titlesShown() == listOf(SECOND_TITLE) }
+                    shot("7b-unfinished-chapters")
+                    openFilter()
+                    onAllNodesWithText(localized(DMR.strings.unfinished_chapters)).onFirst().performClick()
+                    waitOrDump("for the stored filter") { history.filterUnfinishedChapter().get() == TriState.ENABLED_NOT }
+                    closeFilter()
+                    waitOrDump("for the finished chapter alone") { rowCount() == 1 && titlesShown() == listOf(FixtureCatalog.FORMATS_TITLE) }
+                    openFilter()
+                    onAllNodesWithText(localized(DMR.strings.finished_chapters)).onFirst().performClick()
+                    waitOrDump("for the filter to be off") { history.filterUnfinishedChapter().get() == TriState.DISABLED }
+
+                    // Both titles have unread chapters: Unfinished entries keeps both, Finished entries none
+                    onAllNodesWithText(localized(DMR.strings.unfinished_entries)).onFirst().performClick()
+                    waitOrDump("for the stored filter") { history.filterUnfinishedManga().get() == TriState.ENABLED_IS }
+                    closeFilter()
+                    waitOrDump("for both rows") { rowCount() == 2 }
+                    openFilter()
+                    onAllNodesWithText(localized(DMR.strings.unfinished_entries)).onFirst().performClick()
+                    waitOrDump("for the stored filter") { history.filterUnfinishedManga().get() == TriState.ENABLED_NOT }
+                    closeFilter()
+                    waitFor(hasText(localized(DMR.strings.no_history_matches_the_filters)))
+                    rowCount() shouldBe 0
+                    openFilter()
+                    onAllNodesWithText(localized(DMR.strings.finished_entries)).onFirst().performClick()
+                    waitOrDump("for the filter to be off") { history.filterUnfinishedManga().get() == TriState.DISABLED }
+
+                    // The panorama switch is Komikku's history preference, so it carries over in backups
+                    val panorama = history.usePanoramaCover().get()
+                    onAllNodesWithText(localized(KMR.strings.action_panorama_cover)).onFirst().performClick()
+                    waitOrDump("for the panorama setting to flip") { history.usePanoramaCover().get() == !panorama }
+                    onAllNodesWithText(localized(KMR.strings.action_panorama_cover)).onFirst().performClick()
+                    waitOrDump("for the panorama setting to flip back") { history.usePanoramaCover().get() == panorama }
+                    closeFilter()
+                    waitOrDump("for both rows back") { rowCount() == 2 }
                 }
 
                 step("Select all and remove") {

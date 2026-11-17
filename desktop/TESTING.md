@@ -317,9 +317,10 @@ The runtime can start only once per JVM. So each journey is its own class with o
 
 `ButtonCrawlTest` (task `:desktop:buttonCrawlTest`) clicks every button of the app. It starts the
 runtime and seeds the library as the smoke test does, and opens the same checks (`SmokeChecks.kt`
-holds them for both), plus three states whose buttons need data: a library selection
-(`flow:library.selection`), an entry with every chapter selected (`flow:manga.chapter-selection`)
-and the reader with its bars shown (`flow:reader.bars`). Settings search, the theme row and the
+holds them for both), plus four states whose buttons need data: a library selection
+(`flow:library.selection`), an entry with every chapter selected (`flow:manga.chapter-selection`),
+the reader on a middle page for its keys (`flow:reader.keys`) and the reader with its bars shown
+(`flow:reader.bars`). Settings search, the theme row and the
 Settings screen itself are skipped: their rows are the Settings pages'.
 
 For each check it collects every clickable node of the topmost root (a dialog or menu over the
@@ -340,6 +341,26 @@ opening a web page or a folder, the file and folder pickers, the clipboard, an u
 and quitting. The crawl puts a recorder in its place, so a click never leaves the test, and a
 picker answers "cancelled". New code that opens something outside the window must use it too.
 
+### Other inputs
+
+The same pass covers what a user does other than click, with the same snapshot, signature,
+baseline and restore. Each gets a key of its own, the node's key with a suffix:
+
+| Input | Key | What the crawl does |
+| --- | --- | --- |
+| Right click, and other semantics custom actions | `<node> [action: <label>]` | Runs the action. `onRightClick` (`ui/common/Modifiers.kt`) gives every right-click site a custom action ("More actions", or "Copy to clipboard" where it copies), which screen-reader and keyboard users reach too. A menu it opens is crawled one level down, as a click's. The one long press that opens a menu (the entry's title, `EntryInfoMenus.kt`) has the same menu as its right-click action; other long presses only show a tooltip, so the crawl does not long-press. |
+| Text field | `<node> [type]`, `<node> [type, enter]`, `<node> [type, escape]` | Gives the field the focus and types `Alpha` (the seeded entry, so a search finds it), records; then presses Enter and records again. A second task types and presses Escape. Password fields are left out (`AppLockJourneyTest` and the sync and tracker journeys cover them). |
+| Slider | `<node> [slider max]`, `<node> [slider min]` | Sets it to its maximum, records, then to its minimum. Material's `setProgress` also calls `onValueChangeFinished`. |
+| Keyboard shortcut | `<check>/key:<keys>` | Presses the key into the window as the window passes it on (the focused node, then the app's shortcuts on the root, then Escape as Back). Every `Shortcuts.actionFor` action, on the library (`tab:Library`, `tab:More` for Ctrl+1) or an entry (Escape, Alt+Left), and every `ReaderKeys.bindings` key on `flow:reader.keys`. |
+
+A text field on a screen fails when neither typing nor Enter did more than show the text (no
+setting, search, list or screen took it); a field in a dialog that only shows the text is
+`field-local`, since the dialog's own button stores it. A dialog with a disabled button and an
+empty field gets `Crawl` typed in before its buttons are collected, so the button it held back is
+crawled too. A slider fails when neither end stored anything or changed anything but the slider.
+The crawl clears what was typed into the root screen's fields (the library search) between tasks,
+and puts the window back from fullscreen (the reader's F).
+
 A button that opens a menu gets its items clicked as well, one level down. Dialogs that a click
 opens are not crawled; the named ones have checks of their own. Between clicks, the crawl puts back
 the settings a click changed and the seeded library (Alpha, Bravo, their chapters and the Smoke
@@ -358,10 +379,16 @@ every run (digits become `#`). The tokens:
 | `db:<table>.<column>`, `db:<table>+`, `db:<table>-` | It changed that column, or added or removed rows. The report also names the rows: `chapters.read[Alpha/Chapter 1]`. |
 | `queue+`, `queue-`, `files:downloads-`, `files:local-` | It changed the download queue, or added or removed files in the downloads or local folders. |
 | `job:library-update` | It started a library update. |
+| `tab:<Tab>`, `selection` | It switched the home tab, or changed a selection's "N selected" count. |
+| `focus:<node>` | A key moved the focus to that node (keyboard shortcuts only: a click or typing moves the focus as a side effect). |
+| `reader:<page\|menu\|zoom\|fullscreen\|help\|auto-scroll\|settings\|chapters>` | It changed that of the open reader. The reader exposes these through `ReaderKeys.StateKey`, a semantics property for tests that screen readers do not see. |
 | `browse:<host>`, `folder:<path>`, `pick:open[<types>]`, `pick:save[<types>]`, `pick:folder`, `clipboard`, `trash:<name>`, `install`, `exit` | An outside effect, through `SystemEffects`. A link must be an http(s) address, and a folder must exist inside the data or storage folder. |
 | `toast:"<text>"`, `notification:"<title>"` | It showed a toast or a notification. |
 | `calls-back` | It called a callback of a dialog that the test renders directly. |
 | `ui` | Only the screen changed. |
+| `own-value` | Only the control's own value changed: a text field's text or focus, a slider's position. |
+| `field-local` | A text field in a dialog only showed what was typed; the dialog's button stores it. |
+| `field`, `key-unused`, `at-end-already` | Nothing changed: the field refused the text, the field or screen did not use Enter or Escape, or a slider (or N and P in the reader) was already at that end. |
 | `selected-already`, `field` | Nothing changed, rightly: the page, tab or option was already chosen, or the text field already had the focus. |
 | `logs:offline` | The app logged an error only because the crawl runs offline or without Chromium. Any other error fails the click. |
 
@@ -396,6 +423,20 @@ Two files in `desktop/src/test/resources/` go with it:
 Each run writes every button with what clicking it did to `desktop/build/reports/coverage/buttons.md`.
 `-Pzoukan.crawl.only=<regex>` crawls only the checks whose name or key matches, to debug one, and
 `-Pzoukan.shard=i/n` crawls every n-th check key, as CI does.
+
+### What the crawl leaves to other tests
+
+Some inputs are slow or flaky to crawl, or leave the window, so dedicated tests cover their logic:
+
+- Library Shift-click range and Ctrl/Cmd-click toggle: `LibraryClickSelectionTest`.
+- The paged reader's wheel page turn and Ctrl/Cmd + wheel zoom: `PagedWheelTest`.
+- The mouse back button: `ShortcutsBackGuardTest`.
+- Closing the window to the tray, and the one-time notice: `AppTrayTest` (`onWindowClose`).
+- The tray menu's update and pause or start downloads: `AppTrayTest` (`trayMenu`). The real OS tray and its notifications are not tested.
+- The Resume button's docking side: `ResumeButtonDockTest`, and the stored side `ReadButtonPositionTest`.
+- The reader's key table: `ReaderKeysTest`.
+- Drag to reorder: `CategoriesJourneyTest` drags the Edit categories handle. Swipe: `ChapterListTest` swipes a chapter row.
+- Not tested: a second instance handing over to the first (two processes), and windows across several monitors.
 
 ## Usability checks
 
@@ -478,6 +519,25 @@ screenshots to `desktop/build/reports/e2e/`.
 
 Always pass `--tests`. With `-Pzoukan.e2e=true`, `test` no longer leaves out the wiring tests and
 the journeys, and runs every test class in a JVM of its own.
+
+Some other tests use the network and skip themselves unless the environment variable
+`ZOUKAN_LIVE=true` is set (some also accept `-Dzoukan.live=true` on the test JVM). Run them one at a
+time, with `--tests`:
+
+- `DohLiveTest`: resolves real names through every DNS over HTTPS provider.
+- `ChromiumDohLiveTest`, `WebViewFrameCallbacksLiveTest`: drive an installed Chromium
+  (`ZOUKAN_CEF_DIR=<data>/browser`).
+- `UpdateLiveTest`: runs the update check against the real GitHub releases as version 1.0.6
+  (`ZOUKAN_LIVE_UPDATE_FROM` changes it), downloads this platform's installer (about 300 MB) and its
+  `.sig`, and checks that the release signature verifies under the committed
+  `zoukan-release-key.pem` and that a copy with one byte flipped, or a changed signature, is
+  refused. When the newest release has no `.sig` (releases from before the release signature), it
+  checks that the installer is refused and then skips the signature checks. It uses an in-memory
+  secret store and a temporary folder, so it touches no app data and no OS secret store.
+
+```bash
+ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
+```
 
 `extensionWiringTest` downloads every extension of two stores, so it is part of the nightly
 check only. The stores are `CompatibilityHarness.SAMPLE_STORES`: Keiyoushi (about 1,700

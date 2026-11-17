@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +69,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReserveSnackbarSpace
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.checkRow
 import zoukan.i18n.desktop.DMR
@@ -561,7 +561,7 @@ private fun LabeledCheckbox(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Checkbox(
+        RowCheckbox(
             checked = checked,
             onCheckedChange = null,
             enabled = enabled,

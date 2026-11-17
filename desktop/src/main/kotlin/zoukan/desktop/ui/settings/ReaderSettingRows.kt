@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +30,8 @@ import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
@@ -379,7 +379,7 @@ private fun <T> ChoiceRow(row: ReaderSettingRow.Choice<T>, inline: Boolean) {
 fun <T> RadioChoices(selected: T, choices: List<Pair<T, String>>, onSelect: (T) -> Unit) {
     choices.forEach { (value, label) ->
         Row(Modifier.fillMaxWidth().radioRow(selected == value) { onSelect(value) }, verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected == value, onClick = null)
+            RowRadioButton(selected == value, onClick = null)
             Text(label)
         }
     }
@@ -418,7 +418,7 @@ private fun BottomButtonsRow(prefs: DesktopPreferences) {
         val on = value in buttons
         val toggle = { prefs.readerBottomButtons().set(if (on) buttons - value else buttons + value) }
         Row(Modifier.fillMaxWidth().checkRow(on) { toggle() }.padding(horizontal = Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(on, onCheckedChange = null)
+            RowCheckbox(on, onCheckedChange = null)
             Text(label)
         }
     }

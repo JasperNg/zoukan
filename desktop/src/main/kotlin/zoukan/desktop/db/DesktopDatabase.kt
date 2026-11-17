@@ -3,6 +3,8 @@ package zoukan.desktop.db
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import org.sqlite.SQLiteConfig
+import org.sqlite.SQLiteOpenMode
 import org.sqlite.mc.SQLiteMCSqlCipherConfig
 import tachiyomi.data.Chapters
 import tachiyomi.data.Database
@@ -38,7 +40,7 @@ object DesktopDatabase {
         localized(DMR.strings.database_key_missing, file.path),
     )
 
-    /** The database file is empty but its WAL or shared-memory file is there, and there is no key. */
+    /** The database file is empty but a non-empty WAL is there, and there is no key. */
     class JournalWithoutKeyException(file: File) : IllegalStateException(
         localized(DMR.strings.database_journal_without_key, file.path),
     )
@@ -75,23 +77,30 @@ object DesktopDatabase {
     /**
      * Refuses a database newer than [schemaVersion] without writing to it, and copies one that is
      * about to be migrated to [preMigrationCopy] first, keeping only the latest such copy.
+     *
+     * The version is read through a read-only connection: closing a read-write one, even one that
+     * only read, checkpoints the WAL into the file, so a refused newer database would not be left
+     * as it was.
      */
     private fun checkVersion(file: File, url: String, properties: Properties, schemaVersion: Long) {
         // Only the key: no journal_mode or other setting that would write to the file
-        val probeProperties = Properties().apply {
+        val keyOnly = Properties().apply {
             properties.forEach { (k, v) -> if (k != "journal_mode" && k != "foreign_keys") setProperty(k.toString(), v.toString()) }
         }
-        val probe = JdbcSqliteDriver(url, probeProperties)
-        try {
-            val version = probe.executeQuery(null, "PRAGMA user_version", { cursor ->
+        val readOnly = Properties().apply {
+            putAll(keyOnly)
+            setProperty(SQLiteConfig.Pragma.OPEN_MODE.pragmaName, SQLiteOpenMode.READONLY.flag.toString())
+        }
+        val version = JdbcSqliteDriver(url, readOnly).use { probe ->
+            probe.executeQuery(null, "PRAGMA user_version", { cursor ->
                 QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else 0L)
             }, 0).value ?: 0L
-            if (version > schemaVersion) throw TooNewException(file, version, schemaVersion)
-            if (version == 0L || version == schemaVersion) return
-            // Move the WAL's pages into the file, so the copy is the whole database
-            probe.executeQuery(null, "PRAGMA wal_checkpoint(TRUNCATE)", { QueryResult.Value(Unit) }, 0)
-        } finally {
-            probe.close()
+        }
+        if (version > schemaVersion) throw TooNewException(file, version, schemaVersion)
+        if (version == 0L || version == schemaVersion) return
+        // Move the WAL's pages into the file, so the copy is the whole database
+        JdbcSqliteDriver(url, keyOnly).use { writer ->
+            writer.executeQuery(null, "PRAGMA wal_checkpoint(TRUNCATE)", { QueryResult.Value(Unit) }, 0)
         }
         copyBeforeMigration(file, schemaVersion)
     }
@@ -156,15 +165,16 @@ object DesktopDatabase {
 
     /**
      * The key from the secret store; a new one only when neither the key nor the database exists.
-     * A secret store error is thrown before any key is made. An empty file whose WAL or shared
-     * memory file is still there may hold data in the WAL, so it is refused rather than given a new
-     * key that could never read it.
+     * A secret store error is thrown before any key is made. An empty file whose WAL is still there
+     * with something in it may hold data in the WAL, so it is refused rather than given a new key
+     * that could never read it. A shared-memory file (or an empty WAL) holds no data: SQLite
+     * rebuilds it, so a stale one left by a crash does not block start-up.
      */
     private fun databaseKey(file: File, secrets: SecretStore): ByteArray {
         secrets.get(KEY_NAME)?.let { return HexFormat.of().parseHex(it) }
         if (file.exists() && file.length() > 0) throw KeyMissingException(file)
-        val journals = listOf("-wal", "-shm").map { File(file.parentFile, file.name + it) }
-        if (journals.any { it.exists() }) throw JournalWithoutKeyException(file)
+        val wal = File(file.parentFile, file.name + "-wal")
+        if (wal.isFile && wal.length() > 0) throw JournalWithoutKeyException(file)
         val key = ByteArray(32).also { SecureRandom().nextBytes(it) }
         secrets.set(KEY_NAME, HexFormat.of().formatHex(key))
         return key

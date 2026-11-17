@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,8 +58,12 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.checkRow
+import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import java.util.Collections
@@ -363,10 +365,10 @@ internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (
                         entries.forEachIndexed { i, entry ->
                             val value = values.getOrNull(i)?.toString() ?: return@forEachIndexed
                             Row(
-                                Modifier.fillMaxWidth().toggleable(value == current, onValueChange = { onSave(value) }).padding(vertical = 8.dp),
+                                Modifier.fillMaxWidth().radioRow(value == current) { onSave(value) }.padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                androidx.compose.material3.RadioButton(selected = value == current, onClick = null)
+                                RowRadioButton(selected = value == current, onClick = null)
                                 Spacer(Modifier.width(8.dp))
                                 Text(entry.toString())
                             }
@@ -390,12 +392,12 @@ internal fun PreferenceDialog(pref: Preference, onDismiss: () -> Unit, onSave: (
                         entries.forEachIndexed { i, entry ->
                             val value = values.getOrNull(i)?.toString() ?: return@forEachIndexed
                             Row(
-                                Modifier.fillMaxWidth().toggleable(value in chosen, onValueChange = { on ->
+                                Modifier.fillMaxWidth().checkRow(value in chosen, onChange = { on ->
                                     chosen = if (on) chosen + value else chosen - value
                                 }).padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Checkbox(checked = value in chosen, onCheckedChange = null)
+                                RowCheckbox(checked = value in chosen, onCheckedChange = null)
                                 Spacer(Modifier.width(8.dp))
                                 Text(entry.toString())
                             }

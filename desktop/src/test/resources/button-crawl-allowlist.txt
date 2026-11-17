@@ -5,13 +5,9 @@
 flow:manga.chapter-selection/"Mark as unread"  # the seeded chapters are unread, so marking them unread rightly writes nothing; Mark as read covers the wiring
 flow:manga.chapter-selection/"Remove bookmark"  # the seeded chapters have no bookmark, so removing it rightly writes nothing; Bookmark covers the wiring
 flow:library.selection/"Mark as unread"  # the seeded chapters are unread, so marking them unread rightly writes nothing; Mark as read covers the wiring
-browse:EXTENSIONS/"Check the stores again"  # offline in the crawl: the stores fail again with the same message
-browse:FEED/"Refresh"  # offline in the crawl: the feed's sources fail again the same way
-screen:browse.SourceFeedScreen/"Refresh"  # offline in the crawl: the source fails again the same way
-screen:whatsnew.WhatsNewScreen/"Try again"  # offline in the crawl: the release notes fail again with the same message
+screen:browse.SourceFeedScreen/"Refresh"  # the local source's feed loads again with the same entries; a row that fails again is toasted, but the local source does not fail
 screen:browse.GlobalSearchScreen/"Search"  # searches again for the query already shown: the local source gives the same results
 screen:migration.MigrationListScreen/"Search"  # searches again for the query already shown: the local source gives the same results
 dialog:reader.ReaderSettingsDialog/"Shift double pages Pairs from the first page, for this ch..."  # kept for the open chapter only, in the reader's model, as on Android; the reader shows it on its pages
 screen:upcoming.UpcomingScreen/tag:upcoming-#-#  # a calendar day with no expected chapter: nothing to show
 screen:upcoming.UpcomingScreen/tag:upcoming-#-# #2  # a calendar day with no expected chapter: nothing to show
-state:app-lock/tag:app-lock  # the lock screen's background: it takes clicks so that none reach the app under it

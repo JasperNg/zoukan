@@ -8,6 +8,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
+import java.text.Normalizer
 
 /**
  * Every delete under the downloads folder goes through here. It never follows a symbolic link (a
@@ -29,9 +30,7 @@ object SafeDelete {
         false
     }
 
-    /** Tests replace it, so no machine's trash is used. */
-    @Volatile
-    internal var trash: (File) -> Boolean = { file ->
+    private val systemTrash: (File) -> Boolean = { file ->
         try {
             canTrash() && java.awt.Desktop.getDesktop().moveToTrash(file)
         } catch (e: RuntimeException) {
@@ -39,6 +38,38 @@ object SafeDelete {
             false
         }
     }
+
+    /** Tests replace it, so no machine's trash is used. */
+    @Volatile
+    internal var trash: (File) -> Boolean = systemTrash
+
+    /**
+     * Whether files in [folder] can go to the system trash: the trash works here, and [folder] is on
+     * a volume that has one. A network share (SMB, AFP, NFS, WebDAV, a Windows UNC path) has none:
+     * Finder and Explorer delete there for good. A trash replaced by a test always works.
+     *
+     * Only a good guess: a delete into the trash that still fails deletes nothing (see [delete]).
+     */
+    fun canTrash(folder: File): Boolean {
+        if (trash !== systemTrash) return true
+        if (!canTrash()) return false
+        val type = try {
+            Files.getFileStore(folder.toPath()).type()
+        } catch (e: IOException) {
+            return false
+        } catch (e: SecurityException) {
+            return false
+        }
+        return volumeHasTrash(folder.absolutePath, type)
+    }
+
+    /** Whether a volume of file system [type] holding [path] has a system trash (see [canTrash]). */
+    internal fun volumeHasTrash(path: String, type: String?): Boolean {
+        if (path.startsWith("\\\\") || path.startsWith("//")) return false
+        return type.orEmpty().lowercase() !in NETWORK_FILE_SYSTEMS
+    }
+
+    private val NETWORK_FILE_SYSTEMS = setOf("smbfs", "afpfs", "nfs", "nfs4", "webdav", "cifs", "smb2", "smb3", "ftp", "fuse.sshfs")
 
     /**
      * Where [target] really is, with the links in its parent folders resolved but not a link
@@ -60,7 +91,10 @@ object SafeDelete {
 
     /**
      * Deletes [target] (a file, a folder with everything in it, or a link) when it is inside [root],
-     * at least [minDepth] levels down; into the system trash when [toTrash] and the trash works here.
+     * at least [minDepth] levels down. With [toTrash], a file or folder goes to the system trash and
+     * is never deleted for good: when the move fails (a network share, a volume without a trash) it
+     * stays where it is and this returns false. A link is removed as itself either way: what it points
+     * to is never touched.
      *
      * @return true when [target] is gone afterwards (or was not there)
      */
@@ -74,7 +108,12 @@ object SafeDelete {
         }
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return true
         // Only a plain file or folder goes to the trash: a link or a Windows junction is removed as itself
-        if (toTrash && isPlain(path) && trash(path.toFile())) return true
+        if (toTrash && isPlain(path)) {
+            if (trash(path.toFile())) return true
+            // The user was told "trash": nothing is deleted for good instead
+            logcat(LogPriority.WARN) { "Not deleting ${path.fileName}: it could not be moved to the trash" }
+            return !Files.exists(path, LinkOption.NOFOLLOW_LINKS)
+        }
         deleteTreeNoFollow(path)
         return !Files.exists(path, LinkOption.NOFOLLOW_LINKS)
     }
@@ -123,13 +162,26 @@ object SafeDelete {
             !attrs.isDirectory -> false
             else -> {
                 val parent = path.toAbsolutePath().parent
-                parent != null && path.toRealPath() != parent.toRealPath().resolve(path.fileName.toString())
+                parent != null && !samePath(path.toRealPath(), parent.toRealPath().resolve(path.fileName.toString()))
             }
         }
     } catch (e: IOException) {
         // Unreadable: treated as a link, so nothing behind it is touched
         true
     }
+
+    /**
+     * Whether [real] is [listed]. macOS ignores the Unicode form of names, and its real path gives
+     * the form on disk (NFD, from a folder made outside Java or copied from another system) while
+     * the listed name may be NFC: the same folder, not a link. Elsewhere the forms are two names.
+     */
+    private fun samePath(real: Path, listed: Path): Boolean {
+        if (real == listed) return true
+        if (!IGNORES_UNICODE_FORM) return false
+        return Normalizer.normalize(real.toString(), Normalizer.Form.NFC) == Normalizer.normalize(listed.toString(), Normalizer.Form.NFC)
+    }
+
+    private val IGNORES_UNICODE_FORM = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
 
     /** What is left is reported by the caller, which checks the path is gone. */
     private fun deleteQuietly(path: Path) {
