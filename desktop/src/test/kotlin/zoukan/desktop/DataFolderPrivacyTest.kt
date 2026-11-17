@@ -142,15 +142,125 @@ class DataFolderPrivacyTest {
         BackupExclusion.VALUE.joinToString("") { "%02X".format(it) } shouldBe TMUTIL_VALUE
     }
 
+    private fun assumePosix() = assumeTrue("posix" in temp.toPath().fileSystem.supportedFileAttributeViews())
+
+    private fun permissions(dir: File): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(dir.toPath()))
+
+    /** Runs [block] with the data folder override set to [dir]. */
+    private fun <T> withOverride(dir: File, block: () -> T): T {
+        System.setProperty("zoukan.dataDir", dir.path)
+        return try {
+            block()
+        } finally {
+            System.clearProperty("zoukan.dataDir")
+        }
+    }
+
     @Test
-    fun `protect makes the data folder private to the user`() {
-        assumeTrue("posix" in temp.toPath().fileSystem.supportedFileAttributeViews())
+    fun `protect makes the default data folder private to the user`() {
+        assumePosix()
         Files.setPosixFilePermissions(temp.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"))
 
-        DataFolderPrivacy.protect(ZoukanDirs(temp, hidesFromSpotlight = false), notes::add)
+        DataFolderPrivacy.protect(ZoukanDirs(temp, hidesFromSpotlight = false, isDefaultRoot = true), notes::add)
 
-        PosixFilePermissions.toString(Files.getPosixFilePermissions(temp.toPath())) shouldBe "rwx------"
+        permissions(temp) shouldBe "rwx------"
         notes.shouldBeEmpty()
+    }
+
+    @Test
+    fun `an existing data folder the user chose keeps its permissions`() {
+        assumePosix()
+        val chosen = File(temp, "chosen").apply { mkdirs() }
+        Files.setPosixFilePermissions(chosen.toPath(), PosixFilePermissions.fromString("rwxr-x---"))
+
+        val dirs = withOverride(chosen) { ZoukanDirs.default() }
+        dirs.isDefaultRoot shouldBe false
+        DataFolderPrivacy.protect(dirs.create(), notes::add)
+
+        permissions(chosen) shouldBe "rwxr-x---"
+        notes.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a data folder passed in that already exists keeps its permissions`() {
+        assumePosix()
+        Files.setPosixFilePermissions(temp.toPath(), PosixFilePermissions.fromString("rwxr-x---"))
+
+        DataFolderPrivacy.protect(ZoukanDirs(temp, hidesFromSpotlight = false).create(), notes::add)
+
+        permissions(temp) shouldBe "rwxr-x---"
+    }
+
+    @Test
+    fun `a chosen data folder that Zoukan creates is made private`() {
+        assumePosix()
+        val chosen = File(temp, "new-profile")
+
+        val dirs = withOverride(chosen) { ZoukanDirs.default() }
+        // The one-instance lock creates the folder before the runtime starts
+        chosen.mkdirs()
+        Files.setPosixFilePermissions(chosen.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"))
+        DataFolderPrivacy.protect(dirs.create(), notes::add)
+
+        permissions(chosen) shouldBe "rwx------"
+        notes.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a data folder passed in that create makes is made private`() {
+        assumePosix()
+        val root = File(temp, "made")
+
+        DataFolderPrivacy.protect(ZoukanDirs(root, hidesFromSpotlight = false).create(), notes::add)
+
+        permissions(root) shouldBe "rwx------"
+    }
+
+    @Test
+    fun `the harness profile beside a chosen data folder is made private only when created`() {
+        val data = File(temp, "data")
+        withOverride(data) { ZoukanDirs.harness() }.isDefaultRoot shouldBe false
+        withOverride(data) { ZoukanDirs.harness() }.rootIsNew shouldBe true
+        File(temp, "data-harness").mkdirs()
+        // The first look in this process is remembered
+        withOverride(data) { ZoukanDirs.harness() }.rootIsNew shouldBe true
+
+        val existing = File(temp, "kept")
+        File(temp, "kept-harness").mkdirs()
+        withOverride(existing) { ZoukanDirs.harness() }.rootIsNew shouldBe false
+    }
+
+    @Test
+    fun `a symbolic link to the data folder is not followed`() {
+        assumePosix()
+        val target = File(temp, "target").apply { mkdirs() }
+        Files.setPosixFilePermissions(target.toPath(), PosixFilePermissions.fromString("rwxr-x---"))
+        val link = File(temp, "link")
+        Files.createSymbolicLink(link.toPath(), target.toPath())
+
+        DataFolderPrivacy.protect(ZoukanDirs(link, hidesFromSpotlight = false, isDefaultRoot = true), notes::add)
+
+        permissions(target) shouldBe "rwxr-x---"
+    }
+
+    @Test
+    fun `protect creates updates and keeps it out of Time Machine on macOS`() {
+        assumeTrue(Platform.current == Platform.MACOS)
+        val dirs = ZoukanDirs(temp, hidesFromSpotlight = true)
+        File(temp, "updates").exists() shouldBe false
+
+        DataFolderPrivacy.protect(dirs, notes::add)
+
+        dirs.updates.isDirectory shouldBe true
+        BackupExclusion.isExcluded(dirs.updates) shouldBe true
+        dirs.disposableFolders.forEach { BackupExclusion.isExcluded(it) shouldBe true }
+        notes.shouldBeEmpty()
+    }
+
+    @Test
+    fun `protect does not create updates on other systems`() {
+        DataFolderPrivacy.protect(ZoukanDirs(temp, hidesFromSpotlight = false), notes::add)
+        File(temp, "updates").exists() shouldBe false
     }
 
     @Test

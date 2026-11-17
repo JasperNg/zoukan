@@ -2,6 +2,7 @@ package zoukan.desktop
 
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Where Zoukan keeps its files.
@@ -36,6 +37,14 @@ class ZoukanDirs internal constructor(
     private val keptInRoot: Set<String> = emptySet(),
     /** Whether the disposable folders take the `.noindex` names: on macOS. */
     internal val hidesFromSpotlight: Boolean,
+    /**
+     * Whether [root] is Zoukan's own per-platform folder, not one the user chose with the data
+     * folder override or passed in. Only then, or when Zoukan made it ([rootIsNew]), is it made
+     * private, see [DataFolderPrivacy.protect].
+     */
+    internal val isDefaultRoot: Boolean = false,
+    /** Whether [root] did not exist when this process first resolved it, see [default]. */
+    private val rootWasMissing: Boolean = false,
 ) {
     constructor(root: File, localRoot: File = root) :
         this(root, localRoot, emptySet(), hidesFromSpotlight = Platform.current == Platform.MACOS)
@@ -103,9 +112,19 @@ class ZoukanDirs internal constructor(
         folderNotes.toList().also { folderNotes.clear() }
     }
 
-    /** Creates [root] alone. */
+    @Volatile
+    private var createdRoot: Boolean = false
+
+    /**
+     * Whether Zoukan made [root] on this start: it was missing when this process first resolved it
+     * (the one-instance lock may create it before [create] runs), or [createRoot] made it.
+     */
+    internal val rootIsNew: Boolean
+        get() = rootWasMissing || createdRoot
+
+    /** Creates [root] alone, noting whether it was made now ([rootIsNew]). */
     internal fun createRoot(): ZoukanDirs = apply {
-        root.mkdirs()
+        if (root.mkdirs()) createdRoot = true
     }
 
     fun create(): ZoukanDirs = apply {
@@ -118,7 +137,7 @@ class ZoukanDirs internal constructor(
 
     /** These folders, with [relative] caches (of [LOCAL_CACHES]) kept in [root]. */
     fun keepingInRoot(relative: Set<String>): ZoukanDirs =
-        ZoukanDirs(root, localRoot, keptInRoot + relative, hidesFromSpotlight)
+        ZoukanDirs(root, localRoot, keptInRoot + relative, hidesFromSpotlight, isDefaultRoot, rootWasMissing = rootIsNew)
             .also { copy -> takeFolderNotes().forEach(copy::recordFolderNote) }
 
     private fun local(relative: String) = File(if (relative in keptInRoot) root else localRoot, relative)
@@ -133,6 +152,19 @@ class ZoukanDirs internal constructor(
         /** The caches that live in [localRoot], by their path relative to it (and to [root]). */
         val LOCAL_CACHES = listOf(BROWSER_NATIVES, BROWSER_PROFILE, IMAGES, JAVACPP, ARCHIVES)
 
+        /** Per absolute path: whether the folder was missing the first time this process looked. */
+        private val missingAtFirstLook = ConcurrentHashMap<String, Boolean>()
+
+        /** A root the user chose with the data folder override. */
+        private fun chosen(root: File, hidesFromSpotlight: Boolean = Platform.current == Platform.MACOS): ZoukanDirs {
+            val missing = try {
+                missingAtFirstLook.computeIfAbsent(root.path) { !root.exists() }
+            } catch (e: Exception) {
+                false
+            }
+            return ZoukanDirs(root, hidesFromSpotlight = hidesFromSpotlight, isDefaultRoot = false, rootWasMissing = missing)
+        }
+
         fun default(): ZoukanDirs = default(
             Platform.current,
             System.getProperty("zoukan.dataDir"),
@@ -142,33 +174,37 @@ class ZoukanDirs internal constructor(
 
         /**
          * The data folder for [platform]: [dataDirProperty] (`-Dzoukan.dataDir`) or the
-         * `ZOUKAN_DATA_DIR` variable, else the platform's default. Only the default Windows folder
-         * gets a [localRoot] of its own; an overridden folder keeps everything inside it.
+         * `ZOUKAN_DATA_DIR` variable (a folder the user chose), else the platform's default (Zoukan's
+         * own). Only the default Windows folder gets a [localRoot] of its own; an overridden folder
+         * keeps everything inside it.
          */
         internal fun default(platform: Platform, dataDirProperty: String?, env: (String) -> String?, home: String): ZoukanDirs {
             val override = dataDirProperty ?: env("ZOUKAN_DATA_DIR")
             val hides = platform == Platform.MACOS
-            if (!override.isNullOrBlank()) return ZoukanDirs(File(override).absoluteFile, hidesFromSpotlight = hides)
+            if (!override.isNullOrBlank()) return chosen(File(override).absoluteFile, hides)
             return when (platform) {
                 Platform.WINDOWS -> ZoukanDirs(
                     root = File(env("APPDATA") ?: "$home\\AppData\\Roaming", "Zoukan"),
                     localRoot = File(env("LOCALAPPDATA").orEmpty().ifBlank { "$home\\AppData\\Local" }, "Zoukan-local"),
                     hidesFromSpotlight = hides,
+                    isDefaultRoot = true,
                 )
-                Platform.MACOS -> ZoukanDirs(File(home, "Library/Application Support/Zoukan"), hidesFromSpotlight = hides)
-                Platform.LINUX -> ZoukanDirs(File(env("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan"), hidesFromSpotlight = hides)
+                Platform.MACOS -> ZoukanDirs(File(home, "Library/Application Support/Zoukan"), hidesFromSpotlight = hides, isDefaultRoot = true)
+                Platform.LINUX -> ZoukanDirs(File(env("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan"), hidesFromSpotlight = hides, isDefaultRoot = true)
             }
         }
 
         /**
          * The harness profile, outside the data folder (and on Windows outside the roaming profile).
-         * With a data-folder override it is the sibling `<name>-harness`. Its caches stay inside it.
+         * With a data-folder override it is the sibling `<name>-harness`, which counts as chosen by
+         * the user (made private only when it is created); without one it is Zoukan's own folder.
+         * Its caches stay inside it.
          */
         fun harness(): ZoukanDirs {
             val override = System.getProperty("zoukan.dataDir") ?: System.getenv("ZOUKAN_DATA_DIR")
             if (!override.isNullOrBlank()) {
                 val data = File(override).absoluteFile
-                return ZoukanDirs(File(data.parentFile, data.name + "-harness"))
+                return chosen(File(data.parentFile, data.name + "-harness"))
             }
             val home = System.getProperty("user.home")
             val root = when (Platform.current) {
@@ -176,7 +212,7 @@ class ZoukanDirs internal constructor(
                 Platform.MACOS -> File(home, "Library/Application Support/Zoukan-harness")
                 Platform.LINUX -> File(System.getenv("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan-harness")
             }
-            return ZoukanDirs(root)
+            return ZoukanDirs(root, hidesFromSpotlight = Platform.current == Platform.MACOS, isDefaultRoot = true)
         }
     }
 }

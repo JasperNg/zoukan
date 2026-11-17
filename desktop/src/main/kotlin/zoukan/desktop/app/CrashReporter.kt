@@ -206,14 +206,17 @@ object CrashReporter {
      * Markers of processes still running (another Zoukan command using the same data folder) are
      * left alone. Returns the newest crash report found: the JVM's crash file copied over, the
      * fatal report the process wrote, or a note.
+     *
+     * [jvmCrashFolders] are where the JVM writes its crash file (the working folder, or the temp
+     * folder when that is not writable); a copied crash file is deleted only from one of them.
      */
-    internal fun checkPreviousRun(dirs: ZoukanDirs): File? {
+    internal fun checkPreviousRun(dirs: ZoukanDirs, jvmCrashFolders: List<File> = defaultJvmCrashFolders()): File? {
         val markers = dirs.logs.listFiles { f -> f.name.startsWith(".running-") }.orEmpty()
         return markers
             .mapNotNull { marker ->
                 val pid = marker.name.removePrefix(".running-").toLongOrNull() ?: return@mapNotNull null
                 if (isRunning(pid, since = marker.lastModified())) return@mapNotNull null
-                reportFor(dirs, marker, pid)
+                reportFor(dirs, marker, pid, jvmCrashFolders)
             }
             .maxByOrNull { it.lastModified() }
     }
@@ -227,16 +230,16 @@ object CrashReporter {
         return started.toEpochMilli() <= since + 1_000
     }
 
-    private fun reportFor(dirs: ZoukanDirs, marker: File, pid: Long): File {
+    private fun reportFor(dirs: ZoukanDirs, marker: File, pid: Long, jvmCrashFolders: List<File>): File {
         val since = marker.lastModified()
         marker.delete()
         dirs.crashes.mkdirs()
         // The JVM writes hs_err_pid<pid>.log to the working folder, or the temp folder when that
-        // is not writable (the installed app's folder)
-        val jvmCrash = listOfNotNull(System.getProperty("user.dir"), System.getProperty("java.io.tmpdir"), dirs.root.path)
-            .map(::File)
-            .flatMap { it.listFiles { f -> f.name == "hs_err_pid$pid.log" }.orEmpty().toList() }
-            .firstOrNull { it.lastModified() >= since }
+        // is not writable (the installed app's folder). The pid may since have been reused by
+        // another Java program, so a file that does not name Zoukan's main class is left alone.
+        val jvmCrash = (jvmCrashFolders + dirs.root)
+            .flatMap { runCatching { it.listFiles { f -> f.name == "hs_err_pid$pid.log" }.orEmpty().toList() }.getOrDefault(emptyList()) }
+            .firstOrNull { it.lastModified() >= since && isZoukanJvmCrash(it) }
         jvmCrash?.let { src ->
             val dest = File(dirs.crashes, "jvm-crash-${src.name}")
             val copied = runCatching { copyRedacted(src, dest) }
@@ -246,7 +249,7 @@ object CrashReporter {
                 }
                 .isSuccess
             if (copied) {
-                deleteJvmCrashOriginal(src)
+                deleteJvmCrashOriginal(src, jvmCrashFolders)
                 return dest
             }
         }
@@ -266,18 +269,48 @@ object CrashReporter {
 
     private val HS_ERR_NAME = Regex("""hs_err_pid\d+\.log""")
 
+    /** The app's main class, as the JVM names it in its crash file (the Gradle run and the installed launcher). */
+    private const val MAIN_CLASS = "zoukan.desktop.MainKt"
+
+    /** How much of a JVM crash file is read to find its command line (it is in the summary near the top). */
+    private const val CRASH_FILE_HEAD_BYTES = 64 * 1024
+
+    /** The working and temp folders, where the JVM writes its crash file. */
+    private fun defaultJvmCrashFolders(): List<File> =
+        listOfNotNull(System.getProperty("user.dir"), System.getProperty("java.io.tmpdir")).map(::File)
+
+    /**
+     * Whether [file] is a crash file of Zoukan's JVM: its `Command Line:` or `java_command:` line
+     * names Zoukan's main class. Only the first [CRASH_FILE_HEAD_BYTES] are read; a file that
+     * cannot be read, or another program's, is not Zoukan's. Never throws.
+     */
+    internal fun isZoukanJvmCrash(file: File): Boolean = runCatching {
+        val head = file.inputStream().use { it.readNBytes(CRASH_FILE_HEAD_BYTES) }
+        // Latin-1 decodes any bytes; the line looked for is ASCII
+        String(head, Charsets.ISO_8859_1).lineSequence().any { raw ->
+            val line = raw.trim()
+            val value = when {
+                line.startsWith("Command Line:") -> line.removePrefix("Command Line:")
+                line.startsWith("java_command:") -> line.removePrefix("java_command:")
+                else -> return@any false
+            }
+            value.split(' ', '\t').any { it == MAIN_CLASS }
+        }
+    }.getOrDefault(false)
+
     /**
      * Deletes the JVM's crash file once its redacted copy is in the crash folder: the original keeps
-     * the values of environment variables. Only a `hs_err_pid*.log` directly in the temp or working
-     * folder is deleted (never one in the data folder); a failure is logged and the file stays.
+     * the values of environment variables. Only a `hs_err_pid*.log` directly in one of [allowedFolders]
+     * (the working and temp folders, never the data folder) that names Zoukan's main class is deleted;
+     * a failure is logged and the file stays.
      */
-    internal fun deleteJvmCrashOriginal(src: File) {
+    internal fun deleteJvmCrashOriginal(src: File, allowedFolders: List<File> = defaultJvmCrashFolders()) {
         runCatching {
             if (!HS_ERR_NAME.matches(src.name) || !src.isFile) return
             val parent = src.absoluteFile.parentFile?.canonicalFile ?: return
-            val allowed = listOfNotNull(System.getProperty("java.io.tmpdir"), System.getProperty("user.dir"))
-                .mapNotNull { runCatching { File(it).canonicalFile }.getOrNull() }
+            val allowed = allowedFolders.mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
             if (parent !in allowed) return
+            if (!isZoukanJvmCrash(src)) return
             if (!src.delete()) logcat(LogPriority.WARN) { "Could not delete the JVM crash file ${src.name} after copying it" }
         }.onFailure { logcat(LogPriority.WARN, it) { "Could not delete the JVM crash file ${src.name} after copying it" } }
     }

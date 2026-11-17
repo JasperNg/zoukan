@@ -78,6 +78,7 @@ class CrashReporterTest {
         File(dirs.logs, ".running-$pid").setLastModified(System.currentTimeMillis() - 60_000)
         File(root, "hs_err_pid$pid.log").writeText(
             "# A fatal error has been detected by the Java Runtime Environment\n\n" +
+                "Command Line: -Xmx2g zoukan.desktop.MainKt\n\n" +
                 "Environment Variables:\nGITHUB_TOKEN=ghp_SECRETENV3\nPATH=/usr/bin\n\n" +
                 "Signal Handlers:\n",
         )
@@ -100,7 +101,9 @@ class CrashReporterTest {
         val other = DEAD_PID + 1
         File(dirs.logs, ".running-$other").writeText("")
         File(dirs.logs, ".running-$other").setLastModified(System.currentTimeMillis() - 60_000)
-        File(root, "hs_err_pid$other.log").writeText("# A fatal error has been detected by the Java Runtime Environment")
+        File(root, "hs_err_pid$other.log").writeText(
+            "# A fatal error has been detected by the Java Runtime Environment\nCommand Line: zoukan.desktop.MainKt\n",
+        )
         val copy = CrashReporter.checkPreviousRun(dirs)!!
         copy.name shouldBe "jvm-crash-hs_err_pid$other.log"
         copy.readText() shouldContain "fatal error"

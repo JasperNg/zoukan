@@ -78,7 +78,8 @@ object ZoukanRuntime {
 
     private fun boot(requested: ZoukanDirs, interactiveBrowser: Boolean) {
         // Before the log file and the caches open anything: the disposable folders take
-        // their `.noindex` names and leave Time Machine on macOS, and the data folder becomes 0700
+        // their `.noindex` names and leave Time Machine on macOS, and the data folder may become 0700
+        // (see DataFolderPrivacy.protect for when)
         requested.createRoot()
         DataFolderPrivacy.protect(requested) { note -> requested.recordFolderNote(note) }
 

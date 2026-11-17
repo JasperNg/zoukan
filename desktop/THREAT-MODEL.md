@@ -321,12 +321,16 @@ Residual risk:
    the original, which holds environment variable values, is deleted; if the copy fails it is
    kept. Titles of what was read, URLs and file paths can appear in the log, also in incognito.
    The crash dialog says so. Anyone who can read the data folder can read them. On POSIX systems
-   the data folder is made `0700` at every start. On macOS these folders, `reports/` and the
-   caches (Coil's image cache, the chapter cache, FFmpeg's natives and the Android layer's cache
-   folder) take a `.noindex` name (`logs.noindex`, `crashes.noindex`, `reports.noindex`,
-   `cache/images.noindex`, `cache/archives.noindex`, `cache/javacpp.noindex`,
+   the data folder is made `0700` at every start when it is Zoukan's own per-platform folder, or
+   when Zoukan created it on that start; a folder chosen with the data folder override
+   (`zoukan.dataDir` or `ZOUKAN_DATA_DIR`) that already existed keeps the permissions its owner
+   gave it, and a data folder that is a symbolic link is not changed. On macOS these folders,
+   `reports/` and the caches (Coil's image cache, the chapter cache, FFmpeg's natives and the
+   Android layer's cache folder) take a `.noindex` name (`logs.noindex`, `crashes.noindex`,
+   `reports.noindex`, `cache/images.noindex`, `cache/archives.noindex`, `cache/javacpp.noindex`,
    `android/android-compat/appdata/cache.noindex`), so Spotlight does not index them, and carry
-   Time Machine's exclusion (as `tmutil addexclusion` sets it), as does `updates/`. A profile with
+   Time Machine's exclusion (as `tmutil addexclusion` sets it), as does `updates/`, which is
+   created at start so the first downloaded installer is already excluded. A profile with
    the old names has them renamed at start; if a rename fails, the old folder is used for that
    run. Code: `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
 6. **The built-in browser's profile is not encrypted.** `<cache>/cache/browser` is shared by the

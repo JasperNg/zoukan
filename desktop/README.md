@@ -111,7 +111,7 @@ synced or copied folder works on both:
   reader reads a downloaded chapter from disk.
 - **Library updates** follow LibraryUpdateJob: the update categories, the skip rules (unread, not
   started, completed, outside the release period), five sources at once. Errors go to
-  `<data>/reports/library-update-errors.txt`.
+  `<data>/reports/library-update-errors.txt` (`reports.noindex` on macOS).
 - **Background work** runs while the app is open, in place of WorkManager: the scheduled library
   update and automatic backup are checked every minute against when they last ran, so missed work
   runs soon after launch. Closing the window keeps Zoukan in the tray (Settings > General), from
@@ -263,8 +263,9 @@ asks once more.
   other differences from Android.
 - The local source reads RAR 5 chapters through the system's `tar` command (bsdtar, on macOS and
   Windows 10 and later); RAR 4, 7z and TAR open without it. RAR, 7z and TAR chapters are unpacked
-  into `<cache>/cache/archives` on first open, encrypted with the file key (the last 8 are kept);
-  without the key they are held in memory only, and a chapter too large for that is refused.
+  into `<cache>/cache/archives` (`cache/archives.noindex` on macOS) on first open, encrypted with
+  the file key (the last 8 are kept); without the key they are held in memory only, and a chapter
+  too large for that is refused.
 - Background work runs only while Zoukan runs (in the window or the tray), not as an OS service.
 - The UI lives in the `desktop` module (`ui/`), not a shared `ui-shared` module:
   `presentation-core` is Android-only, so the screens are desktop Compose code.

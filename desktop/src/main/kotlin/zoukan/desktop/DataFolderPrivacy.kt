@@ -62,23 +62,31 @@ internal object DataFolderPrivacy {
     }
 
     /**
-     * On macOS: creates the disposable folders under their new names and keeps them, and the
-     * downloaded updates, out of Time Machine. On POSIX systems: makes the data folder 0700.
+     * On macOS: creates the disposable folders under their new names and `updates/`, and keeps
+     * them out of Time Machine. On POSIX systems: makes the data folder 0700 when it is Zoukan's
+     * own per-platform folder or Zoukan made it on this start ([ZoukanDirs.rootIsNew]). A folder
+     * the user chose (the data folder override) that already existed keeps its permissions.
      */
     fun protect(dirs: ZoukanDirs, note: (String) -> Unit) {
-        restrictToOwner(dirs.root, note)
+        if (dirs.isDefaultRoot || dirs.rootIsNew) restrictToOwner(dirs.root, note)
         if (!dirs.hidesFromSpotlight) return
         dirs.disposableFolders.forEach { dir ->
             runCatching { dir.mkdirs() }
             BackupExclusion.exclude(dir, note)
         }
-        if (dirs.updates.isDirectory) BackupExclusion.exclude(dirs.updates, note)
+        // Created now, so the first installer downloaded later is already excluded
+        runCatching { dirs.updates.mkdirs() }
+        BackupExclusion.exclude(dirs.updates, note)
     }
 
-    /** Sets [dir] to rwx------ when the file system has POSIX permissions and it is not already. */
+    /**
+     * Sets [dir] to rwx------ when the file system has POSIX permissions and it is not already.
+     * A symbolic link is left alone, so the folder it points to keeps its permissions.
+     */
     fun restrictToOwner(dir: File, note: (String) -> Unit) {
         try {
             val path = dir.toPath()
+            if (Files.isSymbolicLink(path)) return
             if (!Files.isDirectory(path)) return
             if ("posix" !in path.fileSystem.supportedFileAttributeViews()) return
             val ownerOnly = setOf(

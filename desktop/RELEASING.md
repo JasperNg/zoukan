@@ -242,7 +242,7 @@ On macOS the folders are `<data>/logs.noindex` and `<data>/crashes.noindex`, whi
 not index and Time Machine does not back up.
 
 A crash in the window or while starting writes a report, shows a dialog with its path and closes
-Zoukan. Each Zoukan process leaves a `<data>/logs/.running-<pid>` marker that its shutdown removes;
+Zoukan. Each Zoukan process leaves a `<data>/logs/.running-<pid>` marker (`logs.noindex` on macOS) that its shutdown removes;
 when the next start finds one whose process is gone (killed, out of memory, a JVM crash), it says
 so. Markers of processes still running, such as a command-line run on the same folder, are left
 alone. Settings > About opens
