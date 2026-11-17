@@ -188,7 +188,7 @@ Verified and trusted:
 
 | Control | Where |
 |---|---|
-| Database always encrypted (SQLCipher 4 scheme, SQLite3MultipleCiphers) under a random 256-bit raw key | `desktop/.../db/DesktopDatabase.kt` (`createDriver`, `properties`) |
+| Database always encrypted (SQLCipher 4 scheme, SQLite3MultipleCiphers) under a random 256-bit raw key | `desktop/.../db/DesktopDatabase.kt` (`createDriver`, `properties`); every connection, the database thread's kept one included, opens with those properties in `desktop/.../db/DesktopSqliteDriver.kt` |
 | The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed), as does an empty database file whose `-wal` still has data in it (a stale `-shm` alone, or an empty `-wal`, holds no data and does not block start-up); a secret store error stops start-up before any key is made | `DesktopDatabase.databaseKey`, `KeyMissingException`, `JournalWithoutKeyException` |
 | The copy made before a schema migration (`zoukan.db.pre-v<N>`, with its `-wal` if any, beside the database) is a byte copy, so it is encrypted with the same key; only the latest is kept. A database from a newer build is refused before anything writes to it: its version is read through a read-only connection, so not even a WAL checkpoint touches the file or its `-wal` | `DesktopDatabase.copyBeforeMigration`, `TooNewException` |
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |

@@ -61,17 +61,29 @@ object DesktopDatabase {
 
     private const val PRE_MIGRATION = ".pre-v"
 
-    fun createDriver(file: File, secrets: SecretStore): SqlDriver = createDriver(file, secrets, Database.Schema.version)
+    /** @param databaseThread the thread whose connection stays open while it is busy; see [DesktopSqliteDriver]. */
+    fun createDriver(file: File, secrets: SecretStore, databaseThread: DatabaseThread? = null): SqlDriver =
+        createDriver(file, secrets, Database.Schema.version, databaseThread)
 
     /** [schemaVersion] is the version this build migrates to; tests pass another to check the copy. */
-    internal fun createDriver(file: File, secrets: SecretStore, schemaVersion: Long): SqlDriver {
+    internal fun createDriver(
+        file: File,
+        secrets: SecretStore,
+        schemaVersion: Long,
+        databaseThread: DatabaseThread? = null,
+    ): SqlDriver {
         val key = databaseKey(file, secrets)
         val url = "jdbc:sqlite:${file.absolutePath}"
         val properties = properties(key)
         // Checked before SQLDelight sees the file: it would leave a newer database open as it is
         // (and fixTriggers would then write to it), and it migrates without a copy
         if (file.isFile && file.length() > 0) checkVersion(file, url, properties, schemaVersion)
-        return JdbcSqliteDriver(url = url, properties = properties, schema = Database.Schema).also(::fixTriggers)
+        return DesktopSqliteDriver.withSchema(
+            url = url,
+            properties = properties,
+            databaseThread = databaseThread,
+            schema = Database.Schema,
+        ).also(::fixTriggers)
     }
 
     /**
