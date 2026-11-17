@@ -78,7 +78,10 @@ class DownloadQueueOrderTest {
             }
             every { getOnlineSources() } returns listOf(sourceA, sourceB)
         }
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)
@@ -138,7 +141,7 @@ class DownloadQueueOrderTest {
     }
 
     @Test
-    fun `clean up deletes orphaned, unfinished, read and non-library downloads`() = runBlocking<Unit> {
+    fun `clean up deletes unfinished, read and non-library downloads, and keeps unknown files and orphaned folders`() = runBlocking<Unit> {
         val manager = manager()
         val downloads = File(temp, "downloads/A (EN)")
         fun make(path: String) = File(downloads, path).apply {
@@ -155,7 +158,7 @@ class DownloadQueueOrderTest {
         )
         make("Kept/Chapter 1.cbz")
         make("Kept/Chapter 2.cbz")
-        make("Kept/Chapter 9.cbz") // no such chapter any more
+        make("Kept/Chapter 9.cbz") // no chapter the desktop knows: maybe the Android app's, kept
         make("Kept/Chapter 2_tmp/") // an unfinished download
         make("Kept/cover.jpg")
         make("Left library/Chapter 3.cbz")
@@ -171,11 +174,11 @@ class DownloadQueueOrderTest {
             chaptersOf = { chapters.getValue(it) },
         )
 
-        downloads.list()!!.toSet() shouldBe setOf("Kept")
-        File(downloads, "Kept").list()!!.toSet() shouldBe setOf("Chapter 2.cbz", "cover.jpg")
-        // Nobody: folder + 1 file; Left library: folder + 1 file; All read: chapter + folder;
-        // Kept: Chapter 9, the unfinished one and Chapter 1
-        cleared shouldBe 2 + 2 + 2 + 3
+        // Nobody, a folder of no entry, is only deleted when the user ticks it in the preview
+        downloads.list()!!.toSet() shouldBe setOf("Kept", "Nobody")
+        File(downloads, "Kept").list()!!.toSet() shouldBe setOf("Chapter 2.cbz", "Chapter 9.cbz", "cover.jpg")
+        // Left library: chapter + folder; All read: chapter + folder; Kept: the unfinished one and Chapter 1
+        cleared shouldBe 2 + 2 + 2
         manager.isDownloaded(kept, chapters.getValue(1L)[0]) shouldBe false
         manager.isDownloaded(kept, chapters.getValue(1L)[1]) shouldBe true
     }

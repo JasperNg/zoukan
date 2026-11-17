@@ -39,7 +39,6 @@ import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
 import zoukan.i18n.desktop.DMR
-import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
@@ -184,7 +183,7 @@ object PageImages {
     /** Puts the image on the system clipboard. */
     fun copy(bytes: ByteArray) {
         val image = toAwt(bytes)
-        Toolkit.getDefaultToolkit().systemClipboard.setContents(ImageTransferable(image), null)
+        zoukan.desktop.app.SystemEffects.current.copy(ImageTransferable(image))
     }
 
     /**

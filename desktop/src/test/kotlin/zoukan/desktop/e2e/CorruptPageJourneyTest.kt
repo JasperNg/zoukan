@@ -13,20 +13,27 @@ import cafe.adriel.voyager.navigator.Navigator
 import io.kotest.matchers.doubles.shouldBeLessThan
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.reader.ReaderScreen
+import zoukan.i18n.desktop.DMR
 import kotlin.time.Duration.Companion.minutes
 
 /**
  * One page of a chapter is a corrupt image (the server answers 200 with the format's magic and
  * zeros): the reader shows "Page 2 could not load" with the page's Retry, the other pages draw.
- * After the route is switched off, the page's Retry draws it.
+ * After the route is switched off, the page's Retry draws it. A page the source refuses (HTTP 403)
+ * shows a readable reason under "Page n could not load", not the raw status line.
  *
  *   ./gradlew :desktop:journeyTest --tests "*CorruptPageJourneyTest"
  */
@@ -51,6 +58,16 @@ class CorruptPageJourneyTest {
         val error = "Page 2 could not load"
         val manga = journey.addToLibrary(FixtureCatalog.FORMATS_TITLE)
         journey.server.fail("/images/${corrupt.file}", FixtureFailure.CorruptImage)
+        // The first page of chapter 2 is refused
+        val refused = FixtureCatalog.pages(FixtureCatalog.formats[1]).first().file
+        journey.server.extraRoutes += { exchange, parts ->
+            if (parts.lastOrNull() == refused) {
+                exchange.sendResponseHeaders(403, -1)
+                true
+            } else {
+                false
+            }
+        }
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
@@ -93,6 +110,22 @@ class CorruptPageJourneyTest {
                     waitOrDump("for page 2 to draw", timeout = Journey.PAGE_TIMEOUT) { pageDrew(corrupt) }
                     textOnScreen(error) shouldBe false
                     shot("2-retried")
+                }
+
+                step("A page the source refuses (403): a readable reason, not the raw status") {
+                    // No silent second try: the error shows on the first answer
+                    preferences.readerInstantRetry().set(false)
+                    val chapter2 = runBlocking { Injekt.get<GetChaptersByMangaId>().await(manga.id) }.first { it.name == "Chapter 2 (PNG)" }
+                    runOnUiThread {
+                        navigator?.pop()
+                        navigator?.push(ReaderScreen(manga.id, chapter2.id))
+                    }
+                    waitOrDump("for the page error", 30_000) {
+                        onAllNodes(hasText(localized(DMR.strings.page_could_not_load, 1))).fetchSemanticsNodes().isNotEmpty()
+                    }
+                    onAllNodes(hasText(localized(MR.strings.exception_http, 403))).fetchSemanticsNodes().isNotEmpty() shouldBe true
+                    onAllNodes(hasText("HTTP 403")).fetchSemanticsNodes().isEmpty() shouldBe true
+                    shot("3-refused-page")
                 }
             }
         }

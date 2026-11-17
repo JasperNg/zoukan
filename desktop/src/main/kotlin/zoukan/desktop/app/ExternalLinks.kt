@@ -1,6 +1,5 @@
 package zoukan.desktop.app
 
-import java.awt.Desktop
 import java.net.URI
 
 /**
@@ -23,6 +22,6 @@ object ExternalLinks {
     /** Opens [url] in the system browser. Throws when it is not a web address or cannot open. */
     fun browse(url: String) {
         val uri = webUri(url) ?: throw IllegalArgumentException("Not a web address: ${url.take(100)}")
-        Desktop.getDesktop().browse(uri)
+        SystemEffects.current.browse(uri)
     }
 }

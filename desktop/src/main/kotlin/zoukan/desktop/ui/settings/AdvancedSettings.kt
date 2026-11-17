@@ -45,6 +45,8 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.FileRequest
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
@@ -53,7 +55,6 @@ import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.extension.ExtensionTrust
 import zoukan.i18n.desktop.DMR
-import java.awt.FileDialog
 import java.io.File
 import java.net.CookieHandler
 import java.net.CookieManager
@@ -282,12 +283,9 @@ private fun UserAgentPreference() {
 private fun CrashLogsPreference() {
     val window = LocalWindow.current?.window
     SettingRow(localized(MR.strings.pref_dump_crash_logs), localized(MR.strings.pref_dump_crash_logs_summary), onClick = {
-        val dialog = FileDialog(window as java.awt.Frame?, localized(MR.strings.pref_dump_crash_logs), FileDialog.SAVE).apply {
-            file = "komikku_crash_logs.txt"
-            isVisible = true
-        }
-        val name = dialog.file ?: return@SettingRow
-        val target = File(dialog.directory, name)
+        val target = SystemEffects.current.pickFile(
+            FileRequest(window, localized(MR.strings.pref_dump_crash_logs), save = true, fileName = "komikku_crash_logs.txt"),
+        ) ?: return@SettingRow
         AppScope.launch {
             try {
                 withContext(Dispatchers.IO) { target.writeText(crashLogs(Injekt.get())) }

@@ -33,7 +33,10 @@ class StatsScreenModelTest {
     private fun setup(): Pair<DownloadManager, DownloadPaths> {
         val source = mockk<Source> { every { this@mockk.toString() } returns "Fake (EN)" }
         val sourceManager = mockk<SourceManager> { every { getOrStub(7L) } returns source }
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)
@@ -57,6 +60,9 @@ class StatsScreenModelTest {
         val removed = manga(2L, "Removed")
         paths.mangaDir(inLibrary).apply { mkdirs() }.let { dir ->
             File(dir, "Chapter 1").mkdirs()
+            File(dir, "Chapter 1/001.png").writeText("png")
+            // An empty folder is no download
+            File(dir, "Chapter 4").mkdirs()
             File(dir, "Chapter 2_tmp").mkdirs()
             File(dir, "Chapter 3.cbz_tmp").writeText("partial")
         }

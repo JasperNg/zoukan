@@ -46,6 +46,8 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.FileRequest
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.compat.localized
@@ -58,7 +60,6 @@ import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
-import java.awt.FileDialog
 import java.io.File
 
 /**
@@ -69,6 +70,7 @@ import java.io.File
 fun LazyListScope.dataSettings() {
     settingsGroup(localized(MR.strings.label_data_storage))
     item(key = "data-storage-location") { StorageLocationPreference() }
+    item(key = "data-storage-unavailable") { StorageUnavailableBanner() }
     item(key = "data-storage-info") { InfoText(localized(MR.strings.pref_storage_location_info)) }
     item(key = "data-open-downloads") {
         val storage = remember { Injekt.get<ZoukanStorage>() }
@@ -145,7 +147,8 @@ fun LazyListScope.dataSettings() {
         val scope = rememberCoroutineScope()
         SettingRow(localized(DMR.strings.clear_cover_cache), localized(DMR.strings.covers_download_again_when_shown), onClick = {
             scope.launch(Dispatchers.IO) {
-                dirs.covers.listFiles()?.forEach { it.delete() }
+                // Custom covers (covers/custom) are kept
+                zoukan.desktop.manga.CustomCovers.clearCache(dirs.covers)
                 // ZOUKAN: and the other images kept on disk (extension icons, tracker covers, ...)
                 runCatching { Images.clearDiskCache() }
                 Toasts.show(localized(DMR.strings.cover_cache_cleared))
@@ -281,13 +284,33 @@ private fun BackupButtons() {
  * file then opens in [RestoreBackupScreen]. The first-run setup uses it too.
  */
 internal fun pickBackupFile(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): File? {
-    val dialog = FileDialog(window as java.awt.Frame?, localized(MR.strings.file_select_backup), FileDialog.LOAD).apply {
-        directory = dirs.backups.absolutePath
-        setFilenameFilter { _, name -> name.endsWith(".tachibk") || name.endsWith(".proto.gz") }
-        isVisible = true
+    return SystemEffects.current.pickFile(
+        FileRequest(window, localized(MR.strings.file_select_backup), save = false, directory = dirs.backups) { name ->
+            name.endsWith(".tachibk") || name.endsWith(".proto.gz")
+        },
+    )
+}
+
+/**
+ * Shown while the chosen storage folder is missing, for example on a drive that is not connected.
+ * Downloads, automatic backups and the local source then save nothing until it is back or another
+ * folder is chosen.
+ */
+@Composable
+private fun StorageUnavailableBanner() {
+    val storage = remember { Injekt.get<ZoukanStorage>() }
+    val folder by storage.folderPreference.collectAsState()
+    // Checked when the page opens and when the folder changes. No polling loop: an endless delay
+    // loop keeps Compose UI tests from going idle
+    val available by produceState(true, folder) { value = withContext(Dispatchers.IO) { storage.isAvailable } }
+    if (!available) {
+        Text(
+            localized(DMR.strings.storage_folder_unavailable, storage.root.path),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
+        )
     }
-    val name = dialog.file ?: return null
-    return File(dialog.directory, name)
 }
 
 /** Android's StorageInfo: the storage location's disk, used and free. */
@@ -295,7 +318,8 @@ internal fun pickBackupFile(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.
 private fun StorageUsage() {
     val storage = remember { Injekt.get<ZoukanStorage>() }
     val folder by storage.folderPreference.collectAsState()
-    val root = remember(folder) { storage.root.also { it.mkdirs() } }
+    // Never created here: a chosen folder that is missing is a disconnected drive (StorageUnavailableBanner)
+    val root = remember(folder) { storage.root }
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }
     SearchTerms(localized(MR.strings.pref_storage_usage), localized(DMR.strings.disk_space))
@@ -361,12 +385,9 @@ private fun ExportLibraryPreference() {
         confirmButton = {
             TextButton(onClick = {
                 dialog = false
-                val chooser = FileDialog(window as java.awt.Frame?, localized(DMR.strings.export_library), FileDialog.SAVE).apply {
-                    file = "komikku_library.csv"
-                    isVisible = true
-                }
-                val name = chooser.file ?: return@TextButton
-                val target = File(chooser.directory, name)
+                val target = SystemEffects.current.pickFile(
+                    FileRequest(window, localized(DMR.strings.export_library), save = true, fileName = "komikku_library.csv"),
+                ) ?: return@TextButton
                 val options = LibraryCsv.Options(title, title && author, title && artist)
                 scope.launch {
                     try {

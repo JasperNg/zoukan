@@ -129,7 +129,10 @@ class SyncChaptersDownloadsTest {
         }
         val fakeSource = mockk<Source> { every { this@mockk.toString() } returns "Fake (EN)" }
         val sourceManager = mockk<SourceManager> { every { getOrStub(7L) } returns fakeSource }
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)

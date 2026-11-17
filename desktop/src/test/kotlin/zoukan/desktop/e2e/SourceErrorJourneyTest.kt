@@ -23,16 +23,23 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.ZoukanContent
+import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.e2eEffectContext
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * A source that answers with errors: the catalogue (500), a title's details and chapters (404) and
+ * A source that answers with errors: the catalogue too late (a timeout), the catalogue (500), a title's details and chapters (404) and
  * only its chapter list (500; the details call answers, but the source API returns details and
  * chapters as one update, so the screen has neither). Each shows the error the user reads and a retry
  * (the "Retry" button, the entry's "Refresh") that works once the server answers again. Every call
  * fails while a rule is on, so a silent client retry cannot hide the error. A failed load adds
- * nothing to the library.
+ * nothing to the library. Last, a source that blocks the global search (HTTP 403, as a Cloudflare
+ * check does): its row explains that the site blocked the request instead of the raw status, and
+ * its Retry searches that one source again.
+ *
+ * The app's client waits 30 s to read; the fixture source here has a 3 s read timeout (a test-only
+ * setting of [FixtureSource]) and the slow catalogue answers after 5 s, so the timeout step takes
+ * seconds, not minutes.
  *
  * The fixture serves a title's details at `/manga/<key>` and its chapter list at
  * `/manga/<key>/chapters`, so the 404 rule (`/manga/`) fails both and the 500 rule only the list.
@@ -51,7 +58,7 @@ class SourceErrorJourneyTest {
 
     @Test
     fun errorsShowAndRetryWorks() {
-        journey = Journey.start("source-error")
+        journey = Journey.start("source-error", sourceReadTimeoutSeconds = READ_TIMEOUT_SECONDS)
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
 
@@ -59,14 +66,27 @@ class SourceErrorJourneyTest {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                 setContent { ZoukanContent(preferences) { navigator = it } }
 
-                step("The catalogue answers 500: the error and a Retry, no titles") {
-                    server.fail("/catalog", FixtureFailure.Status(500))
+                step("The catalogue answers after ${SLOW_MILLIS / 1000} s, past the $READ_TIMEOUT_SECONDS s timeout: the timeout error") {
+                    server.fail("/catalog", FixtureFailure.Slow(SLOW_MILLIS))
                     onAllNodesWithText("Browse").onFirst().performClick()
                     onAllNodesWithText("Sources").onFirst().performClick()
                     waitFor(hasText(FixtureSource.NAME))
                     onAllNodesWithText(FixtureSource.NAME).onFirst().performScrollTo().performClick()
+                    waitFor(hasText(TIMEOUT_MESSAGE), timeout = 20_000)
+                    waitFor(hasText("Retry"))
+                    onAllNodesWithTag("manga-item").fetchSemanticsNodes() shouldHaveSize 0
+                    shot("0-timeout")
+                }
+
+                step("The catalogue answers 500 to Retry: the error and a Retry, no titles") {
+                    val slow = server.requests.count { it == "/catalog" }
+                    server.clearFailures()
+                    server.fail("/catalog", FixtureFailure.Status(500))
+                    onAllNodesWithText("Retry").onFirst().performClick()
                     waitFor(hasText("HTTP error 500"))
                     waitFor(hasText("Retry"))
+                    (server.requests.count { it == "/catalog" } shouldBeGreaterThan slow)
+                    onAllNodesWithText(TIMEOUT_MESSAGE).fetchSemanticsNodes() shouldHaveSize 0
                     onAllNodesWithTag("manga-item").fetchSemanticsNodes() shouldHaveSize 0
                     shot("1-catalogue-500")
                 }
@@ -130,11 +150,38 @@ class SourceErrorJourneyTest {
                     runBlocking { Injekt.get<GetFavorites>().await() }.shouldBeEmpty()
                     shot("6-chapters-refreshed")
                 }
+
+                step("Global search, the site answers 403: the row says the site blocked the request and offers Retry") {
+                    server.fail("/catalog", FixtureFailure.Status(403))
+                    runOnUiThread { navigator?.push(GlobalSearchScreen("Fixture")) }
+                    waitFor(hasText(BLOCKED))
+                    waitFor(hasText("Retry"))
+                    onAllNodesWithText("HTTP error 403").fetchSemanticsNodes() shouldHaveSize 0
+                    shot("7-global-search-blocked")
+                }
+
+                step("The site answers again: Retry on the row lists its results") {
+                    val failed = server.requests.count { it == "/catalog" }
+                    server.clearFailures()
+                    onAllNodesWithText("Retry").onFirst().performClick()
+                    waitFor(hasText(FixtureCatalog.FORMATS_TITLE))
+                    server.requests.count { it == "/catalog" } shouldBeGreaterThan failed
+                    onAllNodesWithText(BLOCKED).fetchSemanticsNodes() shouldHaveSize 0
+                    shot("8-global-search-retried")
+                }
             }
         }
     }
 
     private companion object {
+        const val READ_TIMEOUT_SECONDS = 3L
+        const val SLOW_MILLIS = 5_000L
+
+        /** What the source screen shows for OkHttp's read timeout (a SocketTimeoutException). */
+        const val TIMEOUT_MESSAGE = "The source took too long to answer"
+
+        const val BLOCKED = "The site blocked the request. Open the site to pass its check or sign in, then try again."
+
         /** The start of Fixture Second's description, shown once its details load. */
         const val SECOND_DESCRIPTION = "A second title"
     }

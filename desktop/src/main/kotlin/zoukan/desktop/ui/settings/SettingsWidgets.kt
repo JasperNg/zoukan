@@ -1,5 +1,8 @@
 package zoukan.desktop.ui.settings
 
+import androidx.compose.foundation.selection.triStateToggleable
+import zoukan.desktop.ui.common.radioRow
+import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -146,7 +149,7 @@ fun <T> ChoiceSetting(
                 Column(Modifier.verticalScrollWithBar()) {
                     choices.forEach { (choice, label) ->
                         Row(
-                            Modifier.fillMaxWidth().clickable {
+                            Modifier.fillMaxWidth().radioRow(choice == value) {
                                 open = false
                                 onChoose(choice)
                             }.padding(vertical = 4.dp),
@@ -220,7 +223,7 @@ fun MultiSelectPreference(
                 Column(Modifier.verticalScrollWithBar()) {
                     choices.forEach { (key, label) ->
                         Row(
-                            Modifier.fillMaxWidth().clickable { chosen = if (key in chosen) chosen - key else chosen + key }.padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().checkRow(key in chosen) { chosen = if (key in chosen) chosen - key else chosen + key }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(checked = key in chosen, onCheckedChange = null)
@@ -303,7 +306,7 @@ fun CategoriesIncludeExcludeDialog(
                         else -> ToggleableState.Off
                     }
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().triStateToggleable(state = state, role = Role.Checkbox) {
                             when (state) {
                                 ToggleableState.Off -> inc = inc + id
                                 ToggleableState.On -> {

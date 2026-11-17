@@ -40,6 +40,8 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.FileRequest
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
@@ -52,8 +54,6 @@ import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice
 import zoukan.i18n.desktop.DMR
-import java.awt.FileDialog
-import java.io.File
 
 private val STATUSES = listOf(
     SManga.UNKNOWN,
@@ -127,13 +127,13 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
                     CoverImage(Cover.of(manga), Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Corners.Medium).coverOutline(Corners.Medium))
                     if (edit.canEditCover(manga)) {
                         OutlinedButton(onClick = {
-                            val dialog = FileDialog(window, localized(DMR.strings.choose_a_cover), FileDialog.LOAD).apply {
-                                setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png", "webp", "gif", "avif") }
-                                isVisible = true
-                            }
-                            val name = dialog.file ?: return@OutlinedButton
+                            val picked = SystemEffects.current.pickFile(
+                                FileRequest(window, localized(DMR.strings.choose_a_cover), save = false) { name ->
+                                    name.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png", "webp", "gif", "avif")
+                                },
+                            ) ?: return@OutlinedButton
                             run {
-                                edit.setCover(manga, File(dialog.directory, name))
+                                edit.setCover(manga, picked)
                                 Toasts.show(localized(MR.strings.cover_updated))
                             }
                         }) { Text(localized(DMR.strings.change_cover)) }

@@ -1,0 +1,146 @@
+package zoukan.desktop.backup
+
+import eu.kanade.tachiyomi.data.backup.create.BackupOptions
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import zoukan.desktop.ZoukanDirs
+import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+/** Why a [SafetySnapshot] is taken: the change it comes before. Part of the file name, and each keeps its own [SafetySnapshot.KEEP]. */
+enum class SnapshotReason(val tag: String) {
+    RESTORE("restore"),
+    SYNC("sync"),
+    CLEAR_DATABASE("clear-database"),
+    MIGRATION("migration"),
+    CLEAR_CHAPTERS("clear-chapters"),
+}
+
+/**
+ * Asks whether a change may go ahead although the safety backup before it failed with [error]:
+ * true goes ahead, false cancels the change.
+ */
+fun interface SnapshotFailedPrompt {
+    fun continueWithout(error: String): Boolean
+}
+
+/**
+ * A `.tachibk` backup of the whole library written just before a change that deletes or overwrites
+ * library data (a restore, a sync, Clear database, a migration, removing an entry's chapters), so
+ * the change can be undone with Restore backup. The Android app takes none.
+ *
+ * The snapshots go to `backups/safety` in the app's own data folder ([folder]), never to the
+ * storage folder's `autobackup` that the Android app reads and that may be shared. Each [reason]
+ * keeps its newest [keep]; only files named as this class names them are ever deleted. They are
+ * written off the calling thread by [write] (the normal backup creator).
+ */
+class SafetySnapshot(
+    private val folder: () -> File,
+    private val write: suspend (File) -> Unit,
+    private val keep: Int = KEEP,
+    private val timeoutMillis: Long = TIMEOUT_MILLIS,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val now: () -> LocalDateTime = LocalDateTime::now,
+) {
+    /**
+     * Writes a snapshot before a [reason] change and rotates the old ones out. Never throws but for
+     * cancellation: a failure, or a write that takes longer than the timeout, is the result.
+     */
+    suspend fun take(reason: SnapshotReason): Result<File> = try {
+        withContext(dispatcher) {
+            // One at a time, so two changes at once cannot pick the same name or rotate each other's file
+            lock.withLock {
+                withTimeout(timeoutMillis) {
+                    val dir = folder().apply { mkdirs() }
+                    val file = freeFile(dir, "${PREFIX}${reason.tag}_${now().format(FILE_TIME)}")
+                    write(file)
+                    prune(dir, reason, keep, file)
+                    logcat { "Safety backup saved to $file" }
+                    Result.success(file)
+                }
+            }
+        }
+    } catch (e: TimeoutCancellationException) {
+        logcat(LogPriority.ERROR, e) { "The safety backup before ${reason.tag} timed out" }
+        Result.failure(e)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        logcat(LogPriority.ERROR, e) { "The safety backup before ${reason.tag} failed" }
+        Result.failure(e)
+    }
+
+    /**
+     * Takes a snapshot before a [reason] change the user started. True when the change may go
+     * ahead: the snapshot was saved, or it failed and the user chose to continue in [prompt].
+     */
+    suspend fun guard(reason: SnapshotReason, prompt: SnapshotFailedPrompt): Boolean {
+        val error = take(reason).exceptionOrNull() ?: return true
+        val message = errorText(error)
+        return try {
+            withContext(dispatcher) { prompt.continueWithout(message) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // A prompt that cannot be shown keeps the data as it is
+            logcat(LogPriority.ERROR, e) { "Could not ask whether to continue without a safety backup" }
+            false
+        }
+    }
+
+    companion object {
+        /** Snapshots kept for each reason. */
+        const val KEEP = 5
+
+        /** A write that takes longer than this counts as failed, so a change never waits forever. */
+        const val TIMEOUT_MILLIS = 5 * 60_000L
+
+        internal const val PREFIX = "safety_"
+        private val FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
+        private val lock = Mutex()
+
+        /** Where the snapshots go: inside the app's data folder, never the shared storage folder. */
+        fun folder(dirs: ZoukanDirs): File = File(dirs.backups, "safety")
+
+        /** The app's snapshots, with the data folder and the backup creator looked up when one is taken. */
+        fun forApp(): SafetySnapshot = SafetySnapshot(
+            folder = { folder(Injekt.get<ZoukanDirs>()) },
+            // The default choices: library, chapters, history, tracking, categories, settings; no private settings
+            write = { file -> DesktopBackups(Injekt.get<ZoukanDirs>().android).create(file, BackupOptions(), replaceExisting = false) },
+        )
+
+        /** What a failure says, short enough for a dialog. */
+        internal fun errorText(error: Throwable): String =
+            (error.message?.takeIf { it.isNotBlank() } ?: error::class.simpleName.orEmpty()).take(300)
+
+        /**
+         * Deletes [reason]'s snapshots in [folder] beyond the newest [keep], never [justWritten].
+         * Newest by the time in the name, which this class writes; other files are never touched.
+         */
+        internal fun prune(folder: File, reason: SnapshotReason, keep: Int, justWritten: File) {
+            val pattern = Regex("""${Regex.escape(PREFIX + reason.tag)}_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})(?:-(\d+))?\.tachibk""")
+            folder.listFiles().orEmpty()
+                .filter { it.isFile && it != justWritten }
+                .mapNotNull { file -> pattern.matchEntire(file.name)?.let { m -> file to (m.groupValues[1] to (m.groupValues[2].toIntOrNull() ?: 1)) } }
+                .sortedWith(compareByDescending<Pair<File, Pair<String, Int>>> { it.second.first }.thenByDescending { it.second.second })
+                .drop((keep - 1).coerceAtLeast(0))
+                .forEach { (file, _) ->
+                    if (!file.delete()) logcat(LogPriority.WARN) { "Could not delete the old safety backup $file" }
+                }
+        }
+
+        /** [base] plus `.tachibk` if free, else `-2`, `-3`, ...: a snapshot never takes an existing file's name. */
+        internal fun freeFile(folder: File, base: String): File = AutoBackup.freeFile(folder, base)
+    }
+}

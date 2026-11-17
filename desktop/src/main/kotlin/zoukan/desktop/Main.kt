@@ -5,6 +5,18 @@ import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.PREF_DOH_360
+import eu.kanade.tachiyomi.network.PREF_DOH_ADGUARD
+import eu.kanade.tachiyomi.network.PREF_DOH_ALIDNS
+import eu.kanade.tachiyomi.network.PREF_DOH_CLOUDFLARE
+import eu.kanade.tachiyomi.network.PREF_DOH_CONTROLD
+import eu.kanade.tachiyomi.network.PREF_DOH_DNSPOD
+import eu.kanade.tachiyomi.network.PREF_DOH_GOOGLE
+import eu.kanade.tachiyomi.network.PREF_DOH_MULLVAD
+import eu.kanade.tachiyomi.network.PREF_DOH_NJALLA
+import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
+import eu.kanade.tachiyomi.network.dohProviderUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import mihon.data.extension.service.ExtensionStoreService
@@ -57,15 +69,19 @@ Commands:
       --network             Also check that GitHub (the update check) can be reached
   status                  Start the runtime, open the encrypted database, load installed extensions
   harness [options]       Run the extension compatibility harness and write a report
-      --store <url>         Extension store (default: Keiyoushi)
-      --packages <a,b,...>  Extensions to test, for example en.mangapill,all.mangadex
+      --store <url|name>    Extension store, repeatable: keiyoushi, yuzono or a URL (default: both
+                            sample stores, each with its own sample and report)
+      --packages <a,b,...>  Extensions to test, for example en.mangapill,all.mangadex; over several
+                            stores, each store tests those it lists
       --all                 Test every extension in the store
       --lang <code>         Source language to test in multi-language extensions (default: en)
       --offline             Install and load only, no calls to manga sites
       --apk                 Install from APKs with dex2jar even when the store has jars
       --skip-nsfw           With --all, skip NSFW extensions
       --interactive         Open a browser window for Cloudflare challenges the hidden browser cannot solve
-      --wiring              Check every extension (or --packages) is wired up, without calling manga sites:
+      --doh <name|off>      DNS over HTTPS for the run: cloudflare, google, adguard, quad9, alidns, dnspod,
+                            360, mullvad, controld, njalla, or off (default: the harness profile's setting)
+      --wiring            Check every extension (or --packages) is wired up, without calling manga sites:
                             missing Android or app APIs, Injekt lookups, sources, client and headers, settings
   backup create [file]    Back up the library and settings (default: <data>/backups/zoukan_<date>.tachibk)
       --private             Include private settings (tracker logins and the like)
@@ -91,7 +107,7 @@ Only one Zoukan can use a data folder at a time: the commands that start the run
 Data folder: -Dzoukan.dataDir=<path> or ZOUKAN_DATA_DIR overrides the default.
 
 Exit codes: 0 success, 1 the command failed, 2 bad usage. harness exits 1 when an extension fails to
-install or load, and with --wiring also when an app API is missing.
+install or load or a store cannot be read, and with --wiring also when an app API is missing.
 """
 
 fun main(args: Array<String>) {
@@ -230,11 +246,17 @@ private fun status(): Int {
 
 private fun harness(args: List<String>): Int {
     var options = CompatibilityHarness.Options()
+    val stores = mutableListOf<String>()
     var wiring = false
+    var doh: Int? = null
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
-            "--store" -> options = options.copy(storeUrl = it.value("--store"))
+            "--doh" -> doh = harnessDohProvider(it.value("--doh")) ?: run {
+                System.err.println("Unknown DNS over HTTPS provider for --doh\n\n$USAGE")
+                return 2
+            }
+            "--store" -> stores += it.value("--store")
             "--packages" -> options = options.copy(packages = it.value("--packages").split(',').map(String::trim).filter(String::isNotEmpty))
             "--all" -> options = options.copy(all = true)
             "--lang" -> options = options.copy(lang = it.value("--lang"))
@@ -249,13 +271,59 @@ private fun harness(args: List<String>): Int {
             }
         }
     }
+    val runs = try {
+        harnessRuns(options, stores)
+    } catch (e: IllegalArgumentException) {
+        System.err.println("${e.message}\n\n$USAGE")
+        return 2
+    }
     // A separate profile, so the harness never touches the user's library or trusted extensions
     val dirs = harnessDirs()
     val lock = lockHarness(dirs) ?: return 1
     try {
-        return runHarness(dirs, options, wiring)
+        return runHarness(dirs, runs, wiring, doh)
     } finally {
         lock.close()
+    }
+}
+
+/** The provider number for a `--doh` name (the settings' providers, or `off`); null for an unknown name. */
+internal fun harnessDohProvider(name: String): Int? = when (name.trim().lowercase()) {
+    "off", "none" -> -1
+    "cloudflare" -> PREF_DOH_CLOUDFLARE
+    "google" -> PREF_DOH_GOOGLE
+    "adguard" -> PREF_DOH_ADGUARD
+    "quad9" -> PREF_DOH_QUAD9
+    "alidns" -> PREF_DOH_ALIDNS
+    "dnspod" -> PREF_DOH_DNSPOD
+    "360" -> PREF_DOH_360
+    "mullvad" -> PREF_DOH_MULLVAD
+    "controld" -> PREF_DOH_CONTROLD
+    "njalla" -> PREF_DOH_NJALLA
+    else -> null
+}
+
+/**
+ * One harness run per store: each `--store` (a sample store's name or a URL), or both sample stores
+ * when none is given. A sample store brings its own sample and drift guard. Over several stores each
+ * store tests only the `--packages` it lists, so a package of one store is not a failure of another.
+ */
+internal fun harnessRuns(options: CompatibilityHarness.Options, stores: List<String>): List<CompatibilityHarness.Options> {
+    val samples = if (stores.isEmpty()) {
+        CompatibilityHarness.SAMPLE_STORES.map { it.id }
+    } else {
+        stores.distinct()
+    }
+    return samples.map { store ->
+        val sample = CompatibilityHarness.SAMPLE_STORES.firstOrNull { it.id == store || it.url == store }
+        require(sample != null || "://" in store) { "Unknown store \"$store\": give keiyoushi, yuzono or a URL" }
+        val url = sample?.url ?: store
+        options.copy(
+            storeUrl = url,
+            storeId = CompatibilityHarness.storeId(url),
+            skipMissing = samples.size > 1,
+            minExtensions = sample?.minExtensions ?: 0,
+        )
     }
 }
 
@@ -269,21 +337,54 @@ internal fun lockHarness(dirs: ZoukanDirs): AutoCloseable? =
         null
     }
 
-private fun runHarness(dirs: ZoukanDirs, options: CompatibilityHarness.Options, wiring: Boolean): Int {
-    ZoukanRuntime.start(dirs, interactiveBrowser = options.interactive)
+private fun runHarness(dirs: ZoukanDirs, runs: List<CompatibilityHarness.Options>, wiring: Boolean, doh: Int?): Int {
+    ZoukanRuntime.start(dirs, interactiveBrowser = runs.any { it.interactive })
+    // Before NetworkHelper and the browser read it. The harness has its own profile, so this never
+    // changes the user's setting
+    val dohPreference = Injekt.get<NetworkPreferences>().dohProvider()
+    doh?.let(dohPreference::set)
+    println("DNS over HTTPS: ${dohProviderUrl(dohPreference.get()) ?: "off (system DNS)"}")
+    // NetworkHelper first, so the cookie store and Chromium hooks are in place
+    Injekt.get<NetworkHelper>()
+    // Every store runs, and each writes its own report, even when an earlier one failed
+    val results = runs.map { options ->
+        println("Store ${options.storeId}: ${options.storeUrl}")
+        runCatching { runHarnessOn(dirs, options, wiring) }
+            .onFailure { System.err.println("Store ${options.storeId} failed: ${CompatibilityHarness.describe(it)}") }
+    }
+    // Over several stores, a package that none of them lists is still a mistake
+    val requested = runs.first().packages
+    if (runs.size > 1 && requested.isNotEmpty()) {
+        val found = results.flatMap { it.getOrNull()?.second.orEmpty() }.toSet()
+        val missing = requested.map { it.removePrefix("eu.kanade.tachiyomi.extension.") }.filter { it !in found }
+        if (missing.isNotEmpty()) {
+            System.err.println("Not in any store: ${missing.joinToString()}")
+            return 1
+        }
+    }
+    return results.maxOf { result -> result.fold(onSuccess = { it.first }, onFailure = { 1 }) }
+}
+
+/** Runs one store; returns the exit code and the packages it tested. */
+private fun runHarnessOn(dirs: ZoukanDirs, options: CompatibilityHarness.Options, wiring: Boolean): Pair<Int, List<String>> {
     if (wiring) {
-        Injekt.get<NetworkHelper>()
         val check = ExtensionWiringCheck(
             dirs = dirs,
             storeService = Injekt.get<ExtensionStoreService>(),
             installer = Injekt.get<DesktopExtensionInstaller>(),
             loader = Injekt.get<DesktopExtensionLoader>(),
-            options = ExtensionWiringCheck.Options(options.storeUrl, options.packages, options.skipNsfw),
+            options = ExtensionWiringCheck.Options(
+                storeUrl = options.storeUrl,
+                storeId = options.storeId,
+                packages = options.packages,
+                skipNsfw = options.skipNsfw,
+                minExtensions = options.minExtensions,
+            ),
         )
         val (report, rows) = check.run()
         report.save(check.reportFile())
         println("\nReport saved to ${check.reportFile()}")
-        return wiringExitCode(rows)
+        return wiringExitCode(rows) to rows.map { it.pkg }
     }
     val harness = CompatibilityHarness(
         dirs = dirs,
@@ -292,18 +393,16 @@ private fun runHarness(dirs: ZoukanDirs, options: CompatibilityHarness.Options, 
         loader = Injekt.get<DesktopExtensionLoader>(),
         options = options,
     )
-    // NetworkHelper first, so the cookie store and Chromium hooks are in place
-    Injekt.get<NetworkHelper>()
     val (report, rows) = harness.run()
     val name = buildString {
-        append("extensions")
+        append("extensions-").append(options.storeId)
         if (options.forceApk) append("-apk")
         append("-").append(Platform.id)
     }
     val file = File(dirs.reports, "$name.md")
     report.save(file)
     println("\nReport saved to $file")
-    return harnessExitCode(rows)
+    return harnessExitCode(rows) to rows.map { it.pkg }
 }
 
 /** 1 when an extension failed to load or an app API it needs is missing; 0 for a clean run. */

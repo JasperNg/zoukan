@@ -194,9 +194,35 @@ jobs:
             desktop/build/test-results/
           if-no-files-found: ignore
 
+  button-crawl:
+    name: Button crawl (shard ${{ matrix.shard }}/4)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: ./.github/actions/setup-zoukan
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      - run: xvfb-run -a ./gradlew :desktop:buttonCrawlTest -Pzoukan.shard=${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: button-crawl-${{ matrix.shard }}
+          path: |
+            desktop/build/reports/coverage/buttons.md
+            desktop/build/reports/tests/
+            desktop/build/test-results/
+          if-no-files-found: ignore
+
   pr-gate:
     name: PR gate
-    needs: [changes, spotless, unit, wiring, journeys]
+    needs: [changes, spotless, unit, wiring, journeys, button-crawl]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

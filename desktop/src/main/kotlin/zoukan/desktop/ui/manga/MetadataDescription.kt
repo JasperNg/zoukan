@@ -59,7 +59,6 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.SourceTags
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.onRightClick
-import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.time.Instant
 import java.time.ZoneId
@@ -298,7 +297,7 @@ fun NamespaceTags(meta: RaisedSearchMetadata, sourceId: Long, search: EntryInfoS
 private val SmallPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp)
 
 fun copyToClipboard(text: String) {
-    runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) }
+    runCatching { zoukan.desktop.app.SystemEffects.current.copy(StringSelection(text)) }
         .onSuccess { Toasts.show(localized(MR.strings.copied_to_clipboard, text.take(50))) }
 }
 

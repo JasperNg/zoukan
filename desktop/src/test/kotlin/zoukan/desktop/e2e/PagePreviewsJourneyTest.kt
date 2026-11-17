@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.doubles.shouldBeLessThan
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import kotlinx.coroutines.runBlocking
@@ -30,8 +31,8 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * The entry screen's page previews and related titles, with the fixture source serving both:
  * the thumbnails draw from the server, clicking the third opens the reader at page 3, More
- * previews lists them all, a related title opens its own entry, and a thumbnail whose image is
- * corrupt draws nothing while the others do.
+ * previews lists them all, the related titles come from the source only and one opens its own
+ * entry, and a thumbnail whose image is corrupt draws nothing while the others do.
  *
  *   ./gradlew :desktop:journeyTest --tests "*PagePreviewsJourneyTest"
  */
@@ -102,10 +103,16 @@ class PagePreviewsJourneyTest {
                     waitFor(hasText("Related titles"))
                 }
 
-                step("The related titles are two other titles; opening one opens its entry") {
+                step("The related titles are two other titles from the source; opening one opens its entry") {
                     onAllNodesWithText("Related titles").onFirst().performScrollTo()
                     waitFor(hasText("Fixture Second"))
                     waitFor(hasText("Fixture Third"))
+                    // Every path of the app's lookup has answered and the row shows all it got
+                    waitOrDump("for the related-titles lookup to finish") { entrySource.relatedLookups.get() > 0 }
+                    waitForIdle()
+                    // From the source only. The app's search for the title's words ("fixture") would
+                    // also bring the search-only title below, which the source does not relate
+                    onAllNodesWithText(FixtureCatalog.MISSING_COVER_TITLE).fetchSemanticsNodes() shouldHaveSize 0
                     shot("4-related")
                     onAllNodesWithText("Fixture Third").onFirst().performClick()
                     // Its own entry: its description, not the first title's

@@ -504,6 +504,16 @@
     <string name="cleanup_done_removed_1_folder">Cleanup done. Removed 1 folder</string>
     <string name="cleanup_done_removed_folders">Cleanup done. Removed %1$s folders</string>
     <string name="cleaning_up_downloads_failed">Cleaning up downloads failed</string>
+    <string name="cleanup_preview_title">Delete these downloads?</string>
+    <string name="cleanup_preview_unfinished">Unfinished downloads: %1$s (%2$s)</string>
+    <string name="cleanup_preview_read">Read chapters: %1$s (%2$s)</string>
+    <string name="cleanup_preview_not_in_library">Chapters of entries not in the library: %1$s (%2$s)</string>
+    <string name="cleanup_preview_orphans">Folders of no entry in the database. They may belong to the Android app or be copied in by hand: tick only those you want deleted.</string>
+    <string name="cleanup_preview_nothing">Nothing to clean up</string>
+    <string name="cleanup_preview_trash">Deleted files go to the system trash.</string>
+    <string name="cleanup_preview_permanent">The system trash is not available here: deleted files cannot be recovered.</string>
+    <string name="cleanup_preview_keeps_unknown">Files that are not a chapter of the entry are never deleted.</string>
+    <string name="cleanup_finding">Finding downloads to clean up…</string>
     <string name="non_library_entries_in_database">%1$s non-library entries in database</string>
     <string name="youre_about_to_remove_entries_from">You\'re about to remove entries from the database</string>
     <string name="excluded_sources">Excluded sources</string>
@@ -930,6 +940,11 @@
     <string name="a_zoukan_command_is_using_the_data_folder">\"zoukan %1$s\" is using the data folder. Wait for it to finish, or stop it, then open Zoukan again.</string>
     <string name="backup_file_and_date">%1$s, saved %2$s</string>
     <string name="secret_store_unavailable">Zoukan could not read its keys in %1$s. If you denied access, start Zoukan again and allow it; nothing was changed.</string>
+    <string name="storage_folder_unavailable">The storage folder %1$s is not available. Connect the drive, or choose another folder in Settings &gt; Data and storage. Nothing is saved there until then.</string>
+    <string name="database_key_missing">The database %1$s exists but its key is not in the secret store. It cannot be opened; restore a backup into a new database.</string>
+    <string name="database_journal_without_key">The database %1$s is empty, but its journal files (-wal, -shm) are still there and its key is not in the secret store. Zoukan did not open it, so nothing was changed. Move these files to another folder, then start Zoukan again.</string>
+    <string name="database_too_new">The database %1$s was made by a newer version of Zoukan (database version %2$s; this version reads up to %3$s). Update Zoukan to open it; the file was not changed.</string>
+    <string name="database_copy_failed">Zoukan could not save a copy of the database before updating it: %1$s. The database was not changed. Free some disk space, then start Zoukan again.</string>
     <string name="screen_action_failed_mark_read">Marking as read failed</string>
     <string name="screen_action_failed_set_categories">Changing the categories failed</string>
     <string name="screen_action_failed_remove_from_library">Removing from the library failed</string>
@@ -938,4 +953,9 @@
     <string name="screen_action_failed_add_to_library">Adding to the library failed</string>
     <string name="screen_action_failed_bookmark">Changing the bookmark failed</string>
     <string name="screen_action_failed_remove_store">Removing the extension store failed</string>
+    <string name="safety_backup_failed_title">Safety backup failed</string>
+    <string name="safety_backup_failed_text">Zoukan could not save a backup of the library before this change, so it cannot be undone with Restore backup.\n\n%1$s\n\nContinue without a backup?</string>
+    <string name="continue_without_backup">Continue without a backup</string>
+    <string name="saving_safety_backup">Saving a safety backup…</string>
+    <string name="sync_skipped_no_safety_backup">Sync did not change the library because a safety backup could not be saved first: %1$s</string>
 </resources>

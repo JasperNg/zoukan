@@ -125,6 +125,9 @@ class MigrationJourneyTest {
                     // The target's details and chapter list came over HTTP
                     server.requests.count { it.startsWith("/manga/") } shouldBeGreaterThan detailRequests
                     server.requests shouldContain "/manga/formats"
+                    // One safety backup for the batch, in the data folder, before anything moved
+                    zoukan.desktop.backup.SafetySnapshot.folder(dirs).listFiles().orEmpty()
+                        .count { it.name.startsWith("safety_migration_") } shouldBe 1
                     waitOrDump("for the library to list both entries", 10_000) {
                         onAllNodesWithTag("manga-item").fetchSemanticsNodes().size == 2
                     }

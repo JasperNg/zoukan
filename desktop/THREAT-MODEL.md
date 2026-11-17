@@ -186,7 +186,8 @@ Verified and trusted:
 | Control | Where |
 |---|---|
 | Database always encrypted (SQLCipher 4 scheme, SQLite3MultipleCiphers) under a random 256-bit raw key | `desktop/.../db/DesktopDatabase.kt` (`createDriver`, `properties`) |
-| The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed) | `DesktopDatabase.databaseKey`, `KeyMissingException` |
+| The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed), as does an empty database file whose `-wal` or `-shm` is still there; a secret store error stops start-up before any key is made | `DesktopDatabase.databaseKey`, `KeyMissingException`, `JournalWithoutKeyException` |
+| The copy made before a schema migration (`zoukan.db.pre-v<N>`, with its `-wal` if any, beside the database) is a byte copy, so it is encrypted with the same key; only the latest is kept. A database from a newer build is refused before anything writes to it | `DesktopDatabase.copyBeforeMigration`, `TooNewException` |
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |
 | Windows: Credential Manager generic credentials, per-user, non-roaming; macOS: login Keychain generic passwords | `desktop/.../secrets/WindowsCredentialStore.kt`, `MacKeychainStore.kt` |
 | The app's cookie store (`java.net.CookieManager`, what OkHttp and the sources use) writes only cookies with an expiry, to `cookies.json`, encrypted with `FileCipher`; session cookies stay in memory. It is synced with Chromium's cookies while a browser window is open. Chromium does not persist session cookies either (`persist_session_cookies = false`) | `desktop/.../network/PersistentCookieStore.kt`, `android-compat/.../webkit/CefCookieSync.kt`, `desktop/.../browser/JcefRuntime.kt` (`applySettings`) |
@@ -220,6 +221,12 @@ Residual risk:
    folder (a cloud drive, a NAS, another user with access) can read the library and reading
    history that the database encryption protects. Users who keep storage on a shared folder can
    switch automatic backups off. Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
+   **Safety backups** (written before a restore, a data sync that changes the library, Clear
+   database, a migration and Clear manga's chapter removal) are the same unencrypted format with
+   the same default choices (no private settings), but go to `backups/safety` inside the app's
+   data folder, never the storage folder, so they are not on a shared or cloud folder; the newest
+   five of each kind are kept. Anyone who can read the data folder can read them, as with the
+   logs (residual risk 5). Code: `desktop/.../backup/SafetySnapshot.kt`.
 5. **Logs and crash reports are plain text.** `logs/` holds the rolling log (4 files of 5 MB) and
    `crashes/` holds crash and error reports (the stack trace and the end of the log, with sign-in
    codes, tokens and passwords redacted) and copies of JVM crash files (without environment

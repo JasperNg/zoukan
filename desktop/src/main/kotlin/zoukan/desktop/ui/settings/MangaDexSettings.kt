@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.settings
 
+import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -208,7 +209,7 @@ private fun SyncFollowsDialog(onDismiss: () -> Unit, onConfirm: (Set<String>) ->
             Column(Modifier.fillMaxWidth()) {
                 followOptions.forEachIndexed { index, option ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { selection[index] = !selection[index] },
+                        Modifier.fillMaxWidth().checkRow(selection[index]) { selection[index] = it },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = selection[index], onCheckedChange = null)

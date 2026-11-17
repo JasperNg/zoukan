@@ -52,7 +52,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -228,7 +227,6 @@ object UpcomingScreen : Screen {
         val model = rememberScreenModel { UpcomingScreenModel() }
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
-        val uriHandler = LocalUriHandler.current
         val scope = rememberCoroutineScope()
         val listState = rememberLazyListState()
 
@@ -256,7 +254,8 @@ object UpcomingScreen : Screen {
                     }
                 }
                 TooltipIconButton(Icons.AutoMirrored.Outlined.HelpOutline, localized(DMR.strings.upcoming_guide), onClick = {
-                    runCatching { uriHandler.openUri(Constants.URL_HELP_UPCOMING) }
+                    runCatching { zoukan.desktop.app.ExternalLinks.browse(Constants.URL_HELP_UPCOMING) }
+                        .onFailure { zoukan.desktop.app.Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
                 })
             }
             if (loading) {
