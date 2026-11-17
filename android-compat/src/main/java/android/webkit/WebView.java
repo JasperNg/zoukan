@@ -1281,38 +1281,6 @@ public class WebView extends AbsoluteLayout
         mProvider.getViewDelegate().onWindowVisibilityChanged(visibility);
     }
 
-    // ZOUKAN -->
-    // Extensions keep a hidden WebView rendering by moving it offscreen and telling it its window is
-    // visible. The desktop WebView is headless and always runs, so these only record the values;
-    // View's own versions are stubs that throw.
-    private float mTranslationX;
-    private float mTranslationY;
-
-    @Override
-    public void dispatchWindowVisibilityChanged(int visibility) {
-    }
-
-    @Override
-    public float getTranslationX() {
-        return mTranslationX;
-    }
-
-    @Override
-    public void setTranslationX(float translationX) {
-        mTranslationX = translationX;
-    }
-
-    @Override
-    public float getTranslationY() {
-        return mTranslationY;
-    }
-
-    @Override
-    public void setTranslationY(float translationY) {
-        mTranslationY = translationY;
-    }
-    // ZOUKAN <--
-
     @Override
     protected void onDraw(Canvas canvas) {
         mProvider.getViewDelegate().onDraw(canvas);

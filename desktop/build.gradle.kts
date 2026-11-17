@@ -581,8 +581,8 @@ tasks.register<UsabilityReport>("usabilityReport") {
 // Installs every extension of each sample store and checks it is wired up on the desktop: no
 // class, method or field its bytecode uses is missing or a stub, its Injekt lookups resolve, its
 // sources, client, headers and settings work (ExtensionWiringCheck). The stores are
-// SampleStores.ALL (in the tests; the app names no store): Keiyoushi, and yuzono's "Cursed" store, which only the tests
-// use (the app does not add or trust it). Each store runs in a Test task and JVM of its own
+// SampleStores.ALL, which only the tests define (the app names no store): Keiyoushi, and yuzono's
+// "Cursed" store, which the app does not add or trust. HarnessRunsTest checks this list matches. Each store runs in a Test task and JVM of its own
 // (extensionWiringTest<Store>), one after the other: Keiyoushi alone needs a 4 GB heap. It downloads
 // every extension, so it is not part of `check`; the nightly check runs it. The reports go to
 // build/reports/e2e/extensions-wiring-<store>.md. -Pzoukan.e2e.stores=yuzono picks the stores and

@@ -3050,7 +3050,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public void dispatchWindowVisibilityChanged(@Visibility int visibility) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // Extensions tell a hidden WebView its window is visible so it keeps rendering. Desktop views
+        // are never shown, so there is nothing to dispatch.
+        // ZOUKAN <--
     }
 
     protected void onWindowVisibilityChanged(@Visibility int visibility) {
@@ -3569,31 +3572,39 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         throw new RuntimeException("Stub!");
     }
 
+    // ZOUKAN -->
+    // Extensions move a hidden WebView offscreen with these; desktop views are never drawn, so the
+    // values are only recorded.
+    private float mTranslationX;
+    private float mTranslationY;
+    private float mTranslationZ;
+    // ZOUKAN <--
+
     @ViewDebug.ExportedProperty(category = "drawing")
     public float getTranslationX() {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ return mTranslationX; /* ZOUKAN <-- */
     }
 
     public void setTranslationX(float translationX) {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ mTranslationX = translationX; /* ZOUKAN <-- */
     }
 
     @ViewDebug.ExportedProperty(category = "drawing")
     public float getTranslationY() {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ return mTranslationY; /* ZOUKAN <-- */
     }
 
     public void setTranslationY(float translationY) {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ mTranslationY = translationY; /* ZOUKAN <-- */
     }
 
     @ViewDebug.ExportedProperty(category = "drawing")
     public float getTranslationZ() {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ return mTranslationZ; /* ZOUKAN <-- */
     }
 
     public void setTranslationZ(float translationZ) {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ mTranslationZ = translationZ; /* ZOUKAN <-- */
     }
 
     public void setAnimationMatrix(@Nullable Matrix matrix) {

@@ -50,6 +50,9 @@ class GraphicsCompatTest {
         p.negate()
         Point(p) shouldBe Point(-4, 3)
         Point().apply { set(7, 8) }.toString() shouldBe "Point(7, 8)"
+        Point(1, 2).hashCode() shouldBe Point(1, 2).hashCode()
+        // As on Android: copying null is a programming error, not (0, 0)
+        shouldThrow<NullPointerException> { Point(null as Point?) }
     }
 
     @Test

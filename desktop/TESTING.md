@@ -582,7 +582,7 @@ ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
 `extensionWiringTest` downloads every extension of two stores, so it runs only in `nightlyCheck`
 and `longChecks` (on Windows before each merge to master). The stores are `SampleStores.ALL`, defined in the tests only (the app names no store): Keiyoushi (about 1,700
 extensions) and yuzono's "Cursed" store (six NSFW extensions with their own signing key). Only the
-tests and the harness use the yuzono store; the app does not add or trust it. Each store runs in a
+tests use the yuzono store; the app does not add or trust it. Each store runs in a
 test task and JVM of its own (`extensionWiringTestKeiyoushi`, `extensionWiringTestYuzono`), one
 after the other, and writes its own report:
 `desktop/build/reports/e2e/extensions-wiring-<store>.md`. A store that lists far fewer extensions
@@ -599,10 +599,11 @@ index is a stub.
 ```
 
 The live harness (`./gradlew :desktop:run --args="harness --store <url>"`) is part of the app, so
-it names no store: `--store` takes a store's index URL and is required (repeatable). The test
-presets in `SampleStores` (Keiyoushi's 30 extensions, all six of yuzono's) are for the tests; with a
-plain URL the harness tests `CompatibilityHarness.DEFAULT_PACKAGES` unless `--packages` or `--all`
-says otherwise. Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile. Over
+it names no store: `--store` takes a store's index URL and is required (repeatable). It tests
+`CompatibilityHarness.DEFAULT_PACKAGES` unless `--packages` or `--all` says otherwise, and has no
+minimum-size check (`SampleStores` in the tests holds the stores' URLs and minimum sizes).
+Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile, where
+`<store>` is the URL's GitHub owner or host (`owner-2` and so on for a second store of the same owner). Over
 several stores, a `--packages` entry is tested in the stores that list it, and fails the run only
 when no store lists it.
 

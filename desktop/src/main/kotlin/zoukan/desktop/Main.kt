@@ -304,30 +304,23 @@ internal fun harnessDohProvider(name: String): Int? = when (name.trim().lowercas
 }
 
 /**
- * One harness run per store: each `--store` (a URL, or the id or URL of one of [presets]), or every
- * preset when no `--store` is given. The app ships no presets and names no store, so the command
- * line needs `--store <url>`; the tests pass theirs. A preset brings its own sample and drift
- * guard. Over several stores each store tests only the `--packages` it lists, so a package of one
- * store is not a failure of another.
+ * One harness run per `--store` URL. The app names no store, so at least one URL is required. Each
+ * run's report and trace files are named by [CompatibilityHarness.storeId] of its URL, made unique
+ * (`owner`, `owner-2`, ...) so two stores of one owner or host never overwrite each other's files.
+ * Over several stores each store tests only the `--packages` it lists, so a package of one store is
+ * not a failure of another.
  */
-internal fun harnessRuns(
-    options: CompatibilityHarness.Options,
-    stores: List<String>,
-    presets: List<CompatibilityHarness.SampleStore> = emptyList(),
-): List<CompatibilityHarness.Options> {
-    val wanted = stores.ifEmpty { presets.map { it.id } }.distinct()
-    require(wanted.isNotEmpty()) { "Give the store to test: --store <url>" }
-    return wanted.map { store ->
-        val preset = presets.firstOrNull { it.id == store || it.url == store }
-        require(preset != null || "://" in store) { "Unknown store \"$store\": give its URL" }
-        val url = preset?.url ?: store
-        options.copy(
-            storeUrl = url,
-            storeId = preset?.id ?: CompatibilityHarness.storeId(url),
-            skipMissing = wanted.size > 1,
-            minExtensions = preset?.minExtensions ?: 0,
-            sample = preset?.packages.orEmpty(),
-        )
+internal fun harnessRuns(options: CompatibilityHarness.Options, stores: List<String>): List<CompatibilityHarness.Options> {
+    val urls = stores.distinct()
+    require(urls.isNotEmpty()) { "Give the store to test: --store <url>" }
+    urls.firstOrNull { "://" !in it }?.let { throw IllegalArgumentException("Unknown store \"$it\": give its URL") }
+    val used = mutableSetOf<String>()
+    return urls.map { url ->
+        val base = CompatibilityHarness.storeId(url)
+        var id = base
+        var n = 1
+        while (!used.add(id)) id = "$base-${++n}"
+        options.copy(storeUrl = url, storeId = id, skipMissing = urls.size > 1)
     }
 }
 

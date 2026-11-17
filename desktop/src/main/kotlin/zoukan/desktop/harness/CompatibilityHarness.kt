@@ -44,10 +44,8 @@ class CompatibilityHarness(
     data class Options(
         /** The store's index URL. The app names no store: the caller passes one. */
         val storeUrl: String = "",
-        /** Names the store in the report and trace files: a [SampleStore.id], or [storeId] of the URL. */
+        /** Names the store in the report and trace files: [storeId] of the URL, unless the caller names it. */
         val storeId: String = "store",
-        /** The extensions to test when [packages] is empty and [all] is off: a [SampleStore]'s, else [DEFAULT_PACKAGES]. */
-        val sample: List<String> = emptyList(),
         /** Package names, with or without the eu.kanade.tachiyomi.extension. prefix. Empty means the defaults. */
         val packages: List<String> = emptyList(),
         /**
@@ -115,6 +113,7 @@ class CompatibilityHarness(
         traces.parentFile.mkdirs()
         traces.writeText("")
         val report = Report("Zoukan extension compatibility")
+        require(options.storeUrl.isNotBlank()) { "No store URL: the app names no store, so the caller must give one" }
         val store = storeService.fetch(options.storeUrl).getOrThrow()
         val available = storeService.getExtensions(store).getOrThrow()
         checkStoreSize(options.storeUrl, available.size, options.minExtensions)
@@ -130,7 +129,7 @@ class CompatibilityHarness(
         val wanted = when {
             options.all -> available.filterNot { options.skipNsfw && it.isNsfw }.map { it.pkgName }
             options.packages.isNotEmpty() -> options.packages.map { it.withPrefix() }
-            else -> options.sample.ifEmpty { DEFAULT_PACKAGES }
+            else -> DEFAULT_PACKAGES
         }.filter { pkg -> !options.skipMissing || available.any { it.pkgName == pkg } }
         // Each extension runs on a worker of its own: withTimeout fires only where a coroutine
         // suspends, so a source blocked in a network read (an Rx source in OkHttp's execute(), a
@@ -349,13 +348,6 @@ class CompatibilityHarness(
     }
 
     private fun String.withPrefix() = if (startsWith(PREFIX)) this else PREFIX + this
-
-    /**
-     * A store the harness and the wiring check test, with its sample of extensions for the live
-     * run and the fewest extensions it should list (fewer means the store moved or was emptied).
-     * The app ships none: the tests define theirs.
-     */
-    data class SampleStore(val id: String, val url: String, val packages: List<String>, val minExtensions: Int)
 
     companion object {
         private const val PREFIX = "eu.kanade.tachiyomi.extension."

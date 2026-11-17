@@ -18,10 +18,8 @@ public class Point implements Parcelable {
     }
 
     public Point(Point src) {
-        if (src != null) {
-            x = src.x;
-            y = src.y;
-        }
+        this.x = src.x;
+        this.y = src.y;
     }
 
     public void set(int x, int y) {
@@ -46,9 +44,10 @@ public class Point implements Parcelable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Point)) return false;
+        if (o == null || getClass() != o.getClass()) return false;
         Point p = (Point) o;
-        return x == p.x && y == p.y;
+        if (x != p.x) return false;
+        return y == p.y;
     }
 
     @Override

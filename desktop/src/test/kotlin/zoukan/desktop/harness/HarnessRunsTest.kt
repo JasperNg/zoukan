@@ -8,6 +8,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import mihon.data.extension.service.ExtensionStoreService
@@ -22,26 +23,47 @@ import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
 import java.io.File
 
-/** The harness and the wiring check run per store: each sample store with its sample, report name and drift guard. */
-class SampleStoresTest {
+/** The harness runs once per store URL, with its own report name; the app itself names no store. */
+class HarnessRunsTest {
 
     @TempDir
     lateinit var temp: File
 
+    private val url = "https://example.org/repo.json"
+
     @Test
-    fun `with no --store the harness runs every preset, skipping packages a store does not list`() {
-        val runs = harnessRuns(CompatibilityHarness.Options(packages = listOf("en.mangapill")), emptyList(), SampleStores.ALL)
-        runs.map { it.storeId } shouldContainExactly listOf("keiyoushi", "yuzono")
-        runs.map { it.storeUrl } shouldContainExactly SampleStores.ALL.map { it.url }
-        runs.all { it.skipMissing } shouldBe true
-        runs.map { it.minExtensions } shouldContainExactly listOf(1000, 1)
-        runs.map { it.sample } shouldContainExactly SampleStores.ALL.map { it.packages }
+    fun `with no --store the harness refuses to run, since the app names no store`() {
+        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), emptyList()) }
+            .message!! shouldContain "--store <url>"
     }
 
     @Test
-    fun `the command line has no presets, so it needs --store`() {
-        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), emptyList()) }
-            .message!! shouldContain "--store <url>"
+    fun `a store name is a usage error, only URLs are taken`() {
+        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), listOf("some-store")) }
+            .message!! shouldContain "give its URL"
+    }
+
+    @Test
+    fun `one --store keeps a missing package a failure and gets a name from its GitHub owner`() {
+        val run = harnessRuns(CompatibilityHarness.Options(), listOf("https://raw.githubusercontent.com/some-one/repo/repo/repo.json")).single()
+        run.storeId shouldBe "some-one"
+        run.skipMissing shouldBe false
+        run.minExtensions shouldBe 0
+    }
+
+    @Test
+    fun `stores of one owner get distinct report names, so their reports never overwrite each other`() {
+        val runs = harnessRuns(
+            CompatibilityHarness.Options(packages = listOf("en.mangapill")),
+            listOf(
+                "https://raw.githubusercontent.com/some-one/a/repo/repo.json",
+                "https://raw.githubusercontent.com/some-one/b/repo/repo.json",
+                "https://raw.githubusercontent.com/some-one/a/repo/repo.json",
+                "https://example.org/x/repo.json",
+            ),
+        )
+        runs.map { it.storeId } shouldContainExactly listOf("some-one", "some-one-2", "example.org")
+        runs.all { it.skipMissing } shouldBe true
     }
 
     @Test
@@ -58,32 +80,27 @@ class SampleStoresTest {
     }
 
     @Test
-    fun `one --store keeps a missing package a failure`() {
-        val run = harnessRuns(CompatibilityHarness.Options(), listOf("yuzono"), SampleStores.ALL).single()
-        run.storeUrl shouldBe SampleStores.YUZONO.url
-        run.skipMissing shouldBe false
+    fun `a harness without a store URL fails before it fetches anything`() {
+        val (service, _) = storeWith("en.a")
+        val harness = CompatibilityHarness(
+            dirs = ZoukanDirs(temp),
+            storeService = service,
+            installer = mockk<DesktopExtensionInstaller>(),
+            loader = mockk<DesktopExtensionLoader>(),
+            options = CompatibilityHarness.Options(packages = listOf("en.a"), offline = true),
+        )
+        assertThrows<IllegalArgumentException> { harness.run() }
+        coVerify(exactly = 0) { service.fetch(any()) }
     }
 
     @Test
-    fun `a store URL gets a name from its GitHub owner and no drift guard`() {
-        val run = harnessRuns(CompatibilityHarness.Options(), listOf("https://raw.githubusercontent.com/some-one/repo/repo/repo.json")).single()
-        run.storeId shouldBe "some-one"
-        run.minExtensions shouldBe 0
-        run.sample shouldBe emptyList()
-    }
-
-    @Test
-    fun `an unknown store name is a usage error`() {
-        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), listOf("nope"), SampleStores.ALL) }
-        // Without the presets a store's name means nothing
-        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), listOf("yuzono")) }
-    }
-
-    @Test
-    fun `the Keiyoushi sample is the default sample plus ten, and the yuzono sample is its six extensions`() {
-        SampleStores.KEIYOUSHI.packages.size shouldBe 30
-        SampleStores.KEIYOUSHI.packages.take(20) shouldContainExactly CompatibilityHarness.DEFAULT_PACKAGES
-        SampleStores.YUZONO.packages.size shouldBe 6
+    fun `every test store has a wiring test task, and the other way round`() {
+        val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
+        val tasks = Regex("""val extensionWiringStores = listOf\(([^)]*)\)""")
+            .find(File(root, "desktop/build.gradle.kts").readText())!!.groupValues[1]
+            .split(',').map { it.trim().removeSurrounding("\"") }
+        tasks shouldContainExactly SampleStores.ALL.map { it.id }
+        SampleStores.ALL.map { it.url }.distinct().size shouldBe SampleStores.ALL.size
     }
 
     @Test
@@ -94,7 +111,7 @@ class SampleStoresTest {
             storeService = service,
             installer = mockk<DesktopExtensionInstaller>(),
             loader = mockk<DesktopExtensionLoader>(),
-            options = CompatibilityHarness.Options(packages = listOf("en.a"), offline = true, minExtensions = 1000),
+            options = CompatibilityHarness.Options(storeUrl = url, packages = listOf("en.a"), offline = true, minExtensions = 1000),
         )
         assertThrows<IllegalStateException> { harness.run() }.message!! shouldContain "lists 1 extensions, expected at least 1000"
     }
@@ -107,7 +124,7 @@ class SampleStoresTest {
             storeService = service,
             installer = mockk<DesktopExtensionInstaller>(),
             loader = mockk<DesktopExtensionLoader>(),
-            options = CompatibilityHarness.Options(packages = listOf("en.elsewhere"), offline = true, skipMissing = true),
+            options = CompatibilityHarness.Options(storeUrl = url, packages = listOf("en.elsewhere"), offline = true, skipMissing = true),
         )
         harness.run().second shouldBe emptyList()
     }
@@ -120,7 +137,7 @@ class SampleStoresTest {
             storeService = service,
             installer = mockk<DesktopExtensionInstaller>(),
             loader = mockk<DesktopExtensionLoader>(),
-            options = CompatibilityHarness.Options(packages = listOf("en.elsewhere"), offline = true),
+            options = CompatibilityHarness.Options(storeUrl = url, packages = listOf("en.elsewhere"), offline = true),
         )
         harness.run().second.single().error shouldBe "not in store"
     }

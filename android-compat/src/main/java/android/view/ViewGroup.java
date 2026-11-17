@@ -418,7 +418,13 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     @Override
     public void dispatchWindowVisibilityChanged(int visibility) {
-        throw new RuntimeException("Stub!");
+        // ZOUKAN -->
+        // As AOSP: the group, then each child (View's version records nothing on desktop)
+        super.dispatchWindowVisibilityChanged(visibility);
+        for (int i = 0; i < getChildCount(); i++) {
+            getChildAt(i).dispatchWindowVisibilityChanged(visibility);
+        }
+        // ZOUKAN <--
     }
 
     @Override

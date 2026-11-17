@@ -1,22 +1,18 @@
 package zoukan.desktop.harness
 
-import zoukan.desktop.harness.CompatibilityHarness.Companion.DEFAULT_PACKAGES
-import zoukan.desktop.harness.CompatibilityHarness.SampleStore
-
 /**
- * The real stores the harness tests and the extension wiring check run over. They live in the
- * tests only: the app names no store and ships no store URL.
+ * The real stores the extension wiring check and the live tests download from. They live in the
+ * tests only: the app names no store and ships no store URL. Each [id] must match a store in
+ * `extensionWiringStores` in desktop/build.gradle.kts, which runs one test task per store.
  */
 object SampleStores {
-    private const val PREFIX = "eu.kanade.tachiyomi.extension."
+
+    /** A store and the fewest extensions it should list (fewer means it moved or was emptied). */
+    data class SampleStore(val id: String, val url: String, val minExtensions: Int)
 
     val KEIYOUSHI = SampleStore(
         id = "keiyoushi",
         url = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json",
-        packages = DEFAULT_PACKAGES + listOf(
-            "all.cubari", "all.namicomi", "all.globalcomix", "all.mangatoon", "all.mangataro", "en.mangafox",
-            "en.manhuaplus", "en.rizzcomic", "en.thunderscans", "en.drakescans",
-        ).map { PREFIX + it },
         minExtensions = 1000,
     )
 
@@ -28,17 +24,8 @@ object SampleStores {
     val YUZONO = SampleStore(
         id = "yuzono",
         url = "https://raw.githubusercontent.com/yuzono/cursed-manga-repo/repo/repo.json",
-        packages = listOf(
-            "all.ehentai",
-            "all.hitomi",
-            "all.nhentai",
-            "all.pururin",
-            "en.hentai20",
-            "en.hentai2read",
-        ).map { PREFIX + it },
         minExtensions = 1,
     )
 
-    /** The stores the wiring check runs over, each on its own. */
     val ALL = listOf(KEIYOUSHI, YUZONO)
 }

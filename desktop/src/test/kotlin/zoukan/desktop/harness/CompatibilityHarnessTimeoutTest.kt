@@ -106,7 +106,7 @@ class CompatibilityHarnessTimeoutTest {
             storeService = storeService,
             installer = installer,
             loader = loader,
-            options = CompatibilityHarness.Options(packages = listOf("en.blocking", "en.fine")),
+            options = CompatibilityHarness.Options(storeUrl = "https://example.org/repo.json", packages = listOf("en.blocking", "en.fine")),
             stepTimeout = 1.seconds,
         )
         val (_, rows) = harness.run()
@@ -152,7 +152,7 @@ class CompatibilityHarnessTimeoutTest {
             storeService = storeService,
             installer = installer,
             loader = loader,
-            options = CompatibilityHarness.Options(packages = listOf(pkg)),
+            options = CompatibilityHarness.Options(storeUrl = "https://example.org/repo.json", packages = listOf(pkg)),
             stepTimeout = 1.seconds,
         ).run()
     }

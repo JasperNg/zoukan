@@ -79,6 +79,7 @@ class EndToEndReadTest {
             step("Add the Keiyoushi store") {
                 onAllNodesWithText("Browse").onFirst().performClick()
                 onAllNodesWithText("Stores").onFirst().performClick()
+                waitFor(hasText("Store URL", substring = true))
                 onAllNodes(hasSetTextAction() and hasAnyDescendant(hasText("Store URL", substring = true)), useUnmergedTree = true)
                     .onFirst().performTextInput(SampleStores.KEIYOUSHI.url)
                 onAllNodes(hasText("Add") and hasClickAction()).onFirst().performClick()
