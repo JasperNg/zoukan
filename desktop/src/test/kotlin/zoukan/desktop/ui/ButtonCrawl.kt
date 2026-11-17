@@ -29,6 +29,24 @@ internal object ButtonCrawl {
             """seconds?|minutes?|hours?|days?|weeks?|months?|years?) ?(ago)?\b""",
     )
 
+    /** How deep the crawl goes into menus: a button's menu, and a submenu of one of its items, but not a menu inside a submenu. */
+    const val MAX_MENU_DEPTH = 2
+
+    /**
+     * Whether a click opened a menu, from the clickable items of each menu over the window before
+     * and after it (in root order). A new popup is a menu; so is a menu whose items were all
+     * replaced: a submenu shown in place of its menu (the library entry's "Download"), or a new
+     * popup in place of the one that closed. An item that only changes its own state (a checkbox
+     * in a menu) keeps the menu's items, so it opens nothing.
+     */
+    fun openedMenu(before: List<Set<String>>, after: List<Set<String>>): Boolean {
+        if (after.size > before.size) return true
+        if (after.isEmpty() || after.size != before.size) return false
+        val now = after.last()
+        val was = before.last()
+        return now.isNotEmpty() && was.isNotEmpty() && now.none { it in was }
+    }
+
     /** The lines of [text] that are not blank and not `#` comments, trimmed. */
     private fun entries(text: String) = text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
 
