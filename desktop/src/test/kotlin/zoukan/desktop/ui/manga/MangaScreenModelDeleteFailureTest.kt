@@ -122,7 +122,7 @@ class MangaScreenModelDeleteFailureTest {
         model.deleteDownloads(listOf(chapter))
         waitUntil { toasts.any { it.startsWith(failed) } }
 
-        toasts.any { it.startsWith(failed) && "/unplugged/Zoukan" in it } shouldBe true
+        toasts.any { it.startsWith(failed) && File("/unplugged/Zoukan").path in it } shouldBe true
         uncaught.shouldBeEmpty()
     }
 
