@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.settings
 
+import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +61,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.FileRequest
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.BackupValidator
 import zoukan.desktop.backup.DesktopBackups
@@ -70,7 +73,6 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReserveSnackbarSpace
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.i18n.desktop.DMR
-import java.awt.FileDialog
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -459,14 +461,18 @@ private data class InvalidRestore(
 
 /** Asks where to save a backup, in the backup folder with the default name; null when cancelled. */
 private fun chooseBackupFile(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): File? {
-    val dialog = FileDialog(window as java.awt.Frame?, localized(MR.strings.pref_create_backup), FileDialog.SAVE).apply {
-        directory = dirs.backups.apply { mkdirs() }.absolutePath
-        file = DesktopBackups.defaultFileName()
-        isVisible = true
-    }
-    val name = dialog.file ?: return null
+    val picked = SystemEffects.current.pickFile(
+        FileRequest(
+            window,
+            localized(MR.strings.pref_create_backup),
+            save = true,
+            directory = dirs.backups.apply { mkdirs() },
+            fileName = DesktopBackups.defaultFileName(),
+        ),
+    ) ?: return null
+    val name = picked.name
     // The extension the Android app's restore picker looks for
-    return File(dialog.directory, if (name.endsWith(".tachibk") || name.endsWith(".proto.gz")) name else "$name.tachibk")
+    return if (name.endsWith(".tachibk") || name.endsWith(".proto.gz")) picked else File(picked.parentFile, "$name.tachibk")
 }
 
 /** presentation-core's LazyColumnWithAction: the list, and the screen's action button under it. */
@@ -550,14 +556,7 @@ private fun LabeledCheckbox(
             .clip(MaterialTheme.shapes.small)
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(
-                role = Role.Checkbox,
-                onClick = {
-                    if (enabled) {
-                        onCheckedChange(!checked)
-                    }
-                },
-            )
+            .checkRow(checked, enabled) { onCheckedChange(it) }
             .testTag("backup-option:$label"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

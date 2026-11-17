@@ -111,6 +111,8 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
             Updates.autoCheck().set(false)
             // A restore asks before it writes security settings, and a journey cannot drive the native dialog
             zoukan.desktop.ui.settings.sensitiveSettingsChoice = { false }
+            // Nor the one after a failed safety backup: such a change is cancelled
+            zoukan.desktop.ui.common.snapshotFailedPrompt = zoukan.desktop.backup.SnapshotFailedPrompt { false }
             startUi(journey.dirs)
             // The source's grid, as before Android's "Replace latest button" (on by default) opened its feed
             Injekt.get<eu.kanade.domain.ui.UiPreferences>().useNewSourceNavigation().set(false)

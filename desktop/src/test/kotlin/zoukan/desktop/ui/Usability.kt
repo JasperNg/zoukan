@@ -43,7 +43,10 @@ enum class Rule { UNLABELLED_CLICKABLE, TEXT_OVERFLOW, ESCAPE_NOT_DISMISSING, TA
 class DismissProbe {
     @Volatile
     var called = false
-    val dismiss: () -> Unit = { called = true }
+    val dismiss: () -> Unit = {
+        called = true
+        HostCalls.record()
+    }
 }
 
 /** The node of a finding that says a rule threw: never allowlisted (see [classify]), so an error always shows as new. */
@@ -246,7 +249,7 @@ fun InstallEscapeAsBack() {
  * The scene is internal API: a Compose update that changes it breaks only this test helper.
  */
 @OptIn(InternalTestApi::class, InternalComposeUiApi::class)
-private fun ComposeUiTest.pressEscape(node: SemanticsNode) {
+internal fun ComposeUiTest.pressEscape(node: SemanticsNode) {
     val scene = (this as? SkikoComposeUiTest)?.scene
     if (scene == null) {
         onNode(byId(node.id)).performKeyInput { pressKey(Key.Escape) }
@@ -264,19 +267,19 @@ private fun ComposeUiTest.pressEscape(node: SemanticsNode) {
 
 // Semantics helpers
 
-private fun ComposeUiTest.roots(merged: Boolean): List<SemanticsNode> =
+internal fun ComposeUiTest.roots(merged: Boolean): List<SemanticsNode> =
     onAllNodes(isRoot(), useUnmergedTree = !merged).fetchSemanticsNodes()
 
 /**
  * The dialog roots: those that hold a node marked as a dialog. When no root is marked (the
  * desktop dialog may not set it), every root after the window's.
  */
-private fun dialogRoots(roots: List<SemanticsNode>): List<SemanticsNode> {
+internal fun dialogRoots(roots: List<SemanticsNode>): List<SemanticsNode> {
     val marked = roots.drop(1).filter { root -> root.descendants().any { SemanticsProperties.IsDialog in it.config } }
     return marked.ifEmpty { roots.drop(1) }
 }
 
-private fun SemanticsNode.descendants(): List<SemanticsNode> {
+internal fun SemanticsNode.descendants(): List<SemanticsNode> {
     val out = mutableListOf<SemanticsNode>()
     fun walk(node: SemanticsNode) {
         out += node
@@ -291,12 +294,12 @@ private fun ComposeUiTest.focused(root: SemanticsNode): SemanticsNode? =
     onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull { node -> generateSequence(node) { it.parent }.last().id == root.id }
 
 /** A semantics id lives only for this run: used to find a node again now, never in a finding. */
-private fun byId(id: Int) = SemanticsMatcher("semantics id $id") { it.id == id }
+internal fun byId(id: Int) = SemanticsMatcher("semantics id $id") { it.id == id }
 
 private fun SemanticsNode.text(): String? =
     config.getOrNull(SemanticsProperties.Text)?.joinToString(" ") { it.text }?.takeIf { it.isNotBlank() }
 
-private fun label(node: SemanticsNode): String? = node.text()
+internal fun label(node: SemanticsNode): String? = node.text()
     ?: node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString(" ")?.takeIf { it.isNotBlank() }
     ?: node.config.getOrNull(SemanticsProperties.EditableText)?.text?.takeIf { it.isNotBlank() }
 

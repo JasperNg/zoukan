@@ -59,12 +59,15 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.backup.SnapshotReason
 import zoukan.desktop.compat.localized
 import zoukan.desktop.manga.CustomCovers
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.checkRow
+import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.i18n.desktop.DMR
 import java.io.Serializable
 
@@ -183,15 +186,23 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
         // stop it partway; its result still shows as a toast
         val chosen = flags
         val migration = AppScope.async {
+            // ZOUKAN -->
+            // A safety backup first, so the migration can be undone; without one the user decides
+            if (!SafetySnapshot.forApp().guard(SnapshotReason.MIGRATION) { snapshotFailedPrompt.continueWithout(it) }) return@async false
+            // ZOUKAN <--
             reportOutcome(onFailure = { Toasts.error(localized(DMR.strings.migration_failed), it) }) {
                 val current = Injekt.get<GetManga>().await(mangaId) ?: error(localized(DMR.strings.the_entry_no_longer_exists))
                 migrate(current, picked, replace, chosen)
             }
             Toasts.show(if (replace) localized(DMR.strings.migrated_to, picked.title) else localized(DMR.strings.copied_to, picked.title))
+            true
         }
         scope.launch {
             try {
-                migration.await()
+                if (!migration.await()) {
+                    busy = false
+                    return@launch
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {

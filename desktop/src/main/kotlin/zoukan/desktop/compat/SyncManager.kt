@@ -33,6 +33,8 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.RestoreGate
+import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.backup.SnapshotReason
 import zoukan.desktop.compat.localized
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
@@ -49,6 +51,9 @@ class SyncManager(
     private val syncPreferences: SyncPreferences = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val dirs: ZoukanDirs = Injekt.get(),
+    // ZOUKAN -->
+    private val safetySnapshot: SafetySnapshot = SafetySnapshot.forApp(),
+    // ZOUKAN <--
 ) {
     private val json = Json {
         encodeDefaults = true
@@ -244,6 +249,17 @@ class SyncManager(
         }
 
         val (favorites, nonFavorites) = splitFavorites(remoteBackup)
+        // ZOUKAN -->
+        // A copy of the library before the remote one overwrites it, so the sync can be undone.
+        // Nobody is there to ask, so without one the library is left as it is and the sync tries
+        // again later; the notification says why
+        if (favorites.isNotEmpty()) {
+            safetySnapshot.take(SnapshotReason.SYNC).onFailure { e ->
+                notifier.showSyncError(localized(DMR.strings.sync_skipped_no_safety_backup, SafetySnapshot.errorText(e)))
+                return false
+            }
+        }
+        // ZOUKAN <--
         updateNonFavorites(nonFavorites)
 
         if (favorites.isEmpty()) {

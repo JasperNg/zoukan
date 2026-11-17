@@ -22,6 +22,13 @@
   smoke: true
   tests: [ui.ScreenSmokeTest, ui.common.AppMessagesTest, ui.ShortcutsBackGuardTest, e2e.BackupRestoreJourneyTest]
 
+- key: flow:shell.database-open
+  feature: "Opening the encrypted database: missing key refused, journal without key refused, newer database refused unchanged, copy before a migration"
+  tier: unit
+  smoke: false
+  tests: [db.DesktopDatabaseKeyTest]
+  gap: "The refusals end start-up with the crash dialog, which is OS-level (a Swing dialog before the window); the checks are unit tested"
+
 - key: flow:shell.window-bounds
   feature: "Window size and position restored, minimum 800x560"
   tier: unit
@@ -452,7 +459,7 @@
   feature: "Source answers past the client's read timeout: the timeout error shows, Retry lists the titles"
   tier: journey
   smoke: false
-  tests: [e2e.SourceTimeoutJourneyTest]
+  tests: [e2e.SourceErrorJourneyTest]
 
 - key: flow:browse.source-header
   feature: "Open website (sign in / Cloudflare), source feed, source settings"
@@ -603,7 +610,7 @@
   feature: "Clear entry (delete downloads / chapters); local files only behind their own option and a second confirmation"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaLocalJourneyTest, e2e.ClearMangaMergedJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, e2e.MangaClearLocalRefreshJourneyTest, ui.manga.EntryDialogsConfirmTest]
+  tests: [ui.ScreenSmokeTest, e2e.EntryPageJourneyTest, e2e.ClearMangaDownloadedDataJourneyTest, e2e.ClearMangaLocalFilesJourneyTest, ui.manga.EntryDialogsConfirmTest, download.DownloadDeleteTest]
 
 - key: dialog:common.ConfirmDestructiveDialog
   feature: "Second question before something the user cannot take back or that runs third-party code (local files to the trash, downloads deleted from Updates, a new download password, a sync reset, MangaDex follows, installing an extension, removing a store or a feed)"
@@ -710,7 +717,7 @@
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.PagePreviewsJourneyTest, ui.manga.PagePreviewScreenTest]
-  gap: "Only the first page of previews loads (the fixture has one); loading the next page as the grid scrolls is not driven. Related titles on the entry screen: e2e.PagePreviewsJourneyTest and e2e.EntrySectionsJourneyTest"
+  gap: "Only the first page of previews loads (the fixture has one); loading the next page as the grid scrolls is not driven. Related titles on the entry screen: e2e.PagePreviewsJourneyTest"
 
 - key: screen:manga.MetadataViewScreen
   feature: "Metadata view"
@@ -775,7 +782,7 @@
   feature: "Retry failed pages, load this page first"
   tier: journey
   smoke: false
-  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest, e2e.ReaderErrorMessageJourneyTest]
+  tests: [e2e.CorruptPageJourneyTest, e2e.DescramblingJourneyTest]
   gap: "The bar's Retry failed pages (R) and Load this page first are not driven; the page's own Retry is"
 
 - key: flow:reader.chapter-nav
@@ -880,8 +887,8 @@
   feature: "Data and storage (also the More tab's row): storage location, downloads folder; backup create, restore, folder; storage usage, chapter and cover cache, data folder; export library list; data sync; data saver"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest, e2e.MetadataJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
-  gap: "sync on start and on resume stays Window-level (accepted gap until a later refactor)"
+  tests: [ui.ScreenSmokeTest, ui.settings.DataSettingsTest, e2e.SyncWebDavJourneyTest, e2e.SyncYomiJourneyTest, e2e.MetadataJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest, manga.CoverCacheClearTest, storage.StorageUnavailableTest]
+  gap: "sync on start and on resume stays Window-level (accepted gap until a later refactor); the missing-storage-folder banner is unit tested through ZoukanStorage, not shown by a UI test"
 
 - key: screen:more.SettingsScreen
   feature: "Settings row"
@@ -958,7 +965,7 @@
   feature: "Download location and password (CBZ); delete chapters, auto download, download ahead, cache renew"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.SettingsAppearanceLibraryJourneyTest, download.DownloadIndexTest, download.DownloadDeleteTest]
 
 - key: state:download-password
   feature: "Download password (encrypted CBZ) dialog"
@@ -980,11 +987,11 @@
   tests: [ui.settings.StorageLocationTest]
 
 - key: dialog:settings.CleanupDownloadsDialog
-  feature: "Clean up downloads dialog"
-  tier: journey
+  feature: "Clean up downloads: options, preview with counts and sizes, orphaned folders ticked one by one, trash"
+  tier: unit
   smoke: false
-  tests: []
-  gap: "Not opened by any test and it deletes downloads; planned: a journey (not designed yet), SettingsPagesJourneyTest is its nearest home"
+  tests: [ui.settings.CleanupPreviewDialogTest, download.DownloadCleanupSafetyTest, download.DownloadQueueOrderTest, download.DownloadCleanupRaceTest]
+  gap: "The Settings row and the options dialog are not clicked through to the preview; planned: a journey (Settings > Advanced > preview > confirm), SettingsPagesJourneyTest is its nearest home"
 
 - key: settings:Tracking
   feature: "Trackers, login dialogs, auto update"
@@ -1030,14 +1037,14 @@
   feature: "Create backup screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.BackupScreensJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.BackupRestoreJourneyTest]
   gap: "the file chooser is a native dialog (manual)"
 
 - key: screen:settings.RestoreBackupScreen
   feature: "Restore backup screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, backup.BackupRoundTripTest, e2e.BackupRestoreJourneyTest, extension.ExtensionStoreSafetyTest]
+  tests: [ui.ScreenSmokeTest, backup.BackupRoundTripTest, e2e.BackupRestoreJourneyTest, extension.ExtensionStoreSafetyTest, backup.BackupJobsTest, backup.SafetySnapshotTest]
 
 - key: screen:settings.MissingExtensionsScreen
   feature: "Missing extensions screen"
@@ -1050,7 +1057,7 @@
   tier: journey
   smoke: false
   tests: []
-  gap: "Needs a restore with missing extensions; planned: BackupScreensJourneyTest (missing source)"
+  gap: "Needs a restore with missing extensions; planned: BackupRestoreJourneyTest (missing source)"
 
 - key: dialog-inline:DataSettings.kt:ExportLibraryPreference
   feature: "Export library list dialog"
@@ -1087,7 +1094,7 @@
   feature: "Clear database screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
+  tests: [ui.ScreenSmokeTest, e2e.SettingsBrowseDataAdvancedJourneyTest, ui.settings.ClearDatabaseSnapshotTest]
 
 - key: settings:Security
   feature: "Lock, password, days, times, hide notification content, incognito and extensions"
@@ -1183,13 +1190,13 @@
   feature: "Source settings screen"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.settings.SourceSettingsTest, e2e.SourcePreferencesJourneyTest, e2e.SourceSettingsRobustnessJourneyTest]
+  tests: [ui.ScreenSmokeTest, ui.settings.SourceSettingsTest, e2e.SourcePreferencesJourneyTest]
 
 - key: dialog:settings.PreferenceDialog
   feature: "Source settings: preference dialog"
   tier: journey
   smoke: false
-  tests: [e2e.SourcePreferencesJourneyTest, e2e.SourceSettingsRobustnessJourneyTest]
+  tests: [e2e.SourcePreferencesJourneyTest]
 
 - key: state:ChoiceSetting
   feature: "Choice setting dialog"

@@ -11,12 +11,13 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.FieldVisitor
 import org.objectweb.asm.Handle
 // ZOUKAN -->
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Label
 import org.objectweb.asm.TypePath
+import org.objectweb.asm.commons.ClassRemapper
+import org.objectweb.asm.commons.SimpleRemapper
 // ZOUKAN <--
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
@@ -383,38 +384,6 @@ object BytecodeEditor {
         )
 
     /**
-     * Replace direct references to the class, used on places
-     * that don't have any other text then the class
-     *
-     * @return [String] of class or null if [String] was null
-     */
-    private fun String?.replaceDirectly() =
-        when (this) {
-            null -> null
-            in classesToReplace -> "$REPLACEMENT_PATH/$this"
-            else -> this
-        }
-
-    /**
-     * Replace references to the class, used in places that have
-     * other text around the class references
-     *
-     * @return [String] with class references replaced, or null if [String] was null
-     */
-    private fun String?.replaceIndirectly(): String? {
-        if (this == null) return null
-        var classReference: String = this
-        classesToReplace.forEach {
-            // ZOUKAN -->
-            // Only as a descriptor's class name (Ljava/text/SimpleDateFormat; or <...>), so a
-            // name already replaced is not prefixed twice
-            classReference = classReference.replace(Regex("(?<=L)${Regex.escape(it)}(?=[;<])"), "$REPLACEMENT_PATH/$it")
-            // ZOUKAN <--
-        }
-        return classReference
-    }
-
-    /**
      * Replace all references to certain classes inside the class file
      * with ones that behave more like Androids
      *
@@ -426,136 +395,38 @@ object BytecodeEditor {
         // Read the class and prepare to modify it
         val cr = ClassReader(pair.second)
         val cw = ClassWriter(cr, 0)
-        // Modify the class
-        cr.accept(
-            object : ClassVisitor(/* ZOUKAN --> */Opcodes.ASM9/* ZOUKAN <-- */, cw) {
-                // Modify field descriptor, for example
-                // class MangaYes {
-                //     val format = SimpleDateFormat("YYYY-MM-dd")
-                // }
-                override fun visitField(
-                    access: Int,
-                    name: String?,
-                    desc: String?,
-                    signature: String?,
-                    cst: Any?,
-                ): FieldVisitor? {
-                    logger.trace { "CLass Field" to "${desc.replaceIndirectly()}: ${cst?.let { it::class.java.simpleName }}: $cst" }
-                    return super.visitField(access, name, desc.replaceIndirectly(), signature, cst)
-                }
-
-                override fun visit(
-                    version: Int,
-                    access: Int,
-                    name: String?,
-                    signature: String?,
-                    superName: String?,
-                    interfaces: Array<out String>?,
-                ) {
-                    logger.trace { "Visiting $name: $signature: $superName" }
-                    super.visit(version, access, name, signature, superName, interfaces)
-                }
-
-                // Modify method bytecode, for example
-                // class MangaYes {
-                //     fun fetchChapterList() {
-                //         SimpleDateFormat("YYYY-MM-dd")
-                //     }
-                // }
+        // ZOUKAN -->
+        // Every reference to a replaced class is renamed, wherever it is: instructions and
+        // descriptors, but also the stack map frames, local variable tables, generic signatures,
+        // try-catch types, class constants, method handles, annotations and the super class.
+        // Suwayomi's visitor renamed only instructions and descriptors, which works for dex2jar's
+        // output but not for a store's jar: its stack map frames still named
+        // java/text/SimpleDateFormat for a local holding the replacement, and the verifier rejected
+        // the method ("Inconsistent stackmap frames"). The frames are renamed, not recomputed, so
+        // the class needs no class loader to resolve common super classes. A name already replaced
+        // is not in the map, so a class rewritten before keeps its references (idempotent).
+        val http =
+            object : ClassVisitor(Opcodes.ASM9, cw) {
                 override fun visitMethod(
                     access: Int,
-                    name: String,
-                    desc: String,
+                    name: String?,
+                    descriptor: String?,
                     signature: String?,
-                    exceptions: Array<String?>?,
-                ): MethodVisitor {
-                    logger.trace { "Processing method $name: ${desc.replaceIndirectly()}: $signature" }
-                    val mv: MethodVisitor? =
-                        super.visitMethod(
-                            access,
-                            name,
-                            desc.replaceIndirectly(),
-                            signature,
-                            exceptions,
-                        )
-                    return /* ZOUKAN --> */ExtensionHttpRewriter(/* ZOUKAN <-- */object : MethodVisitor(/* ZOUKAN --> */Opcodes.ASM9/* ZOUKAN <-- */, mv) {
-                        override fun visitLdcInsn(cst: Any?) {
-                            logger.trace { "Ldc" to "${cst?.let { "${it::class.java.simpleName}: $it" }}" }
-                            super.visitLdcInsn(cst)
-                        }
-
-                        // Replace method type, for example
-                        // val format = DateFormat()
-                        // fun fetchChapterList() {
-                        //     if (format is SimpleDateFormat)
-                        // }
-                        override fun visitTypeInsn(
-                            opcode: Int,
-                            type: String?,
-                        ) {
-                            logger.trace {
-                                "Type" to "$opcode: ${type.replaceDirectly()}"
-                            }
-                            super.visitTypeInsn(
-                                opcode,
-                                type.replaceDirectly(),
-                            )
-                        }
-
-                        // Replace method field, for example
-                        // fun fetchChapterList() {
-                        //     val format = SimpleDateFormat("YYYY-MM-dd")
-                        // }
-                        override fun visitMethodInsn(
-                            opcode: Int,
-                            owner: String?,
-                            name: String?,
-                            desc: String?,
-                            itf: Boolean,
-                        ) {
-                            logger.trace {
-                                "Method" to "$opcode: ${owner.replaceDirectly()}: $name: ${desc.replaceIndirectly()}"
-                            }
-                            super.visitMethodInsn(
-                                opcode,
-                                owner.replaceDirectly(),
-                                name,
-                                desc.replaceIndirectly(),
-                                itf,
-                            )
-                        }
-
-                        // Replace class field call from method, for example
-                        // val format = SimpleDateFormat("YYYY-MM-dd")
-                        // fun fetchChapterList() {
-                        //     format.format(Date())
-                        // }
-                        override fun visitFieldInsn(
-                            opcode: Int,
-                            owner: String?,
-                            name: String?,
-                            desc: String?,
-                        ) {
-                            logger.trace { "Field" to "$opcode: $owner: $name: ${desc.replaceIndirectly()}" }
-                            super.visitFieldInsn(opcode, owner, name, desc.replaceIndirectly())
-                        }
-
-                        override fun visitInvokeDynamicInsn(
-                            name: String?,
-                            desc: String?,
-                            bsm: Handle?,
-                            vararg bsmArgs: Any?,
-                        ) {
-                            logger.trace { "InvokeDynamic" to "$name: $desc" }
-                            super.visitInvokeDynamicInsn(name, desc, bsm, *bsmArgs)
-                        }
-                    }/* ZOUKAN --> */)/* ZOUKAN <-- */
-                }
-            },
-            0,
-        )
+                    exceptions: Array<out String>?,
+                ): MethodVisitor? =
+                    super.visitMethod(access, name, descriptor, signature, exceptions)?.let(::ExtensionHttpRewriter)
+            }
+        cr.accept(ClassRemapper(http, replacedClassRemapper), 0)
+        // ZOUKAN <--
         return pair.first to cw.toByteArray()
     }
+
+    // ZOUKAN -->
+    /** Renames each of [classesToReplace] to its copy under [REPLACEMENT_PATH]. */
+    private val replacedClassRemapper by lazy {
+        SimpleRemapper(classesToReplace.associateWith { "$REPLACEMENT_PATH/$it" })
+    }
+    // ZOUKAN <--
 
     private fun write(pair: Pair<Path, ByteArray>) {
         Files.write(

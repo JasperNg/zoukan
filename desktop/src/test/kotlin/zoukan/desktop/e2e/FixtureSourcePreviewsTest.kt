@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * The fixture source's page previews and related titles, which the entry screen shows
- * (EntrySectionsJourneyTest). Neither touches the network or the source's settings, so this needs
+ * (PagePreviewsJourneyTest). Neither touches the network or the source's settings, so this needs
  * no app runtime.
  */
 class FixtureSourcePreviewsTest {

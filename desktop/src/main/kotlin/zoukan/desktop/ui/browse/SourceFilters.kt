@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.browse
 
+import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -247,7 +248,7 @@ internal fun SourceCategoriesDialog(
                 Column(Modifier.verticalScrollWithBar()) {
                     categories.forEach { category ->
                         Row(
-                            Modifier.fillMaxWidth().clickable { chosen = if (category in chosen) chosen - category else chosen + category }.padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().checkRow(category in chosen) { chosen = if (category in chosen) chosen - category else chosen + category }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(checked = category in chosen, onCheckedChange = null)

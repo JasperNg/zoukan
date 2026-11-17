@@ -48,6 +48,10 @@ class BackupJobs(
     private val scope: CoroutineScope,
     private val backups: () -> DesktopBackups,
     private val sensitivePrompt: SensitivePrompt = SensitivePrompt { false },
+    /** The backup written before a restore changes anything; see [SafetySnapshot]. */
+    private val snapshot: SafetySnapshot = SafetySnapshot.forApp(),
+    /** Asks whether to restore anyway when [snapshot] fails; without one the restore is cancelled. */
+    private val snapshotPrompt: SnapshotFailedPrompt = SnapshotFailedPrompt { false },
     private val storePrompt: StorePrompt,
 ) {
     private val _status = MutableStateFlow<String?>(null)
@@ -120,6 +124,14 @@ class BackupJobs(
                                 }
                             }
                         }
+                        // A copy of the library as it is, so the restore can be undone; the user
+                        // decides when it cannot be saved
+                        _status.value = localized(DMR.strings.saving_safety_backup)
+                        if (!snapshot.guard(SnapshotReason.RESTORE, snapshotPrompt)) {
+                            result = RestoreOutcome.CANCELLED
+                            return@launch
+                        }
+                        _status.value = localized(DMR.strings.restoring, file.name)
                         val errors = desktopBackups.restore(backup, chosen, allowSensitive = allowSensitive) { _, progress, total ->
                             _status.value = localized(DMR.strings.restoring_of, file.name, progress, total)
                         }

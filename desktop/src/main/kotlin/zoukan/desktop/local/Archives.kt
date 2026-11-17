@@ -216,25 +216,7 @@ object Archives {
 
     /** Deletes [dir] without following links, so a linked folder loses the link and not its files. */
     private fun deleteTree(dir: File) {
-        if (!Files.exists(dir.toPath(), LinkOption.NOFOLLOW_LINKS)) return
-        runCatching {
-            Files.walkFileTree(
-                dir.toPath(),
-                object : SimpleFileVisitor<Path>() {
-                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                        runCatching { Files.delete(file) }
-                        return FileVisitResult.CONTINUE
-                    }
-
-                    override fun visitFileFailed(file: Path, e: IOException) = FileVisitResult.CONTINUE
-
-                    override fun postVisitDirectory(d: Path, e: IOException?): FileVisitResult {
-                        runCatching { Files.delete(d) }
-                        return FileVisitResult.CONTINUE
-                    }
-                },
-            )
-        }
+        zoukan.desktop.download.SafeDelete.deleteTreeNoFollow(dir.toPath())
     }
 
     /**

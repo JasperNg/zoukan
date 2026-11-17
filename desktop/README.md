@@ -19,8 +19,8 @@ upstream Komikku.
 ```bash
 ./gradlew :desktop:run                                     # open the app
 ./gradlew :desktop:run --args="status"                     # open the encrypted database, list installed extensions
-./gradlew :desktop:run --args="harness"                    # test the 20 default extensions against their sites
-./gradlew :desktop:run --args="harness --all --skip-nsfw"  # test every extension in the store
+./gradlew :desktop:run --args="harness"                    # test the sample extensions of each test store against their sites
+./gradlew :desktop:run --args="harness --store <url> --all --skip-nsfw"  # test every extension in the the main extension store store
 ./gradlew :desktop:run --args="browser https://example.org"
 ./gradlew :desktop:run --args="backup restore <file.tachibk>"     # restore a Komikku, Mihon or SY backup
 ./gradlew :desktop:run --args="backup create [file] [--private]" # back up (default: <data>/backups)
@@ -188,8 +188,8 @@ runs it on a clone of master it keeps for itself and saves the log and reports t
 at 03:00 and `-Unregister` removes it.
 
 The harness uses its own profile, so it never touches the app's extensions or database, and its
-extension jars and browser profile stay out of the roaming profile. It writes its report to
-`reports/extensions-<platform>.md` in that profile:
+extension jars and browser profile stay out of the roaming profile. It writes one report per store to
+`reports/extensions-<store>-<platform>.md` in that profile:
 
 - Windows: `%LOCALAPPDATA%\Zoukan\harness`
 - macOS: `~/Library/Application Support/Zoukan-harness`
