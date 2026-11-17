@@ -35,8 +35,7 @@ class ProgressWriterTest {
             order += update.lastPageRead!!
         }
         (0..9).forEach { writer.submit(progressUpdate(1L, it, read = it == 9)) }
-        writer.close()
-        withTimeout(10_000) { writer.job.join() }
+        withTimeout(10_000) { writer.join() }
 
         order shouldContainExactly (0L..9L).toList()
         row.lastPageRead shouldBe 9L
@@ -52,8 +51,7 @@ class ProgressWriterTest {
         val row = Row(read = true, lastPageRead = 20)
         val writer = ProgressWriter(scope()) { row.apply(it) }
         writer.submit(progressUpdate(1L, 4, read = false))
-        writer.close()
-        withTimeout(10_000) { writer.job.join() }
+        withTimeout(10_000) { writer.join() }
 
         row.read shouldBe true
         row.lastPageRead shouldBe 4L
@@ -68,27 +66,23 @@ class ProgressWriterTest {
         }
         writer.submit(progressUpdate(1L, 1, read = false))
         writer.submit(progressUpdate(1L, 2, read = false))
-        writer.close()
-        withTimeout(10_000) { writer.job.join() }
+        withTimeout(10_000) { writer.join() }
 
         row.lastPageRead shouldBe 2L
     }
 
     @Test
-    fun `closing lets the queued writes finish`() = runBlocking<Unit> {
+    fun `a write submitted after the reader closed still runs, after the earlier ones`() = runBlocking<Unit> {
         val row = Row()
         val writer = ProgressWriter(scope()) { update ->
             delay(50)
             row.apply(update)
         }
         writer.submit(progressUpdate(1L, 5, read = false))
+        // The last page, reported while the closed reader fades out
         writer.submit(progressUpdate(1L, 6, read = true))
-        writer.close()
-        // A page change after the reader closed is dropped, not an error
-        writer.submit(progressUpdate(1L, 0, read = false))
-        withTimeout(10_000) { writer.job.join() }
+        withTimeout(10_000) { writer.join() }
 
-        writer.job.isCompleted shouldBe true
         row.lastPageRead shouldBe 6L
         row.read shouldBe true
     }

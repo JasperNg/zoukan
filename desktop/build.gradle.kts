@@ -450,7 +450,7 @@ tasks.named("check") { dependsOn(wiringTest) }
 // The button crawl clicks every button of every screen, tab, Settings page and dialog, and fails
 // on a click that throws, logs an error, hangs the window or does nothing, and on a button that
 // appeared or went since src/test/resources/button-inventory.txt. It takes long, so `check` does
-// not run it; CI runs it in shards (desktop/TESTING.md, 'The button crawl'):
+// not run it; longChecks runs it whole on a Windows machine (desktop/TESTING.md, 'The button crawl'):
 //   ./gradlew :desktop:buttonCrawlTest
 //   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.only="settings:Library" -Pzoukan.shard=1/4
 //   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true
@@ -472,7 +472,8 @@ val buttonCrawlTest by tasks.registering(Test::class) {
     // -Pzoukan.crawl.only=<regex> crawls only the checks whose name or key matches
     providers.gradleProperty("zoukan.crawl.only").orNull?.let { systemProperty("zoukan.crawl.only", it) }
     providers.gradleProperty("zoukan.crawl.debug").orNull?.let { systemProperty("zoukan.crawl.debug", it) }
-    // -Pzoukan.shard=i/n crawls every n-th check key, from the i-th: CI splits the crawl this way
+    // -Pzoukan.shard=i/n crawls every n-th check key, from the i-th (to debug a part; the baseline
+    // and longChecks use one unsharded run, since the split can change a signature)
     providers.gradleProperty("zoukan.shard").orNull?.let { value ->
         value.split('/').mapNotNull { it.trim().toIntOrNull() }
             .takeIf { it.size == 2 && value.count { c -> c == '/' } == 1 && it[1] >= 1 && it[0] in 1..it[1] }
@@ -622,7 +623,7 @@ val extensionWiringTest by tasks.registering {
 // The user journeys drive the real UI against a local fixture server (src/test/kotlin/zoukan/
 // desktop/e2e): browse a source, read every image format and check the pages drew, change a
 // source's settings, download chapters and read them offline, back up and restore. They need no
-// network but take a few minutes, so they run on request and nightly, not on every build:
+// network but take a few minutes, so they run on request and in longChecks, not on every build:
 //   ./gradlew :desktop:journeyTest
 // Screenshots go to desktop/build/reports/journeys/.
 val journeyTest by tasks.registering(Test::class) {
@@ -650,8 +651,8 @@ val journeyTest by tasks.registering(Test::class) {
     // ZoukanRuntime keeps a cachedir that is already set. AvifJourneyTest clears it to keep the
     // app's own path (FFmpeg in the data folder) under test
     systemProperty("org.bytedeco.javacpp.cachedir", layout.buildDirectory.dir("javacpp-cache").get().asFile.absolutePath)
-    // CI splits the journeys over jobs: -Pzoukan.shard=2/3 runs the second third. Which journeys a
-    // shard keeps is decided only by JourneyShardFilter in the test JVMs (JourneyShard.includes);
+    // -Pzoukan.shard=2/3 runs the second third of the journeys (to split them over machines). Which
+    // journeys a shard keeps is decided only by JourneyShardFilter in the test JVMs (JourneyShard.includes);
     // the build checks only the form of the value, so a typo fails here and not in every fork
     providers.gradleProperty("zoukan.shard").orNull?.let { value ->
         value.split('/').mapNotNull { it.trim().toIntOrNull() }
@@ -672,7 +673,7 @@ val journeyTest by tasks.registering(Test::class) {
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
     // A journey that hangs (a deadlock waits forever, so no waitUntil timeout fires) fails after 10
-    // minutes with its stack, instead of holding its shard until the CI job's timeout. The longest
+    // minutes with its stack, instead of holding its fork for the rest of the run. The longest
     // journeys take about 2 minutes. -Pzoukan.journey.timeout=30m raises it to debug a slow machine
     systemProperty("junit.jupiter.execution.timeout.default", providers.gradleProperty("zoukan.journey.timeout").getOrElse("10m"))
     shouldRunAfter(tasks.test, wiringTest)
@@ -696,5 +697,23 @@ val nightlyCheck by tasks.registering {
     doLast {
         if (!hasWiring.get()) logger.warn("nightlyCheck: no $extensionWiringTaskName task, so only the journeys ran")
     }
+}
+
+// The long checks GitHub CI leaves out: the journeys, the whole button crawl and the extension
+// wiring check. They must pass on a Windows machine before each merge to master (desktop/RELEASING.md,
+// "Before merging to master"):
+//   gradlew.bat :desktop:longChecks --continue
+// One task after another (the journeys already run up to 4 JVMs side by side), and the crawl in one
+// unsharded run: button-inventory.txt is recorded the same way, so a shard split never changes a
+// signature.
+val longChecks by tasks.registering {
+    group = "verification"
+    description = "Runs the journeys, the whole button crawl and the extension wiring check (before a merge to master)"
+    dependsOn(nightlyCheck, buttonCrawlTest)
+}
+buttonCrawlTest.configure { mustRunAfter(journeyTest) }
+extensionWiringStoreTests.forEach { it.configure { mustRunAfter(buttonCrawlTest) } }
+if (gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "longChecks" } && providers.gradleProperty("zoukan.shard").isPresent) {
+    error("longChecks runs every journey and the whole button crawl: leave out -Pzoukan.shard")
 }
 // ZOUKAN <--

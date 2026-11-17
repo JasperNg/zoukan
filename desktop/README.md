@@ -177,13 +177,15 @@ The fixtures live in `src/test/resources/e2e-fixtures/`: `generate.py` makes the
 colour per page, one chapter per format) and `manifest.json`; `FixtureServer` serves them on
 127.0.0.1 and `FixtureSource` reads them as an extension would. Each journey runs in its own JVM
 with a throwaway data folder and saves screenshots to `desktop/build/reports/journeys/`. They take a
-few minutes, so `check` does not run them; the nightly check does.
+few minutes, so `check` does not run them; `longChecks` does (below).
 
 ### Nightly check
 
-`./gradlew :desktop:nightlyCheck --continue` runs the journeys and, once it exists, the extension
-wiring check (`extensionWiringTest`). On Windows, `desktop\packaging\check\nightly-windows.ps1`
-runs it on a clone of master it keeps for itself and saves the log and reports to
+`./gradlew :desktop:nightlyCheck --continue` runs the journeys and the extension wiring check
+(`extensionWiringTest`). `./gradlew :desktop:longChecks --continue` runs those and the whole button
+crawl; GitHub CI runs none of them, so it must pass on a Windows machine before each merge to master
+(`desktop/TESTING.md`, "Before merging to master"). On Windows, `desktop\packaging\check\nightly-windows.ps1`
+runs `nightlyCheck` on a clone of master it keeps for itself and saves the log and reports to
 `%LOCALAPPDATA%\Zoukan-nightly\<date>`; `-Register` adds a scheduled task that runs it every night
 at 03:00 and `-Unregister` removes it.
 

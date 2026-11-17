@@ -14,7 +14,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -395,9 +394,13 @@ class ReaderScreenModel(
         val chapter = state.chapter ?: return
         if (index !in state.pages.indices) return
         mutableState.update { it.copy(currentPage = index, firstShownPage = first) }
-        requestPages(index)
         // ZOUKAN -->
-        if ((index + 1).toDouble() / state.pages.size > 0.25) downloadAhead()
+        // After the screen was popped the reader still shows while it fades out, and its viewer can
+        // report the page it settled on then: that page is still saved below, but no page loads
+        if (!disposed) {
+            requestPages(index)
+            if ((index + 1).toDouble() / state.pages.size > 0.25) downloadAhead()
+        }
         // ZOUKAN <--
         val last = index == state.pages.lastIndex
         val read = chapter.read || last
@@ -445,7 +448,14 @@ class ReaderScreenModel(
         val markDuplicates = libraryPreferences.markDuplicateReadChapterAsRead().get()
             .contains(tachiyomi.domain.library.service.LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
         val decision = ReadDeletionPolicy.afterRead(chapter, state.navigable, state.chapters, slots, markDuplicates)
-        decision.toDelete.forEach { pendingDeletes[it.id] = it }
+        if (disposed) {
+            // Read after the reader closed (see onPageChanged): its file is closed already, so the
+            // downloads go now instead of waiting for a close that has happened
+            val deletes = decision.toDelete
+            if (deletes.isNotEmpty()) appScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(null, deletes) { downloadManager.deleteRead(it) } }
+        } else {
+            decision.toDelete.forEach { pendingDeletes[it.id] = it }
+        }
         val duplicates = decision.markRead
         if (duplicates.isNotEmpty()) {
             appScope.launch(CoroutineName("duplicate chapters read")) { updateChapter.awaitAll(duplicates.map { ChapterUpdate(id = it.id, read = true) }) }
@@ -863,10 +873,17 @@ class ReaderScreenModel(
         appScope.launch(Dispatchers.IO) { runCatching { old.close() } }
     }
 
+    // ZOUKAN -->
+    /**
+     * Set when Voyager disposes the model, which it does as soon as the screen is popped, while the
+     * reader still fades out and can report a page. Only read and changed on the main thread.
+     */
+    private var disposed = false
+    // ZOUKAN <--
+
     override fun onDispose() {
-        // The queued progress writes still finish
-        progressWriter.close()
         // ZOUKAN -->
+        disposed = true
         // The open file is closed before the read downloads are deleted, in that order: Windows
         // cannot delete a file that is still open
         val old = format
@@ -1029,29 +1046,35 @@ internal fun progressUpdate(chapterId: Long, index: Int, read: Boolean) =
 /**
  * Runs the reader's progress writes one at a time, in the order they were submitted, so a late
  * write never overwrites a newer one (the page going back, or a read chapter becoming unread).
- * [close] lets the queued writes finish, then stops.
+ *
+ * Each write is its own job on [scope] (the app scope), which waits for the one before it. Nothing
+ * needs closing: a write submitted after the reader was disposed (the last page, reported while the
+ * reader fades out) is saved like any other, and once the writes are done no job is left, so
+ * quitting, which waits for the app scope's jobs, waits for exactly the writes still to run.
  */
-internal class ProgressWriter(scope: CoroutineScope, private val write: suspend (ChapterUpdate) -> Unit) {
-    private val queue = Channel<ChapterUpdate>(Channel.UNLIMITED)
+internal class ProgressWriter(private val scope: CoroutineScope, private val write: suspend (ChapterUpdate) -> Unit) {
+    /** The last write submitted; guarded by this */
+    private var last: Job? = null
 
-    val job: Job = scope.launch {
-        for (update in queue) {
-            try {
-                write(update)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                logcat(LogPriority.ERROR, e) { "Saving reading progress failed" }
+    fun submit(update: ChapterUpdate) {
+        synchronized(this) {
+            val previous = last
+            last = scope.launch(CoroutineName("reading progress")) {
+                previous?.join()
+                try {
+                    write(update)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "Saving reading progress failed" }
+                }
             }
         }
     }
 
-    fun submit(update: ChapterUpdate) {
-        queue.trySend(update)
-    }
-
-    fun close() {
-        queue.close()
+    /** Returns once every write submitted so far has run. */
+    suspend fun join() {
+        synchronized(this) { last }?.join()
     }
 }
 // ZOUKAN <--
