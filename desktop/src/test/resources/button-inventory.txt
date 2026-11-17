@@ -73,7 +73,11 @@ browse:SOURCES/"Filter sources"  nav:browse.SourcesFilterScreen
 browse:SOURCES/"History"  tab:History
 browse:SOURCES/"Library"  tab:Library
 browse:SOURCES/"Local source Other"  nav:browse.SourceFeedScreen
+browse:SOURCES/"Local source Other" #2  nav:browse.SourceFeedScreen
 browse:SOURCES/"Local source Other" [action: More actions]  menu
+browse:SOURCES/"Local source Other" [action: More actions] #2  menu
+browse:SOURCES/"Local source Other" [action: More actions] #2 > "Pin"  close pref:pinned_catalogues
+browse:SOURCES/"Local source Other" [action: More actions] #2 > "Set categories"  dialog:"Local source"
 browse:SOURCES/"Local source Other" [action: More actions] > "Pin"  close pref:pinned_catalogues
 browse:SOURCES/"Local source Other" [action: More actions] > "Set categories"  dialog:"Local source"
 browse:SOURCES/"More"  tab:More
@@ -82,6 +86,7 @@ browse:SOURCES/"More" #2 > "Pin"  close pref:pinned_catalogues
 browse:SOURCES/"More" #2 > "Set categories"  dialog:"Local source"
 browse:SOURCES/"Open from a URL"  dialog:"Open from a URL"
 browse:SOURCES/"Pin"  pref:pinned_catalogues
+browse:SOURCES/"Pin" #2  pref:pinned_catalogues
 browse:SOURCES/"Updates"  tab:Updates
 browse:SOURCES/tag:browse-page-EXTENSIONS  ui
 browse:SOURCES/tag:browse-page-FEED  ui
@@ -270,7 +275,7 @@ dialog:manga.MigrateDialog/"Cancel"  calls-back
 dialog:manga.MigrateDialog/"Categories"  ui
 dialog:manga.MigrateDialog/"Chapter and reader settings"  ui
 dialog:manga.MigrateDialog/"Chapters read and history"  ui
-dialog:manga.MigrateDialog/"Copy"  calls-back close db:chapters.date_fetch db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
+dialog:manga.MigrateDialog/"Copy"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
 dialog:manga.MigrateDialog/"Delete downloads of current entry after migration"  ui
 dialog:manga.MigrateDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at nav:back pref:migration_flags toast:"Migrated to Bravo"
 dialog:manga.MigrateDialog/"Notes"  ui
@@ -334,8 +339,8 @@ dialog:reader.ReaderSettingsDialog/"None"  pref:center_margin_type
 dialog:reader.ReaderSettingsDialog/"None" #2  pref:reader_tapping_inverted
 dialog:reader.ReaderSettingsDialog/"Original size"  pref:pref_image_scale_type_key
 dialog:reader.ReaderSettingsDialog/"Paged (left to right)"  db:mangas.favorite_modified_at db:mangas.viewer
-dialog:reader.ReaderSettingsDialog/"Paged (right to left)"  db:mangas.favorite_modified_at db:mangas.viewer
-dialog:reader.ReaderSettingsDialog/"Paged (vertical)"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Paged (right to left)"  db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Paged (vertical)"  db:mangas.viewer
 dialog:reader.ReaderSettingsDialog/"Pan wide images when tapping"  pref:navigate_pan
 dialog:reader.ReaderSettingsDialog/"Reading mode"  selected-already
 dialog:reader.ReaderSettingsDialog/"Right and left"  pref:reader_navigation_mode_pager
@@ -362,13 +367,66 @@ dialog:settings.CategoriesIncludeExcludeDialog/"Smoke"  ui
 dialog:track.TrackingDialog/"Close"  calls-back
 dialog:whatsnew.UpdatedDialog/"OK"  calls-back
 dialog:whatsnew.UpdatedDialog/"What's new"  calls-back
+flow:library.selection-download/"All"  selected-already
+flow:library.selection-download/"Browse"  selection tab:Browse
+flow:library.selection-download/"Change categories"  dialog:"Set categories"
+flow:library.selection-download/"Clear selection"  selection
+flow:library.selection-download/"Crawl"  ui
+flow:library.selection-download/"Default"  ui
+flow:library.selection-download/"Delete downloads"  dialog:"Delete the downloads of # entry?"
+flow:library.selection-download/"Download"  menu
+flow:library.selection-download/"Download" > "Bookmarked"  close selection
+flow:library.selection-download/"Download" > "Next # chapters"  close queue+ selection
+flow:library.selection-download/"Download" > "Next # chapters" #2  close queue+ selection
+flow:library.selection-download/"Download" > "Next chapter"  close queue+ selection
+flow:library.selection-download/"Download" > "Unread chapters"  close queue+ selection
+flow:library.selection-download/"History"  selection tab:History
+flow:library.selection-download/"Invert selection"  selection
+flow:library.selection-download/"Library"  selected-already
+flow:library.selection-download/"Mark as read"  db:chapters.read selection
+flow:library.selection-download/"Mark as unread"  selection
+flow:library.selection-download/"Migrate"  nav:migration.MigrationConfigScreen pref:migration_sources selection
+flow:library.selection-download/"More"  selection tab:More
+flow:library.selection-download/"More" #2  menu
+flow:library.selection-download/"More" #2 > "Merge"  close nav:browse.GlobalSearchScreen selection
+flow:library.selection-download/"Remove from library"  dialog:"Remove from library?"
+flow:library.selection-download/"Select all"  selection
+flow:library.selection-download/"Update"  job:library-update notification:"Library updated" selection toast:"Updating"
+flow:library.selection-download/"Updates"  selection tab:Updates
+flow:library.selection-download/tag:manga-item  selection
+flow:library.selection-download/tag:manga-item #2  selection
+flow:library.selection-download/tag:manga-item [action: More actions]  menu
+flow:library.selection-download/tag:manga-item [action: More actions] #2  menu
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user selection
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources selection
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Open"  close nav:manga.MangaScreen selection
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Remove from library"  dialog:"Remove from library?"
+flow:library.selection-download/tag:manga-item [action: More actions] #2 > "Select"  close selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Change categories"  dialog:"Set categories"
+flow:library.selection-download/tag:manga-item [action: More actions] > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Delete downloads"  dialog:"Delete the downloads of # entry?"
+flow:library.selection-download/tag:manga-item [action: More actions] > "Deselect"  close selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Download"  menu
+flow:library.selection-download/tag:manga-item [action: More actions] > "Download" > "Next # chapters"  close queue+ selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Download" > "Next # chapters" #2  close queue+ selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Download" > "Next chapter"  close queue+ selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Download" > "Unread chapters"  close queue+ selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Mark as read"  close db:chapters.read selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Mark as unread"  close selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources selection
+flow:library.selection-download/tag:manga-item [action: More actions] > "Open"  close nav:manga.MangaScreen selection logs:offline
+flow:library.selection-download/tag:manga-item [action: More actions] > "Remove from library"  dialog:"Remove from library?"
 flow:library.selection/"All"  selected-already
 flow:library.selection/"Browse"  selection tab:Browse
 flow:library.selection/"Change categories"  dialog:"Set categories"
 flow:library.selection/"Clear selection"  selection
+flow:library.selection/"Crawl"  ui
 flow:library.selection/"Default"  ui
 flow:library.selection/"History"  selection tab:History
-flow:library.selection/"Invert selection"  ui
+flow:library.selection/"Invert selection"  selection
 flow:library.selection/"Library"  selected-already
 flow:library.selection/"Mark as read"  db:chapters.read selection
 flow:library.selection/"Mark as unread"  selection
@@ -378,7 +436,6 @@ flow:library.selection/"More" #2  menu
 flow:library.selection/"More" #2 > "Merge"  close nav:browse.GlobalSearchScreen selection
 flow:library.selection/"Remove from library"  dialog:"Remove from library?"
 flow:library.selection/"Select all"  selection
-flow:library.selection/"Smoke"  ui
 flow:library.selection/"Update"  db:mangas.favorite_modified_at job:library-update notification:"Library updated" selection toast:"Updating"
 flow:library.selection/"Updates"  selection tab:Updates
 flow:library.selection/key:Ctrl+A  selection
@@ -388,6 +445,12 @@ flow:library.selection/tag:manga-item [action: More actions]  menu
 flow:library.selection/tag:manga-item [action: More actions] #2  menu
 flow:library.selection/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
 flow:library.selection/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user selection
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Delete downloads"  dialog:"Delete the downloads of # entry?"
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Download"  menu
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Download" > "Next # chapters"  close
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Download" > "Next # chapters" #2  close
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Download" > "Next chapter"  close
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Download" > "Unread chapters"  close
 flow:library.selection/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
 flow:library.selection/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
 flow:library.selection/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources selection
@@ -508,11 +571,10 @@ screen:browse.MigrateMangaScreen/"Back"  nav:back tab:Library
 screen:browse.MigrateMangaScreen/"Bravo"  ui
 screen:browse.MigrateMangaScreen/"Bravo" [action: More actions]  ui
 screen:browse.MigrateMangaScreen/"Invert the selection"  ui
-screen:browse.MigrateMangaScreen/"Open"  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.MigrateMangaScreen/"Open"  nav:manga.MangaScreen
 screen:browse.MigrateMangaScreen/"Open" #2  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
 screen:browse.MigrateMangaScreen/"Select all"  ui
 screen:browse.OpenUrlScreen/"Back"  nav:back tab:Library
-screen:browse.OpenUrlScreen/"Local source Other"  unreached
 screen:browse.OpenUrlScreen/"Select entries"  selection
 screen:browse.OpenUrlScreen/tag:global-search-has-results  ui
 screen:browse.SourceCategoryScreen/"Add"  dialog:"Add category"
@@ -524,7 +586,7 @@ screen:browse.SourceFeedScreen/"Popular"  nav:browse.SourceScreen
 screen:browse.SourceFeedScreen/"Refresh"  NO-EFFECT
 screen:browse.SourceFeedScreen/"Select entries"  selection
 screen:browse.SourceFeedScreen/tag:manga-item  nav:manga.MangaScreen
-screen:browse.SourceFeedScreen/tag:manga-item #2  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.SourceFeedScreen/tag:manga-item #2  nav:manga.MangaScreen
 screen:browse.SourceFeedScreen/tag:manga-item [action: More actions]  dialog:"Bravo"
 screen:browse.SourceFeedScreen/tag:manga-item [action: More actions] #2  dialog:"Alpha"
 screen:browse.SourceScreen/""Alpha""  selected-already
@@ -655,7 +717,7 @@ screen:migration.MigrationListScreen/"Alpha" [type, enter]  key-unused
 screen:migration.MigrationListScreen/"Alpha" [type, escape]  key-unused
 screen:migration.MigrationListScreen/"Alpha" [type]  ui
 screen:migration.MigrationListScreen/"Back"  dialog:"Stop migrating?"
-screen:migration.MigrationListScreen/"Bravo Local source # chapters · Latest: #"  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:migration.MigrationListScreen/"Bravo Local source # chapters · Latest: #"  nav:manga.MangaScreen
 screen:migration.MigrationListScreen/"No alternatives found"  nav:browse.GlobalSearchScreen
 screen:migration.MigrationListScreen/"No alternatives found" #2  nav:browse.GlobalSearchScreen
 screen:migration.MigrationListScreen/"Search"  NO-EFFECT
@@ -741,7 +803,7 @@ screen:settings.RestoreBackupScreen/tag:backup-option:Extension stores  ui
 screen:settings.RestoreBackupScreen/tag:backup-option:Library  ui
 screen:settings.RestoreBackupScreen/tag:backup-option:Saved Searches & Feeds  ui
 screen:settings.RestoreBackupScreen/tag:backup-option:Source settings  ui
-screen:settings.RestoreBackupScreen/tag:restore-backup-action  asks:sensitive-settings db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.last_update pref:categorized_display toast:"Restored # entries"
+screen:settings.RestoreBackupScreen/tag:restore-backup-action  asks:sensitive-settings db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at db:mangas.last_update pref:categorized_display toast:"Restored # entries"
 screen:settings.SourceSettingsScreen/"Back"  nav:back tab:Library
 screen:stats.StatsScreen/"Back"  nav:back tab:Library
 screen:stats.StatsScreen/"More"  menu
@@ -803,7 +865,7 @@ settings:Advanced/"Library Categories, global update"  ui
 settings:Advanced/"Log level Changing this can impact app performance. Force..."  dialog:"Log level"
 settings:Advanced/"Onboarding guide"  ui
 settings:Advanced/"Reader Reading mode, display, navigation"  ui
-settings:Advanced/"Refresh library covers"  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ toast:"Library covers refreshed"
+settings:Advanced/"Refresh library covers"  db:mangas.favorite_modified_at toast:"Library covers refreshed"
 settings:Advanced/"Reindex downloads Force app to recheck downloaded chapters"  toast:"Recreating download index"
 settings:Advanced/"Reset per-series reader settings Resets reading mode and ..."  toast:"All reader settings reset"
 settings:Advanced/"Revoke trusted unknown extensions Extensions trusted on t..."  toast:"Revoked trust for all unknown extensions"
@@ -929,7 +991,7 @@ settings:Data/"Connections Discord"  ui
 settings:Data/"Create backup"  nav:settings.CreateBackupScreen
 settings:Data/"Data Saver Compress images before downloading or loading ..."  dialog:"Data Saver"
 settings:Data/"Data and storage Manual & automatic backups, storage space"  selected-already
-settings:Data/"Data folder /tmp/zoukan-crawl#"  folder:.
+settings:Data/"Data folder <home>\AppData\Local\Temp\zoukan-c..."  folder:.
 settings:Data/"Downloads Automatic download, download ahead"  ui
 settings:Data/"E-Hentai E-Hentai settings"  ui
 settings:Data/"Install missing extensions Installs the extensions of the..."  nav:settings.MissingExtensionsScreen
@@ -942,7 +1004,7 @@ settings:Data/"Open the local source folder Put a folder per entry here,..."  fo
 settings:Data/"Reader Reading mode, display, navigation"  ui
 settings:Data/"Restore backup"  pick:open[tachibk,proto.gz]
 settings:Data/"Security and privacy App lock, secure screen"  ui
-settings:Data/"Storage location /tmp/zoukan-crawl#"  pick:folder
+settings:Data/"Storage location <home>\AppData\Local\Temp\zou..."  pick:folder
 settings:Data/"Sync service Off"  dialog:"Sync service"
 settings:Data/"Tracking One-way progress sync, enhanced sync"  ui
 settings:Data/tag:settings-search  ui
@@ -974,7 +1036,7 @@ settings:Downloads/"Library Categories, global update"  ui
 settings:Downloads/"Reader Reading mode, display, navigation"  ui
 settings:Downloads/"Save as CBZ archive"  pref:save_chapter_as_cbz
 settings:Downloads/"Security and privacy App lock, secure screen"  ui
-settings:Downloads/"Set the download password Kept in files in /tmp/zoukan-cr..."  dialog:"Download password"
+settings:Downloads/"Set the download password Kept in files in <home>"  dialog:"Download password"
 settings:Downloads/"Split tall images Improves reader performance"  pref:split_tall_images
 settings:Downloads/"Tracking One-way progress sync, enhanced sync"  ui
 settings:Downloads/tag:settings-search  ui
@@ -1029,7 +1091,7 @@ settings:Library/"Swipe to left action Toggle bookmark"  dialog:"Swipe to left a
 settings:Library/"Swipe to right action Toggle read"  dialog:"Swipe to right action"
 settings:Library/"Tag sorting tags # tags"  nav:library.SortTagScreen
 settings:Library/"Tracking One-way progress sync, enhanced sync"  ui
-settings:Library/"Update the library #Last update: ##, #, #:# #"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+settings:Library/"Update the library #Last update: # ##, #:#"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
 settings:Library/tag:settings-search  ui
 settings:Library/tag:settings-search [type, enter]  key-unused
 settings:Library/tag:settings-search [type, escape]  ui
@@ -1160,7 +1222,6 @@ state:app-lock/"Unlock"  ui
 state:download-password/"Cancel"  close
 state:download-password/tag:download-password  ui
 state:download-password/tag:download-password-repeat  ui
-state:onboarding/"All"  selected-already
 state:onboarding/"Browse"  tab:Browse
 state:onboarding/"Catppuccin"  pref:pref_app_theme
 state:onboarding/"Close"  ui
@@ -1168,8 +1229,7 @@ state:onboarding/"Cloudflare"  pref:pref_app_theme
 state:onboarding/"Cotton candy"  pref:pref_app_theme
 state:onboarding/"Custom"  pref:pref_app_theme
 state:onboarding/"Dark"  pref:pref_theme_mode_key
-state:onboarding/"Default"  ui
-state:onboarding/"Default" #2  pref:pref_app_theme
+state:onboarding/"Default"  pref:pref_app_theme
 state:onboarding/"Doom"  pref:pref_app_theme
 state:onboarding/"Downloads"  nav:downloads.DownloadsScreen
 state:onboarding/"Filter, sort and display"  dialog:"Filter"
@@ -1195,7 +1255,6 @@ state:onboarding/"Search library"  ui
 state:onboarding/"Search library" [type, enter]  key-unused
 state:onboarding/"Search library" [type, escape]  ui
 state:onboarding/"Search library" [type]  ui
-state:onboarding/"Smoke"  ui
 state:onboarding/"Statistics"  nav:stats.StatsScreen
 state:onboarding/"Strawberry Daiquiri"  pref:pref_app_theme
 state:onboarding/"System"  pref:pref_theme_mode_key
@@ -1206,12 +1265,18 @@ state:onboarding/"Update library"  db:mangas.favorite_modified_at job:library-up
 state:onboarding/"Updates"  tab:Updates
 state:onboarding/"Yin & Yang"  pref:pref_app_theme
 state:onboarding/"Yotsuba"  pref:pref_app_theme
-state:onboarding/tag:manga-item  unreached
-state:onboarding/tag:manga-item #2  unreached
+state:onboarding/tag:manga-item  nav:manga.MangaScreen
+state:onboarding/tag:manga-item #2  nav:manga.MangaScreen
 state:onboarding/tag:manga-item [action: More actions]  menu
 state:onboarding/tag:manga-item [action: More actions] #2  menu
 state:onboarding/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
 state:onboarding/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+state:onboarding/tag:manga-item [action: More actions] #2 > "Delete downloads"  dialog:"Delete the downloads of # entry?"
+state:onboarding/tag:manga-item [action: More actions] #2 > "Download"  menu
+state:onboarding/tag:manga-item [action: More actions] #2 > "Download" > "Next # chapters"  close
+state:onboarding/tag:manga-item [action: More actions] #2 > "Download" > "Next # chapters" #2  close
+state:onboarding/tag:manga-item [action: More actions] #2 > "Download" > "Next chapter"  close
+state:onboarding/tag:manga-item [action: More actions] #2 > "Download" > "Unread chapters"  close
 state:onboarding/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
 state:onboarding/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
 state:onboarding/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
@@ -1270,9 +1335,7 @@ tab:History/"Search history" [type, enter]  key-unused
 tab:History/"Search history" [type, escape]  unreached
 tab:History/"Search history" [type]  ui
 tab:History/"Updates"  tab:Updates
-tab:Library/"All"  selected-already
 tab:Library/"Browse"  tab:Browse
-tab:Library/"Default"  ui
 tab:Library/"Downloads"  nav:downloads.DownloadsScreen
 tab:Library/"Filter, sort and display"  dialog:"Filter"
 tab:Library/"History"  tab:History
@@ -1281,13 +1344,12 @@ tab:Library/"More"  tab:More
 tab:Library/"More" #2  menu
 tab:Library/"More" #2 > "Edit categories"  close nav:category.CategoryScreen
 tab:Library/"More" #2 > "Library update errors"  close nav:library.UpdateErrorsScreen
-tab:Library/"More" #2 > "Open a random entry"  close db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+tab:Library/"More" #2 > "Open a random entry"  close nav:manga.MangaScreen
 tab:Library/"More" #2 > "Select all"  close selection
 tab:Library/"Search library"  ui
 tab:Library/"Search library" [type, enter]  key-unused
 tab:Library/"Search library" [type, escape]  ui
 tab:Library/"Search library" [type]  ui
-tab:Library/"Smoke"  ui
 tab:Library/"Statistics"  nav:stats.StatsScreen
 tab:Library/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
 tab:Library/"Updates"  tab:Updates
@@ -1298,10 +1360,26 @@ tab:Library/key:Ctrl+4  tab:Browse
 tab:Library/key:Ctrl+5  tab:More
 tab:Library/key:Ctrl+F  focus:"Search library"
 tab:Library/key:Ctrl+Shift+U  db:mangas.favorite_modified_at job:library-update notification:"Library updated" toast:"Updating the library"
-tab:Library/tag:manga-item  unreached
-tab:Library/tag:manga-item #2  unreached
-tab:Library/tag:manga-item [action: More actions]  unreached
-tab:Library/tag:manga-item [action: More actions] #2  unreached
+tab:Library/tag:manga-item  nav:manga.MangaScreen
+tab:Library/tag:manga-item #2  nav:manga.MangaScreen
+tab:Library/tag:manga-item [action: More actions]  menu
+tab:Library/tag:manga-item [action: More actions] #2  menu
+tab:Library/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
+tab:Library/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+tab:Library/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
+tab:Library/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
+tab:Library/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
+tab:Library/tag:manga-item [action: More actions] #2 > "Open"  close nav:manga.MangaScreen
+tab:Library/tag:manga-item [action: More actions] #2 > "Remove from library"  dialog:"Remove from library?"
+tab:Library/tag:manga-item [action: More actions] #2 > "Select"  close selection
+tab:Library/tag:manga-item [action: More actions] > "Change categories"  dialog:"Set categories"
+tab:Library/tag:manga-item [action: More actions] > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+tab:Library/tag:manga-item [action: More actions] > "Mark as read"  close db:chapters.read
+tab:Library/tag:manga-item [action: More actions] > "Mark as unread"  close
+tab:Library/tag:manga-item [action: More actions] > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
+tab:Library/tag:manga-item [action: More actions] > "Open"  close nav:manga.MangaScreen
+tab:Library/tag:manga-item [action: More actions] > "Remove from library"  dialog:"Remove from library?"
+tab:Library/tag:manga-item [action: More actions] > "Select"  close selection
 tab:More/"About"  nav:more.SettingsScreen
 tab:More/"Browse"  tab:Browse
 tab:More/"Categories"  nav:category.CategoryScreen
