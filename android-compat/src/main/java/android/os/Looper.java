@@ -240,7 +240,11 @@ public final class Looper {
         // One looper serves every extension: an Error from one extension's callback (a LinkageError,
         // a StackOverflowError) must not end it and hang every WebView extension until a restart
         } catch (Error error) {
-            if (error instanceof ThreadDeath) throw error;
+            // The VM's own failures (OutOfMemoryError, InternalError) stay fatal and reach the crash reporter
+            if (error instanceof ThreadDeath
+                    || (error instanceof VirtualMachineError && !(error instanceof StackOverflowError))) {
+                throw error;
+            }
             Log.e(TAG, "Loop handler threw", error);
         // ZOUKAN <--
         } finally {

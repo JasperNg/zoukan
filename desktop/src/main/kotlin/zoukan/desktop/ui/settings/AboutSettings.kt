@@ -213,7 +213,9 @@ private fun exitApp(code: Int) {
 internal fun storeTokenOrToast(value: String?): Boolean = try {
     Updates.checker.token = value
     true
-} catch (e: Exception) {
+} catch (e: Throwable) {
+    // A refusal, or the native store failing to load (a LinkageError from JNA)
+    if (e !is Exception && e !is LinkageError) throw e
     logcat("AboutSettings", LogPriority.WARN) { "Could not store the update-check token: ${e.message}" }
     Toasts.show(secretStoreError(e))
     false

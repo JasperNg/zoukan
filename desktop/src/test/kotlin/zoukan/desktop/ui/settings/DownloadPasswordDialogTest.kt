@@ -43,13 +43,21 @@ class DownloadPasswordDialogTest {
     private class RefusingStore(private val inner: SecretStore) : SecretStore by inner {
         var refuse = false
 
-        override fun set(key: String, value: String) {
+        /** Fail as the native store does when its library cannot load, instead of refusing. */
+        var unloadable = false
+
+        private fun fail() {
+            if (unloadable) throw UnsatisfiedLinkError("no Security framework")
             check(!refuse) { "denied" }
+        }
+
+        override fun set(key: String, value: String) {
+            fail()
             inner.set(key, value)
         }
 
         override fun delete(key: String) {
-            check(!refuse) { "denied" }
+            fail()
             inner.delete(key)
         }
     }
@@ -171,5 +179,19 @@ class DownloadPasswordDialogTest {
         security.passwordProtectDownloads().get() shouldBe true
         dismissed shouldBe false
         changed shouldBe null
+    }
+
+    @Test
+    fun `a secret store whose native library cannot load keeps the password and the dialog`() = runDesktopComposeUiTest {
+        showDialog()
+        store.unloadable = true
+        onNodeWithText(localized(MR.strings.action_remove)).performClick()
+        waitForIdle()
+        lastButton(localized(MR.strings.action_remove)).performClick()
+        waitForIdle()
+
+        store.unloadable = false
+        password.get()?.concatToString() shouldBe "old-pass"
+        dismissed shouldBe false
     }
 }

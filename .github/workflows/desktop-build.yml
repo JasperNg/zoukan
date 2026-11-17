@@ -19,6 +19,7 @@ on:
       - '**.md'
       - '.github/readme-images/**'
       - '.github/ISSUE_TEMPLATE/**'
+      - 'desktop/reports/**'
       - 'LICENSE'
   pull_request:
     paths:

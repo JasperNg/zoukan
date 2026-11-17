@@ -130,10 +130,10 @@ class ExtensionWiringCheck(
     }
 
     fun run(): Pair<Report, List<Row>> = runBlocking {
+        require(options.storeUrl.isNotBlank()) { "No store URL: the app names no store, so the caller must give one" }
         val report = Report("Zoukan extension wiring")
         traces.parentFile.mkdirs()
         traces.writeText("")
-        require(options.storeUrl.isNotBlank()) { "No store URL: the app names no store, so the caller must give one" }
         val store = storeService.fetch(options.storeUrl).getOrThrow()
         val available = storeService.getExtensions(store).getOrThrow()
         CompatibilityHarness.checkStoreSize(options.storeUrl, available.size, options.minExtensions)

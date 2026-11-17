@@ -83,6 +83,26 @@ class LooperWakeTest {
     }
 
     @Test
+    fun `an OutOfMemoryError from a message still ends the loop, for the crash reporter`() {
+        val ready = CompletableFuture<Looper>()
+        val thrown = CompletableFuture<Throwable>()
+        val thread = Thread {
+            Looper.prepare()
+            ready.complete(Looper.myLooper()!!)
+            Looper.loop()
+        }.apply {
+            isDaemon = true
+            setUncaughtExceptionHandler { _, e -> thrown.complete(e) }
+            start()
+        }
+        val looper = ready.get(5, TimeUnit.SECONDS)
+        Handler(looper).post { throw OutOfMemoryError("probe") }
+        (thrown.get(5, TimeUnit.SECONDS) is OutOfMemoryError) shouldBe true
+        thread.join(5_000)
+        thread.isAlive shouldBe false
+    }
+
+    @Test
     fun `HandlerThread quit ends the thread`() {
         val thread = HandlerThread("probe").apply { start() }
         (thread.looper != null) shouldBe true

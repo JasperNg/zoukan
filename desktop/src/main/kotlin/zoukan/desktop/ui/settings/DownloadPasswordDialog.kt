@@ -54,7 +54,9 @@ internal fun DownloadPasswordDialog(
     fun storeOrToast(value: String): Boolean = try {
         cbzPassword.set(value)
         true
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
+        // A refusal, or the native store failing to load (a LinkageError from JNA)
+        if (e !is Exception && e !is LinkageError) throw e
         logcat("DownloadPasswordDialog", LogPriority.WARN) { "Could not store the download password: ${e.message}" }
         Toasts.show(secretStoreError(e))
         pending = null

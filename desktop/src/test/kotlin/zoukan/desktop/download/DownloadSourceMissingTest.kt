@@ -32,10 +32,12 @@ class DownloadSourceMissingTest {
     private val kits = mutableListOf<DownloadKit>()
     private val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as Logger
     private val appender = ListAppender<ILoggingEvent>().apply { start() }
+    private var installedLogger = false
 
     @AfterEach
     fun tearDown() {
         root.detachAppender(appender)
+        if (installedLogger) LogcatLogger.uninstall()
         // Queue saves run in the background; let them finish before the temp folder goes
         kits.forEach { it.awaitBackground() }
     }
@@ -43,7 +45,10 @@ class DownloadSourceMissingTest {
     @Test
     fun `a chapter of an entry whose source is not installed fails without logging an error`() = runBlocking<Unit> {
         // As the app does at start (ZoukanRuntime): logcat goes to SLF4J
-        if (!LogcatLogger.isInstalled) LogcatLogger.install(Slf4jLogcatLogger(LogPriority.INFO))
+        if (!LogcatLogger.isInstalled) {
+            LogcatLogger.install(Slf4jLogcatLogger(LogPriority.INFO))
+            installedLogger = true
+        }
         val kit = DownloadKit(temp).also { kits += it }
         root.addAppender(appender)
         val manga = kit.manga(1, "Alpha", source = 42)

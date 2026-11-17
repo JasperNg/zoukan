@@ -33,13 +33,33 @@ class ImageMetadataTest {
             .map { File(root, it) }
             .filter(File::isFile)
         withClue("found no images under $root") { files.shouldNotBeEmpty() }
-        // PNG keeps the manifest in a caBX chunk, JPEG and WebP in JUMBF boxes, SVG in c2pa: metadata
-        val markers = listOf("caBX", "c2pa", "jumb").map { it.toByteArray() }
-        val hits = files.filter { file ->
-            val bytes = file.readBytes()
-            markers.any { marker -> bytes.indexOf(marker) >= 0 }
-        }.map { it.relativeTo(root).path }
+        val hits = files.filter { hasManifest(it) }.map { it.relativeTo(root).path }
         hits.shouldBeEmpty()
+    }
+
+    /** PNG keeps the manifest in a caBX chunk, SVG in c2pa metadata, JPEG and WebP in a JUMBF box labelled c2pa. */
+    private fun hasManifest(file: File): Boolean {
+        val bytes = file.readBytes()
+        return when (file.extension.lowercase()) {
+            "png" -> pngChunkTypes(bytes).contains("caBX")
+            "svg" -> bytes.toString(Charsets.UTF_8).contains("c2pa", ignoreCase = true)
+            // Compressed pixels can hold any 4 bytes; a JUMBF box has both its type and its label
+            else -> bytes.indexOf("jumb".toByteArray()) >= 0 && bytes.indexOf("c2pa".toByteArray()) >= 0
+        }
+    }
+
+    /** The chunk types of a PNG, walked by length so pixel data is never mistaken for a type. */
+    private fun pngChunkTypes(bytes: ByteArray): List<String> {
+        val types = mutableListOf<String>()
+        var i = 8
+        while (i + 8 <= bytes.size) {
+            val length = ((bytes[i].toInt() and 0xff) shl 24) or ((bytes[i + 1].toInt() and 0xff) shl 16) or
+                ((bytes[i + 2].toInt() and 0xff) shl 8) or (bytes[i + 3].toInt() and 0xff)
+            types += String(bytes, i + 4, 4, Charsets.US_ASCII)
+            if (length < 0) break
+            i += 12 + length
+        }
+        return types
     }
 
     private fun ByteArray.indexOf(needle: ByteArray): Int {

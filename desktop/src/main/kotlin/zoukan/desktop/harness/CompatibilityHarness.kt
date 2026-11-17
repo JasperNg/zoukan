@@ -110,10 +110,10 @@ class CompatibilityHarness(
     )
 
     fun run(): Pair<Report, List<Row>> = runBlocking {
+        require(options.storeUrl.isNotBlank()) { "No store URL: the app names no store, so the caller must give one" }
         traces.parentFile.mkdirs()
         traces.writeText("")
         val report = Report("Zoukan extension compatibility")
-        require(options.storeUrl.isNotBlank()) { "No store URL: the app names no store, so the caller must give one" }
         val store = storeService.fetch(options.storeUrl).getOrThrow()
         val available = storeService.getExtensions(store).getOrThrow()
         checkStoreSize(options.storeUrl, available.size, options.minExtensions)
