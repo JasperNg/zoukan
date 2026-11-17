@@ -42,19 +42,36 @@ class DownloadSourceMissingTest {
         kits.forEach { it.awaitBackground() }
     }
 
-    @Test
-    fun `a chapter of an entry whose source is not installed fails without logging an error`() = runBlocking<Unit> {
+    private fun installLogger() {
         // As the app does at start (ZoukanRuntime): logcat goes to SLF4J
         if (!LogcatLogger.isInstalled) {
             LogcatLogger.install(Slf4jLogcatLogger(LogPriority.INFO))
             installedLogger = true
         }
-        val kit = DownloadKit(temp).also { kits += it }
         root.addAppender(appender)
-        val manga = kit.manga(1, "Alpha", source = 42)
-        val chapter = kit.chapter(1, 1)
+    }
 
-        kit.manager.enqueue(manga, listOf(chapter))
+    @Test
+    fun `an entry whose source is not installed queues nothing, as on Android`() = runBlocking<Unit> {
+        installLogger()
+        val kit = DownloadKit(temp).also { kits += it }
+
+        kit.manager.enqueue(kit.manga(1, "Alpha", source = 42), listOf(kit.chapter(1, 1)))
+        withTimeout(30_000) { kit.manager.awaitIdle() }
+
+        kit.manager.queue.value.shouldBeEmpty()
+        appender.list.filter { it.level == Level.ERROR }.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a source uninstalled after its chapters were queued fails them without logging an error`() = runBlocking<Unit> {
+        installLogger()
+        val kit = DownloadKit(temp, sources = listOf(DownloadKit.TestSource("Gone", 42))).also { kits += it }
+        val manga = kit.manga(1, "Alpha", source = 42)
+
+        kit.manager.enqueue(manga, listOf(kit.chapter(1, 1)), start = false)
+        kit.byId.remove(42)
+        kit.manager.start()
         withTimeout(30_000) { kit.manager.awaitIdle() }
 
         val download = kit.manager.queue.value.single()

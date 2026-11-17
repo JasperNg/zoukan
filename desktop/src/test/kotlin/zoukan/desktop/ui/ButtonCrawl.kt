@@ -17,11 +17,16 @@ internal object ButtonCrawl {
     /**
      * A button key that stays the same from run to run: digits become `#`, since counts, sizes,
      * dates and times in a row's label change with the day and the machine, not with the app.
-     * Month and day names, a.m. and p.m., and the words of a relative date go too.
+     * Month and day names, a.m. and p.m., and the words of a relative date go too. A user's home
+     * folder becomes `<home>`, so the inventory never holds the name of the account that recorded it.
      */
     fun stable(id: String): String = id
+        .replace(HOME, "<home>")
         .replace(DATE_WORDS, "#")
         .replace(Regex("""\d+"""), "#")
+
+    /** `C:\Users\<name>`, `/Users/<name>` and `/home/<name>`, also when a label cut the name short. */
+    private val HOME = Regex("""(?i)\b[a-z]:\\Users\\[^\\\s"]*|/(?:Users|home)/[^/\s"]+""")
 
     private val DATE_WORDS = Regex(
         """(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|""" +

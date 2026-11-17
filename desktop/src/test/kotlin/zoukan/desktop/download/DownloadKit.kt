@@ -47,7 +47,8 @@ internal class DownloadKit(
         every { root } returns temp
     }
 
-    private val byId = sources.associateBy { it.id }
+    /** The installed sources by id; a test removes one to uninstall its extension. */
+    val byId = sources.associateBy { it.id }.toMutableMap()
 
     val sourceManager: SourceManager = object : SourceManager by mockk<SourceManager>() {
         override fun get(sourceKey: Long) = byId[sourceKey]

@@ -783,6 +783,10 @@ class DownloadManager(
      */
     fun enqueue(manga: Manga, chapters: List<Chapter>, start: Boolean = true) {
         if (chapters.isEmpty()) return
+        // As Android's Downloader.queueChapters: only an installed online source downloads, so the
+        // local source and an entry whose extension is not installed queue nothing (a merged entry
+        // passes its children here one by one)
+        if (sourceManager.get(manga.source) !is HttpSource) return
         val candidates = chapters
             .distinctBy { it.id }
             .filterNot { isDownloaded(manga, it) }
