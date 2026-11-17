@@ -9,6 +9,7 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.RectF
 import io.kotest.assertions.throwables.shouldThrow
@@ -39,6 +40,17 @@ class GraphicsCompatTest {
     }
 
     private fun Bitmap.pixels(): IntArray = IntArray(width * height).also { getPixels(it, 0, width, 0, 0, width, height) }
+
+    @Test
+    fun `Point is a real value, not android jar's stub`() {
+        val p = Point(3, -4)
+        p.offset(1, 1)
+        p shouldBe Point(4, -3)
+        p.equals(4, -3) shouldBe true
+        p.negate()
+        Point(p) shouldBe Point(-4, 3)
+        Point().apply { set(7, 8) }.toString() shouldBe "Point(7, 8)"
+    }
 
     @Test
     fun `drawBitmap from a src Rect to a dst RectF moves tiles pixel for pixel`() {
