@@ -178,7 +178,8 @@ fun runZoukanApp() {
         // Cmd+Q on macOS, once Chromium has taken it over, quits the same way
         DisposableEffect(Unit) {
             JcefRuntime.quitRequest = ::quit
-            onDispose { JcefRuntime.quitRequest = null }
+            // The app is quitting now: a further Cmd+Q must not let JCEF shut Chromium down under the exit
+            onDispose { JcefRuntime.quitRequest = JcefRuntime.QUIT_UNDERWAY }
         }
         // The window opens where it was closed, at the size it had
         val windowState = remember { WindowBounds.initialState(preferences.windowBounds().get()) }

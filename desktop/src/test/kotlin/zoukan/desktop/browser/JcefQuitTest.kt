@@ -18,6 +18,11 @@ class JcefQuitTest {
     }
 
     @Test
+    fun `once the app is quitting, another Cmd+Q still does not let JCEF shut Chromium down`() {
+        JcefRuntime.onBeforeTerminate(JcefRuntime.QUIT_UNDERWAY) shouldBe true
+    }
+
+    @Test
     fun `without it, as in the command-line tools, JCEF's own shutdown ends the run`() {
         JcefRuntime.onBeforeTerminate(null) shouldBe false
     }

@@ -41,11 +41,28 @@ object JcefRuntime {
 
     /**
      * The app's own quit (the window and tray's Quit), which macOS's Cmd+Q must run once Chromium
-     * has taken it over; null outside the windowed app (the command-line tools), where JCEF's own
-     * shutdown ends the run.
+     * has taken it over. It is null only before the windowed app starts and in the command-line
+     * tools, where JCEF's own shutdown ends the run; once set it is never set back to null (the
+     * app's exit leaves [QUIT_UNDERWAY]).
      */
     @Volatile
     var quitRequest: (() -> Unit)? = null
+
+    /**
+     * The [quitRequest] while the app is already quitting. A further Cmd+Q must still answer true,
+     * so that JCEF does not shut Chromium down under the exit path; the quit already under way
+     * finishes the job.
+     */
+    internal val QUIT_UNDERWAY: () -> Unit = {}
+
+    // Whether Chromium has reported its user agent (see learnUserAgent)
+    private val userAgentLearned = AtomicBoolean(false)
+
+    /**
+     * Whether [DesktopBrowser.userAgent] is the one Chromium reported. Until then it is the one
+     * [install] assumed from Chromium's version, and a browser window asks Chromium first.
+     */
+    val userAgentKnown: Boolean get() = userAgentLearned.get()
 
     /**
      * JCEF's question before it shuts Chromium down for a Cmd+Q: true when the app quits itself,
@@ -63,6 +80,31 @@ object JcefRuntime {
         CefHelper.requestStart = ::requestStart
         DesktopBrowser.userAgent = userAgent()
     }
+
+    /**
+     * Takes the user agent Chromium [reported] (`navigator.userAgent` on a blank page of the
+     * browser window) as [DesktopBrowser.userAgent], when it is a plausible one; else keeps the
+     * assumed one. Never throws: it runs on Chromium's threads.
+     */
+    fun learnUserAgent(reported: String?) {
+        runCatching {
+            val assumed = DesktopBrowser.userAgent
+            val userAgent = chromiumUserAgent(reported, assumed)
+            if (userAgent != assumed) {
+                logcat(LogPriority.WARN) { "Chromium's user agent is not the expected one; using Chromium's" }
+                DesktopBrowser.userAgent = userAgent
+            }
+            if (chromiumUserAgent(reported, assumed = null) != null) userAgentLearned.set(true)
+        }.onFailure { logcat(LogPriority.WARN, it) { "Could not take Chromium's user agent" } }
+    }
+
+    /**
+     * [reported] when it looks like a browser's user agent (starts with "Mozilla/", one line),
+     * else [assumed]. A failed evaluation reports null, or "null" when it was not decoded.
+     */
+    internal fun chromiumUserAgent(reported: String?, assumed: String?): String? = reported
+        ?.takeIf { it.isNotBlank() && it != "null" && it.startsWith("Mozilla/") && '\n' !in it && '\r' !in it }
+        ?: assumed
 
     /** The user agent Chromium sends by default (Chrome's reduced user agent string). */
     private fun userAgent(): String {

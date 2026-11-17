@@ -81,7 +81,8 @@ class ClearanceUserAgents(private val store: Store) {
          * The user agents to try a challenge with, in order: the request's own first, like Android's
          * WebView does, so the clearance works with the extension's user agent; then Chromium's,
          * which Cloudflare accepts when it rejects a user agent that does not match the browser
-         * (an Android one on desktop Chromium, say). The last one is used for the browser window.
+         * (an Android one on desktop Chromium, say). The browser window, the last resort, always
+         * uses Chromium's own user agent, whatever this list holds.
          */
         fun solveOrder(requestUserAgent: String, browserUserAgent: String?): List<String> =
             listOfNotNull(requestUserAgent, browserUserAgent).distinct()

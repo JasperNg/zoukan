@@ -74,10 +74,12 @@ class CloudflareInterceptor(
                 val solvedWith = userAgents.firstOrNull { solveHeadless(original, it, oldCookie) } ?: run {
                     // The user may take minutes; the call timeout (2 min) would end the call first
                     (chain.call().timeout() as? AsyncTimeout)?.exit()
-                    val userAgent = userAgents.last()
-                    userAgent.takeIf {
-                        DesktopBrowser.solveChallenge(request.url.toString(), it) { isSolved(request, oldCookie) }
+                    val solvedInWindow = DesktopBrowser.solveChallenge(request.url.toString(), userAgents.last()) {
+                        isSolved(request, oldCookie)
                     }
+                    // The window runs Chromium's own user agent, which it may have learned only while
+                    // opening, so it is read after the solve
+                    if (solvedInWindow) DesktopBrowser.userAgent ?: userAgents.last() else null
                 }
                 // A clearance someone else's window got already has its record
                 if (solvedWith != null) {
@@ -231,8 +233,10 @@ object CloudflareChallenge {
 object DesktopBrowser {
     fun interface ChallengeSolver {
         /**
-         * Shows [url] in a browser window with [userAgent] until [isSolved] returns true, the user
-         * closes the window, or a timeout. Returns whether it was solved.
+         * Shows [url] in a browser window until [isSolved] returns true, the user closes the
+         * window, or a timeout. Returns whether it was solved. [userAgent] is the request's hint
+         * only: the built-in window always runs Chromium's own user agent, and the clearance is
+         * recorded with that one ([DesktopBrowser.userAgent] once the window has opened).
          */
         fun solve(url: String, userAgent: String, isSolved: () -> Boolean): Boolean
     }
@@ -241,8 +245,9 @@ object DesktopBrowser {
     var challengeSolver: ChallengeSolver? = null
 
     /**
-     * The user agent of the app's Chromium, set by the app at start. A challenge that the request's
-     * own user agent cannot solve is solved with it, and that host's requests then use it.
+     * The user agent of the app's Chromium, set by the app at start from Chromium's version and
+     * replaced by the value Chromium reports once a browser window has opened. A challenge that the
+     * request's own user agent cannot solve is solved with it, and that host's requests then use it.
      */
     @Volatile
     var userAgent: String? = null

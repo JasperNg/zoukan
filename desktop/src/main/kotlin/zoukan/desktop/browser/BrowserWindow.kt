@@ -18,13 +18,16 @@ import org.cef.network.CefRequest
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
+import xyz.nulldev.androidcompat.webkit.evaluateJavaScriptDecoded
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.GraphicsEnvironment
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JButton
 import javax.swing.JFrame
 import javax.swing.JLabel
@@ -133,7 +136,13 @@ class BrowserWindow(
                     // disagreeing (the app's default is an Android one), and Cloudflare's Turnstile
                     // fails such a browser once the user clicks the check. A clearance got here is
                     // recorded with Chromium's user agent, which the app then sends to that site.
-                    browser.loadURL(startUrl)
+                    // That is the one Chromium reports here, on the window's own blank page (never
+                    // a site's page), the first time a window opens.
+                    if (JcefRuntime.userAgentKnown) {
+                        browser.loadURL(startUrl)
+                    } else {
+                        learnUserAgentThenLoad(browser)
+                    }
                 }
             })
             val browser = client.createBrowser("about:blank", false, false).also { browser = it }
@@ -284,7 +293,32 @@ class BrowserWindow(
         }
     }
 
+    /**
+     * Asks Chromium for its user agent on the still blank page, then loads [startUrl] exactly once:
+     * after the answer, after [USER_AGENT_TIMEOUT_MS] when none comes, or at once when asking fails.
+     * An answer that comes after the page started loading is ignored, as it may be the site's.
+     */
+    private fun learnUserAgentThenLoad(browser: CefBrowser) {
+        val started = AtomicBoolean(false)
+        fun load(reported: String?, answered: Boolean) {
+            if (!started.compareAndSet(false, true)) return
+            if (answered) JcefRuntime.learnUserAgent(reported)
+            runCatching { browser.loadURL(startUrl) }
+                .onFailure { logcat(LogPriority.WARN, it) { "The browser could not load its page" } }
+        }
+        runCatching {
+            CompletableFuture.delayedExecutor(USER_AGENT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .execute { load(null, answered = false) }
+            // Reports on Chromium's threads; a failed evaluation reports null
+            browser.evaluateJavaScriptDecoded("navigator.userAgent") { load(it, answered = true) }
+        }.onFailure {
+            logcat(LogPriority.WARN, it) { "Could not ask Chromium for its user agent" }
+            load(null, answered = false)
+        }
+    }
+
     companion object {
+        private const val USER_AGENT_TIMEOUT_MS = 3000L
         private const val CHALLENGE_TIMEOUT_MS = 3 * 60 * 1000L
         private const val CLOSE_WAIT_SECONDS = 10L
 
