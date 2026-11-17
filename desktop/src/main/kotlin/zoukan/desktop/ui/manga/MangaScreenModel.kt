@@ -192,6 +192,12 @@ class MangaScreenModel(
 
     private var firstLoad = true
 
+    /**
+     * Bumped by each check of the downloads, so an older check that ends last is dropped. Before
+     * the init blocks: the entry can load (and check its downloads) before the constructor ends.
+     */
+    private val downloadedCheck = AtomicInteger()
+
     init {
         screenModelScope.launch {
             // ZOUKAN -->
@@ -293,9 +299,6 @@ class MangaScreenModel(
                 .collect { queued -> mutableState.update { it.copy(queued = queued) } }
         }
     }
-
-    /** Bumped by each check of the downloads, so an older check that ends last is dropped. */
-    private val downloadedCheck = AtomicInteger()
 
     private fun updateDownloaded() {
         val manga = state.value.manga ?: return
