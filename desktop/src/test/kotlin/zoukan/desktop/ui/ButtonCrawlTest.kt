@@ -39,13 +39,23 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ThemeMode
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.collections.shouldBeEmpty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import mihon.domain.manga.model.toDomainManga
+import okhttp3.Request
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
@@ -55,8 +65,10 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.history.interactor.RemoveHistory
+import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.DesktopAppModule
@@ -106,7 +118,9 @@ import kotlin.time.Duration.Companion.minutes
  * then minimum) and the keyboard shortcuts in [KEYS].
  *
  * A button that opens a menu (a popup that is not a dialog) gets its items clicked too, one level
- * down. Dialogs opened by a click are not crawled: the named ones have checks of their own.
+ * down, and an item that opens a submenu gets the submenu's items clicked ([ButtonCrawl.openedMenu],
+ * [ButtonCrawl.MAX_MENU_DEPTH]). Dialogs opened by a click are not crawled: the named ones have
+ * checks of their own.
  *
  * Between clicks the settings the click changed are put back, and the seeded library (Alpha and
  * Bravo, their chapters, the Smoke category) is restored when a click changed it. The network goes
@@ -181,6 +195,10 @@ class ButtonCrawlTest {
 
         /** What an empty field of a dialog gets before its buttons are collected, so a Save it disables shows. */
         const val FILLED = "Crawl"
+
+        /** The online entry of flow:library.selection-download: before Alpha in the library's A to Z order, so it is the first item. */
+        const val ONLINE_TITLE = "Aeon"
+        const val ONLINE_URL = "/aeon"
 
         /** Fallbacks that say what a text field or slider task saw when nothing changed (see TESTING.md, 'Effect signatures'). */
         const val REJECTED = "field"
@@ -508,8 +526,8 @@ class ButtonCrawlTest {
     }
 
     /**
-     * States whose buttons only show with data: a library selection, the entry's chapters all
-     * selected and the reader's bars. Each key is the coverage-matrix row of the flow.
+     * States whose buttons only show with data: a library selection, one of an online entry (for
+     * the download actions), the entry's chapters all selected and the reader's bars. Each key is the coverage-matrix row of the flow.
      */
     private fun extraChecks(f: SmokeFixture): List<SmokeCheck> = listOf(
         SmokeCheck(
@@ -530,6 +548,7 @@ class ButtonCrawlTest {
                 waitUntil(timeoutMillis = 10_000) { onAllNodes(hasText("1 selected")).fetchSemanticsNodes().isNotEmpty() }
             },
         ),
+        onlineSelection(),
         SmokeCheck(
             "flow:manga.chapter-selection",
             "entry with every chapter selected",
@@ -566,6 +585,94 @@ class ButtonCrawlTest {
             },
         ),
     )
+
+    /**
+     * The library with an online entry ([ONLINE_TITLE], of [HeldSource]) selected, so the
+     * download actions show: the selection bar's Download and the entry menu's Download with its
+     * submenu. The seeded entries are local-source, which has no downloads. The entry and its
+     * source are added for this check only, and removed again with whatever it queued.
+     */
+    private fun onlineSelection(): SmokeCheck {
+        val source = HeldSource()
+        val tests = Injekt.get<zoukan.desktop.exh.BuiltInSources>().testSources
+        return SmokeCheck(
+            "flow:library.selection-download",
+            "library selection of an online entry",
+            { HomeScreen.selectTab(HomeTab.Library) },
+            drive = {
+                if (tests.value.none { it === source }) tests.value = tests.value + source
+                waitUntil(timeoutMillis = 10_000) { Injekt.get<SourceManager>().get(source.id) != null }
+                runBlocking { seedOnline(source) }
+                val all = hasText("All") and SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Tab)
+                if (onAllNodes(all).fetchSemanticsNodes().isNotEmpty()) {
+                    onAllNodes(all).onFirst().performClick()
+                    settle()
+                }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(ONLINE_TITLE).fetchSemanticsNodes().isNotEmpty() }
+                onAllNodesWithText(ONLINE_TITLE).onFirst().performMouseInput { rightClick() }
+                clickText("Select")
+                waitUntil(timeoutMillis = 10_000) { onAllNodes(hasText("1 selected")).fetchSemanticsNodes().isNotEmpty() }
+            },
+            cleanup = {
+                val downloads = Injekt.get<zoukan.desktop.download.DownloadManager>()
+                try {
+                    downloads.clearQueue()
+                    runBlocking {
+                        withTimeout(10_000) { downloads.awaitBackgroundWork() }
+                        val mangas = Injekt.get<MangaRepository>()
+                        mangas.getMangaByUrlAndSourceId(ONLINE_URL, source.id)?.let { mangas.deleteManga(it.id) }
+                    }
+                } finally {
+                    tests.value = tests.value.filterNot { it === source }
+                    // The download made the source's folder before it waited for the pages
+                    Injekt.get<zoukan.desktop.download.DownloadPaths>().sourceDir(source.id).deleteRecursively()
+                }
+            },
+        )
+    }
+
+    /** Adds [ONLINE_TITLE] to the library, with two unread chapters, as a library update of [source] would. */
+    private suspend fun seedOnline(source: HeldSource) {
+        val entry = SManga.create().apply {
+            url = ONLINE_URL
+            title = ONLINE_TITLE
+        }.toDomainManga(source.id)
+        val manga = Injekt.get<NetworkToLocalManga>()(listOf(entry)).single()
+        Injekt.get<MangaRepository>().update(MangaUpdate(id = manga.id, favorite = true))
+        if (Injekt.get<GetChaptersByMangaId>().await(manga.id).isNotEmpty()) return
+        Injekt.get<ChapterRepository>().addAll(
+            (1..2).map { n ->
+                tachiyomi.domain.chapter.model.Chapter.create().copy(
+                    mangaId = manga.id,
+                    url = "$ONLINE_URL/$n",
+                    name = "Chapter $n",
+                    chapterNumber = n.toDouble(),
+                    // The oldest chapter has the highest source order, as a source lists them
+                    sourceOrder = (2 - n).toLong(),
+                )
+            },
+        )
+    }
+
+    /**
+     * An online source whose pages never come: a chapter queued from it stays in the queue,
+     * downloading, until the check's cleanup clears the queue. So a download's signature is the
+     * queue's change, the same in every run, with no failure or notification racing it. Its other
+     * requests (the entry's details, chapters, related titles) go to the crawl's closed network and
+     * fail there as an extension's do offline.
+     */
+    private class HeldSource : HttpSource() {
+        override val name = "Crawl online"
+        override val lang = "en"
+        override val supportsLatest = false
+        override val baseUrl = "http://127.0.0.1:9"
+
+        override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popular?page=$page", headers)
+
+        override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/search?q=$query&page=$page", headers)
+
+        override suspend fun getPageList(chapter: SChapter): List<Page> = awaitCancellation()
+    }
 
     // The crawl
 
@@ -831,11 +938,7 @@ class ButtonCrawlTest {
      */
     private fun ComposeUiTest.press(target: Target): List<Task> {
         target.position?.let { scroll(it) }
-        target.parent?.let { parent ->
-            val opener = find(parent, parent.fromRoot) ?: return unreached(target)
-            press(opener, parent.kind)
-            settleQuickly()
-        }
+        target.parent?.let { parent -> if (!reopen(parent)) return unreached(target) }
         val fromRoot = target.fromRoot
         val found = find(target, fromRoot) ?: return unreached(target)
         toggles[target.key] = isToggle(found.node)
@@ -849,12 +952,17 @@ class ButtonCrawlTest {
         }
         val (before, after, signature) = measure(target.key, target.kind, none) { press(found, target.kind) }
         var next = emptyList<Task>()
-        // A menu, not a dialog: its items, one level down
-        if (target.parent == null && after.menus > before.menus) {
+        // A menu, not a dialog: its items, one level down. A submenu of a menu item too, but no
+        // menu inside a submenu (ButtonCrawl.MAX_MENU_DEPTH)
+        val depth = generateSequence(target.parent) { it.parent }.count()
+        if ("menu" in signature.tokens && depth < ButtonCrawl.MAX_MENU_DEPTH) {
+            // A new popup is on a root of its own after the old ones; a submenu shown in place of its
+            // menu, or a popup in place of one that closed, is the topmost root with items
+            val menuRoot = if (after.roots > before.roots) before.roots else topRoot(roots(merged = true))
             val keys = mutableSetOf<String>()
-            next = clickables(fromRoot = before.roots).mapNotNull {
+            next = clickables(fromRoot = menuRoot).mapNotNull {
                 val key = uniqueKey("${target.key} > ${ButtonCrawl.stable(it.raw)}", keys) ?: return@mapNotNull null
-                Task.Click(Target(target.check, key, it.raw, it.ordinal, target.position, parent = target, fromRoot = before.roots))
+                Task.Click(Target(target.check, key, it.raw, it.ordinal, target.position, parent = target, fromRoot = menuRoot))
             }
         }
         // The round trip, for a click that stored something and stayed on the same screen
@@ -866,6 +974,15 @@ class ButtonCrawlTest {
             if (shown != null) roundTrip(target, fromRoot, shown)
         }
         return next
+    }
+
+    /** Opens the menu [opener] opened again: its own opener first, for a submenu. False when a button of the chain is gone. */
+    private fun ComposeUiTest.reopen(opener: Target): Boolean {
+        opener.parent?.let { if (!reopen(it)) return false }
+        val found = find(opener, opener.fromRoot) ?: return false
+        press(found, opener.kind)
+        settleQuickly()
+        return true
     }
 
     /**
@@ -1129,7 +1246,8 @@ class ButtonCrawlTest {
     private class Snapshot(
         val stack: List<cafe.adriel.voyager.core.screen.Screen>,
         val roots: Int,
-        val menus: Int,
+        /** The clickable items of each menu over the window, by node id, in root order. */
+        val menus: List<Set<String>>,
         /** The dialogs' titles: the first text of each root that is not a menu. */
         val dialogs: List<String>,
         val screen: String,
@@ -1156,13 +1274,15 @@ class ButtonCrawlTest {
     private fun ComposeUiTest.snapshot(): Snapshot {
         val roots = roots(merged = false)
         // A menu is a popup; any other root over the window is a dialog
-        val (menus, dialogs) = roots.drop(1).partition { root -> root.descendants().any { SemanticsProperties.IsPopup in it.config } }
+        val (menus, dialogs) = roots.withIndex().drop(1).partition { (_, root) -> root.descendants().any { SemanticsProperties.IsPopup in it.config } }
+        // A menu's items as the crawl names them: by the merged tree's node ids
+        val merged = roots(merged = true)
         val storage = Injekt.get<zoukan.desktop.storage.ZoukanStorage>()
         return Snapshot(
             stack = runOnUiThread { navigator.items.toList() },
             roots = roots.size,
-            menus = menus.size,
-            dialogs = dialogs.map { root -> root.descendants().firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.Text)?.joinToString { t -> t.text } } ?: "" },
+            menus = menus.map { (index, _) -> merged.getOrNull(index)?.descendants()?.filter { matches(Kind.Click, it) }?.map(::nodeId)?.toSet().orEmpty() },
+            dialogs = dialogs.map { (_, root) -> root.descendants().firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.Text)?.joinToString { t -> t.text } } ?: "" },
             screen = roots.joinToString("\n") { root -> root.descendants().joinToString("|", transform = ::describe) },
             settings = settings(),
             rows = readDb(),
@@ -1231,7 +1351,7 @@ class ButtonCrawlTest {
         }
         // The new dialogs, by title
         if (after.dialogs.size > before.dialogs.size) after.dialogs.drop(before.dialogs.size).forEach { tokens += "dialog:" + quoted(it) }
-        if (after.menus > before.menus) tokens += "menu"
+        if (ButtonCrawl.openedMenu(before.menus, after.menus)) tokens += "menu"
         if (after.roots < before.roots) tokens += "close"
         Recorder.calls.drop(before.outside).take(after.outside - before.outside).forEach { tokens += it }
         toasts.drop(before.toasts).take(after.toasts - before.toasts).forEach { tokens += "toast:" + quoted(it) }
@@ -1371,6 +1491,8 @@ class ButtonCrawlTest {
         return when {
             signature == NO_EFFECT -> "it did nothing"
             signature == "ui" && settingToggle -> "a setting's switch or choice that changed the screen but stored nothing"
+            // A click that opened a menu or submenu ("Download" with its choices) is "menu", not "ui":
+            // its items are crawled and checked instead
             signature == "ui" && toggles[key] != true && dataAction.containsMatchIn(label) -> "the label says it changes data, but the click only changed the screen"
             typeKey.containsMatchIn(key) && inDialog[key] != true && signature in inert &&
                 effects[key.replace(" [type]", " [type, enter]")] in inert -> "typing and Enter changed nothing but the field: no setting, search or screen took it"

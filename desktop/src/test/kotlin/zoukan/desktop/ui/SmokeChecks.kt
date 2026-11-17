@@ -155,9 +155,9 @@ import java.awt.EventQueue
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 import kotlin.time.Duration.Companion.minutes
@@ -229,11 +229,27 @@ internal object SmokeChecks {
      */
     fun startRuntime(prefix: String): ZoukanDirs {
         System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
-        val dirs = ZoukanDirs(Files.createTempDirectory(prefix).toFile())
+        val dirs = ZoukanDirs(newTempDir(prefix))
         ZoukanRuntime.start(dirs, interactiveBrowser = false)
         // The run lasts minutes, and the daily update check would call GitHub after 30 s
         Updates.autoCheck().set(false)
         return dirs
+    }
+
+    /**
+     * A new folder `<prefix><18 digits>` in the system temp folder. Files.createTempDirectory adds a
+     * random number of 1 to 20 digits, and labels that show the data folder are cut to a fixed
+     * length before ButtonCrawl.stable turns the digits into `#`, so a different count could move
+     * the cut and change a button key between two runs on the same machine. A fixed count cannot.
+     */
+    private fun newTempDir(prefix: String): File {
+        val temp = File(System.getProperty("java.io.tmpdir"))
+        repeat(100) {
+            val name = prefix + "%018d".format(ThreadLocalRandom.current().nextLong(1_000_000_000_000_000_000L))
+            val dir = File(temp, name)
+            if (dir.mkdir()) return dir
+        }
+        error("could not make a $prefix folder in $temp")
     }
 
     /** Every check, in the smoke test's order. */

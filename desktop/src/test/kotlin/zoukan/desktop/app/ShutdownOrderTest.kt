@@ -30,7 +30,6 @@ class ShutdownOrderTest {
             written.set(true)
         }
         writer.submit(ChapterUpdate(id = 1, lastPageRead = 5))
-        writer.close()
         // The loop waits for the extensions, as before they load
         val jobs = BackgroundJobs(
             mockk(relaxed = true),
