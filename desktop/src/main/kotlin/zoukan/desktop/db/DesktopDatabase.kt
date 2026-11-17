@@ -1,7 +1,6 @@
 package zoukan.desktop.db
 
 import app.cash.sqldelight.db.SqlDriver
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.sqlite.mc.SQLiteMCSqlCipherConfig
 import tachiyomi.data.Chapters
 import tachiyomi.data.Database
@@ -34,11 +33,13 @@ object DesktopDatabase {
             "It cannot be opened; restore a backup into a new database.",
     )
 
-    fun createDriver(file: File, secrets: SecretStore): SqlDriver {
+    /** @param databaseThread the thread whose connection stays open while it is busy; see [DesktopSqliteDriver]. */
+    fun createDriver(file: File, secrets: SecretStore, databaseThread: DatabaseThread? = null): SqlDriver {
         val key = databaseKey(file, secrets)
-        return JdbcSqliteDriver(
+        return DesktopSqliteDriver.withSchema(
             url = "jdbc:sqlite:${file.absolutePath}",
             properties = properties(key),
+            databaseThread = databaseThread,
             schema = Database.Schema,
         ).also(::fixTriggers)
     }
