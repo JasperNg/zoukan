@@ -95,7 +95,6 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
         val opened = withContext(Dispatchers.IO) {
             val window = BrowserWindow(
                 url,
-                userAgent = null,
                 message = "Sign in to ${tracker.name}. The window closes by itself when you are done.",
                 interceptNavigation = { target ->
                     if (isRedirect(target)) {

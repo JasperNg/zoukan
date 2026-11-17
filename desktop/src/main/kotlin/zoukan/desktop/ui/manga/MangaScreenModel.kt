@@ -5,7 +5,6 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
-import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.MERGED_SOURCE_ID
@@ -93,7 +92,6 @@ class MangaScreenModel(
     private val chaptersByEntry: ChaptersByEntry = Injekt.get<ChaptersByEntry>().cached(),
     // Resolved on first use, as before, so a missing registration only fails where it is used
     private val desktopPreferences: Lazy<zoukan.desktop.app.DesktopPreferences> = injectLazy(),
-    private val networkHelper: Lazy<NetworkHelper> = injectLazy(),
     private val downloadPaths: Lazy<zoukan.desktop.download.DownloadPaths> = injectLazy(),
     private val getChaptersByMangaId: Lazy<tachiyomi.domain.chapter.interactor.GetChaptersByMangaId> = injectLazy(),
     private val getMergedMangaById: Lazy<tachiyomi.domain.manga.interactor.GetMergedMangaById> = lazy {
@@ -614,8 +612,7 @@ class MangaScreenModel(
     fun openInWebView() {
         val url = mangaUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         appScope.launch {
-            val userAgent = networkHelper.value.defaultUserAgentProvider()
-            if (!BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
+            if (!BrowserWindow(url).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
     }
 

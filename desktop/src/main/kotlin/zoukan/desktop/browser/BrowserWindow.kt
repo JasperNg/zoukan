@@ -5,9 +5,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import logcat.LogPriority
 import org.cef.CefApp
 import org.cef.CefClient
@@ -26,7 +23,6 @@ import java.awt.Dimension
 import java.awt.GraphicsEnvironment
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.JButton
@@ -46,7 +42,6 @@ import javax.swing.WindowConstants
  */
 class BrowserWindow(
     private val startUrl: String,
-    private val userAgent: String?,
     private val message: String? = null,
     /**
      * Sees every navigation of the main frame before it happens, redirects included. Returning true
@@ -109,7 +104,7 @@ class BrowserWindow(
                 override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
                     if (frame.isMain) {
                         val url = frame.url
-                        CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, userAgent) }
+                        CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, null) }
                     }
                 }
             })
@@ -133,13 +128,12 @@ class BrowserWindow(
                 ): Boolean = BrowserPopups.onPopup(targetUrl) { browser.loadURL(it) }
 
                 override fun onAfterCreated(browser: CefBrowser) {
-                    // Cloudflare ties cf_clearance to the user agent, so the page must see the app's.
-                    // The browser starts blank and loads the page once the user agent is set.
-                    if (userAgent == null) {
-                        browser.loadURL(startUrl)
-                    } else {
-                        setUserAgent(browser, userAgent).whenComplete { _, _ -> browser.loadURL(startUrl) }
-                    }
+                    // Chromium's own user agent, never an override: an override leaves
+                    // navigator.userAgent, navigator.userAgentData and the Sec-CH-UA headers
+                    // disagreeing (the app's default is an Android one), and Cloudflare's Turnstile
+                    // fails such a browser once the user clicks the check. A clearance got here is
+                    // recorded with Chromium's user agent, which the app then sends to that site.
+                    browser.loadURL(startUrl)
                 }
             })
             val browser = client.createBrowser("about:blank", false, false).also { browser = it }
@@ -264,7 +258,7 @@ class BrowserWindow(
             discord()?.setWebView(false)
         }
         browser?.url?.let { url ->
-            runCatching { CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, userAgent) } }
+            runCatching { CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, null) } }
         }
         browser?.run {
             setCloseAllowed()
@@ -288,16 +282,6 @@ class BrowserWindow(
         } else {
             close()
         }
-    }
-
-    private fun setUserAgent(browser: CefBrowser, userAgent: String): CompletableFuture<*> {
-        val params = buildJsonObject { put("userAgent", userAgent) }
-        return runCatching {
-            browser.devToolsClient.executeDevToolsMethod("Emulation.setUserAgentOverride", Json.encodeToString(params))
-        }.getOrElse { CompletableFuture.failedFuture<String>(it) }
-            .whenComplete { _, error ->
-                if (error != null) logcat(LogPriority.WARN, error) { "Could not set the browser's user agent" }
-            }
     }
 
     companion object {
@@ -332,7 +316,7 @@ class BrowserWindow(
 
         /** Lets shared network code show a Cloudflare challenge to the user. */
         fun installChallengeSolver() {
-            DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { url, userAgent, isSolved ->
+            DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { url, _, isSolved ->
                 val started = System.currentTimeMillis()
                 // Background traffic can meet a challenge while the app is locked: the window waits
                 // for the unlock, within the challenge's usual time, instead of showing a source's
@@ -341,16 +325,15 @@ class BrowserWindow(
                     isSolved()
                 } else {
                     val left = CHALLENGE_TIMEOUT_MS - (System.currentTimeMillis() - started)
-                    isSolved() || openChallenge(url, userAgent, left, isSolved)
+                    isSolved() || openChallenge(url, left, isSolved)
                 }
             }
         }
 
-        private fun openChallenge(url: String, userAgent: String, timeoutMs: Long, isSolved: () -> Boolean): Boolean {
+        private fun openChallenge(url: String, timeoutMs: Long, isSolved: () -> Boolean): Boolean {
             if (timeoutMs <= 0) return false
             val window = BrowserWindow(
                 url,
-                userAgent,
                 message = "This site wants to check you are human. Solve the check; the window closes by itself.",
             )
             return window.open() && window.await(timeoutMs, isSolved)

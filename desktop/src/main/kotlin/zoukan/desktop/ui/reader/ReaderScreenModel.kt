@@ -145,7 +145,6 @@ class ReaderScreenModel(
     private val sourcePreferences: Lazy<eu.kanade.domain.source.service.SourcePreferences> = injectLazy(),
     private val editManga: Lazy<zoukan.desktop.manga.EditManga> = injectLazy(),
     private val getChapter: Lazy<tachiyomi.domain.chapter.interactor.GetChapter> = injectLazy(),
-    private val networkHelper: Lazy<eu.kanade.tachiyomi.network.NetworkHelper> = injectLazy(),
     private val downloadAheadRule: DownloadAhead = DownloadAhead(downloadManager::isDownloaded),
     /** Scope of the work that outlives the screen: progress, history, deletion after reading */
     private val appScope: CoroutineScope = zoukan.desktop.app.AppScope,
@@ -944,8 +943,7 @@ class ReaderScreenModel(
     fun openChapterInWebView() {
         val url = chapterUrl() ?: return Toasts.show(localized(DMR.strings.this_source_has_no_web_page))
         appScope.launch {
-            val userAgent = networkHelper.value.defaultUserAgentProvider()
-            if (!zoukan.desktop.browser.BrowserWindow(url, userAgent).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
+            if (!zoukan.desktop.browser.BrowserWindow(url).open()) Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
         }
     }
 

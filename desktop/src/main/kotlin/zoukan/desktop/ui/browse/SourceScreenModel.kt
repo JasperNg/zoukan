@@ -3,7 +3,6 @@ package zoukan.desktop.ui.browse
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.source.interactor.GetExhSavedSearch
-import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -263,8 +262,7 @@ class SourceScreenModel(
         val url = (source as? HttpSource)?.baseUrl?.takeIf { it.isNotBlank() }
             ?: return Toasts.show(localized(DMR.strings.this_source_has_no_website))
         screenModelScope.launch(Dispatchers.IO) {
-            val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
-            val window = BrowserWindow(url, userAgent, message = localized(DMR.strings.sign_in_or_pass_the_sites))
+            val window = BrowserWindow(url, message = localized(DMR.strings.sign_in_or_pass_the_sites))
             if (!window.open()) return@launch Toasts.show(localized(DMR.strings.the_built_in_browser_could_not))
             window.await(Long.MAX_VALUE)
             withContext(Dispatchers.Main) { state.value.let { setListing(it.listing, it.savedSearch) } }

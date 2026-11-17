@@ -174,7 +174,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Update progress after reading, retry when offline | Yes | Retries every 15 minutes |
 | "Ask" before updating progress | Yes | A dialog after a chapter is marked read |
 | OAuth sign-in | Yes, changed | In the built-in browser, which catches the `komikku://` redirect, instead of the system browser with a loopback redirect: the trackers only accept Komikku's registered redirect. A pasted redirect from another browser also works |
-| Cloudflare challenges | Yes, changed | Hidden first, then the built-in browser. Parallel requests to one host share one challenge attempt: a request that waited reuses the new clearance, or fails if that attempt failed. Android lets each request solve its own |
+| Cloudflare challenges | Yes, changed | Hidden first, then the built-in browser. Parallel requests to one host share one challenge attempt: a request that waited reuses the new clearance, or fails if that attempt failed. Android lets each request solve its own. The built-in browser always uses Chromium's own user agent, and a clearance got there is then sent with that user agent; Android's WebView uses the app's user agent, which on desktop would make Cloudflare's check fail |
 | Site sign-in for a source | Yes | Browse > source > globe button opens the site; cookies are shared |
 
 ## Security, sync and connections

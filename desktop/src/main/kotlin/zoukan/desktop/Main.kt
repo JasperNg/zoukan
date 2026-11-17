@@ -424,8 +424,7 @@ private fun browser(args: List<String>): Int {
     ) ?: return 1
     try {
         ZoukanRuntime.start()
-        val userAgent = Injekt.get<NetworkHelper>().defaultUserAgentProvider()
-        val window = BrowserWindow(url, userAgent)
+        val window = BrowserWindow(url)
         if (!window.open()) {
             System.err.println("The browser could not open (no display, or Chromium failed to start; see the log)")
             return 1

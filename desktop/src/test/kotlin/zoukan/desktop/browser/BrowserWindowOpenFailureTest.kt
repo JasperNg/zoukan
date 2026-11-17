@@ -9,7 +9,7 @@ class BrowserWindowOpenFailureTest {
     fun `a window refused before Chromium starts leaves the registry`() {
         val before = BrowserWindow.registeredCount()
         // Not a web address (and in a headless test run there is no display either): refused early
-        val window = BrowserWindow("file:///etc/hosts", userAgent = null)
+        val window = BrowserWindow("file:///etc/hosts")
         BrowserWindow.registeredCount() shouldBe before + 1
 
         window.open() shouldBe false
