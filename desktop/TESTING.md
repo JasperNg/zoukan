@@ -318,8 +318,9 @@ The runtime can start only once per JVM. So each journey is its own class with o
 
 `ButtonCrawlTest` (task `:desktop:buttonCrawlTest`) clicks every button of the app. It starts the
 runtime and seeds the library as the smoke test does, and opens the same checks (`SmokeChecks.kt`
-holds them for both), plus four states whose buttons need data: a library selection
-(`flow:library.selection`), an entry with every chapter selected (`flow:manga.chapter-selection`),
+holds them for both), plus five states whose buttons need data: a library selection
+(`flow:library.selection`), a selection of an online entry for the download actions
+(`flow:library.selection-download`), an entry with every chapter selected (`flow:manga.chapter-selection`),
 the reader on a middle page for its keys (`flow:reader.keys`) and the reader with its bars shown
 (`flow:reader.bars`). Settings search, the theme row and the
 Settings screen itself are skipped: their rows are the Settings pages'.
@@ -362,8 +363,20 @@ crawled too. A slider fails when neither end stored anything or changed anything
 The crawl clears what was typed into the root screen's fields (the library search) between tasks,
 and puts the window back from fullscreen (the reader's F).
 
-A button that opens a menu gets its items clicked as well, one level down. Dialogs that a click
-opens are not crawled; the named ones have checks of their own. Between clicks, the crawl puts back
+A button that opens a menu gets its items clicked as well, one level down, and an item that opens
+a submenu gets the submenu's items clicked, keyed `<button> > <item> > <submenu item>`: the
+library entry's "More actions" > "Download" > "Next chapter". A menu inside a submenu is not
+crawled. A click opened a menu when a new popup appeared, or when the open menu's items were all
+replaced (a submenu shown in place of its menu, or a popup in place of the one that closed);
+`ButtonCrawlMenuTest` tests that rule. Such a click is `menu`, never `ui`, so a submenu's opener
+("Download") is not held to the rule for labels that change data: its items are.
+
+The seeded entries are local-source, which has no downloads, so `flow:library.selection-download`
+adds an online entry (Aeon, of a test source whose pages never come) for its own clicks and
+removes it after each. A download from it stays in the queue, so "Next chapter" and the other
+choices are `queue+` in every run; the cleanup clears the queue.
+
+Dialogs that a click opens are not crawled; the named ones have checks of their own. Between clicks, the crawl puts back
 the settings a click changed and the seeded library (Alpha, Bravo, their chapters and the Smoke
 category). HTTP goes to a closed local port, so the crawl runs offline on every machine.
 
@@ -375,7 +388,7 @@ every run (digits become `#`). The tokens:
 | Token | Meaning |
 | --- | --- |
 | `nav:<package>.<Screen>`, `nav:back`, `nav:host` | It opened that screen, went back, or opened a dialog the test renders directly. |
-| `dialog:"<title>"`, `menu`, `close` | It opened a dialog (named by its title) or a menu, or closed one. |
+| `dialog:"<title>"`, `menu`, `close` | It opened a dialog (named by its title) or a menu (a submenu too), or closed one. |
 | `pref:<key>` | It changed that preference. The crawl also checks the value reached the file on disk. |
 | `db:<table>.<column>`, `db:<table>+`, `db:<table>-` | It changed that column, or added or removed rows. The report also names the rows: `chapters.read[Alpha/Chapter 1]`. |
 | `queue+`, `queue-`, `files:downloads-`, `files:local-` | It changed the download queue, or added or removed files in the downloads or local folders. |
