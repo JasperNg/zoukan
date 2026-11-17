@@ -185,7 +185,7 @@ Verified and trusted:
 
 | Control | Where |
 |---|---|
-| Database always encrypted (SQLCipher 4 scheme, SQLite3MultipleCiphers) under a random 256-bit raw key | `desktop/.../db/DesktopDatabase.kt` (`createDriver`, `properties`) |
+| Database always encrypted (SQLCipher 4 scheme, SQLite3MultipleCiphers) under a random 256-bit raw key | `desktop/.../db/DesktopDatabase.kt` (`createDriver`, `properties`); every connection, the database thread's kept one included, opens with those properties in `desktop/.../db/DesktopSqliteDriver.kt` |
 | The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed) | `DesktopDatabase.databaseKey`, `KeyMissingException` |
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |
 | Windows: Credential Manager generic credentials, per-user, non-roaming; macOS: login Keychain generic passwords | `desktop/.../secrets/WindowsCredentialStore.kt`, `MacKeychainStore.kt` |

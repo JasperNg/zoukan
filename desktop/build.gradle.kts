@@ -354,6 +354,10 @@ tasks.test {
     }
     providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
     providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
+    // RestoreSpeedTest's size, work folder and JFR file, for timing a larger restore by hand
+    listOf("zoukan.restoreBench", "zoukan.restoreBench.dir", "zoukan.restoreBench.jfr").forEach { name ->
+        providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
+    }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     // The UI text comes from string resources in the system language; the tests check the English text
     systemProperty("user.language", "en")
