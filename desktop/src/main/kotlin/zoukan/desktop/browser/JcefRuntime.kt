@@ -39,6 +39,25 @@ object JcefRuntime {
     /** -Dzoukan.cefDebug=true writes a verbose Chromium log to `<data>/browser/chromium.log` */
     private val debugLogging = System.getProperty("zoukan.cefDebug").toBoolean()
 
+    /**
+     * The app's own quit (the window and tray's Quit), which macOS's Cmd+Q must run once Chromium
+     * has taken it over; null outside the windowed app (the command-line tools), where JCEF's own
+     * shutdown ends the run.
+     */
+    @Volatile
+    var quitRequest: (() -> Unit)? = null
+
+    /**
+     * JCEF's question before it shuts Chromium down for a Cmd+Q: true when the app quits itself,
+     * which stops JCEF disposing Chromium under a still running app (a second Cmd+Q then crashed
+     * in the shut-down framework).
+     */
+    internal fun onBeforeTerminate(quit: (() -> Unit)?): Boolean {
+        quit ?: return false
+        quit()
+        return true
+    }
+
     fun install(dirs: ZoukanDirs) {
         this.dirs = dirs
         CefHelper.requestStart = ::requestStart
@@ -140,6 +159,10 @@ object JcefRuntime {
                 object : MavenCefAppHandlerAdapter() {
                     // On Chromium's UI thread, where its preferences can be set
                     override fun onContextInitialized() = applyPrivacyPreferences()
+
+                    // Once Chromium runs, it takes over macOS's Cmd+Q and calls this on the AWT
+                    // thread; false would let JCEF shut Chromium down under a running app (see quitRequest)
+                    override fun onBeforeTerminate(): Boolean = onBeforeTerminate(quitRequest)
                 },
             )
         }

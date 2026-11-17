@@ -90,6 +90,7 @@ import zoukan.desktop.app.ServiceScope
 import zoukan.desktop.app.SingleInstance
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.BackgroundJobs
@@ -173,6 +174,11 @@ fun runZoukanApp() {
         fun quit() {
             BrowserWindow.disposeAllForQuit()
             exitApplication()
+        }
+        // Cmd+Q on macOS, once Chromium has taken it over, quits the same way
+        DisposableEffect(Unit) {
+            JcefRuntime.quitRequest = ::quit
+            onDispose { JcefRuntime.quitRequest = null }
         }
         // The window opens where it was closed, at the size it had
         val windowState = remember { WindowBounds.initialState(preferences.windowBounds().get()) }
