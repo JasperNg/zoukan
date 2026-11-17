@@ -113,7 +113,10 @@ class JavaSharedPreferences(
          */
         @JvmStatic
         fun flushPendingSaves() {
-            unsaved.toList().forEach { prefs ->
+            // A snapshot through toArray: Kotlin's toList() reads size() and then the first element,
+            // and a writer that leaves the set in between made it throw NoSuchElementException,
+            // which stopped the shutdown flush before the other files were written
+            ArrayList(unsaved).forEach { prefs ->
                 // save() takes the file's lock, so this never interleaves with the background writer;
                 // writing the latest snapshot again is harmless
                 // Only a file that was written leaves the list
@@ -138,7 +141,7 @@ class JavaSharedPreferences(
             // could deadlock
             runBlocking {
                 withTimeout(timeout) {
-                    while (writers.isNotEmpty()) writers.toList().joinAll()
+                    while (writers.isNotEmpty()) ArrayList(writers).joinAll()
                 }
             }
             flushPendingSaves()
