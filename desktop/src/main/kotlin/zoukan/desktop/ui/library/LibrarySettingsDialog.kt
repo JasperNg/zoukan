@@ -30,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
@@ -214,8 +216,9 @@ private fun DisplayPage(model: LibraryScreenModel) {
     }
     if (mode != LibraryDisplayMode.List) {
         val columns by p.landscapeColumns().collectAsState()
+        val columnsTitle = localized(DMR.strings.columns, if (columns == 0) localized(DMR.strings.fit_the_window) else columns)
         Text(
-            localized(DMR.strings.columns, if (columns == 0) localized(DMR.strings.fit_the_window) else columns),
+            columnsTitle,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(top = 12.dp),
         )
@@ -224,6 +227,8 @@ private fun DisplayPage(model: LibraryScreenModel) {
             onValueChange = { p.landscapeColumns().set(it.roundToInt()) },
             valueRange = 0f..12f,
             steps = 11,
+            // The title above names the slider for screen readers (and the button crawl)
+            modifier = Modifier.semantics { contentDescription = columnsTitle },
         )
     }
     Text(localized(DMR.strings.badges), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))

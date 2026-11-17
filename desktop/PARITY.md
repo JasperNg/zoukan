@@ -38,7 +38,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Reader: volume keys, display cutout, orientation, fullscreen (system bars) | No | Phone hardware and gestures; the desktop has F11 for full screen and Ctrl + wheel to zoom |
 | Reader landscape zoom (KMK `landscapeZoom`) | No | Android's image scale preference for wide pages (Fit or Double); not phone hardware, so it would be meaningful here, but the desktop does not have it |
 | Webtoon pinch-zoom toggle (`webtoonPinchToZoomEnabled`) | Yes | Android's preference; gates Ctrl/Cmd + wheel zoom in webtoon mode; Settings > Reader and the reader sheet |
-| Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order |
+| Double pages, crop borders | Yes | Single, double or automatic in a wide window; inverted order. Page layout and crop borders are in Settings > Reader (pager and webtoon), as on Android, and in the reader's settings sheet. Continuous vertical uses the webtoon crop borders setting: Android's separate one (`crop_borders_continues_vertical`, its Vertical+ group) is not on the desktop |
 | Reader filters | Yes | Brightness, color filter with blend modes, grayscale, inverted colors. Brightness below zero darkens the page, since a window cannot dim the screen |
 | Skip read, filtered and duplicate chapters; auto scroll | Yes | Auto scroll on A |
 | Reader page actions: set as cover, copy, save, first, second or combined page | Yes, changed | Right-click or long-press a page. Saves go to Pictures/Zoukan, in a folder per entry when that setting is on. Android's Share has no desktop share sheet, so Copy to clipboard stands in for it |

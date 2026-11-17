@@ -1,7 +1,6 @@
 package zoukan.desktop.e2e
 
 import android.app.Application
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -9,11 +8,11 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -185,7 +184,7 @@ class SettingsPagesJourneyTest {
                     preferences.showNavigationOverlayNewUser().set(true)
                 }
 
-                step("Reader: scale, background, tap zones, keep screen on and page transitions set in Settings reach the reader") {
+                step("Reader: scale, page layout, crop borders, background, tap zones, keep screen on and page transitions set in Settings reach the reader") {
                     openSettings()
                     val list = settingsPage(SettingsCategory.Reader)
                     fun choose(row: String, option: String, done: () -> Boolean) {
@@ -203,6 +202,11 @@ class SettingsPagesJourneyTest {
                     waitOrDump("for keep screen on") { preferences.keepScreenOn().get() }
                     clickRow(list, localized(MR.strings.pref_page_transitions))
                     waitOrDump("for page transitions off") { !preferences.pageTransitionsPager().get() }
+                    // The window is wide, so the default (automatic) would show pages two at a time
+                    val layout = preferences.pageLayout().get()
+                    choose(localized(SYMR.strings.page_layout), localized(SYMR.strings.single_page)) { preferences.pageLayout().get() == 0 }
+                    clickRow(list, localized(MR.strings.pref_crop_borders))
+                    waitOrDump("for crop borders") { preferences.cropBorders().get() }
                     shot("1-reader-settings-page")
 
                     preferences.showNavigationOverlayOnStart().set(false)
@@ -216,23 +220,33 @@ class SettingsPagesJourneyTest {
                     waitFor(hasText("1 / ${pages.size}"))
                     // Keep screen on: the open reader holds the display awake
                     KeepAwake.readerHolds.get() shouldBe 1
-                    // Original size: the 600 x 900 page is not fitted to the window's height
-                    val window = root().getBoundsInRoot()
-                    val page = onAllNodesWithTag("page-image").onFirst().getBoundsInRoot()
-                    ((page.bottom - page.top) - (window.bottom - window.top)).value.let { kotlin.math.abs(it) > 20f } shouldBe true
-                    (page.right - page.left < window.right - window.left) shouldBe true
+                    // Original size with crop borders: the 600 x 900 page's 12 px black frame is cut,
+                    // less a 3 px pad, so it shows about 582 dp wide (uncropped 600; fitted to the
+                    // window's height about 530). Its height is clipped to the window, so the width tells
+                    // The window's own root, not a popup's
+                    val roots = onAllNodes(isRoot())
+                    val windowRoot = roots[(0 until roots.fetchSemanticsNodes().size).maxBy { roots[it].fetchSemanticsNode().size.width }]
+                    val windowWidth = windowRoot.fetchSemanticsNode().size.width
+                    val shownPage = onAllNodesWithTag("page-image").fetchSemanticsNodes()
+                        .indexOfFirst { it.boundsInRoot.left >= 0f && it.boundsInRoot.right <= windowWidth }
+                    val page = onAllNodesWithTag("page-image")[shownPage].fetchSemanticsNode().boundsInRoot
+                    val width = with(density) { page.width.toDp() }.value
+                    (width in 574f..590f) shouldBe true
                     // The white background beside the page
-                    val pixels = root().captureToImage().toPixelMap()
+                    val pixels = windowRoot.captureToImage().toPixelMap()
                     pixels[4, pixels.height / 2].let { it.red > 0.95f && it.green > 0.95f && it.blue > 0.95f } shouldBe true
                     shot("1-reader-from-settings")
-                    // Kindle-ish tap zones: the lower right of the middle turns the page, where the
-                    // default zones (right and left) open the menu. Page transitions are off, so it
-                    // turns without the slide (the slide's own choice is ReaderReducedMotionTest's)
-                    root().performMouseInput { click(Offset(width * 0.6f, height * 0.7f)) }
+                    // Kindle-ish tap zones: the middle of the window (the page's centre) turns the
+                    // page, where the default zones (right and left) open the menu. Page transitions
+                    // are off, so it turns without the slide (the slide's own choice is ReaderReducedMotionTest's).
+                    // Single page: the turn shows page 2 alone, where double pages would show "2-3"
+                    onAllNodesWithTag("page-image")[shownPage].performMouseInput { click(center) }
                     waitFor(hasText("2 / ${pages.size}"), 10_000)
                     waitOrDump("for the second page", timeout = 30_000) { pageDrew(pages[1]) }
                     runOnUiThread { while (navigator?.canPop == true) navigator.pop() }
                     waitOrDump("for the reader to let the screen sleep") { KeepAwake.readerHolds.get() == 0 }
+                    preferences.pageLayout().set(layout)
+                    preferences.cropBorders().set(false)
                     preferences.imageScaleType().set(FitModes.FIT_SCREEN)
                     preferences.readerTheme().set(1)
                     preferences.navigationModePager().set(ReaderNavigation.DEFAULT)

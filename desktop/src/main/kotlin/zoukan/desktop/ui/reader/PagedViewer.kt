@@ -47,6 +47,7 @@ import zoukan.desktop.app.FitModes
 import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.moreActions
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -382,6 +383,8 @@ fun PagedViewer(
                     openPageActions()
                 }
             }
+            // The right-click's page actions, for screen readers, keyboard users and the button crawl
+            .moreActions { openPageActions() }
             // ZOUKAN <--
             .pointerInputTaps(
                 onTap = { position, size ->

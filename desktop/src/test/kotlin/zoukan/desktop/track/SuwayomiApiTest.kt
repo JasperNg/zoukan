@@ -43,7 +43,9 @@ class SuwayomiApiTest {
         val preferences = mockk<SharedPreferences> {
             every { getBoolean("Tracker Delete", false) } answers { deleteDownloads }
         }
-        Injekt.addSingleton<Application>(mockk { every { getSharedPreferences(any(), any()) } returns preferences })
+        val application = mockk<Application>()
+        every { application.getSharedPreferences(any<String>(), any<Int>()) } returns preferences
+        Injekt.addSingleton<Application>(application)
         // The extension's client adds the server's basic auth
         val sourceClient = http.client.newBuilder()
             .addInterceptor { chain ->
@@ -55,7 +57,9 @@ class SuwayomiApiTest {
             every { baseUrl } returns "$SERVER/"
             every { id } returns 3100117499L
         }
-        Injekt.addSingleton<SourceManager>(mockk { every { get(any()) } returns source })
+        val sourceManager = mockk<SourceManager>()
+        every { sourceManager.get(any<Long>()) } returns source
+        Injekt.addSingleton<SourceManager>(sourceManager)
     }
 
     private val suwayomi = Suwayomi(9L)
@@ -66,11 +70,15 @@ class SuwayomiApiTest {
         env.close()
     }
 
-    private fun answerManga(unread: Int = 368, latestRead: String = """{"lastReadAt": "1700000000", "chapterNumber": 12.0}""") {
+    private fun answerManga(
+        unread: Int = 368,
+        latestRead: String = """{"lastReadAt": "1700000000", "chapterNumber": 12.0}""",
+        thumbnail: String = "/api/v1/manga/42/thumbnail",
+    ) {
         http.answer(
             """
             {"data": {"manga": {"artist": "Kentarou Miura", "author": "Kentarou Miura", "description": "Guts, a mercenary",
-              "id": 42, "status": "ONGOING", "thumbnailUrl": "/api/v1/manga/42/thumbnail", "title": "Berserk",
+              "id": 42, "status": "ONGOING", "thumbnailUrl": "$thumbnail", "title": "Berserk",
               "url": "/manga/2", "genre": ["Action", "Dark Fantasy"], "inLibraryAt": "1700000000",
               "chapters": {"totalCount": 380}, "latestUploadedChapter": {"uploadDate": "1700000000000"},
               "latestFetchedChapter": {"fetchedAt": "1700000000"}, "latestReadChapter": $latestRead,
@@ -105,6 +113,20 @@ class SuwayomiApiTest {
         found.publishing_status shouldBe "ONGOING"
         found.last_chapter_read shouldBe 12.0
         found.status shouldBe Suwayomi.READING
+    }
+
+    @Test
+    fun `the cover address joins the server and the thumbnail path with one slash`() = runBlocking<Unit> {
+        // The server's thumbnail path starts with a slash; the source's address ends with one
+        answerManga()
+        suwayomi.api.getTrackSearch(42).cover_url shouldBe "$SERVER/api/v1/manga/42/thumbnail"
+
+        answerManga(thumbnail = "api/v1/manga/42/thumbnail")
+        suwayomi.api.getTrackSearch(42).cover_url shouldBe "$SERVER/api/v1/manga/42/thumbnail"
+
+        // An absolute address is kept as it is
+        answerManga(thumbnail = "https://covers.example.test/42.jpg")
+        suwayomi.api.getTrackSearch(42).cover_url shouldBe "https://covers.example.test/42.jpg"
     }
 
     @Test

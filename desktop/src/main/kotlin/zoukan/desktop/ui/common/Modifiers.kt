@@ -10,7 +10,11 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
 
@@ -33,17 +37,23 @@ fun Modifier.onRightClickAt(onClick: (Offset) -> Unit): Modifier = onRightClickA
 
 /** [onRightClickAt], with [label] naming the action for screen readers and keyboard users. */
 fun Modifier.onRightClickAt(label: String?, onClick: (Offset) -> Unit): Modifier = this
-    .semantics {
-        customActions = listOf(
-            CustomAccessibilityAction(label ?: localized(DMR.strings.more_actions)) {
-                onClick(Offset.Zero)
-                true
-            },
-        )
-    }
+    .moreActions(label) { onClick(Offset.Zero) }
     .onPointerEvent(PointerEventType.Press) { event ->
         if (event.button == PointerButton.Secondary) onClick(event.changes.firstOrNull()?.position ?: Offset.Zero)
     }
+
+/**
+ * Only the semantics half of [onRightClickAt]: a custom action named [label] ("More actions" when
+ * null) that runs [onAction], for an element that handles the right-click itself.
+ */
+fun Modifier.moreActions(label: String? = null, onAction: () -> Unit): Modifier = semantics {
+    customActions = listOf(
+        CustomAccessibilityAction(label ?: localized(DMR.strings.more_actions)) {
+            onAction()
+            true
+        },
+    )
+}
 
 /**
  * A row with a checkbox or switch in it: the whole row is the control, with the row's text as its
@@ -52,6 +62,22 @@ fun Modifier.onRightClickAt(label: String?, onClick: (Offset) -> Unit): Modifier
  */
 fun Modifier.checkRow(checked: Boolean, enabled: Boolean = true, role: Role = Role.Checkbox, onChange: (Boolean) -> Unit): Modifier =
     toggleable(value = checked, enabled = enabled, role = role, onValueChange = onChange)
+
+/**
+ * A menu item with a checkbox in it, which the item's own click toggles: gives the item the
+ * checkbox's role and state, which a checkbox without a callback doesn't announce. The menu-item
+ * form of [checkRow], for a DropdownMenuItem that already handles the click.
+ */
+fun Modifier.checkedMenuItem(checked: Boolean): Modifier = semantics {
+    role = Role.Checkbox
+    toggleableState = ToggleableState(checked)
+}
+
+/** The menu-item form of [radioRow]: a DropdownMenuItem with a radio button in it, which its click selects. */
+fun Modifier.selectedMenuItem(selected: Boolean): Modifier = semantics {
+    role = Role.RadioButton
+    this.selected = selected
+}
 
 /** A row with a radio button in it: the whole row is the choice. Give the radio button `onClick = null`. */
 fun Modifier.radioRow(selected: Boolean, enabled: Boolean = true, onClick: () -> Unit): Modifier =

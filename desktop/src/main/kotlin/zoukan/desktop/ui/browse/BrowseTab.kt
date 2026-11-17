@@ -78,6 +78,7 @@ import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkedMenuItem
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.settings.SourceSettingsScreen
@@ -353,6 +354,8 @@ private fun ExtensionsList(state: BrowseScreenModel.State, model: BrowseScreenMo
                         DropdownMenuItem(
                             text = { Text(languageName(lang)) },
                             leadingIcon = { Checkbox(checked = lang in state.languages, onCheckedChange = null) },
+                            // The checkbox has no callback, so the item says whether it is checked
+                            modifier = Modifier.checkedMenuItem(lang in state.languages),
                             onClick = { model.toggleLanguage(lang) },
                         )
                     }

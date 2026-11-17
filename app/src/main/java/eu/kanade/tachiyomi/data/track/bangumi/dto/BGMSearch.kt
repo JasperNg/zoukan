@@ -27,7 +27,8 @@ data class BGMSubject(
     val rating: BGMSubjectRating?,
     val platform: String?,
     // SY -->
-    val infobox: List<Infobox>,
+    // ZOUKAN: optional in Bangumi's API; one search result without it failed the whole search
+    val infobox: List<Infobox> = emptyList(),
     // SY <--
 ) {
     fun toTrackSearch(trackId: Long): TrackSearch = TrackSearch.create(trackId).apply {

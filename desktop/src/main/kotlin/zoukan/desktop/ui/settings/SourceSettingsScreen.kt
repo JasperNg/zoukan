@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -304,6 +306,7 @@ private fun SeekBarSetting(pref: SeekBarPreference, title: String, enabled: Bool
                 enabled = enabled && pref.isAdjustable,
                 valueRange = min.toFloat()..max.toFloat(),
                 steps = ((max - min) / increment - 1).coerceIn(0, 1000),
+                modifier = Modifier.semantics { contentDescription = title },
             )
         }
     }

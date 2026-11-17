@@ -38,7 +38,8 @@ class UpdateChecker(
 
         data class Available(val release: Release) : Result
 
-        data class Failed(val message: String) : Result
+        /** [rateLimited]: GitHub refused the request for its rate limit, not for this installation or token. */
+        data class Failed(val message: String, val rateLimited: Boolean = false) : Result
     }
 
     data class Release(
@@ -76,7 +77,8 @@ class UpdateChecker(
                     response.code == 404 && token == null ->
                         Result.Failed("No releases found. If the repository is private, add a GitHub token.")
                     response.code == 401 -> Result.Failed("GitHub refused the token (401)")
-                    response.code == 403 || response.code == 429 -> Result.Failed("GitHub rate limit or no access (${response.code}); try again later")
+                    response.code == 403 || response.code == 429 ->
+                        Result.Failed("GitHub rate limit or no access (${response.code}); try again later", isRateLimited(response))
                     !response.isSuccessful -> Result.Failed("GitHub answered ${response.code}")
                     else -> select(response.body.string(), current, platform, includePrereleases)
                         ?.let { Result.Available(it) }
@@ -235,6 +237,13 @@ class UpdateChecker(
     )
 
     companion object {
+        /**
+         * GitHub's answer to a request over its rate limit: 429, or 403 with no requests left or a
+         * Retry-After (its secondary limit). A 403 without these is a refused token or repository.
+         */
+        internal fun isRateLimited(response: okhttp3.Response): Boolean =
+            response.code == 429 || response.header("x-ratelimit-remaining") == "0" || response.header("retry-after") != null
+
         /** The GitHub token's name in the secret store. */
         const val TOKEN_KEY = "github-token"
 

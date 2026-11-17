@@ -39,20 +39,13 @@ class KavitaApiTest {
             every { getString("APIKEY", "") } returns API_KEY
         }
         val empty = mockk<SharedPreferences> { every { getString(any(), any()) } returns "" }
-        Injekt.addSingleton<Application>(
-            mockk {
-                every { getSharedPreferences(any(), any()) } returns empty
-                every { getSharedPreferences("source_${sourceId(1)}", any()) } returns configured
-            },
-        )
-        Injekt.addSingleton<SourceManager>(
-            mockk {
-                every { get(any()) } answers {
-                    val id = firstArg<Long>()
-                    mockk<ConfigurableSource> { every { this@mockk.id } returns id }
-                }
-            },
-        )
+        val application = mockk<Application>()
+        every { application.getSharedPreferences(any<String>(), any<Int>()) } returns empty
+        every { application.getSharedPreferences("source_${sourceId(1)}", any<Int>()) } returns configured
+        Injekt.addSingleton<Application>(application)
+        val sourceManager = mockk<SourceManager>()
+        every { sourceManager.get(any<Long>()) } answers { configurableSource(firstArg()) }
+        Injekt.addSingleton<SourceManager>(sourceManager)
     }
 
     private val kavita = Kavita(TrackerManager.KAVITA)
@@ -62,6 +55,8 @@ class KavitaApiTest {
         http.checkAllAnswered(JWT, https = false)
         env.close()
     }
+
+    private fun configurableSource(id: Long): ConfigurableSource = mockk { every { this@mockk.id } returns id }
 
     private fun sourceId(n: Int): Long {
         val bytes = MessageDigest.getInstance("MD5").digest("kavita_$n/all/1".toByteArray())
@@ -172,7 +167,12 @@ class KavitaApiTest {
 
         http.answer("""{"title":"Server Error"}""", code = 500)
         shouldThrow<HttpException> {
-            kavita.update(Track.create(TrackerManager.KAVITA).apply { tracking_url = SERIES_URL; last_chapter_read = 1.0 })
+            kavita.update(
+                Track.create(TrackerManager.KAVITA).apply {
+                    tracking_url = SERIES_URL
+                    last_chapter_read = 1.0
+                },
+            )
         }.code shouldBe 500
     }
 

@@ -75,9 +75,17 @@ fi
 xattr -dr com.apple.quarantine "$app"
 
 report="$out/selftest-macos.md"; rm -f "$report"
-"$app/Contents/MacOS/Zoukan" selftest --ui --network --report "$report" >"$out/selftest-macos.log" 2>&1
+# With CI's GITHUB_TOKEN the update check has its own rate limit, so it is a real check; the token
+# goes to the app through its environment only and is never printed
+ZOUKAN_SELFTEST_GITHUB_TOKEN="${ZOUKAN_SELFTEST_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}" \
+  "$app/Contents/MacOS/Zoukan" selftest --ui --network --report "$report" >"$out/selftest-macos.log" 2>&1
 code=$?
 result "Self-test of the installed app" $([ $code = 0 ] && [ -f "$report" ] && echo 1 || echo 0) "exit $code, report $report"
+# A rate-limited update check is neither a pass nor a failure: say so
+if [ -f "$report" ] && grep -q '^| Update check | skipped |' "$report"; then
+  echo "[skipped] Update check: skipped (rate limited), see $report"
+  rows+="| Update check | skipped | rate limited, see the self-test report |"$'\n'
+fi
 
 if [ $keep = 0 ]; then
   rm -rf "$app"; rmdir "$dest" 2>/dev/null

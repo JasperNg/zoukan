@@ -692,8 +692,8 @@
   feature: "Tracking dialog"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.KomgaTrackingJourneyTest, track.TrackingSearchTest, track.TrackChaptersTest, track.AnilistApiTest]
-  gap: "Komga bind, progress sync, error and unbind are driven offline; for the hosted trackers (AniList, MyAnimeList, Kitsu, MangaUpdates, Shikimori, Bangumi) the API addresses are constants in the shared Android code, so the dialog is not driven against them: AniList's search, bind, progress, unbind and error mapping are unit tested with recorded answers (AnilistApiTest); the others by TrackerLoginTest, TrackingSearchTest, TrackChaptersTest and smoke"
+  tests: [ui.ScreenSmokeTest, e2e.KomgaTrackingJourneyTest, track.TrackingSearchTest, track.TrackChaptersTest, track.AnilistApiTest, track.MyAnimeListApiTest, track.KitsuApiTest, track.MangaUpdatesApiTest, track.ShikimoriApiTest, track.BangumiApiTest, track.KavitaApiTest, track.SuwayomiApiTest, track.MangaDexFollowApiTest]
+  gap: "Komga bind, progress sync, error and unbind are driven offline; for the hosted trackers (AniList, MyAnimeList, Kitsu, MangaUpdates, Shikimori, Bangumi) the API addresses are constants in the shared Android code, so the dialog is not driven against them. Instead each tracker's search, bind, progress/status/score update, unbind, token refresh or expiry and error answers are unit tested with recorded answers (RecordedHttp: the requests sent, with their auth header, and the mapping of the answers); Kavita and Suwayomi the same against their self-hosted APIs, MDList's follow calls in MangaDexFollowApiTest"
 
 - key: screen:manga.PagePreviewScreen
   feature: "Page previews screen"
@@ -939,7 +939,7 @@
   tier: journey
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
-  gap: "Driven from this page and seen in the reader: the default reading mode (Webtoon), Show reading mode off, page scaling (Original size), background (White, by pixel), tap zones (Kindle-ish turns the page where the default opens the menu), keep screen on (the reader holds the display) and page transitions off (set, not timed: the slide itself is ReaderReducedMotionTest's). Page layout and crop borders are not on this page (the reader's sheet only, ReaderSettingsParityTest) and are driven by ReaderSettingsJourneyTest and CropBordersTest"
+  gap: "Driven from this page and seen in the reader: the default reading mode (Webtoon), Show reading mode off, page scaling (Original size), page layout (Single page: a turn shows page 2 alone, not a 2-3 spread), crop borders (the fixture page's black frame is cut, by its width), background (White, by pixel), tap zones (Kindle-ish turns the page where the default opens the menu), keep screen on (the reader holds the display) and page transitions off (set, not timed: the slide itself is ReaderReducedMotionTest's). The webtoon section's crop borders row is driven by ReaderSettingsJourneyTest (from the sheet) and CropBordersTest"
 
 - key: settings:Downloads
   feature: "Download location and password (CBZ); delete chapters, auto download, download ahead, cache renew"
@@ -984,8 +984,8 @@
   feature: "Trackers, login dialogs, auto update"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest, track.TrackingSearchTest, track.TrackChaptersTest, e2e.SettingsPagesJourneyTest, e2e.KomgaTrackingJourneyTest, track.AnilistApiTest]
-  gap: "The journey flips track when adding to the library; KomgaTrackingJourneyTest shows its effect with Komga bound (on: the tracking dialog opens after adding; off: it does not) and Update tracking: Ask; hosted trackers are driven only through unit tests (AnilistApiTest with recorded answers, TrackerLoginTest, TrackingSearchTest, TrackChaptersTest): their API addresses are constants in the shared Android code"
+  tests: [ui.ScreenSmokeTest, track.TrackerLoginTest, track.TrackingSearchTest, track.TrackChaptersTest, e2e.SettingsPagesJourneyTest, e2e.KomgaTrackingJourneyTest, track.AnilistApiTest, track.MyAnimeListApiTest, track.KitsuApiTest, track.MangaUpdatesApiTest, track.ShikimoriApiTest, track.BangumiApiTest, track.KavitaApiTest, track.SuwayomiApiTest, track.MangaDexFollowApiTest]
+  gap: "The journey flips track when adding to the library; KomgaTrackingJourneyTest shows its effect with Komga bound (on: the tracking dialog opens after adding; off: it does not) and Update tracking: Ask; hosted trackers are driven only through unit tests (one *ApiTest per tracker with recorded answers, including token refresh and an expired or refused login; TrackerLoginTest, TrackingSearchTest, TrackChaptersTest): their API addresses are constants in the shared Android code"
 
 - key: dialog-inline:TrackingSettings.kt:TrackerSetting
   feature: "Tracker login dialogs"
@@ -1138,8 +1138,8 @@
   feature: "MangaDex login, sync follows"
   tier: journey
   smoke: true
-  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest]
-  gap: "The journey (with the MangaDex stand-in source) checks the page is signed out and opens and cancels the sync dialog; no setting changes offline; login and sync need MangaDex's servers (accepted gap, manual)"
+  tests: [ui.ScreenSmokeTest, e2e.SettingsPagesJourneyTest, track.MangaDexFollowApiTest]
+  gap: "The journey (with the MangaDex stand-in source) checks the page is signed out and opens and cancels the sync dialog; no setting changes offline. Following the library (MangaDexSync.pushFavorites through MDList and the shared FollowsHandler: status and rating reads, follow, unfollow, status and rating writes, token refresh and sign-out on a dead token) is unit tested with recorded answers (MangaDexFollowApiTest); login and the follow sync to the library need MangaDex's servers (accepted gap, manual)"
 
 # Opened by the smoke test's settings:MangaDex check, which clicks the sync row, waits for this
 # dialog and carries its key too
