@@ -128,19 +128,19 @@ dialog:browse.OpenUrlDialog/tag:open-url-field [type, enter]  key-unused
 dialog:browse.OpenUrlDialog/tag:open-url-field [type, escape]  calls-back
 dialog:browse.OpenUrlDialog/tag:open-url-field [type]  field-local
 dialog:browse.QuickLibraryToggleDialogs/"Add anyway"  calls-back
-dialog:browse.QuickLibraryToggleDialogs/"Add"  calls-back close db:mangas.date_added db:mangas.favorite_modified_at toast:"Added to library"
+dialog:browse.QuickLibraryToggleDialogs/"Add"  calls-back close db:mangas.date_added toast:"Added to library"
 dialog:browse.QuickLibraryToggleDialogs/"Alpha Local source · # chapters"  calls-back close nav:manga.MangaScreen
 dialog:browse.QuickLibraryToggleDialogs/"Alpha Local source · # chapters" [action: More actions]  calls-back close nav:manga.MangaScreen
 dialog:browse.QuickLibraryToggleDialogs/"Cancel"  calls-back close
 dialog:browse.QuickLibraryToggleDialogs/"Categories"  ui
 dialog:browse.QuickLibraryToggleDialogs/"Chapter and reader settings"  ui
 dialog:browse.QuickLibraryToggleDialogs/"Chapters read and history"  ui
-dialog:browse.QuickLibraryToggleDialogs/"Copy"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Alpha"
+dialog:browse.QuickLibraryToggleDialogs/"Copy"  calls-back close db:mangas.cover_last_modified db:mangas.date_added nav:manga.MangaScreen pref:migration_flags toast:"Copied to Alpha"
 dialog:browse.QuickLibraryToggleDialogs/"Delete downloads of current entry after migration"  ui
 dialog:browse.QuickLibraryToggleDialogs/"Migrate"  calls-back
 dialog:browse.QuickLibraryToggleDialogs/"Notes"  ui
 dialog:browse.QuickLibraryToggleDialogs/"Open"  calls-back close nav:manga.MangaScreen
-dialog:browse.QuickLibraryToggleDialogs/"Remove"  calls-back close db:mangas.favorite db:mangas.favorite_modified_at toast:"Removed from library"
+dialog:browse.QuickLibraryToggleDialogs/"Remove"  calls-back close db:mangas.favorite toast:"Removed from library"
 dialog:browse.QuickLibraryToggleDialogs/"Smoke"  ui
 dialog:browse.QuickLibraryToggleDialogs/"Tracking"  ui
 dialog:browse.SourceCategoriesDialog/"Cancel"  calls-back
@@ -201,14 +201,14 @@ dialog:manga.CategoryDialog/"Smoke"  ui
 dialog:manga.ChangeCategoryDialog/"Cancel"  calls-back
 dialog:manga.ChangeCategoryDialog/"OK"  calls-back
 dialog:manga.ChangeCategoryDialog/"Smoke"  ui
-dialog:manga.ChapterSettingsDialog/"Bookmarked"  db:mangas.chapter_flags db:mangas.favorite_modified_at
+dialog:manga.ChapterSettingsDialog/"Bookmarked"  db:mangas.chapter_flags
 dialog:manga.ChapterSettingsDialog/"Close"  calls-back
 dialog:manga.ChapterSettingsDialog/"Display"  ui
 dialog:manga.ChapterSettingsDialog/"Filter"  selected-already
-dialog:manga.ChapterSettingsDialog/"Reset"  db:mangas.favorite_modified_at
+dialog:manga.ChapterSettingsDialog/"Reset"  NO-EFFECT
 dialog:manga.ChapterSettingsDialog/"Set as default"  dialog:"Chapter settings"
 dialog:manga.ChapterSettingsDialog/"Sort"  ui
-dialog:manga.ChapterSettingsDialog/"Unread"  db:mangas.chapter_flags db:mangas.favorite_modified_at
+dialog:manga.ChapterSettingsDialog/"Unread"  db:mangas.chapter_flags
 dialog:manga.ClearMangaDialog/"Cancel"  calls-back
 dialog:manga.ClearMangaDialog/"Chapters & History from Database"  ui
 dialog:manga.ClearMangaDialog/"Downloaded data"  ui
@@ -251,7 +251,7 @@ dialog:manga.EditMangaDialog/"Notes"  own-value
 dialog:manga.EditMangaDialog/"Notes" [type, enter]  field-local
 dialog:manga.EditMangaDialog/"Notes" [type, escape]  calls-back
 dialog:manga.EditMangaDialog/"Notes" [type]  field-local
-dialog:manga.EditMangaDialog/"Save"  calls-back db:mangas.favorite_modified_at db:mangas.genre files:local+
+dialog:manga.EditMangaDialog/"Save"  calls-back db:mangas.genre files:local+
 dialog:manga.EditMangaDialog/"Status: Unknown"  menu
 dialog:manga.EditMangaDialog/"Status: Unknown" > "Cancelled"  close
 dialog:manga.EditMangaDialog/"Status: Unknown" > "Completed"  close
@@ -275,19 +275,19 @@ dialog:manga.MigrateDialog/"Cancel"  calls-back
 dialog:manga.MigrateDialog/"Categories"  ui
 dialog:manga.MigrateDialog/"Chapter and reader settings"  ui
 dialog:manga.MigrateDialog/"Chapters read and history"  ui
-dialog:manga.MigrateDialog/"Copy"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
+dialog:manga.MigrateDialog/"Copy"  calls-back close db:mangas.cover_last_modified db:mangas.date_added nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
 dialog:manga.MigrateDialog/"Delete downloads of current entry after migration"  ui
-dialog:manga.MigrateDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at nav:back pref:migration_flags toast:"Migrated to Bravo"
+dialog:manga.MigrateDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite nav:back pref:migration_flags toast:"Migrated to Bravo"
 dialog:manga.MigrateDialog/"Notes"  ui
 dialog:manga.MigrateDialog/"Tracking"  ui
 dialog:manga.PickDialog/"Cancel"  calls-back
 dialog:manga.PickDialog/"Categories"  ui
 dialog:manga.PickDialog/"Chapter and reader settings"  ui
 dialog:manga.PickDialog/"Chapters read and history"  ui
-dialog:manga.PickDialog/"Copy"  calls-back close db:chapters.date_fetch db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
+dialog:manga.PickDialog/"Copy"  calls-back close db:chapters.date_fetch db:mangas.cover_last_modified db:mangas.date_added nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
 dialog:manga.PickDialog/"Delete downloads of current entry after migration"  ui
-dialog:manga.PickDialog/"Merge"  calls-back close db:mangas+ db:mangas.favorite_modified_at db:merged+ nav:manga.MangaScreen toast:"Merged"
-dialog:manga.PickDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at nav:back pref:migration_flags toast:"Migrated to Bravo"
+dialog:manga.PickDialog/"Merge"  calls-back close db:mangas+ db:merged+ nav:manga.MangaScreen toast:"Merged"
+dialog:manga.PickDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite nav:back pref:migration_flags toast:"Migrated to Bravo"
 dialog:manga.PickDialog/"Notes"  ui
 dialog:manga.PickDialog/"Tracking"  ui
 dialog:reader.PageActionsDialog/"Close"  calls-back
@@ -313,7 +313,7 @@ dialog:reader.ReaderSettingsDialog/"Automatic"  pref:pref_zoom_start_key
 dialog:reader.ReaderSettingsDialog/"Both"  pref:reader_tapping_inverted
 dialog:reader.ReaderSettingsDialog/"Center"  pref:pref_zoom_start_key
 dialog:reader.ReaderSettingsDialog/"Close"  calls-back
-dialog:reader.ReaderSettingsDialog/"Continuous vertical"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Continuous vertical"  db:mangas.viewer
 dialog:reader.ReaderSettingsDialog/"Crop borders"  pref:crop_borders
 dialog:reader.ReaderSettingsDialog/"Default"  pref:reader_navigation_mode_pager
 dialog:reader.ReaderSettingsDialog/"Disable zoom in"  pref:paged_disable_zoom_in
@@ -338,7 +338,7 @@ dialog:reader.ReaderSettingsDialog/"Left"  pref:pref_zoom_start_key
 dialog:reader.ReaderSettingsDialog/"None"  pref:center_margin_type
 dialog:reader.ReaderSettingsDialog/"None" #2  pref:reader_tapping_inverted
 dialog:reader.ReaderSettingsDialog/"Original size"  pref:pref_image_scale_type_key
-dialog:reader.ReaderSettingsDialog/"Paged (left to right)"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Paged (left to right)"  db:mangas.viewer
 dialog:reader.ReaderSettingsDialog/"Paged (right to left)"  db:mangas.viewer
 dialog:reader.ReaderSettingsDialog/"Paged (vertical)"  db:mangas.viewer
 dialog:reader.ReaderSettingsDialog/"Pan wide images when tapping"  pref:navigate_pan
@@ -352,7 +352,7 @@ dialog:reader.ReaderSettingsDialog/"Smart fit"  pref:pref_image_scale_type_key
 dialog:reader.ReaderSettingsDialog/"Split wide pages"  pref:pref_dual_page_split
 dialog:reader.ReaderSettingsDialog/"Stretch"  pref:pref_image_scale_type_key
 dialog:reader.ReaderSettingsDialog/"Vertical"  pref:reader_tapping_inverted
-dialog:reader.ReaderSettingsDialog/"Webtoon"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Webtoon"  db:mangas.viewer
 dialog:reader.ReaderSettingsDialog/"Wide pages"  pref:center_margin_type
 dialog:recs.RecommendationSearchDialog/"Cancel"  calls-back
 dialog:recs.RecommendationSearchDialog/"Find common recommendations"  calls-back
@@ -436,7 +436,7 @@ flow:library.selection/"More" #2  menu
 flow:library.selection/"More" #2 > "Merge"  close nav:browse.GlobalSearchScreen selection
 flow:library.selection/"Remove from library"  dialog:"Remove from library?"
 flow:library.selection/"Select all"  selection
-flow:library.selection/"Update"  db:mangas.favorite_modified_at job:library-update notification:"Library updated" selection toast:"Updating"
+flow:library.selection/"Update"  job:library-update notification:"Library updated" selection toast:"Updating"
 flow:library.selection/"Updates"  selection tab:Updates
 flow:library.selection/key:Ctrl+A  selection
 flow:library.selection/tag:manga-item  selection
@@ -475,14 +475,14 @@ flow:manga.chapter-selection/"Chapter #"  selection
 flow:manga.chapter-selection/"Chapter #" #2  selection
 flow:manga.chapter-selection/"Clear selection"  selection
 flow:manga.chapter-selection/"Cover"  dialog:"Alpha"
-flow:manga.chapter-selection/"In library"  db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at toast:"Removed from library"
+flow:manga.chapter-selection/"In library"  db:mangas.date_added db:mangas.favorite toast:"Removed from library"
 flow:manga.chapter-selection/"In library" [action: More actions]  dialog:"Set categories"
 flow:manga.chapter-selection/"Local source"  close nav:browse.SourceFeedScreen selection
 flow:manga.chapter-selection/"Local source" [action: More actions]  ui
 flow:manga.chapter-selection/"Mark as read"  db:chapters.read selection
 flow:manga.chapter-selection/"Mark as unread"  selection
 flow:manga.chapter-selection/"More"  ui
-flow:manga.chapter-selection/"Refresh"  db:mangas.favorite_modified_at
+flow:manga.chapter-selection/"Refresh"  NO-EFFECT
 flow:manga.chapter-selection/"Remove bookmark"  selection
 flow:manga.chapter-selection/"Tracking"  dialog:"Tracking"
 flow:manga.chapter-selection/tag:entry-title  close nav:browse.GlobalSearchScreen selection
@@ -504,11 +504,11 @@ flow:reader.bars/"Page layout" > "Single page"  close pref:page_layout
 flow:reader.bars/"Previous chapter (P)"  db:history+
 flow:reader.bars/"Read previous chapter"  db:chapters.last_page_read db:chapters.read db:history+ reader:page
 flow:reader.bars/"Reading mode: Paged (right to left)"  menu
-flow:reader.bars/"Reading mode: Paged (right to left)" > "Continuous vertical"  close db:mangas.favorite_modified_at db:mangas.viewer
-flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (left to right)"  close db:mangas.favorite_modified_at db:mangas.viewer
-flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (right to left)"  close db:mangas.favorite_modified_at db:mangas.viewer
-flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (vertical)"  close db:mangas.favorite_modified_at db:mangas.viewer
-flow:reader.bars/"Reading mode: Paged (right to left)" > "Webtoon"  close db:mangas.favorite_modified_at db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Continuous vertical"  close db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (left to right)"  close db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (right to left)"  close db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (vertical)"  close db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Webtoon"  close db:mangas.viewer
 flow:reader.bars/"Scale type: Fit screen"  menu
 flow:reader.bars/"Scale type: Fit screen" > "Fit height"  close pref:pref_image_scale_type_key
 flow:reader.bars/"Scale type: Fit screen" > "Fit screen"  close pref:pref_image_scale_type_key
@@ -563,7 +563,7 @@ screen:browse.GlobalSearchScreen/"Local source Other"  nav:browse.SourceScreen
 screen:browse.GlobalSearchScreen/"Search"  NO-EFFECT
 screen:browse.GlobalSearchScreen/"Select entries"  selection
 screen:browse.GlobalSearchScreen/tag:global-search-has-results  ui
-screen:browse.GlobalSearchScreen/tag:manga-item  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.GlobalSearchScreen/tag:manga-item  db:mangas.cover_last_modified db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
 screen:browse.GlobalSearchScreen/tag:manga-item [action: More actions]  dialog:"Alpha"
 screen:browse.MigrateMangaScreen/"Alpha"  ui
 screen:browse.MigrateMangaScreen/"Alpha" [action: More actions]  ui
@@ -572,7 +572,7 @@ screen:browse.MigrateMangaScreen/"Bravo"  ui
 screen:browse.MigrateMangaScreen/"Bravo" [action: More actions]  ui
 screen:browse.MigrateMangaScreen/"Invert the selection"  ui
 screen:browse.MigrateMangaScreen/"Open"  nav:manga.MangaScreen
-screen:browse.MigrateMangaScreen/"Open" #2  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.MigrateMangaScreen/"Open" #2  db:mangas.cover_last_modified db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
 screen:browse.MigrateMangaScreen/"Select all"  ui
 screen:browse.OpenUrlScreen/"Back"  nav:back tab:Library
 screen:browse.OpenUrlScreen/"Select entries"  selection
@@ -651,7 +651,7 @@ screen:manga.MangaScreen/"Chapter #"  selection
 screen:manga.MangaScreen/"Chapter #" #2  selection
 screen:manga.MangaScreen/"Cover"  dialog:"Alpha"
 screen:manga.MangaScreen/"Filter and sort"  dialog:"Filter"
-screen:manga.MangaScreen/"In library"  db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at toast:"Removed from library"
+screen:manga.MangaScreen/"In library"  db:mangas.date_added db:mangas.favorite toast:"Removed from library"
 screen:manga.MangaScreen/"In library" [action: More actions]  dialog:"Set categories"
 screen:manga.MangaScreen/"Local source"  nav:browse.SourceFeedScreen
 screen:manga.MangaScreen/"Local source" [action: More actions]  menu
@@ -666,7 +666,7 @@ screen:manga.MangaScreen/"More" > "Merge with another entry"  close nav:browse.G
 screen:manga.MangaScreen/"More" > "Open folder"  close folder:local/Alpha
 screen:manga.MangaScreen/"More" > "Similar titles and recommendations"  close nav:recs.RecommendsScreen logs:offline
 screen:manga.MangaScreen/"More" > "Update frequency"  dialog:"Update frequency"
-screen:manga.MangaScreen/"Refresh"  db:mangas.favorite_modified_at
+screen:manga.MangaScreen/"Refresh"  NO-EFFECT
 screen:manga.MangaScreen/"Select all"  selection
 screen:manga.MangaScreen/"Start"  nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
 screen:manga.MangaScreen/"Tracking"  dialog:"Tracking"
@@ -729,7 +729,7 @@ screen:more.HistoryScreen/"Search history" [type, escape]  ui
 screen:more.HistoryScreen/"Search history" [type]  ui
 screen:more.UpdatesScreen/"Downloads"  nav:downloads.DownloadsScreen
 screen:more.UpdatesScreen/"Filter"  dialog:"Filter"
-screen:more.UpdatesScreen/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+screen:more.UpdatesScreen/"Update library"  job:library-update notification:"Library updated"
 screen:more.UpdatesScreen/"View Upcoming Updates"  nav:upcoming.UpcomingScreen
 screen:reader.ReaderScreen/"Read next chapter"  db:history+ reader:page
 screen:reader.ReaderScreen/"Read previous chapter"  db:chapters.last_page_read db:chapters.read db:history+ reader:page
@@ -751,7 +751,7 @@ screen:recs.CommonRecommendsScreen/"Search library" [type, enter]  key-unused
 screen:recs.CommonRecommendsScreen/"Search library" [type, escape]  ui
 screen:recs.CommonRecommendsScreen/"Search library" [type]  ui
 screen:recs.CommonRecommendsScreen/"Statistics"  nav:stats.StatsScreen
-screen:recs.CommonRecommendsScreen/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+screen:recs.CommonRecommendsScreen/"Update library"  job:library-update notification:"Library updated"
 screen:recs.CommonRecommendsScreen/"Updates"  tab:Updates
 screen:recs.CommonRecommendsScreen/tag:manga-item  nav:manga.MangaScreen
 screen:recs.CommonRecommendsScreen/tag:manga-item #2  nav:manga.MangaScreen
@@ -803,7 +803,7 @@ screen:settings.RestoreBackupScreen/tag:backup-option:Extension stores  ui
 screen:settings.RestoreBackupScreen/tag:backup-option:Library  ui
 screen:settings.RestoreBackupScreen/tag:backup-option:Saved Searches & Feeds  ui
 screen:settings.RestoreBackupScreen/tag:backup-option:Source settings  ui
-screen:settings.RestoreBackupScreen/tag:restore-backup-action  asks:sensitive-settings db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at db:mangas.last_update pref:categorized_display toast:"Restored # entries"
+screen:settings.RestoreBackupScreen/tag:restore-backup-action  asks:sensitive-settings db:mangas.cover_last_modified db:mangas.date_added db:mangas.last_update pref:categorized_display toast:"Restored # entries"
 screen:settings.SourceSettingsScreen/"Back"  nav:back tab:Library
 screen:stats.StatsScreen/"Back"  nav:back tab:Library
 screen:stats.StatsScreen/"More"  menu
@@ -865,7 +865,7 @@ settings:Advanced/"Library Categories, global update"  ui
 settings:Advanced/"Log level Changing this can impact app performance. Force..."  dialog:"Log level"
 settings:Advanced/"Onboarding guide"  ui
 settings:Advanced/"Reader Reading mode, display, navigation"  ui
-settings:Advanced/"Refresh library covers"  db:mangas.favorite_modified_at toast:"Library covers refreshed"
+settings:Advanced/"Refresh library covers"  toast:"Library covers refreshed"
 settings:Advanced/"Reindex downloads Force app to recheck downloaded chapters"  toast:"Recreating download index"
 settings:Advanced/"Reset per-series reader settings Resets reading mode and ..."  toast:"All reader settings reset"
 settings:Advanced/"Revoke trusted unknown extensions Extensions trusted on t..."  toast:"Revoked trust for all unknown extensions"
@@ -1091,7 +1091,7 @@ settings:Library/"Swipe to left action Toggle bookmark"  dialog:"Swipe to left a
 settings:Library/"Swipe to right action Toggle read"  dialog:"Swipe to right action"
 settings:Library/"Tag sorting tags # tags"  nav:library.SortTagScreen
 settings:Library/"Tracking One-way progress sync, enhanced sync"  ui
-settings:Library/"Update the library #Last update: # ##, #:#"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+settings:Library/"Update the library #Last update: # ##, #:#"  job:library-update notification:"Library updated"
 settings:Library/tag:settings-search  ui
 settings:Library/tag:settings-search [type, enter]  key-unused
 settings:Library/tag:settings-search [type, escape]  ui
@@ -1261,7 +1261,7 @@ state:onboarding/"System"  pref:pref_theme_mode_key
 state:onboarding/"Tako"  pref:pref_app_theme
 state:onboarding/"Teal & Turquoise"  pref:pref_app_theme
 state:onboarding/"Tidal Wave"  pref:pref_app_theme
-state:onboarding/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+state:onboarding/"Update library"  job:library-update notification:"Library updated"
 state:onboarding/"Updates"  tab:Updates
 state:onboarding/"Yin & Yang"  pref:pref_app_theme
 state:onboarding/"Yotsuba"  pref:pref_app_theme
@@ -1351,7 +1351,7 @@ tab:Library/"Search library" [type, enter]  key-unused
 tab:Library/"Search library" [type, escape]  ui
 tab:Library/"Search library" [type]  ui
 tab:Library/"Statistics"  nav:stats.StatsScreen
-tab:Library/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+tab:Library/"Update library"  job:library-update notification:"Library updated"
 tab:Library/"Updates"  tab:Updates
 tab:Library/key:Ctrl+,  nav:more.SettingsScreen
 tab:Library/key:Ctrl+2  tab:Updates
@@ -1359,7 +1359,7 @@ tab:Library/key:Ctrl+3  tab:History
 tab:Library/key:Ctrl+4  tab:Browse
 tab:Library/key:Ctrl+5  tab:More
 tab:Library/key:Ctrl+F  focus:"Search library"
-tab:Library/key:Ctrl+Shift+U  db:mangas.favorite_modified_at job:library-update notification:"Library updated" toast:"Updating the library"
+tab:Library/key:Ctrl+Shift+U  job:library-update notification:"Library updated" toast:"Updating the library"
 tab:Library/tag:manga-item  nav:manga.MangaScreen
 tab:Library/tag:manga-item #2  nav:manga.MangaScreen
 tab:Library/tag:manga-item [action: More actions]  menu
@@ -1402,6 +1402,6 @@ tab:Updates/"Filter"  dialog:"Filter"
 tab:Updates/"History"  tab:History
 tab:Updates/"Library"  tab:Library
 tab:Updates/"More"  tab:More
-tab:Updates/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+tab:Updates/"Update library"  job:library-update notification:"Library updated"
 tab:Updates/"Updates"  selected-already
 tab:Updates/"View Upcoming Updates"  nav:upcoming.UpcomingScreen

@@ -150,5 +150,8 @@ class DownloadManagerTest {
         manager.delete(manga, listOf(one, two))
         manager.downloadedIds(manga, listOf(one, two, broken)) shouldBe emptySet()
         File(temp, "downloads/Fake (EN)/Test_ Manga").exists() shouldBe false
+        // Queue saves run in the background: one still writing when the test ends made the temp
+        // folder's clean-up fail (as in DownloadQueueStatesTest)
+        withTimeout(10_000) { manager.awaitBackgroundWork() }
     }
 }

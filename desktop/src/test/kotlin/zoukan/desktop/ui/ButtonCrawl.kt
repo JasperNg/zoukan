@@ -32,8 +32,8 @@ internal object ButtonCrawl {
      */
     fun withoutHome(text: String): String = text.replace(HOME, "<home>…")
 
-    /** `C:\Users\…` (one or two backslashes), `/Users/…` and `/home/…`, to the end of the text. */
-    private val HOME = Regex("""(?i)\b[a-z]:\\{1,2}Users\\{1,2}.*|/(?:Users|home)/.*""")
+    /** `C:\Users\…` (one or two backslashes), `/Users/…` and `/home/…`, to the end of the text or its closing quote. */
+    private val HOME = Regex("""(?i)\b[a-z]:\\{1,2}Users\\{1,2}[^"]*|/(?:Users|home)/[^"]*""")
 
     private val DATE_WORDS = Regex(
         """(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|""" +

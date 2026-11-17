@@ -183,6 +183,9 @@ class ButtonCrawlTest {
         /** A coroutine's cancellation, logged as an error by shared code that catches every Exception. */
         val CANCELLED = Regex("""\b(Job)?CancellationException\b""")
 
+        /** The entry column a trigger in mangas.sq sets to the current second on each write (see [signatureOf]). */
+        const val CLOCK_COLUMN = "db:mangas.favorite_modified_at"
+
         /** App-state keys that a user switches, as Android keeps incognito mode and Downloaded only: the others are the app's timestamps and caches. */
         val USER_APP_STATE = setOf("incognito_mode", "pref_downloaded_only").map { tachiyomi.core.common.preference.Preference.appStateKey(it) }.toSet()
 
@@ -1358,7 +1361,9 @@ class ButtonCrawlTest {
         notifications.drop(before.notifications).take(after.notifications - before.notifications).forEach { tokens += "notification:" + quoted(it) }
         if (after.callbacks > before.callbacks) tokens += "calls-back"
         (after.settings.keys + before.settings.keys).filter { after.settings[it] != before.settings[it] }.forEach { tokens += "pref:$it" }
-        details.forEach { tokens += "db:" + it.substringBefore('[') }
+        // CLOCK_COLUMN is set by a database trigger to the current second on every write of the entry,
+        // so it shows only when the clock ticked during the click: it stays in the details, not the tokens
+        details.forEach { row -> ("db:" + row.substringBefore('[')).takeIf { it != CLOCK_COLUMN }?.let { tokens += it } }
         if (after.queue > before.queue) tokens += "queue+"
         if (after.queue < before.queue) tokens += "queue-"
         after.files.forEach { (dir, count) ->

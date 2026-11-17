@@ -14,6 +14,9 @@ class ButtonCrawlKeyTest {
         ButtonCrawl.stable("""Escaped C:\\Users\\someone\\x""") shouldBe "Escaped <home>…"
         ButtonCrawl.stable("Storage location /Users/some one/Library/Zoukan") shouldBe "Storage location <home>…"
         ButtonCrawl.stable("Data folder /home/someone/.local/share/zoukan") shouldBe "Data folder <home>…"
+        // A key that already holds its quotes keeps the closing one
+        ButtonCrawl.stable("""settings:Data/"Data folder C:\Users\SomeOne\AppData\Lo..."""") shouldBe
+            """settings:Data/"Data folder <home>…""""
     }
 
     @Test

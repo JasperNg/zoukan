@@ -8,3 +8,6 @@ screen:migration.MigrationListScreen/"Search"  # searches again for the query al
 dialog:reader.ReaderSettingsDialog/"Shift double pages Pairs from the first page, for this ch..."  # kept for the open chapter only, in the reader's model, as on Android; the reader shows it on its pages
 screen:upcoming.UpcomingScreen/tag:upcoming-#-#  # a calendar day with no expected chapter: nothing to show
 screen:upcoming.UpcomingScreen/tag:upcoming-#-# #2  # a calendar day with no expected chapter: nothing to show
+dialog:manga.ChapterSettingsDialog/"Reset"  # the seeded entry already has the default chapter settings, so resetting rewrites the same values
+flow:manga.chapter-selection/"Refresh"  # the crawl runs offline: refreshing the local entry finds nothing new to write
+screen:manga.MangaScreen/"Refresh"  # the crawl runs offline: refreshing the local entry finds nothing new to write
