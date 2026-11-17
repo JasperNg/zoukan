@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.settings
 
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -113,8 +113,6 @@ import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
-import java.awt.Desktop
-import java.awt.FileDialog
 import java.io.File
 
 /** The backups and restores started from Settings; the screens and the settings pages share this one. */

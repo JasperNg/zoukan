@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.settings
 
-import zoukan.desktop.ui.common.checkRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +71,7 @@ import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ReserveSnackbarSpace
 import zoukan.desktop.ui.common.ScreenHeader
+import zoukan.desktop.ui.common.checkRow
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.time.Instant

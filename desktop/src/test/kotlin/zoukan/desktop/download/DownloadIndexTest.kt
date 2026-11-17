@@ -49,14 +49,28 @@ class DownloadIndexTest {
     }
 
     @Test
-    fun `a folder named in NFD is found for a title and chapter in NFC`() {
+    fun `a folder named in NFD is found for a title and chapter in NFC`() = runBlocking<Unit> {
         val kit = kit()
         val nfc = Normalizer.normalize("Café", Normalizer.Form.NFC)
         val nfd = Normalizer.normalize("Café", Normalizer.Form.NFD)
         val entry = kit.manga(1, nfc)
         kit.write("A (EN)/$nfd/Chapitre $nfd.cbz")
+        val chapter = kit.chapter(1, 1, name = "Chapitre $nfc")
 
-        kit.downloaded(entry, kit.chapter(1, 1, name = "Chapitre $nfc")) shouldBe true
+        // The names as the system reports them (ext4 and NTFS keep NFD apart from NFC; the JDK on
+        // macOS may hand them back in NFC): found under those, never under a name made from the title
+        val onDisk = File(kit.downloads, "A (EN)").list()!!.single()
+        val chapterOnDisk = File(kit.downloads, "A (EN)/$onDisk").list()!!.single()
+        kit.downloaded(entry, chapter) shouldBe true
+        val found = kit.manager.findChapter(entry, chapter)!!
+        found.parentFile.name shouldBe onDisk
+        found.name shouldBe chapterOnDisk
+        found.isFile shouldBe true
+        kit.manager.downloadCount(entry) shouldBe 1
+
+        // And it is deleted from where it is, with no second folder made
+        kit.manager.delete(entry, listOf(chapter))
+        File(kit.downloads, "A (EN)").list().orEmpty().toList() shouldBe emptyList()
     }
 
     @Test

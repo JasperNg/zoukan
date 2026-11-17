@@ -151,7 +151,7 @@ class StatsScreenModel(
 
 /** Downloaded chapters of [library]. */
 internal fun countDownloadedChapters(library: List<Manga>, downloadManager: DownloadManager): Int =
-    library.sumOf { downloadManager.downloadCount(it) }
+    downloadManager.downloadCounts(library).values.sum()
 
 object StatsScreen : Screen {
     private fun readResolve(): Any = StatsScreen

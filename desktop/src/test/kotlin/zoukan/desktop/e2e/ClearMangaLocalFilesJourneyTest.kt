@@ -9,9 +9,6 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
@@ -27,6 +24,7 @@ import zoukan.desktop.ui.manga.onRefreshStart
 import zoukan.desktop.ui.manga.systemTrash
 import java.io.File
 import java.util.Collections
+import javax.swing.SwingUtilities
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -63,9 +61,9 @@ class ClearMangaLocalFilesJourneyTest {
             trashed += it
             true
         }
-        val starts: MutableList<Thread> = Collections.synchronizedList(mutableListOf())
-        // The UI thread is the one Dispatchers.Main runs on: the Swing thread in the app, the emulated main looper here
-        val uiThread = runBlocking { withContext(Dispatchers.Main) { Thread.currentThread() } }
+        // For each refresh start, whether it ran on the Swing event thread. The thread itself can be
+        // replaced between two events, so the test records the kind of thread, not the instance
+        val starts: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
@@ -89,7 +87,7 @@ class ClearMangaLocalFilesJourneyTest {
                     files.forEach { fingerprint(it) shouldBe before.getValue(it) }
                 }
                 step("Ask again and confirm: the folder goes to the trash and the entry refreshes") {
-                    onRefreshStart = { thread -> starts += thread }
+                    onRefreshStart = { starts += SwingUtilities.isEventDispatchThread() }
                     openClearManga()
                     waitFor(hasText("Local files in ${folder.name}"))
                     onNodeWithText("Local files in ${folder.name}").performClick()
@@ -106,6 +104,6 @@ class ClearMangaLocalFilesJourneyTest {
 
         trashed.map { it.canonicalFile } shouldBe listOf(folder.canonicalFile)
         // One refresh, started on the UI thread
-        starts shouldBe listOf(uiThread)
+        starts shouldBe listOf(true)
     }
 }

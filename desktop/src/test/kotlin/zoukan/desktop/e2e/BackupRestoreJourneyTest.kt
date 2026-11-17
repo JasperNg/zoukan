@@ -199,6 +199,10 @@ class BackupRestoreJourneyTest {
                 }
 
                 step("Backup and restore choices") {
+                    // The restore's message lies over the lower options; the user waits for it to go
+                    waitOrDump("for the restore's message to go", timeout = 30_000) {
+                        onAllNodes(hasText("Restored", substring = true)).fetchSemanticsNodes().isEmpty()
+                    }
                     // Create backup: what goes in the backup, as Android's CreateBackupScreen
                     runOnUiThread { navigator?.push(CreateBackupScreen) }
                     waitFor(hasTestTag("create-backup-action"))
@@ -216,9 +220,6 @@ class BackupRestoreJourneyTest {
                             list.performScrollToNode(hasTestTag("backup-option:$label"))
                             onNodeWithTag("backup-option:$label").performClick()
                         }
-                    // DEBUG
-                    onAllNodes(hasAnyAncestor(backupOption) and SemanticsMatcher("toggle") { it.config.getOrNull(SemanticsProperties.ToggleableState) != null }, useUnmergedTree = true).fetchSemanticsNodes().forEach { n -> println("DEBUG ${n.config.getOrNull(SemanticsProperties.ToggleableState)} ${n.boundsInRoot}") }
-                    onAllNodes(hasScrollAction()).fetchSemanticsNodes().forEach { n -> println("DEBUG scroll ${n.boundsInRoot}") }
                     // Nothing chosen: nothing to create
                     onNodeWithTag("create-backup-action").assertIsNotEnabled()
                     runOnUiThread { navigator?.pop() }

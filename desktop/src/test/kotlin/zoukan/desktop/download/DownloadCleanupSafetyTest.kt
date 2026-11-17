@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeFalse
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.domain.chapter.model.Chapter
@@ -25,6 +26,8 @@ class DownloadCleanupSafetyTest {
     lateinit var temp: File
 
     private val kits = mutableListOf<DownloadKit>()
+
+    private val isWindows = System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
     private fun kit(
         sources: List<DownloadKit.TestSource> = listOf(DownloadKit.TestSource("A", 1)),
@@ -151,7 +154,8 @@ class DownloadCleanupSafetyTest {
 
     @Test
     fun `a link is deleted as a link and what it points to survives`() = runBlocking<Unit> {
-        assumeFalse(System.getProperty("os.name").orEmpty().lowercase().contains("win"), "links need rights on Windows")
+        // Windows makes symbolic links only with admin rights or developer mode; the junction test below covers it there
+        assumeFalse(isWindows, "symbolic links need rights on Windows; see the junction test")
         val kit = kit()
         val entry = kit.manga(1, "Entry")
         val outside = File(temp, "outside/Chapter 1").apply { mkdirs() }
@@ -170,6 +174,27 @@ class DownloadCleanupSafetyTest {
         Files.exists(link.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) shouldBe false
         page.readText() shouldBe "page"
         Files.isSymbolicLink(linkedOrphan.toPath()) shouldBe true
+    }
+
+    @Test
+    fun `a Windows junction is deleted as a link and the folder it points to survives`() = runBlocking<Unit> {
+        assumeTrue(isWindows, "junctions are Windows only; the symbolic link test covers other systems")
+        val kit = kit()
+        val entry = kit.manga(1, "Entry")
+        val outside = File(temp, "outside/Chapter 1").apply { mkdirs() }
+        val page = File(outside, "001.png").apply { writeText("page") }
+        File(kit.downloads, "A (EN)/Entry").mkdirs()
+        val junction = File(kit.downloads, "A (EN)/Entry/Chapter 1")
+        // A junction needs no rights, unlike a symbolic link
+        val made = ProcessBuilder("cmd", "/c", "mklink", "/J", junction.absolutePath, outside.absolutePath)
+            .redirectErrorStream(true).start().waitFor()
+        assumeTrue(made == 0 && junction.exists(), "mklink /J failed")
+
+        val plan = kit.plan(listOf(entry), mapOf(1L to listOf(kit.chapter(1, 1, read = true))))
+        kit.manager.applyCleanup(plan, toTrash = true)
+
+        junction.exists() shouldBe false
+        page.readText() shouldBe "page"
     }
 
     @Test
@@ -193,7 +218,10 @@ class DownloadCleanupSafetyTest {
     @Test
     fun `the delete helper refuses paths outside the downloads folder or too high in it`() {
         val kit = kit()
-        val outside = File(temp, "outside/file").apply { parentFile.mkdirs(); writeText("x") }
+        val outside = File(temp, "outside/file").apply {
+            parentFile.mkdirs()
+            writeText("x")
+        }
         val sourceDir = kit.write("A (EN)/Entry/Chapter 1.cbz").parentFile.parentFile
 
         SafeDelete.delete(kit.downloads, outside) shouldBe false

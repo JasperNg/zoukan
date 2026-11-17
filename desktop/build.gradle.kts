@@ -467,6 +467,7 @@ val buttonCrawlTest by tasks.registering(Test::class) {
     }
     // -Pzoukan.crawl.only=<regex> crawls only the checks whose name or key matches
     providers.gradleProperty("zoukan.crawl.only").orNull?.let { systemProperty("zoukan.crawl.only", it) }
+    providers.gradleProperty("zoukan.crawl.debug").orNull?.let { systemProperty("zoukan.crawl.debug", it) }
     // -Pzoukan.shard=i/n crawls every n-th check key, from the i-th: CI splits the crawl this way
     providers.gradleProperty("zoukan.shard").orNull?.let { value ->
         value.split('/').mapNotNull { it.trim().toIntOrNull() }

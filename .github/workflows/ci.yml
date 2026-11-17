@@ -216,6 +216,7 @@ jobs:
           name: button-crawl-${{ matrix.shard }}
           path: |
             desktop/build/reports/coverage/buttons.md
+            desktop/build/reports/coverage/button-inventory-found.txt
             desktop/build/reports/tests/
             desktop/build/test-results/
           if-no-files-found: ignore

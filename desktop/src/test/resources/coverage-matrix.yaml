@@ -986,6 +986,13 @@
   smoke: false
   tests: [ui.settings.StorageLocationTest]
 
+- key: dialog:settings.CleanupPreviewDialog
+  feature: "Clean up downloads preview: counts and sizes, orphaned folders unticked until ticked, trash or permanent"
+  tier: unit
+  smoke: false
+  tests: [ui.settings.CleanupPreviewDialogTest, download.DownloadCleanupSafetyTest]
+  gap: "Not reached from the Settings row by a test; planned with the Clean up downloads journey"
+
 - key: dialog:settings.CleanupDownloadsDialog
   feature: "Clean up downloads: options, preview with counts and sizes, orphaned folders ticked one by one, trash"
   tier: unit

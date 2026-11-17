@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
@@ -38,6 +39,7 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
@@ -77,7 +79,8 @@ fun PageActionsDialog(
         modifier = Modifier.testTag("page-actions"),
         title = { Text(if (double) localized(DMR.strings.pages_and, target.page + 1, target.extra!! + 1) else localized(DMR.strings.page, target.page + 1)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Scrolls in a window too short for three rows of actions
+            Column(Modifier.verticalScrollWithBar(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Action(if (double) localized(SYMR.strings.action_set_first_page_cover) else localized(MR.strings.set_as_cover), Icons.Outlined.Photo) { coverOf = target.page }
                     Action(if (double) localized(KMR.strings.action_copy_to_clipboard_first_page) else localized(MR.strings.action_copy_to_clipboard), Icons.Outlined.ContentCopy) {
@@ -142,7 +145,8 @@ private fun Action(title: String, icon: ImageVector, onClick: () -> Unit) {
         onClick = onClick,
         shape = Corners.Large,
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-        modifier = Modifier.widthIn(min = ACTION_WIDTH, max = ACTION_WIDTH).height(96.dp),
+        // At least 96 dp tall, taller when a label needs a third line (wider fonts, as on Linux), so no label is clipped
+        modifier = Modifier.widthIn(min = ACTION_WIDTH, max = ACTION_WIDTH).heightIn(min = 96.dp),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Icon(icon, null)
