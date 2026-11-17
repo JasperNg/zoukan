@@ -69,8 +69,8 @@ Commands:
       --network             Also check that GitHub (the update check) can be reached
   status                  Start the runtime, open the encrypted database, load installed extensions
   harness [options]       Run the extension compatibility harness and write a report
-      --store <url|name>    Extension store, repeatable: store-a, store-b or a URL (default: both
-                            sample stores, each with its own sample and report)
+      --store <url>         Extension store index URL (required), repeatable: each store gets its
+                            own report
       --packages <a,b,...>  Extensions to test, for example en.mangapill,all.mangadex; over several
                             stores, each store tests those it lists
       --all                 Test every extension in the store
@@ -304,25 +304,29 @@ internal fun harnessDohProvider(name: String): Int? = when (name.trim().lowercas
 }
 
 /**
- * One harness run per store: each `--store` (a sample store's name or a URL), or both sample stores
- * when none is given. A sample store brings its own sample and drift guard. Over several stores each
- * store tests only the `--packages` it lists, so a package of one store is not a failure of another.
+ * One harness run per store: each `--store` (a URL, or the id or URL of one of [presets]), or every
+ * preset when no `--store` is given. The app ships no presets and names no store, so the command
+ * line needs `--store <url>`; the tests pass theirs. A preset brings its own sample and drift
+ * guard. Over several stores each store tests only the `--packages` it lists, so a package of one
+ * store is not a failure of another.
  */
-internal fun harnessRuns(options: CompatibilityHarness.Options, stores: List<String>): List<CompatibilityHarness.Options> {
-    val samples = if (stores.isEmpty()) {
-        CompatibilityHarness.SAMPLE_STORES.map { it.id }
-    } else {
-        stores.distinct()
-    }
-    return samples.map { store ->
-        val sample = CompatibilityHarness.SAMPLE_STORES.firstOrNull { it.id == store || it.url == store }
-        require(sample != null || "://" in store) { "Unknown store \"$store\": give a sample store id or a URL" }
-        val url = sample?.url ?: store
+internal fun harnessRuns(
+    options: CompatibilityHarness.Options,
+    stores: List<String>,
+    presets: List<CompatibilityHarness.SampleStore> = emptyList(),
+): List<CompatibilityHarness.Options> {
+    val wanted = stores.ifEmpty { presets.map { it.id } }.distinct()
+    require(wanted.isNotEmpty()) { "Give the store to test: --store <url>" }
+    return wanted.map { store ->
+        val preset = presets.firstOrNull { it.id == store || it.url == store }
+        require(preset != null || "://" in store) { "Unknown store \"$store\": give its URL" }
+        val url = preset?.url ?: store
         options.copy(
             storeUrl = url,
-            storeId = CompatibilityHarness.storeId(url),
-            skipMissing = samples.size > 1,
-            minExtensions = sample?.minExtensions ?: 0,
+            storeId = preset?.id ?: CompatibilityHarness.storeId(url),
+            skipMissing = wanted.size > 1,
+            minExtensions = preset?.minExtensions ?: 0,
+            sample = preset?.packages.orEmpty(),
         )
     }
 }

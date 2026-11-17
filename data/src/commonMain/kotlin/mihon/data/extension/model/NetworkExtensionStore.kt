@@ -45,7 +45,7 @@ data class NetworkExtensionStore(
         @ProtoNumber(1) val apkUrl: String,
         @ProtoNumber(2) val iconUrl: String,
         // ZOUKAN -->
-        // an extension store's extension: a ready-made, JAR-signed JVM jar of the extension, for desktop apps.
+        // Some stores' extension: a ready-made, JAR-signed JVM jar of the extension, for desktop apps.
         // The Android app ignores it.
         @ProtoNumber(501) val jarUrl: String? = null,
         // ZOUKAN <--

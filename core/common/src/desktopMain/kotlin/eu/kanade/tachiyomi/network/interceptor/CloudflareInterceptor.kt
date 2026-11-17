@@ -31,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock
  * waits for Cloudflare's cf_clearance cookie. When that fails, for example on an interactive
  * Turnstile challenge, the page opens in a browser window so the user can solve it.
  *
- * The class keeps the Android name because the main extension store extensions look up the default client's
+ * The class keeps the Android name because extensions look up the default client's
  * interceptors by simple name ("CloudflareInterceptor must be present in default client").
  */
 class CloudflareInterceptor(

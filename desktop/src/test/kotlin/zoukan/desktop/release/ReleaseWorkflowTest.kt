@@ -103,9 +103,9 @@ class ReleaseWorkflowTest {
         val missing = jobs - "pr-gate" - gateNeeds.toSet()
         if (jobs.isEmpty() || gateNeeds.isEmpty()) problems += "ci.yml: could not read the jobs or the PR gate's needs"
         if (missing.isNotEmpty()) problems += "ci.yml: PR gate does not need $missing, so they do not gate a merge or a release"
-        // The long checks run on a Windows machine before each merge (desktop/RELEASING.md), not on GitHub
+        // The long checks run on Windows before each merge (desktop/RELEASING.md), not on GitHub
         for (task in listOf(":desktop:journeyTest", ":desktop:buttonCrawlTest", ":desktop:extensionWiringTest", ":desktop:nightlyCheck")) {
-            if (task in ci) problems += "ci.yml runs $task, a long check for a Windows machine"
+            if (task in ci) problems += "ci.yml runs $task, a long check for Windows"
         }
         val nightlyOn = text(".github/workflows/nightly.yml").substringAfter("\non:\n").substringBefore("\n\n")
         for (trigger in listOf("schedule:", "pull_request:", "push:")) {

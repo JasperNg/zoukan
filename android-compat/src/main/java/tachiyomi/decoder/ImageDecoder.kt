@@ -10,7 +10,7 @@ import java.io.InputStream
 
 /**
  * Desktop stand-in for tachiyomiorg/image-decoder, which the Android app ships and extensions call
- * (an extension store's image helpers, for one). It has the native library's Kotlin API and decodes with
+ * (one extension's image helpers, for one). It has the native library's Kotlin API and decodes with
  * ImageIO: JPEG, PNG, GIF (first frame), BMP and WebP, and AVIF and HEIF where the app registers
  * an ImageIO reader for them; formats no reader knows (JPEG XL) make [newInstance] return null, as
  * the native decoder does for an image it cannot read.

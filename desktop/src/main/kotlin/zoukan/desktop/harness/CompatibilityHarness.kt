@@ -42,9 +42,12 @@ class CompatibilityHarness(
     internal val stepTimeout: Duration? = null,
 ) {
     data class Options(
-        val storeUrl: String = DEFAULT_STORE,
+        /** The store's index URL. The app names no store: the caller passes one. */
+        val storeUrl: String = "",
         /** Names the store in the report and trace files: a [SampleStore.id], or [storeId] of the URL. */
-        val storeId: String = SAMPLE_STORE_A.id,
+        val storeId: String = "store",
+        /** The extensions to test when [packages] is empty and [all] is off: a [SampleStore]'s, else [DEFAULT_PACKAGES]. */
+        val sample: List<String> = emptyList(),
         /** Package names, with or without the eu.kanade.tachiyomi.extension. prefix. Empty means the defaults. */
         val packages: List<String> = emptyList(),
         /**
@@ -127,7 +130,7 @@ class CompatibilityHarness(
         val wanted = when {
             options.all -> available.filterNot { options.skipNsfw && it.isNsfw }.map { it.pkgName }
             options.packages.isNotEmpty() -> options.packages.map { it.withPrefix() }
-            else -> SAMPLE_STORES.firstOrNull { it.url == options.storeUrl }?.packages ?: DEFAULT_PACKAGES
+            else -> options.sample.ifEmpty { DEFAULT_PACKAGES }
         }.filter { pkg -> !options.skipMissing || available.any { it.pkgName == pkg } }
         // Each extension runs on a worker of its own: withTimeout fires only where a coroutine
         // suspends, so a source blocked in a network read (an Rx source in OkHttp's execute(), a
@@ -350,11 +353,11 @@ class CompatibilityHarness(
     /**
      * A store the harness and the wiring check test, with its sample of extensions for the live
      * run and the fewest extensions it should list (fewer means the store moved or was emptied).
+     * The app ships none: the tests define theirs.
      */
     data class SampleStore(val id: String, val url: String, val packages: List<String>, val minExtensions: Int)
 
     companion object {
-        const val DEFAULT_STORE = "https://example.org/extensions/repo.json"
         private const val PREFIX = "eu.kanade.tachiyomi.extension."
         // Sources that load their chapter list in a WebView take over a minute for one step (en.comix:
         // about 85 s); the app itself puts no limit on details and chapters
@@ -370,43 +373,10 @@ class CompatibilityHarness(
             "en.tapastic", "en.templescan",
         ).map { PREFIX + it }
 
-        val SAMPLE_STORE_A = SampleStore(
-            id = "store-a",
-            url = DEFAULT_STORE,
-            packages = DEFAULT_PACKAGES + listOf(
-                "all.cubari", "all.namicomi", "all.globalcomix", "all.mangatoon", "all.mangataro", "en.mangafox",
-                "en.manhuaplus", "en.rizzcomic", "en.thunderscans", "en.drakescans",
-            ).map { PREFIX + it },
-            minExtensions = 1000,
-        )
-
-        /**
-         * a second store: six NSFW extensions with their own signing key. Only the harness
-         * and the tests use it, so its extensions go through the same checks; the app does not
-         * add or trust it (desktop/THREAT-MODEL.md), a user adds it as any other store.
-         */
-        val SAMPLE_STORE_B = SampleStore(
-            id = "store-b",
-            url = "https://example.org/other-store/repo.json",
-            packages = listOf(
-                "all.ehentai",
-                "all.hitomi",
-                "all.nhentai",
-                "all.pururin",
-                "en.hentai20",
-                "en.hentai2read",
-            ).map { PREFIX + it },
-            minExtensions = 1,
-        )
-
-        /** The stores the harness and the wiring check run over by default, each on its own. */
-        val SAMPLE_STORES = listOf(SAMPLE_STORE_A, SAMPLE_STORE_B)
-
-        /** A [SampleStore.id], or a name for another store URL: its GitHub owner, else its host. */
-        fun storeId(url: String): String = SAMPLE_STORES.firstOrNull { it.url == url }?.id
-            ?: url.substringAfter("://").split('/').let { parts ->
-                if (parts.first() == "raw.githubusercontent.com" && parts.size > 1) parts[1] else parts.first()
-            }.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "store" }
+        /** A name for a store URL in report file names: its GitHub owner, else its host. */
+        fun storeId(url: String): String = url.substringAfter("://").split('/').let { parts ->
+            if (parts.first() == "raw.githubusercontent.com" && parts.size > 1) parts[1] else parts.first()
+        }.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "store" }
 
         /** Fails when a store lists fewer than [min] extensions: it moved, or its index is a stub. */
         fun checkStoreSize(url: String, size: Int, min: Int) = check(size >= min) {

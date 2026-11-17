@@ -949,7 +949,7 @@ public class WebView extends AbsoluteLayout
     }
 
     // @UnsupportedAppUsage
-    // Here because the main extension store relies on it
+    // Here because extensions rely on it
     private static WebViewFactoryProvider getFactory() {
         return new DummyWebViewFactoryProvider();
     }
@@ -966,7 +966,7 @@ public class WebView extends AbsoluteLayout
 
     // ZOUKAN -->
     // Dispatchers.Main is the AWT event thread on desktop, which has no Looper, and extensions
-    // create WebViews in withContext(Dispatchers.Main) (an extension store's runWebView, for one). Those
+    // create WebViews in withContext(Dispatchers.Main) (a shared runWebView helper, for one). Those
     // WebViews belong to the emulated main looper, where their callbacks run.
     private final Looper mWebViewThread = Looper.myLooper() != null ? Looper.myLooper() : Looper.getMainLooper();
     // ZOUKAN <--

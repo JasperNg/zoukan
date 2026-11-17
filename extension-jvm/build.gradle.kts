@@ -1,6 +1,6 @@
 // ZOUKAN -->
-// Desktop extension runtime: installs extensions from extension stores (an extension store's signed JVM
-// jars, or an APK converted with dex2jar when a store has no jar), checks their signatures, and
+// Desktop extension runtime: installs extensions from extension stores (signed JVM jars
+// from stores that publish them, or an APK converted with dex2jar when a store has no jar), checks their signatures, and
 // loads their sources in a child-first class loader.
 plugins {
     id("zoukan.jvm")

@@ -607,11 +607,6 @@ internal fun StoresList(state: BrowseScreenModel.State, model: BrowseScreenModel
                 }, enabled = url.isNotBlank()) { Text(localized(MR.strings.action_add)) }
             }
         }
-        if (state.stores.none { it.indexUrl == BrowseScreenModel.SAMPLE_STORE_A }) {
-            item {
-                TextButton(onClick = { model.addStore(BrowseScreenModel.SAMPLE_STORE_A) }) { Text(localized(DMR.strings.add_default_store)) }
-            }
-        }
         items(state.stores, key = { it.indexUrl }) { store ->
             Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = Corners.Medium) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

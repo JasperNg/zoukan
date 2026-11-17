@@ -73,7 +73,7 @@ data class ExtensionManifest(
         // Same as ExtensionLoader.SUPPORTED_LIB_VERSIONS on Android
         val SUPPORTED_LIB_VERSIONS = listOf(1.4, 1.6)
 
-        /** Reads the text AndroidManifest.xml a the main extension store jar (or a jar converted by Zoukan) carries. */
+        /** Reads the text AndroidManifest.xml a store's jar (or a jar converted by Zoukan) carries. */
         fun fromJar(jar: File): ExtensionManifest = ZipFile(jar).use { zip ->
             val entry = zip.getEntry("AndroidManifest.xml")
                 ?: throw ExtensionException(ExtensionException.Stage.MANIFEST, "No AndroidManifest.xml in ${jar.name}")

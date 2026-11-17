@@ -3,7 +3,10 @@ package zoukan.desktop.ui
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -34,6 +37,7 @@ import zoukan.desktop.ZoukanRuntime
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.harness.SampleStores
 import zoukan.extension.DesktopExtensionManager
 import java.io.File
 import java.nio.file.Files
@@ -75,8 +79,9 @@ class EndToEndReadTest {
             step("Add the Keiyoushi store") {
                 onAllNodesWithText("Browse").onFirst().performClick()
                 onAllNodesWithText("Stores").onFirst().performClick()
-                waitFor(hasText("Add the default store"))
-                onAllNodesWithText("Add the default store").onFirst().performClick()
+                onAllNodes(hasSetTextAction() and hasAnyDescendant(hasText("Store URL", substring = true)), useUnmergedTree = true)
+                    .onFirst().performTextInput(SampleStores.KEIYOUSHI.url)
+                onAllNodes(hasText("Add") and hasClickAction()).onFirst().performClick()
                 waitFor(hasText("Keiyoushi"), timeout = 60_000) { onAllNodesWithText("Signing key", substring = true) }
             }
 

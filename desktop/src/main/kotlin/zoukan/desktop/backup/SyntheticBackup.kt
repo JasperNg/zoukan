@@ -261,14 +261,14 @@ object SyntheticBackup {
             backupExtensionStores = buildList {
                 add(
                     BackupExtensionStore(
-                        indexUrl = "https://example.org/extensions",
-                        name = "the main extension store",
-                        badgeLabel = "KEI",
-                        signingKey = "9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2",
+                        indexUrl = "https://example.org/extensions/repo",
+                        name = "Example store",
+                        badgeLabel = "EX",
+                        signingKey = "ab".repeat(32),
                         contactWebsite = "https://example.org",
                         contactDiscord = "https://example.org/chat",
                         isLegacy = false,
-                        extensionListUrl = "https://example.org/extensions/index.pb",
+                        extensionListUrl = "https://example.org/extensions/repo/index.pb",
                     ),
                 )
                 if (legacy) {

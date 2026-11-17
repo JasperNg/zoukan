@@ -4,7 +4,7 @@
 // networking, the extension runtime, the built-in browser) and the command-line tools.
 //
 //   ./gradlew :desktop:run                              # the app
-//   ./gradlew :desktop:run --args="harness"
+//   ./gradlew :desktop:run --args="harness --store <url>"
 //   ./gradlew :desktop:run --args="browser https://example.org"
 //   ./gradlew :desktop:packageMsi                       # Windows installer (Phase 7, see RELEASING.md)
 //   ./gradlew :desktop:packageDmg                       # macOS disk image (notarizeDmg to notarize)
@@ -450,7 +450,7 @@ tasks.named("check") { dependsOn(wiringTest) }
 // The button crawl clicks every button of every screen, tab, Settings page and dialog, and fails
 // on a click that throws, logs an error, hangs the window or does nothing, and on a button that
 // appeared or went since src/test/resources/button-inventory.txt. It takes long, so `check` does
-// not run it; longChecks runs it whole on a Windows machine (desktop/TESTING.md, 'The button crawl'):
+// not run it; longChecks runs it whole on Windows (desktop/TESTING.md, 'The button crawl'):
 //   ./gradlew :desktop:buttonCrawlTest
 //   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.only="settings:Library" -Pzoukan.shard=1/4
 //   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true
@@ -581,7 +581,7 @@ tasks.register<UsabilityReport>("usabilityReport") {
 // Installs every extension of each sample store and checks it is wired up on the desktop: no
 // class, method or field its bytecode uses is missing or a stub, its Injekt lookups resolve, its
 // sources, client, headers and settings work (ExtensionWiringCheck). The stores are
-// CompatibilityHarness.SAMPLE_STORES: Keiyoushi, and yuzono's "Cursed" store, which only the tests
+// SampleStores.ALL (in the tests; the app names no store): Keiyoushi, and yuzono's "Cursed" store, which only the tests
 // use (the app does not add or trust it). Each store runs in a Test task and JVM of its own
 // (extensionWiringTest<Store>), one after the other: Keiyoushi alone needs a 4 GB heap. It downloads
 // every extension, so it is not part of `check`; the nightly check runs it. The reports go to
@@ -700,7 +700,7 @@ val nightlyCheck by tasks.registering {
 }
 
 // The long checks GitHub CI leaves out: the journeys, the whole button crawl and the extension
-// wiring check. They must pass on a Windows machine before each merge to master (desktop/RELEASING.md,
+// wiring check. They must pass on Windows before each merge to master (desktop/RELEASING.md,
 // "Before merging to master"):
 //   gradlew.bat :desktop:longChecks --continue
 // One task after another (the journeys already run up to 4 JVMs side by side), and the crawl in one

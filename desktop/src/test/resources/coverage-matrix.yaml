@@ -391,7 +391,7 @@
   tests: [ui.ScreenSmokeTest, e2e.BrowseFeaturesJourneyTest]
 
 - key: browse:STORES
-  feature: "Stores page: add, add Keiyoushi, remove"
+  feature: "Stores page: add, remove"
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.StoreInstallJourneyTest]

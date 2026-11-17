@@ -355,8 +355,6 @@ class BrowseScreenModel(
     }
 
     companion object {
-        const val SAMPLE_STORE_A = "https://example.org/extensions/repo.json"
-
         // ZOUKAN -->
         /** BlacklistedSources.BLACKLISTED_EXTENSIONS on Android */
         val BLACKLISTED_EXTENSIONS = setOf("eu.kanade.tachiyomi.extension.all.ehentai")

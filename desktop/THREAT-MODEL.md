@@ -76,7 +76,7 @@ Residual risk:
    only APKs, dex2jar translates dex to JVM bytecode, Suwayomi's ASM-based `BytecodeEditor`
    rewrites it, and the manifest and assets are read — all before any signature comparison, which
    happens at load. dex2jar is effectively unmaintained; this is pre-consent exposure to its
-   parsers. Downloads have no size cap. Stores with ready-made jars (the common case) skip
+   parsers. Downloads have no size cap. Stores with ready-made jars (the norm) skip
    this path entirely.
 4. **A converted jar can be swapped after install** by a same-user process, because the APK's
    signature does not cover it. (Mitigated: its hash is recorded at conversion in the encrypted
@@ -256,9 +256,9 @@ fallback's input file is user- or source-chosen content, parsed by libarchive as
 
 | Risk | Why accepted | What would change it |
 |---|---|---|
-| Extensions run in-process with full user privileges | The Android extension model, kept on purpose; the whole extension ecosystem (the common stores) depends on it, and Suwayomi-Server makes the same trade | Run extensions out-of-process with an IPC surface; a large, ongoing engineering effort |
+| Extensions run in-process with full user privileges | The Android extension model, kept on purpose; the whole extension ecosystem depends on it, and Suwayomi-Server makes the same trade | Run extensions out-of-process with an IPC surface; a large, ongoing engineering effort |
 | Store index self-declares its signing key over TLS | Same design as Mihon/Komikku; a curated or pinned root would break user-added stores, which the feature exists to allow | Signed indexes or an app-shipped list of known store keys, with user-added stores still allowed but flagged |
-| dex2jar/ASM parse hostile APKs in-process before the trust decision | Only stores without jars reach it; the dominant stores publishes jars; dex2jar is unmaintained, so "fix the parser" is not available | Drop the APK path (jars-only stores), or convert in a throwaway subprocess/sandbox with a download size cap |
+| dex2jar/ASM parse hostile APKs in-process before the trust decision | Only stores without jars reach it; the dominant store publishes jars; dex2jar is unmaintained, so "fix the parser" is not available | Drop the APK path (jars-only stores), or convert in a throwaway subprocess/sandbox with a download size cap |
 | System tar (libarchive) reads RAR 5 and odd 7z archives | RAR 5 has no maintained pure-Java reader; without tar those chapters cannot open at all | The caps and symlink-skip shrink it (hardened); a pure-Java RAR 5 reader would remove it |
 | OAuth login CSRF from unbound `komikku://` redirects | The trackers' app registrations only accept the custom scheme; Android inherits the same flaw | Trackers move to loopback or https redirects, then the window can bind the redirect to the page it was opened from |
 | Same-user malware reads secret-store keys | OS design; no desktop API grants per-read prompts or hardware binding for generic credentials | OS-level change; the app can only shrink what is at rest, which it already does |

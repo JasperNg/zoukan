@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 
 /**
  * Desktop stand-in for the ca.mpreg fork of the image decoder (frame by frame, with HDR support)
- * that newer Android apps ship and extensions call (an extension store's image helpers, for one). It decodes
+ * that newer Android apps ship and extensions call (one extension's image helpers, for one). It decodes
  * with ImageIO: JPEG, PNG, GIF, BMP and WebP, never as HDR.
  *
  * Each [Frame] holds its pixels as Android's ARGB_8888 does in memory: R, G, B, A bytes per pixel,

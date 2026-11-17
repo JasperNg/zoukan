@@ -96,7 +96,6 @@ browse:SOURCES/tag:source-search  ui
 browse:SOURCES/tag:source-search [type, enter]  key-unused
 browse:SOURCES/tag:source-search [type, escape]  ui
 browse:SOURCES/tag:source-search [type]  ui
-browse:STORES/"Add the default store"  toast:"Could not add the store: Failed to connect to /#" logs:offline
 browse:STORES/"Batch add"  nav:browse.BatchAddScreen
 browse:STORES/"Browse"  selected-already
 browse:STORES/"History"  tab:History
@@ -728,7 +727,6 @@ screen:settings.CreateBackupScreen/tag:backup-option:Saved Searches & Feeds  ui
 screen:settings.CreateBackupScreen/tag:backup-option:Source settings  ui
 screen:settings.CreateBackupScreen/tag:backup-option:Tracking  ui
 screen:settings.CreateBackupScreen/tag:create-backup-action  pick:save[*]
-screen:settings.ExtensionStoresScreen/"Add the default store"  toast:"Could not add the store: Failed to connect to /#" logs:offline
 screen:settings.ExtensionStoresScreen/"Back"  nav:back tab:Library
 screen:settings.ExtensionStoresScreen/"Store URL (repo.json or index.min.json)"  ui
 screen:settings.ExtensionStoresScreen/"Store URL (repo.json or index.min.json)" [type, enter]  key-unused

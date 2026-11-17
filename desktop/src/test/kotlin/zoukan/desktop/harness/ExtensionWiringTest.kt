@@ -21,7 +21,7 @@ import java.nio.file.Files
  * lookups resolve, its sources build their client, headers and filters, a request through each
  * source's client arrives with its headers, and its settings save and read back.
  *
- * `zoukan.e2e.store` names the store, one of [CompatibilityHarness.SAMPLE_STORES] (default
+ * `zoukan.e2e.store` names the store, one of [SampleStores.ALL] (default
  * keiyoushi). The Gradle task `extensionWiringTest` runs it once per store, each in its own JVM.
  * It downloads every extension, so it runs only when asked; `zoukan.e2e.package` limits it to
  * some extensions (comma-separated, for example en.mangapill,all.mangadex):
@@ -38,9 +38,9 @@ class ExtensionWiringTest {
     @Test
     fun `every extension is wired up`() {
         assumeTrue(System.getProperty("zoukan.e2e") == "true", "End-to-end test; run with -Pzoukan.e2e=true")
-        val storeId = System.getProperty("zoukan.e2e.store") ?: CompatibilityHarness.SAMPLE_STORE_A.id
-        val store = CompatibilityHarness.SAMPLE_STORES.firstOrNull { it.id == storeId }
-            ?: error("Unknown store \"$storeId\"; the stores are ${CompatibilityHarness.SAMPLE_STORES.map { it.id }}")
+        val storeId = System.getProperty("zoukan.e2e.store") ?: SampleStores.KEIYOUSHI.id
+        val store = SampleStores.ALL.firstOrNull { it.id == storeId }
+            ?: error("Unknown store \"$storeId\"; the stores are ${SampleStores.ALL.map { it.id }}")
         val dirs = ZoukanDirs(Files.createTempDirectory("zoukan-e2e-wiring").toFile())
         ZoukanRuntime.start(dirs, interactiveBrowser = false)
         Injekt.get<NetworkHelper>()

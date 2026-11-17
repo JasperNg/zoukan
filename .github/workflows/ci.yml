@@ -7,8 +7,8 @@
 # from releasing.
 #
 # This is the fast set, and the release gate (desktop-build.yml calls it). The long checks (the
-# journeys, the button crawl and the extension wiring check) do not run on GitHub: they run on the
-# Windows machine before each merge to master, `gradlew.bat :desktop:longChecks --continue`
+# journeys, the button crawl and the extension wiring check) do not run on GitHub: they run on
+# Windows before each merge to master, `gradlew.bat :desktop:longChecks --continue`
 # (desktop/RELEASING.md, "Before merging to master"). nightly.yml can still run them by hand.
 #
 # The end-to-end tests stay out of this workflow: they only run with -Pzoukan.e2e=true, because

@@ -9,9 +9,9 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 | --- | --- | --- | --- |
 | Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub on every pull request and every push to master (`.github/workflows/ci.yml`). |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
-| Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On a Windows machine before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
-| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Not on GitHub. On a Windows machine before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`. |
-| Extension wiring | `:desktop:extensionWiringTest` (with the journeys: `:desktop:nightlyCheck`) | Downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Not on GitHub on its own. On a Windows machine before each merge to master, by `:desktop:longChecks`; on that machine every night too if `desktop/packaging/check/nightly-windows.ps1 -Register` was run. `.github/workflows/nightly.yml` has no schedule: start it by hand to run, on Windows and macOS, the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`, and on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. |
+| Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On Windows before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
+| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Not on GitHub. On Windows before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`. |
+| Extension wiring | `:desktop:extensionWiringTest` (with the journeys: `:desktop:nightlyCheck`) | Downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Not on GitHub on its own. On Windows before each merge to master, by `:desktop:longChecks`; on that machine every night too if `desktop/packaging/check/nightly-windows.ps1 -Register` was run. `.github/workflows/nightly.yml` has no schedule: start it by hand to run, on Windows and macOS, the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`, and on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. |
 | Android compile | `:app:compileDebugKotlin` and `compileDebugKotlinAndroid` of `:data`, `:domain`, `:core:common`, `:source-api` | A desktop change to shared Android code (`app/.../data/track/`, `data/`, `domain/`) that breaks the Android build. Compiles only; runs no Android tests. | Every pull request and every push to master: the "Android compile" job in `.github/workflows/ci.yml`, described in the comment above it. Locally it needs `ANDROID_HOME` set to an Android SDK. |
 | Live | `:desktop:test -Pzoukan.e2e=true` | The `EndToEnd*Test` classes. Most of them use real sites and need the network. | Only when you ask for them. Never in CI. |
 
@@ -35,8 +35,8 @@ macOS and the Android compile. Its jobs run side by side and it takes about 10 m
 ## Before merging to master
 
 The long tiers, the journeys, the button crawl and the extension wiring check, do not run on
-GitHub. They must pass on a Windows machine before a pull request is merged to master (and so before
-it is released). On Windows, in a checkout of the pull request's branch:
+GitHub. They must pass on Windows before a pull request is merged to master (and so before
+it is released). On a Windows machine, in a checkout of the pull request's branch:
 
 ```powershell
 .\gradlew.bat :desktop:longChecks --continue
@@ -446,7 +446,7 @@ Two files in `desktop/src/test/resources/` go with it:
   between). A button key is `<check key>/<node id>`, and `<check key>/<button> > <item>` for a menu
   item. The crawl fails when a button appears, goes or does something else. Some signatures
   depend on the platform (paths, dates) and on which buttons ran before in the same JVM, so the
-  inventory is recorded on a Windows machine, in one unsharded run, the same way `longChecks` runs
+  inventory is recorded on Windows, in one unsharded run, the same way `longChecks` runs
   the crawl. After a change on purpose, regenerate it there:
   `.\gradlew.bat :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true`, and review the
   diff: each changed line is a change in what a button does. A filtered or sharded run rewrites
@@ -580,7 +580,7 @@ ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
 ```
 
 `extensionWiringTest` downloads every extension of two stores, so it runs only in `nightlyCheck`
-and `longChecks` (on a Windows machine before each merge to master). The stores are `CompatibilityHarness.SAMPLE_STORES`: Keiyoushi (about 1,700
+and `longChecks` (on Windows before each merge to master). The stores are `SampleStores.ALL`, defined in the tests only (the app names no store): Keiyoushi (about 1,700
 extensions) and yuzono's "Cursed" store (six NSFW extensions with their own signing key). Only the
 tests and the harness use the yuzono store; the app does not add or trust it. Each store runs in a
 test task and JVM of its own (`extensionWiringTestKeiyoushi`, `extensionWiringTestYuzono`), one
@@ -598,10 +598,11 @@ index is a stub.
 ./gradlew :desktop:extensionWiringTest -Pzoukan.e2e.stores=keiyoushi -Pzoukan.e2e.package=en.mangapill,all.webtoons
 ```
 
-The live harness (`./gradlew :desktop:run --args="harness"`) also runs over both stores by
-default, each with its own sample: Keiyoushi's 30 (`CompatibilityHarness.SAMPLE_STORE_A`) and all six
-of yuzono's. `--store keiyoushi` or `--store yuzono` (repeatable, or a store URL) picks the stores.
-Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile. Over
+The live harness (`./gradlew :desktop:run --args="harness --store <url>"`) is part of the app, so
+it names no store: `--store` takes a store's index URL and is required (repeatable). The test
+presets in `SampleStores` (Keiyoushi's 30 extensions, all six of yuzono's) are for the tests; with a
+plain URL the harness tests `CompatibilityHarness.DEFAULT_PACKAGES` unless `--packages` or `--all`
+says otherwise. Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile. Over
 several stores, a `--packages` entry is tested in the stores that list it, and fails the run only
 when no store lists it.
 
@@ -613,7 +614,7 @@ harness profile's setting. The run prints the server it uses. Use it when the lo
 redirects a site, or to check a provider:
 
 ```bash
-./gradlew :desktop:run --args="harness --doh quad9 --store keiyoushi --packages en.comix"
+./gradlew :desktop:run --args="harness --doh quad9 --store https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json --packages en.comix"
 ```
 
 The "First image" column gives the first page's type, size and size in pixels (`ok image/webp

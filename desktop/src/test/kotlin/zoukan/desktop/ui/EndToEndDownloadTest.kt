@@ -51,9 +51,9 @@ import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
+import zoukan.desktop.harness.SampleStores
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.storage.ZoukanStorage
-import zoukan.desktop.ui.browse.BrowseScreenModel
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.extension.DesktopExtensionManager
 import java.awt.image.BufferedImage
@@ -97,7 +97,7 @@ class EndToEndDownloadTest {
 
         val source = step("Install $pkg and add three entries to the library") {
             runBlocking {
-                Injekt.get<AddExtensionStore>()(BrowseScreenModel.SAMPLE_STORE_A).getOrThrow()
+                Injekt.get<AddExtensionStore>()(SampleStores.KEIYOUSHI.url).getOrThrow()
                 extensions.findAvailableExtensions()
                 val available = extensions.availableExtensionsFlow.value[pkg] ?: error("$pkg is not in the store")
                 extensions.installExtension(available)

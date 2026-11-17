@@ -19,8 +19,8 @@ upstream Komikku.
 ```bash
 ./gradlew :desktop:run                                     # open the app
 ./gradlew :desktop:run --args="status"                     # open the encrypted database, list installed extensions
-./gradlew :desktop:run --args="harness"                    # test the sample extensions of each test store against their sites
-./gradlew :desktop:run --args="harness --store <url> --all --skip-nsfw"  # test every extension in the the main extension store store
+./gradlew :desktop:run --args="harness --store <store URL>"  # test a sample of a store's extensions against their sites
+./gradlew :desktop:run --args="harness --store <store URL> --all --skip-nsfw"  # test every extension in a store
 ./gradlew :desktop:run --args="browser https://example.org"
 ./gradlew :desktop:run --args="backup restore <file.tachibk>"     # restore a Komikku, Mihon or SY backup
 ./gradlew :desktop:run --args="backup create [file] [--private]" # back up (default: <data>/backups)
@@ -147,7 +147,7 @@ metadata) are journeys that need no network and run in `journeyTest`.
 ./gradlew :desktop:journeyTest
 ```
 
-`EndToEndReadTest` drives the real UI: it adds the the main extension store store, installs an extension, browses
+`EndToEndReadTest` drives the real UI: it adds an extension store, installs an extension, browses
 its source, adds the first entry to the library and reads it in paged and webtoon mode. It needs
 the network and a display, so it is skipped unless asked for:
 
@@ -183,7 +183,7 @@ few minutes, so `check` does not run them; `longChecks` does (below).
 
 `./gradlew :desktop:nightlyCheck --continue` runs the journeys and the extension wiring check
 (`extensionWiringTest`). `./gradlew :desktop:longChecks --continue` runs those and the whole button
-crawl; GitHub CI runs none of them, so it must pass on a Windows machine before each merge to master
+crawl; GitHub CI runs none of them, so it must pass on Windows before each merge to master
 (`desktop/TESTING.md`, "Before merging to master"). On Windows, `desktop\packaging\check\nightly-windows.ps1`
 runs `nightlyCheck` on a clone of master it keeps for itself and saves the log and reports to
 `%LOCALAPPDATA%\Zoukan-nightly\<date>`; `-Register` adds a scheduled task that runs it every night
@@ -238,7 +238,7 @@ real export in `src/test/resources/backups/`; reports go to `desktop/build/repor
 | Preferences | `DesktopPreferenceStore` (core/common) | Android SharedPreferences emulation, same keys and value types as the Android app |
 | Backups | `backup/` (desktop), `:backup` (shared) | `DesktopBackups`, `BackupCheck`, `BackupComparison` |
 | Cookies | `network/PersistentCookieStore.kt` | Shared by OkHttp and the built-in browser |
-| Extensions | `extension-jvm/` | an extension store's signed jars (store field 501); dex2jar only for stores without jars |
+| Extensions | `extension-jvm/` | Signed jars from stores that publish them (store field 501); dex2jar only for stores without jars |
 | Built-in browser | `browser/` | Chromium through jcefmaven, downloaded on first use into `<data>/browser` |
 | Cloudflare | `CloudflareInterceptor` (core/common desktopMain) | Hidden WebView first, then a browser window (`--interactive`) |
 | Android app code | `app-shared.txt`, `compat/` | Trackers, E-Hentai, merged source and some interactors are copied from `app/src/main/java` at build time (`syncAppShared`) and compiled as they are; `compat/` has desktop versions of the Android pieces they call |
@@ -251,7 +251,7 @@ asks once more.
 ## Known limits
 
 - Converting APKs with dex2jar fails JVM bytecode verification for R8-minified APKs, which is every
-  current the main extension store APK. Stores without jars only work for unminified extensions.
+  current APK of the main extension store. Stores without jars only work for unminified extensions.
 - Discord Rich Presence talks to the Discord app on the same computer, not to Discord's servers.
 - Google Drive sync and the secure screen are Android only. See [PARITY.md](PARITY.md) for the
   other differences from Android.

@@ -29,12 +29,19 @@ class SampleStoresTest {
     lateinit var temp: File
 
     @Test
-    fun `with no --store the harness runs both sample stores, skipping packages a store does not list`() {
-        val runs = harnessRuns(CompatibilityHarness.Options(packages = listOf("en.mangapill")), emptyList())
+    fun `with no --store the harness runs every preset, skipping packages a store does not list`() {
+        val runs = harnessRuns(CompatibilityHarness.Options(packages = listOf("en.mangapill")), emptyList(), SampleStores.ALL)
         runs.map { it.storeId } shouldContainExactly listOf("keiyoushi", "yuzono")
-        runs.map { it.storeUrl } shouldContainExactly CompatibilityHarness.SAMPLE_STORES.map { it.url }
+        runs.map { it.storeUrl } shouldContainExactly SampleStores.ALL.map { it.url }
         runs.all { it.skipMissing } shouldBe true
         runs.map { it.minExtensions } shouldContainExactly listOf(1000, 1)
+        runs.map { it.sample } shouldContainExactly SampleStores.ALL.map { it.packages }
+    }
+
+    @Test
+    fun `the command line has no presets, so it needs --store`() {
+        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), emptyList()) }
+            .message!! shouldContain "--store <url>"
     }
 
     @Test
@@ -52,8 +59,8 @@ class SampleStoresTest {
 
     @Test
     fun `one --store keeps a missing package a failure`() {
-        val run = harnessRuns(CompatibilityHarness.Options(), listOf("yuzono")).single()
-        run.storeUrl shouldBe CompatibilityHarness.SAMPLE_STORE_B.url
+        val run = harnessRuns(CompatibilityHarness.Options(), listOf("yuzono"), SampleStores.ALL).single()
+        run.storeUrl shouldBe SampleStores.YUZONO.url
         run.skipMissing shouldBe false
     }
 
@@ -62,18 +69,21 @@ class SampleStoresTest {
         val run = harnessRuns(CompatibilityHarness.Options(), listOf("https://raw.githubusercontent.com/some-one/repo/repo/repo.json")).single()
         run.storeId shouldBe "some-one"
         run.minExtensions shouldBe 0
+        run.sample shouldBe emptyList()
     }
 
     @Test
     fun `an unknown store name is a usage error`() {
-        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), listOf("nope")) }
+        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), listOf("nope"), SampleStores.ALL) }
+        // Without the presets a store's name means nothing
+        assertThrows<IllegalArgumentException> { harnessRuns(CompatibilityHarness.Options(), listOf("yuzono")) }
     }
 
     @Test
     fun `the Keiyoushi sample is the default sample plus ten, and the yuzono sample is its six extensions`() {
-        CompatibilityHarness.SAMPLE_STORE_A.packages.size shouldBe 30
-        CompatibilityHarness.SAMPLE_STORE_A.packages.take(20) shouldContainExactly CompatibilityHarness.DEFAULT_PACKAGES
-        CompatibilityHarness.SAMPLE_STORE_B.packages.size shouldBe 6
+        SampleStores.KEIYOUSHI.packages.size shouldBe 30
+        SampleStores.KEIYOUSHI.packages.take(20) shouldContainExactly CompatibilityHarness.DEFAULT_PACKAGES
+        SampleStores.YUZONO.packages.size shouldBe 6
     }
 
     @Test

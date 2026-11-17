@@ -11,7 +11,7 @@ import java.nio.file.StandardCopyOption
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Installs an extension from its store. the main extension store publishes a ready-made, JAR-signed JVM jar of
+ * Installs an extension from its store. Most stores publish a ready-made, JAR-signed JVM jar of
  * each extension (the store's jarUrl), which is installed as it is. For a store that publishes only
  * APKs, the APK is converted with dex2jar, and the converted jar's SHA-256 is handed to the loader
  * (InstalledFiles.convertedSha256), which records it outside the extensions folder: unlike the

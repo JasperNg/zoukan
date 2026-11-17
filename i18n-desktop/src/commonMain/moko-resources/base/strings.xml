@@ -44,7 +44,6 @@
     <string name="available_loading">Available (loading…)</string>
     <string name="available">Available (%1$s)</string>
     <string name="extension_stores_list_the_extensions_you">Extension stores list the extensions you can install. Zoukan installs the store\'s signed jars and only loads extensions signed with the store\'s key.</string>
-    <string name="add_default_store">Add the default store</string>
     <string name="signing_key">Signing key %1$s…</string>
     <string name="added_1_entry_to_the_library">Added 1 entry to the library</string>
     <string name="added_entries_to_the_library">Added %1$s entries to the library</string>

@@ -11,8 +11,8 @@ tests, the wiring shards, the file tests on Windows and macOS and the Android co
 ## Before merging to master
 
 The long checks do not run on GitHub: the journeys, the button crawl and the extension wiring
-check. Every merge to master that changes code is released, so they must pass on a Windows machine
-before the pull request is merged. On Windows, in a checkout of the pull request's branch:
+check. Every merge to master that changes code is released, so they must pass on Windows
+before the pull request is merged. On a Windows machine, in a checkout of the pull request's branch:
 
 ```powershell
 .\gradlew.bat :desktop:longChecks --continue

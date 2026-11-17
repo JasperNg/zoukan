@@ -26,7 +26,7 @@ import java.util.zip.ZipInputStream
  * ICU-backed copy that behaves like Android's), and copies the APK's assets and its decoded
  * manifest into the jar.
  *
- * R8-minified APKs, which is every current the main extension store APK, fail JVM bytecode verification after
+ * R8-minified APKs, which is every APK of the main extension store, fail JVM bytecode verification after
  * conversion: R8 inlines trivial subclass constructors (new-instance of a subclass followed by the
  * superclass constructor), which ART accepts and the JVM refuses, and dex2jar keeps the dex
  * register types. So stores with jars are installed from their jars.

@@ -74,9 +74,10 @@ class ExtensionWiringCheck(
     private val options: Options,
 ) {
     data class Options(
-        val storeUrl: String = CompatibilityHarness.DEFAULT_STORE,
+        /** The store's index URL. The app names no store: the caller passes one. */
+        val storeUrl: String = "",
         /** Names the store in the report and trace files (see [CompatibilityHarness.Options.storeId]). */
-        val storeId: String = CompatibilityHarness.SAMPLE_STORE_A.id,
+        val storeId: String = "store",
         /** Package names, with or without the eu.kanade.tachiyomi.extension. prefix. Empty means all. */
         val packages: List<String> = emptyList(),
         val skipNsfw: Boolean = false,
