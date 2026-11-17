@@ -1170,11 +1170,11 @@ class DownloadManager(
         return null
     }
 
-    /** Loads the saved queue and starts it. Called once at start-up. */
     /** Whether [manga]'s chapters can download: an installed online source, and not a merged entry itself. */
     private fun canDownload(manga: Manga): Boolean =
         manga.source != MERGED_SOURCE_ID && sourceManager.get(manga.source) is HttpSource
 
+    /** Loads the saved queue and starts it. Called once at start-up. */
     suspend fun restore(start: Boolean = true) {
         val saved = readSavedQueue() ?: return
         val mangas = HashMap<Long, Manga?>()
