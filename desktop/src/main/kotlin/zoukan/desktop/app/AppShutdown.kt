@@ -1,5 +1,6 @@
 package zoukan.desktop.app
 
+import app.cash.sqldelight.db.SqlDriver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
@@ -33,7 +34,11 @@ object AppShutdown {
                     Injekt.get(),
                     Injekt.get(),
                     appScope,
-                    databaseIdle = { Injekt.get<DatabaseHandler>().await { } },
+                    databaseIdle = {
+                        Injekt.get<DatabaseHandler>().await { }
+                        // Closes the database thread's connection, which checkpoints the WAL into the file
+                        Injekt.get<SqlDriver>().close()
+                    },
                 )
             }
         } catch (e: Throwable) {

@@ -1,6 +1,5 @@
 package zoukan.desktop.db
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -28,14 +27,14 @@ class BlockingReadDeadlockTest {
 
     @Test
     fun `a blocking read on the thread that started a transaction does not deadlock`() {
-        // As DesktopAppModule sets it up: one database thread for queries and transactions
-        val executor = Executors.newSingleThreadExecutor { Thread(it, "zoukan-database").apply { isDaemon = true } }
-        val driver = JdbcSqliteDriver(
+        val thread = DatabaseThread()
+        val driver = DesktopSqliteDriver.withSchema(
             url = "jdbc:sqlite:${File(temp, "zoukan.db").absolutePath}",
             properties = DesktopDatabase.properties(ByteArray(32) { it.toByte() }),
+            databaseThread = thread,
             schema = Database.Schema,
         )
-        val dispatcher = executor.asCoroutineDispatcher()
+        val dispatcher = thread.executor.asCoroutineDispatcher()
         val handler = AndroidDatabaseHandler(DesktopDatabase.createDatabase(driver), driver, dispatcher, dispatcher)
         val ui = Executors.newSingleThreadExecutor { Thread(it, "ui").apply { isDaemon = true } }
         val uiScope = CoroutineScope(ui.asCoroutineDispatcher())
@@ -60,7 +59,7 @@ class BlockingReadDeadlockTest {
         } finally {
             driver.close()
             ui.shutdownNow()
-            executor.shutdownNow()
+            thread.executor.shutdownNow()
         }
     }
 }
