@@ -118,6 +118,8 @@ class CancellationSourceScanTest {
             Site("ui/recs/RecommendsScreen.kt", "ExternalLinks.browse", LINK),
             Site("ui/security/LockOverlay.kt", "focus.requestFocus()", FOCUS),
             Site("ui/settings/AboutSettings.kt", "SystemEffects.current.installUpdate", "starts the installer, no suspension point"),
+            Site("ui/settings/AboutSettings.kt", "} catch (e: Throwable) {", "stores the update token in the OS secret store, plain call"),
+            Site("ui/settings/DownloadPasswordDialog.kt", "} catch (e: Throwable) {", "stores the download password in the OS secret store, plain call"),
             Site("ui/settings/AboutSettings.kt", "ExternalLinks.browse", LINK),
             Site("ui/settings/AboutSettings.kt", "disposeAllForQuit", "closes the windows on the way out"),
             Site("ui/settings/AdvancedSettings.kt", "readText()", FILE),
