@@ -8,6 +8,8 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import logcat.LogPriority
@@ -16,7 +18,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.slf4j.LoggerFactory
+import tachiyomi.domain.chapter.interactor.GetChapter
+import tachiyomi.domain.manga.interactor.GetManga
 import zoukan.desktop.Slf4jLogcatLogger
+import zoukan.desktop.ZoukanDirs
 import java.io.File
 
 /**
@@ -80,5 +85,31 @@ class DownloadSourceMissingTest {
         val logs = appender.list.filter { "Alpha" in it.formattedMessage }
         logs.shouldNotBeEmpty()
         logs.filter { it.level == Level.ERROR }.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a restored queue drops the chapters whose source can no longer download, as on Android`() = runBlocking<Unit> {
+        installLogger()
+        val kit = DownloadKit(temp).also { kits += it }
+        val kept = kit.manga(1, "Alpha", source = 1)
+        val gone = kit.manga(2, "Bravo", source = 42)
+        val chapters = mapOf(1L to kit.chapter(1, 1), 2L to kit.chapter(2, 2))
+        File(temp, "downloads-queue.json").writeText("""[{"mangaId":1,"chapterId":1},{"mangaId":2,"chapterId":2}]""")
+        val manager = DownloadManager(
+            ZoukanDirs(temp),
+            kit.paths,
+            kit.sourceManager,
+            kit.downloadPreferences,
+            mockk(),
+            mockk<GetManga> { coEvery { await(any<Long>()) } answers { listOf(kept, gone).firstOrNull { it.id == firstArg<Long>() } } },
+            mockk<GetChapter> { coEvery { await(any<Long>()) } answers { chapters[firstArg<Long>()] } },
+            mockk(relaxed = true),
+        ) { emptyList() }
+
+        manager.restore(start = false)
+
+        manager.queue.value.map { it.manga.title } shouldBe listOf("Alpha")
+        appender.list.filter { it.level == Level.ERROR }.shouldBeEmpty()
+        manager.awaitBackgroundWork()
     }
 }

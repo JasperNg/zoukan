@@ -1335,7 +1335,7 @@ class ButtonCrawlTest {
         override fun hashCode() = tokens.hashCode()
     }
 
-    private fun quoted(text: String) = "\"" + ButtonCrawl.stable(text.replace(Regex("\\s+"), " ").trim().take(50)) + "\""
+    private fun quoted(text: String) = "\"" + ButtonCrawl.stable(ButtonCrawl.withoutHome(text.replace(Regex("\\s+"), " ").trim()).take(50)) + "\""
 
     private fun signatureOf(before: Snapshot, after: Snapshot, kind: Kind): Signature {
         val details = db.diff(before.rows, after.rows)

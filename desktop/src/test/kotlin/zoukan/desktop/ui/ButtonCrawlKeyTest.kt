@@ -7,12 +7,13 @@ import org.junit.jupiter.api.Test
 class ButtonCrawlKeyTest {
 
     @Test
-    fun `a user's home folder becomes a placeholder, also when the label cut it short`() {
-        ButtonCrawl.stable("""Data folder C:\Users\SomeOne\AppData\Local\Temp\zoukan-c...""") shouldBe
-            """Data folder <home>\AppData\Local\Temp\zoukan-c..."""
-        ButtonCrawl.stable("""Kept in files in C:\Users\Some...""") shouldBe "Kept in files in <home>"
-        ButtonCrawl.stable("Storage location /Users/someone/Library/Zoukan") shouldBe "Storage location <home>/Library/Zoukan"
-        ButtonCrawl.stable("Data folder /home/someone/.local/share/zoukan") shouldBe "Data folder <home>/.local/share/zoukan"
+    fun `a path in a user's home folder becomes a placeholder, whatever the name's length or spaces`() {
+        ButtonCrawl.stable("""Data folder C:\Users\SomeOne\AppData\Local\Temp\zoukan-c...""") shouldBe "Data folder <home>…"
+        ButtonCrawl.stable("""Data folder C:\Users\A Much Longer Name\AppData\Local\Te...""") shouldBe "Data folder <home>…"
+        ButtonCrawl.stable("""Kept in files in C:\Users\Some...""") shouldBe "Kept in files in <home>…"
+        ButtonCrawl.stable("""Escaped C:\\Users\\someone\\x""") shouldBe "Escaped <home>…"
+        ButtonCrawl.stable("Storage location /Users/some one/Library/Zoukan") shouldBe "Storage location <home>…"
+        ButtonCrawl.stable("Data folder /home/someone/.local/share/zoukan") shouldBe "Data folder <home>…"
     }
 
     @Test

@@ -991,7 +991,7 @@ settings:Data/"Connections Discord"  ui
 settings:Data/"Create backup"  nav:settings.CreateBackupScreen
 settings:Data/"Data Saver Compress images before downloading or loading ..."  dialog:"Data Saver"
 settings:Data/"Data and storage Manual & automatic backups, storage space"  selected-already
-settings:Data/"Data folder <home>\AppData\Local\Temp\zoukan-c..."  folder:.
+settings:Data/"Data folder <home>…"  folder:.
 settings:Data/"Downloads Automatic download, download ahead"  ui
 settings:Data/"E-Hentai E-Hentai settings"  ui
 settings:Data/"Install missing extensions Installs the extensions of the..."  nav:settings.MissingExtensionsScreen
@@ -1004,7 +1004,7 @@ settings:Data/"Open the local source folder Put a folder per entry here,..."  fo
 settings:Data/"Reader Reading mode, display, navigation"  ui
 settings:Data/"Restore backup"  pick:open[tachibk,proto.gz]
 settings:Data/"Security and privacy App lock, secure screen"  ui
-settings:Data/"Storage location <home>\AppData\Local\Temp\zou..."  pick:folder
+settings:Data/"Storage location <home>…"  pick:folder
 settings:Data/"Sync service Off"  dialog:"Sync service"
 settings:Data/"Tracking One-way progress sync, enhanced sync"  ui
 settings:Data/tag:settings-search  ui
@@ -1036,7 +1036,7 @@ settings:Downloads/"Library Categories, global update"  ui
 settings:Downloads/"Reader Reading mode, display, navigation"  ui
 settings:Downloads/"Save as CBZ archive"  pref:save_chapter_as_cbz
 settings:Downloads/"Security and privacy App lock, secure screen"  ui
-settings:Downloads/"Set the download password Kept in files in <home>"  dialog:"Download password"
+settings:Downloads/"Set the download password Kept in files in <home>…"  dialog:"Download password"
 settings:Downloads/"Split tall images Improves reader performance"  pref:split_tall_images
 settings:Downloads/"Tracking One-way progress sync, enhanced sync"  ui
 settings:Downloads/tag:settings-search  ui

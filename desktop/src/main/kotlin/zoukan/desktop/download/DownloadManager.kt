@@ -2,6 +2,16 @@ package zoukan.desktop.download
 
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.source.online.HttpSource
+import exh.source.MERGED_SOURCE_ID
+import java.io.File
+import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -40,15 +50,6 @@ import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
-import java.io.File
-import java.io.IOException
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.FileAlreadyExistsException
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.StandardCopyOption
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 /** A chapter in the download queue. */
 class Download(val manga: Manga, val chapter: Chapter) {
@@ -784,9 +785,9 @@ class DownloadManager(
     fun enqueue(manga: Manga, chapters: List<Chapter>, start: Boolean = true) {
         if (chapters.isEmpty()) return
         // As Android's Downloader.queueChapters: only an installed online source downloads, so the
-        // local source and an entry whose extension is not installed queue nothing (a merged entry
-        // passes its children here one by one)
-        if (sourceManager.get(manga.source) !is HttpSource) return
+        // local source and an entry whose extension is not installed queue nothing; nor does a merged
+        // entry itself (callers pass its children here one by one)
+        if (!canDownload(manga)) return
         val candidates = chapters
             .distinctBy { it.id }
             .filterNot { isDownloaded(manga, it) }
@@ -1170,11 +1171,17 @@ class DownloadManager(
     }
 
     /** Loads the saved queue and starts it. Called once at start-up. */
+    /** Whether [manga]'s chapters can download: an installed online source, and not a merged entry itself. */
+    private fun canDownload(manga: Manga): Boolean =
+        manga.source != MERGED_SOURCE_ID && sourceManager.get(manga.source) is HttpSource
+
     suspend fun restore(start: Boolean = true) {
         val saved = readSavedQueue() ?: return
         val mangas = HashMap<Long, Manga?>()
         val downloads = saved.mapNotNull { s ->
             val manga = mangas.getOrPut(s.mangaId) { getManga.await(s.mangaId) } ?: return@mapNotNull null
+            // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
+            if (!canDownload(manga)) return@mapNotNull null
             val chapter = getChapter.await(s.chapterId) ?: return@mapNotNull null
             Download(manga, chapter)
         }

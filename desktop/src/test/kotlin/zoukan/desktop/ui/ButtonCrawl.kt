@@ -17,16 +17,23 @@ internal object ButtonCrawl {
     /**
      * A button key that stays the same from run to run: digits become `#`, since counts, sizes,
      * dates and times in a row's label change with the day and the machine, not with the app.
-     * Month and day names, a.m. and p.m., and the words of a relative date go too. A user's home
-     * folder becomes `<home>`, so the inventory never holds the name of the account that recorded it.
+     * Month and day names, a.m. and p.m., and the words of a relative date go too. A path in a user's
+     * home folder becomes `<home>…` (see [withoutHome]).
      */
-    fun stable(id: String): String = id
-        .replace(HOME, "<home>")
+    fun stable(id: String): String = withoutHome(id)
         .replace(DATE_WORDS, "#")
         .replace(Regex("""\d+"""), "#")
 
-    /** `C:\Users\<name>`, `/Users/<name>` and `/home/<name>`, also when a label cut the name short. */
-    private val HOME = Regex("""(?i)\b[a-z]:\\Users\\[^\\\s"]*|/(?:Users|home)/[^/\s"]+""")
+    /**
+     * [text] with a path in a user's home folder, and the rest of the text after it, replaced by
+     * `<home>…`: the inventory never holds the recording account's name, nor its length (a label
+     * cuts a long path at a length that depends on it), and a name with a space cannot leak half.
+     * Apply it before cutting a label short.
+     */
+    fun withoutHome(text: String): String = text.replace(HOME, "<home>…")
+
+    /** `C:\Users\…` (one or two backslashes), `/Users/…` and `/home/…`, to the end of the text. */
+    private val HOME = Regex("""(?i)\b[a-z]:\\{1,2}Users\\{1,2}.*|/(?:Users|home)/.*""")
 
     private val DATE_WORDS = Regex(
         """(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|""" +
