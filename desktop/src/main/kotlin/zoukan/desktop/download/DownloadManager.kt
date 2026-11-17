@@ -1000,7 +1000,7 @@ class DownloadManager(
         val chapter = download.chapter
         return try {
             val source = sourceManager.get(manga.source) as? HttpSource
-                ?: error("The source of ${manga.title} is not installed")
+                ?: throw SourceNotInstalledException(manga.title)
             // Nothing is created on the system disk when the chosen storage folder is unplugged
             paths.requireStorage()
             // The folder as named on disk, so a copy from macOS (NFD names) gets no second folder
@@ -1060,7 +1060,13 @@ class DownloadManager(
             if (download.state.value == Download.State.DOWNLOADING) download.state.value = Download.State.QUEUED
             throw e
         } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Downloading ${manga.title} / ${chapter.name} failed" }
+            if (e is SourceNotInstalledException) {
+                // An expected state (a restored library whose extension is not installed yet): the
+                // user gets the notification below, and the log needs no stack trace
+                logcat(LogPriority.WARN) { "Downloading ${manga.title} / ${chapter.name} failed: ${e.message}" }
+            } else {
+                logcat(LogPriority.ERROR, e) { "Downloading ${manga.title} / ${chapter.name} failed" }
+            }
             download.error = errorText(e)
             download.state.value = Download.State.ERROR
             Notifications.post(localized(DMR.strings.download_failed), "${manga.title}: ${chapter.name}\n${download.error}", Notifications.Kind.ERROR)
@@ -1191,3 +1197,6 @@ class DownloadManager(
         }
     }
 }
+
+/** The entry's source (its extension) is not installed, so its chapters cannot download. */
+internal class SourceNotInstalledException(title: String) : IllegalStateException("The source of $title is not installed")

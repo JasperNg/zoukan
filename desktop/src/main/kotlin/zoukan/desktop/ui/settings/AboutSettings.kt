@@ -18,6 +18,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.AppInfo
 import kotlinx.coroutines.launch
+import logcat.LogPriority
+import logcat.logcat
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -32,6 +34,7 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.ui.security.secretStoreError
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.UpdateStates
 import zoukan.desktop.update.Updates
@@ -171,17 +174,19 @@ private fun TokenRow() {
             },
             confirmButton = {
                 TextButton(enabled = value.isNotBlank(), onClick = {
-                    Updates.checker.token = value
-                    hasToken = true
-                    dialog = false
+                    if (storeTokenOrToast(value)) {
+                        hasToken = true
+                        dialog = false
+                    }
                 }) { Text(localized(MR.strings.action_save)) }
             },
             dismissButton = {
                 if (hasToken) {
                     TextButton(onClick = {
-                        Updates.checker.token = null
-                        hasToken = false
-                        dialog = false
+                        if (storeTokenOrToast(null)) {
+                            hasToken = false
+                            dialog = false
+                        }
                     }) { Text(localized(MR.strings.action_remove)) }
                 }
                 TextButton(onClick = { dialog = false }) { Text(localized(MR.strings.action_cancel)) }
@@ -198,4 +203,18 @@ private fun browse(url: String) {
 private fun exitApp(code: Int) {
     runCatching { BrowserWindow.disposeAllForQuit() }
     SystemEffects.current.exit(code)
+}
+
+/**
+ * Saves (or with null, removes) the update-check token in the OS secret store. The store can
+ * refuse (a denied Keychain prompt, a locked keyring): that is a toast, not an exception that
+ * would close the app. @return whether it was stored
+ */
+internal fun storeTokenOrToast(value: String?): Boolean = try {
+    Updates.checker.token = value
+    true
+} catch (e: Exception) {
+    logcat("AboutSettings", LogPriority.WARN) { "Could not store the update-check token: ${e.message}" }
+    Toasts.show(secretStoreError(e))
+    false
 }

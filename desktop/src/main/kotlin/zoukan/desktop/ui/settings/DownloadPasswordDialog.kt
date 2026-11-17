@@ -18,12 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import logcat.LogPriority
+import logcat.logcat
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
+import zoukan.desktop.ui.security.secretStoreError
 import zoukan.i18n.desktop.DMR
 
 /** The change the user asked for, waiting for a second confirmation. */
@@ -46,15 +49,27 @@ internal fun DownloadPasswordDialog(
     var repeat by remember { mutableStateOf("") }
     var pending by remember { mutableStateOf<PendingChange?>(null) }
 
+    // The OS secret store can refuse (a denied Keychain prompt, a locked keyring): the user gets a
+    // toast and the dialog stays open, rather than an exception that would close the app
+    fun storeOrToast(value: String): Boolean = try {
+        cbzPassword.set(value)
+        true
+    } catch (e: Exception) {
+        logcat("DownloadPasswordDialog", LogPriority.WARN) { "Could not store the download password: ${e.message}" }
+        Toasts.show(secretStoreError(e))
+        pending = null
+        false
+    }
+
     fun save() {
-        cbzPassword.set(password)
+        if (!storeOrToast(password)) return
         onPasswordChanged(true)
         onDismiss()
         Toasts.show(localized(DMR.strings.download_password_saved))
     }
 
     fun remove() {
-        cbzPassword.set("")
+        if (!storeOrToast("")) return
         protectDownloads.set(false)
         onPasswordChanged(false)
         onDismiss()

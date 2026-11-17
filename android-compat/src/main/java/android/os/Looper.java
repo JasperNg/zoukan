@@ -236,6 +236,13 @@ public final class Looper {
             }
             Log.e(TAG, "Loop handler threw", exception);
             // throw exception;
+        // ZOUKAN -->
+        // One looper serves every extension: an Error from one extension's callback (a LinkageError,
+        // a StackOverflowError) must not end it and hang every WebView extension until a restart
+        } catch (Error error) {
+            if (error instanceof ThreadDeath) throw error;
+            Log.e(TAG, "Loop handler threw", error);
+        // ZOUKAN <--
         } finally {
             dispatchEnd = needEndTime ? SystemClock.uptimeMillis() : 0;
             ThreadLocalWorkSource.restore(origWorkSource);

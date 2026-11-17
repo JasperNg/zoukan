@@ -23,7 +23,6 @@ on:
       - '**.md'
       - '.github/readme-images/**'
       - '.github/ISSUE_TEMPLATE/**'
-      - 'desktop/reports/**'
       - 'LICENSE'
   workflow_dispatch:
   # desktop-build.yml calls this workflow, so a release waits for the check of its own commit
@@ -64,7 +63,7 @@ jobs:
             [ -z "$file" ] && continue
             # Same list as the paths-ignore above and desktop-build.yml
             case "$file" in
-              *.md|.github/readme-images/*|.github/ISSUE_TEMPLATE/*|desktop/reports/*|LICENSE) ;;
+              *.md|.github/readme-images/*|.github/ISSUE_TEMPLATE/*|LICENSE) ;;
               *) echo "Code change: $file"; code=true; break ;;
             esac
           done < <(git diff --name-only "origin/$BASE_REF...HEAD")

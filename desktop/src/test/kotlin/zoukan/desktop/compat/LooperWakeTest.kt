@@ -56,6 +56,33 @@ class LooperWakeTest {
     }
 
     @Test
+    fun `an Error thrown by a message does not end the loop`() {
+        val ready = CompletableFuture<Looper>()
+        val thread = Thread {
+            Looper.prepare()
+            ready.complete(Looper.myLooper()!!)
+            Looper.loop()
+        }.apply {
+            isDaemon = true
+            start()
+        }
+        val looper = ready.get(5, TimeUnit.SECONDS)
+        val handler = Handler(looper)
+        try {
+            // What an extension built against a newer API throws from a callback
+            handler.post { throw NoSuchMethodError("probe") }
+            handler.post { throw StackOverflowError("probe") }
+            val ran = CountDownLatch(1)
+            handler.post { ran.countDown() }
+            ran.await(5, TimeUnit.SECONDS) shouldBe true
+            thread.isAlive shouldBe true
+        } finally {
+            looper.quit()
+            thread.join(5_000)
+        }
+    }
+
+    @Test
     fun `HandlerThread quit ends the thread`() {
         val thread = HandlerThread("probe").apply { start() }
         (thread.looper != null) shouldBe true
