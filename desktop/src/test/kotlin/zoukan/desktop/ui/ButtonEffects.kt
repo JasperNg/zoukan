@@ -102,6 +102,8 @@ internal object Contracts {
         Contract(Regex("""^flow:reader\.bars/"Scale type: .*" > """), Regex("""^pref:pref_image_scale_type_key$"""), "the reader's scale type writes its preference"),
         Contract(Regex("""^screen:manga\.MangaScreen/"In library"$"""), Regex("""^mangas\.favorite\[Alpha]$"""), "In library on Alpha's screen removes Alpha"),
         Contract(Regex("""^flow:library\.selection/"Mark as read""""), Regex("""^chapters\.read\[Alpha/"""), "the library selection's Mark as read writes the selected entry's chapters"),
+        // The download choices of the selection bar's Download and of the entry menu's Download submenu
+        Contract(Regex("""^flow:library\.selection-download/.*"Download" > "(Next chapter|Next # chapters|Unread chapters)"( #2)?$"""), Regex("""^queue\+$"""), "a download choice queues the online entry's unread chapters"),
         // Settings that write their preference at once: these dialogs apply each choice as it is made
         Contract(Regex("""^dialog:library\.LibrarySettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(pref:|db:categories\.)"""), "the library's filter, sort and display options write their preference"),
         Contract(Regex("""^dialog:reader\.ReaderSettingsDialog/.*\((dialog )?toggle\)$"""), Regex("""^(pref:|mangas\.viewer\[Alpha]$)"""), "the reader settings write their preference, or Alpha's own reading mode"),
