@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,10 +116,12 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         val filter = ReaderFilter.collect(prefs)
         val crop by prefs.cropBorders().collectAsState()
         val cropWebtoon by prefs.cropBordersWebtoon().collectAsState()
-        val cropKey = remember { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
-        LaunchedEffect(crop, cropWebtoon) {
-            if (cropKey.value != null && cropKey.value != (crop to cropWebtoon)) model.redecodePages()
-            cropKey.value = crop to cropWebtoon
+        val cropContinuous by prefs.cropBordersContinuousVertical().collectAsState()
+        val cropKey = remember { mutableStateOf<Triple<Boolean, Boolean, Boolean>?>(null) }
+        LaunchedEffect(crop, cropWebtoon, cropContinuous) {
+            val key = Triple(crop, cropWebtoon, cropContinuous)
+            if (cropKey.value != null && cropKey.value != key) model.redecodePages()
+            cropKey.value = key
         }
         LaunchedEffect(autoScroll, autoScrollInterval, state.generation) {
             while (autoScroll) {
@@ -214,7 +215,6 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 generation = state.generation,
             )
         }
-        val webtoonNow by rememberUpdatedState(webtoon)
         val menuActions = remember(model, navigator, windowState, prefs, actions) {
             ReaderMenuActions(
                 onBack = { navigator.pop() },
@@ -228,7 +228,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 onReadingMode = model::setReadingMode,
                 onFitMode = { prefs.imageScaleType().set(it) },
                 onToggleCrop = {
-                    val pref = if (webtoonNow) prefs.cropBordersWebtoon() else prefs.cropBorders()
+                    val pref = prefs.cropBordersFor(model.state.value.readingMode)
                     pref.set(!pref.get())
                 },
                 onPageLayout = { prefs.pageLayout().set(it) },
@@ -344,7 +344,11 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                         fullscreen = windowState.placement == WindowPlacement.Fullscreen,
                         readingMode = state.readingMode,
                         fitMode = fitMode,
-                        cropEnabled = if (webtoon) cropWebtoon else crop,
+                        cropEnabled = when (state.readingMode) {
+                            ReadingModes.WEBTOON -> cropWebtoon
+                            ReadingModes.CONTINUOUS_VERTICAL -> cropContinuous
+                            else -> crop
+                        },
                         pageLayout = pageLayout,
                         buttons = buttons,
                         forceHorizontalSlider = forceHorizontal,

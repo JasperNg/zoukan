@@ -33,6 +33,7 @@ import zoukan.i18n.desktop.DMR
 
 /**
  * Android's tap zones overlay (ReaderNavigationOverlayView): the zones in color with their names.
+ * The centre, which no zone covers and which opens the menu, is left clear as on Android.
  * It shows when the reader opens if "Show tap zones overlay" is on (or the first time the reader
  * is used), and whenever the zones change while reading; any click or key hides it.
  */
@@ -93,12 +94,8 @@ fun TapZonesOverlay(
                     OutlinedLabel(regionLabel(zone.region, rtl, vertical))
                 }
             }
-            // Nothing covers the centre: a tap there opens the menu, so say so (no colored box)
-            if (ReaderNavigation.regionAt(0.5f, 0.5f, state.zones) == ReaderNavigation.Region.MENU) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    OutlinedLabel(regionLabel(ReaderNavigation.Region.MENU))
-                }
-            }
+            // As Android, only the zones are drawn and named: the uncovered centre (the menu) has no
+            // label, so the reading mode shown there when a chapter opens stays readable
         }
     }
 }
@@ -106,8 +103,10 @@ fun TapZonesOverlay(
 /** White text with a black outline, as Android draws it */
 @Composable
 private fun OutlinedLabel(label: String) {
-    Text(label, style = labelStyle.copy(color = Color.Black, drawStyle = Stroke(width = 8f)))
-    Text(label, style = labelStyle.copy(color = Color.White))
+    Box(Modifier.testTag("tap-zone-label"), contentAlignment = Alignment.Center) {
+        Text(label, style = labelStyle.copy(color = Color.Black, drawStyle = Stroke(width = 8f)))
+        Text(label, style = labelStyle.copy(color = Color.White))
+    }
 }
 
 private const val FADE_MILLIS = 1000

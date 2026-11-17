@@ -708,11 +708,7 @@ class ReaderScreenModel(
         requestPages(state.value.currentPage)
     }
 
-    private fun cropBorders(): Boolean {
-        val mode = state.value.readingMode
-        val webtoon = mode == ReadingModes.WEBTOON || mode == ReadingModes.CONTINUOUS_VERTICAL
-        return if (webtoon) preferences.cropBordersWebtoon().get() else preferences.cropBorders().get()
-    }
+    private fun cropBorders(): Boolean = preferences.cropBordersFor(state.value.readingMode).get()
 
     private fun isOnDisk(manga: Manga, chapter: Chapter): Boolean =
         manga.source == LocalSource.ID || runCatching { downloadManager.isDownloaded(manga, chapter) }.getOrDefault(false)
