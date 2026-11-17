@@ -47,6 +47,7 @@ import zoukan.desktop.app.FitModes
 import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.moreActions
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -230,6 +231,7 @@ fun PagedViewer(
         actions.zoomIn = { current().let { it.zoomTo(it.zoom * 1.25f) } }
         actions.zoomOut = { current().let { it.zoomTo(it.zoom / 1.25f) } }
         actions.zoomReset = { current().reset() }
+        actions.zoom = { current().zoom }
         actions.smoothScroll = null
     }
 
@@ -352,8 +354,8 @@ fun PagedViewer(
                 val delta = change.scrollDelta
                 val zoom = current()
                 val modifiers = event.keyboardModifiers
-                if (modifiers.isCtrlPressed || modifiers.isMetaPressed) {
-                    zoom.zoomTo(zoom.zoom * if (delta.y < 0) 1.15f else 1 / 1.15f, change.position)
+                if (PagedWheel.zooms(ctrl = modifiers.isCtrlPressed, meta = modifiers.isMetaPressed)) {
+                    zoom.zoomTo(zoom.zoom * PagedWheel.zoomFactor(delta.y), change.position)
                     change.consume()
                     return@onPointerEvent
                 }
@@ -366,9 +368,11 @@ fun PagedViewer(
                         return@onPointerEvent
                     }
                 }
-                val now = System.currentTimeMillis()
-                if (now - lastTurn < 300 || abs(delta.y) < 0.1f) return@onPointerEvent
-                if (delta.y > 0) actions.next() else actions.previous()
+                when (PagedWheel.turn(delta.y, System.currentTimeMillis() - lastTurn)) {
+                    1 -> actions.next()
+                    -1 -> actions.previous()
+                    else -> return@onPointerEvent
+                }
                 change.consume()
             }
             // ZOUKAN -->
@@ -379,6 +383,8 @@ fun PagedViewer(
                     openPageActions()
                 }
             }
+            // The right-click's page actions, for screen readers, keyboard users and the button crawl
+            .moreActions { openPageActions() }
             // ZOUKAN <--
             .pointerInputTaps(
                 onTap = { position, size ->
@@ -629,5 +635,24 @@ private fun HalfPage(
             is ReaderPage.State.Error -> PageError(page.index + 1, s.message, foreground, { onRetry(page.index) }, Modifier.fillMaxSize())
             else -> PageLoading(page.index + 1, foreground, Modifier.fillMaxSize())
         }
+    }
+}
+
+/** What the mouse wheel does in the paged reader, once a tall or zoomed page has scrolled to its edge. */
+internal object PagedWheel {
+    /** Ctrl (Cmd on macOS) + wheel zooms instead of turning the page. */
+    fun zooms(ctrl: Boolean, meta: Boolean): Boolean = ctrl || meta
+
+    /** The zoom change of one wheel step: up zooms in, down zooms out. */
+    fun zoomFactor(deltaY: Float): Float = if (deltaY < 0) 1.15f else 1 / 1.15f
+
+    /**
+     * The page turn of a wheel step: 1 for the next page, -1 for the previous one, 0 for none (a
+     * tiny step, or within 300 ms of the last turn so one flick does not skip pages).
+     */
+    fun turn(deltaY: Float, sinceLastTurnMs: Long): Int = when {
+        sinceLastTurnMs < 300 || abs(deltaY) < 0.1f -> 0
+        deltaY > 0 -> 1
+        else -> -1
     }
 }

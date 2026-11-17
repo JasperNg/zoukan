@@ -29,7 +29,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -158,53 +157,37 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
             // The Up and Down keys follow the vertical taps too; J and K stay physical
             val verticalFlipped = ReaderNavigation.verticalFlipped(invert)
             val ctrl = event.isCtrlPressed || event.isMetaPressed
-            when (event.key) {
-                Key.DirectionRight -> if (event.isAltPressed) {
-                    return false
-                } else if (flipped) {
-                    actions.previous()
-                } else {
-                    actions.next()
-                }
-                Key.DirectionLeft -> if (event.isAltPressed) {
-                    return false
-                } else if (flipped) {
-                    actions.next()
-                } else {
-                    actions.previous()
-                }
-                Key.DirectionDown -> if (verticalFlipped) actions.up() else actions.down()
-                Key.DirectionUp -> if (verticalFlipped) actions.down() else actions.up()
-                Key.J -> actions.down()
-                Key.K -> actions.up()
-                Key.Spacebar -> if (event.isShiftPressed) actions.previous() else actions.next()
-                Key.PageDown -> actions.next()
-                Key.PageUp -> actions.previous()
-                Key.MoveHome -> actions.first()
-                Key.MoveEnd -> actions.last()
-                Key.N, Key.RightBracket -> model.nextChapter()
-                Key.P, Key.LeftBracket -> model.previousChapter()
-                Key.Equals, Key.Plus, Key.NumPadAdd -> actions.zoomIn()
-                Key.Minus, Key.NumPadSubtract -> actions.zoomOut()
-                Key.Zero, Key.NumPad0 -> actions.zoomReset()
-                Key.M, Key.Enter -> model.toggleMenu()
-                Key.F, Key.F11 -> if (ctrl) return false else toggleFullscreen()
-                Key.Slash -> showKeys = !showKeys
+            val action = ReaderKeys.actionFor(event.key, ctrl, event.isShiftPressed, event.isAltPressed, flipped, verticalFlipped) ?: return false
+            when (action) {
+                ReaderKeys.Action.NEXT_PAGE -> actions.next()
+                ReaderKeys.Action.PREVIOUS_PAGE -> actions.previous()
+                ReaderKeys.Action.SCROLL_DOWN -> actions.down()
+                ReaderKeys.Action.SCROLL_UP -> actions.up()
+                ReaderKeys.Action.FIRST_PAGE -> actions.first()
+                ReaderKeys.Action.LAST_PAGE -> actions.last()
+                ReaderKeys.Action.NEXT_CHAPTER -> model.nextChapter()
+                ReaderKeys.Action.PREVIOUS_CHAPTER -> model.previousChapter()
+                ReaderKeys.Action.ZOOM_IN -> actions.zoomIn()
+                ReaderKeys.Action.ZOOM_OUT -> actions.zoomOut()
+                ReaderKeys.Action.ZOOM_RESET -> actions.zoomReset()
+                ReaderKeys.Action.TOGGLE_MENU -> model.toggleMenu()
+                ReaderKeys.Action.TOGGLE_FULLSCREEN -> toggleFullscreen()
+                ReaderKeys.Action.TOGGLE_HELP -> showKeys = !showKeys
                 // ZOUKAN -->
-                Key.A -> autoScroll = !autoScroll
-                Key.S -> showSettings = !showSettings
-                Key.B -> model.toggleBookmark()
-                Key.C -> showChapters = !showChapters
-                Key.R -> if (event.isShiftPressed) model.boostPage() else model.retryAllPages()
-                Key.D -> model.toggleShiftDoublePages()
+                ReaderKeys.Action.TOGGLE_AUTO_SCROLL -> autoScroll = !autoScroll
+                ReaderKeys.Action.TOGGLE_SETTINGS -> showSettings = !showSettings
+                ReaderKeys.Action.TOGGLE_BOOKMARK -> model.toggleBookmark()
+                ReaderKeys.Action.TOGGLE_CHAPTERS -> showChapters = !showChapters
+                ReaderKeys.Action.RETRY_PAGES -> model.retryAllPages()
+                ReaderKeys.Action.BOOST_PAGE -> model.boostPage()
+                ReaderKeys.Action.SHIFT_DOUBLE_PAGES -> model.toggleShiftDoublePages()
                 // ZOUKAN <--
-                Key.Escape -> when {
+                ReaderKeys.Action.ESCAPE -> when {
                     showKeys -> showKeys = false
                     menuVisible -> model.setMenu(false)
                     windowState.placement == WindowPlacement.Fullscreen -> windowState.placement = WindowPlacement.Floating
                     else -> navigator.pop()
                 }
-                else -> return false
             }
             return true
         }
@@ -272,7 +255,28 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                     // Bubbling pass: a focused button, slider or menu gets its keys first
                     .onKeyEvent(::onKey)
                     .focusRequester(focus)
-                    .focusable(),
+                    .focusable()
+                    // ZOUKAN -->
+                    .semantics {
+                        with(ReaderKeys) {
+                            readerState = {
+                                ReaderKeys.State(
+                                    page = model.state.value.currentPage,
+                                    menu = model.menuVisible.value,
+                                    zoom = actions.zoom(),
+                                    fullscreen = windowState.placement == WindowPlacement.Fullscreen,
+                                    help = showKeys,
+                                    autoScroll = autoScroll,
+                                    settings = showSettings,
+                                    chapters = showChapters,
+                                    hasNext = model.state.value.nextChapter != null,
+                                    hasPrevious = model.state.value.previousChapter != null,
+                                    ready = model.state.value.let { !it.loading && it.error == null && it.pages.isNotEmpty() },
+                                )
+                            }
+                        }
+                    },
+                // ZOUKAN <--
             ) {
                 when {
                     state.loading -> PageLoading(state.currentPage + 1, foreground, Modifier.fillMaxSize())

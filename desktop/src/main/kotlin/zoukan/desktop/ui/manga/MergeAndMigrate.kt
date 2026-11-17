@@ -1,6 +1,5 @@
 package zoukan.desktop.ui.manga
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -59,12 +57,16 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.backup.SnapshotReason
 import zoukan.desktop.compat.localized
 import zoukan.desktop.manga.CustomCovers
 import zoukan.desktop.migration.MigrateManga
 import zoukan.desktop.ui.browse.GlobalSearchScreen
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.checkRow
+import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.i18n.desktop.DMR
 import java.io.Serializable
 
@@ -183,15 +185,23 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
         // stop it partway; its result still shows as a toast
         val chosen = flags
         val migration = AppScope.async {
+            // ZOUKAN -->
+            // A safety backup first, so the migration can be undone; without one the user decides
+            if (!SafetySnapshot.forApp().guard(SnapshotReason.MIGRATION) { snapshotFailedPrompt.continueWithout(it) }) return@async false
+            // ZOUKAN <--
             reportOutcome(onFailure = { Toasts.error(localized(DMR.strings.migration_failed), it) }) {
                 val current = Injekt.get<GetManga>().await(mangaId) ?: error(localized(DMR.strings.the_entry_no_longer_exists))
                 migrate(current, picked, replace, chosen)
             }
             Toasts.show(if (replace) localized(DMR.strings.migrated_to, picked.title) else localized(DMR.strings.copied_to, picked.title))
+            true
         }
         scope.launch {
             try {
-                migration.await()
+                if (!migration.await()) {
+                    busy = false
+                    return@launch
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {
@@ -215,7 +225,7 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
                         Modifier.fillMaxWidth().checkRow(flag in flags) { flags = if (it) flags + flag else flags - flag },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(flag in flags, onCheckedChange = null)
+                        RowCheckbox(flag in flags, onCheckedChange = null)
                         Text(localized(MigrateManga.label(flag)))
                     }
                 }
@@ -298,12 +308,12 @@ fun MergedEntriesDialog(mangaId: Long, onDismiss: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Row(Modifier.clickable { update(MergeMangaSettingsUpdate(ref.id, null, !ref.getChapterUpdates, null, null, null)) }, verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(ref.getChapterUpdates, onCheckedChange = null)
+                        Row(Modifier.checkRow(ref.getChapterUpdates) { update(MergeMangaSettingsUpdate(ref.id, null, !ref.getChapterUpdates, null, null, null)) }, verticalAlignment = Alignment.CenterVertically) {
+                            RowCheckbox(ref.getChapterUpdates, onCheckedChange = null)
                             Text(localized(MR.strings.label_recent_updates), style = MaterialTheme.typography.bodySmall)
                         }
-                        Row(Modifier.clickable { update(MergeMangaSettingsUpdate(ref.id, null, null, null, !ref.downloadChapters, null)) }, verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(ref.downloadChapters, onCheckedChange = null)
+                        Row(Modifier.checkRow(ref.downloadChapters) { update(MergeMangaSettingsUpdate(ref.id, null, null, null, !ref.downloadChapters, null)) }, verticalAlignment = Alignment.CenterVertically) {
+                            RowCheckbox(ref.downloadChapters, onCheckedChange = null)
                             Text(localized(MR.strings.pref_category_downloads), style = MaterialTheme.typography.bodySmall)
                         }
                         TooltipIconButton(Icons.Outlined.Delete, localized(DMR.strings.remove_from_the_merge), enabled = list.size > 1, onClick = {

@@ -45,7 +45,11 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
     if (keepAwake) {
         DisposableEffect(Unit) {
             val lock = KeepAwake.acquire()
-            onDispose { lock.release() }
+            KeepAwake.readerHolds.incrementAndGet()
+            onDispose {
+                KeepAwake.readerHolds.decrementAndGet()
+                lock.release()
+            }
         }
     }
 
@@ -117,6 +121,9 @@ fun BoxScope.ReaderEffects(model: ReaderScreenModel, state: ReaderScreenModel.St
  * for background work such as the favorites sync.
  */
 object KeepAwake {
+    /** How many open readers keep the screen on ("Keep screen on"); for the tests. */
+    internal val readerHolds = java.util.concurrent.atomic.AtomicInteger()
+
     fun interface Lock {
         fun release()
     }

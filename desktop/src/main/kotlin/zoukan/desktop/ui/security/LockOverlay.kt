@@ -1,7 +1,5 @@
 package zoukan.desktop.ui.security
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -83,9 +82,9 @@ fun LockOverlay() {
         }
     }
     Surface(
-        Modifier.fillMaxSize().testTag("app-lock")
-            // Nothing behind the lock takes clicks
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+        // Nothing behind the lock takes clicks: a Material Surface takes every pointer event over it.
+        // Not a clickable, which screen readers would announce as a button that does nothing
+        Modifier.fillMaxSize().testTag("app-lock").pointerInput(Unit) {},
         color = MaterialTheme.colorScheme.background,
     ) {
         Box(contentAlignment = Alignment.Center) {

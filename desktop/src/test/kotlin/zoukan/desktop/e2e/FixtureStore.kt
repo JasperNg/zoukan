@@ -121,7 +121,7 @@ class FixtureStore(private val server: FixtureServer) : AutoCloseable {
                                         buildJsonArray {
                                             add(
                                                 buildJsonObject {
-                                                    put("id", offer.pkgName.hashCode().toLong())
+                                                    put("id", sourceId(offer.name))
                                                     put("name", offer.name)
                                                     put("language", "en")
                                                     put("homeUrl", server.baseUrl)
@@ -242,6 +242,15 @@ class FixtureStore(private val server: FixtureServer) : AutoCloseable {
         const val JAR_SOURCE_CLASS = "$JAR_PACKAGE.StoreFixtureSource"
 
         private const val CONFIG_FILE = zoukan.desktop.e2e.extjar.CONFIG
+
+        /**
+         * The id the extension's source has once loaded (HttpSource.generateId for [name], "en"
+         * and version 1), so the index lists the id the installed source really has, as a store does.
+         */
+        fun sourceId(name: String): Long {
+            val bytes = MessageDigest.getInstance("MD5").digest("${name.lowercase()}/en/1".toByteArray())
+            return (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
+        }
         private const val PASSWORD = "password"
     }
 }

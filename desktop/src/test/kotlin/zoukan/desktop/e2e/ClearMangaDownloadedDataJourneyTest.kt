@@ -9,7 +9,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.manga.interactor.SmartSearchMerge
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
@@ -21,16 +23,17 @@ import zoukan.desktop.e2e.LocalEntryFixture.openClearManga
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
+import java.io.File
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * "Clear manga" on a local entry must never delete the user's own files in the local folder as
- * "downloaded data".
+ * "Clear manga > Downloaded data" must never delete the user's own files in the local folder:
+ * not on a local entry, and not on a merged entry that has a local part.
  *
- *   ./gradlew :desktop:journeyTest --tests "*ClearMangaLocalJourneyTest"
+ *   ./gradlew :desktop:journeyTest --tests "*ClearMangaDownloadedDataJourneyTest"
  */
 @OptIn(ExperimentalTestApi::class)
-class ClearMangaLocalJourneyTest {
+class ClearMangaDownloadedDataJourneyTest {
 
     private lateinit var journey: Journey
 
@@ -40,21 +43,27 @@ class ClearMangaLocalJourneyTest {
     }
 
     @Test
-    fun `clearing downloaded data of a local entry keeps the user's files`() {
-        journey = Journey.start("clear-local")
+    fun `clearing downloaded data keeps the user's local files, on a local and on a merged entry`() {
+        journey = Journey.start("clear-downloaded-data")
         val preferences = Injekt.get<DesktopPreferences>()
         var navigator: Navigator? = null
-        val (manga, files) = addLocalEntry()
+        val (local, files) = addLocalEntry()
         val before = files.associateWith { fingerprint(it) }
+        val online = journey.addToLibrary(FixtureCatalog.FORMATS_TITLE)
+
+        fun assertFilesKept(files: List<File>) = files.forEach { file ->
+            file.exists() shouldBe true
+            fingerprint(file) shouldBe before.getValue(file)
+        }
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
                 setContent { ZoukanContent(preferences) { navigator = it } }
                 waitForIdle()
-                runOnUiThread { navigator?.push(MangaScreen(manga.id)) }
+                runOnUiThread { navigator?.push(MangaScreen(local.id)) }
                 waitFor(hasText("Start") and isEnabled())
 
-                step("Clear manga > Downloaded data, if the dialog still offers it for a local entry") {
+                step("Local entry: Clear manga > Downloaded data, if the dialog still offers it, keeps the files") {
                     openClearManga()
                     if (onAllNodesWithText("Downloaded data").fetchSemanticsNodes().isNotEmpty()) {
                         onAllNodesWithText("Downloaded data").onFirst().performClick()
@@ -68,13 +77,22 @@ class ClearMangaLocalJourneyTest {
                     }
                     waitForIdle()
                     Thread.sleep(1_000)
+                    assertFilesKept(files)
+                }
+                step("Merged entry with that local part: Clear manga > Downloaded data keeps the files") {
+                    val merged = runBlocking { SmartSearchMerge().smartSearchMerge(online, local.id) }
+                    runOnUiThread { navigator?.push(MangaScreen(merged.id)) }
+                    waitFor(hasText("Start") and isEnabled())
+                    openClearManga()
+                    onAllNodesWithText("Downloaded data").onFirst().performClick()
+                    waitForIdle()
+                    onNode(hasText("OK") and isEnabled()).performClick()
+                    waitForIdle()
+                    Thread.sleep(1_000)
                 }
             }
         }
 
-        files.forEach { file ->
-            file.exists() shouldBe true
-            fingerprint(file) shouldBe before.getValue(file)
-        }
+        assertFilesKept(files)
     }
 }

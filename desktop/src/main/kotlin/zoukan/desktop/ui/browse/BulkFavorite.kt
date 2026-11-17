@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
@@ -17,7 +16,6 @@ import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,8 +51,10 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 
@@ -293,13 +293,13 @@ private fun BulkFavoriteDialogs(bulk: BulkFavorite) {
                 Column(Modifier.heightIn(max = 400.dp).verticalScrollWithBar()) {
                     categories.forEach { category ->
                         Row(
-                            Modifier.fillMaxWidth().toggleable(
-                                value = category.id in chosen,
-                                onValueChange = { on -> chosen = if (on) chosen + category.id else chosen - category.id },
+                            Modifier.fillMaxWidth().checkRow(
+                                checked = category.id in chosen,
+                                onChange = { on -> chosen = if (on) chosen + category.id else chosen - category.id },
                             ).padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(checked = category.id in chosen, onCheckedChange = null)
+                            RowCheckbox(checked = category.id in chosen, onCheckedChange = null)
                             Spacer(Modifier.width(8.dp))
                             Text(category.name)
                         }

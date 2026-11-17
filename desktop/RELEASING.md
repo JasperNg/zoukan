@@ -2,8 +2,11 @@
 
 Phase 7 of the desktop port: the installers, the update check and crash logs. GitHub Actions
 builds both installers and publishes the release on every merge to `master` that changes more
-than docs; the published installers are unsigned. The local checks below (the install checks and
-the nightly run) are extra: they run on the Windows desktop and the Mac and do not gate merges.
+than docs; the published installers are unsigned. Nothing is published unless it passed two
+gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job:
+unit and file tests, wiring, the journeys and the button crawl) and the clean-install check of each
+installer (below), which `desktop-build.yml` runs on the installer it is about to publish. The
+nightly run (`nightly.yml`) does not gate a release; it reports to the nightly-failure issue.
 
 ## Installers
 
@@ -102,6 +105,10 @@ the database is left as it was.
 
 ## Clean-install checks (the Phase 7 gate)
 
+`desktop-build.yml` runs these scripts with `--skip-build` / `-SkipBuild` on the MSI and DMG it
+built, before the release job, and a failure stops the release. They can also be run locally, as
+below.
+
 ```powershell
 # Windows
 powershell -ExecutionPolicy Bypass -File desktop\packaging\check\install-check-windows.ps1
@@ -122,6 +129,12 @@ The self-test is also a command of the installed app: `Zoukan selftest --ui --ne
 <file.md>` (on Windows `Zoukan.exe`, which has no console, so read the report). It uses a throwaway
 profile and checks the bundled runtime and its modules, the OS secret store, the encrypted
 database, extension loading, crash logs, the window (Skia's native code) and HTTPS to GitHub.
+Each check is `pass`, `FAIL` or `skipped`; only a `FAIL` fails the self-test. The update check is
+`skipped (rate limited)` when GitHub refuses the request for its rate limit (429, or 403 with no
+requests left or a Retry-After), since that says nothing about the installation. With a token in
+`ZOUKAN_SELFTEST_GITHUB_TOKEN` the request has its own rate limit and any other failure fails;
+the install check scripts set it from `GITHUB_TOKEN`, which `desktop-build.yml` passes them. The
+token is kept in memory only and never written to the report or the log.
 
 ## Publishing a release
 
@@ -173,6 +186,11 @@ downloaded. The public key is `desktop/src/main/resources/zoukan-release-key.pem
 the app; the private key is the repository secret `ZOUKAN_RELEASE_SIGNING_KEY` (PEM), read only by
 the `release` job, which fails without it and checks each signature against the public key before
 publishing. Apps built before this check do not look at the signature and keep updating.
+
+The first release published with `.sig` files is 1.1.0. Until 1.1.0 is published no release has a
+signature, so the positive path of `UpdateLiveTest` (a real release's installer whose signature
+verifies) cannot pass before then: the test checks that the unsigned installer is refused and
+skips the rest.
 
 To rotate the key: make a new Ed25519 key pair, replace the secret, and commit the new public key.
 The first release carrying the new public key must still be signed with the **old** private key

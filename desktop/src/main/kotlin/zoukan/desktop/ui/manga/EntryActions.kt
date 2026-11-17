@@ -57,6 +57,8 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
+import zoukan.desktop.app.FileRequest
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
@@ -74,7 +76,6 @@ import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.reader.PageImages
 import zoukan.desktop.ui.track.Choice
 import zoukan.i18n.desktop.DMR
-import java.awt.FileDialog
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -224,13 +225,13 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
                     }
                     if (edit.canEditCover(manga)) {
                         CoverAction(localized(DMR.strings.change), Icons.Outlined.Edit) {
-                            val dialog = FileDialog(window, localized(DMR.strings.choose_a_cover), FileDialog.LOAD).apply {
-                                setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in COVER_EXTENSIONS }
-                                isVisible = true
-                            }
-                            val name = dialog.file ?: return@CoverAction
+                            val picked = SystemEffects.current.pickFile(
+                                FileRequest(window, localized(DMR.strings.choose_a_cover), save = false) { name ->
+                                    name.substringAfterLast('.').lowercase() in COVER_EXTENSIONS
+                                },
+                            ) ?: return@CoverAction
                             run(localized(MR.strings.notification_cover_update_failed)) {
-                                edit.setCover(manga, File(dialog.directory, name))
+                                edit.setCover(manga, picked)
                                 Toasts.show(localized(MR.strings.cover_updated))
                             }
                         }

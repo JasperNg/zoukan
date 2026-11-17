@@ -1,0 +1,1331 @@
+# Every button the button crawl finds and what clicking it does: <button key>  <effect signature>.
+# See desktop/TESTING.md, 'The button crawl'. The crawl fails when a button appears, goes or does
+# something else. After a change on purpose, regenerate it:
+#   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true
+browse:EXTENSIONS/"Batch add"  nav:browse.BatchAddScreen
+browse:EXTENSIONS/"Browse"  selected-already
+browse:EXTENSIONS/"Check the stores again"  toast:"Add an extension store to find extensions."
+browse:EXTENSIONS/"History"  tab:History
+browse:EXTENSIONS/"Languages"  menu
+browse:EXTENSIONS/"Library"  tab:Library
+browse:EXTENSIONS/"More"  tab:More
+browse:EXTENSIONS/"Open from a URL"  dialog:"Open from a URL"
+browse:EXTENSIONS/"Stores"  ui
+browse:EXTENSIONS/"Updates"  tab:Updates
+browse:EXTENSIONS/tag:browse-page-EXTENSIONS  selected-already
+browse:EXTENSIONS/tag:browse-page-FEED  ui
+browse:EXTENSIONS/tag:browse-page-MIGRATE  ui
+browse:EXTENSIONS/tag:browse-page-SOURCES  ui
+browse:EXTENSIONS/tag:browse-page-STORES  ui
+browse:EXTENSIONS/tag:extension-search  ui
+browse:EXTENSIONS/tag:extension-search [type, enter]  key-unused
+browse:EXTENSIONS/tag:extension-search [type, escape]  own-value
+browse:EXTENSIONS/tag:extension-search [type]  ui
+browse:EXTENSIONS/tag:global-search  ui
+browse:EXTENSIONS/tag:global-search [type, enter]  nav:browse.GlobalSearchScreen
+browse:EXTENSIONS/tag:global-search [type, escape]  own-value
+browse:EXTENSIONS/tag:global-search [type]  ui
+browse:FEED/"Add"  dialog:"Add a feed"
+browse:FEED/"Add" #2  dialog:"Add a feed"
+browse:FEED/"Batch add"  nav:browse.BatchAddScreen
+browse:FEED/"Browse"  selected-already
+browse:FEED/"History"  tab:History
+browse:FEED/"Library"  tab:Library
+browse:FEED/"More"  tab:More
+browse:FEED/"Open from a URL"  dialog:"Open from a URL"
+browse:FEED/"Select entries"  selection
+browse:FEED/"Updates"  tab:Updates
+browse:FEED/tag:browse-page-EXTENSIONS  ui
+browse:FEED/tag:browse-page-FEED  selected-already
+browse:FEED/tag:browse-page-MIGRATE  ui
+browse:FEED/tag:browse-page-SOURCES  ui
+browse:FEED/tag:browse-page-STORES  ui
+browse:FEED/tag:global-search  ui
+browse:FEED/tag:global-search [type, enter]  nav:browse.GlobalSearchScreen
+browse:FEED/tag:global-search [type, escape]  own-value
+browse:FEED/tag:global-search [type]  ui
+browse:MIGRATE/"Ascending"  pref:pref_migration_direction
+browse:MIGRATE/"Batch add"  nav:browse.BatchAddScreen
+browse:MIGRATE/"Browse"  selected-already
+browse:MIGRATE/"Entries"  pref:pref_migration_sorting
+browse:MIGRATE/"Find a source by name"  ui
+browse:MIGRATE/"Find a source by name" [type, enter]  key-unused
+browse:MIGRATE/"Find a source by name" [type, escape]  unreached
+browse:MIGRATE/"Find a source by name" [type]  ui
+browse:MIGRATE/"History"  tab:History
+browse:MIGRATE/"Library"  tab:Library
+browse:MIGRATE/"More"  tab:More
+browse:MIGRATE/"Name"  pref:pref_migration_sorting
+browse:MIGRATE/"Open from a URL"  dialog:"Open from a URL"
+browse:MIGRATE/"Updates"  tab:Updates
+browse:MIGRATE/tag:browse-page-EXTENSIONS  ui
+browse:MIGRATE/tag:browse-page-FEED  ui
+browse:MIGRATE/tag:browse-page-MIGRATE  selected-already
+browse:MIGRATE/tag:browse-page-SOURCES  ui
+browse:MIGRATE/tag:browse-page-STORES  ui
+browse:MIGRATE/tag:global-search  ui
+browse:MIGRATE/tag:global-search [type, enter]  nav:browse.GlobalSearchScreen
+browse:MIGRATE/tag:global-search [type, escape]  own-value
+browse:MIGRATE/tag:global-search [type]  ui
+browse:SOURCES/"Batch add"  nav:browse.BatchAddScreen
+browse:SOURCES/"Browse"  selected-already
+browse:SOURCES/"Filter sources"  nav:browse.SourcesFilterScreen
+browse:SOURCES/"History"  tab:History
+browse:SOURCES/"Library"  tab:Library
+browse:SOURCES/"Local source Other"  nav:browse.SourceFeedScreen
+browse:SOURCES/"Local source Other" [action: More actions]  menu
+browse:SOURCES/"Local source Other" [action: More actions] > "Pin"  close pref:pinned_catalogues
+browse:SOURCES/"Local source Other" [action: More actions] > "Set categories"  dialog:"Local source"
+browse:SOURCES/"More"  tab:More
+browse:SOURCES/"More" #2  menu
+browse:SOURCES/"More" #2 > "Pin"  close pref:pinned_catalogues
+browse:SOURCES/"More" #2 > "Set categories"  dialog:"Local source"
+browse:SOURCES/"Open from a URL"  dialog:"Open from a URL"
+browse:SOURCES/"Pin"  pref:pinned_catalogues
+browse:SOURCES/"Updates"  tab:Updates
+browse:SOURCES/tag:browse-page-EXTENSIONS  ui
+browse:SOURCES/tag:browse-page-FEED  ui
+browse:SOURCES/tag:browse-page-MIGRATE  ui
+browse:SOURCES/tag:browse-page-SOURCES  selected-already
+browse:SOURCES/tag:browse-page-STORES  ui
+browse:SOURCES/tag:global-search  ui
+browse:SOURCES/tag:global-search [type, enter]  nav:browse.GlobalSearchScreen
+browse:SOURCES/tag:global-search [type, escape]  own-value
+browse:SOURCES/tag:global-search [type]  ui
+browse:SOURCES/tag:source-search  ui
+browse:SOURCES/tag:source-search [type, enter]  key-unused
+browse:SOURCES/tag:source-search [type, escape]  ui
+browse:SOURCES/tag:source-search [type]  ui
+browse:STORES/"Add Keiyoushi"  toast:"Could not add the store: Failed to connect to /#" logs:offline
+browse:STORES/"Batch add"  nav:browse.BatchAddScreen
+browse:STORES/"Browse"  selected-already
+browse:STORES/"History"  tab:History
+browse:STORES/"Library"  tab:Library
+browse:STORES/"More"  tab:More
+browse:STORES/"Open from a URL"  dialog:"Open from a URL"
+browse:STORES/"Store URL (repo.json or index.min.json)"  ui
+browse:STORES/"Store URL (repo.json or index.min.json)" [type, enter]  key-unused
+browse:STORES/"Store URL (repo.json or index.min.json)" [type, escape]  key-unused
+browse:STORES/"Store URL (repo.json or index.min.json)" [type]  ui
+browse:STORES/"Updates"  tab:Updates
+browse:STORES/tag:browse-page-EXTENSIONS  ui
+browse:STORES/tag:browse-page-FEED  ui
+browse:STORES/tag:browse-page-MIGRATE  ui
+browse:STORES/tag:browse-page-SOURCES  ui
+browse:STORES/tag:browse-page-STORES  selected-already
+browse:STORES/tag:global-search  ui
+browse:STORES/tag:global-search [type, enter]  nav:browse.GlobalSearchScreen
+browse:STORES/tag:global-search [type, escape]  own-value
+browse:STORES/tag:global-search [type]  ui
+dialog:browse.FeedOrderDialog/"Done"  calls-back
+dialog:browse.OpenUrlDialog/"Cancel"  calls-back
+dialog:browse.OpenUrlDialog/tag:open-url-field  own-value
+dialog:browse.OpenUrlDialog/tag:open-url-field [type, enter]  key-unused
+dialog:browse.OpenUrlDialog/tag:open-url-field [type, escape]  calls-back
+dialog:browse.OpenUrlDialog/tag:open-url-field [type]  field-local
+dialog:browse.QuickLibraryToggleDialogs/"Add anyway"  calls-back
+dialog:browse.QuickLibraryToggleDialogs/"Add"  calls-back close db:mangas.date_added db:mangas.favorite_modified_at toast:"Added to library"
+dialog:browse.QuickLibraryToggleDialogs/"Alpha Local source · # chapters"  calls-back close nav:manga.MangaScreen
+dialog:browse.QuickLibraryToggleDialogs/"Alpha Local source · # chapters" [action: More actions]  calls-back close nav:manga.MangaScreen
+dialog:browse.QuickLibraryToggleDialogs/"Cancel"  calls-back close
+dialog:browse.QuickLibraryToggleDialogs/"Categories"  ui
+dialog:browse.QuickLibraryToggleDialogs/"Chapter and reader settings"  ui
+dialog:browse.QuickLibraryToggleDialogs/"Chapters read and history"  ui
+dialog:browse.QuickLibraryToggleDialogs/"Copy"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Alpha"
+dialog:browse.QuickLibraryToggleDialogs/"Delete downloads of current entry after migration"  ui
+dialog:browse.QuickLibraryToggleDialogs/"Migrate"  calls-back
+dialog:browse.QuickLibraryToggleDialogs/"Notes"  ui
+dialog:browse.QuickLibraryToggleDialogs/"Open"  calls-back close nav:manga.MangaScreen
+dialog:browse.QuickLibraryToggleDialogs/"Remove"  calls-back close db:mangas.favorite db:mangas.favorite_modified_at toast:"Removed from library"
+dialog:browse.QuickLibraryToggleDialogs/"Smoke"  ui
+dialog:browse.QuickLibraryToggleDialogs/"Tracking"  ui
+dialog:browse.SourceCategoriesDialog/"Cancel"  calls-back
+dialog:browse.SourceCategoriesDialog/"Edit"  calls-back
+dialog:browse.SourceCategoriesDialog/"OK"  calls-back
+dialog:browse.SourceCategoriesDialog/"Other"  ui
+dialog:browse.SourceCategoriesDialog/"Smoke"  ui
+dialog:category.CategoryNameDialog/"Cancel"  close
+dialog:category.CategoryNameDialog/tag:category-confirm  close db:categories+
+dialog:category.CategoryNameDialog/tag:category-name  field
+dialog:category.CategoryNameDialog/tag:category-name [type, enter]  key-unused
+dialog:category.CategoryNameDialog/tag:category-name [type, escape]  close
+dialog:category.CategoryNameDialog/tag:category-name [type]  ui
+dialog:common.ConfirmDestructiveDialog/"Cancel"  calls-back
+dialog:common.ConfirmDestructiveDialog/"Confirm"  calls-back
+dialog:library.AddTagDialog/"Add"  close pref:sort_tags_for_library
+dialog:library.AddTagDialog/"Cancel"  close
+dialog:library.AddTagDialog/"Tag"  own-value
+dialog:library.AddTagDialog/"Tag" [type, enter]  key-unused
+dialog:library.AddTagDialog/"Tag" [type, escape]  close
+dialog:library.AddTagDialog/"Tag" [type]  field-local
+dialog:library.LibrarySettingsDialog/"Bookmarked"  pref:pref_filter_library_bookmarked_v2
+dialog:library.LibrarySettingsDialog/"Categories"  pref:pref_filter_library_categories
+dialog:library.LibrarySettingsDialog/"Close"  calls-back
+dialog:library.LibrarySettingsDialog/"Columns: fit the window" [slider max]  pref:pref_library_columns_landscape_key
+dialog:library.LibrarySettingsDialog/"Columns: fit the window" [slider min]  at-end-already
+dialog:library.LibrarySettingsDialog/"Comfortable grid"  pref:pref_display_mode_library
+dialog:library.LibrarySettingsDialog/"Compact grid"  pref:pref_display_mode_library
+dialog:library.LibrarySettingsDialog/"Completed"  pref:pref_filter_library_completed_v2
+dialog:library.LibrarySettingsDialog/"Continue reading button"  pref:display_continue_reading_button
+dialog:library.LibrarySettingsDialog/"Cover-only grid"  pref:pref_display_mode_library
+dialog:library.LibrarySettingsDialog/"Display"  ui
+dialog:library.LibrarySettingsDialog/"Downloaded chapters"  pref:display_download_badge
+dialog:library.LibrarySettingsDialog/"Downloaded"  pref:pref_filter_library_downloaded_v2
+dialog:library.LibrarySettingsDialog/"Edit"  dialog:"Categories"
+dialog:library.LibrarySettingsDialog/"Filter"  selected-already
+dialog:library.LibrarySettingsDialog/"Group"  ui
+dialog:library.LibrarySettingsDialog/"Language"  pref:display_language_badge
+dialog:library.LibrarySettingsDialog/"Lewd"  pref:pref_filter_library_lewd_v2
+dialog:library.LibrarySettingsDialog/"List"  pref:pref_display_mode_library
+dialog:library.LibrarySettingsDialog/"Local source"  pref:display_local_badge
+dialog:library.LibrarySettingsDialog/"Panorama grid"  pref:pref_display_mode_library
+dialog:library.LibrarySettingsDialog/"Show category tabs"  pref:display_category_tabs
+dialog:library.LibrarySettingsDialog/"Show hidden categories"  pref:hide_hidden_categories
+dialog:library.LibrarySettingsDialog/"Show the number of entries"  pref:display_number_of_items
+dialog:library.LibrarySettingsDialog/"Sort"  ui
+dialog:library.LibrarySettingsDialog/"Source icon"  pref:display_source_badge
+dialog:library.LibrarySettingsDialog/"Started"  pref:pref_filter_library_started_v2
+dialog:library.LibrarySettingsDialog/"Unread chapters"  pref:display_unread_badge
+dialog:library.LibrarySettingsDialog/"Unread"  pref:pref_filter_library_unread_v2
+dialog:library.LibrarySettingsDialog/"Use language icon"  pref:display_language_text
+dialog:library.SyncFavoritesConfirmDialog/"Cancel"  calls-back
+dialog:library.SyncFavoritesConfirmDialog/"OK"  calls-back toast:"Syncing favorites. Settings > E-Hentai shows its p"
+dialog:library.SyncFavoritesNotesDialog/"OK"  calls-back pref:eh_show_sync_intro
+dialog:manga.CategoryDialog/"Add"  calls-back
+dialog:manga.CategoryDialog/"Cancel"  calls-back
+dialog:manga.CategoryDialog/"Smoke"  ui
+dialog:manga.ChangeCategoryDialog/"Cancel"  calls-back
+dialog:manga.ChangeCategoryDialog/"OK"  calls-back
+dialog:manga.ChangeCategoryDialog/"Smoke"  ui
+dialog:manga.ChapterSettingsDialog/"Bookmarked"  db:mangas.chapter_flags db:mangas.favorite_modified_at
+dialog:manga.ChapterSettingsDialog/"Close"  calls-back
+dialog:manga.ChapterSettingsDialog/"Display"  ui
+dialog:manga.ChapterSettingsDialog/"Filter"  selected-already
+dialog:manga.ChapterSettingsDialog/"Reset"  db:mangas.favorite_modified_at
+dialog:manga.ChapterSettingsDialog/"Set as default"  dialog:"Chapter settings"
+dialog:manga.ChapterSettingsDialog/"Sort"  ui
+dialog:manga.ChapterSettingsDialog/"Unread"  db:mangas.chapter_flags db:mangas.favorite_modified_at
+dialog:manga.ClearMangaDialog/"Cancel"  calls-back
+dialog:manga.ClearMangaDialog/"Chapters & History from Database"  ui
+dialog:manga.ClearMangaDialog/"Downloaded data"  ui
+dialog:manga.ClearMangaDialog/"Local files in Alpha"  ui
+dialog:manga.CoverDialog/"Change"  pick:open[png,jpg,webp,avif]
+dialog:manga.CoverDialog/"Close"  calls-back
+dialog:manga.CoverDialog/"Copy"  toast:"Could not copy the cover: The entry has no cover"
+dialog:manga.CoverDialog/"Save"  toast:"Could not save the cover: The entry has no cover"
+dialog:manga.CustomDownloadDialog/"Cancel"  calls-back
+dialog:manga.CustomDownloadDialog/"Number of unread chapters"  own-value
+dialog:manga.CustomDownloadDialog/"Number of unread chapters" [type, enter]  key-unused
+dialog:manga.CustomDownloadDialog/"Number of unread chapters" [type, escape]  calls-back
+dialog:manga.CustomDownloadDialog/"Number of unread chapters" [type]  field-local
+dialog:manga.DuplicateDialog/"Add anyway"  calls-back
+dialog:manga.DuplicateDialog/"Bravo Local source · # chapters"  calls-back
+dialog:manga.DuplicateDialog/"Bravo Local source · # chapters" [action: More actions]  calls-back
+dialog:manga.DuplicateDialog/"Cancel"  calls-back
+dialog:manga.DuplicateDialog/"Migrate"  calls-back
+dialog:manga.DuplicateDialog/"Open"  calls-back
+dialog:manga.EditMangaDialog/"Artist"  own-value
+dialog:manga.EditMangaDialog/"Artist" [type, enter]  key-unused
+dialog:manga.EditMangaDialog/"Artist" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Artist" [type]  field-local
+dialog:manga.EditMangaDialog/"Author"  own-value
+dialog:manga.EditMangaDialog/"Author" [type, enter]  key-unused
+dialog:manga.EditMangaDialog/"Author" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Author" [type]  field-local
+dialog:manga.EditMangaDialog/"Cancel"  calls-back
+dialog:manga.EditMangaDialog/"Change cover"  pick:open[png,jpg,webp,avif]
+dialog:manga.EditMangaDialog/"Description"  own-value
+dialog:manga.EditMangaDialog/"Description" [type, enter]  field-local
+dialog:manga.EditMangaDialog/"Description" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Description" [type]  field-local
+dialog:manga.EditMangaDialog/"Fill from tracker"  toast:"Entry is not tracked."
+dialog:manga.EditMangaDialog/"Genres, separated by commas"  own-value
+dialog:manga.EditMangaDialog/"Genres, separated by commas" [type, enter]  field-local
+dialog:manga.EditMangaDialog/"Genres, separated by commas" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Genres, separated by commas" [type]  field-local
+dialog:manga.EditMangaDialog/"Notes"  own-value
+dialog:manga.EditMangaDialog/"Notes" [type, enter]  field-local
+dialog:manga.EditMangaDialog/"Notes" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Notes" [type]  field-local
+dialog:manga.EditMangaDialog/"Save"  calls-back db:mangas.favorite_modified_at db:mangas.genre files:local+
+dialog:manga.EditMangaDialog/"Status: Unknown"  menu
+dialog:manga.EditMangaDialog/"Status: Unknown" > "Cancelled"  close
+dialog:manga.EditMangaDialog/"Status: Unknown" > "Completed"  close
+dialog:manga.EditMangaDialog/"Status: Unknown" > "Licensed"  close
+dialog:manga.EditMangaDialog/"Status: Unknown" > "On hiatus"  close
+dialog:manga.EditMangaDialog/"Status: Unknown" > "Ongoing"  close
+dialog:manga.EditMangaDialog/"Status: Unknown" > "Publishing finished"  close
+dialog:manga.EditMangaDialog/"Status: Unknown" > "Unknown"  close
+dialog:manga.EditMangaDialog/"Thumbnail url"  own-value
+dialog:manga.EditMangaDialog/"Thumbnail url" [type, enter]  key-unused
+dialog:manga.EditMangaDialog/"Thumbnail url" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Thumbnail url" [type]  field-local
+dialog:manga.EditMangaDialog/"Title"  own-value
+dialog:manga.EditMangaDialog/"Title" [type, enter]  key-unused
+dialog:manga.EditMangaDialog/"Title" [type, escape]  calls-back
+dialog:manga.EditMangaDialog/"Title" [type]  field-local
+dialog:manga.FetchIntervalDialog/"Cancel"  calls-back
+dialog:manga.FetchIntervalDialog/"OK"  calls-back
+dialog:manga.MergedEntriesDialog/"Close"  calls-back
+dialog:manga.MigrateDialog/"Cancel"  calls-back
+dialog:manga.MigrateDialog/"Categories"  ui
+dialog:manga.MigrateDialog/"Chapter and reader settings"  ui
+dialog:manga.MigrateDialog/"Chapters read and history"  ui
+dialog:manga.MigrateDialog/"Copy"  calls-back close db:chapters.date_fetch db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
+dialog:manga.MigrateDialog/"Delete downloads of current entry after migration"  ui
+dialog:manga.MigrateDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at nav:back pref:migration_flags toast:"Migrated to Bravo"
+dialog:manga.MigrateDialog/"Notes"  ui
+dialog:manga.MigrateDialog/"Tracking"  ui
+dialog:manga.PickDialog/"Cancel"  calls-back
+dialog:manga.PickDialog/"Categories"  ui
+dialog:manga.PickDialog/"Chapter and reader settings"  ui
+dialog:manga.PickDialog/"Chapters read and history"  ui
+dialog:manga.PickDialog/"Copy"  calls-back close db:chapters.date_fetch db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite_modified_at nav:manga.MangaScreen pref:migration_flags toast:"Copied to Bravo"
+dialog:manga.PickDialog/"Delete downloads of current entry after migration"  ui
+dialog:manga.PickDialog/"Merge"  calls-back close db:mangas+ db:mangas.favorite_modified_at db:merged+ nav:manga.MangaScreen toast:"Merged"
+dialog:manga.PickDialog/"Migrate"  calls-back close db:mangas.cover_last_modified db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at nav:back pref:migration_flags toast:"Migrated to Bravo"
+dialog:manga.PickDialog/"Notes"  ui
+dialog:manga.PickDialog/"Tracking"  ui
+dialog:reader.PageActionsDialog/"Close"  calls-back
+dialog:reader.PageActionsDialog/"Copy #page to clipboard"  calls-back
+dialog:reader.PageActionsDialog/"Copy combined page to clipboard"  calls-back
+dialog:reader.PageActionsDialog/"Copy first page to clipboard"  calls-back
+dialog:reader.PageActionsDialog/"Copy to clipboard"  calls-back
+dialog:reader.PageActionsDialog/"Save #page"  calls-back
+dialog:reader.PageActionsDialog/"Save combined page"  calls-back
+dialog:reader.PageActionsDialog/"Save first page"  calls-back
+dialog:reader.PageActionsDialog/"Save"  calls-back
+dialog:reader.PageActionsDialog/"Set #page as cover"  dialog:"Use this image as cover art?"
+dialog:reader.PageActionsDialog/"Set as cover"  dialog:"Use this image as cover art?"
+dialog:reader.PageActionsDialog/"Set first page as cover"  dialog:"Use this image as cover art?"
+dialog:reader.ReaderChapterListDialog/"Bookmark"  calls-back
+dialog:reader.ReaderChapterListDialog/"Bookmark" #2  calls-back
+dialog:reader.ReaderChapterListDialog/"Chapter # #/#/#"  calls-back
+dialog:reader.ReaderChapterListDialog/"Chapter # #/#/#" #2  calls-back
+dialog:reader.ReaderChapterListDialog/"Close"  calls-back
+dialog:reader.ReaderSettingsDialog/"Animate page transitions"  pref:pref_enable_transitions_pager_key
+dialog:reader.ReaderSettingsDialog/"Automatic (double in a wide window)"  pref:page_layout
+dialog:reader.ReaderSettingsDialog/"Automatic"  pref:pref_zoom_start_key
+dialog:reader.ReaderSettingsDialog/"Both"  pref:reader_tapping_inverted
+dialog:reader.ReaderSettingsDialog/"Center"  pref:pref_zoom_start_key
+dialog:reader.ReaderSettingsDialog/"Close"  calls-back
+dialog:reader.ReaderSettingsDialog/"Continuous vertical"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Crop borders"  pref:crop_borders
+dialog:reader.ReaderSettingsDialog/"Default"  pref:reader_navigation_mode_pager
+dialog:reader.ReaderSettingsDialog/"Disable zoom in"  pref:paged_disable_zoom_in
+dialog:reader.ReaderSettingsDialog/"Disabled"  pref:reader_navigation_mode_pager
+dialog:reader.ReaderSettingsDialog/"Double and wide pages"  pref:center_margin_type
+dialog:reader.ReaderSettingsDialog/"Double pages"  pref:page_layout
+dialog:reader.ReaderSettingsDialog/"Double pages" #2  pref:center_margin_type
+dialog:reader.ReaderSettingsDialog/"Double tap to zoom"  pref:pref_enable_double_tap_zoom_paged
+dialog:reader.ReaderSettingsDialog/"Edge"  pref:reader_navigation_mode_pager
+dialog:reader.ReaderSettingsDialog/"Filter"  ui
+dialog:reader.ReaderSettingsDialog/"Fit height"  pref:pref_image_scale_type_key
+dialog:reader.ReaderSettingsDialog/"Fit screen"  pref:pref_image_scale_type_key
+dialog:reader.ReaderSettingsDialog/"Fit width"  pref:pref_image_scale_type_key
+dialog:reader.ReaderSettingsDialog/"Flip orientation of rotated wide pages"  pref:pref_dual_page_rotate_invert
+dialog:reader.ReaderSettingsDialog/"General"  ui
+dialog:reader.ReaderSettingsDialog/"Horizontal"  pref:reader_tapping_inverted
+dialog:reader.ReaderSettingsDialog/"Invert double pages"  pref:invert_double_pages
+dialog:reader.ReaderSettingsDialog/"Invert split page placement"  pref:pref_dual_page_invert
+dialog:reader.ReaderSettingsDialog/"Kindle-ish"  pref:reader_navigation_mode_pager
+dialog:reader.ReaderSettingsDialog/"L shaped"  pref:reader_navigation_mode_pager
+dialog:reader.ReaderSettingsDialog/"Left"  pref:pref_zoom_start_key
+dialog:reader.ReaderSettingsDialog/"None"  pref:center_margin_type
+dialog:reader.ReaderSettingsDialog/"None" #2  pref:reader_tapping_inverted
+dialog:reader.ReaderSettingsDialog/"Original size"  pref:pref_image_scale_type_key
+dialog:reader.ReaderSettingsDialog/"Paged (left to right)"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Paged (right to left)"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Paged (vertical)"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Pan wide images when tapping"  pref:navigate_pan
+dialog:reader.ReaderSettingsDialog/"Reading mode"  selected-already
+dialog:reader.ReaderSettingsDialog/"Right and left"  pref:reader_navigation_mode_pager
+dialog:reader.ReaderSettingsDialog/"Right"  pref:pref_zoom_start_key
+dialog:reader.ReaderSettingsDialog/"Rotate wide pages to fit"  pref:pref_dual_page_rotate
+dialog:reader.ReaderSettingsDialog/"Shift double pages Pairs from the first page, for this ch..."  ui
+dialog:reader.ReaderSettingsDialog/"Single page"  pref:page_layout
+dialog:reader.ReaderSettingsDialog/"Smart fit"  pref:pref_image_scale_type_key
+dialog:reader.ReaderSettingsDialog/"Split wide pages"  pref:pref_dual_page_split
+dialog:reader.ReaderSettingsDialog/"Stretch"  pref:pref_image_scale_type_key
+dialog:reader.ReaderSettingsDialog/"Vertical"  pref:reader_tapping_inverted
+dialog:reader.ReaderSettingsDialog/"Webtoon"  db:mangas.favorite_modified_at db:mangas.viewer
+dialog:reader.ReaderSettingsDialog/"Wide pages"  pref:center_margin_type
+dialog:recs.RecommendationSearchDialog/"Cancel"  calls-back
+dialog:recs.RecommendationSearchDialog/"Find common recommendations"  calls-back
+dialog:recs.RecommendationSearchDialog/"Hide results already in your library"  pref:rec_search_flags
+dialog:recs.RecommendationSearchDialog/"Source recommendations"  pref:rec_search_flags
+dialog:recs.RecommendationSearchDialog/"Tracker recommendations"  pref:rec_search_flags
+dialog:recs.RecommendationSearchProgressDialog/"Cancel"  calls-back
+dialog:recs.RecommendationSearchProgressDialog/"OK"  calls-back
+dialog:settings.CategoriesIncludeExcludeDialog/"Cancel"  calls-back
+dialog:settings.CategoriesIncludeExcludeDialog/"OK"  calls-back
+dialog:settings.CategoriesIncludeExcludeDialog/"Smoke"  ui
+dialog:track.TrackingDialog/"Close"  calls-back
+dialog:whatsnew.UpdatedDialog/"OK"  calls-back
+dialog:whatsnew.UpdatedDialog/"What's new"  calls-back
+flow:library.selection/"All"  selected-already
+flow:library.selection/"Browse"  selection tab:Browse
+flow:library.selection/"Change categories"  dialog:"Set categories"
+flow:library.selection/"Clear selection"  selection
+flow:library.selection/"Default"  ui
+flow:library.selection/"History"  selection tab:History
+flow:library.selection/"Invert selection"  ui
+flow:library.selection/"Library"  selected-already
+flow:library.selection/"Mark as read"  db:chapters.read selection
+flow:library.selection/"Mark as unread"  selection
+flow:library.selection/"Migrate"  nav:migration.MigrationConfigScreen pref:migration_sources selection
+flow:library.selection/"More"  selection tab:More
+flow:library.selection/"More" #2  menu
+flow:library.selection/"More" #2 > "Merge"  close nav:browse.GlobalSearchScreen selection
+flow:library.selection/"Remove from library"  dialog:"Remove from library?"
+flow:library.selection/"Select all"  selection
+flow:library.selection/"Smoke"  ui
+flow:library.selection/"Update"  db:mangas.favorite_modified_at job:library-update notification:"Library updated" selection toast:"Updating"
+flow:library.selection/"Updates"  selection tab:Updates
+flow:library.selection/key:Ctrl+A  selection
+flow:library.selection/tag:manga-item  selection
+flow:library.selection/tag:manga-item #2  selection
+flow:library.selection/tag:manga-item [action: More actions]  menu
+flow:library.selection/tag:manga-item [action: More actions] #2  menu
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user selection
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources selection
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Open"  close nav:manga.MangaScreen selection
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Remove from library"  dialog:"Remove from library?"
+flow:library.selection/tag:manga-item [action: More actions] #2 > "Select"  close selection
+flow:library.selection/tag:manga-item [action: More actions] > "Change categories"  dialog:"Set categories"
+flow:library.selection/tag:manga-item [action: More actions] > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user selection
+flow:library.selection/tag:manga-item [action: More actions] > "Deselect"  close selection
+flow:library.selection/tag:manga-item [action: More actions] > "Mark as read"  close db:chapters.read selection
+flow:library.selection/tag:manga-item [action: More actions] > "Mark as unread"  close selection
+flow:library.selection/tag:manga-item [action: More actions] > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources selection
+flow:library.selection/tag:manga-item [action: More actions] > "Open"  close nav:manga.MangaScreen selection
+flow:library.selection/tag:manga-item [action: More actions] > "Remove from library"  dialog:"Remove from library?"
+flow:manga.chapter-selection/"Back"  close nav:back selection tab:Library
+flow:manga.chapter-selection/"Bookmark"  db:chapters.bookmark selection
+flow:manga.chapter-selection/"Chapter # #/#/#"  selection
+flow:manga.chapter-selection/"Chapter # #/#/#" #2  selection
+flow:manga.chapter-selection/"Chapter # #/#/#" [action: More actions]  ui
+flow:manga.chapter-selection/"Chapter # #/#/#" [action: More actions] #2  ui
+flow:manga.chapter-selection/"Chapter #"  selection
+flow:manga.chapter-selection/"Chapter #" #2  selection
+flow:manga.chapter-selection/"Clear selection"  selection
+flow:manga.chapter-selection/"Cover"  dialog:"Alpha"
+flow:manga.chapter-selection/"In library"  db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at toast:"Removed from library"
+flow:manga.chapter-selection/"In library" [action: More actions]  dialog:"Set categories"
+flow:manga.chapter-selection/"Local source"  close nav:browse.SourceFeedScreen selection
+flow:manga.chapter-selection/"Local source" [action: More actions]  ui
+flow:manga.chapter-selection/"Mark as read"  db:chapters.read selection
+flow:manga.chapter-selection/"Mark as unread"  selection
+flow:manga.chapter-selection/"More"  ui
+flow:manga.chapter-selection/"Refresh"  db:mangas.favorite_modified_at
+flow:manga.chapter-selection/"Remove bookmark"  selection
+flow:manga.chapter-selection/"Tracking"  dialog:"Tracking"
+flow:manga.chapter-selection/tag:entry-title  close nav:browse.GlobalSearchScreen selection
+flow:manga.chapter-selection/tag:entry-title [action: More actions]  ui
+flow:reader.bars/"Auto scroll (A)"  reader:auto-scroll
+flow:reader.bars/"Back"  db:history+ nav:back tab:Library
+flow:reader.bars/"Bookmark (B)"  db:chapters.bookmark
+flow:reader.bars/"Chapters (C)"  dialog:"Chapters" reader:chapters
+flow:reader.bars/"Crop borders: off"  pref:crop_borders
+flow:reader.bars/"Full screen (F)"  reader:fullscreen
+flow:reader.bars/"Keyboard shortcuts (/)"  dialog:"Reader shortcuts" reader:help
+flow:reader.bars/"Open in WebView"  toast:"This source has no web page"
+flow:reader.bars/"Page #" [slider max]  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.bars/"Page #" [slider min]  at-end-already
+flow:reader.bars/"Page layout"  menu
+flow:reader.bars/"Page layout" > "Automatic (double in a wide window)"  close pref:page_layout
+flow:reader.bars/"Page layout" > "Double pages"  close pref:page_layout
+flow:reader.bars/"Page layout" > "Single page"  close pref:page_layout
+flow:reader.bars/"Previous chapter (P)"  db:history+
+flow:reader.bars/"Read previous chapter"  db:chapters.last_page_read db:chapters.read db:history+ reader:page
+flow:reader.bars/"Reading mode: Paged (right to left)"  menu
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Continuous vertical"  close db:mangas.favorite_modified_at db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (left to right)"  close db:mangas.favorite_modified_at db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (right to left)"  close db:mangas.favorite_modified_at db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Paged (vertical)"  close db:mangas.favorite_modified_at db:mangas.viewer
+flow:reader.bars/"Reading mode: Paged (right to left)" > "Webtoon"  close db:mangas.favorite_modified_at db:mangas.viewer
+flow:reader.bars/"Scale type: Fit screen"  menu
+flow:reader.bars/"Scale type: Fit screen" > "Fit height"  close pref:pref_image_scale_type_key
+flow:reader.bars/"Scale type: Fit screen" > "Fit screen"  close pref:pref_image_scale_type_key
+flow:reader.bars/"Scale type: Fit screen" > "Fit width"  close pref:pref_image_scale_type_key
+flow:reader.bars/"Scale type: Fit screen" > "Original size"  close pref:pref_image_scale_type_key
+flow:reader.bars/"Scale type: Fit screen" > "Smart fit"  close pref:pref_image_scale_type_key
+flow:reader.bars/"Scale type: Fit screen" > "Stretch"  close pref:pref_image_scale_type_key
+flow:reader.bars/"Settings (S)"  dialog:"Reading mode" reader:settings
+flow:reader.bars/in "Page # / #" [action: More actions]  dialog:"Page #"
+flow:reader.keys/in "Page # / #" [action: More actions]  dialog:"Page #"
+flow:reader.keys/key:-  reader:zoom
+flow:reader.keys/key:/  dialog:"Reader shortcuts" reader:help
+flow:reader.keys/key:0  ui
+flow:reader.keys/key:=  reader:zoom
+flow:reader.keys/key:A  reader:auto-scroll
+flow:reader.keys/key:B  db:chapters.bookmark
+flow:reader.keys/key:C  dialog:"Chapters" reader:chapters
+flow:reader.keys/key:D  ui
+flow:reader.keys/key:Down  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.keys/key:End  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.keys/key:Escape  db:history+ nav:back tab:Library
+flow:reader.keys/key:F  reader:fullscreen
+flow:reader.keys/key:Home  db:chapters.last_page_read reader:page
+flow:reader.keys/key:J  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.keys/key:K  db:chapters.last_page_read reader:page
+flow:reader.keys/key:Left  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.keys/key:M  reader:menu
+flow:reader.keys/key:N  ui
+flow:reader.keys/key:P  db:history+ reader:page
+flow:reader.keys/key:Page Down  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.keys/key:Page Up  db:chapters.last_page_read reader:page
+flow:reader.keys/key:R  toast:"No pages failed"
+flow:reader.keys/key:Right  db:chapters.last_page_read reader:page
+flow:reader.keys/key:S  dialog:"Reading mode" reader:settings
+flow:reader.keys/key:Shift+R  ui
+flow:reader.keys/key:Shift+Space  db:chapters.last_page_read reader:page
+flow:reader.keys/key:Space  db:chapters.last_page_read db:chapters.read reader:page
+flow:reader.keys/key:Up  db:chapters.last_page_read reader:page
+screen:browse.BatchAddScreen/"Add galleries"  dialog:"No galleries to add!"
+screen:browse.BatchAddScreen/"Back"  nav:back tab:Library
+screen:browse.BatchAddScreen/tag:batch-add-input  ui
+screen:browse.BatchAddScreen/tag:batch-add-input [type, enter]  own-value
+screen:browse.BatchAddScreen/tag:batch-add-input [type, escape]  nav:back tab:Library
+screen:browse.BatchAddScreen/tag:batch-add-input [type]  ui
+screen:browse.ExtensionDetailsScreen/"Back"  nav:back tab:Library
+screen:browse.GlobalSearchScreen/"Back"  nav:back tab:Library
+screen:browse.GlobalSearchScreen/"Bravo"  ui
+screen:browse.GlobalSearchScreen/"Bravo" [type, enter]  nav:browse.GlobalSearchScreen
+screen:browse.GlobalSearchScreen/"Bravo" [type, escape]  nav:back tab:Library
+screen:browse.GlobalSearchScreen/"Bravo" [type]  ui
+screen:browse.GlobalSearchScreen/"Local source Other"  nav:browse.SourceScreen
+screen:browse.GlobalSearchScreen/"Search"  NO-EFFECT
+screen:browse.GlobalSearchScreen/"Select entries"  selection
+screen:browse.GlobalSearchScreen/tag:global-search-has-results  ui
+screen:browse.GlobalSearchScreen/tag:manga-item  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.GlobalSearchScreen/tag:manga-item [action: More actions]  dialog:"Alpha"
+screen:browse.MigrateMangaScreen/"Alpha"  ui
+screen:browse.MigrateMangaScreen/"Alpha" [action: More actions]  ui
+screen:browse.MigrateMangaScreen/"Back"  nav:back tab:Library
+screen:browse.MigrateMangaScreen/"Bravo"  ui
+screen:browse.MigrateMangaScreen/"Bravo" [action: More actions]  ui
+screen:browse.MigrateMangaScreen/"Invert the selection"  ui
+screen:browse.MigrateMangaScreen/"Open"  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.MigrateMangaScreen/"Open" #2  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.MigrateMangaScreen/"Select all"  ui
+screen:browse.OpenUrlScreen/"Back"  nav:back tab:Library
+screen:browse.OpenUrlScreen/"Local source Other"  unreached
+screen:browse.OpenUrlScreen/"Select entries"  selection
+screen:browse.OpenUrlScreen/tag:global-search-has-results  ui
+screen:browse.SourceCategoryScreen/"Add"  dialog:"Add category"
+screen:browse.SourceCategoryScreen/"Back"  nav:back tab:Library
+screen:browse.SourceFeedScreen/"Add"  dialog:"Add Local source"
+screen:browse.SourceFeedScreen/"Back"  nav:back tab:Library
+screen:browse.SourceFeedScreen/"Latest"  nav:browse.SourceScreen
+screen:browse.SourceFeedScreen/"Popular"  nav:browse.SourceScreen
+screen:browse.SourceFeedScreen/"Refresh"  NO-EFFECT
+screen:browse.SourceFeedScreen/"Select entries"  selection
+screen:browse.SourceFeedScreen/tag:manga-item  nav:manga.MangaScreen
+screen:browse.SourceFeedScreen/tag:manga-item #2  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:browse.SourceFeedScreen/tag:manga-item [action: More actions]  dialog:"Bravo"
+screen:browse.SourceFeedScreen/tag:manga-item [action: More actions] #2  dialog:"Alpha"
+screen:browse.SourceScreen/""Alpha""  selected-already
+screen:browse.SourceScreen/"Alpha"  ui
+screen:browse.SourceScreen/"Alpha" [type, enter]  key-unused
+screen:browse.SourceScreen/"Alpha" [type, escape]  own-value
+screen:browse.SourceScreen/"Alpha" [type]  ui
+screen:browse.SourceScreen/"Back"  nav:back tab:Library
+screen:browse.SourceScreen/"Clear search"  own-value
+screen:browse.SourceScreen/"Display mode"  menu
+screen:browse.SourceScreen/"Display mode" > "Comfortable grid"  close pref:pref_display_mode_catalogue
+screen:browse.SourceScreen/"Display mode" > "Compact grid"  close pref:pref_display_mode_catalogue
+screen:browse.SourceScreen/"Display mode" > "List"  close pref:pref_display_mode_catalogue
+screen:browse.SourceScreen/"Display mode" > "Panorama comfortable grid"  close pref:pref_display_mode_catalogue
+screen:browse.SourceScreen/"Filters"  ui
+screen:browse.SourceScreen/"Latest"  ui
+screen:browse.SourceScreen/"Popular"  selected-already
+screen:browse.SourceScreen/"Search Local source"  ui
+screen:browse.SourceScreen/"Search Local source" [type, enter]  ui
+screen:browse.SourceScreen/"Search Local source" [type, escape]  own-value
+screen:browse.SourceScreen/"Search Local source" [type]  ui
+screen:browse.SourceScreen/"Select entries"  selection
+screen:browse.SourceScreen/"This source's feed"  nav:browse.SourceFeedScreen
+screen:browse.SourceScreen/tag:manga-item  nav:manga.MangaScreen
+screen:browse.SourceScreen/tag:manga-item #2  nav:manga.MangaScreen
+screen:browse.SourceScreen/tag:manga-item [action: More actions]  dialog:"Alpha"
+screen:browse.SourceScreen/tag:manga-item [action: More actions] #2  dialog:"Bravo"
+screen:browse.SourcesFilterScreen/"Back"  nav:back tab:Library
+screen:category.CategoryScreen/"Back"  nav:back tab:Library
+screen:category.CategoryScreen/"Default category Always ask"  menu
+screen:category.CategoryScreen/"Default category Always ask" > "Always ask"  close pref:default_category
+screen:category.CategoryScreen/"Default category Always ask" > "Default"  close pref:default_category
+screen:category.CategoryScreen/"Default category Always ask" > "Smoke"  close pref:default_category
+screen:category.CategoryScreen/"Delete"  dialog:"Delete category"
+screen:category.CategoryScreen/"Hide"  db:categories.hidden
+screen:category.CategoryScreen/"Rename category"  dialog:"Rename category"
+screen:category.CategoryScreen/"Smoke"  dialog:"Rename category"
+screen:category.CategoryScreen/tag:category-add  dialog:"Add category"
+screen:downloads.DownloadsScreen/"Back"  nav:back tab:Library
+screen:downloads.DownloadsScreen/"Open the downloads folder"  folder:downloads
+screen:library.SortTagScreen/"Add a tag"  dialog:"Add tag"
+screen:library.SortTagScreen/"Add a tag" #2  dialog:"Add tag"
+screen:library.SortTagScreen/"Back"  nav:back tab:Library
+screen:library.UpdateErrorsScreen/"Back"  nav:back tab:Library
+screen:manga.MangaScreen/"Add to library"  dialog:"Add to categories"
+screen:manga.MangaScreen/"Back"  nav:back tab:Library
+screen:manga.MangaScreen/"Chapter # #/#/#"  nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:manga.MangaScreen/"Chapter # #/#/#" #2  nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions]  menu
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] #2  menu
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] #2 > "Bookmark"  close db:chapters.bookmark
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] #2 > "Mark as read"  close db:chapters.read
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] #2 > "Mark previous as read"  close
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] #2 > "Read"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] #2 > "Select"  close selection
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] > "Bookmark"  close db:chapters.bookmark
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] > "Mark as read"  close db:chapters.read
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] > "Mark previous as read"  close db:chapters.read
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] > "Read"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:manga.MangaScreen/"Chapter # #/#/#" [action: More actions] > "Select"  close selection
+screen:manga.MangaScreen/"Chapter #"  selection
+screen:manga.MangaScreen/"Chapter #" #2  selection
+screen:manga.MangaScreen/"Cover"  dialog:"Alpha"
+screen:manga.MangaScreen/"Filter and sort"  dialog:"Filter"
+screen:manga.MangaScreen/"In library"  db:mangas.date_added db:mangas.favorite db:mangas.favorite_modified_at toast:"Removed from library"
+screen:manga.MangaScreen/"In library" [action: More actions]  dialog:"Set categories"
+screen:manga.MangaScreen/"Local source"  nav:browse.SourceFeedScreen
+screen:manga.MangaScreen/"Local source" [action: More actions]  menu
+screen:manga.MangaScreen/"Local source" [action: More actions] > "Copy to clipboard"  clipboard close toast:"Copied to clipboard: Local source"
+screen:manga.MangaScreen/"Local source" [action: More actions] > "Global search"  close nav:browse.GlobalSearchScreen
+screen:manga.MangaScreen/"Local source" [action: More actions] > "Library search"  close nav:back tab:Library
+screen:manga.MangaScreen/"More"  menu
+screen:manga.MangaScreen/"More" > "Clear manga"  dialog:"Remove"
+screen:manga.MangaScreen/"More" > "Cover"  dialog:"Alpha"
+screen:manga.MangaScreen/"More" > "Edit details, notes and cover"  dialog:"Edit"
+screen:manga.MangaScreen/"More" > "Merge with another entry"  close nav:browse.GlobalSearchScreen
+screen:manga.MangaScreen/"More" > "Open folder"  close folder:local/Alpha
+screen:manga.MangaScreen/"More" > "Similar titles and recommendations"  close nav:recs.RecommendsScreen logs:offline
+screen:manga.MangaScreen/"More" > "Update frequency"  dialog:"Update frequency"
+screen:manga.MangaScreen/"Refresh"  db:mangas.favorite_modified_at
+screen:manga.MangaScreen/"Select all"  selection
+screen:manga.MangaScreen/"Start"  nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:manga.MangaScreen/"Tracking"  dialog:"Tracking"
+screen:manga.MangaScreen/key:Alt+Left  nav:back tab:Library
+screen:manga.MangaScreen/key:Escape  nav:back tab:Library
+screen:manga.MangaScreen/tag:entry-title  nav:browse.GlobalSearchScreen
+screen:manga.MangaScreen/tag:entry-title [action: More actions]  menu
+screen:manga.MangaScreen/tag:entry-title [action: More actions] > "Copy to clipboard"  clipboard close toast:"Copied to clipboard: Alpha"
+screen:manga.MangaScreen/tag:entry-title [action: More actions] > "Global search"  close nav:browse.GlobalSearchScreen
+screen:manga.MangaScreen/tag:entry-title [action: More actions] > "Library search"  close nav:back tab:Library
+screen:manga.MetadataViewScreen/"Back"  nav:back tab:Library
+screen:manga.PagePreviewScreen/"Back"  nav:back tab:Library
+screen:migration.MigrationConfigScreen/"Additional keywords (optional) Helps narrow down search r..."  ui
+screen:migration.MigrationConfigScreen/"Additional keywords (optional) Helps narrow down search r..." [type, enter]  key-unused
+screen:migration.MigrationConfigScreen/"Additional keywords (optional) Helps narrow down search r..." [type, escape]  nav:back tab:Library
+screen:migration.MigrationConfigScreen/"Additional keywords (optional) Helps narrow down search r..." [type]  ui
+screen:migration.MigrationConfigScreen/"Advanced search mode Breaks down the title into keywords ..."  pref:migration_deep_search
+screen:migration.MigrationConfigScreen/"Back"  nav:back tab:Library
+screen:migration.MigrationConfigScreen/"Categories"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Chapter and reader settings"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Chapters read and history"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Custom cover"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Delete downloads of current entry after migration"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Hide entries without a match"  pref:migration_hide_unmatched
+screen:migration.MigrationConfigScreen/"Hide entries without newer chapters Only show entry if th..."  pref:migration_hide_without_updates
+screen:migration.MigrationConfigScreen/"Match based on chapter number If enabled, chooses the mat..."  pref:migration_prioritize_by_chapters
+screen:migration.MigrationConfigScreen/"Notes"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Search for a source"  ui
+screen:migration.MigrationConfigScreen/"Search for a source" [type, enter]  key-unused
+screen:migration.MigrationConfigScreen/"Search for a source" [type, escape]  own-value
+screen:migration.MigrationConfigScreen/"Search for a source" [type]  ui
+screen:migration.MigrationConfigScreen/"Select"  menu
+screen:migration.MigrationConfigScreen/"Select" > "Select all"  close
+screen:migration.MigrationConfigScreen/"Select" > "Select enabled sources"  close
+screen:migration.MigrationConfigScreen/"Select" > "Select none"  close
+screen:migration.MigrationConfigScreen/"Select" > "Select pinned sources"  close
+screen:migration.MigrationConfigScreen/"Tracking"  pref:migration_flags
+screen:migration.MigrationConfigScreen/"Use smart search For a single entry. If enabled, automati..."  pref:migration_smart_search_single_entry
+screen:migration.MigrationListScreen/"Actions"  menu
+screen:migration.MigrationListScreen/"Actions" #2  menu
+screen:migration.MigrationListScreen/"Actions" #2 > "Don't migrate"  close
+screen:migration.MigrationListScreen/"Actions" #2 > "Search manually"  close nav:browse.GlobalSearchScreen
+screen:migration.MigrationListScreen/"Actions" > "Don't migrate"  close
+screen:migration.MigrationListScreen/"Actions" > "Search manually"  close nav:browse.GlobalSearchScreen
+screen:migration.MigrationListScreen/"Alpha Local source # chapters · Latest: #"  nav:manga.MangaScreen
+screen:migration.MigrationListScreen/"Alpha"  ui
+screen:migration.MigrationListScreen/"Alpha" [type, enter]  key-unused
+screen:migration.MigrationListScreen/"Alpha" [type, escape]  key-unused
+screen:migration.MigrationListScreen/"Alpha" [type]  ui
+screen:migration.MigrationListScreen/"Back"  dialog:"Stop migrating?"
+screen:migration.MigrationListScreen/"Bravo Local source # chapters · Latest: #"  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+screen:migration.MigrationListScreen/"No alternatives found"  nav:browse.GlobalSearchScreen
+screen:migration.MigrationListScreen/"No alternatives found" #2  nav:browse.GlobalSearchScreen
+screen:migration.MigrationListScreen/"Search"  NO-EFFECT
+screen:migration.MigrationListScreen/tag:global-search-has-results  ui
+screen:more.HistoryScreen/"Filter"  dialog:"Filter"
+screen:more.HistoryScreen/"Search history"  ui
+screen:more.HistoryScreen/"Search history" [type, enter]  key-unused
+screen:more.HistoryScreen/"Search history" [type, escape]  ui
+screen:more.HistoryScreen/"Search history" [type]  ui
+screen:more.UpdatesScreen/"Downloads"  nav:downloads.DownloadsScreen
+screen:more.UpdatesScreen/"Filter"  dialog:"Filter"
+screen:more.UpdatesScreen/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+screen:more.UpdatesScreen/"View Upcoming Updates"  nav:upcoming.UpcomingScreen
+screen:reader.ReaderScreen/"Read next chapter"  db:history+ reader:page
+screen:reader.ReaderScreen/"Read previous chapter"  db:chapters.last_page_read db:chapters.read db:history+ reader:page
+screen:reader.ReaderScreen/in "Page # / #" [action: More actions]  dialog:"Page #"
+screen:reader.ReaderScreen/in "Page #-# / #" [action: More actions]  dialog:"Pages # and #"
+screen:recs.CommonRecommendsScreen/"Browse"  tab:Browse
+screen:recs.CommonRecommendsScreen/"Downloads"  nav:downloads.DownloadsScreen
+screen:recs.CommonRecommendsScreen/"Filter, sort and display"  dialog:"Filter"
+screen:recs.CommonRecommendsScreen/"History"  tab:History
+screen:recs.CommonRecommendsScreen/"Library"  selected-already
+screen:recs.CommonRecommendsScreen/"More"  tab:More
+screen:recs.CommonRecommendsScreen/"More" #2  menu
+screen:recs.CommonRecommendsScreen/"More" #2 > "Edit categories"  close nav:category.CategoryScreen
+screen:recs.CommonRecommendsScreen/"More" #2 > "Library update errors"  close nav:library.UpdateErrorsScreen
+screen:recs.CommonRecommendsScreen/"More" #2 > "Open a random entry"  close nav:manga.MangaScreen
+screen:recs.CommonRecommendsScreen/"More" #2 > "Select all"  close selection
+screen:recs.CommonRecommendsScreen/"Search library"  ui
+screen:recs.CommonRecommendsScreen/"Search library" [type, enter]  key-unused
+screen:recs.CommonRecommendsScreen/"Search library" [type, escape]  ui
+screen:recs.CommonRecommendsScreen/"Search library" [type]  ui
+screen:recs.CommonRecommendsScreen/"Statistics"  nav:stats.StatsScreen
+screen:recs.CommonRecommendsScreen/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+screen:recs.CommonRecommendsScreen/"Updates"  tab:Updates
+screen:recs.CommonRecommendsScreen/tag:manga-item  nav:manga.MangaScreen
+screen:recs.CommonRecommendsScreen/tag:manga-item #2  nav:manga.MangaScreen
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions]  menu
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2  menu
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Open"  close nav:manga.MangaScreen
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Remove from library"  dialog:"Remove from library?"
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] #2 > "Select"  close selection
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Change categories"  dialog:"Set categories"
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Mark as read"  close db:chapters.read
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Mark as unread"  close
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Open"  close nav:manga.MangaScreen
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Remove from library"  dialog:"Remove from library?"
+screen:recs.CommonRecommendsScreen/tag:manga-item [action: More actions] > "Select"  close selection
+screen:recs.RecommendsScreen/"Back"  nav:back tab:Library
+screen:settings.ClearDatabaseScreen/"Back"  nav:back tab:Library
+screen:settings.CreateBackupScreen/"Back"  nav:back tab:Library
+screen:settings.CreateBackupScreen/tag:backup-option:All read entries  ui
+screen:settings.CreateBackupScreen/tag:backup-option:App settings  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Categories  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Chapters  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Custom entry info  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Extension stores  ui
+screen:settings.CreateBackupScreen/tag:backup-option:History  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Include sensitive settings (e.g., tracker login tokens)  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Library entries  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Saved Searches & Feeds  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Source settings  ui
+screen:settings.CreateBackupScreen/tag:backup-option:Tracking  ui
+screen:settings.CreateBackupScreen/tag:create-backup-action  pick:save[*]
+screen:settings.ExtensionStoresScreen/"Add Keiyoushi"  toast:"Could not add the store: Failed to connect to /#" logs:offline
+screen:settings.ExtensionStoresScreen/"Back"  nav:back tab:Library
+screen:settings.ExtensionStoresScreen/"Store URL (repo.json or index.min.json)"  ui
+screen:settings.ExtensionStoresScreen/"Store URL (repo.json or index.min.json)" [type, enter]  key-unused
+screen:settings.ExtensionStoresScreen/"Store URL (repo.json or index.min.json)" [type, escape]  nav:back tab:Library
+screen:settings.ExtensionStoresScreen/"Store URL (repo.json or index.min.json)" [type]  ui
+screen:settings.MissingExtensionsScreen/"Back"  nav:back tab:Library
+screen:settings.MissingExtensionsScreen/tag:missing-extensions-close  nav:back tab:Library
+screen:settings.RestoreBackupScreen/"Back"  nav:back tab:Library
+screen:settings.RestoreBackupScreen/tag:backup-option:App settings  ui
+screen:settings.RestoreBackupScreen/tag:backup-option:Categories  ui
+screen:settings.RestoreBackupScreen/tag:backup-option:Extension stores  ui
+screen:settings.RestoreBackupScreen/tag:backup-option:Library  ui
+screen:settings.RestoreBackupScreen/tag:backup-option:Saved Searches & Feeds  ui
+screen:settings.RestoreBackupScreen/tag:backup-option:Source settings  ui
+screen:settings.RestoreBackupScreen/tag:restore-backup-action  asks:sensitive-settings db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.last_update pref:categorized_display toast:"Restored # entries"
+screen:settings.SourceSettingsScreen/"Back"  nav:back tab:Library
+screen:stats.StatsScreen/"Back"  nav:back tab:Library
+screen:stats.StatsScreen/"More"  menu
+screen:stats.StatsScreen/"More" > tag:stats-all-read  close
+screen:upcoming.UpcomingScreen/"Back"  nav:back tab:Library
+screen:upcoming.UpcomingScreen/"Next #"  ui
+screen:upcoming.UpcomingScreen/"Previous #"  ui
+screen:upcoming.UpcomingScreen/"Upcoming guide"  browse:komikku-app.github.io
+screen:upcoming.UpcomingScreen/tag:upcoming-#-#  NO-EFFECT
+screen:upcoming.UpcomingScreen/tag:upcoming-#-# #2  NO-EFFECT
+screen:whatsnew.WhatsNewScreen/"OK"  nav:back tab:Library
+screen:whatsnew.WhatsNewScreen/"Open on GitHub"  browse:github.com
+screen:whatsnew.WhatsNewScreen/"Try again"  toast:"Could not load the release notes: Could not reach "
+settings:About/"About Zoukan #.#.#"  selected-already
+settings:About/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:About/"Appearance Theme, date & time format"  ui
+settings:About/"Back"  nav:back tab:More
+settings:About/"Browse Sources, extensions, global search"  ui
+settings:About/"Check for updates Releases from github.com/JasperNg/zoukan"  ui
+settings:About/"Check for updates automatically Once a #while Zoukan runs"  pref:zoukan_update_check
+settings:About/"Connections Discord"  ui
+settings:About/"Crash logs No crashes recorded"  folder:crashes
+settings:About/"Data and storage Manual & automatic backups, storage space"  ui
+settings:About/"Downloads Automatic download, download ahead"  ui
+settings:About/"E-Hentai E-Hentai settings"  ui
+settings:About/"GitHub token Needed while the release repository is priva..."  dialog:"GitHub token"
+settings:About/"Include test releases Releases marked as pre-release on G..."  pref:zoukan_update_prereleases
+settings:About/"Library Categories, global update"  ui
+settings:About/"Open the log folder zoukan.log has what Zoukan logged; at..."  folder:logs
+settings:About/"Reader Reading mode, display, navigation"  ui
+settings:About/"Security and privacy App lock, secure screen"  ui
+settings:About/"Tracking One-way progress sync, enhanced sync"  ui
+settings:About/"What's new Release notes for Zoukan #.#.#"  nav:whatsnew.WhatsNewScreen
+settings:About/tag:settings-search  ui
+settings:About/tag:settings-search [type, enter]  key-unused
+settings:About/tag:settings-search [type, escape]  ui
+settings:About/tag:settings-search [type]  ui
+settings:Advanced/"About Zoukan #.#.#"  ui
+settings:Advanced/"Advanced Tray, keyboard shortcuts, crash logs"  selected-already
+settings:Advanced/"Appearance Theme, date & time format"  ui
+settings:Advanced/"Back"  nav:back tab:More
+settings:Advanced/"Browse Sources, extensions, global search"  ui
+settings:Advanced/"Clean up downloaded chapters Delete non-existent, partial..."  dialog:"Clean up downloaded chapters"
+settings:Advanced/"Clear WebView data The built-in browser's cookies and cache"  toast:"WebView data cleared"
+settings:Advanced/"Clear cookies Signs you out of sites and forgets passed C..."  toast:"Cookies cleared"
+settings:Advanced/"Clear database Delete history for entries that are not sa..."  nav:settings.ClearDatabaseScreen
+settings:Advanced/"Connections Discord"  ui
+settings:Advanced/"DNS over HTTPS (DoH) Disabled"  dialog:"DNS over HTTPS (DoH)"
+settings:Advanced/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Advanced/"Default user agent string Mozilla/#.# (Linux; Android #;..."  dialog:"Default user agent string"
+settings:Advanced/"Disallow non-ASCII filenames Ensures compatibility with c..."  pref:disallow_non_ascii_filenames
+settings:Advanced/"Downloads Automatic download, download ahead"  ui
+settings:Advanced/"E-Hentai E-Hentai settings"  ui
+settings:Advanced/"Enable delegated sources Apply Komikku enhancements to th..."  pref:eh_delegate_sources
+settings:Advanced/"Enable source blacklist Hide extensions/sources that are ..."  pref:eh_enable_source_blacklist
+settings:Advanced/"Include chapter URL hash Append the first six characters ..."  pref:download_include_chapter_url_hash
+settings:Advanced/"Keep running in the tray Closing the window keeps Zoukan ..."  pref:zoukan_close_to_tray
+settings:Advanced/"Library Categories, global update"  ui
+settings:Advanced/"Log level Changing this can impact app performance. Force..."  dialog:"Log level"
+settings:Advanced/"Onboarding guide"  ui
+settings:Advanced/"Reader Reading mode, display, navigation"  ui
+settings:Advanced/"Refresh library covers"  db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ toast:"Library covers refreshed"
+settings:Advanced/"Reindex downloads Force app to recheck downloaded chapters"  toast:"Recreating download index"
+settings:Advanced/"Reset per-series reader settings Resets reading mode and ..."  toast:"All reader settings reset"
+settings:Advanced/"Revoke trusted unknown extensions Extensions trusted on t..."  toast:"Revoked trust for all unknown extensions"
+settings:Advanced/"Security and privacy App lock, secure screen"  ui
+settings:Advanced/"Share crash logs Saves error logs to a file for sharing w..."  pick:save[*]
+settings:Advanced/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Advanced/"Update library manga titles to match source Warning: if a..."  pref:pref_update_library_manga_titles
+settings:Advanced/tag:settings-search  ui
+settings:Advanced/tag:settings-search [type, enter]  key-unused
+settings:Advanced/tag:settings-search [type, escape]  ui
+settings:Advanced/tag:settings-search [type]  ui
+settings:Appearance/"About Zoukan #.#.#"  ui
+settings:Appearance/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Appearance/"Always show navigation labels Otherwise only the open tab's"  pref:pref_show_bottom_bar_labels
+settings:Appearance/"Appearance Theme, date & time format"  selected-already
+settings:Appearance/"Back"  nav:back tab:More
+settings:Appearance/"Browse Sources, extensions, global search"  ui
+settings:Appearance/"Catppuccin"  pref:pref_app_theme
+settings:Appearance/"Cloudflare"  pref:pref_app_theme
+settings:Appearance/"Connections Discord"  ui
+settings:Appearance/"Cotton candy"  pref:pref_app_theme
+settings:Appearance/"Cover based theme style Vibrant"  dialog:"Cover based theme style"
+settings:Appearance/"Custom"  pref:pref_app_theme
+settings:Appearance/"Dark"  pref:pref_theme_mode_key
+settings:Appearance/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Appearance/"Date format Default (#/#/#)"  dialog:"Date format"
+settings:Appearance/"Default"  pref:pref_app_theme
+settings:Appearance/"Doom"  pref:pref_app_theme
+settings:Appearance/"Downloads Automatic download, download ahead"  ui
+settings:Appearance/"E-Hentai E-Hentai settings"  ui
+settings:Appearance/"Expand all search filters by default"  pref:eh_expand_filters
+settings:Appearance/"Green Apple"  pref:pref_app_theme
+settings:Appearance/"Lavender"  pref:pref_app_theme
+settings:Appearance/"Library Categories, global update"  ui
+settings:Appearance/"Light"  pref:pref_theme_mode_key
+settings:Appearance/"Matrix"  pref:pref_app_theme
+settings:Appearance/"Midnight Dusk"  pref:pref_app_theme
+settings:Appearance/"Mocha"  pref:pref_app_theme
+settings:Appearance/"Monochrome"  pref:pref_app_theme
+settings:Appearance/"Nord"  pref:pref_app_theme
+settings:Appearance/"Page preview rows" [slider max]  pref:pref_previews_row_count
+settings:Appearance/"Page preview rows" [slider min]  pref:pref_previews_row_count
+settings:Appearance/"Panorama Cover Flow Show panorama cover in Global Search ..."  pref:use_panorama_cover_flow
+settings:Appearance/"Panorama Cover Show cover in landscape mode if it's a wid..."  pref:use_panorama_cover_manga_info
+settings:Appearance/"Pure black dark mode"  pref:pref_theme_dark_amoled_key
+settings:Appearance/"Reader Reading mode, display, navigation"  ui
+settings:Appearance/"Relative timestamps "#" instead of "#/#/#""  pref:relative_time_v2
+settings:Appearance/"Render images in manga descriptions"  pref:pref_render_images_description
+settings:Appearance/"Sapphire"  pref:pref_app_theme
+settings:Appearance/"Security and privacy App lock, secure screen"  ui
+settings:Appearance/"Show History button"  pref:pref_show_history_button
+settings:Appearance/"Show Updates button"  pref:pref_show_updates_button
+settings:Appearance/"Strawberry Daiquiri"  pref:pref_app_theme
+settings:Appearance/"System"  pref:pref_theme_mode_key
+settings:Appearance/"Tako"  pref:pref_app_theme
+settings:Appearance/"Teal & Turquoise"  pref:pref_app_theme
+settings:Appearance/"Theme based on cover"  pref:pref_theme_cover_based_key
+settings:Appearance/"Tidal Wave"  pref:pref_app_theme
+settings:Appearance/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Appearance/"Yin & Yang"  pref:pref_app_theme
+settings:Appearance/"Yotsuba"  pref:pref_app_theme
+settings:Appearance/tag:settings-search  ui
+settings:Appearance/tag:settings-search [type, enter]  key-unused
+settings:Appearance/tag:settings-search [type, escape]  ui
+settings:Appearance/tag:settings-search [type]  ui
+settings:Browse/"About Zoukan #.#.#"  ui
+settings:Browse/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Browse/"Appearance Theme, date & time format"  ui
+settings:Browse/"Back"  nav:back tab:More
+settings:Browse/"Browse Sources, extensions, global search"  selected-already
+settings:Browse/"Connections Discord"  ui
+settings:Browse/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Browse/"Downloads Automatic download, download ahead"  ui
+settings:Browse/"E-Hentai E-Hentai settings"  ui
+settings:Browse/"Edit categories # categories"  nav:browse.SourceCategoryScreen
+settings:Browse/"Expand related titles Show the related titles row open on..."  pref:expand_related_mangas
+settings:Browse/"Extension stores # stores"  nav:settings.ExtensionStoresScreen
+settings:Browse/"Feed tab position Do you want the feed tab to be the firs..."  pref:latest_tab_position
+settings:Browse/"Filter sources in categories Filter the sources that are ..."  pref:sources_tab_categories_filter
+settings:Browse/"Hide Feed tab"  pref:hide_latest_tab
+settings:Browse/"Hide entries already in library"  pref:feed_hide_in_library_items
+settings:Browse/"Library Categories, global update"  ui
+settings:Browse/"Local source hidden folders Allow local source to read hi..."  pref:allow_local_source_hidden_folders
+settings:Browse/"Reader Reading mode, display, navigation"  ui
+settings:Browse/"Related titles in overflow menu Only show related titles ..."  pref:related_mangas_in_overflow
+settings:Browse/"Replace latest button Replace latest button with a custom..."  pref:use_new_source_navigation
+settings:Browse/"Security and privacy App lock, secure screen"  ui
+settings:Browse/"Show in sources and extensions lists Requires app restart..."  pref:show_nsfw_source
+settings:Browse/"Suggestions Show source-website's Suggestions while viewi..."  pref:related_mangas
+settings:Browse/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Browse/tag:settings-search  ui
+settings:Browse/tag:settings-search [type, enter]  key-unused
+settings:Browse/tag:settings-search [type, escape]  ui
+settings:Browse/tag:settings-search [type]  ui
+settings:Connections/"About Zoukan #.#.#"  ui
+settings:Connections/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Connections/"Appearance Theme, date & time format"  ui
+settings:Connections/"Back"  nav:back tab:More
+settings:Connections/"Browse Sources, extensions, global search"  ui
+settings:Connections/"Connections Discord"  selected-already
+settings:Connections/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Connections/"Discord Rich Presence Show what you read on your Discord ..."  pref:pref_enable_discord_rpc
+settings:Connections/"Downloads Automatic download, download ahead"  ui
+settings:Connections/"E-Hentai E-Hentai settings"  ui
+settings:Connections/"Library Categories, global update"  ui
+settings:Connections/"Reader Reading mode, display, navigation"  ui
+settings:Connections/"Security and privacy App lock, secure screen"  ui
+settings:Connections/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Connections/tag:settings-search  ui
+settings:Connections/tag:settings-search [type, enter]  key-unused
+settings:Connections/tag:settings-search [type, escape]  ui
+settings:Connections/tag:settings-search [type]  ui
+settings:Data/"About Zoukan #.#.#"  ui
+settings:Data/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Data/"Appearance Theme, date & time format"  ui
+settings:Data/"Automatic backup frequency Every # #"  dialog:"Automatic backup frequency"
+settings:Data/"Back"  nav:back tab:More
+settings:Data/"Browse Sources, extensions, global search"  ui
+settings:Data/"Clear chapter cache Used: # B"  toast:"Cache cleared, # files deleted"
+settings:Data/"Clear chapter cache on app launch"  pref:auto_clear_chapter_cache
+settings:Data/"Clear cover cache Covers download again when shown"  toast:"Cover cache cleared"
+settings:Data/"Connections Discord"  ui
+settings:Data/"Create backup"  nav:settings.CreateBackupScreen
+settings:Data/"Data Saver Compress images before downloading or loading ..."  dialog:"Data Saver"
+settings:Data/"Data and storage Manual & automatic backups, storage space"  selected-already
+settings:Data/"Data folder /tmp/zoukan-crawl#"  folder:.
+settings:Data/"Downloads Automatic download, download ahead"  ui
+settings:Data/"E-Hentai E-Hentai settings"  ui
+settings:Data/"Install missing extensions Installs the extensions of the..."  nav:settings.MissingExtensionsScreen
+settings:Data/"Library Categories, global update"  ui
+settings:Data/"Library List"  dialog:"Select data to include"
+settings:Data/"Open the automatic backup folder The newest # are kept. T..."  folder:autobackup
+settings:Data/"Open the backup folder"  folder:backups
+settings:Data/"Open the downloads folder"  folder:downloads
+settings:Data/"Open the local source folder Put a folder per entry here,..."  folder:local
+settings:Data/"Reader Reading mode, display, navigation"  ui
+settings:Data/"Restore backup"  pick:open[tachibk,proto.gz]
+settings:Data/"Security and privacy App lock, secure screen"  ui
+settings:Data/"Storage location /tmp/zoukan-crawl#"  pick:folder
+settings:Data/"Sync service Off"  dialog:"Sync service"
+settings:Data/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Data/tag:settings-search  ui
+settings:Data/tag:settings-search [type, enter]  key-unused
+settings:Data/tag:settings-search [type, escape]  ui
+settings:Data/tag:settings-search [type]  ui
+settings:Downloads/"About Zoukan #.#.#"  ui
+settings:Downloads/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Downloads/"After manually marked as read"  pref:pref_remove_after_marked_as_read_key
+settings:Downloads/"After reading automatically delete Disabled"  dialog:"After reading automatically delete"
+settings:Downloads/"Allow deleting bookmarked chapters"  pref:pref_remove_bookmarked
+settings:Downloads/"Appearance Theme, date & time format"  ui
+settings:Downloads/"Auto download while reading Disabled"  dialog:"Auto download while reading"
+settings:Downloads/"Back"  nav:back tab:More
+settings:Downloads/"Browse Sources, extensions, global search"  ui
+settings:Downloads/"Concurrent page downloads" [slider max]  pref:download_parallel_page_limit
+settings:Downloads/"Concurrent page downloads" [slider min]  pref:download_parallel_page_limit
+settings:Downloads/"Concurrent source downloads" [slider max]  pref:download_parallel_source_limit
+settings:Downloads/"Concurrent source downloads" [slider min]  pref:download_parallel_source_limit
+settings:Downloads/"Connections Discord"  ui
+settings:Downloads/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Downloads/"Download cache renew interval # #"  dialog:"Download cache renew interval"
+settings:Downloads/"Download new chapters After a library update"  pref:download_new
+settings:Downloads/"Downloads Automatic download, download ahead"  selected-already
+settings:Downloads/"E-Hentai E-Hentai settings"  ui
+settings:Downloads/"Encryption AES-#"  dialog:"Encryption"
+settings:Downloads/"Excluded categories None"  dialog:"Excluded categories"
+settings:Downloads/"Library Categories, global update"  ui
+settings:Downloads/"Reader Reading mode, display, navigation"  ui
+settings:Downloads/"Save as CBZ archive"  pref:save_chapter_as_cbz
+settings:Downloads/"Security and privacy App lock, secure screen"  ui
+settings:Downloads/"Set the download password Kept in files in /tmp/zoukan-cr..."  dialog:"Download password"
+settings:Downloads/"Split tall images Improves reader performance"  pref:split_tall_images
+settings:Downloads/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Downloads/tag:settings-search  ui
+settings:Downloads/tag:settings-search [type, enter]  key-unused
+settings:Downloads/tag:settings-search [type, escape]  ui
+settings:Downloads/tag:settings-search [type]  ui
+settings:EHentai/"About Zoukan #.#.#"  ui
+settings:EHentai/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:EHentai/"Appearance Theme, date & time format"  ui
+settings:EHentai/"Back"  nav:back tab:More
+settings:EHentai/"Browse Sources, extensions, global search"  ui
+settings:EHentai/"Connections Discord"  ui
+settings:EHentai/"Data and storage Manual & automatic backups, storage space"  ui
+settings:EHentai/"Downloads Automatic download, download ahead"  ui
+settings:EHentai/"E-Hentai Adds the built-in E-Hentai sources to Browse"  pref:eh_is_hentai_enabled
+settings:EHentai/"E-Hentai E-Hentai settings"  selected-already
+settings:EHentai/"Library Categories, global update"  ui
+settings:EHentai/"Reader Reading mode, display, navigation"  ui
+settings:EHentai/"Security and privacy App lock, secure screen"  ui
+settings:EHentai/"Tracking One-way progress sync, enhanced sync"  ui
+settings:EHentai/tag:settings-search  ui
+settings:EHentai/tag:settings-search [type, enter]  key-unused
+settings:EHentai/tag:settings-search [type, escape]  ui
+settings:EHentai/tag:settings-search [type]  ui
+settings:Library/"About Zoukan #.#.#"  ui
+settings:Library/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Library/"Appearance Theme, date & time format"  ui
+settings:Library/"Automatic updates Off"  dialog:"Automatic updates"
+settings:Library/"Automatically refresh metadata Check for new cover and de..."  pref:auto_update_metadata
+settings:Library/"Back"  nav:back tab:More
+settings:Library/"Browse Sources, extensions, global search"  ui
+settings:Library/"Categories Include: All Exclude: None"  dialog:"Categories"
+settings:Library/"Connections Discord"  ui
+settings:Library/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Library/"Default category Always ask"  dialog:"Default category"
+settings:Library/"Downloads Automatic download, download ahead"  ui
+settings:Library/"E-Hentai E-Hentai settings"  ui
+settings:Library/"Edit categories # category"  nav:category.CategoryScreen
+settings:Library/"Fetch chapters when adding to library Automatically fetch..."  pref:fetch_chapters_on_add
+settings:Library/"Fetch metadata when adding to library Automatically fetch..."  pref:fetch_metadata_on_add
+settings:Library/"Hide missing chapter indicators"  pref:pref_hide_missing_chapter_indicators
+settings:Library/"Library Categories, global update"  selected-already
+settings:Library/"Library dynamic category updates Always launch global upd..."  dialog:"Library dynamic category updates"
+settings:Library/"Mark duplicate read chapter as read None"  dialog:"Mark duplicate read chapter as read"
+settings:Library/"Per-category settings for sort"  pref:categorized_display
+settings:Library/"Reader Reading mode, display, navigation"  ui
+settings:Library/"Security and privacy App lock, secure screen"  ui
+settings:Library/"Show empty categories during search/filtering"  pref:show_empty_categories_search
+settings:Library/"Show unread count on Updates icon"  pref:library_show_updates_count
+settings:Library/"Smart update None"  dialog:"Smart update"
+settings:Library/"Swipe to left action Toggle bookmark"  dialog:"Swipe to left action"
+settings:Library/"Swipe to right action Toggle read"  dialog:"Swipe to right action"
+settings:Library/"Tag sorting tags # tags"  nav:library.SortTagScreen
+settings:Library/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Library/"Update the library #Last update: ##, #, #:# #"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+settings:Library/tag:settings-search  ui
+settings:Library/tag:settings-search [type, enter]  key-unused
+settings:Library/tag:settings-search [type, escape]  ui
+settings:Library/tag:settings-search [type]  ui
+settings:MangaDex/"Cancel"  close
+settings:MangaDex/"Completed"  ui
+settings:MangaDex/"Dropped"  ui
+settings:MangaDex/"OK"  close pref:pref_mangadex_sync_to_library_indexes toast:"Syncing MangaDex follows failed: Failed to connect" logs:offline
+settings:MangaDex/"On hold"  ui
+settings:MangaDex/"Plan to read"  ui
+settings:MangaDex/"Reading"  ui
+settings:MangaDex/"Rereading"  ui
+settings:Reader/"About Zoukan #.#.#"  ui
+settings:Reader/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Reader/"Aggressive page loading Download every page of an online ..."  pref:eh_aggressive_page_loading
+settings:Reader/"Always show chapter transition"  pref:always_show_chapter_transition
+settings:Reader/"Animate page transitions"  pref:pref_enable_transitions_pager_key
+settings:Reader/"Appearance Theme, date & time format"  ui
+settings:Reader/"Apply Smart scale to Long strip with gaps"  pref:pref_webtoon_smart_scale_long_strip_gap
+settings:Reader/"Auto webtoon mode Read entries tagged webtoon, manhwa or ..."  pref:eh_use_auto_webtoon
+settings:Reader/"Back"  nav:back tab:More
+settings:Reader/"Background Black"  dialog:"Background"
+settings:Reader/"Browse Sources, extensions, global search"  ui
+settings:Reader/"Center margin None"  dialog:"Center margin"
+settings:Reader/"Connections Discord"  ui
+settings:Reader/"Crop borders"  pref:crop_borders
+settings:Reader/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Reader/"Default reading mode Paged (right to left)"  dialog:"Default reading mode"
+settings:Reader/"Disable zoom in"  pref:paged_disable_zoom_in
+settings:Reader/"Disable zoom out"  pref:webtoon_disable_zoom_out
+settings:Reader/"Double tap to zoom"  pref:pref_enable_double_tap_zoom_paged
+settings:Reader/"Downloads Automatic download, download ahead"  ui
+settings:Reader/"E-Hentai E-Hentai settings"  ui
+settings:Reader/"Flash on page change Reduces ghosting on e-ink monitors"  pref:pref_reader_flash
+settings:Reader/"Flip orientation of rotated wide pages"  pref:pref_dual_page_rotate_invert
+settings:Reader/"Instant retry Retry a failed page once at once"  pref:eh_reader_instant_retry
+settings:Reader/"Invert split page placement"  pref:pref_dual_page_invert
+settings:Reader/"Invert tap zones None"  dialog:"Invert tap zones"
+settings:Reader/"Keep screen on"  pref:pref_keep_screen_on_key
+settings:Reader/"Library Categories, global update"  ui
+settings:Reader/"Page layout Automatic (double in a wide window)"  dialog:"Page layout"
+settings:Reader/"Page scaling (paged modes) Fit screen"  dialog:"Page scaling (paged modes)"
+settings:Reader/"Pages to preload" [slider max]  pref:eh_preload_size
+settings:Reader/"Pages to preload" [slider min]  pref:eh_preload_size
+settings:Reader/"Pan wide images when tapping"  pref:navigate_pan
+settings:Reader/"Pinch to zoom"  pref:pref_enable_pinch_to_zoom_webtoon
+settings:Reader/"Preserve reading position Open a read chapter at its last..."  pref:eh_preserve_reading_position
+settings:Reader/"Reader Reading mode, display, navigation"  selected-already
+settings:Reader/"Reader threads" [slider max]  pref:eh_reader_threads
+settings:Reader/"Reader threads" [slider min]  pref:eh_reader_threads
+settings:Reader/"Rotate wide pages to fit"  pref:pref_dual_page_rotate
+settings:Reader/"Security and privacy App lock, secure screen"  ui
+settings:Reader/"Show actions on long tap Right-click always shows them"  pref:reader_long_tap
+settings:Reader/"Show page number"  pref:pref_show_page_number_key
+settings:Reader/"Show reading mode Briefly shows the current mode when the..."  pref:pref_show_reading_mode
+settings:Reader/"Show tap zones overlay Briefly show when reader is opened"  pref:reader_navigation_overlay_on_start
+settings:Reader/"Smaller tap zones"  pref:reader_navigation_smaller_tap_zone
+settings:Reader/"Smart scale on wide screen Fit screen"  dialog:"Smart scale on wide screen"
+settings:Reader/"Smooth auto scroll Webtoon modes glide instead of jumping"  pref:smooth_auto_scroll
+settings:Reader/"Split wide pages"  pref:pref_dual_page_split
+settings:Reader/"Tap zones Default"  dialog:"Tap zones"
+settings:Reader/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Reader/"Webtoon side padding" [slider max]  pref:webtoon_side_padding
+settings:Reader/"Webtoon side padding" [slider min]  pref:webtoon_side_padding
+settings:Reader/"Zoom start position Automatic"  dialog:"Zoom start position"
+settings:Reader/tag:settings-search  ui
+settings:Reader/tag:settings-search [type, enter]  key-unused
+settings:Reader/tag:settings-search [type, escape]  ui
+settings:Reader/tag:settings-search [type]  ui
+settings:Security/"About Zoukan #.#.#"  ui
+settings:Security/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Security/"Appearance Theme, date & time format"  ui
+settings:Security/"Back"  nav:back tab:More
+settings:Security/"Browse Sources, extensions, global search"  ui
+settings:Security/"Connections Discord"  ui
+settings:Security/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Security/"Downloads Automatic download, download ahead"  ui
+settings:Security/"E-Hentai E-Hentai settings"  ui
+settings:Security/"Hide notification content Notifications say only that the..."  pref:hide_notification_content
+settings:Security/"Incognito extensions Always read these sources in incognito"  dialog:"Incognito extensions"
+settings:Security/"Incognito mode Reading keeps no history, progress or trac..."  pref:__APP_STATE_incognito_mode
+settings:Security/"Library Categories, global update"  ui
+settings:Security/"Reader Reading mode, display, navigation"  ui
+settings:Security/"Require unlock Ask for a password when Zoukan opens and a..."  dialog:"Set a password"
+settings:Security/"Secure screen Incognito mode"  dialog:"Secure screen"
+settings:Security/"Security and privacy App lock, secure screen"  selected-already
+settings:Security/"Tracking One-way progress sync, enhanced sync"  ui
+settings:Security/tag:settings-search  ui
+settings:Security/tag:settings-search [type, enter]  key-unused
+settings:Security/tag:settings-search [type, escape]  ui
+settings:Security/tag:settings-search [type]  ui
+settings:Tracking/"About Zoukan #.#.#"  ui
+settings:Tracking/"Advanced Tray, keyboard shortcuts, crash logs"  ui
+settings:Tracking/"Appearance Theme, date & time format"  ui
+settings:Tracking/"Back"  nav:back tab:More
+settings:Tracking/"Browse Sources, extensions, global search"  ui
+settings:Tracking/"Connections Discord"  ui
+settings:Tracking/"Data and storage Manual & automatic backups, storage space"  ui
+settings:Tracking/"Downloads Automatic download, download ahead"  ui
+settings:Tracking/"E-Hentai E-Hentai settings"  ui
+settings:Tracking/"Library Categories, global update"  ui
+settings:Tracking/"Other browser"  dialog:"Sign in with another browser"
+settings:Tracking/"Other browser" #2  dialog:"Sign in with another browser"
+settings:Tracking/"Reader Reading mode, display, navigation"  ui
+settings:Tracking/"Resolve with source metadata Find the tracker entry from ..."  pref:pref_resolve_using_source_metadata_key
+settings:Tracking/"Security and privacy App lock, secure screen"  ui
+settings:Tracking/"Sign in"  toast:"Signing in to MDList failed: Install the MangaDex "
+settings:Tracking/"Sign in" #2  toast:"Signing in to MyAnimeList failed: The built-in bro" logs:offline
+settings:Tracking/"Sync progress from trackers Mark chapters read when a tra..."  pref:pref_auto_sync_progress_from_trackers_key
+settings:Tracking/"Track when adding to the library"  pref:track_on_adding_to_library
+settings:Tracking/"Tracking One-way progress sync, enhanced sync"  selected-already
+settings:Tracking/"Turn on"  pref:__PRIVATE_pref_mangasync_password_6 pref:__PRIVATE_pref_mangasync_username_6 pref:__PRIVATE_pref_tracker_auth_expired_6
+settings:Tracking/"Update progress after reading"  pref:pref_auto_update_manga_sync_key
+settings:Tracking/"Update progress when marking as read Always"  dialog:"Update progress when marking as read"
+settings:Tracking/tag:settings-search  ui
+settings:Tracking/tag:settings-search [type, enter]  key-unused
+settings:Tracking/tag:settings-search [type, escape]  ui
+settings:Tracking/tag:settings-search [type]  ui
+state:ChoiceSetting/"Cancel"  close
+state:ChoiceSetting/"One"  calls-back close
+state:ChoiceSetting/"Two"  calls-back close
+state:MultiSelectPreference/"Cancel"  close
+state:MultiSelectPreference/"Charging"  ui
+state:MultiSelectPreference/"OK"  close pref:library_update_restriction
+state:MultiSelectPreference/"Wi-Fi"  ui
+state:app-lock/"Password"  field
+state:app-lock/"Unlock"  ui
+state:download-password/"Cancel"  close
+state:download-password/tag:download-password  ui
+state:download-password/tag:download-password-repeat  ui
+state:onboarding/"All"  selected-already
+state:onboarding/"Browse"  tab:Browse
+state:onboarding/"Catppuccin"  pref:pref_app_theme
+state:onboarding/"Close"  ui
+state:onboarding/"Cloudflare"  pref:pref_app_theme
+state:onboarding/"Cotton candy"  pref:pref_app_theme
+state:onboarding/"Custom"  pref:pref_app_theme
+state:onboarding/"Dark"  pref:pref_theme_mode_key
+state:onboarding/"Default"  ui
+state:onboarding/"Default" #2  pref:pref_app_theme
+state:onboarding/"Doom"  pref:pref_app_theme
+state:onboarding/"Downloads"  nav:downloads.DownloadsScreen
+state:onboarding/"Filter, sort and display"  dialog:"Filter"
+state:onboarding/"Green Apple"  pref:pref_app_theme
+state:onboarding/"History"  tab:History
+state:onboarding/"Library"  selected-already
+state:onboarding/"Light"  pref:pref_theme_mode_key
+state:onboarding/"Matrix"  pref:pref_app_theme
+state:onboarding/"Midnight Dusk"  pref:pref_app_theme
+state:onboarding/"Mocha"  pref:pref_app_theme
+state:onboarding/"Monochrome"  pref:pref_app_theme
+state:onboarding/"More"  tab:More
+state:onboarding/"More" #2  menu
+state:onboarding/"More" #2 > "Edit categories"  close nav:category.CategoryScreen
+state:onboarding/"More" #2 > "Library update errors"  close nav:library.UpdateErrorsScreen
+state:onboarding/"More" #2 > "Open a random entry"  close nav:manga.MangaScreen
+state:onboarding/"More" #2 > "Select all"  close selection
+state:onboarding/"Next"  ui
+state:onboarding/"Nord"  pref:pref_app_theme
+state:onboarding/"Pure black dark mode"  pref:pref_theme_dark_amoled_key
+state:onboarding/"Sapphire"  pref:pref_app_theme
+state:onboarding/"Search library"  ui
+state:onboarding/"Search library" [type, enter]  key-unused
+state:onboarding/"Search library" [type, escape]  ui
+state:onboarding/"Search library" [type]  ui
+state:onboarding/"Smoke"  ui
+state:onboarding/"Statistics"  nav:stats.StatsScreen
+state:onboarding/"Strawberry Daiquiri"  pref:pref_app_theme
+state:onboarding/"System"  pref:pref_theme_mode_key
+state:onboarding/"Tako"  pref:pref_app_theme
+state:onboarding/"Teal & Turquoise"  pref:pref_app_theme
+state:onboarding/"Tidal Wave"  pref:pref_app_theme
+state:onboarding/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+state:onboarding/"Updates"  tab:Updates
+state:onboarding/"Yin & Yang"  pref:pref_app_theme
+state:onboarding/"Yotsuba"  pref:pref_app_theme
+state:onboarding/tag:manga-item  unreached
+state:onboarding/tag:manga-item #2  unreached
+state:onboarding/tag:manga-item [action: More actions]  menu
+state:onboarding/tag:manga-item [action: More actions] #2  menu
+state:onboarding/tag:manga-item [action: More actions] #2 > "Change categories"  dialog:"Set categories"
+state:onboarding/tag:manga-item [action: More actions] #2 > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+state:onboarding/tag:manga-item [action: More actions] #2 > "Mark as read"  close db:chapters.read
+state:onboarding/tag:manga-item [action: More actions] #2 > "Mark as unread"  close
+state:onboarding/tag:manga-item [action: More actions] #2 > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
+state:onboarding/tag:manga-item [action: More actions] #2 > "Open"  close nav:manga.MangaScreen
+state:onboarding/tag:manga-item [action: More actions] #2 > "Remove from library"  dialog:"Remove from library?"
+state:onboarding/tag:manga-item [action: More actions] #2 > "Select"  close selection
+state:onboarding/tag:manga-item [action: More actions] > "Change categories"  dialog:"Set categories"
+state:onboarding/tag:manga-item [action: More actions] > "Continue reading"  close nav:reader.ReaderScreen pref:reader_navigation_overlay_new_user
+state:onboarding/tag:manga-item [action: More actions] > "Mark as read"  close db:chapters.read
+state:onboarding/tag:manga-item [action: More actions] > "Mark as unread"  close
+state:onboarding/tag:manga-item [action: More actions] > "Migrate"  close nav:migration.MigrationConfigScreen pref:migration_sources
+state:onboarding/tag:manga-item [action: More actions] > "Open"  close nav:manga.MangaScreen
+state:onboarding/tag:manga-item [action: More actions] > "Remove from library"  dialog:"Remove from library?"
+state:onboarding/tag:manga-item [action: More actions] > "Select"  close selection
+tab:Browse/"Batch add"  nav:browse.BatchAddScreen
+tab:Browse/"Browse"  selected-already
+tab:Browse/"Filter sources"  nav:browse.SourcesFilterScreen
+tab:Browse/"History"  tab:History
+tab:Browse/"Library"  tab:Library
+tab:Browse/"Local source Other"  nav:browse.SourceFeedScreen
+tab:Browse/"Local source Other" #2  nav:browse.SourceFeedScreen
+tab:Browse/"Local source Other" [action: More actions]  menu
+tab:Browse/"Local source Other" [action: More actions] #2  menu
+tab:Browse/"Local source Other" [action: More actions] #2 > "Pin"  close pref:pinned_catalogues
+tab:Browse/"Local source Other" [action: More actions] #2 > "Set categories"  dialog:"Local source"
+tab:Browse/"Local source Other" [action: More actions] > "Pin"  close pref:pinned_catalogues
+tab:Browse/"Local source Other" [action: More actions] > "Set categories"  dialog:"Local source"
+tab:Browse/"More"  tab:More
+tab:Browse/"More" #2  menu
+tab:Browse/"More" #2 > "Pin"  close pref:pinned_catalogues
+tab:Browse/"More" #2 > "Set categories"  dialog:"Local source"
+tab:Browse/"Open from a URL"  dialog:"Open from a URL"
+tab:Browse/"Pin"  pref:pinned_catalogues
+tab:Browse/"Pin" #2  pref:pinned_catalogues
+tab:Browse/"Updates"  tab:Updates
+tab:Browse/tag:browse-page-EXTENSIONS  ui
+tab:Browse/tag:browse-page-FEED  ui
+tab:Browse/tag:browse-page-MIGRATE  ui
+tab:Browse/tag:browse-page-SOURCES  selected-already
+tab:Browse/tag:browse-page-STORES  ui
+tab:Browse/tag:global-search  ui
+tab:Browse/tag:global-search [type, enter]  nav:browse.GlobalSearchScreen
+tab:Browse/tag:global-search [type, escape]  own-value
+tab:Browse/tag:global-search [type]  ui
+tab:Browse/tag:source-search  ui
+tab:Browse/tag:source-search [type, enter]  key-unused
+tab:Browse/tag:source-search [type, escape]  ui
+tab:Browse/tag:source-search [type]  ui
+tab:History/"Browse"  tab:Browse
+tab:History/"Filter"  dialog:"Filter"
+tab:History/"History"  selected-already
+tab:History/"Library"  tab:Library
+tab:History/"More"  tab:More
+tab:History/"Search history"  ui
+tab:History/"Search history" [type, enter]  key-unused
+tab:History/"Search history" [type, escape]  unreached
+tab:History/"Search history" [type]  ui
+tab:History/"Updates"  tab:Updates
+tab:Library/"All"  selected-already
+tab:Library/"Browse"  tab:Browse
+tab:Library/"Default"  ui
+tab:Library/"Downloads"  nav:downloads.DownloadsScreen
+tab:Library/"Filter, sort and display"  dialog:"Filter"
+tab:Library/"History"  tab:History
+tab:Library/"Library"  selected-already
+tab:Library/"More"  tab:More
+tab:Library/"More" #2  menu
+tab:Library/"More" #2 > "Edit categories"  close nav:category.CategoryScreen
+tab:Library/"More" #2 > "Library update errors"  close nav:library.UpdateErrorsScreen
+tab:Library/"More" #2 > "Open a random entry"  close db:mangas.cover_last_modified db:mangas.favorite_modified_at db:mangas.initialized db:mangas.thumbnail_url files:local+ nav:manga.MangaScreen
+tab:Library/"More" #2 > "Select all"  close selection
+tab:Library/"Search library"  ui
+tab:Library/"Search library" [type, enter]  key-unused
+tab:Library/"Search library" [type, escape]  ui
+tab:Library/"Search library" [type]  ui
+tab:Library/"Smoke"  ui
+tab:Library/"Statistics"  nav:stats.StatsScreen
+tab:Library/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+tab:Library/"Updates"  tab:Updates
+tab:Library/key:Ctrl+,  nav:more.SettingsScreen
+tab:Library/key:Ctrl+2  focus:@#,# tab:Updates
+tab:Library/key:Ctrl+3  tab:History
+tab:Library/key:Ctrl+4  tab:Browse
+tab:Library/key:Ctrl+5  tab:More
+tab:Library/key:Ctrl+F  focus:"Search library"
+tab:Library/key:Ctrl+Shift+U  db:mangas.favorite_modified_at job:library-update notification:"Library updated" toast:"Updating the library"
+tab:Library/tag:manga-item  unreached
+tab:Library/tag:manga-item #2  unreached
+tab:Library/tag:manga-item [action: More actions]  unreached
+tab:Library/tag:manga-item [action: More actions] #2  unreached
+tab:More/"About"  nav:more.SettingsScreen
+tab:More/"Browse"  tab:Browse
+tab:More/"Categories"  nav:category.CategoryScreen
+tab:More/"Data and storage"  nav:more.SettingsScreen
+tab:More/"Download queue"  nav:downloads.DownloadsScreen
+tab:More/"Downloaded only Filters all entries in your library"  pref:__APP_STATE_pref_downloaded_only
+tab:More/"Help"  browse:komikku-app.github.io
+tab:More/"History"  tab:History
+tab:More/"Incognito mode Pauses reading history"  pref:__APP_STATE_incognito_mode
+tab:More/"Library update errors"  nav:library.UpdateErrorsScreen
+tab:More/"Library"  tab:Library
+tab:More/"More"  selected-already
+tab:More/"Settings"  nav:more.SettingsScreen
+tab:More/"Statistics"  nav:stats.StatsScreen
+tab:More/"Updates"  tab:Updates
+tab:More/key:Ctrl+1  tab:Library
+tab:Updates/"Browse"  tab:Browse
+tab:Updates/"Downloads"  nav:downloads.DownloadsScreen
+tab:Updates/"Filter"  dialog:"Filter"
+tab:Updates/"History"  tab:History
+tab:Updates/"Library"  tab:Library
+tab:Updates/"More"  tab:More
+tab:Updates/"Update library"  db:mangas.favorite_modified_at job:library-update notification:"Library updated"
+tab:Updates/"Updates"  selected-already
+tab:Updates/"View Upcoming Updates"  nav:upcoming.UpcomingScreen

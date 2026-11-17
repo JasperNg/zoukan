@@ -20,6 +20,9 @@ class ReaderActions {
     var zoomOut: () -> Unit = {}
     var zoomReset: () -> Unit = {}
 
+    /** The current page's zoom, 1 when not zoomed: what the zoom keys change, for the reader's [ReaderKeys.State]. */
+    var zoom: () -> Float = { 1f }
+
     /** Smooth auto scroll: scrolls a window's height over the given milliseconds; null where pages turn instead */
     var smoothScroll: ((Long) -> Unit)? = null
 }

@@ -64,7 +64,7 @@ import kotlin.time.Duration.Companion.minutes
  *   multi-select and text setting saves a new value that reads back from its SharedPreferences.
  *
  * It needs the network only to download the extensions. The report goes to
- * `<data>/reports/extensions-wiring-<platform>.md`.
+ * `<data>/reports/extensions-wiring-<store>-<platform>.md`.
  */
 class ExtensionWiringCheck(
     private val dirs: ZoukanDirs,
@@ -75,6 +75,8 @@ class ExtensionWiringCheck(
 ) {
     data class Options(
         val storeUrl: String = CompatibilityHarness.DEFAULT_STORE,
+        /** Names the store in the report and trace files (see [CompatibilityHarness.Options.storeId]). */
+        val storeId: String = CompatibilityHarness.KEIYOUSHI.id,
         /** Package names, with or without the eu.kanade.tachiyomi.extension. prefix. Empty means all. */
         val packages: List<String> = emptyList(),
         val skipNsfw: Boolean = false,
@@ -82,6 +84,8 @@ class ExtensionWiringCheck(
         val parallelism: Int = 6,
         /** Package names (as [packages]) to leave out. */
         val exclude: List<String> = emptyList(),
+        /** Fails the run when the store lists fewer extensions (a moved or emptied store). */
+        val minExtensions: Int = 0,
     )
 
     /** One extension's result. Each list holds the problems found by that check. */
@@ -118,7 +122,7 @@ class ExtensionWiringCheck(
     private val loaders = ConcurrentHashMap<String, ExtensionClassLoader>()
 
     /** The stack trace of every failure, for finding what in the app is missing. */
-    private val traces = File(dirs.reports, "extensions-wiring-traces-${Platform.id}.txt")
+    private val traces = File(dirs.reports, "extensions-wiring-traces-${options.storeId}-${Platform.id}.txt")
 
     private fun trace(row: Row, step: String, e: Throwable) = synchronized(traces) {
         traces.appendText("== ${row.pkg} ($step)\n" + e.stackTraceToString().lines().take(40).joinToString("\n") + "\n\n")
@@ -130,6 +134,7 @@ class ExtensionWiringCheck(
         traces.writeText("")
         val store = storeService.fetch(options.storeUrl).getOrThrow()
         val available = storeService.getExtensions(store).getOrThrow()
+        CompatibilityHarness.checkStoreSize(options.storeUrl, available.size, options.minExtensions)
         fun names(list: List<String>) = list.map { if (it.startsWith(PREFIX)) it else PREFIX + it }.toSet()
         val excluded = names(options.exclude)
         val wanted = if (options.packages.isEmpty()) {
@@ -471,7 +476,7 @@ class ExtensionWiringCheck(
         report.line()
     }
 
-    fun reportFile(): File = File(dirs.reports, "extensions-wiring-${Platform.id}.md")
+    fun reportFile(): File = File(dirs.reports, "extensions-wiring-${options.storeId}-${Platform.id}.md")
 
     /** Who a missing API is for. */
     enum class GapKind(val title: String, val description: String) {

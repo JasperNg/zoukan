@@ -10,16 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -30,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
@@ -38,8 +36,14 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
+import zoukan.desktop.ui.common.RowSwitch
+import zoukan.desktop.ui.common.RowTriStateCheckbox
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
 import kotlin.math.roundToInt
@@ -116,7 +120,7 @@ fun SettingRow(
 @Composable
 fun SwitchSetting(title: String, subtitle: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     SettingRow(title, subtitle, enabled, onClick = { onChange(!checked) }, switched = checked) {
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        RowSwitch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
@@ -146,13 +150,13 @@ fun <T> ChoiceSetting(
                 Column(Modifier.verticalScrollWithBar()) {
                     choices.forEach { (choice, label) ->
                         Row(
-                            Modifier.fillMaxWidth().clickable {
+                            Modifier.fillMaxWidth().radioRow(choice == value) {
                                 open = false
                                 onChoose(choice)
                             }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(selected = choice == value, onClick = null)
+                            RowRadioButton(selected = choice == value, onClick = null)
                             Spacer(Modifier.width(12.dp))
                             Text(label)
                         }
@@ -187,6 +191,8 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
             onValueChangeFinished = { preference.set(value.roundToInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = (range.last - range.first - 1).coerceAtLeast(0),
+            // The title above names the slider for screen readers (and the button crawl)
+            modifier = Modifier.semantics { contentDescription = title },
         )
     }
 }
@@ -220,10 +226,10 @@ fun MultiSelectPreference(
                 Column(Modifier.verticalScrollWithBar()) {
                     choices.forEach { (key, label) ->
                         Row(
-                            Modifier.fillMaxWidth().clickable { chosen = if (key in chosen) chosen - key else chosen + key }.padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().checkRow(key in chosen) { chosen = if (key in chosen) chosen - key else chosen + key }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(checked = key in chosen, onCheckedChange = null)
+                            RowCheckbox(checked = key in chosen, onCheckedChange = null)
                             Spacer(Modifier.width(12.dp))
                             Text(label)
                         }
@@ -303,7 +309,7 @@ fun CategoriesIncludeExcludeDialog(
                         else -> ToggleableState.Off
                     }
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().triStateToggleable(state = state, role = Role.Checkbox) {
                             when (state) {
                                 ToggleableState.Off -> inc = inc + id
                                 ToggleableState.On -> {
@@ -315,7 +321,7 @@ fun CategoriesIncludeExcludeDialog(
                         }.padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        TriStateCheckbox(state = state, onClick = null)
+                        RowTriStateCheckbox(state = state, onClick = null)
                         Spacer(Modifier.width(12.dp))
                         Text(categoryName(category))
                         if (state == ToggleableState.Indeterminate) {

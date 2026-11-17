@@ -45,6 +45,7 @@ import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -76,6 +77,12 @@ class DownloadManager(
     private val getManga: GetManga,
     private val getChapter: GetChapter,
     private val getCategories: GetCategories,
+    /**
+     * The other entries whose downloads go to [Manga]'s folder, with their chapters (see
+     * [sharesDownloadFolder]); a delete keeps their chapters' files. Null looks them up in the
+     * database; tests without one pass their own.
+     */
+    coOwners: (suspend (Manga) -> List<Pair<Manga, List<Chapter>>>)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -85,6 +92,11 @@ class DownloadManager(
     // ZOUKAN -->
     // Not every test registers it; without it there is no data saver
     private val sourcePreferences by lazy { runCatching { Injekt.get<SourcePreferences>() }.getOrNull() }
+
+    /** [coOwners], or the database's; none when there is no database (tests that pass none). */
+    private val coOwnerLookup: (suspend (Manga) -> List<Pair<Manga, List<Chapter>>>)? by lazy {
+        coOwners ?: databaseCoOwners()
+    }
     // ZOUKAN <--
 
     private val _queue = MutableStateFlow<List<Download>>(emptyList())
@@ -108,28 +120,30 @@ class DownloadManager(
 
     /**
      * One lock per entry, shared by the clean-up and the download writer, so clean-up never deletes the
-     * files of a download that is starting or running. Never held for two entries at once.
+     * files of a download that is starting or running. Only the clean-up holds several at once (the
+     * owners of a shared folder), always taken in id order; nothing else holds more than one.
      */
     private val entryLocks = ConcurrentHashMap<Long, Mutex>()
-    private fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
+    internal fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
 
-    /** The file names in each manga folder, read once and kept up to date by this class */
-    private val cache = ConcurrentHashMap<File, Set<String>>()
+    /** What is in each entry's download folder, read once and checked again by its modified time */
+    internal val index = DownloadIndex()
+
+    /** How many folders were listed, for the benchmark. */
+    internal val foldersRead: Int get() = index.listingsRead
 
     // Downloaded chapters --------------------------------------------------------------------
 
-    /** When [cache] was last emptied, for the download cache renew interval. */
+    /** When [index] was last emptied, for the download cache renew interval. */
     @Volatile
     private var lastRenew = System.currentTimeMillis()
 
-    private fun namesIn(mangaDir: File): Set<String> {
-        renewIfDue()
-        return cache.getOrPut(mangaDir) { mangaDir.list()?.toHashSet().orEmpty() }
-    }
+    private val root: File get() = paths.downloadsRoot
 
     /**
-     * Reads the download folders again once "Download cache renew interval" (KMK) has passed, so
-     * files changed outside the app show up. "Manual" (-1) only renews from Reindex downloads.
+     * Reads the download folders again once "Download cache renew interval" (KMK) has passed. Folders
+     * are also checked by their modified time every few seconds (see [DownloadIndex]), so this is
+     * only an upper bound. "Manual" (-1) only renews from Reindex downloads.
      */
     private fun renewIfDue() {
         val hours = preferences.downloadCacheRenewInterval().get()
@@ -137,36 +151,101 @@ class DownloadManager(
         val now = System.currentTimeMillis()
         if (now - lastRenew < hours * 60L * 60 * 1000) return
         lastRenew = now
-        cache.clear()
+        index.clear()
         _changes.update { it + 1 }
     }
 
-    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
-    fun isDownloaded(manga: Manga, chapter: Chapter): Boolean {
-        val names = namesIn(paths.mangaDir(manga))
-        if (names.isEmpty()) return false
-        return paths.validChapterNames(chapter).any { it in names }
+    /**
+     * The chapter's download, a folder with files in it or a CBZ with bytes in it, in the entry's
+     * folder (or under the name the other non-ASCII setting gives it). Reads the folder on a cache
+     * miss: call off the UI thread (use [enqueueAll] from screen models).
+     */
+    fun findChapter(manga: Manga, chapter: Chapter): File? {
+        renewIfDue()
+        return findIn(root, dirsOf(manga), chapter)
     }
+
+    private fun findIn(root: File, dirs: List<File>, chapter: Chapter): File? {
+        val names = paths.chapterNameCandidates(chapter)
+        for (dir in dirs) {
+            index.findValid(root, dir, names)?.let { return File(dir, it) }
+        }
+        return null
+    }
+
+    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
+    fun isDownloaded(manga: Manga, chapter: Chapter): Boolean = findChapter(manga, chapter) != null
 
     /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
     fun downloadedIds(manga: Manga, chapters: List<Chapter>): Set<Long> {
-        val names = namesIn(paths.mangaDir(manga))
-        if (names.isEmpty()) return emptySet()
-        return chapters.filter { c -> paths.validChapterNames(c).any { it in names } }.mapTo(HashSet()) { it.id }
+        renewIfDue()
+        // The folders and the downloads folder once per entry, not per chapter
+        val root = root
+        val dirs = dirsOf(manga)
+        return chapters.filter { findIn(root, dirs, it) != null }.mapTo(HashSet()) { it.id }
     }
 
     /**
-     * How many chapters of [manga] are downloaded, for the library's download badge and filter.
+     * How many chapters of [manga] are downloaded, for the library's download badge and filter:
+     * folders with files and CBZs with bytes, a chapter with both counted once; unfinished
+     * downloads, covers and other files are not chapters.
      * Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models).
      */
-    fun downloadCount(manga: Manga): Int =
-        namesIn(paths.mangaDir(manga)).count { name ->
-            !name.endsWith(DownloadPaths.TMP_SUFFIX) && !name.startsWith(".") && NOT_CHAPTER.none { name.endsWith(it, ignoreCase = true) }
-        }
+    fun downloadCount(manga: Manga): Int {
+        renewIfDue()
+        val root = root
+        return dirsOf(manga).flatMapTo(HashSet()) { index.chapterKeys(root, it) }.size
+    }
 
-    /** Reads the entry's download folder on a cache miss: call off the UI thread (use [enqueueAll] from screen models). */
-    fun findChapter(manga: Manga, chapter: Chapter): File? =
-        if (isDownloaded(manga, chapter)) paths.findChapter(manga, chapter) else null
+    /**
+     * [downloadCount] of each of [mangas], for the library's badges and the statistics: the folders
+     * are read on several threads at once (the common pool, one per core), as a first read is mostly
+     * waiting for the disk. An entry whose folder cannot be read counts 0.
+     * Reads the folders on a cache miss: call off the UI thread.
+     */
+    fun downloadCounts(mangas: List<Manga>): Map<Long, Int> {
+        renewIfDue()
+        val counts = ConcurrentHashMap<Long, Int>()
+        mangas.distinctBy { it.id }.parallelStream().forEach { manga ->
+            counts[manga.id] = try {
+                downloadCount(manga)
+            } catch (e: RuntimeException) {
+                logcat(LogPriority.WARN, e) { "Counting the downloads of ${manga.ogTitle} failed" }
+                0
+            }
+        }
+        return counts
+    }
+
+    /**
+     * Whether the downloads of [a] and [b] go to the same folder: sources with the same name and
+     * language, and titles that give the same folder name. Deleting one's chapters there could then
+     * delete the other's.
+     */
+    fun sharesDownloadFolder(a: Manga, b: Manga): Boolean {
+        fun keys(m: Manga) = paths.mangaDirs(m).mapTo(HashSet()) { index.key(root, it.parentFile.name) + "/" + index.key(root, it.name) }
+        return keys(a).any { it in keys(b) }
+    }
+
+    /**
+     * The entry's download folders ([DownloadPaths.mangaDirs]) as named on disk: a source or entry
+     * folder named in another Unicode form or case is the same folder (see [DownloadIndex.resolve]).
+     */
+    private fun dirsOf(manga: Manga): List<File> {
+        val root = root
+        return paths.mangaDirs(manga).map { index.resolve(root, it) }.distinct()
+    }
+
+    /** The names on disk of every copy of [chapter] in [dir], complete or not, unfinished ones included. */
+    private fun namesOnDisk(dir: File, chapter: Chapter): List<String> {
+        val candidates = paths.validChapterNames(chapter) +
+            paths.validChapterNames(chapter).map { it + DownloadPaths.TMP_SUFFIX }
+        return index.matching(root, dir, candidates)
+    }
+
+    /** [namesOnDisk] of each of [chapters]. */
+    private fun namesOnDisk(dir: File, chapters: List<Chapter>): Set<String> =
+        chapters.flatMapTo(HashSet()) { namesOnDisk(dir, it) }
 
     /**
      * Gives a downloaded chapter the name its new name or scanlator calls for, as Android's
@@ -177,19 +256,20 @@ class DownloadManager(
      * download keeps its old name and this returns false. True when renamed or nothing to rename.
      */
     fun renameChapter(manga: Manga, oldChapter: Chapter, newChapter: Chapter): Boolean {
-        val dir = paths.mangaDir(manga)
+        val dir = index.resolve(root, paths.mangaDir(manga))
         if (!dir.isDirectory) return true
         // Assume there's only 1 version of the chapter name formats present
-        val oldDownload = paths.validChapterNames(oldChapter).asSequence()
+        index.invalidate(dir)
+        val oldDownload = index.matching(root, dir, paths.validChapterNames(oldChapter))
             .map { File(dir, it) }
-            .firstOrNull { it.exists() } ?: return true
+            .firstOrNull { !it.name.endsWith(DownloadPaths.TMP_SUFFIX) } ?: return true
 
         var newName = paths.chapterDirName(newChapter)
         if (oldDownload.isFile && oldDownload.extension == "cbz") newName += ".cbz"
         if (oldDownload.name == newName) return true
 
         val target = File(dir, newName)
-        if (target.exists()) {
+        if (target.exists() && !runCatching { Files.isSameFile(oldDownload.toPath(), target.toPath()) }.getOrDefault(false)) {
             logcat(LogPriority.WARN) { "Not renaming ${oldDownload.name} to $newName: a download of that name exists" }
             return false
         }
@@ -244,43 +324,101 @@ class DownloadManager(
     /** Forgets what was read from disk, for example after the storage folder moved. */
     fun invalidateCache() {
         lastRenew = System.currentTimeMillis()
-        cache.clear()
+        index.clear()
         _changes.update { it + 1 }
     }
 
     private fun invalidate(mangaDir: File) {
-        cache.remove(mangaDir)
+        index.invalidate(mangaDir)
         _changes.update { it + 1 }
     }
 
+    /**
+     * Deletes the downloads of [chapters] (each name they may have, and unfinished downloads), then
+     * the entry's folder when nothing is left in it. Never touches other files.
+     *
+     * @throws zoukan.desktop.storage.StorageUnavailableException when the storage folder is missing
+     */
     suspend fun delete(manga: Manga, chapters: List<Chapter>) = withContext(Dispatchers.IO) {
+        paths.requireStorage()
         cancel(chapters.map { it.id }.toSet())
         // A cancelled download may still be writing its last file; delete after it stopped, or the
         // chapter would come back
         synchronized(lock) { stopping }?.join()
-        val dir = paths.mangaDir(manga)
-        chapters.forEach { chapter ->
-            paths.validChapterNames(chapter).forEach { name ->
-                File(dir, name).takeIf { it.exists() }?.deleteRecursively()
-            }
-            File(dir, paths.chapterDirName(chapter) + DownloadPaths.TMP_SUFFIX).takeIf { it.exists() }?.deleteRecursively()
-        }
-        if (dir.list()?.isEmpty() == true) dir.delete()
-        invalidate(dir)
+        val others = coOwnerChapters(manga, chapters)
+        entryLock(manga.id).withLock { deleteChapterFiles(manga, chapters, others) }
     }
 
     /**
-     * Deletes all of an entry's downloads and takes its chapters out of the queue, as Android's
-     * deleteManga(removeQueued = true), then the source's folder when it is left empty.
+     * The chapters of the other entries that share [manga]'s folder, read before any file is deleted;
+     * none when [chapters] have nothing on disk (no lookup then).
      */
-    suspend fun deleteManga(manga: Manga) = withContext(Dispatchers.IO) {
+    private suspend fun coOwnerChapters(manga: Manga, chapters: List<Chapter>): List<Chapter> {
+        val lookup = coOwnerLookup ?: return emptyList()
+        val anything = dirsOf(manga).any { dir -> dir.isDirectory && chapters.any { namesOnDisk(dir, it).isNotEmpty() } }
+        if (!anything) return emptyList()
+        return lookup(manga).filter { (other, _) -> other.id != manga.id }.flatMap { it.second }
+    }
+
+    /** The database's entries in [Manga]'s download folder, with their chapters; null without a database. */
+    private fun databaseCoOwners(): (suspend (Manga) -> List<Pair<Manga, List<Chapter>>>)? {
+        val mangas = try {
+            Injekt.get<tachiyomi.domain.manga.repository.MangaRepository>()
+        } catch (e: uy.kohesive.injekt.api.InjektionException) {
+            return null
+        }
+        val chapters = try {
+            Injekt.get<tachiyomi.domain.chapter.repository.ChapterRepository>()
+        } catch (e: uy.kohesive.injekt.api.InjektionException) {
+            return null
+        }
+        return { manga ->
+            // Sources with the same name and language share a folder
+            val sourceDir = paths.sourceDir(manga.source)
+            val sources = (sourceManager.getOnlineSources().map { it.id }.filter { paths.sourceDir(it) == sourceDir } + manga.source).distinct()
+            // The repository throws on a database error: the delete fails rather than guessing
+            sources.flatMap { mangas.getMangaBySourceId(it) }
+                .filter { it.id != manga.id && sharesDownloadFolder(manga, it) }
+                .map { it to chapters.getChapterByMangaId(it.id) }
+        }
+    }
+
+    /**
+     * Under the entry's lock: [chapters]' files in each of the entry's folders, then the folder if
+     * empty. A name a chapter of another entry in the folder ([others]) also has is that entry's
+     * download too (titles that give the same folder name, chapter names without the URL hash): kept.
+     */
+    private fun deleteChapterFiles(manga: Manga, chapters: List<Chapter>, others: List<Chapter> = emptyList()) {
+        dirsOf(manga).forEach { dir ->
+            index.invalidate(dir)
+            if (!dir.isDirectory) return@forEach
+            val keep = namesOnDisk(dir, others)
+            chapters.flatMap { namesOnDisk(dir, it) }.distinct().filter { it !in keep }.forEach { name ->
+                if (!SafeDelete.delete(root, File(dir, name), minDepth = 3)) {
+                    logcat(LogPriority.WARN) { "Could not delete the download $name of ${manga.title}" }
+                }
+            }
+            SafeDelete.deleteIfEmpty(root, dir, minDepth = 2)
+            invalidate(dir)
+        }
+    }
+
+    /**
+     * Deletes the downloads of [chapters], all of an entry's chapters, and takes them out of the
+     * queue, as Android's deleteManga(removeQueued = true). Unlike Android it deletes only those
+     * chapters' files (and unfinished downloads of them): an entry whose title gives the same folder
+     * name as another entry's, or files copied in by hand, are kept. The folder, and then the
+     * source's folder, go once empty.
+     *
+     * @throws zoukan.desktop.storage.StorageUnavailableException when the storage folder is missing
+     */
+    suspend fun deleteManga(manga: Manga, chapters: List<Chapter>) = withContext(Dispatchers.IO) {
+        paths.requireStorage()
         cancelSeries(manga.id)
         synchronized(lock) { stopping }?.join()
-        val dir = paths.mangaDir(manga)
-        dir.deleteRecursively()
-        val sourceDir = paths.sourceDir(manga.source)
-        if (sourceDir.list()?.isEmpty() == true) sourceDir.delete()
-        invalidate(dir)
+        val others = coOwnerChapters(manga, chapters)
+        entryLock(manga.id).withLock { deleteChapterFiles(manga, chapters, others) }
+        SafeDelete.deleteIfEmpty(root, paths.sourceDir(manga.source), minDepth = 1)
     }
 
     /**
@@ -308,6 +446,12 @@ class DownloadManager(
      * [chaptersToDelete]), each from the entry it belongs to, which for a merged entry is a child.
      */
     suspend fun deleteRead(chapters: List<Chapter>) {
+        // An automatic deletion: with the storage drive unplugged there is nothing to delete, and
+        // marking the chapters read must not fail because of it
+        if (!paths.isStorageAvailable) {
+            logcat(LogPriority.WARN) { "Not deleting read chapters: the storage folder is not available" }
+            return
+        }
         chapters.filter { it.read }.groupBy { it.mangaId }.forEach { (mangaId, list) ->
             val manga = getManga.await(mangaId) ?: return@forEach
             val toDelete = chaptersToDelete(manga, list).filter { isDownloaded(manga, it) || it.id in queuedIds() }
@@ -326,63 +470,283 @@ class DownloadManager(
 
     private fun queuedIds(): Set<Long> = _queue.value.mapTo(HashSet()) { it.chapter.id }
 
+    /** What "Clean up downloaded chapters" would delete, to show before anything is deleted. */
+    data class CleanupPlan(
+        val items: List<CleanupItem>,
+        /**
+         * Whether the downloads folder's volume has a system trash ([SafeDelete.canTrash]): what the
+         * preview says and what [applyCleanupResult] should be given, so the two always agree.
+         */
+        val toTrash: Boolean = false,
+        /** How the plan was made, to check each item again just before it is deleted; null checks nothing. */
+        val recheck: CleanupRecheck? = null,
+    ) {
+        val orphans: List<CleanupItem> get() = items.filter { it.reason == CleanupReason.ORPHAN_FOLDER }
+        val others: List<CleanupItem> get() = items.filter { it.reason != CleanupReason.ORPHAN_FOLDER }
+    }
+
+    /** The choices and the database reads a [CleanupPlan] was made with. */
+    class CleanupRecheck internal constructor(
+        internal val removeRead: Boolean,
+        internal val removeNonFavorite: Boolean,
+        internal val protectedIds: Set<Long>,
+        internal val allManga: suspend () -> List<Manga>,
+        internal val chaptersOf: suspend (Long) -> List<Chapter>,
+    )
+
     /**
-     * SY's "Clean up downloaded chapters" (Settings > Advanced). In each installed source's
-     * folder it deletes entry folders that belong to no entry and hold no chapter download that an
-     * entry of that source lacks in its own folder (a folder left under an old title is kept), then,
-     * per entry: everything when
-     * [removeNonFavorite] and the entry left the library, files that are no chapter of the entry
-     * and unfinished downloads, the read chapters when [removeRead], and the folder once no
-     * chapter is left. Entries with chapters in the queue are left alone.
+     * What [applyCleanupResult] did: [deleted] files and folders; [notDeleted] ones it tried and could
+     * not delete (or move to the trash), still on disk; [skipped] ones it left because they changed
+     * since the plan (read again, back in the library, queued, an orphan that has an entry now).
+     */
+    data class CleanupResult(val deleted: Int, val notDeleted: Int, val skipped: Int)
+
+    /**
+     * One file or folder a clean-up would delete. [owners] are the entries whose folder it is in
+     * (more than one when titles give the same folder name); empty for an orphaned folder.
+     */
+    data class CleanupItem(
+        val file: File,
+        val reason: CleanupReason,
+        val owners: Set<Long>,
+        val bytes: Long,
+    )
+
+    enum class CleanupReason {
+        /** An unfinished download (`_tmp`) */
+        UNFINISHED,
+
+        /** A read chapter, when "Delete read chapters" is ticked */
+        READ,
+
+        /** A chapter of an entry that left the library, when that option is ticked */
+        NOT_IN_LIBRARY,
+
+        /** A folder no entry of the database has; only deleted when the user ticks it */
+        ORPHAN_FOLDER,
+    }
+
+    /**
+     * SY's "Clean up downloaded chapters" (Settings > Advanced), first step: finds what it would
+     * delete and deletes nothing. Unlike SY it never plans to delete a file it does not know as a
+     * chapter of the entry (it may be the Android app's, in a shared folder); orphaned folders are
+     * listed for the user to tick; and a source folder whose source has no entry in the database is
+     * left alone (a fresh or restored database, or another app's downloads).
      *
-     * @return how many files and folders it deleted, as Android counts them
+     * Entries are grouped by folder, as two sources with the same name and language, or two entries
+     * with titles that give the same folder name, share one. Entries in [protectedIds] (the children
+     * of merged entries, which are not in the library themselves) never count as "not in library".
+     */
+    suspend fun planCleanup(
+        removeRead: Boolean,
+        removeNonFavorite: Boolean,
+        allManga: suspend () -> List<Manga>,
+        chaptersOf: suspend (Long) -> List<Chapter>,
+        protectedIds: Set<Long> = emptySet(),
+    ): CleanupPlan = withContext(Dispatchers.IO) {
+        paths.requireStorage()
+        val mangas = allManga()
+        val busy = _queue.value.mapTo(HashSet()) { it.manga.id }
+        val chapterCache = HashMap<Long, List<Chapter>>()
+        val knownChapters: suspend (Long) -> List<Chapter> = { id -> chapterCache.getOrPut(id) { chaptersOf(id) } }
+        // Every entry by the source folder its downloads go to: other sources (even ones not
+        // installed) whose folder has the same name count as owners too
+        val bySourceDir = mangas.groupBy { paths.sourceDir(it.source) }
+        val items = ArrayList<CleanupItem>()
+        sourceManager.getOnlineSources().map { paths.sourceDir(it.id) }.distinct().forEach { sourceDir ->
+            val sourceMangas = bySourceDir[sourceDir].orEmpty()
+            // Nothing in the database for this folder: it is not the desktop's to judge
+            if (sourceMangas.isEmpty()) return@forEach
+            // A linked folder (or a Windows junction) is not walked into: what it points to is not the desktop's
+            val folders = sourceDir.listFiles()
+                ?.filter { Files.isDirectory(it.toPath(), LinkOption.NOFOLLOW_LINKS) && !SafeDelete.isLink(it.toPath()) }
+                .orEmpty()
+            if (folders.isEmpty()) return@forEach
+            val byFolder = HashMap<String, MutableSet<Manga>>()
+            sourceMangas.forEach { m ->
+                paths.mangaDirNames(m.ogTitle).forEach { name -> byFolder.getOrPut(index.key(root, name)) { LinkedHashSet() } += m }
+            }
+            folders.forEach folder@{ folder ->
+                val owners = byFolder[index.key(root, folder.name)]?.toList()
+                if (owners == null) {
+                    // Not orphaned when it holds chapters of an entry whose folder has another name (the
+                    // source changed the title, and a download may have used the old one since)
+                    val owner = renamedOwner(folder, sourceMangas, knownChapters)
+                    if (owner != null) {
+                        logcat(LogPriority.WARN) { "Kept ${folder.name}: its chapters belong to ${owner.ogTitle}, whose folder has another name" }
+                    } else {
+                        items += CleanupItem(folder, CleanupReason.ORPHAN_FOLDER, emptySet(), sizeOf(folder))
+                    }
+                    return@folder
+                }
+                if (owners.any { it.id in busy }) return@folder
+                items += planFolder(folder, owners, knownChapters, removeRead, removeNonFavorite, protectedIds)
+            }
+        }
+        CleanupPlan(
+            items,
+            toTrash = SafeDelete.canTrash(root),
+            recheck = CleanupRecheck(removeRead, removeNonFavorite, protectedIds, allManga, chaptersOf),
+        )
+    }
+
+    /** The entries of [mangas] whose download folder is [folder] (a folder in a source's folder). */
+    private fun ownersOf(folder: File, mangas: List<Manga>): List<Manga> {
+        val key = index.key(root, folder.name)
+        return mangas.filter { m ->
+            paths.sourceDir(m.source) == folder.parentFile && paths.mangaDirNames(m.ogTitle).any { index.key(root, it) == key }
+        }
+    }
+
+    private suspend fun planFolder(
+        folder: File,
+        owners: List<Manga>,
+        chaptersOf: suspend (Long) -> List<Chapter>,
+        removeRead: Boolean,
+        removeNonFavorite: Boolean,
+        protectedIds: Set<Long>,
+    ): List<CleanupItem> {
+        index.invalidate(folder)
+        val ownerIds = owners.mapTo(LinkedHashSet()) { it.id }
+        val chapters = owners.flatMap { chaptersOf(it.id) }
+        val items = ArrayList<CleanupItem>()
+        // Unfinished downloads of any chapter, known or not: the queue of these entries is empty
+        index.names(root, folder).filter { it.endsWith(DownloadPaths.TMP_SUFFIX) }.forEach { name ->
+            items += CleanupItem(File(folder, name), CleanupReason.UNFINISHED, ownerIds, sizeOf(File(folder, name)))
+        }
+        val notInLibrary = removeNonFavorite && owners.all { !it.favorite && it.id !in protectedIds }
+        val toDelete: List<Chapter> = when {
+            notInLibrary -> chapters
+            removeRead -> chapters.filter { it.read }
+            else -> emptyList()
+        }
+        if (toDelete.isEmpty()) return items
+        // A name an unread chapter of another entry in this folder also has is that entry's too: kept
+        val keep = if (notInLibrary) {
+            emptySet()
+        } else {
+            namesOnDisk(folder, chapters.filterNot { it.read })
+        }
+        val reason = if (notInLibrary) CleanupReason.NOT_IN_LIBRARY else CleanupReason.READ
+        toDelete.flatMap { namesOnDisk(folder, it) }.distinct()
+            .filter { it !in keep && !it.endsWith(DownloadPaths.TMP_SUFFIX) }
+            .forEach { name -> items += CleanupItem(File(folder, name), reason, ownerIds, sizeOf(File(folder, name))) }
+        return items
+    }
+
+    /**
+     * Second step: deletes what [plan] lists, except orphaned folders not in [orphansToDelete], each
+     * through [SafeDelete], into the system trash when [toTrash] (a file that cannot go there is
+     * kept, never deleted for good). Entry folders left empty go too.
+     *
+     * Each item is checked again just before it goes, under the locks of all the entries in its
+     * folder: one whose entry was queued since, whose chapter is no longer read, whose entry is back
+     * in the library, or an orphaned folder that has an entry now, is left alone.
+     *
+     * @return how many files and folders it deleted
+     */
+    suspend fun applyCleanup(plan: CleanupPlan, orphansToDelete: Set<File> = emptySet(), toTrash: Boolean = false): Int =
+        applyCleanupResult(plan, orphansToDelete, toTrash).deleted
+
+    /** [applyCleanup], with what it could not delete and what it left because it changed. */
+    suspend fun applyCleanupResult(
+        plan: CleanupPlan,
+        orphansToDelete: Set<File> = emptySet(),
+        toTrash: Boolean = false,
+    ): CleanupResult = withContext(Dispatchers.IO) {
+        paths.requireStorage()
+        val recheck = plan.recheck
+        // The database as it is now, read once
+        val mangas = recheck?.allManga?.invoke()
+        var deleted = 0
+        var notDeleted = 0
+        var skipped = 0
+        plan.orphans.filter { it.file in orphansToDelete }.forEach { item ->
+            if (recheck != null && mangas != null && hasOwnerNow(item.file, mangas, recheck.chaptersOf)) {
+                logcat(LogPriority.WARN) { "Kept ${item.file.name}: an entry uses that folder now" }
+                skipped++
+                return@forEach
+            }
+            if (SafeDelete.delete(root, item.file, minDepth = 2, toTrash = toTrash)) deleted++ else notDeleted++
+            invalidate(item.file)
+        }
+        plan.others.groupBy { it.file.parentFile }.forEach { (folder, items) ->
+            val owners = mangas?.let { ownersOf(folder, it) }
+            val ids = (items.flatMap { it.owners } + owners.orEmpty().map { it.id }).distinct().sorted()
+            // The queue is read under the entries' locks, right before deleting: an entry queued since
+            // the plan is left alone, and a download of it waits for this to finish
+            withEntryLocks(ids) {
+                if (_queue.value.any { it.manga.id in ids }) {
+                    skipped += items.size
+                    return@withEntryLocks
+                }
+                // What the plan would list now, with each entry's library and read state read again
+                val still = if (recheck != null && owners != null) {
+                    if (owners.isEmpty()) {
+                        emptySet()
+                    } else {
+                        val chapters = HashMap<Long, List<Chapter>>()
+                        planFolder(
+                            folder,
+                            owners,
+                            { id -> chapters.getOrPut(id) { recheck.chaptersOf(id) } },
+                            recheck.removeRead,
+                            recheck.removeNonFavorite,
+                            recheck.protectedIds,
+                        ).mapTo(HashSet()) { it.file }
+                    }
+                } else {
+                    null
+                }
+                items.forEach { item ->
+                    if (still != null && item.file !in still) {
+                        logcat(LogPriority.INFO) { "Kept ${item.file.name}: it changed since the clean-up was planned" }
+                        skipped++
+                        return@forEach
+                    }
+                    if (SafeDelete.delete(root, item.file, minDepth = 3, toTrash = toTrash)) deleted++ else notDeleted++
+                }
+                if (SafeDelete.deleteIfEmpty(root, folder, minDepth = 2)) deleted++
+            }
+            invalidate(folder)
+        }
+        CleanupResult(deleted, notDeleted, skipped)
+    }
+
+    /** Runs [block] holding the entry locks of [ids], taken in the order given (ascending ids). */
+    private suspend fun withEntryLocks(ids: List<Long>, block: suspend () -> Unit) {
+        if (ids.isEmpty()) return block()
+        entryLock(ids.first()).withLock { withEntryLocks(ids.drop(1), block) }
+    }
+
+    /** Whether an orphaned [folder] planned for deletion is an entry's folder now (see [planCleanup]). */
+    private suspend fun hasOwnerNow(folder: File, mangas: List<Manga>, chaptersOf: suspend (Long) -> List<Chapter>): Boolean {
+        if (ownersOf(folder, mangas).isNotEmpty()) return true
+        val sourceMangas = mangas.filter { paths.sourceDir(it.source) == folder.parentFile }
+        return renamedOwner(folder, sourceMangas, chaptersOf) != null
+    }
+
+    /**
+     * Plans and runs a clean-up in one go, leaving orphaned folders alone (the settings screen shows
+     * the plan first, see [planCleanup] and [applyCleanup]).
+     *
+     * @return how many files and folders it deleted
      */
     suspend fun cleanup(
         removeRead: Boolean,
         removeNonFavorite: Boolean,
         allManga: suspend () -> List<Manga>,
         chaptersOf: suspend (Long) -> List<Chapter>,
-    ): Int = withContext(Dispatchers.IO) {
-        val mangas = allManga()
-        val busy = _queue.value.mapTo(HashSet()) { it.manga.id }
-        // Each entry's chapters read once for the folder-owner checks
-        val chapterCache = HashMap<Long, List<Chapter>>()
-        val knownChapters: suspend (Long) -> List<Chapter> = { id -> chapterCache.getOrPut(id) { chaptersOf(id) } }
-        var cleared = 0
-        sourceManager.getOnlineSources().forEach { source ->
-            val sourceDir = paths.sourceDir(source.id)
-            val folders = sourceDir.listFiles()?.filter { it.isDirectory }.orEmpty()
-            if (folders.isEmpty()) return@forEach
-            val sourceMangas = mangas.filter { it.source == source.id }
-            val byFolder = sourceMangas.associateBy { paths.mangaDirName(it.ogTitle) }
-            // Folders of no entry first, so their checks see each entry's folder before it is cleaned
-            folders.sortedBy { it.name in byFolder }.forEach folder@{ folder ->
-                val manga = byFolder[folder.name]
-                if (manga == null) {
-                    // Not orphaned when it holds chapters of an entry whose folder has another name (the
-                    // source changed the title, and a download may have used the old one since)
-                    val owner = renamedOwner(folder, sourceMangas, knownChapters)
-                    if (owner != null) {
-                        logcat(LogPriority.WARN) { "Kept ${folder.name}: its chapters belong to ${owner.ogTitle}, whose folder has another name" }
-                        return@folder
-                    }
-                    // Orphaned: no entry of this source has this folder
-                    cleared += 1 + (folder.list()?.size ?: 0)
-                    folder.deleteRecursively()
-                    invalidate(folder)
-                    return@folder
-                }
-                // The queue is read for this entry under its lock, right before deleting: an entry queued
-                // since the walk began is left alone, and a download of it waits for this to finish
-                if (manga.id in busy) return@folder
-                entryLock(manga.id).withLock {
-                    if (_queue.value.none { it.manga.id == manga.id }) {
-                        cleared += cleanupEntry(folder, manga, chaptersOf(manga.id), removeRead, removeNonFavorite)
-                    }
-                }
-            }
+    ): Int = applyCleanup(planCleanup(removeRead, removeNonFavorite, allManga, chaptersOf))
+
+    private fun sizeOf(file: File): Long = try {
+        Files.walk(file.toPath()).use { s ->
+            s.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }.mapToLong { it.toFile().length() }.sum()
         }
-        cleared
+    } catch (e: IOException) {
+        0L
+    } catch (e: java.io.UncheckedIOException) {
+        0L
     }
 
     /**
@@ -394,55 +758,14 @@ class DownloadManager(
         sourceMangas: List<Manga>,
         chaptersOf: suspend (Long) -> List<Chapter>,
     ): Manga? {
-        val names = folder.list()?.toHashSet().orEmpty()
-        if (names.isEmpty()) return null
+        index.invalidate(folder)
+        if (index.names(root, folder).isEmpty()) return null
         return sourceMangas.firstOrNull { manga ->
-            val own = paths.mangaDir(manga)
             // A copy of a chapter the entry's own folder also has is a leftover, not the only download
             chaptersOf(manga.id).any { chapter ->
-                val valid = paths.validChapterNames(chapter)
-                valid.any { it in names } && valid.none { File(own, it).exists() }
+                index.matching(root, folder, paths.validChapterNames(chapter)).isNotEmpty() && !isDownloaded(manga, chapter)
             }
         }
-    }
-
-    private fun cleanupEntry(
-        folder: File,
-        manga: Manga,
-        chapters: List<Chapter>,
-        removeRead: Boolean,
-        removeNonFavorite: Boolean,
-    ): Int {
-        if (removeNonFavorite && !manga.favorite) {
-            val count = 1 + (folder.list()?.size ?: 0)
-            folder.deleteRecursively()
-            invalidate(folder)
-            return count
-        }
-        val names = folder.list()?.toList().orEmpty()
-        val chapterNames = chapters.associateWith { paths.validChapterNames(it) }
-        val known = chapterNames.values.flatten().toHashSet()
-        val readNames = if (removeRead) chapters.filter { it.read }.flatMap { chapterNames.getValue(it) }.toHashSet() else emptySet()
-        val delete = names.filter { name ->
-            when {
-                name.endsWith(DownloadPaths.TMP_SUFFIX) -> true
-                // Covers, ComicInfo and such stay with the chapters
-                name.startsWith(".") || NOT_CHAPTER.any { name.endsWith(it, ignoreCase = true) } -> false
-                name !in known -> true
-                else -> name in readNames
-            }
-        }
-        delete.forEach { File(folder, it).deleteRecursively() }
-        var count = delete.size
-        val left = folder.list().orEmpty().filterNot { name ->
-            name.startsWith(".") || NOT_CHAPTER.any { name.endsWith(it, ignoreCase = true) }
-        }
-        if (left.isEmpty() && folder.exists()) {
-            folder.deleteRecursively()
-            count++
-        }
-        if (count > 0) invalidate(folder)
-        return count
     }
 
     // Queue -----------------------------------------------------------------------------------
@@ -541,9 +864,21 @@ class DownloadManager(
         scope.launch {
             // After the cancelled download let go of its files
             stopped?.join()
-            removed.forEach { d ->
-                val dir = paths.mangaDir(d.manga)
-                File(dir, paths.chapterDirName(d.chapter) + DownloadPaths.TMP_SUFFIX).deleteRecursively()
+            if (!paths.isStorageAvailable) return@launch
+            removed.groupBy { it.manga.id }.forEach { (id, downloads) ->
+                // Under the entry's lock, re-reading the queue: a chapter queued again since keeps its
+                // unfinished download, which the new download resumes
+                entryLock(id).withLock {
+                    val queued = _queue.value.mapTo(HashSet()) { it.chapter.id }
+                    downloads.filterNot { it.chapter.id in queued }.forEach { d ->
+                        val dir = index.resolve(root, paths.mangaDir(d.manga))
+                        val name = paths.chapterDirName(d.chapter)
+                        listOf(name + DownloadPaths.TMP_SUFFIX, "$name.cbz" + DownloadPaths.TMP_SUFFIX).forEach {
+                            SafeDelete.delete(root, File(dir, it), minDepth = 3)
+                        }
+                        invalidate(dir)
+                    }
+                }
             }
         }
         save()
@@ -666,11 +1001,15 @@ class DownloadManager(
         return try {
             val source = sourceManager.get(manga.source) as? HttpSource
                 ?: error("The source of ${manga.title} is not installed")
-            val dir = paths.mangaDir(manga)
+            // Nothing is created on the system disk when the chosen storage folder is unplugged
+            paths.requireStorage()
+            // The folder as named on disk, so a copy from macOS (NFD names) gets no second folder
+            val dir = index.resolve(root, paths.mangaDir(manga))
             // The gate is the disk, not the cache: a chapter copied in since the folder was listed
             // is kept as it is. The entry's lock keeps a clean-up away from the files being written.
             entryLock(manga.id).withLock {
-                if (paths.findChapter(manga, chapter) != null) {
+                dirsOf(manga).forEach { index.invalidate(it) }
+                if (findChapter(manga, chapter) != null) {
                     invalidate(dir)
                 } else {
                     val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
@@ -850,7 +1189,5 @@ class DownloadManager(
             }
             return if (full) localized(DMR.strings.download_disk_full) else e.message ?: e::class.simpleName.orEmpty()
         }
-
-        private val NOT_CHAPTER = listOf(".xml", ".json", ".jpg", ".jpeg", ".png", ".webp", ".txt")
     }
 }

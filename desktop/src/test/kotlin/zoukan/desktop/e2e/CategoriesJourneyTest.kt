@@ -2,6 +2,7 @@ package zoukan.desktop.e2e
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasTestTag
@@ -40,7 +41,7 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * Categories through the real UI, offline: Edit categories from Library > More (add, rename,
  * drag to reorder, hide, set the default, delete), putting an entry in a category from the
- * library selection, and the same screen from Settings > Library.
+ * library selection and taking it out again, and the same screen from Settings > Library.
  *
  *   ./gradlew :desktop:journeyTest --tests "*CategoriesJourneyTest"
  */
@@ -153,6 +154,25 @@ class CategoriesJourneyTest {
                     onAllNodesWithText("Shelf").onFirst().performClick()
                     waitOrDump("for the Shelf tab to list Alpha alone", 10_000) { items() == 1 }
                     shot("shelf-tab")
+                }
+
+                step("Change categories: unticking the entry's category takes it out") {
+                    val shelf = categories().single()
+                    val alpha = favorites.first { it.title == "Alpha" }
+                    onAllNodesWithText("Alpha").onFirst().performMouseInput { rightClick() }
+                    waitFor(hasText("Select"))
+                    onAllNodesWithText("Select").onFirst().performClick()
+                    waitFor(hasText("1 selected"))
+                    byDescription("Change categories").performClick()
+                    // The dialog starts from the entry's own categories: Shelf is ticked
+                    waitFor(hasText("Shelf") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On))
+                    onAllNodesWithText("Shelf").onLast().performClick()
+                    onAllNodesWithText("OK").onFirst().performClick()
+                    waitOrDump("for Alpha to leave Shelf", 10_000) { runBlocking { getCategories.await(alpha.id) }.isEmpty() }
+                    // The other entries were never in a category
+                    favorites.forEach { runBlocking { getCategories.await(it.id) }.map { c -> c.id } shouldBe emptyList() }
+                    waitOrDump("for the Shelf tab to empty", 10_000) { items() == 0 || onAllNodesWithText("Shelf").fetchSemanticsNodes().isEmpty() }
+                    categories().map { it.id } shouldBe listOf(shelf.id)
                 }
 
                 step("Edit categories opens from Settings > Library") {

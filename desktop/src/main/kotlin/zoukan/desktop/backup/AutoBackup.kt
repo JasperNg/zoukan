@@ -55,6 +55,9 @@ class AutoBackup(
 
     private suspend fun backUp(): File? {
         return try {
+            // A chosen storage folder that is missing (a disconnected drive) is never created on
+            // the system disk: the backup fails and the user is told
+            storage.requireAvailable()
             val folder = storage.autoBackups.apply { mkdirs() }
             val file = freeFile(folder, DesktopBackups.defaultFileName().removeSuffix(".tachibk"))
             DesktopBackups(androidDir).create(file, BackupOptions(), replaceExisting = false)

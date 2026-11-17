@@ -33,7 +33,10 @@ class DownloadRenameTest {
     private fun setup(): Pair<DownloadManager, DownloadPaths> {
         val source = mockk<Source> { every { this@mockk.toString() } returns "Fake (EN)" }
         val sourceManager = mockk<SourceManager> { every { getOrStub(7L) } returns source }
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)
@@ -101,7 +104,7 @@ class DownloadRenameTest {
         File(dir, "001.png").writeText("png")
         manager.isDownloaded(manga, chapter("Ch. 3")) shouldBe true
 
-        kotlinx.coroutines.runBlocking { manager.deleteManga(manga) }
+        kotlinx.coroutines.runBlocking { manager.deleteManga(manga, listOf(chapter("Ch. 3"))) }
 
         paths.mangaDir(manga).exists() shouldBe false
         paths.sourceDir(7L).exists() shouldBe false

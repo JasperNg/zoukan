@@ -34,6 +34,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,12 +47,16 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.backup.SnapshotFailedPrompt
+import zoukan.desktop.backup.SnapshotReason
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -138,6 +143,8 @@ object ClearDatabaseScreen : Screen {
 class ClearDatabaseScreenModel(
     private val handler: DatabaseHandler = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
+    private val snapshot: SafetySnapshot = SafetySnapshot.forApp(),
+    private val snapshotPrompt: SnapshotFailedPrompt = SnapshotFailedPrompt { snapshotFailedPrompt.continueWithout(it) },
 ) : StateScreenModel<ClearDatabaseScreenModel.State>(State()) {
 
     data class Item(val id: Long, val name: String, val count: Long)
@@ -173,12 +180,18 @@ class ClearDatabaseScreenModel(
 
     fun confirm(show: Boolean) = mutableState.update { it.copy(confirming = show) }
 
-    /** Clears the selected sources' entries; a failure is shown as an error instead of closing the app. */
+    private var deleting: Job? = null
+
+    /**
+     * Clears the selected sources' entries, after a safety backup (or the user's go-ahead without
+     * one); a failure is shown as an error instead of closing the app.
+     */
     fun delete(keepReadManga: Boolean) {
         val selection = state.value.selection.toList()
-        if (selection.isEmpty()) return
-        screenModelScope.launch {
+        if (selection.isEmpty() || deleting?.isActive == true) return
+        deleting = screenModelScope.launch {
             try {
+                if (!snapshot.guard(SnapshotReason.CLEAR_DATABASE, snapshotPrompt)) return@launch
                 withContext(Dispatchers.IO + NonCancellable) {
                     handler.await(inTransaction = true) {
                         mangasQueries.deleteNonLibraryManga(selection, if (keepReadManga) 1L else 0L)

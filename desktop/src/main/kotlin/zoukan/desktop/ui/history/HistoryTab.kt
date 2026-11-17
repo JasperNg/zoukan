@@ -26,10 +26,8 @@ import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -94,6 +92,8 @@ import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.RATIO_SWITCH_TO_PANORAMA
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowSwitch
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.SelectionBar
@@ -487,7 +487,7 @@ internal fun RemoveDialog(items: List<HistoryWithRelations>, onRemove: (wholeEnt
                     Modifier.fillMaxWidth().checkRow(wholeEntry) { wholeEntry = it },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = wholeEntry, onCheckedChange = null)
+                    RowCheckbox(checked = wholeEntry, onCheckedChange = null)
                     Text(if (one) localized(DMR.strings.remove_every_chapter_of_this_entry) else localized(DMR.strings.remove_every_chapter_of_these_entries))
                 }
             }
@@ -530,7 +530,7 @@ private fun HistoryFilterDialog(preferences: HistoryPreferences, onDismiss: () -
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(localized(KMR.strings.action_panorama_cover), modifier = Modifier.weight(1f))
-                    Switch(checked = on, onCheckedChange = null)
+                    RowSwitch(checked = on, onCheckedChange = null)
                 }
             }
         },

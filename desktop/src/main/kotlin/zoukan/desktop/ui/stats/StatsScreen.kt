@@ -42,6 +42,7 @@ import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetReadMangaNotInLibraryView
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
@@ -108,14 +109,10 @@ class StatsScreenModel(
         val entries = getLibraryManga.await() + if (allRead) getReadMangaNotInLibraryView.await() else emptyList()
         val library = entries.distinctBy { it.id }
         val loggedIn = trackerManager.loggedInTrackers()
-        val loggedInIds = loggedIn.mapTo(HashSet()) { it.id }
-        val tracks = getTracks.await(library.map { it.id })
-            .mapValues { (_, list) -> list.filter { it.trackerId in loggedInIds } }
-        val scores = tracks.values.mapNotNull { list ->
-            list.filter { it.score > 0.0 }
-                .map { trackerManager.get(it.trackerId)!!.get10PointScore(it) }
-                .takeIf { it.isNotEmpty() }?.average()
-        }.filterNot { it.isNaN() }
+        val trackers = trackerFigures(
+            getTracks.await(library.map { it.id }),
+            loggedIn.mapTo(HashSet()) { it.id },
+        ) { trackerManager.get(it.trackerId)!!.get10PointScore(it) }
         return Stats(
             libraryCount = library.size,
             completedCount = library.count { it.manga.status.toInt() == SManga.COMPLETED && it.unreadCount == 0L },
@@ -126,8 +123,8 @@ class StatsScreenModel(
             totalChapters = library.sumOf { it.totalChapters }.toInt(),
             readChapters = library.sumOf { it.readCount }.toInt(),
             downloadedChapters = countDownloadedChapters(library.map { it.manga }, downloadManager),
-            trackedCount = tracks.count { it.value.isNotEmpty() },
-            meanScore = if (scores.isEmpty()) Double.NaN else scores.average(),
+            trackedCount = trackers.trackedCount,
+            meanScore = trackers.meanScore,
             trackerCount = loggedIn.size,
         )
     }
@@ -149,9 +146,28 @@ class StatsScreenModel(
     }
 }
 
+/** The Services figures: tracked entries and their mean score out of 10 (NaN when none is scored). */
+internal data class TrackerFigures(val trackedCount: Int, val meanScore: Double)
+
+/**
+ * As Android's StatsScreenModel: only tracks of logged-in trackers count; an entry is tracked
+ * when it has one; the mean is over entries with a scored track, each the average of its scored
+ * tracks on [score10]'s 10-point scale.
+ */
+internal fun trackerFigures(tracks: Map<Long, List<Track>>, loggedInIds: Set<Long>, score10: (Track) -> Double): TrackerFigures {
+    val counted = tracks.mapValues { (_, list) -> list.filter { it.trackerId in loggedInIds } }
+    val scores = counted.values.mapNotNull { list ->
+        list.filter { it.score > 0.0 }.map(score10).takeIf { it.isNotEmpty() }?.average()
+    }.filterNot { it.isNaN() }
+    return TrackerFigures(
+        trackedCount = counted.count { it.value.isNotEmpty() },
+        meanScore = if (scores.isEmpty()) Double.NaN else scores.average(),
+    )
+}
+
 /** Downloaded chapters of [library]. */
 internal fun countDownloadedChapters(library: List<Manga>, downloadManager: DownloadManager): Int =
-    library.sumOf { downloadManager.downloadCount(it) }
+    downloadManager.downloadCounts(library).values.sum()
 
 object StatsScreen : Screen {
     private fun readResolve(): Any = StatsScreen

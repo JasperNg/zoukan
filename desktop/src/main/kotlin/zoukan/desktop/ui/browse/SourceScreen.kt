@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -52,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
@@ -74,9 +75,11 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
@@ -370,19 +373,26 @@ private fun FilterItem(filter: Filter<*>, version: Int, onChange: () -> Unit, st
         )
         is Filter.Separator -> HorizontalDivider(Modifier.padding(vertical = 4.dp))
         is Filter.CheckBox -> Row(
-            Modifier.fillMaxWidth().toggleable(filter.state, onValueChange = {
+            Modifier.fillMaxWidth().checkRow(filter.state, onChange = {
                 filter.state = it
                 onChange()
             })
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(checked = filter.state, onCheckedChange = null)
+            RowCheckbox(checked = filter.state, onCheckedChange = null)
             Spacer(Modifier.width(8.dp))
             Text(filter.name)
         }
         is Filter.TriState -> Row(
-            Modifier.fillMaxWidth().clickable {
+            Modifier.fillMaxWidth().triStateToggleable(
+                state = when (filter.state) {
+                    Filter.TriState.STATE_INCLUDE -> ToggleableState.On
+                    Filter.TriState.STATE_EXCLUDE -> ToggleableState.Indeterminate
+                    else -> ToggleableState.Off
+                },
+                role = Role.Checkbox,
+            ) {
                 filter.state = (filter.state + 1) % 3
                 onChange()
             }.padding(horizontal = 16.dp, vertical = 8.dp),

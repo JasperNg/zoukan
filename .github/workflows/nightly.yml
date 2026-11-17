@@ -168,7 +168,7 @@ jobs:
           $failed
 
           Where to look (artifacts nightly-windows-latest, nightly-macos-latest, nightly-screenshots):
-          - Our side: unit tests (nightly/unit-tests), journeys (reports/journeys), the "Missing APIs" section of e2e/extensions-wiring.md, screenshot diffs (reports/screenshots).
+          - Our side: unit tests (nightly/unit-tests), journeys (reports/journeys), the "Missing APIs" section of e2e/extensions-wiring-keiyoushi.md and e2e/extensions-wiring-yuzono.md, screenshot diffs (reports/screenshots).
           - Possibly the site: EndToEndReadTest / EndToEndDownloadTest and extension download errors. Re-run once before treating these as ours.
           EOF
           )

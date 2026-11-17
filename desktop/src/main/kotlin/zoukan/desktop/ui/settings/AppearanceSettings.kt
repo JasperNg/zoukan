@@ -300,11 +300,11 @@ private fun ColorPickerDialog(initial: Color, onDismiss: () -> Unit, onPick: (Co
                 Box(Modifier.fillMaxWidth().height(56.dp).clip(Corners.Large).background(color))
                 Spacer(Modifier.height(12.dp))
                 Text(localized(DMR.strings.hue), style = MaterialTheme.typography.labelMedium)
-                Slider(hue, { hue = it }, valueRange = 0f..1f)
+                Slider(hue, { hue = it }, Modifier.semantics { contentDescription = localized(DMR.strings.hue) }, valueRange = 0f..1f)
                 Text(localized(DMR.strings.saturation), style = MaterialTheme.typography.labelMedium)
-                Slider(saturation, { saturation = it }, valueRange = 0f..1f)
+                Slider(saturation, { saturation = it }, Modifier.semantics { contentDescription = localized(DMR.strings.saturation) }, valueRange = 0f..1f)
                 Text(localized(DMR.strings.brightness), style = MaterialTheme.typography.labelMedium)
-                Slider(value, { value = it }, valueRange = 0f..1f)
+                Slider(value, { value = it }, Modifier.semantics { contentDescription = localized(DMR.strings.brightness) }, valueRange = 0f..1f)
                 OutlinedTextField(
                     hex,
                     { text ->

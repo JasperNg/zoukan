@@ -27,6 +27,7 @@ import zoukan.desktop.Platform
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
@@ -35,7 +36,6 @@ import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.UpdateStates
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
-import kotlin.system.exitProcess
 
 /** Settings > About: version, updates, the log file and crash logs (Phase 7). */
 fun LazyListScope.aboutSettings() {
@@ -137,7 +137,7 @@ private fun UpdateRow() {
                 }
             }
             is UpdateStates.State.Downloaded -> TextButton(onClick = {
-                runCatching { Updates.install(s.file) { exitApp(0) } }
+                runCatching { SystemEffects.current.installUpdate(s.file) { exitApp(0) } }
                     .onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_installer), it) }
             }) { Text(localized(MR.strings.action_install)) }
             else -> Unit
@@ -197,5 +197,5 @@ private fun browse(url: String) {
 /** Exits for the update install: the built-in browser windows are disposed like at any quit. */
 private fun exitApp(code: Int) {
     runCatching { BrowserWindow.disposeAllForQuit() }
-    exitProcess(code)
+    SystemEffects.current.exit(code)
 }

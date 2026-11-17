@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
@@ -32,6 +32,8 @@ import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
@@ -111,6 +113,10 @@ object ReaderSettingRows {
             navigationModePager,
             pagerNavInverted,
             zoomStart,
+            // Where Android's Settings page has them: crop borders after zoom start, and page
+            // layout (SY's fork group there) before the center margin
+            cropBorders,
+            pageLayout,
             centerMargin,
             dualPageSplitPaged,
             dualPageInvertPaged,
@@ -125,6 +131,7 @@ object ReaderSettingRows {
             webtoonNavInverted,
             webtoonScaleType,
             longStripGapSmartScale,
+            cropBordersWebtoon,
             dualPageSplitWebtoon,
             dualPageInvertWebtoon,
             dualPageRotateToFitWebtoon,
@@ -379,7 +386,7 @@ private fun <T> ChoiceRow(row: ReaderSettingRow.Choice<T>, inline: Boolean) {
 fun <T> RadioChoices(selected: T, choices: List<Pair<T, String>>, onSelect: (T) -> Unit) {
     choices.forEach { (value, label) ->
         Row(Modifier.fillMaxWidth().radioRow(selected == value) { onSelect(value) }, verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected == value, onClick = null)
+            RowRadioButton(selected == value, onClick = null)
             Text(label)
         }
     }
@@ -402,6 +409,7 @@ internal fun FlashDurationPreference(preferences: DesktopPreferences) {
             onValueChangeFinished = { pref.set(steps.roundToInt() * 100) },
             valueRange = 1f..15f,
             steps = 13,
+            modifier = Modifier.semantics { contentDescription = localized(MR.strings.pref_flash_duration) },
         )
     }
 }
@@ -418,7 +426,7 @@ private fun BottomButtonsRow(prefs: DesktopPreferences) {
         val on = value in buttons
         val toggle = { prefs.readerBottomButtons().set(if (on) buttons - value else buttons + value) }
         Row(Modifier.fillMaxWidth().checkRow(on) { toggle() }.padding(horizontal = Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(on, onCheckedChange = null)
+            RowCheckbox(on, onCheckedChange = null)
             Text(label)
         }
     }
@@ -433,6 +441,7 @@ private fun AutoScrollIntervalRow(prefs: DesktopPreferences) {
             value = interval,
             onValueChange = { prefs.autoscrollInterval().set((it * 2).roundToInt() / 2f) },
             valueRange = 0.5f..30f,
+            modifier = Modifier.semantics { contentDescription = localized(DMR.strings.every_seconds_a_starts_and_stops, "%.1f".format(interval)) },
         )
     }
 }
@@ -446,6 +455,7 @@ private fun BrightnessRow(prefs: DesktopPreferences) {
             value = value.toFloat(),
             onValueChange = { prefs.customBrightnessValue().set(it.roundToInt()) },
             valueRange = -75f..100f,
+            modifier = Modifier.semantics { contentDescription = localized(DMR.strings.brightness) },
         )
     }
 }
@@ -473,6 +483,7 @@ private fun ColorFilterRow(prefs: DesktopPreferences) {
                     prefs.colorFilterValue().set((argb and (0xFF shl shift).inv()) or (c shl shift))
                 },
                 valueRange = 0f..255f,
+                modifier = Modifier.semantics { contentDescription = name },
             )
         }
     }

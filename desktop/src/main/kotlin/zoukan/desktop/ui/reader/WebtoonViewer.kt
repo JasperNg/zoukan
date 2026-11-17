@@ -50,6 +50,7 @@ import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.collectAsState
+import zoukan.desktop.ui.common.moreActions
 import zoukan.i18n.desktop.DMR
 
 /**
@@ -159,6 +160,7 @@ fun WebtoonViewer(
             actions.zoomIn = { zoom = (zoom * 1.2f).coerceAtMost(3f) }
             actions.zoomOut = { zoom = (zoom / 1.2f).coerceAtLeast(minZoom) }
             actions.zoomReset = { zoom = 1f }
+            actions.zoom = { zoom }
         }
         // ZOUKAN <--
 
@@ -217,6 +219,12 @@ fun WebtoonViewer(
                         event.changes.forEach { it.consume() }
                         pageAt(change.position.y)?.let { model.openPageActions(it) }
                     }
+                }
+                // The right-click's actions, for the page in the middle of the window, for screen
+                // readers, keyboard users and the button crawl
+                .moreActions {
+                    val info = listState.layoutInfo
+                    pageAt((info.viewportStartOffset + info.viewportEndOffset) / 2f)?.let { model.openPageActions(it) }
                 }
                 .pointerInput(doubleTapZoom) {
                     detectTapGestures(

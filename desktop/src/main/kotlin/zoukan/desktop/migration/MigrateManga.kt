@@ -155,6 +155,12 @@ class MigrateManga(
         // entry, which must still have its downloads
         if (MigrationFlag.REMOVE_DOWNLOAD in flags && replace) {
             try {
+                // The same folder (a source with the same name, the same title): its chapters are
+                // the target's downloads now, and deleting them would lose the target's
+                if (downloadManager.sharesDownloadFolder(current, target)) {
+                    logcat(LogPriority.INFO) { "Kept the downloads of ${current.title}: the new entry uses the same folder" }
+                    return
+                }
                 downloadManager.delete(current, getChaptersByMangaId.await(current.id))
             } catch (e: CancellationException) {
                 throw e

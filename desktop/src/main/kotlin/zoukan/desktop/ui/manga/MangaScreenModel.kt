@@ -95,6 +95,7 @@ class MangaScreenModel(
     private val desktopPreferences: Lazy<zoukan.desktop.app.DesktopPreferences> = injectLazy(),
     private val networkHelper: Lazy<NetworkHelper> = injectLazy(),
     private val downloadPaths: Lazy<zoukan.desktop.download.DownloadPaths> = injectLazy(),
+    private val getChaptersByMangaId: Lazy<tachiyomi.domain.chapter.interactor.GetChaptersByMangaId> = injectLazy(),
     private val getMergedMangaById: Lazy<tachiyomi.domain.manga.interactor.GetMergedMangaById> = lazy {
         tachiyomi.domain.manga.interactor.GetMergedMangaById(Injekt.get())
     },
@@ -103,6 +104,11 @@ class MangaScreenModel(
     },
     /** Scope of the work that outlives the screen */
     private val appScope: CoroutineScope = AppScope,
+    /** The backup written before Clear manga removes the chapters from the database */
+    private val safetySnapshot: zoukan.desktop.backup.SafetySnapshot = zoukan.desktop.backup.SafetySnapshot.forApp(),
+    private val snapshotPrompt: zoukan.desktop.backup.SnapshotFailedPrompt = zoukan.desktop.backup.SnapshotFailedPrompt {
+        zoukan.desktop.ui.common.snapshotFailedPrompt.continueWithout(it)
+    },
     // ZOUKAN <--
 ) : StateScreenModel<MangaScreenModel.State>(
     State(
@@ -191,6 +197,12 @@ class MangaScreenModel(
     }
 
     private var firstLoad = true
+
+    /**
+     * Bumped by each check of the downloads, so an older check that ends last is dropped. Before
+     * the init blocks: the entry can load (and check its downloads) before the constructor ends.
+     */
+    private val downloadedCheck = AtomicInteger()
 
     init {
         screenModelScope.launch {
@@ -294,9 +306,6 @@ class MangaScreenModel(
         }
     }
 
-    /** Bumped by each check of the downloads, so an older check that ends last is dropped. */
-    private val downloadedCheck = AtomicInteger()
-
     private fun updateDownloaded() {
         val manga = state.value.manga ?: return
         if (manga.source == LocalSource.ID) return
@@ -337,7 +346,8 @@ class MangaScreenModel(
 
     fun deleteDownloads(chapters: List<Chapter>) {
         val manga = state.value.manga ?: return
-        screenModelScope.launch {
+        // A failure (the storage drive unplugged) is shown and keeps the selection, as markRead does
+        screenModelScope.launchReporting({ localized(DMR.strings.screen_action_failed_delete_downloads) }) {
             byEntry(manga, chapters).forEach { (entry, list) -> downloadManager.delete(entry, list) }
             done(chapters)
         }
@@ -648,7 +658,7 @@ class MangaScreenModel(
                 try {
                     val dir = mangaFolder(manga) ?: return@withContext
                     if (!dir.isDirectory) return@withContext
-                    java.awt.Desktop.getDesktop().open(dir)
+                    zoukan.desktop.app.SystemEffects.current.openFolder(dir)
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e)
                     Toasts.show(localized(tachiyomi.i18n.kmk.KMR.strings.error_opening_folder))
@@ -680,31 +690,37 @@ class MangaScreenModel(
      */
     private fun deleteDownloadedData() {
         val manga = state.value.manga ?: return
+        // Read now: "Remove chapters" may take them out of the database while this runs
+        val shown = state.value.chapters
         appScope.launch {
             try {
                 if (manga.source == MERGED_SOURCE_ID) {
                     mergedEntries().forEach { (entry, _) ->
                         // A cancel stops before the next entry's folder, never keeps deleting
                         ensureActive()
-                        deleteDownloads(entry)
+                        deleteDownloads(entry, shown)
                     }
                 } else {
-                    deleteDownloads(manga)
+                    deleteDownloads(manga, shown)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                logcat(LogPriority.ERROR, e)
+                // The storage drive unplugged, a file that cannot be deleted: said, not only logged
+                logcat(LogPriority.ERROR, e) { "Deleting the downloads of ${manga.title} failed" }
+                Toasts.error(localized(DMR.strings.screen_action_failed_delete_downloads), e)
             }
         }
     }
 
     /** Android's DownloadManager.deleteManga: the queued chapters and the entry's folder. */
-    private suspend fun deleteDownloads(manga: Manga) {
+    private suspend fun deleteDownloads(manga: Manga, shown: List<Chapter>) {
         // A local entry's folder holds the user's own files: only deleteLocalFiles touches it
         if (manga.source == LocalSource.ID) return
+        // Only this entry's chapters are deleted: another entry may share the folder
+        val chapters = (shown.filter { it.mangaId == manga.id } + getChaptersByMangaId.value.await(manga.id)).distinctBy { it.id }
         // One entry's downloads are deleted whole: a cancel waits for this entry and stops before the next
-        withContext(NonCancellable) { downloadManager.deleteManga(manga) }
+        withContext(NonCancellable) { downloadManager.deleteManga(manga, chapters) }
     }
 
     /** The folders in the local source folder holding the user's own files for this entry (or its local parts). */
@@ -746,8 +762,11 @@ class MangaScreenModel(
 
     private fun removeChaptersDatabase() {
         val ids = state.value.chapters.map { it.id }
+        if (ids.isEmpty()) return
         appScope.launch {
             try {
+                // The chapters' read state and history go with them: a safety backup first, or the user's go-ahead
+                if (!safetySnapshot.guard(zoukan.desktop.backup.SnapshotReason.CLEAR_CHAPTERS, snapshotPrompt)) return@launch
                 deleteChapters.value.await(ids)
             } catch (e: CancellationException) {
                 throw e

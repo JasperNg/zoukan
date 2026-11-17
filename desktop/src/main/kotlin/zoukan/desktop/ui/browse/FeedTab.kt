@@ -50,6 +50,7 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -72,6 +73,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.common.EmptyScreen
@@ -153,9 +155,17 @@ class FeedScreenModel(
                     Row(feed, sourceManager.get(feed.source) as? CatalogueSource, feed.savedSearch?.let(searches::get))
                 }
                 val rows = if (sourceId == null) saved else fixedRows(sourceId) + saved
-                val known = state.value.results.keys
-                mutableState.update { it.copy(rows = rows) }
-                rows.filter { it.feed.id !in known }.forEach(::load)
+                // ZOUKAN -->
+                // A removed feed's result goes with it: the database can give its id to the next
+                // feed added, which must load its own titles, not show the removed one's
+                val previous = state.value.rows.orEmpty().associateBy { it.feed.id }
+                val ids = rows.mapTo(HashSet()) { it.feed.id }
+                mutableState.update { it.copy(rows = rows, results = it.results.filterKeys(ids::contains)) }
+                rows.filter { row ->
+                    val before = previous[row.feed.id]
+                    before == null || before.feed.source != row.feed.source || before.feed.savedSearch != row.feed.savedSearch
+                }.forEach(::load)
+                // ZOUKAN <--
             }
         }
     }
@@ -167,16 +177,37 @@ class FeedScreenModel(
         return listOfNotNull(row(LATEST_ROW, false).takeIf { source?.supportsLatest == true }, row(POPULAR_ROW, true))
     }
 
-    fun refresh() = state.value.rows.orEmpty().forEach(::load)
+    private var refreshReport: kotlinx.coroutines.Job? = null
 
-    private fun load(row: Row) {
-        val source = row.source ?: return mutableState.update {
-            it.copy(results = it.results + (row.feed.id to Result.Error(localized(DMR.strings.install_the_sources_extension_to_see))))
+    /**
+     * Loads every row again. A row that fails again shows the same error as before, so each failure
+     * is also toasted: otherwise a refresh that fails the same way looks like it did nothing.
+     */
+    fun refresh() {
+        val rows = state.value.rows.orEmpty()
+        val jobs = rows.mapNotNull(::load)
+        refreshReport?.cancel()
+        refreshReport = screenModelScope.launch {
+            jobs.joinAll()
+            val results = state.value.results
+            rows.forEach { row ->
+                (results[row.feed.id] as? Result.Error)?.let { Toasts.show("${localized(DMR.strings.could_not_load, row.title)}: ${it.message}") }
+            }
+        }
+    }
+
+    /** Starts loading [row]; returns the load, or null when the row's source is not installed. */
+    private fun load(row: Row): kotlinx.coroutines.Job? {
+        val source = row.source ?: run {
+            mutableState.update {
+                it.copy(results = it.results + (row.feed.id to Result.Error(localized(DMR.strings.install_the_sources_extension_to_see))))
+            }
+            return null
         }
         mutableState.update { it.copy(results = it.results + (row.feed.id to Result.Loading)) }
         // A refresh replaces the row's load still running, so an older result never lands last
         loads.remove(row.feed.id)?.cancel()
-        loads[row.feed.id] = screenModelScope.launch {
+        return screenModelScope.launch {
             val result = permits.withPermit {
                 try {
                     val page = withContext(Dispatchers.IO) {
@@ -202,7 +233,7 @@ class FeedScreenModel(
                 }
             }
             mutableState.update { it.copy(results = it.results + (row.feed.id to result)) }
-        }
+        }.also { loads[row.feed.id] = it }
     }
 
     fun add(sourceId: Long, savedSearch: Long?) {
@@ -285,7 +316,10 @@ fun FeedTab(model: FeedScreenModel) {
                 TooltipIconButton(Icons.AutoMirrored.Outlined.Sort, localized(DMR.strings.reorder_the_feed), onClick = { ordering = true })
             }
             // ZOUKAN <--
-            TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_webview_refresh), onClick = model::refresh)
+            // Android's feed has no refresh while it is empty: there is nothing to load again
+            if (rows.isNotEmpty()) {
+                TooltipIconButton(Icons.Outlined.Refresh, localized(MR.strings.action_webview_refresh), onClick = model::refresh)
+            }
             FilledTonalButton(onClick = { adding = true }) {
                 Icon(Icons.Outlined.Add, null)
                 Text(localized(MR.strings.action_add))
@@ -443,8 +477,9 @@ internal fun FeedRowHeader(title: String, fixed: Boolean, onOpen: (() -> Unit)?,
     Row(
         Modifier.fillMaxWidth()
             .clickable(enabled = onOpen != null) { onOpen?.invoke() }
-            // Android's long press on a feed row opens its actions: Delete
-            .onRightClick { if (!fixed) confirmRemove = true }
+            // Android's long press on a feed row opens its actions: Delete. Fixed rows (Latest,
+            // Popular) have none, so they get no right-click and no "More actions" for screen readers
+            .then(if (fixed) Modifier else Modifier.onRightClick { confirmRemove = true })
             .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
