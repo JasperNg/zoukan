@@ -477,8 +477,9 @@ internal fun FeedRowHeader(title: String, fixed: Boolean, onOpen: (() -> Unit)?,
     Row(
         Modifier.fillMaxWidth()
             .clickable(enabled = onOpen != null) { onOpen?.invoke() }
-            // Android's long press on a feed row opens its actions: Delete
-            .onRightClick { if (!fixed) confirmRemove = true }
+            // Android's long press on a feed row opens its actions: Delete. Fixed rows (Latest,
+            // Popular) have none, so they get no right-click and no "More actions" for screen readers
+            .then(if (fixed) Modifier else Modifier.onRightClick { confirmRemove = true })
             .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
