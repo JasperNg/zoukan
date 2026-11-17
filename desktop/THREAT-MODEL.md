@@ -259,9 +259,12 @@ Residual risk:
 
 ## Secrets at rest
 
-What touches the disk unencrypted is deliberately small. The accepted exceptions are automatic and
-safety backups (residual risk 4), logs (5), the built-in browser's profile (6) and a page set
-as a cover, for a moment (7).
+The database, preferences and the app's cookie store are encrypted, as are covers, the image
+cache and the chapter cache, and the HTTP cache is kept in memory only. What still touches the disk
+unencrypted is deliberately small. The accepted exceptions are automatic and safety backups
+(residual risk 4), logs and crash reports (5), the built-in browser's profile (6) and a page set
+as a cover, for a moment (7). On macOS the logs, crash reports and the disposable caches are kept
+out of Spotlight and Time Machine (5).
 
 Verified and trusted:
 
@@ -309,10 +312,23 @@ Residual risk:
    five of each kind are kept. Anyone who can read the data folder can read them, as with the
    logs (residual risk 5). Code: `desktop/.../backup/SafetySnapshot.kt`.
 5. **Logs and crash reports are plain text.** `logs/` holds the rolling log (4 files of 5 MB) and
-   `crashes/` holds crash and error reports (the stack trace and the end of the log, with sign-in
-   codes, tokens and passwords redacted) and copies of JVM crash files (without environment
-   variable values). Titles of what was read and file paths can appear there, also in incognito.
-   The crash dialog says so. Anyone who can read the data folder can read them.
+   `crashes/` holds crash and error reports (the stack trace and the end of the log) and copies of
+   JVM crash files (without environment variable values). Every line of the log, and every report,
+   has sign-in codes, tokens, passwords, API keys and `Bearer` values in `name=value` form redacted
+   (`CrashReporter.redact`, applied by the log's layout); cookies, other header values and tokens
+   in a URL's path are not recognised. A failed page load in the built-in browser logs only the
+   host. Once a JVM crash file (`hs_err_pid<n>.log`) in the temp or working folder has been copied,
+   the original, which holds environment variable values, is deleted; if the copy fails it is
+   kept. Titles of what was read, URLs and file paths can appear in the log, also in incognito.
+   The crash dialog says so. Anyone who can read the data folder can read them. On POSIX systems
+   the data folder is made `0700` at every start. On macOS these folders, `reports/` and the
+   caches (Coil's image cache, the chapter cache, FFmpeg's natives and the Android layer's cache
+   folder) take a `.noindex` name (`logs.noindex`, `crashes.noindex`, `reports.noindex`,
+   `cache/images.noindex`, `cache/archives.noindex`, `cache/javacpp.noindex`,
+   `android/android-compat/appdata/cache.noindex`), so Spotlight does not index them, and carry
+   Time Machine's exclusion (as `tmutil addexclusion` sets it), as does `updates/`. A profile with
+   the old names has them renamed at start; if a rename fails, the old folder is used for that
+   run. Code: `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
 6. **The built-in browser's profile is not encrypted.** `<cache>/cache/browser` is shared by the
    browser windows, the challenge windows and extensions' WebViews, and sits outside `FileCipher`.
    After the clean-up at start and at quit (Web and embedded Chromium) it still holds what sites

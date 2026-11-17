@@ -74,8 +74,28 @@ class ZoukanDirsTest {
             val dirs = ZoukanDirs.default(platform, null, { null }, "/home/someone")
             dirs.hasLocalRoot shouldBe false
             dirs.browserCache shouldBe File(dirs.root, "cache/browser")
-            dirs.archives shouldBe File(dirs.root, "cache/archives")
+            // On macOS the disposable caches take their `.noindex` names, in the data folder
+            val archives = if (platform == Platform.MACOS) "cache/archives.noindex" else "cache/archives"
+            dirs.archives shouldBe File(dirs.root, archives)
         }
+    }
+
+    @Test
+    fun `only macOS gives the disposable folders the noindex names, whatever this computer runs`() {
+        ZoukanDirs.default(Platform.MACOS, null, { null }, "/home/someone").hidesFromSpotlight shouldBe true
+        ZoukanDirs.default(Platform.LINUX, null, { null }, "/home/someone").hidesFromSpotlight shouldBe false
+        val windows = ZoukanDirs.default(Platform.WINDOWS, null, windowsEnv::get, home)
+        windows.hidesFromSpotlight shouldBe false
+        windows.images shouldBe File(windows.localRoot, "cache/images")
+    }
+
+    @Test
+    fun `a cache kept in the data folder keeps the noindex name on macOS`() {
+        val dirs = ZoukanDirs(File("/tmp/profile"), File("/tmp/profile-local"), hidesFromSpotlight = true)
+            .keepingInRoot(setOf(ZoukanDirs.IMAGES))
+        dirs.hidesFromSpotlight shouldBe true
+        dirs.images shouldBe File("/tmp/profile", "cache/images.noindex")
+        dirs.archives shouldBe File("/tmp/profile-local", "cache/archives.noindex")
     }
 
     @Test

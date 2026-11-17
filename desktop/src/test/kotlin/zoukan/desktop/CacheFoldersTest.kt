@@ -16,7 +16,8 @@ class CacheFoldersTest {
 
     private val roaming get() = File(temp, "Roaming/Zoukan")
     private val local get() = File(temp, "Local/Zoukan-local")
-    private fun windowsDirs() = ZoukanDirs(roaming, local)
+    // As on Windows: the caches keep their plain names (the `.noindex` names are macOS's)
+    private fun windowsDirs() = ZoukanDirs(roaming, local, hidesFromSpotlight = false)
 
     private val anotherVolume: (Path, Path) -> Unit = { from, to -> throw AtomicMoveNotSupportedException(from.toString(), to.toString(), "another volume") }
 

@@ -1,6 +1,7 @@
 package zoukan.desktop
 
 import java.io.File
+import java.util.Collections
 
 /**
  * Where Zoukan keeps its files.
@@ -20,14 +21,40 @@ import java.io.File
  * does not carry them ([CacheFolders] moves an older version's folders there). Covers stay in
  * [root]: `cache/covers/custom` holds the user's custom covers.
  *
+ * On macOS the disposable folders ([disposableFolders]: logs, crash reports, reports and the caches
+ * that hold fetched pages and images) end in `.noindex`, so Spotlight does not index them. A profile
+ * that has them under the old name gets them renamed on first use, see [DataFolderPrivacy.resolve].
+ * Folders with the user's data keep their names. macOS has no separate [localRoot], so
+ * [CacheFolders] never moves a `.noindex` folder.
+ *
  * @param keptInRoot caches (paths relative to both roots, see [LOCAL_CACHES]) that could not move
  * to [localRoot] and stay in [root] for this run
  */
-class ZoukanDirs(
+class ZoukanDirs internal constructor(
     val root: File,
     val localRoot: File = root,
     private val keptInRoot: Set<String> = emptySet(),
+    /** Whether the disposable folders take the `.noindex` names: on macOS. */
+    internal val hidesFromSpotlight: Boolean,
 ) {
+    constructor(root: File, localRoot: File = root) :
+        this(root, localRoot, emptySet(), hidesFromSpotlight = Platform.current == Platform.MACOS)
+
+    private val folderNotes = Collections.synchronizedList(mutableListOf<String>())
+
+    /** A disposable folder [name] in [parent], resolved (and renamed if needed) on first use. */
+    private fun disposable(parent: File, name: String): Lazy<File> = lazy { resolved(File(parent, name)) }
+
+    /** A disposable cache in [localRoot] (or [root], see [keptInRoot]), resolved on first use. */
+    private fun disposableLocal(relative: String): Lazy<File> = lazy { resolved(local(relative)) }
+
+    /** [plain], or on macOS its `.noindex` name, see [DataFolderPrivacy.resolve]. */
+    private fun resolved(plain: File): File = if (hidesFromSpotlight) {
+        DataFolderPrivacy.resolve(plain.parentFile, plain.name, plain.name + DataFolderPrivacy.NOINDEX, folderNotes::add)
+    } else {
+        plain
+    }
+
     val database = File(root, "zoukan.db")
     val extensions = File(root, "extensions")
     val android = File(root, "android")
@@ -38,34 +65,61 @@ class ZoukanDirs(
 
     /** Chromium's profile, shared by the browser windows and extensions' WebViews */
     val browserCache = local(BROWSER_PROFILE)
-    val reports = File(root, "reports")
+    val reports: File by disposable(root, "reports")
     val secrets = File(root, "secrets")
     val backups = File(root, "backups")
+
+    /** Covers: `custom/` holds the user's own covers, so this one keeps its name. */
     val covers = File(root, "cache/covers")
 
     /** Coil's disk cache: images fetched by address (extension icons, tracker covers, ...) */
-    val images = local(IMAGES)
+    val images: File by disposableLocal(IMAGES)
 
     /** FFmpeg's natives (AVIF and HEIF images), unpacked by JavaCPP */
-    val javacppCache = local(JAVACPP)
+    val javacppCache: File by disposableLocal(JAVACPP)
 
     /** The chapter cache: unpacked RAR, 7z and TAR chapters */
-    val archives = local(ARCHIVES)
+    val archives: File by disposableLocal(ARCHIVES)
+
+    /** The emulated Android app's cache folder (extensions' own cache files) */
+    val androidCache: File by disposable(File(android, "android-compat/appdata"), "cache")
 
     // Phase 7: the log file, crash reports and downloaded updates
-    val logs = File(root, "logs")
-    val crashes = File(root, "crashes")
+    val logs: File by disposable(root, "logs")
+    val crashes: File by disposable(root, "crashes")
     val updates = File(root, "updates")
 
+    /** Folders whose files can be lost without harm and that may hold private activity. */
+    internal val disposableFolders: List<File>
+        get() = listOf(images, archives, javacppCache, androidCache, logs, crashes, reports)
+
+    /** Keeps [note] for [takeFolderNotes]. */
+    internal fun recordFolderNote(note: String) {
+        folderNotes.add(note)
+    }
+
+    /** What resolving the folders could not do (a rename that failed), to log once logging is set up. */
+    internal fun takeFolderNotes(): List<String> = synchronized(folderNotes) {
+        folderNotes.toList().also { folderNotes.clear() }
+    }
+
+    /** Creates [root] alone. */
+    internal fun createRoot(): ZoukanDirs = apply {
+        root.mkdirs()
+    }
+
     fun create(): ZoukanDirs = apply {
-        listOf(root, extensions, android, browser, browserCache, reports).forEach { it.mkdirs() }
+        createRoot()
+        listOf(extensions, android, browser, browserCache, reports).forEach { it.mkdirs() }
     }
 
     /** Whether the caches have a folder of their own, outside [root]. */
     val hasLocalRoot: Boolean get() = localRoot.absoluteFile.normalize() != root.absoluteFile.normalize()
 
     /** These folders, with [relative] caches (of [LOCAL_CACHES]) kept in [root]. */
-    fun keepingInRoot(relative: Set<String>): ZoukanDirs = ZoukanDirs(root, localRoot, keptInRoot + relative)
+    fun keepingInRoot(relative: Set<String>): ZoukanDirs =
+        ZoukanDirs(root, localRoot, keptInRoot + relative, hidesFromSpotlight)
+            .also { copy -> takeFolderNotes().forEach(copy::recordFolderNote) }
 
     private fun local(relative: String) = File(if (relative in keptInRoot) root else localRoot, relative)
 
@@ -93,14 +147,16 @@ class ZoukanDirs(
          */
         internal fun default(platform: Platform, dataDirProperty: String?, env: (String) -> String?, home: String): ZoukanDirs {
             val override = dataDirProperty ?: env("ZOUKAN_DATA_DIR")
-            if (!override.isNullOrBlank()) return ZoukanDirs(File(override).absoluteFile)
+            val hides = platform == Platform.MACOS
+            if (!override.isNullOrBlank()) return ZoukanDirs(File(override).absoluteFile, hidesFromSpotlight = hides)
             return when (platform) {
                 Platform.WINDOWS -> ZoukanDirs(
                     root = File(env("APPDATA") ?: "$home\\AppData\\Roaming", "Zoukan"),
                     localRoot = File(env("LOCALAPPDATA").orEmpty().ifBlank { "$home\\AppData\\Local" }, "Zoukan-local"),
+                    hidesFromSpotlight = hides,
                 )
-                Platform.MACOS -> ZoukanDirs(File(home, "Library/Application Support/Zoukan"))
-                Platform.LINUX -> ZoukanDirs(File(env("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan"))
+                Platform.MACOS -> ZoukanDirs(File(home, "Library/Application Support/Zoukan"), hidesFromSpotlight = hides)
+                Platform.LINUX -> ZoukanDirs(File(env("XDG_DATA_HOME") ?: "$home/.local/share", "zoukan"), hidesFromSpotlight = hides)
             }
         }
 

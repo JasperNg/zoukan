@@ -238,6 +238,9 @@ that request on a loopback port with a random token (`<data>/zoukan.port`).
 | Errors | `<data>/crashes/error-*.txt`: an uncaught exception on a background thread; the app went on |
 | Unclean exits | `<data>/crashes/unclean-exit-*.txt`, or `jvm-crash-hs_err_pid*.log` when the JVM itself crashed |
 
+On macOS the folders are `<data>/logs.noindex` and `<data>/crashes.noindex`, which Spotlight does
+not index and Time Machine does not back up.
+
 A crash in the window or while starting writes a report, shows a dialog with its path and closes
 Zoukan. Each Zoukan process leaves a `<data>/logs/.running-<pid>` marker that its shutdown removes;
 when the next start finds one whose process is gone (killed, out of memory, a JVM crash), it says

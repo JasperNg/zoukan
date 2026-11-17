@@ -77,6 +77,11 @@ object ZoukanRuntime {
     }
 
     private fun boot(requested: ZoukanDirs, interactiveBrowser: Boolean) {
+        // Before the log file and the caches open anything: the disposable folders take
+        // their `.noindex` names and leave Time Machine on macOS, and the data folder becomes 0700
+        requested.createRoot()
+        DataFolderPrivacy.protect(requested) { note -> requested.recordFolderNote(note) }
+
         if (!LogcatLogger.isInstalled) {
             val debug = System.getProperty("zoukan.debug") == "true"
             LogcatLogger.install(Slf4jLogcatLogger(if (debug) LogPriority.DEBUG else LogPriority.INFO))
@@ -91,6 +96,10 @@ object ZoukanRuntime {
         // data folder), before anything opens them; one that cannot move is used where it is
         val dirs = CacheFolders.migrate(requested).create()
         this.dirs = dirs
+        // The folders this run uses, when the move kept some caches in the data folder (only where
+        // the caches have a folder of their own, so never on macOS; protect is safe to repeat)
+        if (dirs !== requested) DataFolderPrivacy.protect(dirs) { note -> dirs.recordFolderNote(note) }
+        (requested.takeFolderNotes() + dirs.takeFolderNotes()).forEach { note -> logcat(LogPriority.WARN) { note } }
 
         // FFmpeg's natives (AVIF and HEIF images) unpack into Zoukan's own cache, not ~/.javacpp
         if (System.getProperty("org.bytedeco.javacpp.cachedir") == null) {
@@ -105,7 +114,7 @@ object ZoukanRuntime {
             |android.app.packageName = "${DesktopAppModule.PACKAGE_NAME}"
             |android.app.debug = false
             |android.system.isDebuggable = false
-            |
+            |${androidCacheSetting(dirs)}
             """.trimMargin(),
         )
 
@@ -184,6 +193,16 @@ object ZoukanRuntime {
             KcefWebSettings.userAgentProvider = { DesktopBrowser.userAgent?.takeIf { it.isNotBlank() } }
             DesktopBrowser.userAgent?.takeIf { it.isNotBlank() }?.let { System.setProperty("http.agent", it) }
         }.onFailure { logcat(LogPriority.WARN, it) { "Could not set the user agent" } }
+    }
+
+    /**
+     * The emulated app's cache folder when it is not AndroidCompat's default (`.noindex` on macOS),
+     * as a server.conf line; empty otherwise, which leaves server.conf as before.
+     */
+    internal fun androidCacheSetting(dirs: ZoukanDirs): String {
+        if (!dirs.hidesFromSpotlight) return ""
+        val path = dirs.androidCache.absolutePath.replace("\\", "\\\\").replace("\"", "\\\"")
+        return "android.files.cacheDir = \"$path\""
     }
 
     /** Like Suwayomi's LooperThread: extensions and the WebView post to Android's main looper. */

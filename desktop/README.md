@@ -38,7 +38,7 @@ On Windows use `.\gradlew.bat` with the same arguments.
 [RELEASING.md](RELEASING.md) has the installers (an MSI for Windows x64 and a DMG for Apple
 Silicon, each with its own Java runtime), code signing and notarization, the clean-install checks,
 publishing a release, the update check (Settings > About) and where the log and crash logs go
-(`<data>/logs`, `<data>/crashes`).
+(`<data>/logs`, `<data>/crashes`; `logs.noindex` and `crashes.noindex` on macOS).
 
 ## Reader
 
