@@ -94,6 +94,36 @@ class ReleaseWorkflowTest {
     }
 
     @Test
+    fun `the PR gate is the fast set and the long checks run on Windows`() {
+        val ci = text(".github/workflows/ci.yml")
+        val problems = mutableListOf<String>()
+        val jobs = Regex("""(?m)^ {2}([\w-]+):\s*$""").findAll(ci.substringAfter("\njobs:\n")).map { it.groupValues[1] }.toList()
+        val gateNeeds = Regex("""(?m)^ {4}needs: \[([^\]]*)]""").find(job(ci, "pr-gate"))?.groupValues?.get(1).orEmpty()
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val missing = jobs - "pr-gate" - gateNeeds.toSet()
+        if (jobs.isEmpty() || gateNeeds.isEmpty()) problems += "ci.yml: could not read the jobs or the PR gate's needs"
+        if (missing.isNotEmpty()) problems += "ci.yml: PR gate does not need $missing, so they do not gate a merge or a release"
+        // The long checks run on a Windows machine before each merge (desktop/RELEASING.md), not on GitHub
+        for (task in listOf(":desktop:journeyTest", ":desktop:buttonCrawlTest", ":desktop:extensionWiringTest", ":desktop:nightlyCheck")) {
+            if (task in ci) problems += "ci.yml runs $task, a long check for a Windows machine"
+        }
+        val nightlyOn = text(".github/workflows/nightly.yml").substringAfter("\non:\n").substringBefore("\n\n")
+        for (trigger in listOf("schedule:", "pull_request:", "push:")) {
+            if (trigger in nightlyOn) problems += "nightly.yml starts on its own ($trigger); it is manual only"
+        }
+        if ("workflow_dispatch:" !in nightlyOn) problems += "nightly.yml cannot be started by hand"
+        val command = ":desktop:longChecks --continue"
+        for (doc in listOf("desktop/RELEASING.md", "desktop/TESTING.md")) {
+            if (command !in text(doc)) problems += "$doc does not give the pre-merge command `$command`"
+        }
+        val longChecks = text("desktop/build.gradle.kts").substringAfter("val longChecks by tasks.registering", "").substringBefore("\n}")
+        for (part in listOf("nightlyCheck", "buttonCrawlTest")) {
+            if (part !in longChecks) problems += "desktop/build.gradle.kts: longChecks does not run $part"
+        }
+        problems.shouldBeEmpty()
+    }
+
+    @Test
     fun `the release jobs self-test the installers they publish`() {
         val build = text(".github/workflows/desktop-build.yml")
         val problems = mutableListOf<String>()

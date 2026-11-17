@@ -1,22 +1,22 @@
-# The nightly tier: what the PR tier leaves out on purpose. On Windows and macOS it runs the
-# full build and unit tests, the offline journeys and the extension wiring check (nightlyCheck) and
-# the live end-to-end tests, which reach real sites. On ubuntu-24.04 it compares screenshots with
-# the committed goldens. Nothing is packaged or signed here; desktop-build.yml makes the installers.
-# Scheduled runs use the default branch.
+# The manual long tier: the long checks, on GitHub, when someone asks for them. On Windows and
+# macOS it runs the full build and unit tests, the offline journeys and the extension wiring check
+# (nightlyCheck) and the live end-to-end tests, which reach real sites. On ubuntu-24.04 it compares
+# screenshots with the committed goldens. Nothing is packaged or signed here; desktop-build.yml
+# makes the installers.
+#
+# It has no schedule and no pull request trigger, so it never starts on its own: the long checks
+# run on a Windows machine before each merge to master instead (`gradlew.bat :desktop:longChecks
+# --continue`, desktop/RELEASING.md). Start it by hand from the Actions tab (Run workflow) or with
+# `gh workflow run nightly.yml`.
 name: Nightly
 
 on:
-  schedule:
-    - cron: '0 18 * * *'   # 18:00 UTC, after the day's merges
   workflow_dispatch:
     inputs:
       notify:
         description: Open, update or close the nightly-failure issue for this run
         type: boolean
         default: false
-  # Changes to this file run it on their PR, as desktop-build.yml does for itself
-  pull_request:
-    paths: [.github/workflows/nightly.yml]
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -125,8 +125,8 @@ jobs:
   notify:
     name: Report to the nightly-failure issue
     needs: [nightly, screenshots]
-    # Scheduled runs always report; a dispatch reports only when asked; PR runs never do
-    if: always() && (github.event_name == 'schedule' || inputs.notify)
+    # Reports only when the dispatch asks for it
+    if: always() && inputs.notify
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:

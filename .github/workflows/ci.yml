@@ -4,7 +4,12 @@
 # Docs-only pull requests still run the workflow: the changes job finds that no code changed, the
 # heavy jobs are skipped and PR gate passes, so a required check never waits forever. The docs list
 # below must stay the same as desktop-build.yml's push paths-ignore, which stops docs-only merges
-# from releasing. The long and live checks run in nightly.yml.
+# from releasing.
+#
+# This is the fast set, and the release gate (desktop-build.yml calls it). The long checks (the
+# journeys, the button crawl and the extension wiring check) do not run on GitHub: they run on the
+# Windows machine before each merge to master, `gradlew.bat :desktop:longChecks --continue`
+# (desktop/RELEASING.md, "Before merging to master"). nightly.yml can still run them by hand.
 #
 # The end-to-end tests stay out of this workflow: they only run with -Pzoukan.e2e=true, because
 # they reach real extension sites. The installers are built by desktop-build.yml.
@@ -194,63 +199,6 @@ jobs:
             desktop/build/reports/usability/
           if-no-files-found: ignore
 
-  journeys:
-    name: Journeys (shard ${{ matrix.shard }}/3)
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: ./.github/actions/setup-zoukan
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
-      - run: xvfb-run -a ./gradlew :desktop:journeyTest -Pzoukan.shard=${{ matrix.shard }}/3
-      # journeyTest sets isFailOnNoMatchingTests = false for sharded runs, so check a shard ran tests
-      - name: The shard ran tests
-        shell: bash
-        run: ls desktop/build/test-results/journeyTest/TEST-*.xml
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        if: always()
-        with:
-          name: journeys-${{ matrix.shard }}
-          path: |
-            desktop/build/reports/journeys/
-            desktop/build/reports/tests/
-            desktop/build/test-results/
-          if-no-files-found: ignore
-
-  button-crawl:
-    name: Button crawl (shard ${{ matrix.shard }}/4)
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: ./.github/actions/setup-zoukan
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
-      - run: xvfb-run -a ./gradlew :desktop:buttonCrawlTest -Pzoukan.shard=${{ matrix.shard }}/4
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        if: always()
-        with:
-          name: button-crawl-${{ matrix.shard }}
-          path: |
-            desktop/build/reports/coverage/buttons.md
-            desktop/build/reports/coverage/button-inventory-found.txt
-            desktop/build/reports/tests/
-            desktop/build/test-results/
-          if-no-files-found: ignore
-
   # The desktop port edits shared Android code (app/.../data/track/, data/, domain/), so compile the
   # Android app and the Android targets of the shared modules: a desktop change must not break the
   # Android build. The image's preinstalled Android SDK (ANDROID_HOME, licences already accepted)
@@ -276,7 +224,7 @@ jobs:
 
   pr-gate:
     name: PR gate
-    needs: [changes, spotless, unit, files-os, wiring, journeys, button-crawl, android-compile]
+    needs: [changes, spotless, unit, files-os, wiring, android-compile]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

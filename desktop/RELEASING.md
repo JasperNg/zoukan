@@ -3,10 +3,24 @@
 Phase 7 of the desktop port: the installers, the update check and crash logs. GitHub Actions
 builds both installers and publishes the release on every merge to `master` that changes more
 than docs; the published installers are unsigned. Nothing is published unless it passed two
-gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job:
-unit and file tests, wiring, the journeys and the button crawl) and the clean-install check of each
-installer (below), which `desktop-build.yml` runs on the installer it is about to publish. The
-nightly run (`nightly.yml`) does not gate a release; it reports to the nightly-failure issue.
+gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job)
+and the clean-install check of each installer (below), which `desktop-build.yml` runs on the
+installer it is about to publish. The CI check is the fast set only: Spotless, the build and unit
+tests, the wiring shards, the file tests on Windows and macOS and the Android compile.
+
+## Before merging to master
+
+The long checks do not run on GitHub: the journeys, the button crawl and the extension wiring
+check. Every merge to master that changes code is released, so they must pass on a Windows machine
+before the pull request is merged. On Windows, in a checkout of the pull request's branch:
+
+```powershell
+.\gradlew.bat :desktop:longChecks --continue
+```
+
+See `desktop/TESTING.md`, "Before merging to master". `nightly.yml` has no schedule and does not
+gate a release; it can still be started by hand from the Actions tab to run the long checks and the
+live tests on GitHub.
 
 ## Installers
 
