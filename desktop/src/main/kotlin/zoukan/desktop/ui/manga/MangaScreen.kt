@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
@@ -44,7 +43,6 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FabPosition
@@ -106,8 +104,10 @@ import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
+import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClickAt
 import zoukan.desktop.ui.common.rememberContextMenuState
@@ -523,13 +523,13 @@ internal fun CategoryDialog(
             Column {
                 categories.forEach { category ->
                     Row(
-                        Modifier.fillMaxWidth().toggleable(
-                            value = category.id in chosen,
-                            onValueChange = { on -> chosen = if (on) chosen + category.id else chosen - category.id },
+                        Modifier.fillMaxWidth().checkRow(
+                            checked = category.id in chosen,
+                            onChange = { on -> chosen = if (on) chosen + category.id else chosen - category.id },
                         ).padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = category.id in chosen, onCheckedChange = null)
+                        RowCheckbox(checked = category.id in chosen, onCheckedChange = null)
                         Spacer(Modifier.width(8.dp))
                         Text(category.name)
                     }
@@ -561,13 +561,13 @@ internal fun ChangeCategoryDialog(
                 Column(Modifier.heightIn(max = 420.dp).verticalScrollWithBar()) {
                     categories.forEach { category ->
                         Row(
-                            Modifier.fillMaxWidth().toggleable(
-                                value = category.id in checked,
-                                onValueChange = { on -> checked = if (on) checked + category.id else checked - category.id },
+                            Modifier.fillMaxWidth().checkRow(
+                                checked = category.id in checked,
+                                onChange = { on -> checked = if (on) checked + category.id else checked - category.id },
                             ).padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(checked = category.id in checked, onCheckedChange = null)
+                            RowCheckbox(checked = category.id in checked, onCheckedChange = null)
                             Spacer(Modifier.width(8.dp))
                             Text(category.name)
                         }

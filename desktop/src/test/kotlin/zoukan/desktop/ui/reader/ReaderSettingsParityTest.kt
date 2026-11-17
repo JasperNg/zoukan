@@ -61,13 +61,10 @@ class ReaderSettingsParityTest {
     // Only the sheet, and only for the viewer in use
     private val sheetOnlyPaged = keysOf(
         prefs.imageScaleType(), // how a page fits the window
-        prefs.pageLayout(),
         prefs.invertDoublePages(),
-        prefs.cropBorders(),
     )
     private val sheetOnlyWebtoon = keysOf(
         prefs.webtoonSidePadding(),
-        prefs.cropBordersWebtoon(),
     )
 
     // Only Settings: options that apply before a chapter opens or to every session

@@ -43,8 +43,17 @@ class CompatibilityHarness(
 ) {
     data class Options(
         val storeUrl: String = DEFAULT_STORE,
+        /** Names the store in the report and trace files: a [SampleStore.id], or [storeId] of the URL. */
+        val storeId: String = SAMPLE_STORE_A.id,
         /** Package names, with or without the eu.kanade.tachiyomi.extension. prefix. Empty means the defaults. */
         val packages: List<String> = emptyList(),
+        /**
+         * Leaves out [packages] the store does not list instead of failing them: a run over several
+         * stores passes each store the same list.
+         */
+        val skipMissing: Boolean = false,
+        /** Fails the run when the store lists fewer extensions (a moved or emptied store). */
+        val minExtensions: Int = 0,
         /** Test every extension in the store. */
         val all: Boolean = false,
         val lang: String = "en",
@@ -96,7 +105,7 @@ class CompatibilityHarness(
 
     private val traces = File(
         dirs.reports,
-        "extensions-traces${if (options.forceApk) "-apk" else ""}-${Platform.id}.txt",
+        "extensions-traces-${options.storeId}${if (options.forceApk) "-apk" else ""}-${Platform.id}.txt",
     )
 
     fun run(): Pair<Report, List<Row>> = runBlocking {
@@ -105,6 +114,7 @@ class CompatibilityHarness(
         val report = Report("Zoukan extension compatibility")
         val store = storeService.fetch(options.storeUrl).getOrThrow()
         val available = storeService.getExtensions(store).getOrThrow()
+        checkStoreSize(options.storeUrl, available.size, options.minExtensions)
         report.line("Store: ${store.name} (${options.storeUrl}), ${available.size} extensions, signing key ${store.signingKey.take(16)}…")
         report.line(
             "Mode: " + when {
@@ -117,8 +127,8 @@ class CompatibilityHarness(
         val wanted = when {
             options.all -> available.filterNot { options.skipNsfw && it.isNsfw }.map { it.pkgName }
             options.packages.isNotEmpty() -> options.packages.map { it.withPrefix() }
-            else -> DEFAULT_PACKAGES
-        }
+            else -> SAMPLE_STORES.firstOrNull { it.url == options.storeUrl }?.packages ?: DEFAULT_PACKAGES
+        }.filter { pkg -> !options.skipMissing || available.any { it.pkgName == pkg } }
         // Each extension runs on a worker of its own: withTimeout fires only where a coroutine
         // suspends, so a source blocked in a network read (an Rx source in OkHttp's execute(), a
         // Cloudflare wait) would hold the one thread of this run for good. The worker is left behind
@@ -289,7 +299,8 @@ class CompatibilityHarness(
                         !response.isSuccessful -> "HTTP ${response.code}"
                         // As the reader decodes it: a format the app cannot show (AVIF, JPEG XL) fails here
                         else -> runCatching { PageImage.decode(bytes) }.fold(
-                            onSuccess = { "ok $type ${bytes.size / 1024} KB" },
+                            // The size in pixels tells a real page from a placeholder or a scrambled tile
+                            onSuccess = { "ok $type ${bytes.size / 1024} KB ${it.width}x${it.height}" },
                             onFailure = { "undecodable $type: ${describe(it)}" },
                         )
                     }
@@ -336,10 +347,18 @@ class CompatibilityHarness(
 
     private fun String.withPrefix() = if (startsWith(PREFIX)) this else PREFIX + this
 
+    /**
+     * A store the harness and the wiring check test, with its sample of extensions for the live
+     * run and the fewest extensions it should list (fewer means the store moved or was emptied).
+     */
+    data class SampleStore(val id: String, val url: String, val packages: List<String>, val minExtensions: Int)
+
     companion object {
         const val DEFAULT_STORE = "https://example.org/extensions/repo.json"
         private const val PREFIX = "eu.kanade.tachiyomi.extension."
-        private val TIMEOUT = 60.seconds
+        // Sources that load their chapter list in a WebView take over a minute for one step (en.comix:
+        // about 85 s); the app itself puts no limit on details and chapters
+        private val TIMEOUT = 2.minutes
         private const val CLOUDFLARE_MANUAL = "Failed to bypass Cloudflare"
         private val INTERACTIVE_TIMEOUT = 5.minutes
 
@@ -350,6 +369,49 @@ class CompatibilityHarness(
             "en.mangakakalot", "en.mangahere", "en.mangatown", "en.mangago", "en.toonily", "en.comix",
             "en.tapastic", "en.templescan",
         ).map { PREFIX + it }
+
+        val SAMPLE_STORE_A = SampleStore(
+            id = "store-a",
+            url = DEFAULT_STORE,
+            packages = DEFAULT_PACKAGES + listOf(
+                "all.cubari", "all.namicomi", "all.globalcomix", "all.mangatoon", "all.mangataro", "en.mangafox",
+                "en.manhuaplus", "en.rizzcomic", "en.thunderscans", "en.drakescans",
+            ).map { PREFIX + it },
+            minExtensions = 1000,
+        )
+
+        /**
+         * a second store: six NSFW extensions with their own signing key. Only the harness
+         * and the tests use it, so its extensions go through the same checks; the app does not
+         * add or trust it (desktop/THREAT-MODEL.md), a user adds it as any other store.
+         */
+        val SAMPLE_STORE_B = SampleStore(
+            id = "store-b",
+            url = "https://example.org/other-store/repo.json",
+            packages = listOf(
+                "all.ehentai",
+                "all.hitomi",
+                "all.nhentai",
+                "all.pururin",
+                "en.hentai20",
+                "en.hentai2read",
+            ).map { PREFIX + it },
+            minExtensions = 1,
+        )
+
+        /** The stores the harness and the wiring check run over by default, each on its own. */
+        val SAMPLE_STORES = listOf(SAMPLE_STORE_A, SAMPLE_STORE_B)
+
+        /** A [SampleStore.id], or a name for another store URL: its GitHub owner, else its host. */
+        fun storeId(url: String): String = SAMPLE_STORES.firstOrNull { it.url == url }?.id
+            ?: url.substringAfter("://").split('/').let { parts ->
+                if (parts.first() == "raw.githubusercontent.com" && parts.size > 1) parts[1] else parts.first()
+            }.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "store" }
+
+        /** Fails when a store lists fewer than [min] extensions: it moved, or its index is a stub. */
+        fun checkStoreSize(url: String, size: Int, min: Int) = check(size >= min) {
+            "The store $url lists $size extensions, expected at least $min: has it moved, or is its index a stub?"
+        }
 
         fun describe(e: Throwable): String {
             val root = generateSequence(e) { it.cause }.last()

@@ -86,7 +86,10 @@ class RefreshMangaRenameTest {
             every { getOrStub(7L) } returns fake
             every { getOnlineSources() } returns listOf(fake)
         }
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)

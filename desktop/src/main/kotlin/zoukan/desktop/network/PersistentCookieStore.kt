@@ -51,9 +51,31 @@ class PersistentCookieStore(
     /** Size at which [add] prunes [expiresAt], so cookies refreshed on every response don't pile up. */
     @Volatile private var pruneAt = MIN_PRUNE_AT
 
+    /** Set by [close]: nothing is written after it, so the file's folder can be deleted. */
+    private var closed = false
+
+    private val shutdownSave = Thread({ save() }, "cookie-store-flush")
+
     init {
         load()
-        Runtime.getRuntime().addShutdownHook(Thread { save() })
+        Runtime.getRuntime().addShutdownHook(shutdownSave)
+    }
+
+    /**
+     * Writes any pending change now and stops writing the file, at shutdown too. For a profile
+     * deleted while the process runs (the self-test's): without it the shutdown save would create
+     * the deleted folder again. The store keeps working in memory.
+     */
+    @Synchronized
+    fun close() {
+        if (closed) return
+        pendingSave?.cancel(false)
+        pendingSave = null
+        save()
+        closed = true
+        // Fails only once shutdown has begun, when the hook is already running or done
+        runCatching { Runtime.getRuntime().removeShutdownHook(shutdownSave) }
+        saver.shutdown()
     }
 
     override fun add(uri: URI?, cookie: HttpCookie) {
@@ -113,12 +135,14 @@ class PersistentCookieStore(
 
     @Synchronized
     private fun scheduleSaveIn(delayMillis: Long) {
+        if (closed) return
         pendingSave?.cancel(false)
         pendingSave = saver.schedule(::save, delayMillis, TimeUnit.MILLISECONDS)
     }
 
     @Synchronized
     private fun save() {
+        if (closed) return
         pruneExpiries()
         val now = System.currentTimeMillis()
         // Secure cookies too, which a lookup by the store's http URIs leaves out

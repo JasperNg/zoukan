@@ -1,6 +1,8 @@
 package zoukan.desktop.e2e
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -8,12 +10,15 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
+import eu.kanade.domain.source.interactor.GetExhSavedSearch
 import eu.kanade.domain.source.service.SourcePreferences
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.ints.shouldBeGreaterThan
@@ -27,12 +32,15 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.interactor.DeleteFeedSavedSearchById
 import tachiyomi.domain.source.interactor.GetFeedSavedSearchGlobal
+import tachiyomi.domain.source.interactor.GetSavedSearchBySourceId
 import tachiyomi.domain.source.interactor.InsertFeedSavedSearch
 import tachiyomi.domain.source.model.FeedSavedSearch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
@@ -42,13 +50,16 @@ import zoukan.desktop.ui.browse.ExtensionDetailsScreen
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.browse.SourceScreen
 import zoukan.desktop.ui.e2eEffectContext
+import zoukan.desktop.ui.settings.SourceSettingsScreen
 import java.io.File
 import kotlin.time.Duration.Companion.minutes
 
 /**
  * The Komikku browse features through the real UI, offline: Migrate by source, bulk add from a
  * source (covers over HTTP), the source display modes, the global search filters, the feed order,
- * open from a URL, the sources search box and the extension details screen.
+ * open from a URL, the sources search box, the extension details screen, a saved search (saved
+ * with a filter, restored after the source is opened again, added to the feed, deleted), adding
+ * feeds through the dialog, and the source header's feed and settings buttons.
  *
  *   ./gradlew :desktop:journeyTest --tests "*BrowseFeaturesJourneyTest"
  */
@@ -65,6 +76,10 @@ class BrowseFeaturesJourneyTest {
     @Test
     fun browseFeatures() {
         journey = Journey.start("browse-features")
+        // The same source (same name, same id) with its genre filter, for the saved search
+        val filtered = FixtureSource(journey.server.baseUrl, filters = true)
+        Injekt.get<BuiltInSources>().testSources.value = listOf(filtered)
+        journey.awaitListed(filtered)
         val preferences = Injekt.get<DesktopPreferences>()
         val storage = Injekt.get<ZoukanStorage>()
         var navigator: Navigator? = null
@@ -217,6 +232,124 @@ class BrowseFeaturesJourneyTest {
                     runOnUiThread { navigator?.push(ExtensionDetailsScreen("eu.kanade.tachiyomi.extension.en.missing")) }
                     waitFor(hasText("This extension is not installed."))
                     shot("13-extension-missing")
+                    runOnUiThread { navigator?.popUntilRoot() }
+                }
+
+                // ZOUKAN saved searches: Komikku's, stored in the saved_search table as Android stores them
+                val savedName = "Drama picks"
+                fun savedSearches() = runBlocking { Injekt.get<GetSavedSearchBySourceId>().await(source.id) }
+                fun items() = onAllNodesWithTag("manga-item").fetchSemanticsNodes().size
+                fun shown(title: String) = onAllNodesWithText(title, useUnmergedTree = true).fetchSemanticsNodes().size
+
+                step("Save a search with a query and a filter") {
+                    // The screen popped before must leave the composition first, or the same key gets its old state back
+                    waitForIdle()
+                    runOnUiThread { navigator?.push(SourceScreen(source.id)) }
+                    waitOrDump("for the catalogue titles") { items() == catalogue.size }
+                    onAllNodes(hasSetTextAction()).onFirst().performTextInput("Fixture")
+                    onAllNodes(hasSetTextAction()).onFirst().performKeyInput { pressKey(Key.Enter) }
+                    // The catalogue's three titles and the search-only one with "Fixture" in its name
+                    waitOrDump("for the search results") { items() == 4 && shown(FixtureCatalog.MISSING_COVER_TITLE) > 0 }
+                    byDescription("Filters").performClick()
+                    onAllNodesWithText("${FixtureSource.GENRE_FILTER}: ${FixtureSource.GENRE_ANY}").onFirst().performClick()
+                    onAllNodesWithText(FixtureSource.GENRE_DRAMA).onFirst().performClick()
+                    waitFor(hasText("${FixtureSource.GENRE_FILTER}: ${FixtureSource.GENRE_DRAMA}"))
+                    onAllNodesWithText("Filter").onFirst().performClick()
+                    waitOrDump("for the filtered results") { items() == 1 && shown("Fixture Second") > 0 }
+                    onAllNodesWithText("Save").onFirst().performClick()
+                    waitFor(hasText("Save this search"))
+                    onAllNodes(hasSetTextAction()).fetchSemanticsNodes().size shouldBeGreaterThan 1
+                    // The dialog's name field, the last text field
+                    val fields = onAllNodes(hasSetTextAction())
+                    fields[fields.fetchSemanticsNodes().size - 1].performTextInput(savedName)
+                    shot("14-save-search")
+                    val saves = onAllNodesWithText("Save")
+                    saves[saves.fetchSemanticsNodes().size - 1].performClick()
+                    waitOrDump("for the stored saved search", 10_000) { savedSearches().any { it.name == savedName } }
+                    val saved = savedSearches().single()
+                    saved.query shouldBe "Fixture"
+                    // The filters as their JSON, read back into the source's filter list
+                    val restored = runBlocking { Injekt.get<GetExhSavedSearch>().awaitOne(saved.id, filtered::getFilterList) }
+                    (restored?.filterList?.single() as FixtureSource.GenreFilter).selected shouldBe FixtureCatalog.GENRE_DRAMA
+                    waitFor(hasText(savedName))
+                    runOnUiThread { navigator?.popUntilRoot() }
+                }
+
+                step("Reopen the source: the saved search is still there and choosing it applies its query and filter") {
+                    // The screen popped before must leave the composition first, or the same key gets its old state back
+                    waitForIdle()
+                    runOnUiThread { navigator?.push(SourceScreen(source.id)) }
+                    waitOrDump("for the catalogue titles") { items() == catalogue.size }
+                    waitFor(hasText(savedName))
+                    onAllNodesWithText(savedName).onFirst().performClick()
+                    waitOrDump("for the saved search's results") { items() == 1 && shown("Fixture Second") > 0 }
+                    byDescription("Filters").performClick()
+                    waitFor(hasText("${FixtureSource.GENRE_FILTER}: ${FixtureSource.GENRE_DRAMA}"))
+                    shot("15-saved-search-applied")
+                    runOnUiThread { navigator?.popUntilRoot() }
+                }
+
+                step("Add feeds through the dialog: the source's latest, then the saved search") {
+                    val savedId = savedSearches().single().id
+                    fun feeds() = runBlocking { Injekt.get<GetFeedSavedSearchGlobal>().await() }.filter { it.source == source.id }
+                    // The two feeds of the order step go, so both new rows fit on screen (a row off screen is not composed)
+                    runBlocking {
+                        Injekt.get<GetFeedSavedSearchGlobal>().await().forEach { Injekt.get<DeleteFeedSavedSearchById>().await(it.id) }
+                    }
+                    runOnUiThread { HomeScreen.selectTab(HomeTab.Browse) }
+                    onAllNodesWithText("Feed").onFirst().performClick()
+                    waitFor(hasText("Add"))
+                    listOf("Latest updates", "Saved search: $savedName").forEach { option ->
+                        onAllNodesWithText("Add").onFirst().performClick()
+                        waitFor(hasText("Add a feed"))
+                        // The dialog's source field, the last text field (Browse's global search comes first)
+                        val fields = onAllNodes(hasSetTextAction())
+                        fields[fields.fetchSemanticsNodes().size - 1].performTextInput(source.name)
+                        waitFor(hasText("${source.name} (", substring = true))
+                        onAllNodesWithText("${source.name} (", substring = true).onFirst().performClick()
+                        waitFor(hasText("Add ${source.name}"))
+                        waitFor(hasText(option))
+                        shot("16-add-feed")
+                        onAllNodesWithText(option).onFirst().performClick()
+                    }
+                    waitOrDump("for the two stored feeds", 10_000) { feeds().size == 2 }
+                    feeds().map { it.savedSearch }.toSet() shouldBe setOf(null, savedId)
+                    feeds().all { it.global } shouldBe true
+                    // The latest row lists the catalogue, the saved search's row only the drama title
+                    waitFor(hasText("${source.name} · $savedName"))
+                    waitOrDump("for the feed rows' titles") {
+                        shown(FixtureCatalog.FORMATS_TITLE) == 1 && shown("Fixture Third") == 1 && shown("Fixture Second") == 2
+                    }
+                    shot("17-feed-content")
+                }
+
+                step("The source header opens the source's feed and its settings") {
+                    // The screen popped before must leave the composition first, or the same key gets its old state back
+                    waitForIdle()
+                    runOnUiThread { navigator?.push(SourceScreen(source.id)) }
+                    waitOrDump("for the catalogue titles") { items() == catalogue.size }
+                    byDescription("This source's feed").performClick()
+                    waitFor(hasText("This source's latest, popular and saved searches"))
+                    // The fixed rows load the source's catalogue
+                    waitOrDump("for the source feed's titles") { shown("Fixture Third") >= 1 }
+                    shot("18-source-feed")
+                    runOnUiThread { navigator?.pop() }
+                    waitOrDump("for the catalogue titles") { items() == catalogue.size }
+                    byDescription("Source settings").performClick()
+                    waitFor(hasText(FixtureSource.SHOW_BONUS_TITLE))
+                    runOnUiThread { navigator?.lastItem shouldBe SourceSettingsScreen(source.id) }
+                    shot("19-source-settings")
+                    runOnUiThread { navigator?.pop() }
+                }
+
+                step("Delete the saved search: right-click, confirm") {
+                    waitFor(hasText(savedName))
+                    onAllNodesWithText(savedName).onFirst().performMouseInput { rightClick() }
+                    waitFor(hasText("Delete the saved search $savedName?"))
+                    shot("20-delete-saved-search")
+                    onAllNodesWithText("Delete").onFirst().performClick()
+                    waitOrDump("for the saved search to be deleted", 10_000) { savedSearches().isEmpty() }
+                    waitOrDump("for its chip to go", 10_000) { onAllNodesWithText(savedName).fetchSemanticsNodes().isEmpty() }
                     runOnUiThread { navigator?.popUntilRoot() }
                 }
             }

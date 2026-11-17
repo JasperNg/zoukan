@@ -76,7 +76,7 @@ private fun MetadataList(items: List<Pair<String, String>>) {
                 Modifier
                     .fillMaxWidth()
                     .clickable { }
-                    .onRightClick { copyToClipboard(text) }
+                    .onRightClick(localized(MR.strings.action_copy_to_clipboard)) { copyToClipboard(text) }
                     .padding(vertical = 8.dp),
             ) {
                 Text(

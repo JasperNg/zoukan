@@ -66,7 +66,10 @@ class MigrateMangaTest {
     private val downloadSource = mockk<Source>(relaxed = true)
 
     private val paths by lazy {
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<tachiyomi.domain.library.service.LibraryPreferences> {
             every { disallowNonAsciiFilenames() } returns pref(false)
         }
@@ -191,6 +194,20 @@ class MigrateMangaTest {
         build(downloads())(current, target, replace = true, flags = allSteps)
 
         files.forEach { it.exists() shouldBe false }
+    }
+
+    @Test
+    fun `removing the old downloads keeps them when the new entry uses the same folder`() = runBlocking<Unit> {
+        // Both sources give the same folder name (the test's sources have one name), and so do the titles
+        val sameTitle = target.copy(ogTitle = current.ogTitle)
+        stubReads()
+        val files = oldDownloads()
+        val before = files.associateWith { sha(it) }
+
+        build(downloads())(current, sameTitle, replace = true, flags = allSteps)
+
+        // Chapters 1 and 2 of the old entry are the new entry's downloads too
+        files.forEach { sha(it) shouldBe before[it] }
     }
 
     @Test

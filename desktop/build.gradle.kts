@@ -342,6 +342,9 @@ val wiringTests = expectedWiringClasses.map { "*$it" }
 /** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
 
+/** The button crawl [buttonCrawlTest] runs instead of `test`. */
+val buttonCrawlTests = listOf("*ButtonCrawlTest")
+
 tasks.test {
     useJUnitPlatform()
     // The end-to-end UI test reads a manga from an online source; it runs only when asked:
@@ -378,7 +381,7 @@ tasks.test {
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
     if (!providers.gradleProperty("zoukan.e2e").isPresent) {
-        filter { (wiringTests + journeyTests).forEach { excludeTestsMatching(it) } }
+        filter { (wiringTests + journeyTests + buttonCrawlTests).forEach { excludeTestsMatching(it) } }
     }
 }
 
@@ -439,6 +442,47 @@ val wiringTest by tasks.registering(Test::class) {
     finalizedBy("usabilityReport")
 }
 tasks.named("check") { dependsOn(wiringTest) }
+
+// The button crawl clicks every button of every screen, tab, Settings page and dialog, and fails
+// on a click that throws, logs an error, hangs the window or does nothing, and on a button that
+// appeared or went since src/test/resources/button-inventory.txt. It takes long, so `check` does
+// not run it; CI runs it in shards (desktop/TESTING.md, 'The button crawl'):
+//   ./gradlew :desktop:buttonCrawlTest
+//   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.only="settings:Library" -Pzoukan.shard=1/4
+//   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true
+val buttonCrawlTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Clicks every button of the app and checks each one does something without an error"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform()
+    filter { buttonCrawlTests.forEach { includeTestsMatching(it) } }
+    systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+    systemProperty("user.language", "en")
+    // Offline on every machine: HTTP goes to a closed local port, so a click that would reach a
+    // server fails at once and the same way everywhere (the fixture servers on localhost are not used)
+    listOf("http", "https").forEach { scheme ->
+        systemProperty("$scheme.proxyHost", "127.0.0.1")
+        systemProperty("$scheme.proxyPort", "9")
+    }
+    // -Pzoukan.crawl.only=<regex> crawls only the checks whose name or key matches
+    providers.gradleProperty("zoukan.crawl.only").orNull?.let { systemProperty("zoukan.crawl.only", it) }
+    providers.gradleProperty("zoukan.crawl.debug").orNull?.let { systemProperty("zoukan.crawl.debug", it) }
+    // -Pzoukan.shard=i/n crawls every n-th check key, from the i-th: CI splits the crawl this way
+    providers.gradleProperty("zoukan.shard").orNull?.let { value ->
+        value.split('/').mapNotNull { it.trim().toIntOrNull() }
+            .takeIf { it.size == 2 && value.count { c -> c == '/' } == 1 && it[1] >= 1 && it[0] in 1..it[1] }
+            ?: error("zoukan.shard must be i/n with 1 <= i <= n, not \"$value\"")
+        systemProperty("zoukan.shard", value)
+    }
+    // -Pzoukan.crawl.updateBaseline=true rewrites src/test/resources/button-inventory.txt with the
+    // buttons this run found (only the checks it crawled, in a filtered or sharded run)
+    providers.gradleProperty("zoukan.crawl.updateBaseline").orNull?.let { systemProperty("zoukan.crawl.updateBaseline", it) }
+    // The crawl checks the app as it is now, and writes its report each time
+    outputs.upToDateWhen { false }
+    testLogging { events("passed", "skipped", "failed") }
+    shouldRunAfter(tasks.test, wiringTest)
+}
 
 /**
  * Merges the usability findings each smoke JVM wrote (build/reports/usability/<size>.tsv) into
@@ -529,27 +573,46 @@ tasks.register<UsabilityReport>("usabilityReport") {
     onlyIf { !findings.isEmpty }
 }
 
-// Installs every extension of the Keiyoushi store and checks it is wired up on the desktop: no
+// Installs every extension of each sample store and checks it is wired up on the desktop: no
 // class, method or field its bytecode uses is missing or a stub, its Injekt lookups resolve, its
-// sources, client, headers and settings work (ExtensionWiringCheck). It downloads every
-// extension, so it is not part of `check`; the nightly check runs it. The report goes to
-// build/reports/e2e/extensions-wiring.md. -Pzoukan.e2e.package=en.mangapill,all.mangadex limits it:
+// sources, client, headers and settings work (ExtensionWiringCheck). The stores are
+// CompatibilityHarness.SAMPLE_STORES: Keiyoushi, and yuzono's "Cursed" store, which only the tests
+// use (the app does not add or trust it). Each store runs in a Test task and JVM of its own
+// (extensionWiringTest<Store>), one after the other: Keiyoushi alone needs a 4 GB heap. It downloads
+// every extension, so it is not part of `check`; the nightly check runs it. The reports go to
+// build/reports/e2e/extensions-wiring-<store>.md. -Pzoukan.e2e.stores=yuzono picks the stores and
+// -Pzoukan.e2e.package=en.mangapill,all.mangadex the extensions (each store checks those it lists):
 //   ./gradlew :desktop:extensionWiringTest
-val extensionWiringTest by tasks.registering(Test::class) {
+val extensionWiringStores = listOf("keiyoushi", "yuzono")
+val selectedWiringStores = providers.gradleProperty("zoukan.e2e.stores").orNull
+    ?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)
+    ?.onEach { require(it in extensionWiringStores) { "zoukan.e2e.stores: unknown store \"$it\", the stores are $extensionWiringStores" } }
+    ?: extensionWiringStores
+val extensionWiringStoreTests = extensionWiringStores.map { store ->
+    tasks.register<Test>("extensionWiringTest${store.replaceFirstChar(Char::uppercaseChar)}") {
+        group = "verification"
+        description = "Installs every extension of the $store store and checks it is wired up on the desktop"
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        classpath = sourceSets.test.get().runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("*ExtensionWiringTest") }
+        systemProperty("zoukan.e2e", "true")
+        systemProperty("zoukan.e2e.store", store)
+        providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
+        systemProperty("kotlinx.coroutines.fast.service.loader", "false")
+        systemProperty("user.language", "en")
+        // Over a thousand extensions load into one JVM, one class loader each
+        maxHeapSize = "4g"
+        // Live data: never up to date
+        outputs.upToDateWhen { false }
+    }
+}
+// One store at a time: two 4 GB test JVMs at once need more memory than many machines have
+extensionWiringStoreTests.zipWithNext { a, b -> b.configure { mustRunAfter(a) } }
+val extensionWiringTest by tasks.registering {
     group = "verification"
-    description = "Installs every Keiyoushi extension and checks it is wired up on the desktop"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    useJUnitPlatform()
-    filter { includeTestsMatching("*ExtensionWiringTest") }
-    systemProperty("zoukan.e2e", "true")
-    providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
-    systemProperty("kotlinx.coroutines.fast.service.loader", "false")
-    systemProperty("user.language", "en")
-    // Over a thousand extensions load into one JVM, one class loader each
-    maxHeapSize = "4g"
-    // Live data: never up to date
-    outputs.upToDateWhen { false }
+    description = "Checks every extension of each sample store is wired up on the desktop (-Pzoukan.e2e.stores to pick)"
+    dependsOn(extensionWiringStoreTests.filterIndexed { i, _ -> extensionWiringStores[i] in selectedWiringStores })
 }
 
 // The user journeys drive the real UI against a local fixture server (src/test/kotlin/zoukan/
@@ -604,6 +667,10 @@ val journeyTest by tasks.registering(Test::class) {
     doFirst { screenshots.asFile.deleteRecursively() }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
+    // A journey that hangs (a deadlock waits forever, so no waitUntil timeout fires) fails after 10
+    // minutes with its stack, instead of holding its shard until the CI job's timeout. The longest
+    // journeys take about 2 minutes. -Pzoukan.journey.timeout=30m raises it to debug a slow machine
+    systemProperty("junit.jupiter.execution.timeout.default", providers.gradleProperty("zoukan.journey.timeout").getOrElse("10m"))
     shouldRunAfter(tasks.test, wiringTest)
 }
 

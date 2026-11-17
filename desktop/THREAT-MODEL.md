@@ -105,7 +105,10 @@ Verified and trusted:
 | SHA-256 from GitHub's `digest` field checked while streaming; refused outright when GitHub lists none | `UpdateChecker.downloadTo`; the refusal in `desktop/.../update/Updates.kt` (`states.download`) |
 | Only when the running app is itself OS-signed (release builds are not): the installer's signer must match it, by the SHA-256 of the signer certificate's public key on Windows (a renewal that reuses the key passes; the thumbprint is not compared) and by Developer ID team on macOS. A build that says it shipped signed but has no readable signature fails closed. For an unsigned release this check is `Unchecked` and adds nothing | `desktop/.../update/InstallerSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install` |
 | The signatures are re-verified immediately before the installer runs — it sat in a folder other programs can write to. The installer is first copied into a new folder of its own (owner-only on macOS and Linux), the copy is checked, and that same copy is started by the tool's absolute path (`%SystemRoot%\System32\msiexec.exe` on Windows, `/usr/bin/open` on macOS), never by a bare name looked up on `PATH` | `Updates.install`, `Updates.installerCommand` |
-| The GitHub token lives in the OS secret store, never in a file | `UpdateChecker.token` (`TOKEN_KEY` in `SecretStore`) |
+| The GitHub token lives in the OS secret store (on Linux, which is for development only, a file readable only by the user), never in the preferences or any other file; Remove deletes it from the store. `SettingsPagesJourneyTest` checks the preference store and every other file of the data folder | `UpdateChecker.token` (`TOKEN_KEY` in `SecretStore`), `AboutSettings.kt` (`TokenRow`) |
+| The self-test (`zoukan selftest --network`, run by the install checks) takes a GitHub token only from the `ZOUKAN_SELFTEST_GITHUB_TOKEN` environment variable (CI's `GITHUB_TOKEN`), keeps it in memory for its one update check, and never writes it to the report, the log or the throwaway profile; the app itself never reads that variable | `SelfTest` (`TOKEN_ENV`, `MemorySecretStore`), `install-check-macos.sh`, `install-check-windows.ps1` |
+| The release feed's address is fixed: no setting changes it. Tests swap the whole checker through `Updates.checkerForTests`, which is `internal` and set only by code; a checker pointed elsewhere still downloads only from `https://` addresses on its API host, and every installer still needs the release signature | `desktop/.../update/Updates.kt` (`checker`, `checkerForTests`) |
+| The release key is fixed: no setting, system property or file changes it. Tests that download and install an update offline (`SettingsPagesJourneyTest`) put a key made for the test in its place through `Updates.releaseSignatureForTests`, which is `internal`, set only by code and `null` in the shipped app; the test checker keeps the `https://api.github.com` addresses and its OkHttp client alone carries them to the fixture server (`FixtureReleases.client`), so the https and API-host checks run unchanged. The download-and-check steps take the key as a parameter (`Updates.downloadVerified`), which `UpdatesDownloadTest` drives with a test key: a changed installer, another key's signature and a missing signature are refused and deleted | `desktop/.../update/Updates.kt` (`releaseSignature`, `releaseSignatureForTests`, `downloadVerified`) |
 
 Residual risk:
 
@@ -186,7 +189,8 @@ Verified and trusted:
 | Control | Where |
 |---|---|
 | Database always encrypted (SQLCipher 4 scheme, SQLite3MultipleCiphers) under a random 256-bit raw key | `desktop/.../db/DesktopDatabase.kt` (`createDriver`, `properties`) |
-| The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed) | `DesktopDatabase.databaseKey`, `KeyMissingException` |
+| The database key lives in the OS secret store, never next to the file; an existing database with a missing key refuses to open (fail-closed), as does an empty database file whose `-wal` still has data in it (a stale `-shm` alone, or an empty `-wal`, holds no data and does not block start-up); a secret store error stops start-up before any key is made | `DesktopDatabase.databaseKey`, `KeyMissingException`, `JournalWithoutKeyException` |
+| The copy made before a schema migration (`zoukan.db.pre-v<N>`, with its `-wal` if any, beside the database) is a byte copy, so it is encrypted with the same key; only the latest is kept. A database from a newer build is refused before anything writes to it: its version is read through a read-only connection, so not even a WAL checkpoint touches the file or its `-wal` | `DesktopDatabase.copyBeforeMigration`, `TooNewException` |
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |
 | Windows: Credential Manager generic credentials, per-user, non-roaming; macOS: login Keychain generic passwords | `desktop/.../secrets/WindowsCredentialStore.kt`, `MacKeychainStore.kt` |
 | The app's cookie store (`java.net.CookieManager`, what OkHttp and the sources use) writes only cookies with an expiry, to `cookies.json`, encrypted with `FileCipher`; session cookies stay in memory. It is synced with Chromium's cookies while a browser window is open. Chromium does not persist session cookies either (`persist_session_cookies = false`) | `desktop/.../network/PersistentCookieStore.kt`, `android-compat/.../webkit/CefCookieSync.kt`, `desktop/.../browser/JcefRuntime.kt` (`applySettings`) |
@@ -220,6 +224,12 @@ Residual risk:
    folder (a cloud drive, a NAS, another user with access) can read the library and reading
    history that the database encryption protects. Users who keep storage on a shared folder can
    switch automatic backups off. Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
+   **Safety backups** (written before a restore, a data sync that changes the library, Clear
+   database, a migration and Clear manga's chapter removal) are the same unencrypted format with
+   the same default choices (no private settings), but go to `backups/safety` inside the app's
+   data folder, never the storage folder, so they are not on a shared or cloud folder; the newest
+   five of each kind are kept. Anyone who can read the data folder can read them, as with the
+   logs (residual risk 5). Code: `desktop/.../backup/SafetySnapshot.kt`.
 5. **Logs and crash reports are plain text.** `logs/` holds the rolling log (4 files of 5 MB) and
    `crashes/` holds crash and error reports (the stack trace and the end of the log, with sign-in
    codes, tokens and passwords redacted) and copies of JVM crash files (without environment

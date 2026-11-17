@@ -49,7 +49,10 @@ class WhatsNewScreen : cafe.adriel.voyager.core.screen.Screen {
         var attempt by remember { mutableIntStateOf(0) }
         LaunchedEffect(attempt) {
             notes = null
-            notes = Updates.checker.releaseNotes()
+            val result = Updates.checker.releaseNotes()
+            notes = result
+            // A retry that fails the same way leaves the screen as it was: say that it failed again
+            if (attempt > 0) result.exceptionOrNull()?.let { Toasts.error(localized(DMR.strings.could_not_load_the_release_notes), it) }
         }
         val loaded = notes?.getOrNull()
         InfoScreen(

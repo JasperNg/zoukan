@@ -96,7 +96,10 @@ class DownloadManagerTest {
             every { artist } returns null
         }
         val dirs = ZoukanDirs(temp)
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)

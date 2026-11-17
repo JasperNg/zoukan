@@ -16,16 +16,13 @@ import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.PeopleAlt
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,6 +38,9 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
+import zoukan.desktop.ui.common.RowTriStateCheckbox
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
@@ -154,7 +154,7 @@ private fun TriStateRow(label: String, value: TriState, onChange: ((TriState) ->
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TriStateCheckbox(state = state, onClick = null, enabled = onChange != null)
+        RowTriStateCheckbox(state = state, onClick = null, enabled = onChange != null)
         Text(if (value == TriState.ENABLED_NOT) localized(DMR.strings.not, label.lowercase()) else label)
     }
 }
@@ -201,7 +201,7 @@ private fun DisplayRow(label: String, selected: Boolean, onClick: () -> Unit) {
         Modifier.fillMaxWidth().radioRow(selected, onClick = onClick).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = null)
+        RowRadioButton(selected = selected, onClick = null)
         Text(label)
     }
 }
@@ -229,7 +229,7 @@ private fun ScanlatorFilterDialog(
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(shown, onCheckedChange = null)
+                        RowCheckbox(shown, onCheckedChange = null)
                         Text(scanlator)
                     }
                 }
@@ -265,7 +265,7 @@ private fun SetAsDefaultDialog(onConfirm: (toLibrary: Boolean) -> Unit, onDismis
                     Modifier.fillMaxWidth().checkRow(toLibrary) { toLibrary = it },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(toLibrary, onCheckedChange = null)
+                    RowCheckbox(toLibrary, onCheckedChange = null)
                     Text(localized(DMR.strings.also_apply_them_to_every_entry))
                 }
             }

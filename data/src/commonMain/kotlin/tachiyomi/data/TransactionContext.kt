@@ -97,6 +97,7 @@ private suspend fun AndroidDatabaseHandler.createTransactionContext(): Coroutine
  * coroutines to the acquired thread. The [controlJob] is used to control the release of the
  * thread by cancelling the job.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 private suspend fun CoroutineDispatcher.acquireTransactionThread(
     controlJob: Job,
 ): ContinuationInterceptor {
@@ -108,10 +109,24 @@ private suspend fun CoroutineDispatcher.acquireTransactionThread(
             controlJob.cancel()
         }
         try {
+            // ZOUKAN -->
+            val callerDispatcher = continuation.context[ContinuationInterceptor] as? CoroutineDispatcher
+            // ZOUKAN <--
             dispatch(EmptyCoroutineContext) {
                 runBlocking {
                     // Thread acquired, resume coroutine
-                    continuation.resume(coroutineContext[ContinuationInterceptor]!!)
+                    // ZOUKAN -->
+                    // On this thread, not through the caller's dispatcher: the caller goes straight on
+                    // to the transaction dispatcher anyway, and its thread may be blocked waiting for
+                    // this one (a blocking read on the UI thread), which would never let the
+                    // transaction start. With one database thread (desktop) that is a deadlock.
+                    val interceptor = coroutineContext[ContinuationInterceptor]!!
+                    if (callerDispatcher != null) {
+                        with(continuation) { callerDispatcher.resumeUndispatched(interceptor) }
+                    } else {
+                        continuation.resume(interceptor)
+                    }
+                    // ZOUKAN <--
                     controlJob.join()
                 }
             }

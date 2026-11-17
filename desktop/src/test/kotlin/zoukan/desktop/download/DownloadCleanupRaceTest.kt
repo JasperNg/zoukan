@@ -69,7 +69,10 @@ class DownloadCleanupRaceTest {
             every { getOrStub(sourceA.id) } returns sourceA
             every { getOnlineSources() } returns listOf(sourceA)
         }
-        val storage = mockk<ZoukanStorage> { every { downloads } returns File(temp, "downloads") }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
         val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
         val downloadPreferences = mockk<DownloadPreferences> {
             every { includeChapterUrlHash() } returns pref(false)

@@ -262,6 +262,8 @@ class BrowseScreenModel(
         screenModelScope.launch {
             try {
                 val results = extensionManager.findAvailableExtensions()
+                // With no store there is nothing to check: say so rather than seem to do nothing
+                if (results.isEmpty()) Toasts.show(localized(DMR.strings.add_an_extension_store_to_find))
                 results.forEach { (store, result) ->
                     result.onFailure { Toasts.error(localized(DMR.strings.could_not_load, store.name), it) }
                 }

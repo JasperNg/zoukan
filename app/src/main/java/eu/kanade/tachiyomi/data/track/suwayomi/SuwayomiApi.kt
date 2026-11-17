@@ -68,7 +68,10 @@ class SuwayomiApi(private val trackId: Long) {
         TrackSearch.create(trackId).apply {
             remote_id = mangaId
             title = manga.title
-            cover_url = manga.thumbnailUrl?.let { "$baseUrl/$it" } ?: ""
+            // ZOUKAN: one slash between the server address and the path; an absolute address is kept
+            cover_url = manga.thumbnailUrl?.let {
+                if (it.startsWith("http://") || it.startsWith("https://")) it else "$baseUrl/${it.trimStart('/')}"
+            } ?: ""
             summary = manga.description.orEmpty()
             tracking_url = "$baseUrl/manga/$mangaId"
             total_chapters = manga.chapters.totalCount.toLong()

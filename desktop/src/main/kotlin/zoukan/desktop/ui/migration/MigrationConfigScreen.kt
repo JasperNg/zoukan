@@ -18,7 +18,6 @@ import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +65,7 @@ import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.LoadingScreen
+import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SearchField
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -181,7 +181,7 @@ data class MigrationConfigScreen(val mangaIds: List<Long>) : Screen {
             Modifier.fillMaxWidth().checkRow(source.selected) { model.toggle(source.id) }.padding(horizontal = 16.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(source.selected, onCheckedChange = null)
+            RowCheckbox(source.selected, onCheckedChange = null)
             Column(Modifier.weight(1f)) {
                 Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(

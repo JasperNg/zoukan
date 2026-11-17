@@ -33,8 +33,9 @@ fun MURecord.toTrackSearch(id: Long): TrackSearch {
         summary = this@toTrackSearch.description?.htmlDecode() ?: ""
         tracking_url = this@toTrackSearch.url ?: ""
         publishing_status = ""
-        publishing_type = this@toTrackSearch.type.toString()
-        start_date = this@toTrackSearch.year.toString()
+        // ZOUKAN: empty when missing, not the text "null"
+        publishing_type = this@toTrackSearch.type.orEmpty()
+        start_date = this@toTrackSearch.year.orEmpty()
     }
 }
 

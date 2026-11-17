@@ -20,14 +20,17 @@ import zoukan.desktop.e2e.LocalEntryFixture.openClearManga
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
+import zoukan.desktop.ui.manga.onRefreshStart
 import zoukan.desktop.ui.manga.systemTrash
 import java.io.File
 import java.util.Collections
+import javax.swing.SwingUtilities
 import kotlin.time.Duration.Companion.minutes
 
 /**
  * The user's own local files go only when the user picks them under their own label and
- * confirms a second question, and then to the trash, not deleted.
+ * confirms a second question, and then to the trash, not deleted. The refresh that follows starts
+ * on the UI thread, where its busy check cannot race the Refresh button, and starts once.
  *
  *   ./gradlew :desktop:journeyTest --tests "*ClearMangaLocalFilesJourneyTest"
  */
@@ -39,6 +42,7 @@ class ClearMangaLocalFilesJourneyTest {
 
     @AfterEach
     fun close() {
+        onRefreshStart = null
         systemTrash = originalTrash
         if (::journey.isInitialized) journey.close()
     }
@@ -57,6 +61,9 @@ class ClearMangaLocalFilesJourneyTest {
             trashed += it
             true
         }
+        // For each refresh start, whether it ran on the Swing event thread. The thread itself can be
+        // replaced between two events, so the test records the kind of thread, not the instance
+        val starts: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
 
         with(journey) {
             runDesktopComposeUiTest(Journey.WIDTH, Journey.HEIGHT, effectContext = e2eEffectContext(), testTimeout = 10.minutes) {
@@ -79,7 +86,8 @@ class ClearMangaLocalFilesJourneyTest {
                     trashed.shouldBeEmpty()
                     files.forEach { fingerprint(it) shouldBe before.getValue(it) }
                 }
-                step("Ask again and confirm: the folder goes to the trash") {
+                step("Ask again and confirm: the folder goes to the trash and the entry refreshes") {
+                    onRefreshStart = { starts += SwingUtilities.isEventDispatchThread() }
                     openClearManga()
                     waitFor(hasText("Local files in ${folder.name}"))
                     onNodeWithText("Local files in ${folder.name}").performClick()
@@ -87,10 +95,15 @@ class ClearMangaLocalFilesJourneyTest {
                     waitFor(hasText("Move to trash"))
                     onNodeWithText("Move to trash").performClick()
                     waitOrDump("for the folder to reach the trash", timeout = 10_000) { trashed.isNotEmpty() }
+                    waitOrDump("for the refresh to start", timeout = 10_000) { starts.isNotEmpty() }
+                    waitForIdle()
+                    Thread.sleep(1_000)
                 }
             }
         }
 
         trashed.map { it.canonicalFile } shouldBe listOf(folder.canonicalFile)
+        // One refresh, started on the UI thread
+        starts shouldBe listOf(true)
     }
 }

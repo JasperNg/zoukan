@@ -34,9 +34,13 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.backup.SnapshotFailedPrompt
+import zoukan.desktop.backup.SnapshotReason
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.migration.MigrateManga
+import zoukan.desktop.ui.common.snapshotFailedPrompt
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -58,6 +62,10 @@ class MigrationListScreenModel(
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val refreshManga: RefreshManga = Injekt.get(),
     private val migrateManga: MigrateManga = Injekt.get(),
+    // ZOUKAN -->
+    private val safetySnapshot: SafetySnapshot = SafetySnapshot.forApp(),
+    private val snapshotPrompt: SnapshotFailedPrompt = SnapshotFailedPrompt { snapshotFailedPrompt.continueWithout(it) },
+    // ZOUKAN <--
 ) : StateScreenModel<MigrationListScreenModel.State>(State()) {
 
     data class ChapterInfo(val latestChapter: Double?, val chapterCount: Int)
@@ -339,6 +347,9 @@ class MigrationListScreenModel(
         val item = item(mangaId) ?: return
         val target = (item.result as? SearchResult.Success)?.manga ?: return
         screenModelScope.launch(Dispatchers.IO) {
+            // ZOUKAN -->
+            if (!safetySnapshot.guard(SnapshotReason.MIGRATION, snapshotPrompt)) return@launch
+            // ZOUKAN <--
             runCatching { migrateManga(item.manga, target, replace) }
                 .onSuccess { removeItem(mangaId) }
                 .onFailure { if (it is CancellationException) throw it else _effects.trySend(Effect.Failed(it)) }
@@ -369,6 +380,15 @@ class MigrationListScreenModel(
             var failed = 0
             var completed = false
             mutableState.update { it.copy(dialog = Dialog.Progress(0, items.size)) }
+            // ZOUKAN -->
+            // One safety backup for the whole batch, while the progress dialog shows; when it fails
+            // and the user cancels, nothing is migrated
+            if (items.any { it.result is SearchResult.Success } && !safetySnapshot.guard(SnapshotReason.MIGRATION, snapshotPrompt)) {
+                mutableState.update { it.copy(dialog = null) }
+                migrateJob = null
+                return@launch
+            }
+            // ZOUKAN <--
             try {
                 items.forEachIndexed { index, item ->
                     ensureActive()

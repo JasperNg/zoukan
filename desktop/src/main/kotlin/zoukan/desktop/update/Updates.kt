@@ -36,48 +36,84 @@ import kotlin.time.Duration.Companion.seconds
  * installing a downloaded update.
  */
 object Updates {
-    val checker by lazy {
+    private val gitHubChecker by lazy {
         UpdateChecker(Injekt.get<NetworkHelper>().client, Injekt.get<SecretStore>())
     }
+
+    /**
+     * Tests only: a checker for a local fixture release feed in place of GitHub's. Internal, set
+     * by code, never by a setting; the downloads still need GitHub's API host and the release
+     * signature (UpdateChecker.assetRequest, ReleaseSignature).
+     */
+    @Volatile
+    internal var checkerForTests: UpdateChecker? = null
+
+    val checker: UpdateChecker get() = checkerForTests ?: gitHubChecker
 
     private val states by lazy {
         UpdateStates(
             check = { checker.check(includePrereleases().get()) },
             download = { asset, progress ->
-                val dir = Injekt.get<ZoukanDirs>().updates
-                // Only the newest download is kept
-                dir.listFiles()?.filter { it.name != asset.name && it.name != asset.name + ".sig" }?.forEach { it.deleteRecursively() }
-                // Without GitHub's checksum the download cannot be told from a damaged or swapped one
-                if (asset.sha256 == null) {
-                    throw IOException("GitHub lists no checksum for ${asset.name}; get it from the release page instead")
-                }
-                checker.download(asset, dir, progress).also { file ->
-                    val sig = try {
-                        checker.downloadSignature(asset, dir)
-                    } catch (e: IOException) {
-                        file.delete()
-                        File(dir, asset.name + ".sig").delete()
-                        throw IOException("The release signature could not be downloaded: ${e.message}", e)
-                    }
-                    (releaseSignature.verify(file, sig) as? InstallerSignature.Verdict.Rejected)?.let {
-                        file.delete()
-                        sig?.delete()
-                        throw IOException(it.reason)
-                    }
-                    val verdict = signature.verify(file)
-                    if (verdict is InstallerSignature.Verdict.Rejected) {
-                        file.delete()
-                        throw IOException(verdict.reason)
-                    }
-                    logcat { "Update ${file.name}: $verdict" }
-                }
+                downloadVerified(checker, asset, Injekt.get<ZoukanDirs>().updates, releaseSignature, signature, progress)
             },
         )
     }
 
+    /**
+     * Downloads [asset] into [dir] and checks it before it is kept: GitHub's SHA-256 (required),
+     * the release signature with [releaseSignature] and the publisher's code signature with
+     * [installerSignature]. A file that fails is deleted with its signature. Only the newest
+     * download is kept in [dir].
+     */
+    internal suspend fun downloadVerified(
+        checker: UpdateChecker,
+        asset: UpdateChecker.Asset,
+        dir: File,
+        releaseSignature: ReleaseSignature,
+        installerSignature: InstallerSignature,
+        progress: (Long, Long) -> Unit = { _, _ -> },
+    ): File {
+        // Only the newest download is kept
+        dir.listFiles()?.filter { it.name != asset.name && it.name != asset.name + ".sig" }?.forEach { it.deleteRecursively() }
+        // Without GitHub's checksum the download cannot be told from a damaged or swapped one
+        if (asset.sha256 == null) {
+            throw IOException("GitHub lists no checksum for ${asset.name}; get it from the release page instead")
+        }
+        return checker.download(asset, dir, progress).also { file ->
+            val sig = try {
+                checker.downloadSignature(asset, dir)
+            } catch (e: IOException) {
+                file.delete()
+                File(dir, asset.name + ".sig").delete()
+                throw IOException("The release signature could not be downloaded: ${e.message}", e)
+            }
+            (releaseSignature.verify(file, sig) as? InstallerSignature.Verdict.Rejected)?.let {
+                file.delete()
+                sig?.delete()
+                throw IOException(it.reason)
+            }
+            val verdict = installerSignature.verify(file)
+            if (verdict is InstallerSignature.Verdict.Rejected) {
+                file.delete()
+                throw IOException(verdict.reason)
+            }
+            logcat { "Update ${file.name}: $verdict" }
+        }
+    }
+
     private val signature by lazy { InstallerSignature() }
 
-    private val releaseSignature by lazy { ReleaseSignature.builtIn() }
+    private val builtInReleaseSignature by lazy { ReleaseSignature.builtIn() }
+
+    /**
+     * Tests only: the release key's stand-in, so a journey can download and install an update it
+     * signed with a test key. Internal, set by code, never by a setting; the shipped app always
+     * checks with the key built into it (zoukan-release-key.pem).
+     */
+    @Volatile
+    internal var releaseSignatureForTests: ReleaseSignature? = null
+
+    private val releaseSignature: ReleaseSignature get() = releaseSignatureForTests ?: builtInReleaseSignature
 
     val state: StateFlow<UpdateStates.State> get() = states.state
 

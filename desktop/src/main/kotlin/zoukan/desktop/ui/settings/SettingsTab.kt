@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -96,6 +97,7 @@ import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.FitModes
 import zoukan.desktop.app.ReadingModes
+import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.BackupJobs
 import zoukan.desktop.backup.DesktopBackups
@@ -108,10 +110,9 @@ import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Spacing
+import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.desktop.ui.reader.ReaderSettingChoices
 import zoukan.i18n.desktop.DMR
-import java.awt.Desktop
-import java.awt.FileDialog
 import java.io.File
 
 /** The backups and restores started from Settings; the screens and the settings pages share this one. */
@@ -119,6 +120,7 @@ internal val backupJobs = BackupJobs(
     scope = AppScope,
     backups = { DesktopBackups(ZoukanRuntime.dirs.android) },
     sensitivePrompt = { count -> sensitiveSettingsChoice(count) },
+    snapshotPrompt = { error -> snapshotFailedPrompt.continueWithout(error) },
     storePrompt = SwingStorePrompt,
 )
 
@@ -332,7 +334,8 @@ private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: Settin
                             .padding(horizontal = 8.dp)
                             .clip(Corners.ExtraLarge)
                             .then(if (isSelected) Modifier.background(MaterialTheme.colorScheme.surfaceVariant) else Modifier)
-                            .clickable { onSelect(page) }
+                            // Selectable, so a screen reader says which page is open
+                            .selectable(selected = isSelected) { onSelect(page) }
                             .padding(horizontal = 16.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -497,31 +500,20 @@ private fun confirmSensitive(count: Int): Boolean? {
 }
 
 /** A folder picker: the native one on macOS, Swing's on Windows (AWT's FileDialog picks only files there). */
-internal fun chooseFolder(window: java.awt.Window?, start: File): File? {
-    if (zoukan.desktop.Platform.current == zoukan.desktop.Platform.MACOS) {
-        System.setProperty("apple.awt.fileDialogForDirectories", "true")
-        try {
-            val dialog = FileDialog(window as java.awt.Frame?, localized(DMR.strings.choose_the_storage_folder), FileDialog.LOAD).apply {
-                directory = start.absolutePath
-                isVisible = true
-            }
-            return dialog.file?.let { File(dialog.directory, it) }
-        } finally {
-            System.setProperty("apple.awt.fileDialogForDirectories", "false")
-        }
-    }
-    val chooser = javax.swing.JFileChooser(start).apply {
-        fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = localized(DMR.strings.choose_the_storage_folder)
-    }
-    return if (chooser.showOpenDialog(window) == javax.swing.JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
-}
+internal fun chooseFolder(window: java.awt.Window?, start: File): File? =
+    SystemEffects.current.pickFolder(window, localized(DMR.strings.choose_the_storage_folder), start)
 
 fun openFolder(folder: File) {
     AppScope.launch {
         withContext(Dispatchers.IO) {
-            folder.mkdirs()
-            runCatching { Desktop.getDesktop().open(folder) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_folder), it) }
+            // A folder under a missing storage folder is not made on the system disk
+            val storage = runCatching { Injekt.get<zoukan.desktop.storage.ZoukanStorage>() }.getOrNull()
+            if (storage != null && storage.isMissing(folder)) {
+                Toasts.show(localized(DMR.strings.storage_folder_unavailable, storage.root.path))
+            } else {
+                folder.mkdirs()
+                runCatching { SystemEffects.current.openFolder(folder) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_folder), it) }
+            }
         }
     }
 }

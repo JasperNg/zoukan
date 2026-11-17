@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +27,8 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DropdownMenu
+import zoukan.desktop.ui.common.RowCheckbox
+import zoukan.desktop.ui.common.RowRadioButton
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.radioRow
@@ -164,7 +164,7 @@ fun MergedEntryPicker(action: MergedAction, model: MangaScreenModel, onDismiss: 
                         }.padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = false, onClick = null)
+                        RowRadioButton(selected = false, onClick = null)
                         Text(source.toString())
                     }
                 }
@@ -219,7 +219,7 @@ fun ClearMangaDialog(
                         Modifier.fillMaxWidth().checkRow(checked) { toggle() },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = checked, onCheckedChange = null)
+                        RowCheckbox(checked = checked, onCheckedChange = null)
                         Text(label)
                     }
                 }

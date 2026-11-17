@@ -1,7 +1,10 @@
 package zoukan.desktop.db
 
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import org.sqlite.SQLiteConfig
+import org.sqlite.SQLiteOpenMode
 import org.sqlite.mc.SQLiteMCSqlCipherConfig
 import tachiyomi.data.Chapters
 import tachiyomi.data.Database
@@ -11,8 +14,12 @@ import tachiyomi.data.Mangas
 import tachiyomi.data.MemoColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
 import tachiyomi.data.UpdateStrategyColumnAdapter
+import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
+import zoukan.i18n.desktop.DMR
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.SecureRandom
 import java.util.HexFormat
 import java.util.Properties
@@ -30,17 +37,96 @@ object DesktopDatabase {
     const val KEY_NAME = "database-key"
 
     class KeyMissingException(file: File) : IllegalStateException(
-        "The database ${file.path} exists but its key is not in the secret store. " +
-            "It cannot be opened; restore a backup into a new database.",
+        localized(DMR.strings.database_key_missing, file.path),
     )
 
-    fun createDriver(file: File, secrets: SecretStore): SqlDriver {
+    /** The database file is empty but a non-empty WAL is there, and there is no key. */
+    class JournalWithoutKeyException(file: File) : IllegalStateException(
+        localized(DMR.strings.database_journal_without_key, file.path),
+    )
+
+    /** The database was made by a newer build (a downgrade); it is left as it is. */
+    class TooNewException(file: File, val version: Long, val supported: Long) : IllegalStateException(
+        localized(DMR.strings.database_too_new, file.path, version, supported),
+    )
+
+    /** The copy made before a schema migration could not be saved; the database was not migrated. */
+    class CopyFailedException(cause: Throwable) : IllegalStateException(
+        localized(DMR.strings.database_copy_failed, cause.message ?: cause::class.simpleName.orEmpty()),
+        cause,
+    )
+
+    /** The copy kept before an automatic migration to [version]: `zoukan.db.pre-v<version>`. */
+    fun preMigrationCopy(file: File, version: Long): File = File(file.parentFile, "${file.name}$PRE_MIGRATION$version")
+
+    private const val PRE_MIGRATION = ".pre-v"
+
+    fun createDriver(file: File, secrets: SecretStore): SqlDriver = createDriver(file, secrets, Database.Schema.version)
+
+    /** [schemaVersion] is the version this build migrates to; tests pass another to check the copy. */
+    internal fun createDriver(file: File, secrets: SecretStore, schemaVersion: Long): SqlDriver {
         val key = databaseKey(file, secrets)
-        return JdbcSqliteDriver(
-            url = "jdbc:sqlite:${file.absolutePath}",
-            properties = properties(key),
-            schema = Database.Schema,
-        ).also(::fixTriggers)
+        val url = "jdbc:sqlite:${file.absolutePath}"
+        val properties = properties(key)
+        // Checked before SQLDelight sees the file: it would leave a newer database open as it is
+        // (and fixTriggers would then write to it), and it migrates without a copy
+        if (file.isFile && file.length() > 0) checkVersion(file, url, properties, schemaVersion)
+        return JdbcSqliteDriver(url = url, properties = properties, schema = Database.Schema).also(::fixTriggers)
+    }
+
+    /**
+     * Refuses a database newer than [schemaVersion] without writing to it, and copies one that is
+     * about to be migrated to [preMigrationCopy] first, keeping only the latest such copy.
+     *
+     * The version is read through a read-only connection: closing a read-write one, even one that
+     * only read, checkpoints the WAL into the file, so a refused newer database would not be left
+     * as it was.
+     */
+    private fun checkVersion(file: File, url: String, properties: Properties, schemaVersion: Long) {
+        // Only the key: no journal_mode or other setting that would write to the file
+        val keyOnly = Properties().apply {
+            properties.forEach { (k, v) -> if (k != "journal_mode" && k != "foreign_keys") setProperty(k.toString(), v.toString()) }
+        }
+        val readOnly = Properties().apply {
+            putAll(keyOnly)
+            setProperty(SQLiteConfig.Pragma.OPEN_MODE.pragmaName, SQLiteOpenMode.READONLY.flag.toString())
+        }
+        val version = JdbcSqliteDriver(url, readOnly).use { probe ->
+            probe.executeQuery(null, "PRAGMA user_version", { cursor ->
+                QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else 0L)
+            }, 0).value ?: 0L
+        }
+        if (version > schemaVersion) throw TooNewException(file, version, schemaVersion)
+        if (version == 0L || version == schemaVersion) return
+        // Move the WAL's pages into the file, so the copy is the whole database
+        JdbcSqliteDriver(url, keyOnly).use { writer ->
+            writer.executeQuery(null, "PRAGMA wal_checkpoint(TRUNCATE)", { QueryResult.Value(Unit) }, 0)
+        }
+        copyBeforeMigration(file, schemaVersion)
+    }
+
+    private fun copyBeforeMigration(file: File, schemaVersion: Long) {
+        val copy = preMigrationCopy(file, schemaVersion)
+        try {
+            // Copied under a temporary name, then renamed, so a copy with the final name is whole
+            copyAtomically(file, copy)
+            val wal = File(file.parentFile, "${file.name}-wal")
+            val copyWal = File(copy.parentFile, "${copy.name}-wal")
+            // Normally empty after the checkpoint; kept beside the copy (SQLite reads it as the copy's WAL)
+            if (wal.isFile && wal.length() > 0) copyAtomically(wal, copyWal) else copyWal.delete()
+        } catch (e: Exception) {
+            throw CopyFailedException(e)
+        }
+        // Only the latest copy is kept
+        file.parentFile.listFiles().orEmpty()
+            .filter { it.name.startsWith("${file.name}$PRE_MIGRATION") && it != copy && it.name != "${copy.name}-wal" }
+            .forEach { it.delete() }
+    }
+
+    private fun copyAtomically(from: File, to: File) {
+        val tmp = File(to.parentFile, "${to.name}.tmp")
+        Files.copy(from.toPath(), tmp.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        Files.move(tmp.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 
     /**
@@ -77,10 +163,18 @@ object DesktopDatabase {
         chaptersAdapter = Chapters.Adapter(memoAdapter = MemoColumnAdapter),
     )
 
-    /** The key from the secret store; a new one when neither the key nor the database exists. */
+    /**
+     * The key from the secret store; a new one only when neither the key nor the database exists.
+     * A secret store error is thrown before any key is made. An empty file whose WAL is still there
+     * with something in it may hold data in the WAL, so it is refused rather than given a new key
+     * that could never read it. A shared-memory file (or an empty WAL) holds no data: SQLite
+     * rebuilds it, so a stale one left by a crash does not block start-up.
+     */
     private fun databaseKey(file: File, secrets: SecretStore): ByteArray {
         secrets.get(KEY_NAME)?.let { return HexFormat.of().parseHex(it) }
         if (file.exists() && file.length() > 0) throw KeyMissingException(file)
+        val wal = File(file.parentFile, file.name + "-wal")
+        if (wal.isFile && wal.length() > 0) throw JournalWithoutKeyException(file)
         val key = ByteArray(32).also { SecureRandom().nextBytes(it) }
         secrets.set(KEY_NAME, HexFormat.of().formatHex(key))
         return key

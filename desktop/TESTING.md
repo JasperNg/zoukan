@@ -9,8 +9,9 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 | --- | --- | --- | --- |
 | Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build and every pull request. |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
-| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On request, and in the nightly check. |
-| Nightly | `:desktop:nightlyCheck` | The journeys, plus `extensionWiringTest`, which downloads every Keiyoushi extension and checks it loads on the desktop. | By hand, or by `desktop/packaging/check/nightly-windows.ps1`. |
+| Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Every pull request and every push to master: CI runs it in 4 shards under `xvfb-run -a`. Not in `check`: it takes about half an hour in one JVM. |
+| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Every pull request and every push to master: CI runs them in 3 shards under `xvfb-run -a`. Also in the nightly check. |
+| Nightly | `:desktop:nightlyCheck` | The journeys, plus `extensionWiringTest`, which downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Every day at 18:00 UTC by `.github/workflows/nightly.yml`: on Windows and macOS the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`; on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. A failed scheduled run opens or updates the nightly-failure issue. Also by hand, or on a local Windows machine by `desktop/packaging/check/nightly-windows.ps1`. |
 | Live | `:desktop:test -Pzoukan.e2e=true` | The `EndToEnd*Test` classes. Most of them use real sites and need the network. | Only when you ask for them. Never in CI. |
 
 Use the cheapest tier that can catch the bug:
@@ -34,6 +35,10 @@ Use the cheapest tier that can catch the bug:
 ./gradlew :desktop:wiringTest --tests "*ScreenSmokeTest" -Pzoukan.smoke.only="tab:Library"
 ./gradlew :desktop:wiringTest --tests "*ScreenSmokeSmallWindowTest" -Pzoukan.smoke.only="settings:"   # at 800x560
 ./gradlew :desktop:journeyTest                       # every offline journey
+./gradlew :desktop:buttonCrawlTest                   # click every button (long: CI runs it in shards)
+./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.only="settings:Library"
+./gradlew :desktop:buttonCrawlTest -Pzoukan.shard=2/4                     # the second of four shards
+./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true     # rewrite button-inventory.txt
 ./gradlew :desktop:journeyTest --tests "*BrowseAndReadJourneyTest"
 ./gradlew :desktop:nightlyCheck --continue           # nightly only: journeys and every extension
 ```
@@ -52,7 +57,7 @@ Notes:
   the dark theme, and a failure names the window size, for example `[800x560] tab Library`.
 - Gradle can take `:desktop:test` from its build cache. Add `--rerun` to run the tests again
   anyway.
-- `journeyTest` and `extensionWiringTest` never count as up to date. They always run.
+- `journeyTest` and the `extensionWiringTest` tasks never count as up to date. They always run.
 - Never run two `journeyTest` builds at the same time in one checkout. They share the build
   folder and the screenshot folder.
 - Each journey runs in a JVM of its own.
@@ -308,6 +313,131 @@ starts.
 The runtime can start only once per JVM. So each journey is its own class with one test, and
 `journeyTest` runs each class in a JVM of its own. A flow that changes state gets its own journey.
 
+## The button crawl
+
+`ButtonCrawlTest` (task `:desktop:buttonCrawlTest`) clicks every button of the app. It starts the
+runtime and seeds the library as the smoke test does, and opens the same checks (`SmokeChecks.kt`
+holds them for both), plus four states whose buttons need data: a library selection
+(`flow:library.selection`), an entry with every chapter selected (`flow:manga.chapter-selection`),
+the reader on a middle page for its keys (`flow:reader.keys`) and the reader with its bars shown
+(`flow:reader.bars`). Settings search, the theme row and the
+Settings screen itself are skipped: their rows are the Settings pages'.
+
+For each check it collects every clickable node of the topmost root (a dialog or menu over the
+window is modal, so a user can click only in it), scrolling each list to reach its rows. Of
+several buttons with the same key (the rows of one list, the days of a calendar) it clicks the
+first two. Then, for each button, it opens the check again, clicks
+the button and waits for the app to settle. A click fails the run when:
+
+- it throws, the composition throws, or a thread has an uncaught exception;
+- the app logs an ERROR while it runs;
+- the window stops answering (a native modal dialog that does not go through `SystemEffects`);
+- nothing observable happened: no navigation, no dialog or menu opened or closed, nothing on
+  screen changed, no setting or database row changed, no toast or notification, no callback of a
+  dialog rendered directly by the test, and no outside effect.
+
+Outside effects go through `SystemEffects` (`desktop/src/main/kotlin/zoukan/desktop/app/SystemEffects.kt`):
+opening a web page or a folder, the file and folder pickers, the clipboard, an update's installer
+and quitting. The crawl puts a recorder in its place, so a click never leaves the test, and a
+picker answers "cancelled". New code that opens something outside the window must use it too.
+
+### Other inputs
+
+The same pass covers what a user does other than click, with the same snapshot, signature,
+baseline and restore. Each gets a key of its own, the node's key with a suffix:
+
+| Input | Key | What the crawl does |
+| --- | --- | --- |
+| Right click, and other semantics custom actions | `<node> [action: <label>]` | Runs the action. `onRightClick` (`ui/common/Modifiers.kt`) gives every right-click site a custom action ("More actions", or "Copy to clipboard" where it copies), which screen-reader and keyboard users reach too. A menu it opens is crawled one level down, as a click's. The one long press that opens a menu (the entry's title, `EntryInfoMenus.kt`) has the same menu as its right-click action; other long presses only show a tooltip, so the crawl does not long-press. |
+| Text field | `<node> [type]`, `<node> [type, enter]`, `<node> [type, escape]` | Gives the field the focus and types `Alpha` (the seeded entry, so a search finds it), records; then presses Enter and records again. A second task types and presses Escape. Password fields are left out (`AppLockJourneyTest` and the sync and tracker journeys cover them). |
+| Slider | `<node> [slider max]`, `<node> [slider min]` | Sets it to its maximum, records, then to its minimum. Material's `setProgress` also calls `onValueChangeFinished`. |
+| Keyboard shortcut | `<check>/key:<keys>` | Presses the key into the window as the window passes it on (the focused node, then the app's shortcuts on the root, then Escape as Back). Every `Shortcuts.actionFor` action, on the library (`tab:Library`, `tab:More` for Ctrl+1) or an entry (Escape, Alt+Left), and every `ReaderKeys.bindings` key on `flow:reader.keys`. |
+
+A text field on a screen fails when neither typing nor Enter did more than show the text (no
+setting, search, list or screen took it); a field in a dialog that only shows the text is
+`field-local`, since the dialog's own button stores it. A dialog with a disabled button and an
+empty field gets `Crawl` typed in before its buttons are collected, so the button it held back is
+crawled too. A slider fails when neither end stored anything or changed anything but the slider.
+The crawl clears what was typed into the root screen's fields (the library search) between tasks,
+and puts the window back from fullscreen (the reader's F).
+
+A button that opens a menu gets its items clicked as well, one level down. Dialogs that a click
+opens are not crawled; the named ones have checks of their own. Between clicks, the crawl puts back
+the settings a click changed and the seeded library (Alpha, Bravo, their chapters and the Smoke
+category). HTTP goes to a closed local port, so the crawl runs offline on every machine.
+
+### Effect signatures
+
+Each click gets an effect signature: the things it did, as sorted tokens that are the same in
+every run (digits become `#`). The tokens:
+
+| Token | Meaning |
+| --- | --- |
+| `nav:<package>.<Screen>`, `nav:back`, `nav:host` | It opened that screen, went back, or opened a dialog the test renders directly. |
+| `dialog:"<title>"`, `menu`, `close` | It opened a dialog (named by its title) or a menu, or closed one. |
+| `pref:<key>` | It changed that preference. The crawl also checks the value reached the file on disk. |
+| `db:<table>.<column>`, `db:<table>+`, `db:<table>-` | It changed that column, or added or removed rows. The report also names the rows: `chapters.read[Alpha/Chapter 1]`. |
+| `queue+`, `queue-`, `files:downloads-`, `files:local-` | It changed the download queue, or added or removed files in the downloads or local folders. |
+| `job:library-update` | It started a library update. |
+| `tab:<Tab>`, `selection` | It switched the home tab, or changed a selection's "N selected" count. |
+| `focus:<node>` | A key moved the focus to that node (keyboard shortcuts only: a click or typing moves the focus as a side effect). |
+| `reader:<page\|menu\|zoom\|fullscreen\|help\|auto-scroll\|settings\|chapters>` | It changed that of the open reader. The reader exposes these through `ReaderKeys.StateKey`, a semantics property for tests that screen readers do not see. |
+| `browse:<host>`, `folder:<path>`, `pick:open[<types>]`, `pick:save[<types>]`, `pick:folder`, `clipboard`, `trash:<name>`, `install`, `exit` | An outside effect, through `SystemEffects`. A link must be an http(s) address, and a folder must exist inside the data or storage folder. |
+| `toast:"<text>"`, `notification:"<title>"` | It showed a toast or a notification. |
+| `calls-back` | It called a callback of a dialog that the test renders directly. |
+| `ui` | Only the screen changed. |
+| `own-value` | Only the control's own value changed: a text field's text or focus, a slider's position. |
+| `field-local` | A text field in a dialog only showed what was typed; the dialog's button stores it. |
+| `field`, `key-unused`, `at-end-already` | Nothing changed: the field refused the text, the field or screen did not use Enter or Escape, or a slider (or N and P in the reader) was already at that end. |
+| `selected-already`, `field` | Nothing changed, rightly: the page, tab or option was already chosen, or the text field already had the focus. |
+| `logs:offline` | The app logged an error only because the crawl runs offline or without Chromium. Any other error fails the click. |
+
+A switch, checkbox or choice whose click changed a preference or the database gets a round trip:
+the crawl opens the check again without putting the state back, and the button must show the
+stored state (a switch stays on).
+
+A click fails the run when, besides the errors above, its signature is empty; when it is only
+`ui` for a Settings switch or choice, or for a button whose label says it changes data ("Mark
+as read", "Delete", "Download"); when a contract does not hold; or when its signature differs
+from the inventory. The contracts are in `Contracts` (`ButtonEffects.kt`): for example, "Add to
+library" on Alpha's screen must write `mangas.favorite[Alpha]`, and a switch of the library's
+filter, sort and display options must write a preference.
+
+### The checked-in files
+
+Two files in `desktop/src/test/resources/` go with it:
+
+- `button-inventory.txt`: every button and its signature, `<button key>  <signature>` (two spaces
+  between). A button key is `<check key>/<node id>`, and `<check key>/<button> > <item>` for a menu
+  item. The crawl fails when a button appears, goes or does something else. After a change on
+  purpose, regenerate it with `-Pzoukan.crawl.updateBaseline=true` (a filtered or sharded run
+  rewrites only the buttons it crawled) and review the diff: each changed line is a change in
+  what a button does. Each run also writes what it found, in the same format, to
+  `desktop/build/reports/coverage/button-inventory-found.txt`, and CI uploads it with each shard
+  (artifact `button-crawl-<shard>`), so a new inventory can be put together from CI without a
+  local crawl: keep the header and append the sorted lines of the four shards' files.
+- `button-crawl-allowlist.txt`: buttons allowed to do nothing, or only change the screen,
+  `<button key>  # <reason>`. Such a button is usually a bug, so fix it rather than list it. A line
+  whose button now does something more fails a full run.
+
+Each run writes every button with what clicking it did to `desktop/build/reports/coverage/buttons.md`.
+`-Pzoukan.crawl.only=<regex>` crawls only the checks whose name or key matches, to debug one, and
+`-Pzoukan.shard=i/n` crawls every n-th check key, as CI does.
+
+### What the crawl leaves to other tests
+
+Some inputs are slow or flaky to crawl, or leave the window, so dedicated tests cover their logic:
+
+- Library Shift-click range and Ctrl/Cmd-click toggle: `LibraryClickSelectionTest`.
+- The paged reader's wheel page turn and Ctrl/Cmd + wheel zoom: `PagedWheelTest`.
+- The mouse back button: `ShortcutsBackGuardTest`.
+- Closing the window to the tray, and the one-time notice: `AppTrayTest` (`onWindowClose`).
+- The tray menu's update and pause or start downloads: `AppTrayTest` (`trayMenu`). The real OS tray and its notifications are not tested.
+- The Resume button's docking side: `ResumeButtonDockTest`, and the stored side `ReadButtonPositionTest`.
+- The reader's key table: `ReaderKeysTest`.
+- Drag to reorder: `CategoriesJourneyTest` drags the Edit categories handle. Swipe: `ChapterListTest` swipes a chapter row.
+- Not tested: a second instance handing over to the first (two processes), and windows across several monitors.
+
 ## Usability checks
 
 Every smoke check also looks at what is on screen for four kinds of usability problem, in the
@@ -390,6 +520,62 @@ screenshots to `desktop/build/reports/e2e/`.
 Always pass `--tests`. With `-Pzoukan.e2e=true`, `test` no longer leaves out the wiring tests and
 the journeys, and runs every test class in a JVM of its own.
 
-`extensionWiringTest` downloads every extension of the Keiyoushi store, so it is part of the
-nightly check only. `-Pzoukan.e2e.package=en.mangapill,all.mangadex` limits it to some
-extensions. Its report goes to `desktop/build/reports/e2e/extensions-wiring.md`.
+Some other tests use the network and skip themselves unless the environment variable
+`ZOUKAN_LIVE=true` is set (some also accept `-Dzoukan.live=true` on the test JVM). Run them one at a
+time, with `--tests`:
+
+- `DohLiveTest`: resolves real names through every DNS over HTTPS provider.
+- `ChromiumDohLiveTest`, `WebViewFrameCallbacksLiveTest`: drive an installed Chromium
+  (`ZOUKAN_CEF_DIR=<data>/browser`).
+- `UpdateLiveTest`: runs the update check against the real GitHub releases as version 1.0.6
+  (`ZOUKAN_LIVE_UPDATE_FROM` changes it), downloads this platform's installer (about 300 MB) and its
+  `.sig`, and checks that the release signature verifies under the committed
+  `zoukan-release-key.pem` and that a copy with one byte flipped, or a changed signature, is
+  refused. When the newest release has no `.sig` (releases from before the release signature), it
+  checks that the installer is refused and then skips the signature checks. 1.1.0 is the first
+  release with `.sig` files, so the positive path can pass only once 1.1.0 is published. It uses an in-memory
+  secret store and a temporary folder, so it touches no app data and no OS secret store.
+
+```bash
+ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
+```
+
+`extensionWiringTest` downloads every extension of two stores, so it is part of the nightly
+check only. The stores are `CompatibilityHarness.SAMPLE_STORES`: Keiyoushi (about 1,700
+extensions) and yuzono's "Cursed" store (six NSFW extensions with their own signing key). Only the
+tests and the harness use the yuzono store; the app does not add or trust it. Each store runs in a
+test task and JVM of its own (`extensionWiringTestKeiyoushi`, `extensionWiringTestYuzono`), one
+after the other, and writes its own report:
+`desktop/build/reports/e2e/extensions-wiring-<store>.md`. A store that lists far fewer extensions
+than expected (under 1,000 for Keiyoushi, none for yuzono) fails its task: the store moved or its
+index is a stub.
+
+- `-Pzoukan.e2e.stores=yuzono` picks the stores (comma-separated; default both).
+- `-Pzoukan.e2e.package=en.mangapill,all.mangadex` limits it to some extensions. Each store checks
+  the ones it lists.
+
+```bash
+./gradlew :desktop:extensionWiringTest -Pzoukan.e2e.stores=yuzono
+./gradlew :desktop:extensionWiringTest -Pzoukan.e2e.stores=keiyoushi -Pzoukan.e2e.package=en.mangapill,all.webtoons
+```
+
+The live harness (`./gradlew :desktop:run --args="harness"`) also runs over both stores by
+default, each with its own sample: Keiyoushi's 30 (`CompatibilityHarness.SAMPLE_STORE_A`) and all six
+of yuzono's. `--store keiyoushi` or `--store yuzono` (repeatable, or a store URL) picks the stores.
+Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile. Over
+several stores, a `--packages` entry is tested in the stores that list it, and fails the run only
+when no store lists it.
+
+`--doh <name|off>` sets DNS over HTTPS for the run, for OkHttp and the hidden Chromium alike:
+`cloudflare`, `google`, `adguard`, `quad9`, `alidns`, `dnspod`, `360`, `mullvad`, `controld`,
+`njalla`, or `off` for the system's DNS. It sets the DNS preference of the harness profile, so later
+runs without `--doh` keep it; the app's own profile is never touched. Without it the run uses the
+harness profile's setting. The run prints the server it uses. Use it when the local DNS blocks or
+redirects a site, or to check a provider:
+
+```bash
+./gradlew :desktop:run --args="harness --doh quad9 --store keiyoushi --packages en.comix"
+```
+
+The "First image" column gives the first page's type, size and size in pixels (`ok image/webp
+1 KB 720x40`, say), so a placeholder, a tiny tile or a scrambled image shows apart from a real page.

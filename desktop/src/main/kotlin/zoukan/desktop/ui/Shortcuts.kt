@@ -13,6 +13,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerButton
 import cafe.adriel.voyager.navigator.Navigator
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -99,6 +100,10 @@ object Shortcuts {
         val ctrl = event.isCtrlPressed || event.isMetaPressed
         return perform(actionFor(event.key, ctrl, event.isShiftPressed, event.isAltPressed), navigator, escape = event.key == Key.Escape)
     }
+
+    /** The mouse's back button goes back one screen; not while the app lock covers the window. */
+    fun mouseBack(button: PointerButton?, locked: Boolean, navigator: Navigator?): Boolean =
+        button == PointerButton.Back && !locked && goBack(navigator)
 
     /** Goes back one screen, as the mouse back button does; returns whether there was a screen to go back to. */
     fun goBack(navigator: Navigator?): Boolean {

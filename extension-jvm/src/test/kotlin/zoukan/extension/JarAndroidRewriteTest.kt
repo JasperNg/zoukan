@@ -6,8 +6,13 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Label
+import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
+import org.objectweb.asm.Type
 import suwayomi.tachidesk.manga.impl.util.BytecodeEditor
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -108,6 +113,117 @@ class JarAndroidRewriteTest {
         ).loadClass("zoukan.extension.generated.Twice")
         cls.getField("format").type.name shouldBe replacement
         cls.getMethod("make").invoke(null).javaClass.name shouldBe replacement
+    }
+
+    /**
+     * pick(Z) keeps a SimpleDateFormat in local 1 across a branch, so the class has a stack map
+     * frame naming java/text/SimpleDateFormat (what Keiyoushi's en.tapastic has in a(Z)SChapter).
+     * It also loads the class as a constant, with a local variable table and a generic signature.
+     */
+    private fun branchingDateFormatClass(internal: String): ByteArray {
+        val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES or ClassWriter.COMPUTE_MAXS)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, internal, null, "java/lang/Object", null)
+        cw.visitField(
+            Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+            "formats",
+            "Ljava/util/List;",
+            "Ljava/util/List<Ljava/text/SimpleDateFormat;>;",
+            null,
+        ).visitEnd()
+        cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "pick", "(Z)Ljava/lang/Object;", null, null).apply {
+            val start = Label()
+            val join = Label()
+            val end = Label()
+            visitCode()
+            visitLabel(start)
+            visitTypeInsn(Opcodes.NEW, "java/text/SimpleDateFormat")
+            visitInsn(Opcodes.DUP)
+            visitLdcInsn("yyyy-MM-dd")
+            visitMethodInsn(Opcodes.INVOKESPECIAL, "java/text/SimpleDateFormat", "<init>", "(Ljava/lang/String;)V", false)
+            visitVarInsn(Opcodes.ASTORE, 1)
+            visitVarInsn(Opcodes.ILOAD, 0)
+            visitJumpInsn(Opcodes.IFEQ, join)
+            visitVarInsn(Opcodes.ALOAD, 1)
+            visitInsn(Opcodes.ICONST_0)
+            visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/text/SimpleDateFormat", "setLenient", "(Z)V", false)
+            // The branch target: a frame with locals [int, java/text/SimpleDateFormat]
+            visitLabel(join)
+            visitVarInsn(Opcodes.ALOAD, 1)
+            visitInsn(Opcodes.ARETURN)
+            visitLabel(end)
+            visitLocalVariable("format", "Ljava/text/SimpleDateFormat;", null, start, end, 1)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "type", "()Ljava/lang/Class;", null, null).apply {
+            visitCode()
+            visitLdcInsn(Type.getObjectType("java/text/SimpleDateFormat"))
+            visitInsn(Opcodes.ARETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
+    @Test
+    fun `a replaced class held in a local across a branch passes the verifier`() {
+        val internal = "zoukan/extension/generated/Branches"
+        val original = branchingDateFormatClass(internal)
+        // The class as compiled has a stack map frame naming the JDK class
+        String(original, Charsets.ISO_8859_1).contains("java/text/SimpleDateFormat") shouldBe true
+
+        // A class loader other than the boot loader verifies what it defines, so a frame left
+        // naming java/text/SimpleDateFormat fails here with "Inconsistent stackmap frames"
+        val cls = ExtensionClassLoader(
+            JarContents(mapOf("$internal.class" to original)),
+            "zoukan.extension.generated",
+        ).loadClass(internal.replace('/', '.'))
+        val pick = cls.getMethod("pick", Boolean::class.javaPrimitiveType)
+        pick.invoke(null, true).javaClass.name shouldBe replacement
+        pick.invoke(null, false).javaClass.name shouldBe replacement
+        (cls.getMethod("type").invoke(null) as Class<*>).name shouldBe replacement
+        cls.getField("formats").genericType.typeName shouldBe "java.util.List<$replacement>"
+
+        // Every reference is renamed: no descriptor, frame or signature still names the JDK class
+        val rewritten = BytecodeEditor.fixAndroidClass(original)
+        val remaining = mutableListOf<String>()
+        ClassReader(rewritten).accept(
+            object : ClassVisitor(Opcodes.ASM9) {
+                override fun visitField(access: Int, name: String, descriptor: String, signature: String?, value: Any?) =
+                    null.also { listOfNotNull(descriptor, signature).filter { "Ljava/text/SimpleDateFormat;" in it }.forEach(remaining::add) }
+
+                override fun visitMethod(
+                    access: Int,
+                    name: String,
+                    descriptor: String,
+                    signature: String?,
+                    exceptions: Array<out String>?,
+                ) = object : MethodVisitor(Opcodes.ASM9) {
+                    override fun visitFrame(type: Int, numLocal: Int, local: Array<out Any>?, numStack: Int, stack: Array<out Any>?) {
+                        (local.orEmpty().toList() + stack.orEmpty().toList()).filter { it == "java/text/SimpleDateFormat" }.forEach { remaining += "frame in $name" }
+                    }
+
+                    override fun visitLocalVariable(name: String, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
+                        if (descriptor == "Ljava/text/SimpleDateFormat;") remaining += "local $name"
+                    }
+
+                    override fun visitLdcInsn(value: Any?) {
+                        if (value is Type && value.internalName == "java/text/SimpleDateFormat") remaining += "ldc in $name"
+                    }
+
+                    override fun visitTypeInsn(opcode: Int, type: String) {
+                        if (type == "java/text/SimpleDateFormat") remaining += "type in $name"
+                    }
+
+                    override fun visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean) {
+                        if (owner == "java/text/SimpleDateFormat") remaining += "call $name"
+                    }
+                }
+            },
+            0,
+        )
+        remaining shouldBe emptyList()
     }
 
     @Test

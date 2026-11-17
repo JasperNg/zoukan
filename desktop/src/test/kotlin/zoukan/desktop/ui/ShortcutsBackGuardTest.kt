@@ -2,6 +2,7 @@ package zoukan.desktop.ui
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.core.screen.Screen
@@ -9,6 +10,7 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.CurrentScreen
 import cafe.adriel.voyager.navigator.Navigator
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
 private data class Plain(val name: String) : Screen {
@@ -71,5 +73,27 @@ class ShortcutsBackGuardTest {
             }
         }
         left.shouldBeEmpty()
+    }
+
+    @Test
+    fun `the mouse back button pops the stack, other buttons and the app lock do not`() = runDesktopComposeUiTest {
+        var navigator: Navigator? = null
+        setContent {
+            Navigator(Plain("root")) {
+                navigator = it
+                CurrentScreen()
+            }
+        }
+        runOnUiThread { navigator!!.push(Plain("second")) }
+        waitForIdle()
+        runOnUiThread {
+            Shortcuts.mouseBack(PointerButton.Primary, locked = false, navigator) shouldBe false
+            Shortcuts.mouseBack(PointerButton.Back, locked = true, navigator) shouldBe false
+        }
+        waitForIdle()
+        navigator!!.size shouldBe 2
+        runOnUiThread { Shortcuts.mouseBack(PointerButton.Back, locked = false, navigator) shouldBe true }
+        waitForIdle()
+        navigator!!.size shouldBe 1
     }
 }

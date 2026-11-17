@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.model.Category
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import zoukan.desktop.security.Incognito
@@ -39,6 +40,30 @@ class DiscordPresenceTest {
         val hidden = runBlocking { presence.activity() }
         hidden["details"]!!.jsonPrimitive.content shouldBe "Reading"
         hidden.containsKey("state") shouldBe false
+    }
+
+    @Test
+    fun `an entry in a hidden category is read without its title, others show it`() {
+        val incognito = mockk<Incognito>(relaxed = true)
+        every { incognito.isOn(any()) } returns false
+        val getCategories = mockk<GetCategories>()
+        coEvery { getCategories.await(1L) } returns listOf(Category(id = 7, name = "Private", order = 1, flags = 0, hidden = false))
+        coEvery { getCategories.await(2L) } returns emptyList()
+        val presence = DiscordPresence(store, getCategories, incognito)
+        // Android's format: the category ids as strings; "0" is the default category
+        presence.hiddenCategories().set(setOf("7"))
+
+        presence.setReading(DiscordPresence.Reading(1, "Hidden Title", "Chapter 3", 3.0, null, sourceId = 5))
+        val hidden = runBlocking { presence.activity() }
+        hidden["details"]!!.jsonPrimitive.content shouldBe "Reading"
+        hidden.containsKey("state") shouldBe false
+
+        presence.setReading(DiscordPresence.Reading(2, "Shown Title", "Chapter 1", 1.0, null, sourceId = 5))
+        runBlocking { presence.activity() }["details"]!!.jsonPrimitive.content shouldBe "Shown Title"
+
+        // An entry in no category counts as in the default one
+        presence.hiddenCategories().set(setOf(Category.UNCATEGORIZED_ID.toString()))
+        runBlocking { presence.activity() }["details"]!!.jsonPrimitive.content shouldBe "Reading"
     }
 
     @Test
