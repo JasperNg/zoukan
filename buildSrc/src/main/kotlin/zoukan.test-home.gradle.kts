@@ -2,7 +2,7 @@
 /**
  * Gives each desktop test JVM a home folder and a data folder of its own under
  * build/test-home/<task>, so no test reads or writes the developer's real home or Zoukan profile
- * (desktop/TESTING.md, "The test home folder"): `user.home` (the macOS and Linux defaults, Skiko's
+ * (desktop/TESTING.md, "The home folder and file-system side effects"): `user.home` (the macOS and Linux defaults, Skiko's
  * and JNA's native caches, PageActions' Pictures folder), `zoukan.dataDir` (ZoukanDirs.default()
  * everywhere, Windows' %APPDATA% too) and `zoukan.test.home`, which tells the tests' TestHome that
  * `user.home` is this folder. A key the task sets itself is left as it is.
