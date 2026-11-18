@@ -10,8 +10,14 @@ import okhttp3.Dns
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import zoukan.desktop.testing.FileSystemSandbox
 import zoukan.desktop.browser.ChromiumNatives.forDownload
+import java.io.File
+import java.io.IOException
+import java.net.UnknownHostException
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
@@ -58,5 +64,23 @@ class ChromiumNativesTest {
         download.cache shouldBe null
         download.dns shouldBe dns
         download.callTimeoutMillis shouldBe TimeUnit.HOURS.toMillis(1).toInt()
+    }
+
+    @Test
+    fun `a linked install folder loses the link, never the files it points to`() {
+        FileSystemSandbox.create().use { sandbox ->
+            val target = File(sandbox.userFolder, "elsewhere").apply { mkdirs() }
+            File(target, "keep.txt").writeText("the user's")
+            val installDir = sandbox.link(File(sandbox.dataFolder, "chromium"), target)
+            assumeTrue(installDir != null, "symbolic links need rights on this system")
+            sandbox.record()
+            // Fails at the download, after the folder was cleared for a fresh install
+            val offline = OkHttpClient.Builder().dns { throw UnknownHostException(it) }.build()
+
+            assertThrows<IOException> { ChromiumNatives.ensureInstalled(installDir!!, { offline }) }
+
+            File(target, "keep.txt").readText() shouldBe "the user's"
+            sandbox.assertNothingOutsideAppChanged()
+        }
     }
 }

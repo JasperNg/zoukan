@@ -11,6 +11,7 @@ import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
+import zoukan.desktop.download.SafeDelete
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -48,7 +49,8 @@ object ChromiumNatives {
             ?: throw IOException(
                 "No pinned checksum for Chromium ${info.releaseTag} on ${platform.identifier}; it is not downloaded",
             )
-        installDir.deleteRecursively()
+        // Never through a link: a linked install folder loses the link, not what it points to
+        SafeDelete.deleteTreeNoFollow(installDir.toPath())
         if (!installDir.mkdirs()) throw IOException("Could not create $installDir")
         val download = File(installDir, DOWNLOAD)
         try {
@@ -61,7 +63,7 @@ object ChromiumNatives {
             }
         } catch (e: Throwable) {
             // Nothing half installed stays behind
-            installDir.deleteRecursively()
+            SafeDelete.deleteTreeNoFollow(installDir.toPath())
             throw e
         }
         download.delete()
