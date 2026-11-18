@@ -138,7 +138,8 @@ class DownloadManager(
      * files of a download that is starting or running. Only the clean-up holds several at once (the
      * owners of a shared folder), always taken in id order; nothing else holds more than one.
      */
-    private val entryLocks = ConcurrentHashMap<Long, Mutex>()
+    // Internal so a test can put in a lock that records who asks for it: a Mutex does not show its waiters
+    internal val entryLocks = ConcurrentHashMap<Long, Mutex>()
     internal fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
 
     /** What is in each entry's download folder, read once and checked again by its modified time */
