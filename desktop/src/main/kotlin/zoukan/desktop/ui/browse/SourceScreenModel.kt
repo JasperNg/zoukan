@@ -351,8 +351,9 @@ class SourceScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                e.rethrowIfVmFailure()
+                // Before a fatal error goes on: a listing left loading loads no more pages
                 mutableState.update { it.copy(loading = false, error = sourceErrorMessage(e)) }
+                e.rethrowIfVmFailure()
             }
         }
     }

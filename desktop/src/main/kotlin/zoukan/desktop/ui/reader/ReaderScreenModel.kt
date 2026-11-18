@@ -379,9 +379,10 @@ class ReaderScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                // The reader stops loading before a fatal error goes on, or it spins for good
+                mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }
                 e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { "Loading pages of ${chapter.name} failed" }
-                mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }
             }
         }
     }
@@ -567,14 +568,19 @@ class ReaderScreenModel(
                 // ZOUKAN <--
                 throw e
             } catch (e: Throwable) {
-                e.rethrowIfVmFailure()
                 // ZOUKAN -->
-                // A cancelled download can fail with an I/O error ("Canceled"): that is no page error
-                if (!isActive || !owns()) return@launch
+                // A cancelled download can fail with an I/O error ("Canceled"): that is no page error.
+                // The page is an error before a fatal error goes on: a page left loading is never
+                // loaded again, and "Retry" passes over it
+                val ours = isActive && owns()
+                if (ours) {
+                    page.bytes = null
+                    page.setState(ReaderPage.State.Error(sourceErrorText(e)))
+                }
+                e.rethrowIfVmFailure()
+                if (!ours) return@launch
                 // ZOUKAN <--
                 logcat(LogPriority.WARN, e) { "Page ${index + 1} failed" }
-                page.bytes = null
-                page.setState(ReaderPage.State.Error(sourceErrorText(e)))
                 // ZOUKAN -->
                 // SY's "Instant retry": a failed page is tried once more at once
                 if (attempt == 0 && preferences.readerInstantRetry().get()) {

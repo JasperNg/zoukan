@@ -215,9 +215,10 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                // Set before a fatal error goes on, so the screen does not stay loading
+                mutableState.update { it.copy(refreshing = false, error = localized(DMR.strings.this_entry_no_longer_exists)) }
                 e.rethrowIfVmFailure()
                 logcat(LogPriority.WARN, e) { "The entry $mangaId is gone" }
-                mutableState.update { it.copy(refreshing = false, error = localized(DMR.strings.this_entry_no_longer_exists)) }
             }
             // ZOUKAN <--
         }
@@ -384,6 +385,9 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                // The refresh ends before a fatal error goes on: a screen left refreshing can never
+                // refresh again (the error below replaces this one when the catch goes on)
+                mutableState.update { it.copy(refreshing = false, error = sourceErrorText(e)) }
                 e.rethrowIfVmFailure()
                 // Throwable, not Exception: an extension built against another API fails with a
                 // LinkageError, which would leave the screen refreshing for good

@@ -2,6 +2,8 @@ package zoukan.desktop.ui.manga
 
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -48,7 +50,10 @@ class MangaScreenModelMissingEntryTest {
         Thread.setDefaultUncaughtExceptionHandler(previousHandler)
     }
 
-    private fun newModel(getMangaWithChapters: GetMangaWithChapters): MangaScreenModel {
+    private fun newModel(
+        getMangaWithChapters: GetMangaWithChapters,
+        refreshManga: zoukan.desktop.domain.RefreshManga = mockk(relaxed = true),
+    ): MangaScreenModel {
         val downloadedOnly = mockk<tachiyomi.core.common.preference.Preference<Boolean>> { every { changes() } returns flowOf(false) }
         val preferences = mockk<DesktopPreferences> { every { downloadedOnly() } returns downloadedOnly }
         return MangaScreenModel(
@@ -56,7 +61,7 @@ class MangaScreenModelMissingEntryTest {
             getMangaWithChapters = getMangaWithChapters,
             sourceManager = mockk(relaxed = true),
             updateChapter = mockk(relaxed = true),
-            refreshManga = mockk(relaxed = true),
+            refreshManga = refreshManga,
             downloadManager = mockk(relaxed = true) {
                 every { changes } returns MutableStateFlow(0)
                 every { queue } returns MutableStateFlow(emptyList())
@@ -118,5 +123,36 @@ class MangaScreenModelMissingEntryTest {
 
         model.state.value.error shouldBe localized(DMR.strings.this_entry_no_longer_exists)
         uncaught.shouldBeEmpty()
+    }
+
+    @Test
+    fun `running out of memory while the entry opens shows an error and still reaches the crash report`() {
+        val interactor = mockk<GetMangaWithChapters> { coEvery { awaitManga(99L) } throws OutOfMemoryError("test") }
+        val model = newModel(interactor)
+        waitUntil { model.state.value.error != null && uncaught.isNotEmpty() }
+
+        model.state.value.refreshing shouldBe false
+        uncaught.single().shouldBeInstanceOf<OutOfMemoryError>()
+    }
+
+    @Test
+    fun `running out of memory while refreshing ends the refresh and still reaches the crash report`() {
+        val manga = Manga.create().copy(id = 99, initialized = true)
+        val interactor = mockk<GetMangaWithChapters> {
+            coEvery { awaitManga(99L) } returns manga
+            coEvery { subscribe(99L) } returns flowOf(manga to emptyList())
+        }
+        val refresh = mockk<zoukan.desktop.domain.RefreshManga> {
+            coEvery { this@mockk.invoke(any(), any(), any(), any(), any(), any()) } throws OutOfMemoryError("test")
+        }
+        val model = newModel(interactor, refresh)
+        waitUntil { model.state.value.manga != null && !model.state.value.refreshing }
+        runBlocking(main) { model.refresh() }
+        waitUntil { uncaught.isNotEmpty() && !model.state.value.refreshing }
+
+        model.state.value.refreshing shouldBe false
+        model.state.value.error shouldNotBe null
+        // The first load refreshes an entry without chapters too: each refresh's error goes on
+        uncaught.forEach { it.shouldBeInstanceOf<OutOfMemoryError>() }
     }
 }
