@@ -61,4 +61,16 @@ class MainArgumentsTest {
         val (code, _) = run("backup", "compare", a, b)
         code shouldBe 1
     }
+
+    @Test
+    fun `every command turns ImageIO's temporary file cache off`() {
+        val useCache = javax.imageio.ImageIO.getUseCache()
+        try {
+            javax.imageio.ImageIO.setUseCache(true)
+            run("version")
+            javax.imageio.ImageIO.getUseCache() shouldBe false
+        } finally {
+            javax.imageio.ImageIO.setUseCache(useCache)
+        }
+    }
 }

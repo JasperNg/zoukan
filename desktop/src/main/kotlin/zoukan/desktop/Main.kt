@@ -146,6 +146,11 @@ private fun Iterator<String>.intValue(option: String): Int =
  * It does not throw for a failing command, so [main] always reaches its shutdown path.
  */
 internal fun runCommand(args: Array<String>): Int {
+    // ImageIO's streams over an InputStream or OutputStream otherwise copy the image to a temporary
+    // file in the system's temporary folder (a decrypted page or cover); off, they cache in memory.
+    // The app's own reads already use memory-cached streams (MemoryImageIo); this covers the rest.
+    // Images read from or written to a File are opened directly either way
+    javax.imageio.ImageIO.setUseCache(false)
     val command = args.firstOrNull() ?: "ui"
     val rest = args.drop(1)
     return try {

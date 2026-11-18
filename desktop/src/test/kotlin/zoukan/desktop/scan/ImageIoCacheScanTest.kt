@@ -16,6 +16,8 @@ import zoukan.desktop.scan.SourceScan.Allowed
  * Read and write images held in memory with `MemoryImageIo` (desktop) or a
  * `MemoryCacheImageInputStream` / `MemoryCacheImageOutputStream` (android-compat). A `File`
  * argument is opened directly, with no cache file; such a site needs an entry with its reason.
+ * Every command also turns ImageIO's file cache off at start (`runCommand`); this rule does not
+ * rely on that, which a test or a caller outside `runCommand` would not have.
  */
 class ImageIoCacheScanTest {
     private val sourceDirs = listOf(
