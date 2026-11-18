@@ -2,7 +2,6 @@ package zoukan.desktop.app
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.ZoukanDirs
@@ -86,10 +85,6 @@ class ReportPruneTest {
         }
     }
 
-    @Disabled(
-        "Production bug, not fixed here: pruneOldReports lists a reports (or crashes) folder that is a " +
-            "symbolic link, so it deletes old files named like Zoukan's reports in the folder the link points to",
-    )
     @Test
     fun `pruning never deletes through a reports folder that is a link to the user's files`() {
         FileSystemSandbox.create(root).use { sandbox ->
@@ -101,6 +96,40 @@ class ReportPruneTest {
 
             CrashReporter.pruneOldReports(dirs, now)
 
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `pruning never deletes through a crashes folder that is a link to the user's files`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false)
+            // Old files named like crash reports, and more than the count limit of new ones
+            sandbox.userFolder.file("crash-20260101-120000-000.txt", 40)
+            (0 until 35).forEach { sandbox.userFolder.file("error-20261117-1200${"%02d".format(it)}-000.txt", 0) }
+            assumeTrue(sandbox.link(dirs.crashes, sandbox.userFolder) != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            CrashReporter.pruneOldReports(dirs, now)
+            CrashReporter.prune(dirs.crashes, now)
+
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `a link inside the reports folder is not followed or deleted`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false)
+            val target = sandbox.userFolder.file("my-errors.txt", 35)
+            dirs.reports.mkdirs()
+            val link = sandbox.link(File(dirs.reports, "library-update-errors.txt"), target)
+            assumeTrue(link != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            CrashReporter.pruneOldReports(dirs, now)
+
+            target.exists() shouldBe true
             sandbox.assertNothingOutsideAppChanged()
         }
     }

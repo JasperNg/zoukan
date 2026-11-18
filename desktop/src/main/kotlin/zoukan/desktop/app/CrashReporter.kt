@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.download.SafeDelete
 import zoukan.desktop.secrets.SecretStoreUnavailableException
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
@@ -42,7 +43,7 @@ import kotlin.system.exitProcess
  * - While incognito mode is on nothing is logged ([IncognitoLog]), and a report leaves out the log
  *   and the exception messages (class names and stack frames only).
  * - Zoukan's reports older than 30 days, in the crash folder and the reports folder, are deleted at
- *   start and when a report is written.
+ *   start and when a report is written. A link, and a folder that is a link, is never followed.
  */
 object CrashReporter {
     private const val MAX_REPORTS = 30
@@ -283,9 +284,13 @@ object CrashReporter {
         ownFiles(dir, pattern).filter { it.lastModified() in 1 until cutoff }.forEach(::deleteQuietly)
     }
 
-    /** Regular files (not links or folders) directly in [dir] whose names match [pattern]. */
+    /**
+     * Regular files (not links or folders) directly in [dir] whose names match [pattern]. None when
+     * [dir] is itself a link or a Windows junction: the files it leads to are not Zoukan's.
+     */
     private fun ownFiles(dir: File, pattern: Regex): List<File> =
         runCatching {
+            if (SafeDelete.isLink(dir.toPath())) return@runCatching emptyList()
             dir.listFiles().orEmpty().filter { f ->
                 pattern.matches(f.name) &&
                     java.nio.file.Files.isRegularFile(f.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)
