@@ -112,12 +112,12 @@ class RefreshMangaRenameTest {
 
     private val updates = slot<MangaUpdate>()
 
-    private fun refreshManga(): RefreshManga {
+    private fun refreshManga(saves: Boolean = true): RefreshManga {
         val chapterRepository = mockk<ChapterRepository> {
             coEvery { getChapterByMangaId(1) } returns listOf(chapter)
         }
         val mangaRepository = mockk<MangaRepository> {
-            coEvery { update(capture(updates)) } returns true
+            coEvery { update(capture(updates)) } returns saves
             coEvery { getMangaById(1) } returns renamed
         }
         every { libraryPreferences.updateMangaTitles() } returns pref(true)
@@ -230,5 +230,25 @@ class RefreshMangaRenameTest {
         // SyncChapters renames chapter downloads in paths.mangaDir(manga): it must be the new folder
         paths.mangaDir(synced.captured) shouldBe paths.mangaDir(renamed)
         paths.mangaDir(renamed).isDirectory shouldBe true
+    }
+
+    @Test
+    fun `a rename whose title is not saved moves the folder back to the name it had, Android's included`() = runBlocking<Unit> {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+            System.getProperty("os.name").startsWith("Windows"),
+            "Android's device names are not valid folder names on Windows",
+        )
+        setUp()
+        val android = manga("aux")
+        // Android names the folder "aux"; the desktop would name it "aux_"
+        val bytes = Random(6).nextBytes(1024)
+        val file = write(File(paths.mangaDir(android).parentFile, "aux"), "Chapter 1.cbz", bytes)
+        val refresh = refreshManga(saves = false)
+
+        refresh(android, fetchDetails = true, fetchChapters = false, source = sourceWithNewTitle())
+
+        file.readBytes() shouldBe bytes
+        File(paths.mangaDir(android).parentFile, "aux_").exists() shouldBe false
+        File(paths.mangaDir(renamed).parentFile, paths.mangaDirName("New title")).exists() shouldBe false
     }
 }

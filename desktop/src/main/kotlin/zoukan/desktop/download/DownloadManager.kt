@@ -302,17 +302,29 @@ class DownloadManager(
 
     /**
      * Moves an entry's download folder to the name [newTitle] gives it, as Android's renameManga.
-     * Never replaces anything: returns false, and moves nothing, when a folder of that name exists
-     * or a chapter of the entry is in the queue. True when there is nothing to move.
+     * Never replaces anything: returns false, and moves nothing, when a folder of that name exists,
+     * a chapter of the entry is in the queue, or the entry's downloads are in more than one folder
+     * (Android's name and the desktop's, both on disk): moving one would leave the other's chapters
+     * out of view. True when there is nothing to move.
      */
     suspend fun renameManga(manga: Manga, newTitle: String): Boolean =
         renameManga(manga.id, manga.source, manga.ogTitle, newTitle)
 
-    suspend fun renameManga(mangaId: Long, sourceId: Long, fromTitle: String, toTitle: String): Boolean =
+    /** The name of [title]'s one download folder on disk (Android's or the desktop's), so a rename can be undone to it. */
+    suspend fun mangaFolderName(sourceId: Long, title: String): String? =
+        withContext(Dispatchers.IO) { paths.existingMangaDirs(sourceId, title).singleOrNull()?.name }
+
+    /** [toName]: the folder name to move to, instead of the one [toTitle] gives (moving a rename back). */
+    suspend fun renameManga(mangaId: Long, sourceId: Long, fromTitle: String, toTitle: String, toName: String? = null): Boolean =
         withContext(Dispatchers.IO) {
             // The folder Android named, if the desktop names it differently (see FileNames)
-            val old = paths.existingMangaDir(sourceId, fromTitle)
-            val target = File(old.parentFile, paths.mangaDirName(toTitle))
+            val existing = paths.existingMangaDirs(sourceId, fromTitle)
+            if (existing.size > 1) {
+                logcat(LogPriority.WARN) { "Not renaming the download folders of the entry: its downloads are in ${existing.size} folders" }
+                return@withContext false
+            }
+            val old = existing.singleOrNull() ?: return@withContext true
+            val target = File(old.parentFile, toName ?: paths.mangaDirName(toTitle))
             if (old.name == target.name || !old.exists()) return@withContext true
             if (_queue.value.any { it.manga.id == mangaId }) {
                 logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: chapters of the entry are queued" }

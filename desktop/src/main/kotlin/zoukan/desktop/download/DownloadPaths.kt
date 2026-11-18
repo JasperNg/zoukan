@@ -77,18 +77,16 @@ class DownloadPaths(
             ).distinct()
 
     /**
-     * The entry folder of [mangaTitle] that exists in the source's folder: the one [mangaDirName]
-     * names, else Android's name for it when that is not valid everywhere and is on disk (found by
-     * listing the folder, never by opening the name: on Windows `NUL` is a device).
+     * Every folder of [mangaTitle]'s downloads that exists: each of [mangaDirNames] in each folder
+     * of [sourceDirNames], found by listing those folders (on Windows `NUL` is a device).
      */
-    fun existingMangaDir(sourceId: Long, mangaTitle: String): File {
-        val sourceDir = sourceDir(sourceId)
-        val current = File(sourceDir, mangaDirName(mangaTitle))
-        if (current.exists()) return current
-        val legacy = legacyNames(FileNames.androidValidFilename(mangaTitle, disallowNonAscii = disallowNonAscii))
-        if (legacy.isEmpty()) return current
-        val onDisk = sourceDir.list().orEmpty().toSet()
-        return legacy.firstOrNull { it in onDisk }?.let { File(sourceDir, it) } ?: current
+    fun existingMangaDirs(sourceId: Long, mangaTitle: String): List<File> {
+        val names = mangaDirNames(mangaTitle)
+        return sourceDirNames(sourceId).distinct().flatMap { source ->
+            val dir = File(storage.downloads, source)
+            val onDisk = dir.list()?.toSet() ?: return@flatMap emptyList()
+            names.filter { it in onDisk }.map { File(dir, it) }
+        }
     }
 
     fun chapterDirName(chapter: Chapter): String =

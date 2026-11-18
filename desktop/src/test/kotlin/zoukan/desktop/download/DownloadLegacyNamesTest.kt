@@ -78,6 +78,22 @@ class DownloadLegacyNamesTest {
     }
 
     @Test
+    fun `an entry with both Android's folder and the desktop's keeps both when renamed`() = runBlocking<Unit> {
+        val kit = DownloadKit(temp)
+        val manga = kit.manga(1, "aux")
+        kit.chapterFolder("A (EN)/aux/Chapter 1")
+        kit.chapterFolder("A (EN)/aux_/Chapter 2")
+
+        // Moving only one would leave the other's chapters out of view: neither moves
+        kit.manager.renameManga(manga, "Renamed") shouldBe false
+
+        File(kit.downloads, "A (EN)/aux/Chapter 1/001.png").exists() shouldBe true
+        File(kit.downloads, "A (EN)/aux_/Chapter 2/001.png").exists() shouldBe true
+        File(kit.downloads, "A (EN)/Renamed").exists() shouldBe false
+        kit.awaitBackground()
+    }
+
+    @Test
     fun `a name cut to end in a dot, and half a surrogate pair written as a question mark, are found`() = runBlocking<Unit> {
         val kit = DownloadKit(temp)
         // Android cuts the chapter name at 229 bytes, leaving a dot at the end
