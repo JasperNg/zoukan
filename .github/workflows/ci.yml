@@ -106,7 +106,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       # distTar/distZip are built by assemble but nobody uses them in CI
       - name: Build and unit tests
-        run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest -x distTar -x distZip --continue
+        run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest -x distTar -x distZip --continue
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
@@ -169,7 +169,8 @@ jobs:
 
   # The whole unit tier on the other two desktop systems, on every pull request as well as on
   # pushes to master (and so the release, which calls this workflow) and dispatches: :desktop:test,
-  # :extension-jvm:test, :domain:desktopTest, :android-compat:test and :backup:desktopTest. Names
+  # :extension-jvm:test, :domain:desktopTest, :android-compat:test, :backup:desktopTest,
+  # :data:desktopTest, :core:common:desktopTest and :source-api:desktopTest. Names
   # matched by case and Unicode form, links and Windows junctions, SQLite files, the Keychain and
   # Credential Manager, the macOS marks and the other code that only does something on Windows or
   # macOS differ from Linux, so a pull request must not first meet them after the merge. Tests for
@@ -196,7 +197,7 @@ jobs:
         env:
           # The runner is thrown away after the job, so the Keychain tests may turn its prompts off
           ZOUKAN_KEYCHAIN_TESTS: 'true'
-        run: ./gradlew :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest --continue
+        run: ./gradlew :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest --continue
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:

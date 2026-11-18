@@ -34,7 +34,6 @@ dependencies {
     kover(projects.androidCompat)
     kover(projects.backup)
     kover(projects.domain)
-    // No tests of their own yet; the desktop tests run their desktop code
     kover(projects.data)
     kover(projects.core.common)
     kover(projects.sourceApi)

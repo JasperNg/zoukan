@@ -130,7 +130,8 @@ class ReleaseWorkflowTest {
         }
         if (!Regex("""(?m)^\s*runs-on:\s*windows-""").containsMatchIn(journeys)) problems += "journeys.yml does not run on Windows"
         // The whole unit tier on Windows and macOS on every pull request, not only after the merge
-        val unitTier = ":desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest"
+        val unitTier = ":desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest " +
+            ":data:desktopTest :core:common:desktopTest :source-api:desktopTest"
         val filesOs = job(ci, "files-os")
         if (unitTier !in filesOs || "macos-" !in filesOs || "windows-" !in filesOs) {
             problems += "ci.yml: files-os does not run the whole unit tier on Windows and macOS"
