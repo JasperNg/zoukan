@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.MethodSource
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.chapter.model.Chapter
@@ -29,6 +30,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.compat.localized
 import zoukan.desktop.e2e.FixtureCatalog
 import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureServer
@@ -38,13 +40,17 @@ import zoukan.desktop.testing.UserMessages
 import zoukan.desktop.testing.fakes.FailingSecretStore
 import zoukan.desktop.testing.fakes.FileFaults
 import zoukan.desktop.testing.fakes.MemorySecretStore
+import zoukan.desktop.testing.fakes.WriteFaults
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
  * The download queue under injected faults: the image server failing (an error status, a connection
  * cut mid-body, no answer, an HTML page instead of an image, a stall the source's read timeout ends),
- * a folder that cannot be written, and a locked secret store. For each, three things:
+ * a folder that cannot be written, a write that fails (a full disk at the start, in a page or in the
+ * archive, a close or a rename that fails, through the manager's `newDownloader` seam and
+ * [WriteFaults]), and a locked secret store. For each, three things:
  *
  * 1. the user sees it: the chapter is in the error state with a message, and an error notification
  *    names it;
@@ -113,7 +119,12 @@ class DownloadFaultsTest {
     private val sourceDir get() = File(temp, "downloads/$source")
     private val mangaDir get() = File(sourceDir, "Manga")
 
-    private fun manager(secrets: SecretStore = MemorySecretStore(), protect: Boolean = false): DownloadManager {
+    private fun manager(
+        secrets: SecretStore = MemorySecretStore(),
+        protect: Boolean = false,
+        newDownloader: (suspend () -> List<Page>, suspend (Page) -> String, suspend (Page) -> ByteArray, Int) -> ChapterDownloader =
+            { pageList, imageUrl, image, parallelPages -> ChapterDownloader(pageList, imageUrl, image, parallelPages) },
+    ): DownloadManager {
         val sourceManager = mockk<SourceManager> {
             every { get(source.id) } returns source
             every { getOrStub(source.id) } returns source
@@ -136,7 +147,8 @@ class DownloadFaultsTest {
             every { encryptionType() } returns pref(SecurityPreferences.EncryptionType.AES_256)
         }
         val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
-        return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, CbzPassword(secrets, securityPreferences), mockk(), mockk(), mockk(relaxed = true))
+        val password = CbzPassword(secrets, securityPreferences)
+        return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, password, mockk(), mockk(), mockk(relaxed = true), newDownloader = newDownloader)
             .also { managers += it }
     }
 
@@ -272,6 +284,92 @@ class DownloadFaultsTest {
         manager.retrySucceeds(chapter)
         // Encrypted, as protection asks: the entries need the password
         ZipFile(File(mangaDir, "${chapter.name}.cbz")).use { it.isEncrypted shouldBe true }
+    }
+
+    // --- Writes that fail: a full disk, a close or a rename that fails ---
+
+    /** Where a download's write fails. */
+    enum class WriteFailure(val fault: WriteFaults.Fault?, val archiveOnly: Boolean) {
+        /** The first page cannot be written */
+        DISK_FULL_AT_START(WriteFaults.Fault.AtOpen, archiveOnly = false),
+
+        /** A page is cut off part way */
+        DISK_FULL_IN_A_PAGE(WriteFaults.Fault.AfterBytes(10), archiveOnly = false),
+
+        /** The pages are written, and the archive is cut off part way */
+        DISK_FULL_IN_THE_ARCHIVE(WriteFaults.Fault.AfterBytes(1000), archiveOnly = true),
+
+        /** The archive's last flush, on close, fails */
+        CLOSE(WriteFaults.Fault.AtClose, archiveOnly = true),
+
+        /** The archive is written but moving it to its final name fails */
+        RENAME(null, archiveOnly = true),
+    }
+
+    private val writes = WriteFaults()
+
+    @Volatile
+    private var renameFails = false
+
+    private fun inject(failure: WriteFailure) {
+        writes.fault = failure.fault
+        writes.only = { file -> !failure.archiveOnly || file.name.endsWith(".cbz${DownloadPaths.TMP_SUFFIX}") }
+        renameFails = failure == WriteFailure.RENAME
+    }
+
+    private fun heal() {
+        writes.fault = null
+        renameFails = false
+    }
+
+    /** The manager's downloader, with its file writes through [writes] and its last move failing while [renameFails]. */
+    private fun faultyDownloader(
+        pageList: suspend () -> List<Page>,
+        imageUrl: suspend (Page) -> String,
+        image: suspend (Page) -> ByteArray,
+        parallelPages: Int,
+    ) = ChapterDownloader(
+        pageList,
+        imageUrl,
+        image,
+        parallelPages,
+        openOutput = writes::outputStream,
+        publish = { from, to ->
+            if (renameFails) throw java.io.IOException("The process cannot access the file because it is being used by another process")
+            java.nio.file.Files.move(from, to)
+        },
+    )
+
+    /** The fixture server's bytes of the page image [file]. */
+    private fun imageBytes(file: String): ByteArray =
+        FixtureServer::class.java.getResourceAsStream("/e2e-fixtures/images/$file")!!.use { it.readBytes() }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(WriteFailure::class)
+    fun `a write that fails fails the chapter with an error, keeps no archive or partial page, and a retry works`(failure: WriteFailure) = runBlocking<Unit> {
+        val manager = manager(newDownloader = ::faultyDownloader)
+        val (existing, existingBytes) = existingChapter()
+        val chapter = chapter(2)
+        inject(failure)
+
+        val download = manager.failing(chapter)
+
+        shownToUser(download)
+        if (failure.fault != null) download.error shouldBe localized(DMR.strings.download_disk_full)
+        // No archive under the chapter's name or its part name. A page cut off part way stays only
+        // under its part name, which the next try deletes first; every page under its own name is whole
+        File(mangaDir, "${chapter.name}.cbz").exists() shouldBe false
+        File(mangaDir, "${chapter.name}.cbz${DownloadPaths.TMP_SUFFIX}").exists() shouldBe false
+        val pageFolder = File(mangaDir, chapter.name + DownloadPaths.TMP_SUFFIX)
+        ChapterDownloader.imageFiles(pageFolder).forEach { page ->
+            page.readBytes() shouldBe imageBytes(pages[page.nameWithoutExtension.toInt() - 1])
+        }
+        existing.readBytes() shouldBe existingBytes
+
+        heal()
+        manager.retrySucceeds(chapter)
+        existing.readBytes() shouldBe existingBytes
+        mangaDir.list()!!.toSet() shouldBe setOf(existing.name, "${chapter.name}.cbz")
     }
 
     companion object {

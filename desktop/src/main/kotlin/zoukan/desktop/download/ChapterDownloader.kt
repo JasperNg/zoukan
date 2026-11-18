@@ -127,10 +127,12 @@ class ChapterDownloader(
             try {
                 // No REPLACE_EXISTING: a chapter already on disk is never replaced
                 publish(part.toPath(), target.toPath())
-            } catch (e: FileAlreadyExistsException) {
-                // Only the new, unpublished archive goes; the page folder stays for a resume
-                part.delete()
-                throw java.io.IOException("${target.name} already exists; the existing file was kept", e)
+            } catch (e: java.io.IOException) {
+                // Whatever stopped the move (an existing chapter, a file held by another program),
+                // only the new, unpublished archive goes; the page folder stays for a resume
+                if (!part.delete() && part.exists()) logcat(LogPriority.WARN, e) { "Could not remove ${part.name}" }
+                if (e is FileAlreadyExistsException) throw java.io.IOException("${target.name} already exists; the existing file was kept", e)
+                throw e
             }
             // A link the page folder holds is removed as itself, never what it points to
             SafeDelete.deleteTreeNoFollow(tmp.toPath())
