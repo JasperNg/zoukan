@@ -8,8 +8,9 @@ import kotlin.system.exitProcess
  * so a crash in the private macOS calls ([SpotlightNative]) ends only this process, never Zoukan.
  *
  * Arguments: an action ([ADD], [REMOVE] or [CHECK]) and one or more folder paths. For each path,
- * in order, one line `<index> ok` or `<index> failed` goes to standard output; problems go to
- * standard error. The exit code is 0 when every path was handled, [USAGE] for bad arguments and
+ * in order, one line `<index> ok` or `<index> failed` goes to standard output (for [CHECK]: in the
+ * list or not, or `<index> unknown` when the list could not be read); problems go to standard
+ * error. The exit code is 0 when every path was handled, [USAGE] for bad arguments and
  * [WATCHDOG] when the run took longer than [WATCHDOG_MILLIS] (a native call that hangs).
  *
  * It opens no data folder, log, preferences, single-instance lock or secret store. Only this file,
@@ -21,6 +22,9 @@ internal object SpotlightExclusionHelper {
     const val REMOVE = "remove"
     const val CHECK = "check"
     const val USAGE = 2
+
+    /** [CHECK]'s answer for a path when the list could not be read. */
+    const val UNKNOWN = "unknown"
 
     /** The exit code when the watchdog ended a run that hung. */
     const val WATCHDOG = 3
@@ -49,7 +53,12 @@ internal object SpotlightExclusionHelper {
                 REMOVE -> SpotlightNative.set(dir, false, note)
                 else -> SpotlightNative.isExcluded(dir)
             }
-            println("$index ${if (ok) "ok" else "failed"}")
+            val answer = when (ok) {
+                true -> "ok"
+                false -> "failed"
+                null -> UNKNOWN
+            }
+            println("$index $answer")
         }
         System.out.flush()
         exitProcess(0)

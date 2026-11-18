@@ -48,35 +48,47 @@ internal class SpotlightExclusion(
     fun set(dirs: List<File>, exclude: Boolean, note: (String) -> Unit): Set<File> {
         if (!enabled) return emptySet()
         val targets = if (exclude) dirs.filter { it.isDirectory } else dirs
+        if (targets.isEmpty()) return emptySet()
         val action = if (exclude) SpotlightExclusionHelper.ADD else SpotlightExclusionHelper.REMOVE
-        return run(action, targets, note, reportFailures = true)
+        val output = run(action, targets, note) ?: return emptySet()
+        val ok = parse(output, targets.size)
+        if (ok.size < targets.size) {
+            val failed = targets.filterIndexed { i, _ -> i !in ok }.joinToString { it.path }
+            note("Spotlight's Search Privacy list did not change for $failed")
+        }
+        return ok.map { targets[it] }.toSet()
     }
 
-    /** The folders of [dirs] in the list; empty on other systems or when the helper failed. */
-    fun excluded(dirs: List<File>, note: (String) -> Unit): Set<File> {
-        if (!enabled) return emptySet()
-        return run(SpotlightExclusionHelper.CHECK, dirs, note, reportFailures = false)
+    /**
+     * The folders of [dirs] in the list; empty on other systems. Null when the list could not be
+     * read for every folder (the helper failed or is stopped, or did not answer for one of them).
+     */
+    fun excluded(dirs: List<File>, note: (String) -> Unit): Set<File>? {
+        if (!enabled || dirs.isEmpty()) return emptySet()
+        val output = run(SpotlightExclusionHelper.CHECK, dirs, note) ?: return null
+        val answers = parseAnswers(output, dirs.size)
+        if (answers.size < dirs.size) {
+            val unread = dirs.filterIndexed { i, _ -> i !in answers }.joinToString { it.path }
+            note("Could not read Spotlight's Search Privacy list for $unread")
+            return null
+        }
+        return dirs.filterIndexedTo(mutableSetOf()) { i, _ -> answers[i] == true }
     }
 
-    private fun run(action: String, dirs: List<File>, note: (String) -> Unit, reportFailures: Boolean): Set<File> {
-        if (dirs.isEmpty() || stopped.get()) return emptySet()
+    /** Runs the helper with [action] on [dirs]; its standard output, or null (noted, unless stopped) when it did not run. */
+    private fun run(action: String, dirs: List<File>, note: (String) -> Unit): String? {
+        if (stopped.get()) return null
         return try {
             val paths = dirs.map { it.canonicalPath }
             val argv = command(listOf(action) + paths)
             if (argv == null) {
                 note("Could not change Spotlight's Search Privacy list: no Java launcher for the helper")
-                return emptySet()
+                return null
             }
-            val result = runProcess(argv, note) ?: return emptySet()
-            val ok = parse(result, dirs.size)
-            if (reportFailures && ok.size < dirs.size) {
-                val failed = dirs.filterIndexed { i, _ -> i !in ok }.joinToString { it.path }
-                note("Spotlight's Search Privacy list did not change for $failed")
-            }
-            ok.map { dirs[it] }.toSet()
+            runProcess(argv, note)
         } catch (e: Exception) {
             note("Could not change Spotlight's Search Privacy list: $e")
-            emptySet()
+            null
         }
     }
 
@@ -231,6 +243,21 @@ internal class SpotlightExclusion(
             .mapNotNull { it.groupValues[1].toIntOrNull() }
             .filter { it in 0 until count }
             .toSet()
+
+        /**
+         * The answers in the helper's [output], for [count] paths: `ok` true, `failed` false. An index
+         * answered `unknown`, answered twice differently, or not at all is left out.
+         */
+        internal fun parseAnswers(output: String, count: Int): Map<Int, Boolean> {
+            val answers = output.lineSequence()
+                .mapNotNull { LINE.matchEntire(it.trim()) }
+                .mapNotNull { match -> match.groupValues[1].toIntOrNull()?.let { it to (match.groupValues[2] == "ok") } }
+                .filter { it.first in 0 until count }
+                .toList()
+            return answers.groupBy({ it.first }, { it.second })
+                .filterValues { it.distinct().size == 1 }
+                .mapValues { it.value.first() }
+        }
 
         /**
          * The helper's command line: the Java launcher of the runtime Zoukan runs on (`bin/java` in

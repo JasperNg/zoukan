@@ -31,14 +31,17 @@ import java.nio.file.LinkOption
  * Only Zoukan's own marks are taken off: each mark Zoukan puts on is recorded
  * ([ZoukanStorage.spotlightMarked], [ZoukanStorage.timeMachineMarked]), and turning a setting off or
  * changing the storage folder removes the mark only from recorded folders. An exclusion the user made
- * (with `tmutil addexclusion` or in System Settings) stays. A removal that fails, or a recorded folder
- * that cannot be reached (a drive that is not connected), keeps its record and is tried again at the
- * next refresh.
+ * (with `tmutil addexclusion` or in System Settings) stays: a folder that already carries the mark
+ * when Zoukan first sees it is treated as the user's, is not recorded, and stays excluded after the
+ * setting is turned off. When that cannot be read, the folder is neither marked nor recorded until
+ * a later refresh can read it. A removal that fails, or a recorded folder that cannot be reached (a
+ * drive that is not connected), keeps its record and is tried again at the next refresh.
  *
  * Only folder metadata changes: the Time Machine attribute on each folder (set in this process) and
  * its entry in Spotlight's Search Privacy list (changed by a short-lived helper process, see
- * [SpotlightExclusion], started only when something is to change). No file in them is touched. Every
- * step is best-effort: a failure goes to [note] and is never thrown. Other systems: nothing happens.
+ * [SpotlightExclusion], started only when a folder is not yet recorded or something is to change).
+ * No file in them is touched. Every step is best-effort: a failure goes to [note] and is never
+ * thrown. Other systems: nothing happens.
  */
 internal class StorageFolderPrivacy(
     private val storage: ZoukanStorage,
@@ -47,24 +50,37 @@ internal class StorageFolderPrivacy(
     private val timeMachine: FolderMark = FolderMark.TimeMachine,
     private val spotlight: FolderMark = FolderMark.Spotlight,
 ) {
-    /** A folder-level mark that can be put on and taken off. */
-    fun interface FolderMark {
+    /** A folder-level mark that can be put on, taken off and read. */
+    interface FolderMark {
         /**
          * Puts the mark on [dirs] ([on]) or takes it off. Returns the folders of [dirs] now in the
          * wanted state. Never throws; failures go to [note].
          */
         fun set(dirs: List<File>, on: Boolean, note: (String) -> Unit): Set<File>
 
+        /**
+         * The folders of [dirs] that carry the mark now, whoever put it there; null when that could
+         * not be read. Never throws; failures go to [note].
+         */
+        fun marked(dirs: List<File>, note: (String) -> Unit): Set<File>?
+
         /** Time Machine's exclusion attribute, set in Zoukan's process (a public system call). */
         object TimeMachine : FolderMark {
             override fun set(dirs: List<File>, on: Boolean, note: (String) -> Unit): Set<File> =
                 dirs.filterTo(mutableSetOf()) { dir -> if (on) BackupExclusion.exclude(dir, note) else BackupExclusion.include(dir, note) }
+
+            // Any value counts: taking the mark off removes the attribute whatever it holds
+            override fun marked(dirs: List<File>, note: (String) -> Unit): Set<File>? =
+                dirs.filterTo(mutableSetOf()) { dir -> BackupExclusion.hasAttribute(dir, note) ?: return null }
         }
 
         /** Spotlight's Search Privacy list, changed in one run of the helper process for all [dirs]. */
         object Spotlight : FolderMark {
             override fun set(dirs: List<File>, on: Boolean, note: (String) -> Unit): Set<File> =
                 SpotlightExclusion().set(dirs, on, note)
+
+            override fun marked(dirs: List<File>, note: (String) -> Unit): Set<File>? =
+                SpotlightExclusion().excluded(dirs, note)
         }
     }
 
@@ -173,11 +189,16 @@ internal class StorageFolderPrivacy(
         if (!on) return removed
         if (folders == null) return false
         val record = kind.record.get()
-        val toMark = if (kind.markAgain) folders else folders.filter { it.path !in record }
+        // A folder that already carries the mark when Zoukan first sees it is the user's: never recorded
+        val candidates = folders.filter { it.path !in record }
+        val already = if (candidates.isEmpty()) emptySet() else kind.mark.marked(candidates, note)
+        if (already == null) note("Could not read which Zoukan folders already have the ${kind.name} mark; they are tried again at the next refresh")
+        val fresh = if (already == null) emptyList() else candidates.filter { it !in already }
+        val toMark = folders.filter { it in fresh || (kind.markAgain && it.path in record) }
         val marked = if (toMark.isEmpty()) emptySet() else kind.mark.set(toMark, true, note)
-        val newlyMarked = marked.map { it.path }.filter { it !in record }
+        val newlyMarked = fresh.filter { it in marked }.map { it.path }
         if (newlyMarked.isNotEmpty()) kind.record.set(record + newlyMarked)
-        return removed && toMark.all { it in marked }
+        return removed && already != null && toMark.all { it in marked }
     }
 
     /**

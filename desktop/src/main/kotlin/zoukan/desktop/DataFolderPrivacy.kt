@@ -181,6 +181,37 @@ internal object BackupExclusion {
         }
     }
 
+    /**
+     * Whether [dir] carries the exclusion attribute with any value (which [include] would remove);
+     * null when that could not be read (passed to [note], never thrown). False on other systems.
+     */
+    fun hasAttribute(dir: File, note: (String) -> Unit, enabled: Boolean = Platform.current == Platform.MACOS): Boolean? {
+        if (!enabled) return false
+        return try {
+            LibC.INSTANCE.getxattr(dir.absolutePath, ATTRIBUTE, ByteArray(1), NativeLong(1), 0, 0)
+            true
+        } catch (e: LastErrorException) {
+            when (e.errorCode) {
+                ENOATTR -> false
+                // A value longer than the one-byte buffer: the attribute is there
+                ERANGE -> true
+                else -> {
+                    note("Could not read the Time Machine exclusion of ${dir.path}: $e")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            note("Could not read the Time Machine exclusion of ${dir.path}: $e")
+            null
+        } catch (e: LinkageError) {
+            note("Could not read the Time Machine exclusion of ${dir.path}: $e")
+            null
+        }
+    }
+
+    /** macOS's errno when a buffer is too small for an extended attribute's value. */
+    private const val ERANGE = 34
+
     private interface LibC : Library {
         @Throws(LastErrorException::class)
         fun getxattr(path: String, name: String, value: ByteArray, size: NativeLong, position: Int, options: Int): NativeLong

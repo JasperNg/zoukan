@@ -369,8 +369,11 @@ Residual risk:
    folder is the storage folder), is never marked or created. Zoukan records the canonical path of
    every folder it marks, in app-state preferences that are never in backups. When a setting is
    turned off or the storage folder changes, it removes marks only from those recorded paths, so
-   exclusions the user made outside Zoukan stay; a recorded folder that cannot be reached, or whose
-   removal fails, keeps its record and is retried later. A storage folder that is unavailable is
+   exclusions the user made outside Zoukan stay. A folder that already carries the exclusion when
+   Zoukan first sees it is treated as the user's: it is not recorded and stays excluded after the
+   setting is turned off (when Zoukan cannot read whether it does, it leaves the folder unmarked and
+   tries again at the next refresh). A recorded folder that cannot be reached, or whose removal
+   fails, keeps its record and is retried later. A storage folder that is unavailable is
    marked at the next refresh (a settings or storage change, or the next start), not when it comes
    back. When the last attempt to apply a setting failed, Settings shows an error line under its
    switch, so a user in incognito mode, where nothing is logged, still learns of it.

@@ -50,7 +50,7 @@ class SpotlightExclusionTest {
 
         // Later calls fail without starting a helper, and say nothing more
         spotlight.set(listOf(dir()), false, notes::add).shouldBeEmpty()
-        spotlight.excluded(listOf(dir()), notes::add).shouldBeEmpty()
+        spotlight.excluded(listOf(dir()), notes::add) shouldBe null
         starts shouldBe 1
         notes.size shouldBe 1
     }
@@ -61,7 +61,7 @@ class SpotlightExclusionTest {
         val work = workDir()
         val spotlight = SpotlightExclusion(sh("echo report > hs_err_pid$$.log; sleep 30"), timeoutMillis = 500, enabled = true, workDir = work)
 
-        spotlight.excluded(listOf(dir()), notes::add).shouldBeEmpty()
+        spotlight.excluded(listOf(dir()), notes::add) shouldBe null
         notes.single() shouldContain "did not finish"
         notes.single() shouldContain "will not be started again"
         spotlight.set(listOf(dir()), true, notes::add).shouldBeEmpty()
@@ -97,12 +97,12 @@ class SpotlightExclusionTest {
         // A timeout too short for any JVM to start: the real helper is killed before it does anything
         val first = SpotlightExclusion(timeoutMillis = 1, enabled = true, workDir = workDir())
         assumeTrue(SpotlightExclusion.helperCommand(listOf(SpotlightExclusionHelper.CHECK)) != null)
-        first.excluded(listOf(dir()), notes::add).shouldBeEmpty()
+        first.excluded(listOf(dir()), notes::add) shouldBe null
         SpotlightExclusion.stoppedForThisRun shouldBe true
         notes.single() shouldContain "will not be started again"
 
         // A new instance (as each storage folder change makes) does not start it either
-        SpotlightExclusion(enabled = true, workDir = workDir()).excluded(listOf(dir()), notes::add).shouldBeEmpty()
+        SpotlightExclusion(enabled = true, workDir = workDir()).excluded(listOf(dir()), notes::add) shouldBe null
         notes.size shouldBe 1
 
         SpotlightExclusion.resetForTests()

@@ -50,14 +50,14 @@ internal object SpotlightNative {
         }
     }
 
-    /** Whether [dir] is in Spotlight's Search Privacy list; false on other systems or when it cannot be read. */
-    fun isExcluded(dir: File): Boolean {
+    /** Whether [dir] is in Spotlight's Search Privacy list; null when the list cannot be read. */
+    fun isExcluded(dir: File): Boolean? {
         return try {
             dir.canonicalPath in excludedPaths()
         } catch (e: Exception) {
-            false
+            null
         } catch (e: LinkageError) {
-            false
+            null
         }
     }
 
