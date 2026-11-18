@@ -57,7 +57,8 @@ class UpdateFaultsTest {
     }
 
     private fun checker(secrets: SecretStore = MemorySecretStore()) = UpdateChecker(
-        releases.client(OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).build()),
+        // A short read timeout, so a stall fails within the test (the app's client waits longer)
+        releases.client(OkHttpClient.Builder().readTimeout(2, TimeUnit.SECONDS).build()),
         secrets,
         repo = REPO,
         current = Version.parse("1.0.0")!!,
@@ -258,6 +259,7 @@ class UpdateFaultsTest {
             arrayOf("corrupt body", FixtureFailure.Corrupt(fromByte = 5000)),
             arrayOf("more bytes than the release lists", FixtureFailure.Oversize(extraBytes = 4096)),
             arrayOf("an HTML error page", FixtureFailure.Answer(200, "text/html", "<html>Rate limited</html>".toByteArray())),
+            arrayOf("a stall mid-body (the read timeout)", FixtureFailure.Stall(afterBytes = 100_000)),
         )
 
         @JvmStatic
@@ -275,6 +277,7 @@ class UpdateFaultsTest {
             arrayOf("cut mid-body", FixtureFailure.Truncate(keepBytes = 20)),
             arrayOf("corrupt", FixtureFailure.Corrupt()),
             arrayOf("connection closed without an answer", FixtureFailure.Drop),
+            arrayOf("a stall mid-body (the read timeout)", FixtureFailure.Stall(afterBytes = 10)),
         )
     }
 }
