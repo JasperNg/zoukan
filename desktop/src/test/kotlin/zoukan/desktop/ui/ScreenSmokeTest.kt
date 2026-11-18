@@ -257,6 +257,8 @@ open class ScreenSmokeTest {
     @Test
     fun `every screen and dialog opens without an error`() {
         val dirs = SmokeChecks.startRuntime("zoukan-smoke")
+        // What's new would read the release notes from GitHub: a fixed release keeps the run offline
+        Updates.checkerForTests = SmokeReleaseNotes.checker(Injekt.get<SecretStore>())
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         // A background thread's error can come after the check that started its work has closed
         Thread.setDefaultUncaughtExceptionHandler { thread, e ->
