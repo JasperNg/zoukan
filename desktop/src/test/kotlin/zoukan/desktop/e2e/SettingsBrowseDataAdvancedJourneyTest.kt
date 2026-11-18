@@ -152,11 +152,15 @@ class SettingsBrowseDataAdvancedJourneyTest {
                     val title = localized(MR.strings.pref_user_agent_string)
                     val restart = localized(MR.strings.requires_app_restart)
 
-                    fun edit(value: String) {
-                        // Scroll to the row below it, so the user agent row is fully on screen and not
-                        // clipped at the bottom edge, where a click on its centre can miss
-                        list.performScrollToNode(hasText(localized(MR.strings.pref_reset_user_agent_string)))
+                    // Scrolls past the user agent rows to the Library group's first row, so both rows are
+                    // fully on screen and not clipped at the bottom edge, where a click on a row's centre misses
+                    fun showUserAgentRows() {
+                        list.performScrollToNode(hasText(localized(MR.strings.pref_refresh_library_covers)))
                         list.performScrollToNode(hasText(title))
+                    }
+
+                    fun edit(value: String) {
+                        showUserAgentRows()
                         onAllNodesWithText(title).onFirst().performClick()
                         waitFor(hasText(localized(MR.strings.action_ok)))
                         // The page's search field has a text action too: the dialog's is the last one
@@ -185,6 +189,7 @@ class SettingsBrowseDataAdvancedJourneyTest {
                     sentUserAgent() shouldBe listOf("")
 
                     val reset = localized(MR.strings.pref_reset_user_agent_string)
+                    showUserAgentRows()
                     list.performScrollToNode(hasText(reset))
                     onAllNodesWithText(reset).onFirst().performClick()
                     waitOrDump("for the default user agent") { userAgent.get() == default }
