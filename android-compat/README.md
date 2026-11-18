@@ -63,6 +63,7 @@ Paths below are relative to `src/main/java`.
 | A non-persistent multi-select keeps its values in memory and reads them back (`getValues` and `setValues` check `shouldPersist()`, as `ListPreference` does). | `androidx/preference/MultiSelectListPreference.java` |
 | The old default-preferences file is kept as `<name>.xml.migrated` (later ones `.migrated-<time>`) after its values move over, instead of being deleted. | `android/preference/PreferenceManager.kt` |
 | A switch or checkbox shows `summaryOn` or `summaryOff` for its state before the plain summary, as on Android (a summary provider still wins). | `androidx/preference/TwoStatePreference.java` |
+| Catch-alls in Zoukan's code rethrow fatal errors through one helper (`rethrowIfFatal`, and `rethrowIfVmFailure` on paths that run extension code), shared by the app and the extension loader. | `xyz/nulldev/androidcompat/util/FatalErrors.kt` (new) |
 
 `AndroidCompatInitializer` and `AndroidCompat.startApp` are called by `zoukan.desktop.ZoukanRuntime`, after it registers the Injekt modules.
 
