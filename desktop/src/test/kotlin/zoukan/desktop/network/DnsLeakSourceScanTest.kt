@@ -51,6 +51,8 @@ class DnsLeakSourceScanTest {
         // while the app has set none
         "android-compat/src/main/java/xyz/nulldev/androidcompat/network/ExtensionHttp.java" to
             setOf("""\bOkHttpClient\.Builder\(\)""", """\bDns\.SYSTEM\b"""),
+        // Compares the app's DNS with the system's, to hand those lookups to the JDK's own resolver
+        "desktop/src/main/kotlin/zoukan/desktop/network/AppDnsResolver.kt" to setOf("""\bDns\.SYSTEM\b"""),
         // A jar held in memory, no network
         "extension-jvm/src/main/kotlin/zoukan/extension/ExtensionClassLoader.kt" to setOf("""\.openConnection\("""),
     )

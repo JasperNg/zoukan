@@ -82,6 +82,8 @@ class CancellationSourceScanTest {
             Site("ui/browse/SourceScreenModel.kt", "mangaDex.fetchRandomMangaUrl()", REPORTED),
             Site("ui/common/AppLanguage.kt", "val english = runCatching", "builds a Locale"),
             Site("ui/common/ConfirmDialog.kt", "cancelFocus.requestFocus()", FOCUS),
+            Site("ui/common/Images.kt", "} catch (e: Exception) {", "reads the incognito setting, plain call"),
+            Site("ui/common/Images.kt", "val plain = runCatching", FILE),
             Site("ui/common/LanguageIcons.kt", "fun load(", "parses a bundled icon"),
             Site("ui/common/ReducedMotion.kt", "runCatching {", "reads the system's motion setting"),
             Site("ui/common/SearchField.kt", "focus.requestFocus()", FOCUS),

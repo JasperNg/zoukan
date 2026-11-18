@@ -1554,7 +1554,6 @@ class KcefWebViewProvider(
             ref.get()?.onRenderProcessTerminated(browser, status, errorCode, errorString)
         }
 
-        // ZOUKAN -->
         // Once the WebView is gone, the top frame still goes to web pages only
         override fun onBeforeBrowse(
             browser: CefBrowser,
@@ -1565,10 +1564,8 @@ class KcefWebViewProvider(
         ): Boolean =
             ref.get()?.onBeforeBrowse(browser, frame, request, userGesture, isRedirect)
                 ?: (frame.isMain && !KcefNavigationPolicy.isAllowedMainFrameUrl(runCatching { request.url }.getOrNull()))
-        // ZOUKAN <--
     }
 
-    // ZOUKAN -->
     // Once the WebView is gone, a dialog is suppressed and onbeforeunload answered "leave"
     private class WeakJsDialogHandler(target: CefJSDialogHandlerAdapter) : CefJSDialogHandlerAdapter() {
         private val ref = java.lang.ref.WeakReference(target)
@@ -1601,7 +1598,6 @@ class KcefWebViewProvider(
             return true
         }
     }
-    // ZOUKAN <--
 
     private class WeakMessageRouterHandler(target: CefMessageRouterHandlerAdapter) : CefMessageRouterHandlerAdapter() {
         private val ref = java.lang.ref.WeakReference(target)
