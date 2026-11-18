@@ -26,6 +26,7 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.FileSystems
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFilePermissions
 import kotlin.time.Duration.Companion.hours
@@ -201,9 +202,7 @@ object Updates {
 
         // Not kept: the same file would be rejected at every click, with no way to get another
         fun reject(reason: String): Nothing {
-            folder.toFile().deleteRecursively()
-            file.delete()
-            sigFile.delete()
+            discardRejected(folder, file, sigFile)
             states.installRejected(file, reason)
             throw IOException(reason)
         }
@@ -216,6 +215,17 @@ object Updates {
         (signature.verify(copy) as? InstallerSignature.Verdict.Rejected)?.let { reject(it.reason) }
         installerCommand(Platform.current, copy)?.let { ProcessBuilder(it).start() }
         if (Platform.current == Platform.WINDOWS) quit()
+    }
+
+    /**
+     * Deletes a rejected installer, its signature and the folder of its private copy. The folder is
+     * not private on Windows, and another program may have put a link or a junction in it since:
+     * that is removed as itself, never what it points to.
+     */
+    internal fun discardRejected(folder: Path, file: File, sigFile: File) {
+        SafeDelete.deleteTreeNoFollow(folder)
+        file.delete()
+        sigFile.delete()
     }
 
     private fun privateDirAttributes(): Array<FileAttribute<*>> =
