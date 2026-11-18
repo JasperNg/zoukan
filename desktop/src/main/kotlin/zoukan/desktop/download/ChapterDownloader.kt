@@ -12,6 +12,7 @@ import tachiyomi.core.common.util.system.logcat
 import java.io.File
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
 import java.util.Locale
 
@@ -51,7 +52,13 @@ class ChapterDownloader(
         onProgress: (Int, Int) -> Unit,
     ): File {
         mangaDir.mkdirs()
-        val tmp = File(mangaDir, chapterName + DownloadPaths.TMP_SUFFIX).apply { mkdirs() }
+        val tmp = File(mangaDir, chapterName + DownloadPaths.TMP_SUFFIX)
+        // A page folder that is a link leads to files that are not this download's: nothing in it
+        // is deleted, written or packed
+        if (Files.exists(tmp.toPath(), LinkOption.NOFOLLOW_LINKS) && SafeDelete.isLink(tmp.toPath())) {
+            throw java.io.IOException("${tmp.name} is a link; nothing was changed")
+        }
+        tmp.mkdirs()
         tmp.listFiles { f -> f.name.endsWith(".tmp") }?.forEach { it.delete() }
 
         val pages = pageList()
@@ -119,7 +126,8 @@ class ChapterDownloader(
                 part.delete()
                 throw java.io.IOException("${target.name} already exists; the existing file was kept", e)
             }
-            tmp.deleteRecursively()
+            // A link the page folder holds is removed as itself, never what it points to
+            SafeDelete.deleteTreeNoFollow(tmp.toPath())
             target
         } else {
             val target = File(mangaDir, chapterName)

@@ -8,12 +8,16 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.runBlocking
 import net.lingala.zip4j.ZipFile
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.local.LocalFormat
+import zoukan.desktop.testing.FileSystemSandbox
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 
@@ -171,5 +175,45 @@ class ChapterDownloaderTest {
         )
         val dir = downloader.download(temp, "Chapter 6", ChapterDownloader.Options(false, null, null)) { _, _ -> }
         ChapterDownloader.imageFiles(dir).size shouldBe 1
+    }
+
+    @Test
+    fun `finishing a CBZ removes a link left in the page folder, never what it points to`() = runBlocking<Unit> {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val mangaDir = File(sandbox.storageFolder, "downloads/Source/Manga")
+            // A link inside the page folder to the user's folder, as a copied storage folder may hold
+            val link = sandbox.link(File(mangaDir, "Chapter 1_tmp/linked"), sandbox.userFolder)
+            assumeTrue(link != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            val file = downloader().download(mangaDir, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> }
+
+            file.name shouldBe "Chapter 1.cbz"
+            Files.exists(File(mangaDir, "Chapter 1_tmp").toPath(), LinkOption.NOFOLLOW_LINKS) shouldBe false
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `a page folder that is a link is refused and nothing it points to is touched`() = runBlocking<Unit> {
+        listOf(true, false).forEach { asCbz ->
+            FileSystemSandbox.create(temp).use { sandbox ->
+                val mangaDir = File(sandbox.storageFolder, "downloads/Source/Manga")
+                // Files the downloader would otherwise delete or overwrite: a leftover part, a ComicInfo.xml
+                File(sandbox.userFolder, "001.tmp").writeText("another program's temporary file")
+                File(sandbox.userFolder, "ComicInfo.xml").writeText("<ComicInfo/>")
+                val link = sandbox.link(File(mangaDir, "Chapter 1_tmp"), sandbox.userFolder)
+                assumeTrue(link != null, "symbolic links cannot be made here")
+                sandbox.record()
+
+                shouldThrow<java.io.IOException> {
+                    downloader().download(mangaDir, "Chapter 1", ChapterDownloader.Options(asCbz, null, comicInfo)) { _, _ -> }
+                }
+
+                File(mangaDir, "Chapter 1.cbz").exists() shouldBe false
+                File(mangaDir, "Chapter 1").exists() shouldBe false
+                sandbox.assertNothingOutsideAppChanged()
+            }
+        }
     }
 }
