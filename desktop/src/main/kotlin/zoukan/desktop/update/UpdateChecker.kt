@@ -70,12 +70,13 @@ class UpdateChecker(
         }
 
     suspend fun check(includePrereleases: Boolean = false): Result = withContext(Dispatchers.IO) {
-        val request = request("$apiUrl/repos/$repo/releases?per_page=30")
+        val stored = readToken()
+        val request = request("$apiUrl/repos/$repo/releases?per_page=30", stored.getOrNull())
             .header("Accept", "application/vnd.github+json")
             .build()
         try {
             client.newCall(request).execute().use { response ->
-                val hint = if (response.code == 404) missingTokenHint("") else null
+                val hint = if (response.code == 404) missingTokenHint(stored, "") else null
                 when {
                     hint != null -> Result.Failed("No releases found. $hint")
                     response.code == 401 -> Result.Failed("GitHub refused the token (401)")
@@ -105,12 +106,13 @@ class UpdateChecker(
      */
     suspend fun releaseNotes(version: Version = current): kotlin.Result<Notes> = withContext(Dispatchers.IO) {
         val tag = AppVersion.TAG_PREFIX + version
-        val request = request("$apiUrl/repos/$repo/releases/tags/$tag")
+        val stored = readToken()
+        val request = request("$apiUrl/repos/$repo/releases/tags/$tag", stored.getOrNull())
             .header("Accept", "application/vnd.github+json")
             .build()
         try {
             client.newCall(request).execute().use { response ->
-                val hint = if (response.code == 404) missingTokenHint(" in Settings > About") else null
+                val hint = if (response.code == 404) missingTokenHint(stored, " in Settings > About") else null
                 when {
                     hint != null -> kotlin.Result.failure(IOException("No release notes for $version. $hint"))
                     response.code == 404 -> kotlin.Result.failure(IOException("No release notes for $version on GitHub"))
@@ -129,16 +131,25 @@ class UpdateChecker(
     }
 
     /**
+     * The stored token, read once for a request and its message (on macOS each read may show a
+     * Keychain prompt): null when none is stored, a failure when the secret store could not be read.
+     */
+    private fun readToken(): kotlin.Result<String?> = try {
+        kotlin.Result.success(secrets.get(TOKEN_KEY)?.takeIf { it.isNotBlank() })
+    } catch (e: Exception) {
+        kotlin.Result.failure(e)
+    }
+
+    /**
      * Why a 404 may be a private repository read without its token: none is stored (add one,
      * [where]), or the secret store could not be read, so a stored token was not sent. Null when
-     * a token was read and sent: then the 404 is GitHub's own answer.
+     * the token [stored] was sent: then the 404 is GitHub's own answer.
      */
-    private fun missingTokenHint(where: String): String? = try {
-        if (secrets.get(TOKEN_KEY).isNullOrBlank()) "If the repository is private, add a GitHub token$where." else null
-    } catch (e: Exception) {
+    private fun missingTokenHint(stored: kotlin.Result<String?>, where: String): String? = stored.fold(
+        onSuccess = { if (it == null) "If the repository is private, add a GitHub token$where." else null },
         // A locked or unavailable store: telling the user to add a token they have would mislead
-        "${localized(DMR.strings.could_not_use_the_secret_store)}: ${e.message ?: e::class.simpleName}"
-    }
+        onFailure = { e -> "${localized(DMR.strings.could_not_use_the_secret_store)}: ${e.message ?: e::class.simpleName}" },
+    )
 
     /**
      * Downloads the installer to [dir], checking its SHA-256 when GitHub lists one, and returns the
@@ -235,7 +246,7 @@ class UpdateChecker(
         return request(url).header("Accept", "application/octet-stream")
     }
 
-    private fun request(url: String) = Request.Builder().url(url)
+    private fun request(url: String, token: String? = this.token) = Request.Builder().url(url)
         .header("X-GitHub-Api-Version", "2022-11-28")
         .apply { token?.let { header("Authorization", "Bearer $it") } }
 

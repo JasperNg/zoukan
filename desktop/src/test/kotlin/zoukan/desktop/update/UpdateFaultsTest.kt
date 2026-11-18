@@ -217,6 +217,26 @@ class UpdateFaultsTest {
     }
 
     @Test
+    fun `the token is read once per request, so the message matches what was sent`() {
+        publish()
+        server.fail(releases.releasesPath, FixtureFailure.Status(404))
+        // The store answers the first read, then locks: the token was sent, so the 404 is GitHub's own
+        // answer, and the store is not asked again (on macOS each read may show a Keychain prompt)
+        fun store() = FailingSecretStore().apply {
+            backing.values[UpdateChecker.TOKEN_KEY] = "a token"
+            failOn(FailingSecretStore.Operation.READ, FailingSecretStore.Failure.LOCKED, succeedFirst = 1)
+        }
+
+        val check = runBlocking { checker(store()).check() }.shouldBeInstanceOf<UpdateChecker.Result.Failed>().message
+        val notes = runBlocking { checker(store()).releaseNotes(Version.parse("2.0.0")!!) }.exceptionOrNull()!!.message!!
+
+        for (message in listOf(check, notes)) {
+            message shouldNotContain localized(DMR.strings.could_not_use_the_secret_store)
+            message shouldNotContain "add a GitHub token"
+        }
+    }
+
+    @Test
     fun `a private repository with no token stored still says to add one`() {
         publish()
         server.fail(releases.releasesPath, FixtureFailure.Status(404))
