@@ -74,9 +74,8 @@ class SyncManager(
      * set it aside: if the app quits in between (SyncYomi still reports the sync to the server
      * then), the next sync must not trust that ETag. App state, so in no backup and never synced.
      */
-    private val restorePending by lazy {
+    private fun restorePending() =
         Injekt.get<PreferenceStore>().getBoolean(Preference.appStateKey("zoukan_sync_restore_pending"), false)
-    }
     // ZOUKAN <--
 
     private val _running = MutableStateFlow(false)
@@ -202,7 +201,7 @@ class SyncManager(
         }
         // ZOUKAN -->
         // A sync that uploaded but quit before its restore ended: the ETag it saved is not this computer's
-        if (restorePending.get()) syncPreferences.lastSyncEtag().delete()
+        if (restorePending().get()) syncPreferences.lastSyncEtag().delete()
         // ZOUKAN <--
 
         val syncOptions = syncPreferences.getSyncSettings()
@@ -250,11 +249,11 @@ class SyncManager(
 
         // ZOUKAN -->
         val etagBefore = syncPreferences.lastSyncEtag().get()
-        restorePending.set(true)
+        restorePending().set(true)
         val remoteBackup = service?.doSync(syncData)
         if (remoteBackup == null) {
             // Nothing uploaded, so the ETag (if any) is still the one this computer had restored
-            restorePending.delete()
+            restorePending().delete()
             return false
         }
         // ZOUKAN <--
@@ -361,7 +360,7 @@ class SyncManager(
     /** Saves [etag] again once the merged library is all restored here (see doSync). */
     private fun keepEtag(etag: String) {
         if (etag.isNotEmpty()) syncPreferences.lastSyncEtag().set(etag) else syncPreferences.lastSyncEtag().delete()
-        restorePending.delete()
+        restorePending().delete()
     }
     // ZOUKAN <--
 
