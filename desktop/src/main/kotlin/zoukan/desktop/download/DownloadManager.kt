@@ -305,7 +305,7 @@ class DownloadManager(
      * Never replaces anything: returns false, and moves nothing, when a folder of that name exists,
      * a chapter of the entry is in the queue, or the entry's downloads are in more than one folder
      * (Android's name and the desktop's, both on disk): moving one would leave the other's chapters
-     * out of view. True when there is nothing to move.
+     * out of view, so the user is notified. True when there is nothing to move.
      */
     suspend fun renameManga(manga: Manga, newTitle: String): Boolean =
         renameManga(manga.id, manga.source, manga.ogTitle, newTitle)
@@ -321,6 +321,13 @@ class DownloadManager(
             val existing = paths.existingMangaDirs(sourceId, fromTitle)
             if (existing.size > 1) {
                 logcat(LogPriority.WARN) { "Not renaming the download folders of the entry: its downloads are in ${existing.size} folders" }
+                // A lasting state (downloads made before and after "Disallow non-ASCII filenames"
+                // changed, or Android's folder beside the desktop's): told, not only logged
+                Notifications.post(
+                    localized(DMR.strings.download_folders_not_renamed),
+                    localized(DMR.strings.download_folders_not_renamed_text, fromTitle, toTitle, existing.size),
+                    Notifications.Kind.WARNING,
+                )
                 return@withContext false
             }
             val old = existing.singleOrNull() ?: return@withContext true

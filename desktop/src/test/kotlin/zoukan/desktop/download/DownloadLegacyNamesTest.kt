@@ -1,11 +1,17 @@
 package zoukan.desktop.download
 
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.tray.Notifications
 import java.io.File
 
 /**
@@ -84,8 +90,14 @@ class DownloadLegacyNamesTest {
         kit.chapterFolder("A (EN)/aux/Chapter 1")
         kit.chapterFolder("A (EN)/aux_/Chapter 2")
 
-        // Moving only one would leave the other's chapters out of view: neither moves
+        // Moving only one would leave the other's chapters out of view: neither moves, and the
+        // user is told, not only the log
+        val notice = async(start = CoroutineStart.UNDISPATCHED) { Notifications.flow.first() }
         kit.manager.renameManga(manga, "Renamed") shouldBe false
+        withTimeout(5_000) { notice.await() }.let {
+            it.kind shouldBe Notifications.Kind.WARNING
+            it.text shouldContain "Renamed"
+        }
 
         File(kit.downloads, "A (EN)/aux/Chapter 1/001.png").exists() shouldBe true
         File(kit.downloads, "A (EN)/aux_/Chapter 2/001.png").exists() shouldBe true
