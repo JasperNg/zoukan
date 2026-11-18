@@ -96,6 +96,8 @@ class DownloadManager(
         image: suspend (Page) -> ByteArray,
         parallelPages: Int,
     ) -> ChapterDownloader = { pageList, imageUrl, image, parallelPages -> ChapterDownloader(pageList, imageUrl, image, parallelPages) },
+    /** The clock [index] checks its folders' age by; tests pass one they move on. */
+    indexClock: () -> Long = System::currentTimeMillis,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -140,7 +142,7 @@ class DownloadManager(
     internal fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
 
     /** What is in each entry's download folder, read once and checked again by its modified time */
-    internal val index = DownloadIndex()
+    internal val index = DownloadIndex(clock = indexClock)
 
     /** How many folders were listed, for the benchmark. */
     internal val foldersRead: Int get() = index.listingsRead
