@@ -27,8 +27,9 @@ val (unitTestTask, unitVariantSource) =
 
 /**
  * Whether this build was asked for a Kover task (koverXmlReportUnit, koverHtmlReport, koverLog...),
- * or for coverage with -Pzoukan.coverage=true: CI runs the tests with it in one build and makes the
- * report in the next, which then finds the tests up to date.
+ * or for coverage with -Pzoukan.coverage=true. CI's coverage job, which does not gate a merge, runs
+ * `:koverXmlReportUnit -Pzoukan.coverage=true`: one build runs the tests instrumented and writes
+ * the report.
  */
 val coverageRequested = providers.gradleProperty("zoukan.coverage").orNull.toBoolean() ||
     gradle.startParameter.taskNames.any { "kover" in it.substringAfterLast(':').lowercase() }
