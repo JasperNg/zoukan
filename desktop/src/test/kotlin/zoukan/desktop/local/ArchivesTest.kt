@@ -460,4 +460,47 @@ class ArchivesTest {
         }
         LocalFormat.open(file).use { it.pageCount shouldBe 1 }
     }
+
+    /** A 7z whose LZMA2 dictionary declares [dictionaryBytes]; the reader allocates that much to read it. */
+    private fun sevenZWithDictionary(file: File, dictionaryBytes: Int) = file.apply {
+        SevenZOutputFile(this).use { out ->
+            out.setContentMethods(
+                listOf(
+                    org.apache.commons.compress.archivers.sevenz.SevenZMethodConfiguration(
+                        org.apache.commons.compress.archivers.sevenz.SevenZMethod.LZMA2,
+                        org.tukaani.xz.LZMA2Options().apply { dictSize = dictionaryBytes },
+                    ),
+                ),
+            )
+            entries.forEach { (name, bytes) ->
+                out.putArchiveEntry(out.createArchiveEntry(File(name), name))
+                out.write(bytes)
+                out.closeArchiveEntry()
+            }
+        }
+    }
+
+    @Test
+    fun `a 7z that needs more memory than allowed fails with an exception, not by allocating it`() {
+        val file = sevenZWithDictionary(File(temp, "big-dictionary.cb7"), 16 shl 20)
+        Archives.limits = Archives.Limits(sevenZMemoryKiB = 1024)
+        // An IOException the callers handle (a cover or ComicInfo the entry goes without), not an
+        // out-of-memory error from a dictionary of the size the archive asks for
+        shouldThrow<org.apache.commons.compress.MemoryLimitException> { Archives.firstImage(file) }
+        shouldThrow<org.apache.commons.compress.MemoryLimitException> { Archives.comicInfo(file) }
+        // Within the limit it reads as before
+        Archives.limits = Archives.Limits()
+        Archives.firstImage(file)!!.let { ImageIO.read(it.inputStream()).width } shouldBe 1
+    }
+
+    @Test
+    fun `a 7z over the memory limit goes to the system's tar when the chapter opens`() {
+        val version = runCatching {
+            ProcessBuilder("tar", "--version").redirectErrorStream(true).start().inputStream.bufferedReader().readText()
+        }.getOrDefault("")
+        assumeTrue(version.contains("bsdtar"), "no bsdtar on this machine")
+        val file = sevenZWithDictionary(File(temp, "big-dictionary-open.cb7"), 16 shl 20)
+        Archives.limits = Archives.Limits(sevenZMemoryKiB = 1024)
+        LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+    }
 }

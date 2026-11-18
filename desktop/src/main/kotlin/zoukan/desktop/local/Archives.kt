@@ -71,12 +71,19 @@ object Archives {
     // an eighth of the heap, since the reader may hold two chapters at once with room to spare.
     private fun defaultMemoryBytes(): Long = (Runtime.getRuntime().maxMemory() / 8).coerceAtMost(MAX_TOTAL_BYTES)
 
+    // What a 7z's decoder may allocate for its dictionary. 7-Zip's largest presets use 64 MB (ultra)
+    // and up to 1.5 GB by hand; Commons Compress sets no limit, so a crafted or huge-dictionary 7z
+    // would allocate it all and run the app out of memory. Past the limit the system's tar reads it.
+    private fun defaultSevenZMemoryKiB(): Int = (Runtime.getRuntime().maxMemory() / 8 / 1024).coerceIn(64L * 1024, 256L * 1024).toInt()
+
     internal data class Limits(
         val entryBytes: Long = MAX_ENTRY_BYTES,
         val totalBytes: Long = MAX_TOTAL_BYTES,
         val entries: Int = MAX_ENTRIES,
         val pageBytes: Long = MAX_PAGE_BYTES,
         val memoryBytes: Long = defaultMemoryBytes(),
+        /** What a 7z's decoders may allocate (its dictionary); more fails with an IOException. */
+        val sevenZMemoryKiB: Int = defaultSevenZMemoryKiB(),
     )
 
     /** The caps on unpacking; only tests change them. */
@@ -441,7 +448,7 @@ object Archives {
                         .minWithOrNull(compareBy(FileNames.naturalOrder) { it.entryName() })
                         ?.let { header -> rar.getInputStream(header).use { readCapped(file, it) } }
                 }
-                Kind.SEVEN_Z -> SevenZFile.builder().setFile(file).get().use { sz ->
+                Kind.SEVEN_Z -> openSevenZ(file).use { sz ->
                     sz.entries.filter { !it.isDirectory && it.hasStream() && it.name.isPage() }
                         .minWithOrNull(compareBy(FileNames.naturalOrder) { it.name })
                         ?.let { entry -> sz.getInputStream(entry).use { readCapped(file, it) } }
@@ -511,7 +518,7 @@ object Archives {
             } catch (_: UnsupportedRarV5Exception) {
                 null
             }
-            Kind.SEVEN_Z -> SevenZFile.builder().setFile(file).get().use { sz ->
+            Kind.SEVEN_Z -> openSevenZ(file).use { sz ->
                 sz.entries.firstOrNull { !it.isDirectory && it.name.isComicInfo() }
                     ?.let { entry -> sz.getInputStream(entry).use { ComicInfoXml.read(it) } }
             }
@@ -522,6 +529,10 @@ object Archives {
             }
         }
     }
+
+    /** [file] as a 7z, its decoders held to [Limits.sevenZMemoryKiB] (a MemoryLimitException past it). */
+    private fun openSevenZ(file: File): SevenZFile =
+        SevenZFile.builder().setFile(file).setMaxMemoryLimitKiB(limits.sevenZMemoryKiB).get()
 
     private fun String.isComicInfo() = substringAfterLast('/').equals(ComicInfoXml.FILE, ignoreCase = true)
 
@@ -539,7 +550,7 @@ object Archives {
                         unpackEntry(sink, header.entryName(), budget, header.fullUnpackSize) { out -> rar.extractFile(header, out) }
                     }
                 }
-                Kind.SEVEN_Z -> SevenZFile.builder().setFile(file).get().use { sz ->
+                Kind.SEVEN_Z -> openSevenZ(file).use { sz ->
                     while (true) {
                         val entry = sz.nextEntry ?: break
                         if (entry.isDirectory || !entry.hasStream()) continue
