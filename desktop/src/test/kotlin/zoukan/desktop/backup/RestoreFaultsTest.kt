@@ -1,5 +1,6 @@
 package zoukan.desktop.backup
 
+import android.content.Context
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import eu.kanade.tachiyomi.data.backup.BackupCodec
@@ -10,6 +11,7 @@ import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
@@ -25,8 +27,6 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import android.content.Context
-import io.kotest.matchers.nulls.shouldBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -279,7 +279,10 @@ class RestoreFaultsTest {
                 { dir: File ->
                     val inTheWay = File(dir, "edits.json.tmp").apply { mkdirs() }
                     File(inTheWay, "kept").writeText("Not the app's")
-                    AutoCloseable { File(inTheWay, "kept").delete(); inTheWay.delete() }
+                    AutoCloseable {
+                        File(inTheWay, "kept").delete()
+                        inTheWay.delete()
+                    }
                 },
             ),
         )

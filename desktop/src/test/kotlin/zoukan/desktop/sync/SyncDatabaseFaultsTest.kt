@@ -19,8 +19,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
-import mihon.domain.extension.interactor.GetExtensionStores
 import kotlinx.serialization.protobuf.ProtoBuf
+import mihon.domain.extension.interactor.GetExtensionStores
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
