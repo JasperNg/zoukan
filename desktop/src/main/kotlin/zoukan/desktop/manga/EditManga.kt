@@ -12,15 +12,13 @@ import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.ImageType
+import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.local.LocalSource
 import zoukan.i18n.desktop.DMR
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.time.Instant
-import javax.imageio.ImageIO
 
 /**
  * Edits an entry's details, notes and cover, as the Android app's edit dialog and cover screen:
@@ -148,10 +146,10 @@ class EditManga(
         if (ImageType.fromBytes(bytes) != null) return bytes
         // Exception, not Throwable: running out of memory on a huge image is not "not an image"
         val decoded = try {
-            ImageIO.read(ByteArrayInputStream(bytes))
+            MemoryImageIo.read(bytes)
         } catch (e: Exception) {
             null
         } ?: throw IOException(localized(DMR.strings.not_an_image))
-        return ByteArrayOutputStream().also { ImageIO.write(decoded, "png", it) }.toByteArray()
+        return MemoryImageIo.png(decoded)
     }
 }

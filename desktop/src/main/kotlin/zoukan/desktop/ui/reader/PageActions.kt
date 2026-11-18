@@ -38,6 +38,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.compat.localized
+import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.ui.common.Corners
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
@@ -45,10 +46,7 @@ import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
-import javax.imageio.ImageIO
 
 /**
  * The pages a right-click or long-press acted on, as Android's page actions dialog: [page] alone,
@@ -261,8 +259,8 @@ object PageImages {
         Image.makeFromEncoded(bytes)
     } catch (e: Exception) {
         // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys covers a few more
-        val image = ImageIO.read(ByteArrayInputStream(bytes)) ?: throw IllegalArgumentException(localized(DMR.strings.not_an_image), e)
-        Image.makeFromEncoded(ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray())
+        val image = MemoryImageIo.read(bytes) ?: throw IllegalArgumentException(localized(DMR.strings.not_an_image), e)
+        Image.makeFromEncoded(MemoryImageIo.png(image))
     }
 
     private fun toPng(bytes: ByteArray): ByteArray = decode(bytes).use { image ->
@@ -271,7 +269,7 @@ object PageImages {
 
     /** An opaque AWT image: Windows pastes transparent parts of a clipboard image as black. */
     private fun toAwt(bytes: ByteArray): BufferedImage {
-        val decoded = ImageIO.read(ByteArrayInputStream(toPng(bytes))) ?: error(localized(DMR.strings.not_an_image))
+        val decoded = MemoryImageIo.read(toPng(bytes)) ?: error(localized(DMR.strings.not_an_image))
         val image = BufferedImage(decoded.width, decoded.height, BufferedImage.TYPE_INT_RGB)
         val g = image.createGraphics()
         g.color = java.awt.Color.WHITE

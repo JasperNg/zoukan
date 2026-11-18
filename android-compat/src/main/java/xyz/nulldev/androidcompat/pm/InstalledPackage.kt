@@ -81,7 +81,7 @@ data class InstalledPackage(
                     .filter { it.isFile }
                     .map {
                         it.data.inputStream().use {
-                            ImageIO.read(it)
+                            ImageIO.read(/* ZOUKAN --> */javax.imageio.stream.MemoryCacheImageInputStream(it)/* ZOUKAN <-- */)
                         }
                     }.sortedByDescending { it.width * it.height }
                     .firstOrNull() ?: return
