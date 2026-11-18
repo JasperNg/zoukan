@@ -1,6 +1,7 @@
 package zoukan.desktop.manga
 
 import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -15,6 +16,9 @@ import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.download.CbzEncryption
+import zoukan.desktop.download.CbzReader
+import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.local.LocalSource
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -126,5 +130,34 @@ class EditMangaLocalCoverTest {
         File(entry, "cover.jpg").writeBytes(image("jpg"))
         edit().setCover(manga, picked("new.png", image("png")))
         names() shouldContainExactly listOf("cover.png")
+    }
+
+    @Test
+    fun `an encrypted cover stays encrypted`() = runBlocking<Unit> {
+        val archive = File(entry, "cover.cbi")
+        CbzWriter(archive, CbzEncryption(password.toCharArray(), SecurityPreferences.EncryptionType.AES_256)).use {
+            it.write("cover.jpg", image("jpg"))
+        }
+        val png = image("png", 8)
+        edit().setCover(manga, picked("new.png", png))
+
+        names() shouldContainExactly listOf("cover.cbi")
+        CbzReader(archive) { password.toCharArray() }.use { reader ->
+            reader.encrypted shouldBe true
+            reader.read(reader.entries.single()) shouldBe png
+        }
+        updates.mapNotNull { it.thumbnailUrl } shouldContainExactly listOf(archive.toURI().toString())
+    }
+
+    @Test
+    fun `an encrypted cover is not replaced in plain when the password is missing`() = runBlocking<Unit> {
+        val archive = File(entry, "cover.cbi")
+        CbzWriter(archive, CbzEncryption(password.toCharArray(), SecurityPreferences.EncryptionType.AES_256)).use {
+            it.write("cover.jpg", image("jpg"))
+        }
+        val before = archive.readBytes()
+        assertThrows<IllegalStateException> { runBlocking { edit(withPassword = false).setCover(manga, picked("new.png", image("png"))) } }
+        archive.readBytes() shouldBe before
+        names() shouldContainExactly listOf("cover.cbi")
     }
 }

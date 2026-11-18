@@ -107,8 +107,9 @@ class EditManga(
             val dir = local.mangaDir(manga.url) ?: return
             val bytes = coverImage(image)
             val old = LocalSource.findCover(dir)
-            // The new cover is in place before the old one goes, so a failed write keeps the cover
-            val cover = local.writeCover(dir, bytes, encrypted = false)
+            // The new cover is in place before the old one goes, so a failed write keeps the cover.
+            // An encrypted cover (cover.cbi) stays encrypted; without the password it is refused
+            val cover = local.writeCover(dir, bytes, encrypted = old != null && LocalSource.isCoverArchive(old))
             if (old != null && old.name != cover.name && !old.delete()) {
                 logcat(LogPriority.WARN) { "Could not delete the old cover ${old.name} of a local entry" }
             }
