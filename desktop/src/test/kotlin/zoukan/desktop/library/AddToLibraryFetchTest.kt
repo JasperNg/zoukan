@@ -8,6 +8,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -58,22 +59,31 @@ class AddToLibraryFetchTest {
         )
 
         val count = 12
-        (1L..count).forEach { addToLibrary.add(manga(it), emptyList(), fetchOnAdd = true) }
+        // The limit's semaphore counts who asks for a permit
+        val original = AddToLibrary.fetches
+        val permits = Semaphore(AddToLibrary.PARALLEL_FETCHES)
+        val asked = AtomicInteger()
+        AddToLibrary.fetches = object : Semaphore by permits {
+            override suspend fun acquire() {
+                asked.incrementAndGet()
+                permits.acquire()
+            }
+        }
+        try {
+            (1L..count).forEach { addToLibrary.add(manga(it), emptyList(), fetchOnAdd = true) }
 
-        withTimeout(10_000) { allStarted.await() }
-        // Give any fetch that would start past the limit the chance to do so before releasing;
-        // with the limit in place this always waits the full time. Nothing marks a fetch that
-        // does not start, so only a pause can show it
-        Await.within(NOTHING_HAPPENS_MILLIS) { running.get() > AddToLibrary.PARALLEL_FETCHES }
-        most.get() shouldBeLessThanOrEqual AddToLibrary.PARALLEL_FETCHES
-        release.complete(Unit)
-        Await.untilSuspending("every fetch to finish") { finished.get() >= count }
-        most.get() shouldBeLessThanOrEqual AddToLibrary.PARALLEL_FETCHES
-        finished.get() shouldBe count
-    }
-
-    private companion object {
-        /** How long the test watches for a fetch past the limit, which must not start. */
-        const val NOTHING_HAPPENS_MILLIS = 500L
+            withTimeout(10_000) { allStarted.await() }
+            // Every fetch has asked for a permit: the first ones hold them until released, so the
+            // rest wait, and none past the limit can have started
+            Await.untilSuspending("every fetch to ask for a permit") { asked.get() == count }
+            running.get() shouldBe AddToLibrary.PARALLEL_FETCHES
+            most.get() shouldBeLessThanOrEqual AddToLibrary.PARALLEL_FETCHES
+            release.complete(Unit)
+            Await.untilSuspending("every fetch to finish") { finished.get() >= count }
+            most.get() shouldBeLessThanOrEqual AddToLibrary.PARALLEL_FETCHES
+            finished.get() shouldBe count
+        } finally {
+            AddToLibrary.fetches = original
+        }
     }
 }
