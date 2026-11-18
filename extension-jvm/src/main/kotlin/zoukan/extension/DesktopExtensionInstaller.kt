@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import mihon.data.extension.service.awaitSecureStoreResponse
 import okhttp3.OkHttpClient
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.coroutines.cancellation.CancellationException
@@ -203,8 +204,17 @@ class DesktopExtensionInstaller(
 
     private suspend fun download(url: String, pkgName: String, suffix: String): File {
         require(pkgName.matches(PACKAGE_NAME)) { "Invalid package name $pkgName" }
-        extensionsDir.mkdirs()
-        val tmp = File.createTempFile("$pkgName-", suffix, extensionsDir)
+        val tmp = try {
+            extensionsDir.mkdirs()
+            File.createTempFile("$pkgName-", suffix, extensionsDir)
+        } catch (e: IOException) {
+            // A missing, read-only or blocked extensions folder: an extension error the caller reports
+            throw ExtensionException(
+                ExtensionException.Stage.DOWNLOAD,
+                "Could not save the download in the extensions folder: ${e.message}",
+                e,
+            )
+        }
         try {
             // Code is downloaded over https only, also after redirects (see awaitSecureStoreResponse)
             client().awaitSecureStoreResponse(url).use { response ->

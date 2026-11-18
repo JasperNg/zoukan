@@ -25,7 +25,6 @@ import zoukan.desktop.testing.fakes.FileFaults
 import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.ExtensionException
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -159,11 +158,13 @@ class ExtensionInstallFaultsTest {
     }
 
     @Test
-    fun `a file where the extensions folder should be fails the install with an error and is left alone`() {
+    fun `a file where the extensions folder should be fails the install with an extension error and is left alone`() {
         val blocker = FileFaults.fileInTheWay(extensionsDir)
 
-        val error = shouldThrow<IOException> { runBlocking { installer().install(extension) } }
+        // An ExtensionException, which DesktopExtensionManager returns as a load error
+        val error = shouldThrow<ExtensionException> { runBlocking { installer().install(extension) } }
 
+        error.stage shouldBe ExtensionException.Stage.DOWNLOAD
         error.message.shouldNotBeBlank()
         blocker.readText() shouldBe "A file where a folder is needed"
         blocker.delete() shouldBe true
