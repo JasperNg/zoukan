@@ -12,6 +12,7 @@ import zoukan.desktop.secrets.SecretStore
 import java.io.Closeable
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
 import java.security.SecureRandom
 
 /**
@@ -97,8 +98,13 @@ class CbzPasswordMissingException :
 class CbzEncryption(val password: CharArray, val type: SecurityPreferences.EncryptionType)
 
 /** Writes a CBZ: stored, not compressed, as the Android app writes them; optionally encrypted. */
-class CbzWriter(file: File, private val encryption: CbzEncryption? = null) : Closeable {
-    private val out = ZipOutputStream(file.outputStream().buffered(), encryption?.password)
+class CbzWriter(
+    file: File,
+    private val encryption: CbzEncryption? = null,
+    /** Opens [file]; the downloader's tests make it fail as a full disk does. */
+    output: (File) -> OutputStream = { it.outputStream() },
+) : Closeable {
+    private val out = ZipOutputStream(output(file).buffered(), encryption?.password)
 
     fun write(name: String, bytes: ByteArray) {
         val params = ZipParameters().apply {

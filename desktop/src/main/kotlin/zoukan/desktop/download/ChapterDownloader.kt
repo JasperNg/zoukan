@@ -10,9 +10,11 @@ import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import java.io.File
+import java.io.OutputStream
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.Locale
 
@@ -28,6 +30,10 @@ class ChapterDownloader(
     private val image: suspend (Page) -> ByteArray,
     private val parallelPages: Int,
     private val writeEntry: (CbzWriter, String, ByteArray) -> Unit = { writer, name, bytes -> writer.write(name, bytes) },
+    /** Opens a page or the archive for writing; tests make it fail as a full disk does. */
+    private val openOutput: (File) -> OutputStream = { it.outputStream() },
+    /** Moves the written archive to its final name, never over an existing file; tests make it fail. */
+    private val publish: (Path, Path) -> Unit = { from, to -> Files.move(from, to) },
 ) {
     data class Options(
         val asCbz: Boolean,
@@ -85,7 +91,7 @@ class ChapterDownloader(
                             // Formats the sniffer does not know (BMP, say) are kept, as Android keeps them
                             val ext = ImageType.fromBytes(bytes)?.extension ?: "jpg"
                             val part = File(tmp, "$base.tmp")
-                            part.writeBytes(bytes)
+                            openOutput(part).use { it.write(bytes) }
                             val image = File(tmp, "$base.$ext")
                             Files.move(part.toPath(), image.toPath(), StandardCopyOption.REPLACE_EXISTING)
                             if (options.splitTallImages) TallImageSplitter.splitIfTall(image, base)
@@ -108,7 +114,7 @@ class ChapterDownloader(
             val target = File(mangaDir, "$chapterName.cbz")
             val part = File(mangaDir, "$chapterName.cbz${DownloadPaths.TMP_SUFFIX}")
             try {
-                CbzWriter(part, options.encryption).use { writer ->
+                CbzWriter(part, options.encryption, openOutput).use { writer ->
                     tmp.listFiles().orEmpty().filter { it.isFile }.sortedWith(compareBy(FileNames.naturalOrder) { it.name })
                         .forEach { writeEntry(writer, it.name, it.readBytes()) }
                 }
@@ -120,7 +126,7 @@ class ChapterDownloader(
             }
             try {
                 // No REPLACE_EXISTING: a chapter already on disk is never replaced
-                Files.move(part.toPath(), target.toPath())
+                publish(part.toPath(), target.toPath())
             } catch (e: FileAlreadyExistsException) {
                 // Only the new, unpublished archive goes; the page folder stays for a resume
                 part.delete()
