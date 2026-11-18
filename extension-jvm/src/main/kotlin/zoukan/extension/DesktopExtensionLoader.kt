@@ -10,6 +10,7 @@ import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.pm.ExternalPackages
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -173,6 +174,7 @@ class DesktopExtensionLoader(
             logcat(LogPriority.ERROR, e) { "Extension load error: ${files.pkgName}" }
             LoadResult.Error(files.pkgName, e)
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             logcat(LogPriority.ERROR, e) { "Extension load error: ${files.pkgName}" }
             LoadResult.Error(
                 files.pkgName,
@@ -342,6 +344,7 @@ class DesktopExtensionLoader(
             } catch (e: ExtensionException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 throw ExtensionException(
                     ExtensionException.Stage.LOAD,
                     "$className: ${e.javaClass.simpleName}: ${e.message}",

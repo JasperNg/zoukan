@@ -20,6 +20,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.service.SourceManager
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -80,6 +81,7 @@ class DesktopSourceManager(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 logcat(LogPriority.ERROR, e) { "Failed to read the stub sources" }
             } finally {
                 // Never leave a backup waiting forever
