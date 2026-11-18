@@ -116,7 +116,10 @@ class UpdatesDownloadTest {
             File(runCopy, "Zoukan-1.9.0.msi").writeText("old")
             // Another program's files in the folder
             val others = listOf(File(updates, "notes.txt"), File(updates, "other-program/data.bin"), File(updates, "runner/x"))
-                .onEach { it.parentFile.mkdirs(); it.writeText("not Zoukan's") }
+                .onEach {
+                    it.parentFile.mkdirs()
+                    it.writeText("not Zoukan's")
+                }
             // Links named like the app's files, to a folder and a file of the user's
             val userFile = File(sandbox.userFolder, "kept.msi").apply { writeText("the user's") }
             val links = listOfNotNull(

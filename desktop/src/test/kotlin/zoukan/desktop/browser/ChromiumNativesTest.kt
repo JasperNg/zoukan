@@ -13,8 +13,8 @@ import okhttp3.OkHttpClient
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import zoukan.desktop.testing.FileSystemSandbox
 import zoukan.desktop.browser.ChromiumNatives.forDownload
+import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
 import java.io.IOException
 import java.net.UnknownHostException
