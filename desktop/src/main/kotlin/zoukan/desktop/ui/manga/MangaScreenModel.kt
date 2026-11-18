@@ -51,6 +51,7 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
+import zoukan.desktop.ui.common.launchAction
 import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
@@ -745,7 +746,7 @@ class MangaScreenModel(
         // On the screen's scope, so the refresh below checks and sets its busy flag on the UI
         // thread, as the Refresh button does, and not after the screen is closed. Only the move
         // to the trash is made non-cancellable, so closing the screen cannot cut it short.
-        screenModelScope.launch {
+        screenModelScope.launchAction {
             try {
                 val moved = withContext(NonCancellable + Dispatchers.IO) {
                     var moved = false

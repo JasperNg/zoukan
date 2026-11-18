@@ -34,6 +34,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.ui.common.launchAction
 
 /** One manga's tracking: the logged-in trackers, its tracks, search and binding, and edits. */
 class TrackingModel(
@@ -236,7 +237,7 @@ class TrackingModel(
     /** Stops tracking here; [remote] also removes the entry from the user's list on the site. */
     fun remove(item: Item, remote: Boolean) {
         val track = item.track ?: return
-        screenModelScope.launch(Dispatchers.IO) {
+        screenModelScope.launchAction(Dispatchers.IO) {
             if (remote) {
                 runCatching { (item.tracker as? DeletableTracker)?.delete(track) }
                     .onFailure { Toasts.error("Could not remove it from ${item.tracker.name}", it) }
