@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import logcat.LogPriority
 import mihon.domain.extension.interactor.GetExtensionStores
+import okio.Sink
 import okio.sink
 import okio.source
 import tachiyomi.core.common.preference.Preference
@@ -54,6 +55,10 @@ class DesktopBackups(
     private val deferNotifications: () -> AutoCloseable? = {
         (runCatching { Injekt.get<SqlDriver>() }.getOrNull() as? DesktopSqliteDriver)?.deferNotifications()
     },
+    /** Opens the temporary file [create] writes; tests make it fail as a full disk does. */
+    private val openSink: (File) -> Sink = { it.sink() },
+    /** Moves the written backup to its name, as [moveIntoPlace]; tests make it fail. */
+    private val move: (temp: File, file: File, replaceExisting: Boolean) -> Unit = { temp, file, replace -> moveIntoPlace(temp, file, replace) },
 ) {
 
     fun contentCreator(): BackupContentCreator = BackupContentCreator(
@@ -71,10 +76,10 @@ class DesktopBackups(
         val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
         try {
             createOwnerOnly(temp)
-            temp.sink().use { BackupCodec.write(backup, it) }
+            openSink(temp).use { BackupCodec.write(backup, it) }
             // Make sure it reads back before it replaces anything
             temp.source().use { BackupCodec.decode(it) }
-            moveIntoPlace(temp, file, replaceExisting)
+            move(temp, file, replaceExisting)
         } finally {
             // A failed write or check leaves nothing behind (automatic backups would pile them up)
             temp.delete()
