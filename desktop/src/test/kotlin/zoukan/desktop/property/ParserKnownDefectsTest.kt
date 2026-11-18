@@ -28,11 +28,6 @@ class ParserKnownDefectsTest {
         (error == null || error is SAXException || error is IOException) shouldBe true
     }
 
-    @Disabled(
-        "Known defect: releaseNotes() returns a Result but throws SerializationException for a 200 answer that is " +
-            "not a release (UpdateChecker.kt:116 catches only IOException); WhatsNewScreen does not catch it, so it " +
-            "reaches the window's exception handler (CrashReporter.fatal).",
-    )
     @Test
     fun `release notes from an answer that is not a release are a failed result`() = runBlocking<Unit> {
         val checker = UpdateChecker(FakeHttp { _, _ -> ByteArray(0) }.client, MemorySecretStore(), repo = "o/r", platform = Platform.WINDOWS)

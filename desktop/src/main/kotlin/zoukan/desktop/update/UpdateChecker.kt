@@ -87,6 +87,10 @@ class UpdateChecker(
             }
         } catch (e: IOException) {
             Result.Failed("Could not reach GitHub: ${e.message ?: e::class.simpleName}")
+        } catch (e: IllegalArgumentException) {
+            // A 200 answer that is not GitHub's release list (SerializationException), such as a
+            // captive portal's page: the check failed, the app goes on
+            Result.Failed("GitHub's answer is not a list of releases")
         }
     }
 
@@ -115,6 +119,10 @@ class UpdateChecker(
             }
         } catch (e: IOException) {
             kotlin.Result.failure(IOException("Could not reach GitHub: ${e.message ?: e::class.simpleName}", e))
+        } catch (e: IllegalArgumentException) {
+            // A 200 answer that is not a release (SerializationException), such as a captive
+            // portal's page: a failed result, which What's new shows, not an exception it does not catch
+            kotlin.Result.failure(IOException("GitHub's answer is not a release", e))
         }
     }
 

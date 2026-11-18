@@ -151,14 +151,12 @@ class OutsideDataParserPropertyTest {
         val notes = Outcomes("UpdateChecker.releaseNotes")
         checkAll(PropertyRuns.config(ITERATIONS / 2), arbFrom { r -> Mutations.input(r, valid, Format.JSON) }) { input ->
             val checker = UpdateChecker(FakeHttp { _, _ -> input }.client, MemorySecretStore(), repo = "o/r", current = Version(listOf(0, 1)), platform = Platform.WINDOWS)
-            // check() returns UpdateChecker.Result; its caller (UpdateStates) also catches anything
-            checks.run(input, { it is IllegalArgumentException }) { checker.check() }
-            notes.run(input, { false }, { if (it is SerializationException) "SerializationException" else it::class.qualifiedName.orEmpty() }) {
-                checker.releaseNotes(Version(listOf(9, 9, 9)))
-            }
+            // Both return their own result type for any answer: nothing is thrown
+            checks.run(input, { false }) { checker.check() }
+            notes.run(input, { false }) { checker.releaseNotes(Version(listOf(9, 9, 9))) }
         }
         checks.check()
-        notes.check(known = KNOWN_RELEASE_NOTES_DEFECTS)
+        notes.check()
     }
 
     @Test
@@ -186,8 +184,5 @@ class OutsideDataParserPropertyTest {
 
         /** Generous: a parse here takes well under a millisecond; only a hang or a blow-up is this slow. */
         private const val MAX_MILLIS_PER_INPUT = 5_000L
-
-        /** `release notes from an answer that is not a release are a failed result` in ParserKnownDefectsTest. */
-        val KNOWN_RELEASE_NOTES_DEFECTS: Set<String> = setOf("UpdateChecker.releaseNotes: SerializationException")
     }
 }

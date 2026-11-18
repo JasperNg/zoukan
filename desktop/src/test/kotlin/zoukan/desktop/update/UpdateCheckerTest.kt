@@ -1,6 +1,9 @@
 package zoukan.desktop.update
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -13,6 +16,7 @@ import zoukan.desktop.Platform
 import zoukan.desktop.app.Version
 import zoukan.desktop.secrets.SecretStore
 import java.io.File
+import java.io.IOException
 
 class UpdateCheckerTest {
     private val releases = """
@@ -76,6 +80,39 @@ class UpdateCheckerTest {
         notes.name shouldBe "Zoukan 1.1.0"
         notes.body shouldBe "## Fixes\n- One"
         notes.pageUrl shouldBe "https://github.com/o/r/releases/tag/desktop-v1.1.0"
+    }
+
+    private fun answering(body: String) = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("OK").body(body.toResponseBody()).build()
+        }.build()
+
+    /** Answers with status 200 that are not GitHub's JSON: an empty body, a captive portal's page, a release without its tag. */
+    private val notReleases = listOf("", "<html>Sign in to the Wi-Fi</html>", """{"name": "no tag"}""", """[{"name": 1}]""", "{")
+
+    @Test
+    fun `release notes from an answer that is not a release are a failed result, not an exception`(): Unit = runBlocking {
+        for (body in notReleases) {
+            val checker = UpdateChecker(answering(body), MemorySecrets(), repo = "o/r", platform = Platform.WINDOWS)
+            checker.releaseNotes(Version(listOf(9, 9, 9))).exceptionOrNull().shouldBeInstanceOf<IOException>()
+        }
+    }
+
+    @Test
+    fun `an update check whose answer is not a release list is a failed result, not an exception`(): Unit = runBlocking {
+        for (body in notReleases) {
+            val checker = UpdateChecker(answering(body), MemorySecrets(), repo = "o/r", platform = Platform.WINDOWS)
+            checker.check().shouldBeInstanceOf<UpdateChecker.Result.Failed>()
+        }
+    }
+
+    @Test
+    fun `a cancelled request stays cancelled`(): Unit = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { throw CancellationException("cancelled") }.build()
+        val checker = UpdateChecker(client, MemorySecrets(), repo = "o/r", platform = Platform.WINDOWS)
+        shouldThrow<CancellationException> { checker.releaseNotes(Version(listOf(9, 9, 9))) }
+        shouldThrow<CancellationException> { checker.check() }
     }
 
     private class MemorySecrets(private val map: MutableMap<String, String> = mutableMapOf()) : SecretStore {
