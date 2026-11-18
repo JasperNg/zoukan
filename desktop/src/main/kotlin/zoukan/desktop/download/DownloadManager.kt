@@ -1131,7 +1131,10 @@ class DownloadManager(
                 runCatching {
                     // The queue as it is now, not as it was at the call: saves start on IO threads
                     // and can take the lock out of order, so an older list must never be written last
-                    val saved = _queue.value.map { SavedDownload(it.manga.id, it.chapter.id) }
+                    val queued = _queue.value.map { SavedDownload(it.manga.id, it.chapter.id) }
+                    // The saved downloads a restore has not read yet, or could not read, stay saved
+                    val ids = queued.mapTo(HashSet()) { it.chapterId }
+                    val saved = queued + held.filterNot { it.chapterId in ids }
                     val tmp = File(queueFile.path + ".tmp")
                     tmp.writeText(json.encodeToString(saved))
                     try {
@@ -1190,20 +1193,82 @@ class DownloadManager(
     private fun canDownload(manga: Manga): Boolean =
         manga.source != MERGED_SOURCE_ID && sourceManager.get(manga.source) is HttpSource
 
-    /** Loads the saved queue and starts it. Called once at start-up. */
+    /**
+     * The saved downloads [restore] has not put in the queue yet, or could not read from the
+     * database: every save writes them after the queue, so they are restored at the next start.
+     */
+    @Volatile
+    private var held: List<SavedDownload> = emptyList()
+
+    /** The entries and chapters as the database reads them; null when not registered (tests without one). */
+    private val restoreRepositories by lazy {
+        try {
+            Injekt.get<tachiyomi.domain.manga.repository.MangaRepository>() to
+                Injekt.get<tachiyomi.domain.chapter.repository.ChapterRepository>()
+        } catch (e: uy.kohesive.injekt.api.InjektionException) {
+            null
+        }
+    }
+
+    /**
+     * [saved]'s chapter, or null when it was deleted. Unlike [GetChapter], which returns null on a
+     * failed read too, a read that fails throws, so the saved download is not taken for deleted.
+     */
+    private suspend fun readSavedChapter(saved: SavedDownload): Chapter? {
+        val chapters = restoreRepositories?.second ?: return getChapter.await(saved.chapterId)
+        return chapters.getChapterById(saved.chapterId)
+    }
+
+    /**
+     * [chapter]'s entry. A chapter is deleted with its entry, so the entry of a chapter that exists
+     * exists too, and a read that fails throws. A saved entry that is not the chapter's is looked up
+     * as before.
+     */
+    private suspend fun readSavedManga(saved: SavedDownload, chapter: Chapter): Manga? {
+        val mangas = restoreRepositories?.first
+        if (mangas == null || chapter.mangaId != saved.mangaId) return getManga.await(saved.mangaId)
+        return mangas.getMangaById(saved.mangaId)
+    }
+
+    /**
+     * Loads the saved queue and starts it. Called once at start-up. A download whose entry or chapter
+     * was deleted is dropped; when the database cannot be read, the downloads from there on stay in
+     * the saved file (see [held]) and the user is told.
+     */
     suspend fun restore(start: Boolean = true) {
         val saved = readSavedQueue() ?: return
+        // Until they are in the queue, saves keep them (also when the restore is cancelled)
+        held = saved
         val mangas = HashMap<Long, Manga?>()
-        val downloads = saved.mapNotNull { s ->
-            val manga = mangas.getOrPut(s.mangaId) { getManga.await(s.mangaId) } ?: return@mapNotNull null
-            // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
-            if (!canDownload(manga)) return@mapNotNull null
-            val chapter = getChapter.await(s.chapterId) ?: return@mapNotNull null
-            Download(manga, chapter)
+        val downloads = ArrayList<Download>()
+        var unread = emptyList<SavedDownload>()
+        for ((i, s) in saved.withIndex()) {
+            val download = try {
+                val chapter = readSavedChapter(s) ?: continue
+                val manga = mangas.getOrPut(s.mangaId) { readSavedManga(s, chapter) } ?: continue
+                // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
+                if (!canDownload(manga)) continue
+                Download(manga, chapter)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                logcat(LogPriority.ERROR, e) { "The saved download queue could not be read from the database" }
+                unread = saved.subList(i, saved.size).toList()
+                break
+            }
+            downloads += download
         }
         _queue.update { q ->
             val queued = q.mapTo(HashSet()) { it.chapter.id }
             q + downloads.distinctBy { it.chapter.id }.filterNot { d -> d.chapter.id in queued }
+        }
+        // After the queue has them, so a save in between writes each download at least once
+        held = unread
+        if (unread.isNotEmpty()) {
+            Notifications.post(
+                localized(DMR.strings.download_queue_restore_failed),
+                localized(DMR.strings.download_queue_restore_failed_kept),
+                Notifications.Kind.WARNING,
+            )
         }
         if (start) start()
     }

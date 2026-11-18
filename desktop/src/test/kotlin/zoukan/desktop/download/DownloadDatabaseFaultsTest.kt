@@ -2,13 +2,22 @@ package zoukan.desktop.download
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
@@ -32,6 +41,7 @@ import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.fakes.FailingSqlDriver
 import zoukan.desktop.track.MapPreferenceStore
+import zoukan.desktop.tray.Notifications
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -39,8 +49,8 @@ import java.util.concurrent.Executors
  * The download manager's database reads under an injected database failure ([FailingSqlDriver] over
  * a real database), one test per read:
  *
- * - restoring the saved queue at start-up (the entries and chapters it names): a known defect, the
- *   test is disabled;
+ * - restoring the saved queue at start-up (the entries and chapters it names): a failed read keeps
+ *   the downloads not yet restored in the saved file, apart from an entry or chapter that was deleted;
  * - the categories an automatic deletion checks ("Exclude categories");
  * - the entry a deletion of read chapters looks up;
  * - the other entries sharing a download folder, which a delete keeps the files of.
@@ -202,12 +212,24 @@ class DownloadDatabaseFaultsTest {
         manager.queue.value.map { it.chapter.id } shouldBe listOf(2L, 1L)
     }
 
+    /**
+     * Runs [block] and returns the notifications it posted. The collector is unconfined, so a post
+     * is in the list when it returns, and cancelling the collector afterwards loses none.
+     */
+    private suspend fun posted(block: suspend () -> Unit): List<Notifications.Message> = coroutineScope {
+        val posted = java.util.Collections.synchronizedList(mutableListOf<Notifications.Message>())
+        val collector = launch(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { Notifications.flow.toList(posted) }
+        yield()
+        try {
+            block()
+            manager.awaitBackgroundWork()
+        } finally {
+            collector.cancelAndJoin()
+        }
+        posted
+    }
+
     @Test
-    @Disabled(
-        "Known defect: GetManga and GetChapter return null on a database error, so restore() drops " +
-            "every saved download as if its entry or chapter were deleted, and the next save of the " +
-            "queue overwrites the saved file. The user is not told.",
-    )
     fun `a database read that fails while the saved queue is restored loses no saved download`() = runBlocking<Unit> {
         queueFile.writeText("""[{"mangaId":1,"chapterId":1}]""")
         driver.failOn(FailingSqlDriver.selectFrom("mangas"))
@@ -220,9 +242,78 @@ class DownloadDatabaseFaultsTest {
 
         // The next start restores it
         driver.heal()
-        val next = DownloadManager(ZoukanDirs(temp), kit.paths, kit.sourceManager, DownloadPreferences(MapPreferenceStore()), io.mockk.mockk(), getManga, getChapter, io.mockk.mockk())
+        val next = nextStart()
         next.restore(start = false)
         next.queue.value.map { it.chapter.id } shouldBe listOf(1L)
+    }
+
+    @Test
+    fun `a restore whose database read fails leaves the saved file as it was and tells the user`() = runBlocking<Unit> {
+        addChapter(2)
+        val before = saved(1L to 1L, 1L to 2L)
+        queueFile.writeText(before)
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+
+        val messages = posted { manager.restore(start = false) }
+
+        driver.failures shouldBe 1
+        manager.queue.value.shouldBeEmpty()
+        queueFile.readText() shouldBe before
+        messages.filter { it.kind == Notifications.Kind.WARNING }.shouldHaveSize(1)
+    }
+
+    @Test
+    fun `a read that fails part way restores the downloads before it and keeps the rest saved`() = runBlocking<Unit> {
+        addChapter(2)
+        addChapter(3)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L, 1L to 3L))
+        // The second chapter's read fails; the third would succeed
+        driver.failOn(FailingSqlDriver.selectFrom("chapters"), nth = 2)
+
+        manager.restore(start = false)
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(1L)
+
+        // A save (chapter 1 cancelled) keeps the downloads not restored
+        manager.cancel(setOf(1L))
+        manager.awaitBackgroundWork()
+        savedChapterIds() shouldBe listOf(2L, 3L)
+
+        val next = nextStart()
+        next.restore(start = false)
+        next.queue.value.map { it.chapter.id } shouldBe listOf(2L, 3L)
+    }
+
+    @Test
+    fun `a download the user queues while the saved queue is held is saved with it`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+        manager.restore(start = false)
+
+        manager.enqueue(manga(), listOf(getChapter.await(2)!!), start = false)
+        manager.awaitBackgroundWork()
+
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(2L)
+        savedChapterIds() shouldBe listOf(2L, 1L)
+        val next = nextStart()
+        next.restore(start = false)
+        next.queue.value.map { it.chapter.id } shouldBe listOf(2L, 1L)
+    }
+
+    @Test
+    fun `a restore cancelled part way is not a database failure, and the saved queue stays`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L))
+        driver.failOn(FailingSqlDriver.selectFrom("chapters"), error = { CancellationException("The app is quitting") })
+
+        val messages = posted {
+            shouldThrow<CancellationException> { manager.restore(start = false) }
+            // A save after it keeps the saved download
+            manager.enqueue(manga(), listOf(getChapter.await(2)!!), start = false)
+        }
+
+        messages.shouldBeEmpty()
+        savedChapterIds() shouldBe listOf(2L, 1L)
     }
 
     @Test
