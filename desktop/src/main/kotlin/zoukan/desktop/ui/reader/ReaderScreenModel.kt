@@ -780,16 +780,8 @@ class ReaderScreenModel(
             Toasts.show(localized(MR.strings.notification_first_add_to_library))
             return@pageAction
         }
-        val bytes = pageBytes(index)
-        // ZOUKAN: in the app's own temporary folder, emptied at every start, not the system's
-        val dir = zoukan.desktop.AppTempFiles.newDir("cover")
-        try {
-            val file = java.io.File(dir, "cover.${PageImages.extension(bytes) ?: "jpg"}")
-            file.writeBytes(bytes)
-            edit.setCover(manga, file)
-        } finally {
-            zoukan.desktop.download.SafeDelete.deleteTreeNoFollow(dir.toPath())
-        }
+        // ZOUKAN: in memory, never through a plain file: the page can come from an encrypted chapter
+        edit.setCover(manga, pageBytes(index))
         Toasts.show(localized(MR.strings.cover_updated))
     }
 

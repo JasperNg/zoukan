@@ -190,4 +190,43 @@ class EditMangaLocalCoverTest {
         left.single().name.equals("cover.cbi", ignoreCase = true) shouldBe true
         CbzReader(left.single()) { password.toCharArray() }.use { reader -> reader.read(reader.entries.single()) shouldBe png }
     }
+
+    /** A chapter archive encrypted with the download password, as Komikku writes it. */
+    private fun encryptedChapter() {
+        CbzWriter(File(entry, "Chapter 1.cbz"), CbzEncryption(password.toCharArray(), SecurityPreferences.EncryptionType.AES_256)).use {
+            it.write("1.png", image("png"))
+        }
+    }
+
+    private fun plainCovers() = entry.listFiles()!!.filter { it.nameWithoutExtension.equals("cover", true) && !LocalSource.isCoverArchive(it) }
+
+    @Test
+    fun `an entry with encrypted chapters and no cover gets an encrypted cover`() = runBlocking<Unit> {
+        encryptedChapter()
+        val png = image("png", 8)
+        edit().setCover(manga, picked("new.png", png))
+
+        plainCovers() shouldBe emptyList()
+        CbzReader(File(entry, "cover.cbi")) { password.toCharArray() }.use { reader ->
+            reader.encrypted shouldBe true
+            reader.read(reader.entries.single()) shouldBe png
+        }
+    }
+
+    @Test
+    fun `an entry with encrypted chapters and a plain cover gets its new cover encrypted`() = runBlocking<Unit> {
+        encryptedChapter()
+        File(entry, "cover.jpg").writeBytes(image("jpg"))
+        edit().setCover(manga, image("png", 8))
+
+        plainCovers() shouldBe emptyList()
+        names() shouldContainExactly listOf("Chapter 1.cbz", "cover.cbi")
+    }
+
+    @Test
+    fun `an entry with encrypted chapters gets no plain cover without the password`() = runBlocking<Unit> {
+        encryptedChapter()
+        assertThrows<IllegalStateException> { runBlocking { edit(withPassword = false).setCover(manga, image("png", 8)) } }
+        names() shouldContainExactly listOf("Chapter 1.cbz")
+    }
 }

@@ -41,9 +41,11 @@ object CustomCovers {
         file.absoluteFile.parentFile?.normalize() == File(coverDir, FOLDER).absoluteFile.normalize()
 
     /** Saves [image] as [mangaId]'s custom cover, encrypted. */
-    fun save(mangaId: Long, image: File) {
+    fun save(mangaId: Long, image: File) = save(mangaId, image.readBytes())
+
+    /** Saves the image [bytes] as [mangaId]'s custom cover, encrypted, without a plain copy on disk. */
+    fun save(mangaId: Long, bytes: ByteArray) {
         val codec = codec ?: throw IOException("The file key is not available, so the cover cannot be saved")
-        val bytes = image.readBytes()
         synchronized(lock) { EncryptedFiles.write(file(mangaId), bytes, codec) }
     }
 

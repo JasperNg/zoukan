@@ -240,6 +240,17 @@ class LocalSource(
         return cover
     }
 
+    /**
+     * Whether a cover written into the entry's [dir] must be encrypted (`cover.cbi`): its cover is
+     * `cover.cbi` already, or its details (`ComicInfo.cbm`) or a chapter archive are encrypted, as
+     * [getChapterList] decides for a cover taken from the first chapter. Android writes a plain
+     * cover for such an entry when its cover is set by hand; the desktop never does.
+     */
+    fun coverMustBeEncrypted(dir: File): Boolean =
+        findCover(dir)?.let(::isCoverArchive) == true ||
+            File(dir, COMIC_INFO_ARCHIVE).isFile ||
+            dir.listFiles().orEmpty().any { !it.name.startsWith('.') && isEncryptedArchive(it) }
+
     /** Whether [file] is a ZIP or CBZ whose entries are encrypted. */
     private fun isEncryptedArchive(file: File): Boolean =
         file.isFile && file.extension.lowercase() in setOf("cbz", "zip") &&

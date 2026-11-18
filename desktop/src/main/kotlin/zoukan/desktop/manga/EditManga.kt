@@ -102,15 +102,19 @@ class EditManga(
 
     fun hasCustomCover(manga: Manga) = manga.source != LocalSource.ID && CustomCovers.file(manga.id).isFile
 
-    suspend fun setCover(manga: Manga, image: File) {
+    suspend fun setCover(manga: Manga, image: File) = setCover(manga, image.readBytes())
+
+    /** Sets the cover from [image]'s bytes, held in memory only (a page of an encrypted chapter included). */
+    suspend fun setCover(manga: Manga, image: ByteArray) {
         if (manga.source == LocalSource.ID) {
             val local = sourceManager.get(LocalSource.ID) as? LocalSource ?: return
             val dir = local.mangaDir(manga.url) ?: return
             val bytes = coverImage(image)
             val old = LocalSource.findCover(dir)
             // The new cover is in place before the old one goes, so a failed write keeps the cover.
-            // An encrypted cover (cover.cbi) stays encrypted; without the password it is refused
-            val cover = local.writeCover(dir, bytes, encrypted = old != null && LocalSource.isCoverArchive(old))
+            // An encrypted entry's cover (cover.cbi, or encrypted chapters) is written encrypted;
+            // without the password it is refused, never written in plain
+            val cover = local.writeCover(dir, bytes, encrypted = local.coverMustBeEncrypted(dir))
             // The old cover can be the new one under another letter case (Cover.JPG, cover.jpg) on a
             // file system that ignores case: then the move replaced it, and deleting it would delete
             // the new cover. When the two cannot be compared, the old one is kept.
@@ -136,12 +140,11 @@ class EditManga(
     private fun String.trimOrNull() = trim().ifBlank { null }
 
     /**
-     * The picked [image] as a local cover: as it is when it is a type both apps find as a cover
+     * The picked image's [bytes] as a local cover: as it is when it is a type both apps find as a cover
      * (by its content, not its file name), a PNG when it is another image Java reads (BMP, TIFF),
      * and an error when it is no image at all.
      */
-    private fun coverImage(image: File): ByteArray {
-        val bytes = image.readBytes()
+    private fun coverImage(bytes: ByteArray): ByteArray {
         if (ImageType.fromBytes(bytes) != null) return bytes
         // Exception, not Throwable: running out of memory on a huge image is not "not an image"
         val decoded = try {
