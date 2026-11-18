@@ -91,8 +91,11 @@ class PageRulesEdgeCasesTest {
 
         KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw StackOverflowError() }
         assertThrows<StackOverflowError> { KcefRequestFilter.shouldBlock("https://ads.example/", null) }
+        // The filter is the app's own code: a missing class or method in it is fatal too
+        KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw NoClassDefFoundError("a class of the app") }
+        assertThrows<NoClassDefFoundError> { KcefRequestFilter.shouldBlock("https://ads.example/", null) }
         // Any other failure fails open
-        KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw LinkageError("bad extension class") }
+        KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw IllegalStateException("block list not loaded") }
         KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe false
     }
 }
