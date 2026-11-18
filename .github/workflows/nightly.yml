@@ -53,7 +53,7 @@ jobs:
       - name: Build and unit tests
         id: build
         continue-on-error: true
-        run: ./gradlew :desktop:build :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest --continue
+        run: ./gradlew :desktop:build :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest --continue
 
       # The live run below reuses the test task's report folder, so keep this run's report
       - name: Keep the unit test report

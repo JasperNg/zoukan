@@ -144,6 +144,15 @@ class ReleaseWorkflowTest {
         }
         val unit = job(ci, "unit")
         if (unitTier !in unit) problems += "ci.yml: the unit job does not run the whole unit tier on Linux"
+        // The nightly runs the same tier (:desktop:build runs :desktop:test), and a failing job keeps every module's report
+        val nightlyWorkflow = text(".github/workflows/nightly.yml")
+        if (":desktop:build " + unitTier.removePrefix(":desktop:test ") !in nightlyWorkflow) {
+            problems += "nightly.yml does not run the whole unit tier"
+        }
+        val tierReports = unitTier.split(' ').map { it.removePrefix(":").substringBeforeLast(':').replace(':', '/') + "/build/reports/tests/" }
+        for ((name, job) in listOf("unit" to unit, "files-os" to filesOs)) {
+            tierReports.filter { it !in job }.forEach { problems += "ci.yml: the $name job does not keep $it" }
+        }
         if ("python3 -B -m unittest discover -s .github/scripts" !in unit) {
             problems += "ci.yml: the unit job does not run the changed-line coverage script's own tests"
         }

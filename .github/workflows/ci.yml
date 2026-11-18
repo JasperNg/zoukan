@@ -118,6 +118,9 @@ jobs:
             domain/build/reports/tests/
             android-compat/build/reports/tests/
             backup/build/reports/tests/
+            data/build/reports/tests/
+            core/common/build/reports/tests/
+            source-api/build/reports/tests/
           if-no-files-found: ignore
 
   # Pull requests only: runs the unit tier again with Kover's agent (koverXmlReportUnit) and lists
@@ -209,6 +212,9 @@ jobs:
             domain/build/reports/tests/
             android-compat/build/reports/tests/
             backup/build/reports/tests/
+            data/build/reports/tests/
+            core/common/build/reports/tests/
+            source-api/build/reports/tests/
           if-no-files-found: ignore
 
   wiring:
