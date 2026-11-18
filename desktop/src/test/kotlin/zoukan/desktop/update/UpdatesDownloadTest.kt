@@ -15,8 +15,11 @@ import zoukan.desktop.app.Version
 import zoukan.desktop.e2e.FixtureReleases
 import zoukan.desktop.e2e.FixtureServer
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 
 /**
  * An update's download and checks offline (Updates.downloadVerified): the release list, the
@@ -100,6 +103,37 @@ class UpdatesDownloadTest {
         shouldThrow<IOException> { download(asset) }.message shouldContain "SHA-256 does not match"
         server.requests.count { it.startsWith(releases.releasesPath + "/assets/") } shouldBe 1
         File(dir, NAME).exists() shouldBe false
+    }
+
+    @Test
+    fun `a new download clears only the app's own old downloads, and never follows a link`() {
+        FileSystemSandbox.create(dir).use { sandbox ->
+            val updates = File(sandbox.dataFolder, "updates").apply { mkdirs() }
+            // The app's own: an older installer, its signature, a half download and a copy install() ran
+            val own = listOf("Zoukan-1.9.0.msi", "Zoukan-1.9.0.msi.sig", "Zoukan-1.9.0.msi.part", "Zoukan-1.9.0-arm64.DMG")
+                .map { File(updates, it).apply { writeText("old") } }
+            val runCopy = File(updates, "run4821937465").apply { mkdirs() }
+            File(runCopy, "Zoukan-1.9.0.msi").writeText("old")
+            // Another program's files in the folder
+            val others = listOf(File(updates, "notes.txt"), File(updates, "other-program/data.bin"), File(updates, "runner/x"))
+                .onEach { it.parentFile.mkdirs(); it.writeText("not Zoukan's") }
+            // Links named like the app's files, to a folder and a file of the user's
+            val userFile = File(sandbox.userFolder, "kept.msi").apply { writeText("the user's") }
+            val links = listOfNotNull(
+                sandbox.link(File(updates, "Zoukan-1.8.0.msi"), userFile),
+                sandbox.link(File(updates, "run1234"), sandbox.userFolder),
+            )
+            sandbox.record()
+
+            val asset = offered(FixtureReleases.Asset(NAME, installer), key.sign(NAME, installer))
+            val file = runBlocking { Updates.downloadVerified(checker, asset, updates, key.verifier, InstallerSignature(packaged = false)) }
+
+            file.readBytes().contentEquals(installer) shouldBe true
+            (own + runCopy + links).filter { Files.exists(it.toPath(), LinkOption.NOFOLLOW_LINKS) } shouldBe emptyList()
+            others.forEach { it.readText() shouldBe "not Zoukan's" }
+            userFile.readText() shouldBe "the user's"
+            sandbox.assertNothingOutsideAppChanged()
+        }
     }
 
     private companion object {

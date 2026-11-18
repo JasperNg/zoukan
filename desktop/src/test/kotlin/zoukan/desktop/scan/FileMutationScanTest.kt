@@ -96,7 +96,6 @@ class FileMutationScanTest {
             Allowed("browser/ChromiumNatives.kt", "installDir.deleteRecursively()", "the app's own Chromium folder, filled only from the pinned, checksummed download; the links in Chromium's bundle point inside it (a failed or outdated install is cleared, then the folder made again)", function = "ensureInstalled", count = 2),
             Allowed("zoukan/extension/DesktopExtensionInstaller.kt", "checkedPackageDir(extensionsDir, pkgName).deleteRecursively()", "checkedPackageDir resolves links and requires the folder to sit directly in the extensions folder, which holds only files the installer wrote", function = "uninstall"),
             // Suspected defects: should go through SafeDelete
-            Allowed("update/Updates.kt", "?.forEach { it.deleteRecursively() }", "known defect: the updates folder is one other programs can write to (see install()); clearing old downloads follows a link planted there", function = "downloadVerified"),
         )
     }
 }

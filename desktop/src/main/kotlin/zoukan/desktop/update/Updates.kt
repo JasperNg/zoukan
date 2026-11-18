@@ -18,6 +18,7 @@ import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.compat.localized
+import zoukan.desktop.download.SafeDelete
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
@@ -65,7 +66,12 @@ object Updates {
      * Downloads [asset] into [dir] and checks it before it is kept: GitHub's SHA-256 (required),
      * the release signature with [releaseSignature] and the publisher's code signature with
      * [installerSignature]. A file that fails is deleted with its signature. Only the newest
-     * download is kept in [dir].
+     * download is kept in [dir]: the app's older downloads there ([isOwnDownload]) are deleted
+     * first, without following links; anything else in the folder is left alone.
+     *
+     * An older verified installer is deleted before the new one is verified. Nothing can reach it
+     * any more: a download starts only from a check that found a newer release, which replaced the
+     * Downloaded state that held the older file.
      */
     internal suspend fun downloadVerified(
         checker: UpdateChecker,
@@ -75,8 +81,11 @@ object Updates {
         installerSignature: InstallerSignature,
         progress: (Long, Long) -> Unit = { _, _ -> },
     ): File {
-        // Only the newest download is kept
-        dir.listFiles()?.filter { it.name != asset.name && it.name != asset.name + ".sig" }?.forEach { it.deleteRecursively() }
+        // Only the newest download is kept. Other programs can write to this folder (see install()):
+        // a link there is removed as itself, never what it points to, and their files stay
+        dir.listFiles()
+            ?.filter { it.name != asset.name && it.name != asset.name + ".sig" && isOwnDownload(it.name) }
+            ?.forEach { SafeDelete.deleteTreeNoFollow(it.toPath()) }
         // Without GitHub's checksum the download cannot be told from a damaged or swapped one
         if (asset.sha256 == null) {
             throw IOException("GitHub lists no checksum for ${asset.name}; get it from the release page instead")
@@ -102,6 +111,17 @@ object Updates {
             logcat { "Update ${file.name}: $verdict" }
         }
     }
+
+    /**
+     * A name the app gives to what it keeps in the updates folder: an installer (the release's
+     * `.msi` or `.dmg`), its release signature (`.sig`), a half download (`.part`), or the private
+     * copy [install] ran (`run` and digits, from Files.createTempDirectory).
+     */
+    internal fun isOwnDownload(name: String): Boolean = OWN_INSTALLER.matches(name) || OWN_RUN_COPY.matches(name)
+
+    private val OWN_INSTALLER = Regex(""".+\.(msi|dmg)(\.sig|\.part)?""", RegexOption.IGNORE_CASE)
+
+    private val OWN_RUN_COPY = Regex("""run[0-9]+""")
 
     private val signature by lazy { InstallerSignature() }
 
