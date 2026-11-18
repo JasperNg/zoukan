@@ -115,10 +115,9 @@ class StorageNamesParityTest {
                 KnownNameDifference(
                     desktop = "cover.\$ext",
                     android = "cover.jpg",
-                    reviewed = false,
-                    why = "Unreviewed mismatch found when the test was written. Android writes a local entry's " +
-                        "new cover as cover.jpg whatever the image is; the desktop names it after the image type " +
-                        "(cover.png, cover.webp, ...). Both apps take any cover.* as the cover, so each reads the other's",
+                    reviewed = true,
+                    why = "On purpose (PARITY.md, Local source): the desktop names the cover after the image's real type; " +
+                        "Android always writes cover.jpg. Each app takes any cover.* image, so each reads the other's",
                 ),
             ),
             NamePair(
@@ -138,11 +137,9 @@ class StorageNamesParityTest {
                 KnownNameDifference(
                     desktop = "zoukan",
                     android = "\${BuildConfig.APPLICATION_ID}",
-                    reviewed = false,
-                    why = "Unreviewed mismatch found when the test was written (not listed in PARITY.md, though " +
-                        "DesktopBackups and THREAT-MODEL.md say it is on purpose): Android names a backup " +
-                        "app.komikku_<date>.tachibk, the desktop zoukan_<date>.tachibk, so AutoBackup prunes only " +
-                        "its own and never the Android app's",
+                    reviewed = true,
+                    why = "On purpose (PARITY.md, Backups; THREAT-MODEL.md residual risk 4): each app prunes only its own " +
+                        "prefix, so neither deletes the other's automatic backups; both restore any .tachibk",
                 ),
             ),
             NamePair(
@@ -161,10 +158,9 @@ class StorageNamesParityTest {
                 KnownNameDifference(
                     desktop = "(none)",
                     android = ".nomedia",
-                    reviewed = false,
-                    why = "Unreviewed mismatch found when the test was written. Android creates downloads/.nomedia " +
-                        "(StorageManager) so the gallery skips downloaded pages; the desktop never creates it, so a " +
-                        "storage folder made on the desktop and copied to Android has none until Android re-creates it",
+                    reviewed = true,
+                    why = "On purpose (PARITY.md, Storage folder: .nomedia files): the file only steers Android's media " +
+                        "scanner; the desktop keeps Android's and writes none",
                 ),
             ),
         )

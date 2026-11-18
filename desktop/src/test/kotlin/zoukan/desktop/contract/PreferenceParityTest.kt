@@ -215,21 +215,6 @@ class PreferenceParityTest {
          * `reviewed = false`: an unreviewed mismatch found when the test was written, waiting for
          * the maintainer to call it a bug or a documented difference.
          */
-        val KNOWN_DIFFERENCES = listOf(
-            KnownPreferenceDifference(
-                "appState:storage_dir",
-                reviewed = false,
-                why = "Unreviewed mismatch found when the test was written. The desktop's default is \"\" " +
-                    "(ZoukanStorage then uses its default folder); Android's is folderProvider.path(). " +
-                    "An app-state key, so backups never carry it",
-            ),
-            KnownPreferenceDifference(
-                "reader_bottom_buttons",
-                reviewed = false,
-                why = "Unreviewed mismatch found when the test was written. The desktop's default adds the " +
-                    "reading mode button (\"rm\", an Android button) and the desktop-only scale type button " +
-                    "(\"zst\") to Android's vc, wb, cbp, cbc, pl. Only an unset preference differs",
-            ),
-        )
+        val KNOWN_DIFFERENCES = emptyList<KnownPreferenceDifference>()
     }
 }
