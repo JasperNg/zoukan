@@ -131,6 +131,45 @@ class ExtensionVerificationTest {
     }
 
     @Test
+    fun `a file that is not a jar, or a cut-off jar, is refused as a signature error`() {
+        val signed = File(dir, "signed.jar")
+        writeZip(signed, extensionFiles)
+        sign(signed)
+        val damaged = mapOf(
+            "html.jar" to "<html>Not found</html>".toByteArray(),
+            "empty.jar" to ByteArray(0),
+            "cut.jar" to signed.readBytes().copyOf(signed.length().toInt() / 2),
+        )
+        for ((name, bytes) in damaged) {
+            val jar = File(dir, name).apply { writeBytes(bytes) }
+            shouldThrow<ExtensionException> { ExtensionSignatures.verifyJar(jar) }.stage shouldBe ExtensionException.Stage.SIGNATURE
+        }
+    }
+
+    @Test
+    fun `a signed file whose bytes were changed after signing is refused as a signature error`() {
+        val signed = File(dir, "signed.jar")
+        writeZip(signed, extensionFiles)
+        sign(signed)
+        // The same entries and signature files, one signed entry with other bytes
+        val tampered = File(dir, "tampered.jar")
+        java.util.zip.ZipFile(signed).use { zip ->
+            val entries = zip.entries().asSequence().filterNot { it.isDirectory }
+                .associate { it.name to zip.getInputStream(it).readAllBytes() }
+            writeZip(tampered, entries + ("assets/data.json" to "{\"evil\":1}".toByteArray()))
+        }
+
+        shouldThrow<ExtensionException> { ExtensionSignatures.verifyJar(tampered) }.stage shouldBe ExtensionException.Stage.SIGNATURE
+    }
+
+    @Test
+    fun `bytes that are not an APK are refused as a signature error`() {
+        for (bytes in listOf(ByteArray(0), "<html>Not found</html>".toByteArray(), ByteArray(4096) { it.toByte() })) {
+            shouldThrow<ExtensionException> { ExtensionSignatures.verifyApk(bytes) }.stage shouldBe ExtensionException.Stage.SIGNATURE
+        }
+    }
+
+    @Test
     fun `an unsigned file added to META-INF after signing is refused`() {
         val signed = File(dir, "signed.jar")
         writeZip(signed, extensionFiles)

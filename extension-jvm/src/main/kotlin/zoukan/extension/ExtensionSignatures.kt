@@ -1,8 +1,10 @@
 package zoukan.extension
 
 import com.android.apksig.ApkVerifier
+import com.android.apksig.apk.ApkFormatException
 import com.android.apksig.util.DataSources
 import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.cert.Certificate
@@ -25,8 +27,21 @@ object ExtensionSignatures {
      *
      * The files are read from the one open jar while their digests are checked, and returned, so
      * the caller can run exactly what was verified.
+     *
+     * A file that is not a jar, is cut off, or has an entry that does not match its signed digest
+     * is refused with an [ExtensionException] too, so its callers report it as an extension error.
      */
-    fun verifyJar(jar: File): VerifiedJar {
+    fun verifyJar(jar: File): VerifiedJar = try {
+        verifyJarOrThrow(jar)
+    } catch (e: IOException) {
+        // ZipException: not a zip, or cut off
+        throw ExtensionException(ExtensionException.Stage.SIGNATURE, "${jar.name} is damaged or not a jar: ${e.message}", e)
+    } catch (e: SecurityException) {
+        // An entry whose bytes do not match the digest its signature lists
+        throw ExtensionException(ExtensionException.Stage.SIGNATURE, "${jar.name} does not match its signature: ${e.message}", e)
+    }
+
+    private fun verifyJarOrThrow(jar: File): VerifiedJar {
         val signers = mutableSetOf<String>()
         val entries = LinkedHashMap<String, ByteArray>()
         JarFile(jar, true).use { jf ->
@@ -77,8 +92,17 @@ object ExtensionSignatures {
      * Checks an APK's v1, v2 and v3 signatures with apksig, as Android's package manager would, and
      * requires a v2 or newer one: only those cover every byte the other readers of the APK parse.
      */
-    fun verifyApk(apk: ByteArray): List<String> =
-        signersOf(ApkVerifier.Builder(DataSources.asDataSource(ByteBuffer.wrap(apk))).build().verify())
+    fun verifyApk(apk: ByteArray): List<String> {
+        val result = try {
+            ApkVerifier.Builder(DataSources.asDataSource(ByteBuffer.wrap(apk))).build().verify()
+        } catch (e: ApkFormatException) {
+            // Not an APK, or a damaged one: an extension error its callers report
+            throw ExtensionException(ExtensionException.Stage.SIGNATURE, "The APK is damaged or not an APK: ${e.message}", e)
+        } catch (e: IOException) {
+            throw ExtensionException(ExtensionException.Stage.SIGNATURE, "The APK could not be read: ${e.message}", e)
+        }
+        return signersOf(result)
+    }
 
     /** The signing certificates' SHA-256 of a verified APK; fails when [result] does not verify. */
     internal fun signersOf(result: ApkVerifier.Result): List<String> {

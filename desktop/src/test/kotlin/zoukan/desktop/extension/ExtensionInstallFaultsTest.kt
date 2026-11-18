@@ -12,7 +12,6 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.io.TempDir
@@ -137,7 +136,7 @@ class ExtensionInstallFaultsTest {
 
         // Any exception reaches the user: DesktopExtensionManager returns an ExtensionException as a
         // load error, and both callers (the Extensions screen, the missing-extensions install) show
-        // any other as an error toast. See the disabled test below for the damaged-jar case.
+        // any other as an error toast. A damaged jar is an ExtensionException (the test below).
         val error = shouldThrow<Exception> { runBlocking { installer().install(extension) } }
 
         error.message.shouldNotBeBlank()
@@ -148,17 +147,15 @@ class ExtensionInstallFaultsTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("damagedJars")
-    @Disabled(
-        "Known defect: a downloaded jar that is not a zip (damaged, or an HTML page sent with status 200) " +
-            "fails in ExtensionSignatures.verifyJar with a raw ZipException, not an ExtensionException, so " +
-            "DesktopExtensionManager.installExtension does not return it as a load error (loadErrorsFlow); " +
-            "it escapes to the caller, which shows only a generic error toast.",
-    )
     fun `a damaged jar is refused as an extension error`(name: String, failure: FixtureFailure) {
-        installed()
+        val before = installed()
         server.fail(store.jarPath(store.trusted), failure)
 
+        // DesktopExtensionManager returns an ExtensionException as a load error (loadErrorsFlow)
         shouldThrow<ExtensionException> { runBlocking { installer().install(extension) } }
+
+        // Never installed, nor left on disk under any name; the installed copy keeps its bytes
+        files() shouldBe before
     }
 
     @Test
