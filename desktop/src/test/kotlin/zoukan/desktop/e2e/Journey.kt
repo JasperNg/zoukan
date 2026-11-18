@@ -20,8 +20,10 @@ import androidx.compose.ui.test.pressKey
 import eu.kanade.tachiyomi.source.model.FilterList
 import exh.source.getMainSource
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
@@ -79,8 +81,8 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
         /** How many turns [readThrough] takes to find a page before it fails. */
         const val MAX_TURNS = 2
 
-        /** How long [watchNothingHappens] watches. */
-        const val NOTHING_HAPPENS_MILLIS = 1_000L
+        /** How long [awaitAppIdle] waits for the app's work to end before it fails. */
+        const val APP_IDLE_TIMEOUT = 60_000L
 
         /**
          * What [readThrough] does after a look for a page: stay when it drew; turn while another
@@ -120,7 +122,8 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
             startUi(journey.dirs)
             // The source's grid, as before Android's "Replace latest button" (on by default) opened its feed
             Injekt.get<eu.kanade.domain.ui.UiPreferences>().useNewSourceNavigation().set(false)
-            AppScope.launch {
+            // On ServiceScope, the app's scope for work that lasts the whole run: awaitAppIdle waits for AppScope's
+            zoukan.desktop.app.ServiceScope.launch {
                 Toasts.flow.collect {
                     println("Journey toast: $it")
                     journey.toasts += it
@@ -183,14 +186,35 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
     }
 
     /**
-     * Waits for the UI to go idle, then watches for [NOTHING_HAPPENS_MILLIS], for a check that
-     * something did not happen (a file deleted, a request sent, a second refresh). Such work would
-     * start in the background with no event to wait for, so only a pause can show it never came.
+     * Waits until the work the app has started has ended: the UI, the user actions (deletes,
+     * removals: `launchAction`, `launchReporting`), the work on AppScope (a clear-data, a tracker
+     * update) and the download manager's. For a check that something did not happen (a file
+     * deleted, a request sent, a second refresh): the work that could have done it is over, so a
+     * check after it is final. Fails, naming what still runs, after [APP_IDLE_TIMEOUT].
      * Wait on a condition (waitOrDump, waitFor) for anything that must happen.
      */
-    fun ComposeUiTest.watchNothingHappens() {
-        waitForIdle()
-        Thread.sleep(NOTHING_HAPPENS_MILLIS)
+    fun ComposeUiTest.awaitAppIdle() {
+        val downloads = Injekt.get<zoukan.desktop.download.DownloadManager>()
+        fun appScopeBusy() = AppScope.coroutineContext.job.children.filter { it.isActive }.toList()
+        fun busy() = zoukan.desktop.ui.common.actionsRunning.get() > 0 || appScopeBusy().isNotEmpty()
+        runBlocking {
+            withTimeout(APP_IDLE_TIMEOUT) {
+                // An action's end can start more (a refresh after a delete), and the UI more actions
+                do {
+                    waitForIdle()
+                    Await.untilSuspending("the user actions to end", APP_IDLE_TIMEOUT) {
+                        zoukan.desktop.ui.common.actionsRunning.get() == 0
+                    }
+                    while (true) {
+                        val pending = appScopeBusy()
+                        if (pending.isEmpty()) break
+                        pending.forEach { it.join() }
+                    }
+                    downloads.awaitBackgroundWork()
+                    waitForIdle()
+                } while (busy())
+            }
+        }
     }
 
     /**

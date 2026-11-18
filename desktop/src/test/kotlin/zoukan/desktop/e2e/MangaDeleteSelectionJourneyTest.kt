@@ -94,12 +94,12 @@ class MangaDeleteSelectionJourneyTest {
                     waitFor(hasContentDescription("Delete downloads"))
                     onNodeWithContentDescription("Delete downloads").performClick()
                     waitFor(hasText(title))
-                    watchNothingHappens()
+                    awaitAppIdle()
                     untouched()
                 }
                 step("Cancel: files unchanged, selection still there") {
                     onNodeWithText("Cancel").performClick()
-                    watchNothingHappens()
+                    awaitAppIdle()
                     untouched()
                     onNodeWithContentDescription("Delete downloads").assertExists()
                 }

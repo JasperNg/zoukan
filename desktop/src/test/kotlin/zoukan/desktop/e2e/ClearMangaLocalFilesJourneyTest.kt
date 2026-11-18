@@ -1,6 +1,7 @@
 package zoukan.desktop.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onNodeWithText
@@ -81,7 +82,7 @@ class ClearMangaLocalFilesJourneyTest {
                 }
                 step("Cancel the second question: nothing moves") {
                     onNodeWithText("Cancel").performClick()
-                    watchNothingHappens()
+                    awaitAppIdle()
                     trashed.shouldBeEmpty()
                     files.forEach { fingerprint(it) shouldBe before.getValue(it) }
                 }
@@ -95,7 +96,10 @@ class ClearMangaLocalFilesJourneyTest {
                     onNodeWithText("Move to trash").performClick()
                     waitOrDump("for the folder to reach the trash", timeout = 10_000) { trashed.isNotEmpty() }
                     waitOrDump("for the refresh to start", timeout = 10_000) { starts.isNotEmpty() }
-                    watchNothingHappens()
+                    // The move has ended and the refresh it started is done: no other can start
+                    awaitAppIdle()
+                    waitFor(hasContentDescription("Refresh") and isEnabled())
+                    awaitAppIdle()
                 }
             }
         }

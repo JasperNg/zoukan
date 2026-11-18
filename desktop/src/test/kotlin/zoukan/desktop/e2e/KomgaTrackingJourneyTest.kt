@@ -189,7 +189,7 @@ class KomgaTrackingJourneyTest {
                     waitOrDump("for the track to go") { tracks(mangaId()).isEmpty() }
                     waitFor(hasText("Add tracking"))
                     val after = komgaCalls()
-                    watchNothingHappens()
+                    awaitAppIdle()
                     komgaCalls() shouldBe after
                     komga.progressUpdates shouldHaveSize 3
                     shot("7-unbound")

@@ -162,7 +162,8 @@ class SettingsPagesJourneyTest {
                     waitFor(hasText("Chapter 2 (PNG)"))
                     onAllNodesWithText("Chapter 2 (PNG)").onFirst().performClick()
                     // With the setting on, the first step saw the mode's name as the reader opened; it
-                    // shows for 1.5 s from then, so watch from the click until well past that
+                    // shows from the reader's start for 1.5 s of the test's clock (the effect's delay
+                    // runs on it), so look at every frame from the click until the clock is well past that
                     val labels = ReadingModes.all.map(ReadingModes::label)
                     var named = false
                     fun look() {
@@ -172,10 +173,10 @@ class SettingsPagesJourneyTest {
                         look()
                         pageDrew(FixtureCatalog.pages("png").first())
                     }
-                    val until = System.currentTimeMillis() + 2_500
-                    while (System.currentTimeMillis() < until) {
+                    val until = mainClock.currentTime + 2_500
+                    while (mainClock.currentTime < until) {
+                        mainClock.advanceTimeByFrame()
                         look()
-                        Thread.sleep(100)
                     }
                     named shouldBe false
                     shot("1-reader-no-mode-name")
