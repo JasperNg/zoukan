@@ -153,8 +153,7 @@ class SingleInstanceTest {
         }
     }
 
-    /** As runZoukanApp does: only checks that it got the lock and keeps no reference. */
-    /** Acquires the lock and keeps only a weak reference to the instance, as a caller that drops it. */
+    /** As runZoukanApp does: acquires the lock and keeps only a weak reference to the instance. */
     private fun acquireAndForget(root: File): java.lang.ref.WeakReference<SingleInstance> =
         java.lang.ref.WeakReference(SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.Acquired>().instance)
 }
