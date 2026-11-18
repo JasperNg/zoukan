@@ -28,6 +28,8 @@ class AutoBackup(
     private val preferences: BackupPreferences,
     /** The names of the automatic backups this install wrote, one per line, newest last. */
     private val written: Preference<String>,
+    /** Makes the backups' writer; tests pass one whose writes fail. */
+    private val backups: () -> DesktopBackups = { DesktopBackups(androidDir) },
 ) {
     /** When the last attempt failed; the next one waits [RETRY_AFTER], not the next minute's check. */
     @Volatile
@@ -60,7 +62,7 @@ class AutoBackup(
             storage.requireAvailable()
             val folder = storage.autoBackups.apply { mkdirs() }
             val file = freeFile(folder, DesktopBackups.defaultFileName().removeSuffix(".tachibk"))
-            DesktopBackups(androidDir).create(file, BackupOptions(), replaceExisting = false)
+            backups().create(file, BackupOptions(), replaceExisting = false)
             preferences.lastAutoBackupTimestamp().set(System.currentTimeMillis())
             // Record the name before pruning, so a crash in between never forgets a file it wrote
             val own = written.get().lines().filter { it.isNotBlank() && it != file.name } + file.name
