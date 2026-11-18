@@ -3,7 +3,11 @@ package zoukan.desktop.image
 import org.bytedeco.ffmpeg.avcodec.AVCodec
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext
 import org.bytedeco.ffmpeg.avformat.AVFormatContext
+import org.bytedeco.ffmpeg.avformat.AVIOContext
+import org.bytedeco.ffmpeg.avformat.AVInputFormat
 import org.bytedeco.ffmpeg.avformat.AVStreamGroupTileGrid
+import org.bytedeco.ffmpeg.avformat.Read_packet_Pointer_BytePointer_int
+import org.bytedeco.ffmpeg.avformat.Seek_Pointer_long_int
 import org.bytedeco.ffmpeg.avutil.AVDictionary
 import org.bytedeco.ffmpeg.avutil.AVFrame
 import org.bytedeco.ffmpeg.global.avcodec.av_packet_alloc
@@ -17,23 +21,31 @@ import org.bytedeco.ffmpeg.global.avcodec.avcodec_open2
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_parameters_to_context
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_receive_frame
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_send_packet
+import org.bytedeco.ffmpeg.global.avformat.AVSEEK_FORCE
+import org.bytedeco.ffmpeg.global.avformat.AVSEEK_SIZE
 import org.bytedeco.ffmpeg.global.avformat.AV_DISPOSITION_DEFAULT
 import org.bytedeco.ffmpeg.global.avformat.AV_STREAM_GROUP_PARAMS_TILE_GRID
 import org.bytedeco.ffmpeg.global.avformat.av_find_best_stream
 import org.bytedeco.ffmpeg.global.avformat.av_read_frame
+import org.bytedeco.ffmpeg.global.avformat.avformat_alloc_context
 import org.bytedeco.ffmpeg.global.avformat.avformat_close_input
 import org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info
 import org.bytedeco.ffmpeg.global.avformat.avformat_open_input
+import org.bytedeco.ffmpeg.global.avformat.avio_alloc_context
+import org.bytedeco.ffmpeg.global.avformat.avio_context_free
 import org.bytedeco.ffmpeg.global.avutil.AVCOL_RANGE_JPEG
 import org.bytedeco.ffmpeg.global.avutil.AVERROR_EAGAIN
+import org.bytedeco.ffmpeg.global.avutil.AVERROR_EOF
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO
 import org.bytedeco.ffmpeg.global.avutil.AV_LOG_QUIET
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
 import org.bytedeco.ffmpeg.global.avutil.av_dict_get
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
 import org.bytedeco.ffmpeg.global.avutil.av_frame_free
+import org.bytedeco.ffmpeg.global.avutil.av_free
 import org.bytedeco.ffmpeg.global.avutil.av_get_pix_fmt_name
 import org.bytedeco.ffmpeg.global.avutil.av_log_set_level
+import org.bytedeco.ffmpeg.global.avutil.av_malloc
 import org.bytedeco.ffmpeg.global.swscale.SWS_ACCURATE_RND
 import org.bytedeco.ffmpeg.global.swscale.SWS_BICUBIC
 import org.bytedeco.ffmpeg.global.swscale.SWS_CS_DEFAULT
@@ -46,6 +58,7 @@ import org.bytedeco.ffmpeg.global.swscale.sws_setColorspaceDetails
 import org.bytedeco.javacpp.BytePointer
 import org.bytedeco.javacpp.DoublePointer
 import org.bytedeco.javacpp.IntPointer
+import org.bytedeco.javacpp.Pointer
 import org.bytedeco.javacpp.PointerPointer
 import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageFormats
@@ -55,6 +68,7 @@ import java.awt.image.DataBufferInt
 import java.io.File
 import java.io.IOException
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Decodes the still images Skia and ImageIO cannot read, AVIF and HEIF, with FFmpeg: the first
@@ -74,24 +88,32 @@ object FfmpegImageDecoder {
     /** Whether [bytes] start like an image this decoder is for ([ImageFormats.HEADER] bytes are enough). */
     fun handles(bytes: ByteArray): Boolean = ImageFormats.sniff(bytes).let { it == Format.Avif || it == Format.Heif }
 
+    /**
+     * Decodes [bytes], which FFmpeg reads from memory (ZOUKAN: never from a temporary file, which
+     * would put a decrypted page on the disk).
+     */
     fun decode(bytes: ByteArray): BufferedImage {
-        // FFmpeg reads from a file here, which keeps the native code simple and safe
-        val file = File.createTempFile("zoukan-image-", ".bin")
+        loadNatives()
+        val io = try {
+            MemoryInput.open(bytes)
+        } catch (e: LinkageError) {
+            throw IOException("FFmpeg could not load", e)
+        }
         try {
-            file.writeBytes(bytes)
-            return decode(file)
+            val format = avformat_alloc_context() ?: throw IOException("Out of memory")
+            format.pb(io.context)
+            // On failure FFmpeg frees the context itself (but not the reader, which is ours)
+            if (avformat_open_input(format, null as BytePointer?, null as AVInputFormat?, null as AVDictionary?) < 0) {
+                throw IOException("Not an image FFmpeg can open")
+            }
+            return decodeOpened(format)
         } finally {
-            file.delete()
+            io.close()
         }
     }
 
     fun decode(file: File): BufferedImage {
-        try {
-            natives
-        } catch (e: LinkageError) {
-            // Natives missing for this OS or CPU: these images fail, the others still show
-            throw IOException("FFmpeg could not load", e)
-        }
+        loadNatives()
         val format = AVFormatContext(null)
         val path = BytePointer(file.absolutePath, Charsets.UTF_8)
         try {
@@ -99,6 +121,20 @@ object FfmpegImageDecoder {
         } finally {
             path.close()
         }
+        return decodeOpened(format)
+    }
+
+    private fun loadNatives() {
+        try {
+            natives
+        } catch (e: LinkageError) {
+            // Natives missing for this OS or CPU: these images fail, the others still show
+            throw IOException("FFmpeg could not load", e)
+        }
+    }
+
+    /** The image of an opened [format], which is closed afterwards. */
+    private fun decodeOpened(format: AVFormatContext): BufferedImage {
         try {
             if (avformat_find_stream_info(format, null as PointerPointer<*>?) < 0) throw IOException("Could not read the image's streams")
             val grids = tileGrids(format)
@@ -117,6 +153,96 @@ object FfmpegImageDecoder {
             return withAlpha(frames.getValue(index), alpha?.let { frames[it] })
         } finally {
             avformat_close_input(format)
+        }
+    }
+
+    /**
+     * FFmpeg's reader over bytes in memory: an AVIOContext whose read and seek callbacks find the
+     * bytes by the context's opaque pointer. The callbacks are made once and kept, as JavaCPP has
+     * few native slots for them; each open reader has a key of its own.
+     */
+    private class MemoryInput private constructor(val context: AVIOContext, private val key: Pointer) : AutoCloseable {
+        private class Source(val bytes: ByteArray) {
+            var position = 0L
+        }
+
+        override fun close() {
+            sources.remove(key.address())
+            // FFmpeg may have replaced the buffer it was given: the one it holds now is freed
+            av_free(context.buffer())
+            avio_context_free(context)
+            av_free(key)
+        }
+
+        private object Read : Read_packet_Pointer_BytePointer_int() {
+            override fun call(opaque: Pointer?, buffer: BytePointer?, size: Int): Int = try {
+                val source = opaque?.let { sources[it.address()] }
+                val left = source?.let { it.bytes.size - it.position } ?: 0L
+                val n = minOf(left, size.toLong()).toInt()
+                if (source == null || buffer == null || n <= 0) {
+                    AVERROR_EOF
+                } else {
+                    buffer.position(0L).put(source.bytes, source.position.toInt(), n)
+                    source.position += n
+                    n
+                }
+            } catch (_: Throwable) {
+                AVERROR_EOF
+            }
+        }
+
+        private object Seek : Seek_Pointer_long_int() {
+            override fun call(opaque: Pointer?, offset: Long, whence: Int): Long = try {
+                val source = opaque?.let { sources[it.address()] }
+                val size = source?.bytes?.size?.toLong() ?: 0L
+                val mode = whence and AVSEEK_FORCE.inv()
+                val target = when (mode) {
+                    SEEK_SET -> offset
+                    SEEK_CUR -> (source?.position ?: 0L) + offset
+                    SEEK_END -> size + offset
+                    else -> -1L
+                }
+                when {
+                    source == null -> -1L
+                    // The size, without moving
+                    mode == AVSEEK_SIZE -> size
+                    target < 0 || target > size -> -1L
+                    else -> {
+                        source.position = target
+                        target
+                    }
+                }
+            } catch (_: Throwable) {
+                -1L
+            }
+        }
+
+        companion object {
+            private const val BUFFER_BYTES = 64 * 1024
+            private const val SEEK_SET = 0
+            private const val SEEK_CUR = 1
+            private const val SEEK_END = 2
+
+            private val sources = ConcurrentHashMap<Long, Source>()
+
+            fun open(bytes: ByteArray): MemoryInput {
+                // A byte of FFmpeg's memory, only for its address: the key of this reader's bytes
+                val key = av_malloc(1L) ?: throw IOException("Out of memory")
+                val buffer = av_malloc(BUFFER_BYTES.toLong())
+                if (buffer == null) {
+                    av_free(key)
+                    throw IOException("Out of memory")
+                }
+                sources[key.address()] = Source(bytes)
+                val context = avio_alloc_context(BytePointer(buffer), BUFFER_BYTES, 0, key, Read, null, Seek)
+                if (context == null) {
+                    sources.remove(key.address())
+                    av_free(buffer)
+                    av_free(key)
+                    throw IOException("Out of memory")
+                }
+                return MemoryInput(context, key)
+            }
         }
     }
 

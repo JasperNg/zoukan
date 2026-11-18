@@ -391,7 +391,19 @@ class KcefWebSettings : WebSettings() {
 
     fun getUserAgentMetadataMap() = (userAgentMetadata ?: defaultUserAgentMetadata()).toMap()
 
-    fun getUserAgentMetadata() = userAgentMetadata
+    // ZOUKAN -->
+    /**
+     * The client hints that go with [getUserAgentString]: the ones an extension set, else, while the
+     * WebView runs the default user agent, the desktop Chromium's own (so that Sec-CH-UA and
+     * navigator.userAgentData match the user agent). An extension's own user agent without its own
+     * metadata gets none, as before.
+     */
+    fun getUserAgentMetadata() =
+        userAgentMetadata
+            ?: runCatching { defaultUserAgentMetadata() }
+                .getOrNull()
+                ?.takeIf { userAgentString == null || userAgentString == defaultUserAgent() }
+    // ZOUKAN <--
 
     override fun setNeedInitialFocus(p0: Boolean) {
         needInitialFocus = p0
@@ -559,22 +571,197 @@ class KcefWebSettings : WebSettings() {
     }
 
     companion object {
-        fun defaultUserAgent() = System.getProperty("http.agent")
+        // ZOUKAN -->
+        /**
+         * The user agent of the app's Chromium, set by the desktop app (it learns the one Chromium
+         * reports). Null, or null answers, fall back to the http.agent system property.
+         */
+        @Volatile
+        @JvmStatic
+        var userAgentProvider: (() -> String?)? = null
 
-        // TODO: Should we support basic parsing of UA? Currently if no metadata is provided, metadata and UA will mismatch
-        fun defaultUserAgentMetadata() =
-            UserAgentMetadata(
-                "",
-                true,
-                "2312DRAABG",
-                "Android",
-                "15.0.0",
-                "",
-                listOf(UserAgentBrandVersion("Chromium", "149"), UserAgentBrandVersion("Not)A;Brand", "24")),
-                listOf("Mobile"),
-                listOf(UserAgentBrandVersion("Chromium", "149.0.7827.197"), UserAgentBrandVersion("Not)A;Brand", "24.0.0.0")),
-                false,
-                "149.0.7827.197",
+        fun defaultUserAgent(): String =
+            runCatching { userAgentProvider?.invoke() }.getOrNull()
+                ?: System.getProperty("http.agent")
+                ?: ""
+
+        /** Chromium's full version from the JCEF build on the class path (152.0.7977.83), if known. */
+        private val chromiumFullVersion: String? by lazy {
+            runCatching { me.friwi.jcefmaven.CefBuildInfo.fromClasspath().releaseTag }.getOrNull()
+                ?.let { Regex("chromium-(\\d+(?:\\.\\d+){3})").find(it)?.groupValues?.get(1) }
+        }
+
+        /** The client hints of the desktop Chromium that runs [defaultUserAgent], on this OS. */
+        fun defaultUserAgentMetadata(): UserAgentMetadata =
+            desktopUserAgentMetadata(
+                userAgent = defaultUserAgent(),
+                chromiumFullVersion = chromiumFullVersion,
+                osName = System.getProperty("os.name").orEmpty(),
+                osVersion = System.getProperty("os.version").orEmpty(),
+                osArch = System.getProperty("os.arch").orEmpty(),
+                windowsBuild = windowsBuild(),
             )
+
+        /**
+         * What a desktop Chromium reports for the reduced [userAgent] (`Chrome/152.0.0.0`): its brands
+         * (Chromium and the "GREASE" brand Chromium derives from the major version), no mobile, the
+         * desktop form factor and this OS. [chromiumFullVersion] is used when its major version is the
+         * user agent's. On Windows, [windowsBuild] (the build number, 22631) gives the platform
+         * version Chromium reports (see [windowsPlatformVersion]); without it the version is guessed
+         * from [osName].
+         */
+        fun desktopUserAgentMetadata(
+            userAgent: String?,
+            chromiumFullVersion: String?,
+            osName: String,
+            osVersion: String,
+            osArch: String,
+            windowsBuild: Int? = null,
+        ): UserAgentMetadata {
+            val major =
+                userAgent?.let { Regex("Chrome/(\\d+)").find(it)?.groupValues?.get(1) }
+                    ?: chromiumFullVersion?.substringBefore('.')?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+                    ?: DEFAULT_CHROMIUM_MAJOR
+            val fullVersion = chromiumFullVersion?.takeIf { it.substringBefore('.') == major } ?: "$major.0.0.0"
+            val seed = major.toInt()
+            val greaseBrand =
+                "Not${GREASE_CHARS[seed % GREASE_CHARS.size]}A${GREASE_CHARS[(seed + 1) % GREASE_CHARS.size]}Brand"
+            val greaseVersion = GREASE_VERSIONS[seed % GREASE_VERSIONS.size]
+            // Chromium's order: the GREASE brand at seed % 2, Chromium at (seed + 1) % 2
+            fun ordered(
+                grease: UserAgentBrandVersion,
+                chromium: UserAgentBrandVersion,
+            ) = if (seed % 2 == 0) listOf(grease, chromium) else listOf(chromium, grease)
+            val brands = ordered(UserAgentBrandVersion(greaseBrand, greaseVersion), UserAgentBrandVersion("Chromium", major))
+            val fullVersionList =
+                ordered(UserAgentBrandVersion(greaseBrand, "$greaseVersion.0.0.0"), UserAgentBrandVersion("Chromium", fullVersion))
+
+            val name = osName.lowercase()
+            val (platform, platformVersion) =
+                when {
+                    name.startsWith("windows") ->
+                        // Chromium reports a Windows API's contract version (Windows 10 22H2 is 10.0.0,
+                        // Windows 11 24H2 19.0.0), which Java does not read: it follows from the build
+                        // number when known, else Windows 11 is taken to be 24H2 or later
+                        "Windows" to (
+                            windowsBuild?.let(::windowsPlatformVersion)
+                                ?: if (name.startsWith("windows 1") && !name.startsWith("windows 10")) "19.0.0" else "10.0.0"
+                            )
+                    name.startsWith("mac") -> "macOS" to threePartVersion(osVersion)
+                    else -> "Linux" to threePartVersion(osVersion)
+                }
+            val arch = osArch.lowercase()
+            return UserAgentMetadata(
+                architecture = if (arch.startsWith("aarch") || arch.startsWith("arm")) "arm" else "x86",
+                mobile = false,
+                model = "",
+                platform = platform,
+                platformVersion = platformVersion,
+                bitness = if (arch.contains("64")) "64" else "32",
+                brands = brands,
+                formFactors = listOf("Desktop"),
+                fullVersionList = fullVersionList,
+                wow64 = false,
+                fullVersion = fullVersion,
+            )
+        }
+
+        /**
+         * The platform version Chromium reports on Windows build [build]: the Windows.Foundation
+         * UniversalApiContract version that build has (Windows 10 1809 is 7.0.0, 2004 to 22H2 10.0.0,
+         * Windows 11 21H2 14.0.0, 22H2 and 23H2 15.0.0, 24H2 and later 19.0.0). A build between two
+         * releases (an Insider build) gets the earlier release's. Null before Windows 10, where
+         * Chromium reports something else.
+         */
+        fun windowsPlatformVersion(build: Int): String? =
+            WINDOWS_CONTRACT_VERSIONS.lastOrNull { (firstBuild, _) -> build >= firstBuild }?.let { "${it.second}.0.0" }
+
+        /** The first build of each Windows release and its UniversalApiContract major version. */
+        private val WINDOWS_CONTRACT_VERSIONS =
+            listOf(
+                10240 to 1, // Windows 10 1507
+                10586 to 2, // 1511
+                14393 to 3, // 1607
+                15063 to 4, // 1703
+                16299 to 5, // 1709
+                17134 to 6, // 1803
+                17763 to 7, // 1809
+                18362 to 8, // 1903, 1909
+                19041 to 10, // 2004 to 22H2
+                22000 to 14, // Windows 11 21H2
+                22621 to 15, // 22H2, 23H2
+                26100 to 19, // 24H2, 25H2
+            )
+
+        /**
+         * The build number in `reg query` output for the CurrentBuildNumber value
+         * (`    CurrentBuildNumber    REG_SZ    22631`), or null.
+         */
+        fun parseWindowsBuild(regOutput: String): Int? =
+            Regex("CurrentBuildNumber\\s+REG_SZ\\s+(\\d{1,6})", RegexOption.IGNORE_CASE)
+                .find(regOutput)
+                ?.groupValues
+                ?.get(1)
+                ?.toIntOrNull()
+
+        /**
+         * This Windows' build number, read from the registry by `reg query` once, in the background
+         * from the first use of this class, so creating a WebView waits for it at most a moment. Null
+         * on other systems or when it cannot be read; never throws.
+         */
+        private val windowsBuildLookup: java.util.concurrent.CompletableFuture<Int?>? by lazy {
+            if (!System.getProperty("os.name").orEmpty().lowercase().startsWith("windows")) return@lazy null
+            runCatching {
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                    { runCatching { readWindowsBuild() }.getOrNull() },
+                    { task -> Thread(task, "WindowsBuildLookup").apply { isDaemon = true }.start() },
+                )
+            }.getOrNull()
+        }
+
+        init {
+            // Starts the lookup early (on Windows only), well before a WebView needs it
+            runCatching { windowsBuildLookup }
+        }
+
+        private fun windowsBuild(): Int? =
+            runCatching { windowsBuildLookup?.get(WINDOWS_BUILD_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS) }.getOrNull()
+
+        private fun readWindowsBuild(): Int? {
+            // reg.exe from the system folder, not whatever PATH finds first
+            val root = System.getenv("SystemRoot")?.takeIf { it.isNotBlank() } ?: return null
+            val reg = java.io.File(root, "System32\\reg.exe").takeIf { it.isFile } ?: return null
+            val process =
+                ProcessBuilder(
+                    reg.path,
+                    "query",
+                    "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                    "/v",
+                    "CurrentBuildNumber",
+                ).redirectErrorStream(true).start()
+            return try {
+                process.outputStream.close()
+                // A few lines, far less than the pipe holds, so reg.exe never waits for them to be read
+                if (!process.waitFor(WINDOWS_BUILD_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)) return null
+                parseWindowsBuild(process.inputStream.bufferedReader().use { it.readText() })
+            } finally {
+                process.destroy()
+            }
+        }
+
+        private const val WINDOWS_BUILD_WAIT_SECONDS = 3L
+
+        /** The leading numbers of [version] as major.minor.patch: 15.2 is 15.2.0, 6.8.0-45-generic is 6.8.0. */
+        private fun threePartVersion(version: String): String {
+            val parts = Regex("^\\d+(?:\\.\\d+)*").find(version.trim())?.value?.split('.').orEmpty()
+            if (parts.isEmpty()) return ""
+            return (parts + listOf("0", "0")).take(3).joinToString(".")
+        }
+
+        // Chromium's GREASE brand (components/embedder_support/user_agent_utils.cc)
+        private val GREASE_CHARS = listOf(" ", "(", ":", "-", ".", "/", ")", ";", "=", "?", "_")
+        private val GREASE_VERSIONS = listOf("8", "99", "24")
+        private const val DEFAULT_CHROMIUM_MAJOR = "152"
+        // ZOUKAN <--
     }
 }

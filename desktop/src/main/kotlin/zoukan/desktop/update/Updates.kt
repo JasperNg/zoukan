@@ -36,8 +36,10 @@ import kotlin.time.Duration.Companion.seconds
  * installing a downloaded update.
  */
 object Updates {
+    // The plain client: GitHub gets no source cookies, no cache entries and not the sources' user
+    // agent (OkHttp's own instead), and the Cloudflare solver never opens a window for it
     private val gitHubChecker by lazy {
-        UpdateChecker(Injekt.get<NetworkHelper>().client, Injekt.get<SecretStore>())
+        UpdateChecker(Injekt.get<NetworkHelper>().plainClient, Injekt.get<SecretStore>())
     }
 
     /**

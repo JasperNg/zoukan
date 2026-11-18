@@ -111,7 +111,7 @@ object EntryActions {
 
     private suspend fun coverBytes(manga: Manga): ByteArray {
         val cover = Cover.of(manga) ?: error(localized(DMR.strings.the_entry_has_no_cover))
-        return Images.coverFile(cover).readBytes()
+        return Images.coverBytes(cover)
     }
 }
 

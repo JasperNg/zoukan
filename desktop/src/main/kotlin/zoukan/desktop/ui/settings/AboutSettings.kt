@@ -32,6 +32,7 @@ import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.security.secretStoreError
@@ -199,9 +200,13 @@ private fun browse(url: String) {
     runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
 }
 
-/** Exits for the update install: the built-in browser windows are disposed like at any quit. */
+/**
+ * Exits for the update install: the built-in browser windows are disposed and the browser's
+ * profile is cleaned, in the same order as at any quit (see main).
+ */
 private fun exitApp(code: Int) {
     runCatching { BrowserWindow.disposeAllForQuit() }
+    JcefRuntime.cleanProfileAtQuit()
     SystemEffects.current.exit(code)
 }
 

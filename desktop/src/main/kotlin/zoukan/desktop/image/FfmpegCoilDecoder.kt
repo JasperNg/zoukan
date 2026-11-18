@@ -12,6 +12,7 @@ import coil3.request.Options
 import coil3.size.Dimension
 import coil3.size.Scale
 import kotlinx.coroutines.runInterruptible
+import okio.FileSystem
 import tachiyomi.decoder.ImageFormats
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
@@ -22,8 +23,10 @@ import java.awt.image.BufferedImage
  */
 class FfmpegCoilDecoder(private val source: ImageSource, private val options: Options) : Decoder {
     override suspend fun decode(): DecodeResult = runInterruptible {
-        // Covers from the disk cache are files already
-        val decoded = source.fileOrNull()?.toFile()?.let(FfmpegImageDecoder::decode)
+        // Plain files are read by path; Coil's disk cache is encrypted, so its files go through
+        // their file system like any other source
+        val decoded = source.fileOrNull()?.takeIf { source.fileSystem === FileSystem.SYSTEM }?.toFile()
+            ?.let(FfmpegImageDecoder::decode)
             ?: FfmpegImageDecoder.decode(source.source().readByteArray())
         val image = downscaled(decoded)
         DecodeResult(image = image.toComposeImageBitmap().asSkiaBitmap().asImage(), isSampled = image !== decoded)

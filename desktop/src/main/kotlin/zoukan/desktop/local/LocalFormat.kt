@@ -28,10 +28,15 @@ sealed interface LocalFormat : AutoCloseable {
         override fun page(index: Int): ByteArray = Archives.readPage(files[index])
     }
 
-    /** A RAR, 7z or TAR chapter, read from its unpacked copy, which stays cached until closed. */
-    class Unpacked private constructor(private val lease: Archives.Lease) : LocalFormat by Directory(lease.dir) {
+    /**
+     * A RAR, 7z or TAR chapter, read from its unpacked copy (encrypted in the cache, or in memory
+     * without the file key), which stays until closed.
+     */
+    class Unpacked private constructor(private val lease: Archives.Lease) : LocalFormat {
         constructor(file: File) : this(Archives.open(file))
 
+        override val pageCount get() = lease.pageCount
+        override fun page(index: Int): ByteArray = lease.page(index)
         override fun close() = lease.close()
     }
 

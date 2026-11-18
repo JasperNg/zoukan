@@ -77,6 +77,17 @@ class RestoreFilterTest {
     }
 
     @Test
+    fun `a sync or backup cannot switch off the content blocker or change its block lists`() {
+        val blockerOff = BackupPreference("zoukan_browser_content_blocker", BooleanPreferenceValue(false))
+        val lists = BackupPreference("zoukan_browser_block_lists", StringPreferenceValue("https://evil.example/list.txt"))
+        filtered(blockerOff, lists, theme) shouldBe listOf(theme)
+        val backup = Backup(backupManga = emptyList(), backupPreferences = listOf(blockerOff, lists, theme))
+        DesktopBackups.sensitiveKeys(backup) shouldBe listOf("zoukan_browser_content_blocker", "zoukan_browser_block_lists")
+        DesktopBackups.withSafePreferences(backup, allowSensitive = true) { false }.backupPreferences shouldBe
+            listOf(blockerOff, lists, theme)
+    }
+
+    @Test
     fun `a sync or backup cannot switch on sending private settings to the sync server`() {
         val sendPrivate = BackupPreference("sync_privateSettings", BooleanPreferenceValue(true))
         filtered(sendPrivate, theme) shouldBe listOf(theme)

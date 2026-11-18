@@ -38,6 +38,7 @@ class EhLogin(private val exhPreferences: ExhPreferences, private val network: N
             val window = BrowserWindow(
                 LOGIN_URL,
                 message = "Sign in to E-Hentai. The window closes by itself when you are signed in.",
+                purpose = BrowserWindow.Purpose.SIGN_IN,
             )
             window.open().also { if (it) window.await(LOGIN_TIMEOUT_MS) { hasForumCookies() } }
         }

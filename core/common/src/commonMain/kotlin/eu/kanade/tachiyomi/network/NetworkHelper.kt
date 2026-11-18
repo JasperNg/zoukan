@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import exh.log.EHLogLevel
 import logcat.LogPriority
-import okhttp3.Cache
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -43,14 +42,14 @@ import kotlin.random.Random
             .readTimeout(readTimeout, TimeUnit.SECONDS)
             .callTimeout(callTimeout, TimeUnit.SECONDS)
             // KMK <--
-            .cache(
-                Cache(
-                    directory = File(context.cacheDir, "network_cache"),
-                    maxSize = 5L * 1024 * 1024, // 5 MiB
-                ),
-            )
+            // ZOUKAN: Android's 5 MiB disk cache; in memory on desktop (see networkCache)
+            .cache(networkCache(context))
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
+        // ZOUKAN -->
+        // Before the DNS over HTTPS clients below are built from this builder, so they have it too
+        networkEventListener()?.let(builder::eventListener)
+        // ZOUKAN <--
 
         // KMK -->
         if (EHLogLevel.isExtraLogging()) {

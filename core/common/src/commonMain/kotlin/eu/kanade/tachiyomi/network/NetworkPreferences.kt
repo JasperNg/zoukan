@@ -5,6 +5,13 @@ import tachiyomi.core.common.preference.PreferenceStore
 
 class NetworkPreferences(
     private val preferenceStore: PreferenceStore,
+    // ZOUKAN -->
+    /**
+     * The DNS over HTTPS provider used while none is stored: -1 (off) as on Android; the desktop
+     * app passes Quad9. Only the default changes, so a stored choice (off included) is kept.
+     */
+    private val defaultDohProvider: Int = -1,
+    // ZOUKAN <--
 ) {
 
     /* KMK --> fun verboseLogging(): Preference<Boolean> {
@@ -12,7 +19,7 @@ class NetworkPreferences(
     } KMK <-- */
 
     fun dohProvider(): Preference<Int> {
-        return preferenceStore.getInt("doh_provider", -1)
+        return preferenceStore.getInt("doh_provider", /* ZOUKAN --> */defaultDohProvider/* ZOUKAN <-- */)
     }
 
     fun defaultUserAgent(): Preference<String> {

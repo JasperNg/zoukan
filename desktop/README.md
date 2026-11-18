@@ -211,6 +211,12 @@ versions kept the profile in `<data>/harness`. That folder is no longer used; it
 
 `-Pzoukan.dataDir=<path>` (Gradle), `-Dzoukan.dataDir=<path>` (JVM) or `ZOUKAN_DATA_DIR` overrides it.
 
+The caches that only make sense on one computer (Chromium's natives and profile, the image cache,
+FFmpeg's natives and the chapter cache) live in `<cache>`. That is `%LOCALAPPDATA%\Zoukan-local`
+for the default Windows data folder, so a roaming profile does not carry them (an older version's
+folders are moved there at start), and the data folder itself everywhere else, an overridden one
+included.
+
 ## Backups
 
 Backups use the Android app's own code, moved into the shared `backup` module (the `.tachibk`
@@ -239,7 +245,7 @@ real export in `src/test/resources/backups/`; reports go to `desktop/build/repor
 | Backups | `backup/` (desktop), `:backup` (shared) | `DesktopBackups`, `BackupCheck`, `BackupComparison` |
 | Cookies | `network/PersistentCookieStore.kt` | Shared by OkHttp and the built-in browser |
 | Extensions | `extension-jvm/` | Signed jars from stores that publish them (store field 501); dex2jar only for stores without jars |
-| Built-in browser | `browser/` | Chromium through jcefmaven, downloaded on first use into `<data>/browser` |
+| Built-in browser | `browser/` | Chromium through jcefmaven, downloaded on first use into `<cache>/browser` (see Data folder) |
 | Cloudflare | `CloudflareInterceptor` (core/common desktopMain) | Hidden WebView first, then a browser window (`--interactive`) |
 | Android app code | `app-shared.txt`, `compat/` | Trackers, E-Hentai, merged source and some interactors are copied from `app/src/main/java` at build time (`syncAppShared`) and compiled as they are; `compat/` has desktop versions of the Android pieces they call |
 
@@ -257,13 +263,14 @@ asks once more.
   other differences from Android.
 - The local source reads RAR 5 chapters through the system's `tar` command (bsdtar, on macOS and
   Windows 10 and later); RAR 4, 7z and TAR open without it. RAR, 7z and TAR chapters are unpacked
-  into `<data>/cache/archives` on first open (the last 8 are kept).
+  into `<cache>/cache/archives` on first open, encrypted with the file key (the last 8 are kept);
+  without the key they are held in memory only, and a chapter too large for that is refused.
 - Background work runs only while Zoukan runs (in the window or the tray), not as an OS service.
 - The UI lives in the `desktop` module (`ui/`), not a shared `ui-shared` module:
   `presentation-core` is Android-only, so the screens are desktop Compose code.
 
 ## Debugging Chromium
 
-`-Pzoukan.cefDebug=true` writes a verbose log to `<data>/browser/chromium.log`.
+`-Pzoukan.cefDebug=true` writes a verbose log to `<cache>/browser/chromium.log`.
 `-Pzoukan.cefArgs="--switch1 --switch2"` adds Chromium switches.
 `--args="convert <apk> <jar>"` runs the APK conversion alone.

@@ -6,21 +6,20 @@ import logcat.LogPriority
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import zoukan.desktop.download.ChapterDownloader
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.FileNames
 import zoukan.desktop.download.ImageType
-import zoukan.desktop.outputWithin
+import zoukan.desktop.secrets.EncryptedFiles
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
-import java.nio.file.Path
-import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
-import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,12 +36,25 @@ import kotlin.concurrent.thread
  * Those formats have no cheap random access (a solid 7z unpacks everything before a page), so a
  * chapter is unpacked once into a cache folder and read from there like a folder chapter. The cache
  * keeps the last [KEEP] chapters, and never removes one that is open ([open] leases it).
+ *
+ * ZOUKAN: each cached page (and ComicInfo.xml) is encrypted with the file key, as the cover cache
+ * is; entries are unpacked into memory one at a time and written encrypted, so no page is ever
+ * plain on disk, the system's tar included (it streams the entries to the app as a TAR). A cached
+ * chapter that cannot be decrypted (another key) is unpacked again. Without the file key nothing
+ * is cached: an open chapter's pages are then kept in memory only, up to [Limits.memoryBytes]
+ * (an eighth of the heap), and a larger chapter is refused with [TooLargeException].
  */
 object Archives {
     val EXTENSIONS = setOf("rar", "cbr", "7z", "cb7", "tar", "cbt")
 
     private const val KEEP = 8
     private const val DONE = ".done"
+
+    // What [DONE] holds, encrypted: a folder whose marker decrypts to it was written whole with this key
+    private val DONE_TOKEN = "zoukan-archive-cache-1".toByteArray(Charsets.US_ASCII)
+
+    // What the file key's encryption adds to a page (a header, a nonce and a tag), with room to spare
+    private const val ENCRYPTION_OVERHEAD = 1024L
 
     // What one chapter may unpack to. Far above any real chapter (a few hundred MB at most), and
     // low enough that a small crafted archive cannot fill the disk.
@@ -54,11 +66,16 @@ object Archives {
     // enough that a crafted archive cannot exhaust the heap.
     private const val MAX_PAGE_BYTES = 64L shl 20
 
+    // What a chapter's pages may come to when they are held in memory (no file key, so no cache):
+    // an eighth of the heap, since the reader may hold two chapters at once with room to spare.
+    private fun defaultMemoryBytes(): Long = (Runtime.getRuntime().maxMemory() / 8).coerceAtMost(MAX_TOTAL_BYTES)
+
     internal data class Limits(
         val entryBytes: Long = MAX_ENTRY_BYTES,
         val totalBytes: Long = MAX_TOTAL_BYTES,
         val entries: Int = MAX_ENTRIES,
         val pageBytes: Long = MAX_PAGE_BYTES,
+        val memoryBytes: Long = defaultMemoryBytes(),
     )
 
     /** The caps on unpacking; only tests change them. */
@@ -116,6 +133,14 @@ object Archives {
     @Volatile
     var cacheRoot: File = File(System.getProperty("java.io.tmpdir"), "zoukan-archives")
 
+    /** The file key that encrypts the cache, or null for no cache on disk; only tests change it. */
+    @Volatile
+    internal var codecSource: () -> SettingsFileCodec? = { SettingsFileCodec.current }
+
+    // The cache folder [prepareCache] has gone through
+    @Volatile
+    private var prepared: File? = null
+
     private enum class Kind { RAR, SEVEN_Z, TAR }
 
     private fun kind(file: File): Kind = when (file.extension.lowercase()) {
@@ -127,11 +152,41 @@ object Archives {
 
     fun isArchive(file: File): Boolean = file.isFile && file.extension.lowercase() in EXTENSIONS
 
-    /** A chapter's unpacked folder, kept in the cache until closed. */
-    class Lease internal constructor(private val key: String, val dir: File) : AutoCloseable {
-        private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+    /**
+     * A chapter's unpacked pages: its folder in the cache, kept until closed, or (without the file
+     * key) its pages in memory.
+     */
+    class Lease internal constructor(private val key: String?, private val pages: Pages) : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+
+        val pageCount: Int get() = pages.count
+
+        /** The page's bytes; throws [TooLargeException] for a page over [Limits.pageBytes]. */
+        fun page(index: Int): ByteArray = pages.read(index)
+
         override fun close() {
-            if (closed.compareAndSet(false, true)) release(key)
+            if (closed.compareAndSet(false, true) && key != null) release(key)
+        }
+    }
+
+    internal interface Pages {
+        val count: Int
+        fun read(index: Int): ByteArray
+    }
+
+    /** The encrypted pages of a cached folder, in order. */
+    private class CachedPages(dir: File, private val codec: SettingsFileCodec) : Pages {
+        private val files = ChapterDownloader.imageFiles(dir)
+        override val count get() = files.size
+        override fun read(index: Int): ByteArray = readCachedPage(files[index], codec)
+    }
+
+    /** The pages in memory, in order; one over the cap was kept cut short at the cap plus a byte. */
+    private class MemoryPages(private val pages: List<ByteArray>) : Pages {
+        override val count get() = pages.size
+        override fun read(index: Int): ByteArray {
+            val max = limits.pageBytes
+            return pages[index].also { if (it.size > max) throw TooLargeException("Page ${index + 1} is over $max bytes, more than a page may be") }
         }
     }
 
@@ -151,38 +206,78 @@ object Archives {
 
     /**
      * Unpacks the chapter's pages (renamed `0001.jpg`, `0002.png`… in the archive's natural order)
-     * and its ComicInfo.xml, and leases the folder until the lease is closed.
+     * and its ComicInfo.xml, encrypted, and leases the folder until the lease is closed. Without
+     * the file key, the pages are unpacked into memory and nothing is written.
      */
     fun open(file: File): Lease {
+        val codec = codecSource()
+        prepareCache(codec)
+        if (codec == null) return Lease(null, unpackToMemory(file))
         val key = key(file)
         // Leased before unpacking, so another chapter's prune leaves this one alone
         acquire(key)
         try {
-            val dir = synchronized(keyLocks.computeIfAbsent(key) { Any() }) { extract(file, key) }
+            val dir = synchronized(keyLocks.computeIfAbsent(key) { Any() }) { extract(file, key, codec) }
             prune()
-            return Lease(key, dir)
+            return Lease(key, CachedPages(dir, codec))
         } catch (e: Throwable) {
             release(key)
             throw e
         }
     }
 
+    /**
+     * Goes once through the cache folder: removes what is not a whole chapter encrypted with the
+     * current key (the plain cache from before encryption, chapters cut short by a crash, the
+     * temporary `.raw` folders), and everything when there is no key. Only this cache's own folder.
+     */
+    fun prepareCache(codec: SettingsFileCodec? = codecSource()) {
+        val root = cacheRoot
+        if (prepared == root) return
+        synchronized(leaseLock) {
+            if (prepared == root) return
+            root.listFiles().orEmpty()
+                .filterNot { it.name in leases || it.name.removeSuffix(".raw") in leases }
+                .forEach { entry ->
+                    val keep = codec != null && entry.isDirectory && !entry.name.endsWith(".raw") && isComplete(entry, codec)
+                    if (!keep) runCatching { deleteTree(entry) }.onFailure { logcat(LogPriority.WARN, it) { "Could not clear ${entry.name} from the chapter cache" } }
+                }
+            prepared = root
+        }
+    }
+
+    /** Whether [dir] is a whole unpacked chapter written with [codec]'s key. */
+    private fun isComplete(dir: File, codec: SettingsFileCodec): Boolean = runCatching {
+        val stored = File(dir, DONE).takeIf { it.isFile && it.length() < 4096 }?.readBytes() ?: return false
+        codec.isEncoded(stored) && codec.decode(stored).contentEquals(DONE_TOKEN)
+    }.getOrDefault(false)
+
+    /** A cached page, decrypted: no more than [Limits.pageBytes]. */
+    private fun readCachedPage(file: File, codec: SettingsFileCodec): ByteArray {
+        val max = limits.pageBytes
+        if (file.length() > max + ENCRYPTION_OVERHEAD) throw TooLargeException("${file.name} is over $max bytes, more than a page may be")
+        val bytes = EncryptedFiles.read(file, codec).bytes
+        if (bytes.size > max) throw TooLargeException("${file.name} is over $max bytes, more than a page may be")
+        return bytes
+    }
+
     internal fun isLeased(dir: File): Boolean = synchronized(leaseLock) { dir.name in leases }
 
-    private fun extract(file: File, key: String): File {
+    private fun extract(file: File, key: String, codec: SettingsFileCodec): File {
         val target = File(cacheRoot, key)
-        if (File(target, DONE).exists()) {
+        if (isComplete(target, codec)) {
             target.setLastModified(System.currentTimeMillis())
             return target
         }
         cacheRoot.mkdirs()
-        target.deleteRecursively()
+        // Half written, from before encryption, or with another key: unpacked again
+        deleteTree(target)
         val raw = File(cacheRoot, "$key.raw")
         deleteTree(raw)
         try {
-            unpack(file, raw)
+            unpack(file, FolderSink(raw, codec))
             val files = regularFiles(raw)
-            val images = files.filter { ImageType.isImageName(it.name) && !it.name.startsWith('.') }
+            val images = files.filter { isPageName(it.name) }
                 .map { it.relativeTo(raw).invariantSeparatorsPath to it }
                 .sortedWith(compareBy(FileNames.naturalOrder) { it.first })
             if (images.isEmpty()) error("${file.name} has no images")
@@ -194,14 +289,127 @@ object Archives {
             }
             files.firstOrNull { it.name.equals(ComicInfoXml.FILE, ignoreCase = true) }
                 ?.let { Files.move(it.toPath(), File(target, ComicInfoXml.FILE).toPath(), StandardCopyOption.REPLACE_EXISTING) }
-            File(target, DONE).createNewFile()
+            File(target, DONE).writeBytes(codec.encode(DONE_TOKEN))
         } catch (e: Throwable) {
-            target.deleteRecursively()
+            deleteTree(target)
             throw e
         } finally {
             deleteTree(raw)
         }
         return target
+    }
+
+    /** The chapter's pages unpacked into memory, in the archive's natural order: no file key, no cache. */
+    private fun unpackToMemory(file: File): Pages {
+        val sink = MemorySink(file.name, limits.memoryBytes)
+        unpack(file, sink)
+        val images = sink.entries.filterKeys { isPageName(it.substringAfterLast('/')) }.toList()
+            .sortedWith(compareBy(FileNames.naturalOrder) { it.first })
+            .map { it.second }
+        if (images.isEmpty()) error("${file.name} has no images")
+        return MemoryPages(images)
+    }
+
+    private fun isPageName(name: String) = ImageType.isImageName(name) && !name.startsWith('.')
+
+    /** Where unpacked entries go, by their path in the archive (see [entryPath]). */
+    internal interface Sink {
+        /** Whether the entry at [path] is read into memory and [put] here; the others are only counted. */
+        fun wants(path: String): Boolean {
+            val fileName = path.substringAfterLast(File.separatorChar)
+            return isPageName(fileName) || fileName.equals(ComicInfoXml.FILE, ignoreCase = true)
+        }
+
+        fun put(path: String, bytes: ByteArray)
+
+        /** Forgets what was put, before another reader tries the archive. */
+        fun reset()
+    }
+
+    /** Each entry encrypted into its own file under [dir]. */
+    private class FolderSink(private val dir: File, private val codec: SettingsFileCodec) : Sink {
+        init {
+            dir.mkdirs()
+        }
+
+        override fun put(path: String, bytes: ByteArray) {
+            val out = File(dir, path)
+            out.parentFile.mkdirs()
+            out.writeBytes(codec.encode(bytes))
+        }
+
+        override fun reset() {
+            deleteTree(dir)
+            dir.mkdirs()
+        }
+    }
+
+    /**
+     * The entries in memory, no more than [max] bytes in all: past that the chapter is refused
+     * rather than risk running the app out of memory.
+     */
+    private class MemorySink(private val archive: String, private val max: Long) : Sink {
+        val entries = LinkedHashMap<String, ByteArray>()
+        private var held = 0L
+
+        override fun put(path: String, bytes: ByteArray) {
+            val key = path.replace(File.separatorChar, '/')
+            val replaced = entries[key]?.size ?: 0
+            if (held - replaced + bytes.size > max) {
+                throw TooLargeException(
+                    "$archive cannot be opened without the file key from the system's secret store: its pages would be " +
+                        "held in memory, and they come to more than ${max shr 20} MB. Converting it to CBZ, or making " +
+                        "the secret store available, lets it open.",
+                )
+            }
+            entries[key] = bytes
+            held += bytes.size - replaced
+        }
+
+        override fun reset() {
+            entries.clear()
+            held = 0
+        }
+    }
+
+    /**
+     * Only the first page in natural order: an entry is read into memory only when it sorts before
+     * the page kept so far, so a cover holds one page at a time and writes nothing to disk.
+     */
+    internal class FirstPageSink : Sink {
+        var first: Pair<String, ByteArray>? = null
+            private set
+
+        override fun wants(path: String): Boolean {
+            if (!isPageName(path.substringAfterLast(File.separatorChar))) return false
+            val best = first ?: return true
+            return FileNames.naturalOrder.compare(path.replace(File.separatorChar, '/'), best.first) < 0
+        }
+
+        override fun put(path: String, bytes: ByteArray) {
+            if (wants(path)) first = path.replace(File.separatorChar, '/') to bytes
+        }
+
+        override fun reset() {
+            first = null
+        }
+    }
+
+    /** Keeps up to [max] + 1 bytes of what is written, and drops the rest: a page over the cap stays marked as such. */
+    private class Capture(private val max: Long) : OutputStream() {
+        private val buffer = ByteArrayOutputStream()
+        private val keep = (max + 1).coerceAtMost(Int.MAX_VALUE.toLong() - 16).toInt()
+
+        override fun write(b: Int) {
+            if (buffer.size() < keep) buffer.write(b)
+        }
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            val room = keep - buffer.size()
+            if (room > 0) buffer.write(b, off, minOf(room, len))
+        }
+
+        fun bytes(): ByteArray = buffer.toByteArray()
     }
 
     /**
@@ -221,7 +429,7 @@ object Archives {
 
     /**
      * The chapter's first page, for a cover, read without unpacking the archive where the format
-     * allows (RAR 5 still needs the system's tar, so it is unpacked).
+     * allows (RAR 5 still needs the system's tar, which is read through for its first page alone).
      */
     fun firstImage(file: File): ByteArray? {
         fun String.isPage() = ImageType.isImageName(this) && !substringAfterLast('/').startsWith('.')
@@ -252,13 +460,46 @@ object Archives {
             null
         }
         if (direct != null) return direct
-        return open(file).use { lease -> zoukan.desktop.download.ChapterDownloader.imageFiles(lease.dir).firstOrNull()?.let(::readPage) }
+        return firstUnpackedPage(file)
+    }
+
+    /**
+     * The first page of a chapter the Java readers could not read directly (RAR 5): from the cache
+     * when the chapter is already there, or else by reading the archive through and keeping that
+     * one page in memory, without unpacking the chapter into the cache or holding all its pages.
+     */
+    internal fun firstUnpackedPage(file: File): ByteArray? {
+        codecSource()?.let { codec ->
+            prepareCache(codec)
+            val key = key(file)
+            acquire(key)
+            try {
+                val dir = File(cacheRoot, key)
+                if (isComplete(dir, codec)) {
+                    ChapterDownloader.imageFiles(dir).firstOrNull()?.let { return readCachedPage(it, codec) }
+                }
+            } finally {
+                release(key)
+            }
+        }
+        val sink = FirstPageSink()
+        unpack(file, sink)
+        val bytes = sink.first?.second ?: return null
+        val max = limits.pageBytes
+        if (bytes.size > max) throw TooLargeException("${file.name} has a page over $max bytes")
+        return bytes
     }
 
     /** The archive's ComicInfo.xml, read without unpacking the pages where the format allows. */
     fun comicInfo(file: File): ComicInfoXml? {
-        File(cacheRoot, key(file)).takeIf { File(it, DONE).exists() }?.let { dir ->
-            return File(dir, ComicInfoXml.FILE).takeIf { it.isFile }?.inputStream()?.use { ComicInfoXml.read(it) }
+        codecSource()?.let { codec ->
+            prepareCache(codec)
+            val dir = File(cacheRoot, key(file))
+            if (isComplete(dir, codec)) {
+                val info = File(dir, ComicInfoXml.FILE).takeIf { it.isFile } ?: return null
+                // One that cannot be decrypted is read from the archive instead
+                runCatching { EncryptedFiles.read(info, codec).bytes }.getOrNull()?.let { return ComicInfoXml.read(it.inputStream()) }
+            }
         }
         return when (kind(file)) {
             Kind.RAR -> try {
@@ -286,8 +527,7 @@ object Archives {
     private fun com.github.junrar.rarfile.FileHeader.entryName(): String =
         (fileName ?: "").replace('\\', '/')
 
-    private fun unpack(file: File, into: File) {
-        into.mkdirs()
+    private fun unpack(file: File, sink: Sink) {
         val limits = limits
         val budget = Budget(file.name, limits)
         try {
@@ -295,40 +535,41 @@ object Archives {
                 Kind.RAR -> Archive(file).use { rar ->
                     if (rar.isEncrypted) error("${file.name} is password protected")
                     rar.fileHeaders.filter { !it.isDirectory }.forEach { header ->
-                        write(into, header.entryName(), budget, header.fullUnpackSize) { out -> rar.extractFile(header, out) }
+                        unpackEntry(sink, header.entryName(), budget, header.fullUnpackSize) { out -> rar.extractFile(header, out) }
                     }
                 }
                 Kind.SEVEN_Z -> SevenZFile.builder().setFile(file).get().use { sz ->
                     while (true) {
                         val entry = sz.nextEntry ?: break
                         if (entry.isDirectory || !entry.hasStream()) continue
-                        write(into, entry.name, budget, entry.size) { out -> copy(sz::read, out) }
+                        unpackEntry(sink, entry.name, budget, entry.size) { out -> copy(sz::read, out) }
                     }
                 }
-                Kind.TAR -> TarArchiveInputStream(file.inputStream().buffered()).use { tar ->
-                    while (true) {
-                        val entry = tar.nextEntry ?: break
-                        // A link's entry counts as a file to Commons Compress; it is not a page
-                        if (!entry.isFile || entry.isSymbolicLink || entry.isLink) continue
-                        write(into, entry.name, budget, entry.size) { out -> tar.copyTo(out) }
-                    }
-                }
+                Kind.TAR -> TarArchiveInputStream(file.inputStream().buffered()).use { tar -> readTar(tar, sink, budget) }
             }
         } catch (e: Throwable) {
-            // Too large for any reader: the system's tar would only fill the disk instead
+            // Too large for any reader: the system's tar would only take as long to say so
             (budget.failure ?: e as? TooLargeException)?.let { tooLarge ->
-                deleteTree(into)
+                sink.reset()
                 throw tooLarge
             }
             // RAR 5, or a method the Java libraries lack: the system's libarchive may read it
-            deleteTree(into)
-            into.mkdirs()
-            if (!systemTar(file, into, limits)) {
-                deleteTree(into)
+            sink.reset()
+            if (!systemTar(file, sink, Budget(file.name, limits))) {
+                sink.reset()
                 val reason = if (e is UnsupportedRarV5Exception) "RAR 5 archives need the system's tar command, which could not read it" else e.message
                 throw IllegalStateException("Could not open ${file.name}: $reason. Converting it to CBZ works everywhere.", e)
             }
             logcat(LogPriority.INFO) { "Unpacked ${file.name} with the system's tar (${e::class.simpleName})" }
+        }
+    }
+
+    /** The TAR's files into [sink]; a link's entry counts as a file to Commons Compress, and is not a page. */
+    private fun readTar(tar: TarArchiveInputStream, sink: Sink, budget: Budget) {
+        while (true) {
+            val entry = tar.nextEntry ?: break
+            if (!entry.isFile || entry.isSymbolicLink || entry.isLink) continue
+            unpackEntry(sink, entry.name, budget, entry.size) { out -> tar.copyTo(out) }
         }
     }
 
@@ -366,73 +607,73 @@ object Archives {
         return parts.joinToString(File.separator)
     }
 
-    /** Writes an entry under [root], refusing names that would land outside it. */
-    private inline fun write(root: File, name: String, budget: Budget, declared: Long, block: (OutputStream) -> Unit) {
-        val out = File(root, entryPath(name) ?: return)
+    /**
+     * Reads an entry, refusing names that would land outside the chapter's folder, and puts it in
+     * [sink] when the sink wants it (a page or ComicInfo.xml): read into memory up to
+     * [Limits.pageBytes] and a byte, so one over the cap is still refused when it is read. Other
+     * files are only counted.
+     */
+    private inline fun unpackEntry(sink: Sink, name: String, budget: Budget, declared: Long, block: (OutputStream) -> Unit) {
+        val path = entryPath(name) ?: return
         budget.entry(declared)
-        out.parentFile.mkdirs()
-        budget.counting(out.outputStream().buffered()).use(block)
+        val keep = sink.wants(path)
+        val capture = if (keep) Capture(limits.pageBytes) else null
+        budget.counting(capture ?: OutputStream.nullOutputStream()).use(block)
+        if (capture != null) sink.put(path, capture.bytes())
     }
 
-    /** Whether what is under [dir] is past [limits], counting links as nothing. */
-    internal fun exceeds(dir: File, limits: Limits): Boolean {
-        var entries = 0
-        var total = 0L
-        var over = false
-        runCatching {
-            Files.walkFileTree(
-                dir.toPath(),
-                object : SimpleFileVisitor<Path>() {
-                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                        if (!attrs.isRegularFile) return FileVisitResult.CONTINUE
-                        entries++
-                        total += attrs.size()
-                        over = entries > limits.entries || attrs.size() > limits.entryBytes || total > limits.totalBytes
-                        return if (over) FileVisitResult.TERMINATE else FileVisitResult.CONTINUE
-                    }
-
-                    // tar is still writing: a file may be gone or locked for a moment
-                    override fun visitFileFailed(file: Path, e: IOException) = FileVisitResult.CONTINUE
-                },
-            )
+    /**
+     * Reads [file] with the system's tar (bsdtar, which is libarchive), which writes its entries as
+     * a TAR to the app (`tar -cf - @archive`) instead of unpacking them onto the disk, so that they
+     * go through [sink] (encrypted) and [budget] like any other reader's. False when there is no
+     * such tar, or it could not read the archive.
+     */
+    private fun systemTar(file: File, sink: Sink, budget: Budget): Boolean = try {
+        val process = ProcessBuilder("tar", "-cf", "-", "@${file.absolutePath}").start()
+        process.outputStream.close()
+        // What tar says when it fails, for the log; read aside so a full pipe never stops it
+        val errors = StringBuffer()
+        val errorReader = thread(isDaemon = true, name = "archive-tar-errors") {
+            runCatching {
+                process.errorStream.bufferedReader().useLines { lines ->
+                    lines.forEach { if (errors.length < 4096) errors.appendLine(it) }
+                }
+            }
         }
-        return over
-    }
-
-    private fun systemTar(file: File, into: File, limits: Limits): Boolean = try {
-        val process = ProcessBuilder("tar", "-xf", file.absolutePath, "-C", into.absolutePath)
-            .redirectErrorStream(true)
-            .start()
-        // tar has no cap of its own, so the folder is measured while it runs
-        val tooLarge = AtomicBoolean(false)
-        val watch = thread(isDaemon = true, name = "archive-size-watch") {
+        val timedOut = AtomicBoolean(false)
+        val watch = thread(isDaemon = true, name = "archive-tar-watch") {
             try {
-                while (process.isAlive) {
-                    Thread.sleep(500)
-                    if (exceeds(into, limits)) {
-                        tooLarge.set(true)
-                        process.destroyForcibly()
-                        break
-                    }
+                if (!process.waitFor(5, TimeUnit.MINUTES)) {
+                    timedOut.set(true)
+                    process.destroyForcibly()
                 }
             } catch (_: InterruptedException) {
             }
         }
-        val output = try {
-            process.outputWithin(5, TimeUnit.MINUTES)
+        try {
+            val input = process.inputStream
+            val read = runCatching { readTar(TarArchiveInputStream(input.buffered()), sink, budget) }
+            budget.failure?.let { throw it }
+            (read.exceptionOrNull() as? TooLargeException)?.let { throw it }
+            // The padding after the last entry, so tar finishes writing and exits on its own
+            runCatching { input.transferTo(OutputStream.nullOutputStream()) }
+            val exit = process.waitFor()
+            errorReader.join(5_000)
+            when {
+                timedOut.get() -> {
+                    logcat(LogPriority.WARN) { "tar took too long to read ${file.name}" }
+                    false
+                }
+                exit != 0 || read.isFailure -> {
+                    logcat(LogPriority.WARN, read.exceptionOrNull()) { "tar could not read ${file.name}: $errors" }
+                    false
+                }
+                else -> true
+            }
         } finally {
+            if (process.isAlive) process.destroyForcibly()
             watch.interrupt()
-            watch.join(5_000)
-        }
-        if (tooLarge.get() || exceeds(into, limits)) {
-            throw TooLargeException("${file.name} unpacks to more than a chapter may")
-        }
-        if (output == null) {
-            logcat(LogPriority.WARN) { "tar took too long to read ${file.name}" }
-            false
-        } else {
-            if (output.exitCode != 0) logcat(LogPriority.WARN) { "tar could not read ${file.name}: ${output.text}" }
-            output.exitCode == 0 && regularFiles(into).isNotEmpty()
+            runCatching { process.inputStream.close() }
         }
     } catch (e: TooLargeException) {
         throw e

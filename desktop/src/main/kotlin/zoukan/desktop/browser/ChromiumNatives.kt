@@ -1,6 +1,5 @@
 package zoukan.desktop.browser
 
-import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import logcat.LogPriority
 import me.friwi.jcefmaven.CefBuildInfo
 import me.friwi.jcefmaven.EnumPlatform
@@ -8,6 +7,7 @@ import me.friwi.jcefmaven.impl.step.check.CefInstallationChecker
 import me.friwi.jcefmaven.impl.step.extract.TarGzExtractor
 import me.friwi.jcefmaven.impl.step.fetch.PackageClasspathStreamer
 import me.friwi.jcefmaven.impl.util.macos.UnquarantineUtil
+import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
@@ -115,9 +115,18 @@ object ChromiumNatives {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /** The app's client without the Cloudflare solver (which needs Chromium) and its two-minute limit. */
-    private fun OkHttpClient.forDownload(): OkHttpClient = newBuilder()
-        .apply { interceptors().removeAll { it is CloudflareInterceptor } }
+    /**
+     * The app's client (its DNS, over HTTPS when it is on) without its interceptors (the Cloudflare
+     * solver, which needs Chromium, and the sources' user agent), cookies, cache and two-minute limit:
+     * the download servers get OkHttp's own user agent and nothing of the sources.
+     */
+    internal fun OkHttpClient.forDownload(): OkHttpClient = newBuilder()
+        .apply {
+            interceptors().clear()
+            networkInterceptors().clear()
+        }
+        .cookieJar(CookieJar.NO_COOKIES)
+        .cache(null)
         .callTimeout(1, TimeUnit.HOURS)
         .build()
 

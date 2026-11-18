@@ -41,6 +41,7 @@ import zoukan.desktop.backup.NoStubSources
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.backup.SyntheticBackup
 import zoukan.desktop.browser.BrowserWindow
+import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.harness.CompatibilityHarness
 import zoukan.desktop.harness.ExtensionWiringCheck
@@ -127,6 +128,8 @@ fun main(args: Array<String>) {
             javax.swing.SwingUtilities.invokeAndWait { KcefWebViewProvider.disposePending() }
         }
     }
+    // The built-in browser's history, caches and log (see BrowserProfileCleanup)
+    JcefRuntime.cleanProfileAtQuit()
     exitProcess(code)
 }
 

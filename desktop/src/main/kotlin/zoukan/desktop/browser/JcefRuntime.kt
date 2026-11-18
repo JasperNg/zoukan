@@ -34,6 +34,9 @@ import kotlin.concurrent.thread
  */
 object JcefRuntime {
     private val requested = AtomicBoolean(false)
+
+    // Whether this process started Chromium on the data folder (see cleanProfileAtQuit)
+    private val started = AtomicBoolean(false)
     private lateinit var dirs: ZoukanDirs
 
     /** -Dzoukan.cefDebug=true writes a verbose Chromium log to `<data>/browser/chromium.log` */
@@ -161,10 +164,12 @@ object JcefRuntime {
             // Session cookies stay in memory: Chromium's own cookie database is outside FileCipher
             persist_session_cookies = false
             if (debugLogging) log_file = java.io.File(browserDir, "chromium.log").absolutePath
+            // No log unless debugging: Chromium's log (chrome_debug.log) is plain text in the
+            // profile and holds pages' console messages with their addresses
             log_severity = if (debugLogging) {
                 CefSettings.LogSeverity.LOGSEVERITY_VERBOSE
             } else {
-                CefSettings.LogSeverity.LOGSEVERITY_WARNING
+                CefSettings.LogSeverity.LOGSEVERITY_DISABLE
             }
         }
     }
@@ -174,6 +179,10 @@ object JcefRuntime {
         // Downloads Chromium when it is missing, and installs it only when its checksum is the
         // pinned one; jcefmaven below then finds it installed and downloads nothing itself
         ChromiumNatives.ensureInstalled(dirs.browser) { Injekt.get<NetworkHelper>().client }
+        // What an earlier run left of the browser's history and caches (a crash, or files Chromium
+        // still held at quit) goes before Chromium opens the profile
+        BrowserProfileCleanup.clean(dirs.browserCache)
+        started.set(true)
         // Chromium resolves names itself; the DNS over HTTPS preference reaches it through its Local State
         val dohProvider = Injekt.get<NetworkPreferences>().dohProvider().get()
         ChromiumDns.apply(dirs.browserCache, dohProvider)
@@ -213,11 +222,28 @@ object JcefRuntime {
     }
 
     /**
+     * Deletes the browser's history, caches and log at quit (see [BrowserProfileCleanup]), when
+     * this process started Chromium. Chromium still runs then, so a file it holds may stay until
+     * the next start cleans it. Never throws.
+     */
+    fun cleanProfileAtQuit() {
+        runCatching {
+            if (!started.get()) return
+            BrowserProfileCleanup.clean(dirs.browserCache)
+        }.onFailure { logcat(LogPriority.WARN, it) { "Could not clean the browser's profile at quit" } }
+    }
+
+    /**
      * Switches that keep the Chrome runtime's background services from contacting Google (field
      * trial Variations, component and model downloads, Optimization Hints, Domain Reliability
-     * reports, hyperlink auditing pings, media router discovery, autofill form signatures). None of
-     * them changes how a page loads or runs: the browser window, WebViews and Cloudflare challenges
-     * work as before.
+     * reports, hyperlink auditing pings, media router discovery, autofill form signatures, network
+     * time queries), and that keep pages' error and policy reports (Reporting, Network Error
+     * Logging) from being stored or sent. None of them changes how a page loads or runs: the
+     * browser window, WebViews and Cloudflare challenges work as before.
+     *
+     * The HTTP and media caches are kept as small as Chromium allows, so pages' contents and
+     * addresses are not kept on disk in plain text. Chromium takes only one --disable-features,
+     * so every feature is in that one switch.
      */
     internal val PRIVACY_SWITCHES = listOf(
         "--disable-background-networking",
@@ -233,18 +259,41 @@ object JcefRuntime {
             "MediaRouter",
             "DialMediaRouteProvider",
             "AutofillServerCommunication",
+            "Reporting",
+            "NetworkErrorLogging",
+            "NetworkTimeServiceQuerying",
         ).joinToString(","),
+        "--disk-cache-size=1",
+        "--media-cache-size=1",
     )
 
-    /** Profile preferences for the same: Safe Browsing would send visited addresses' hashes to Google. */
-    internal val PRIVACY_PREFERENCES: Map<String, Any> = mapOf("safebrowsing.enabled" to false)
+    /**
+     * Profile preferences for the same. Safe Browsing would send visited addresses' hashes to
+     * Google; history, network prediction (preconnects and prefetches to links not clicked),
+     * spellcheck (its dictionary download), password saving and autofill would record or send what
+     * the user visits or types; WebRTC would expose the local and public address outside a proxy.
+     * A name Chromium does not know is skipped (see [applyPrivacyPreferences]).
+     */
+    internal val PRIVACY_PREFERENCES: Map<String, Any> = mapOf(
+        "safebrowsing.enabled" to false,
+        "history.saving_disabled" to true,
+        "net.network_prediction_options" to 2,
+        "webrtc.ip_handling_policy" to "disable_non_proxied_udp",
+        "browser.enable_spellchecking" to false,
+        "credentials_enable_service" to false,
+        "autofill.profile_enabled" to false,
+        "autofill.credit_card_enabled" to false,
+    )
 
     /** Sets [PRIVACY_PREFERENCES] on the global request context. Call on Chromium's UI thread. */
     internal fun applyPrivacyPreferences() {
         runCatching {
             val context = CefRequestContext.getGlobalContext()
             for ((name, value) in PRIVACY_PREFERENCES) {
-                if (!context.canSetPreference(name)) continue
+                if (!context.canSetPreference(name)) {
+                    logcat(LogPriority.WARN) { "Chromium has no preference $name" }
+                    continue
+                }
                 context.setPreference(name, value)?.let { error ->
                     logcat(LogPriority.WARN) { "Chromium preference $name: $error" }
                 }

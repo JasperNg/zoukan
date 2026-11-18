@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.network
 
 import logcat.LogPriority
 import okhttp3.CookieJar
+import okhttp3.Dispatcher
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -9,6 +10,9 @@ import okhttp3.dnsoverhttps.DnsOverHttps
 import tachiyomi.core.common.util.system.logcat
 import java.net.InetAddress
 import java.net.UnknownHostException
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /**
  * Based on https://github.com/square/okhttp/blob/ef5d0c83f7bbd3a0c0534e7ca23cbc4ee7550f3b/okhttp-dnsoverhttps/src/test/java/okhttp3/dnsoverhttps/DohProviders.java
@@ -43,7 +47,7 @@ fun OkHttpClient.Builder.dohCloudflare() = dns(
             InetAddress.getByName("2606:4700:4700::0064"),
             InetAddress.getByName("2606:4700:4700::6400"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 fun OkHttpClient.Builder.dohGoogle() = dns(
@@ -55,7 +59,7 @@ fun OkHttpClient.Builder.dohGoogle() = dns(
             InetAddress.getByName("2001:4860:4860::8888"),
             InetAddress.getByName("2001:4860:4860::8844"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 // AdGuard "Default" DNS works too but for the sake of making sure no site is blacklisted,
@@ -69,7 +73,7 @@ fun OkHttpClient.Builder.dohAdGuard() = dns(
             InetAddress.getByName("2a10:50c0::1:ff"),
             InetAddress.getByName("2a10:50c0::2:ff"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 fun OkHttpClient.Builder.dohQuad9() = dns(
@@ -81,7 +85,7 @@ fun OkHttpClient.Builder.dohQuad9() = dns(
             InetAddress.getByName("2620:fe::fe"),
             InetAddress.getByName("2620:fe::9"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 fun OkHttpClient.Builder.dohAliDNS() = dns(
@@ -93,7 +97,7 @@ fun OkHttpClient.Builder.dohAliDNS() = dns(
             InetAddress.getByName("2400:3200::1"),
             InetAddress.getByName("2400:3200:baba::1"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 fun OkHttpClient.Builder.dohDNSPod() = dns(
@@ -103,7 +107,7 @@ fun OkHttpClient.Builder.dohDNSPod() = dns(
             InetAddress.getByName("1.12.12.12"),
             InetAddress.getByName("120.53.53.53"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 fun OkHttpClient.Builder.doh360() = dns(
@@ -118,7 +122,7 @@ fun OkHttpClient.Builder.doh360() = dns(
             InetAddress.getByName("101.199.113.208"),
             InetAddress.getByName("36.99.170.86"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 // ZOUKAN: dohQuad101() removed (Quad101 is no longer offered)
@@ -135,7 +139,7 @@ fun OkHttpClient.Builder.dohMullvad() = dns(
             InetAddress.getByName("194.242.2.2"),
             InetAddress.getByName("2a07:e340::2"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 /*
@@ -152,7 +156,7 @@ fun OkHttpClient.Builder.dohControlD() = dns(
             InetAddress.getByName("2606:1a40::"),
             InetAddress.getByName("2606:1a40:1::"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 /*
@@ -166,7 +170,7 @@ fun OkHttpClient.Builder.dohNajalla() = dns(
             InetAddress.getByName("95.215.19.53"),
             InetAddress.getByName("2001:67c:2354:2::53"),
         )
-        .build(),
+        .build()/* ZOUKAN --> */.withLocalNames()/* ZOUKAN <-- */,
 )
 
 // ZOUKAN: dohShecan() removed (Shecan is no longer offered)
@@ -272,10 +276,129 @@ fun dohProviderHostResolverRule(provider: Int): String? {
 }
 
 /**
+ * Names that only a local resolver can answer (and that a DoH provider would only learn about):
+ * single-label names (`localhost`, `nas`) and the suffixes reserved or commonly used for home and
+ * company networks (top-level names that are never delegated in public DNS, and a home router's
+ * own name such as `fritz.box`). A trailing dot and case are ignored.
+ */
+fun isLocalOnlyHostName(hostname: String): Boolean {
+    val name = hostname.trimEnd('.').lowercase()
+    if ('.' !in name) return true
+    return LOCAL_ONLY_SUFFIXES.any { name == it || name.endsWith(".$it") }
+}
+
+private val LOCAL_ONLY_SUFFIXES = listOf(
+    "localhost",
+    "local",
+    "lan",
+    "home",
+    "home.arpa",
+    "internal",
+    "localdomain",
+    "corp",
+    "intranet",
+    "private",
+    "test",
+    "fritz.box",
+)
+
+/**
+ * DNS over HTTPS for public names, the system's DNS for [local-only names][isLocalOnlyHostName]
+ * and for the [system proxy's own host name][isSystemProxyHost]: OkHttp's DnsOverHttps refuses
+ * names without a public suffix (`localhost`, `nas`) and the provider cannot know a home network's
+ * names (`nas.local`), so without this the local test store and self-hosted servers would stop
+ * working with DoH on; and a proxy's name sent to DoH would need the proxy to be resolved.
+ *
+ * [systemDns] is the system's DNS ([Dns.SYSTEM]; a test's stand-in).
+ */
+class LocalNamesSystemDns internal constructor(
+    val doh: DnsOverHttps,
+    private val systemDns: Dns = Dns.SYSTEM,
+) : Dns {
+    override fun lookup(hostname: String): List<InetAddress> =
+        if (isLocalOnlyHostName(hostname) || isSystemProxyHost(hostname)) {
+            systemDns.lookup(hostname)
+        } else {
+            doh.lookup(hostname)
+        }
+
+    override fun toString(): String = "LocalNamesSystemDns($doh)"
+}
+
+/** On desktop, [desktopDohDns] of this; on Android, this as it is (Android's behavior). */
+private fun DnsOverHttps.withLocalNames(): Dns = if (DOH_LOCAL_NAMES_USE_SYSTEM_DNS) desktopDohDns(this) else this
+
+/**
+ * The desktop app's DNS over HTTPS, from [doh] as an upstream provider function above builds it
+ * (its client resolving only the DoH server's name, to its bootstrap addresses):
+ * - the DoH server's name still resolves to the bootstrap addresses, never through the system's DNS;
+ * - the system proxy's host name ([isSystemProxyHost]) resolves with [systemDns], so a query that
+ *   goes through a proxy configured by name works (OkHttp's bootstrap DNS refuses every other name);
+ * - any other name the query client is asked for still fails, as before;
+ * - the queries run on [their own threads][isDohQueryThread], so a lookup a query's connection
+ *   makes through the JDK (a SOCKS proxy's name) can be told apart and never loops back into DoH;
+ * - the result is [LocalNamesSystemDns], so local-only names and the proxy's name use [systemDns].
+ *
+ * [systemDns] is the system's DNS ([Dns.SYSTEM]; a test's stand-in).
+ */
+fun desktopDohDns(doh: DnsOverHttps, systemDns: Dns = Dns.SYSTEM): LocalNamesSystemDns {
+    val serverHost = doh.url.host
+    val bootstrap = doh.client.dns
+    val queryDns = Dns { hostname ->
+        when {
+            hostname.trimEnd('.').equals(serverHost, ignoreCase = true) -> bootstrap.lookup(serverHost)
+            isSystemProxyHost(hostname) -> systemDns.lookup(hostname)
+            else -> throw UnknownHostException("$hostname is not the DNS over HTTPS server $serverHost")
+        }
+    }
+    val rebuilt = DnsOverHttps.Builder()
+        .client(doh.client.newBuilder().dispatcher(DohQueryThreads.dispatcher).build())
+        .url(doh.url)
+        .includeIPv6(doh.includeIPv6)
+        .post(doh.post)
+        .resolvePrivateAddresses(doh.resolvePrivateAddresses)
+        .resolvePublicAddresses(doh.resolvePublicAddresses)
+        .systemDns(queryDns)
+        .build()
+    return LocalNamesSystemDns(rebuilt, systemDns)
+}
+
+/**
+ * Whether this thread runs a DNS over HTTPS query of [desktopDohDns]'s clients. A name lookup such
+ * a thread makes through the JDK (the proxy's name, when the query goes through a SOCKS proxy)
+ * must go to the system's DNS: sending it to DoH again would wait for a query thread forever.
+ */
+fun isDohQueryThread(): Boolean = Thread.currentThread() is DohQueryThreads.QueryThread
+
+/** The dispatcher of the DoH query clients, whose threads [isDohQueryThread] recognises. */
+private object DohQueryThreads {
+    class QueryThread(runnable: Runnable) : Thread(runnable, "Zoukan DNS over HTTPS query") {
+        init {
+            isDaemon = true
+        }
+    }
+
+    /** Like OkHttp's own dispatcher's executor: threads made as needed and kept for a minute when idle. */
+    val dispatcher: Dispatcher = Dispatcher(
+        ThreadPoolExecutor(0, Int.MAX_VALUE, 60, TimeUnit.SECONDS, SynchronousQueue()) { QueryThread(it) },
+    )
+}
+
+/** The DNS over HTTPS server behind this DNS, or null when it is not DNS over HTTPS. */
+val Dns.dnsOverHttps: DnsOverHttps?
+    get() = when (this) {
+        is DnsOverHttps -> this
+        is LocalNamesSystemDns -> doh
+        else -> null
+    }
+
+/**
  * This DNS, falling back to the system's for a name it cannot resolve. For self-hosted servers
  * (Komga, Kavita) on a home network, whose names only the local resolver knows: a public name
  * still goes through DNS over HTTPS when it is on, where `Dns.SYSTEM` would send every name to
- * the system resolver. (An IP address needs no lookup: OkHttp connects to it directly.)
+ * the system resolver. (An IP address needs no lookup: OkHttp connects to it directly.) On
+ * desktop the fallback is only for [local-only names][isLocalOnlyHostName], so a public name
+ * DoH cannot resolve (a typo, a blocked domain) is never sent to the system's DNS instead.
  */
 fun Dns.withSystemFallback(): Dns {
     if (this === Dns.SYSTEM) return this
@@ -283,7 +406,8 @@ fun Dns.withSystemFallback(): Dns {
     return Dns { hostname ->
         try {
             dns.lookup(hostname)
-        } catch (_: UnknownHostException) {
+        } catch (e: UnknownHostException) {
+            if (DOH_LOCAL_NAMES_USE_SYSTEM_DNS && !isLocalOnlyHostName(hostname)) throw e
             Dns.SYSTEM.lookup(hostname)
         }
     }

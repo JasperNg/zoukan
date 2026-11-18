@@ -140,6 +140,7 @@ import zoukan.desktop.ui.recs.RecommendationSearchDialog
 import zoukan.desktop.ui.recs.RecommendationSearchProgressDialog
 import zoukan.desktop.ui.recs.RecommendsScreen
 import zoukan.desktop.ui.recs.SearchStatus
+import zoukan.desktop.ui.settings.BlockListsDialog
 import zoukan.desktop.ui.settings.CategoriesIncludeExcludeDialog
 import zoukan.desktop.ui.settings.ChoiceSetting
 import zoukan.desktop.ui.settings.MultiSelectPreference
@@ -148,6 +149,7 @@ import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
+import zoukan.desktop.ui.whatsnew.DohNoticeDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
@@ -649,6 +651,10 @@ internal object SmokeChecks {
             },
             dialog("dialog:browse.OpenUrlDialog", "OpenUrlDialog") { OpenUrlDialog(it) },
             dialog("dialog:whatsnew.UpdatedDialog", "UpdatedDialog") { UpdatedDialog(it, noop) },
+            dialog("dialog:whatsnew.DohNoticeDialog", "DohNoticeDialog") { DohNoticeDialog(it, noop) },
+            dialog("dialog:settings.BlockListsDialog", "BlockListsDialog") {
+                BlockListsDialog("https://example.org/list.txt", it) { noop() }
+            },
             dialog("dialog:settings.CategoriesIncludeExcludeDialog", "CategoriesIncludeExcludeDialog") {
                 CategoriesIncludeExcludeDialog("Smoke", "Smoke", categories, setOf(categories.first().id.toString()), emptySet(), it) { _, _ -> noop() }
             },

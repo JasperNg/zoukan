@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import zoukan.desktop.download.ComicInfoXml
+import zoukan.desktop.secrets.FileCipher
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -26,15 +28,29 @@ class ArchivesTest {
     @TempDir
     lateinit var temp: File
 
+    private fun newCipher() = FileCipher(ByteArray(32).also { java.security.SecureRandom().nextBytes(it) })
+
+    private var cipher: SettingsFileCodec = newCipher()
+
     @BeforeEach
     fun cache() {
         Archives.cacheRoot = File(temp, "cache")
+        Archives.codecSource = { cipher }
     }
 
     @AfterEach
     fun limits() {
         Archives.limits = Archives.Limits()
+        Archives.codecSource = { SettingsFileCodec.current }
     }
+
+    /** Every file the cache holds. */
+    private fun cachedFiles(): List<File> = Archives.cacheRoot.walkTopDown().filter { it.isFile }.toList()
+
+    private fun ByteArray.contains(part: ByteArray): Boolean =
+        (0..size - part.size).any { start -> part.indices.all { this[start + it] == part[it] } }
+
+    private val pngSignature = byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte())
 
     /** A PNG whose width tells the pages apart */
     private fun png(width: Int): ByteArray =
@@ -177,8 +193,6 @@ class ArchivesTest {
         assumeTrue(linked, "this machine cannot create symbolic links")
 
         Archives.regularFiles(root).map { it.relativeTo(root).invariantSeparatorsPath } shouldContainExactly listOf("pages/1.png")
-        // Counted as nothing, and never followed
-        Archives.exceeds(root, Archives.Limits(entries = 1)) shouldBe false
         secret.exists() shouldBe true
     }
 
@@ -252,15 +266,154 @@ class ArchivesTest {
     }
 
     @Test
-    fun `an unpacked folder is measured against the caps`() {
-        val root = File(temp, "unpacked").apply { mkdirs() }
-        File(root, "a/b").mkdirs()
-        File(root, "a/1.bin").writeBytes(ByteArray(10))
-        File(root, "a/b/2.bin").writeBytes(ByteArray(20))
-        Archives.exceeds(root, Archives.Limits(entryBytes = 20, totalBytes = 30, entries = 2)) shouldBe false
-        Archives.exceeds(root, Archives.Limits(entryBytes = 19)) shouldBe true
-        Archives.exceeds(root, Archives.Limits(totalBytes = 29)) shouldBe true
-        Archives.exceeds(root, Archives.Limits(entries = 1)) shouldBe true
+    fun `the cache holds pages and ComicInfo encrypted only`() {
+        listOf(tar(File(temp, "a.cbt")), sevenZ(File(temp, "b.cb7"))).forEach { file ->
+            LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+        }
+        val files = cachedFiles()
+        // Four pages, ComicInfo.xml and the marker, for each chapter
+        files.size shouldBe 12
+        files.forEach { cached ->
+            val stored = cached.readBytes()
+            cipher.isEncoded(stored) shouldBe true
+            stored.contains(pngSignature) shouldBe false
+            stored.contains("Packed".toByteArray()) shouldBe false
+        }
+        Archives.comicInfo(File(temp, "a.cbt"))!!.values["Title"] shouldBe "Packed"
+    }
+
+    @Test
+    fun `a cache written with another key is unpacked again`() {
+        val file = tar(File(temp, "a.cbt"))
+        LocalFormat.open(file).use { it.pageCount shouldBe 4 }
+        cipher = newCipher()
+        LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+        Archives.comicInfo(file)!!.values["Title"] shouldBe "Packed"
+        cachedFiles().forEach { cipher.decode(it.readBytes()) }
+    }
+
+    @Test
+    fun `the plain cache from before encryption is cleared once, and nothing else`() {
+        val root = Archives.cacheRoot
+        val old = File(root, "0123456789abcdef0123").apply { mkdirs() }
+        File(old, "0001.png").writeBytes(png(1))
+        File(old, ".done").createNewFile()
+        File(root, "fedcba9876543210fedc.raw/pages").mkdirs()
+        File(root, "fedcba9876543210fedc.raw/pages/1.png").writeBytes(png(1))
+        val outside = File(temp, "downloads/Chapter 1/001.png").apply { parentFile.mkdirs() }
+        outside.writeBytes(png(1))
+
+        LocalFormat.open(tar(File(temp, "a.cbt"))).use { it.pageCount shouldBe 4 }
+
+        old.exists() shouldBe false
+        File(root, "fedcba9876543210fedc.raw").exists() shouldBe false
+        outside.readBytes() shouldBe png(1)
+        cachedFiles().forEach { cipher.isEncoded(it.readBytes()) shouldBe true }
+    }
+
+    @Test
+    fun `without the file key nothing is cached on disk`() {
+        val stale = File(Archives.cacheRoot, "0123456789abcdef0123").apply { mkdirs() }
+        File(stale, "0001.png").writeBytes(png(1))
+        Archives.codecSource = { null }
+        listOf(tar(File(temp, "a.cbt")), sevenZ(File(temp, "b.cb7"))).forEach { file ->
+            LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+            Archives.comicInfo(file)!!.values["Title"] shouldBe "Packed"
+        }
+        cachedFiles() shouldBe emptyList()
+        stale.exists() shouldBe false
+        // The in-memory cap still holds
+        Archives.limits = Archives.Limits(pageBytes = 16)
+        LocalFormat.open(File(temp, "a.cbt")).use { format ->
+            shouldThrow<Archives.TooLargeException> { format.page(0) }
+        }
+    }
+
+    @Test
+    fun `without the file key a chapter over the memory budget is refused, not unpacked`() {
+        Archives.codecSource = { null }
+        val total = entries.filter { it.first.endsWith(".png") }.sumOf { it.second.size.toLong() }
+        listOf(tar(File(temp, "a.cbt")), sevenZ(File(temp, "b.cb7"))).forEach { file ->
+            Archives.limits = Archives.Limits(memoryBytes = total - 1)
+            val failure = shouldThrow<Archives.TooLargeException> { LocalFormat.open(file) }
+            failure.message!!.contains("without the file key") shouldBe true
+            // Within the budget it opens as before
+            Archives.limits = Archives.Limits(memoryBytes = total + 4096)
+            LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+        }
+        cachedFiles() shouldBe emptyList()
+    }
+
+    @Test
+    fun `the cover fallback keeps only the first page and unpacks nothing to the cache`() {
+        listOf<SettingsFileCodec?>(null, cipher).forEach { codec ->
+            Archives.codecSource = { codec }
+            listOf(tar(File(temp, "a.cbt")), sevenZ(File(temp, "b.cb7"))).forEach { file ->
+                ImageIO.read(Archives.firstUnpackedPage(file)!!.inputStream()).width shouldBe 1
+            }
+            cachedFiles() shouldBe emptyList()
+        }
+        // An unpacked chapter's cover comes from the cache
+        val file = tar(File(temp, "c.cbt"))
+        LocalFormat.open(file).use { it.pageCount shouldBe 4 }
+        ImageIO.read(Archives.firstUnpackedPage(file)!!.inputStream()).width shouldBe 1
+    }
+
+    @Test
+    fun `the first-page sink reads in only pages that sort before the one it holds`() {
+        val sink = Archives.FirstPageSink()
+        val sep = File.separator
+        sink.wants("ComicInfo.xml") shouldBe false
+        listOf("10", "2", "1").forEach { name ->
+            sink.wants("pages${sep}$name.png") shouldBe true
+            sink.put("pages${sep}$name.png", png(name.toInt()))
+        }
+        // Read through, never into memory
+        sink.wants("pages${sep}9.png") shouldBe false
+        sink.wants("pages${sep}10.png") shouldBe false
+        sink.first!!.first shouldBe "pages/1.png"
+        sink.reset()
+        sink.first shouldBe null
+    }
+
+    @Test
+    fun `the system's tar streams what the Java readers cannot read, encrypted into the cache`() {
+        val version = runCatching {
+            ProcessBuilder("tar", "--version").redirectErrorStream(true).start().inputStream.bufferedReader().readText()
+        }.getOrDefault("")
+        // libarchive's tar (macOS, Windows 10 and later) reads ZIPs and RAR 5; GNU tar does not
+        assumeTrue(version.contains("bsdtar"), "no bsdtar on this machine")
+        // A ZIP named like a 7z: Commons Compress refuses it, the system's tar reads it
+        val file = File(temp, "zip.cb7")
+        java.util.zip.ZipOutputStream(file.outputStream()).use { out ->
+            entries.forEach { (name, bytes) ->
+                out.putNextEntry(java.util.zip.ZipEntry(name))
+                out.write(bytes)
+                out.closeEntry()
+            }
+        }
+        LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+        Archives.comicInfo(file)!!.values["Title"] shouldBe "Packed"
+        cachedFiles().forEach { cached ->
+            val stored = cached.readBytes()
+            cipher.isEncoded(stored) shouldBe true
+            stored.contains(pngSignature) shouldBe false
+        }
+        // And without the key, into memory
+        Archives.codecSource = { null }
+        Archives.clearCache()
+        LocalFormat.open(file).use { widths(it) shouldContainExactly listOf(1, 2, 9, 10) }
+        cachedFiles() shouldBe emptyList()
+        // The memory budget holds for what tar streams too
+        Archives.limits = Archives.Limits(memoryBytes = 16)
+        shouldThrow<Archives.TooLargeException> { Archives.open(file) }
+        // Its cover still reads, holding one page at a time
+        ImageIO.read(Archives.firstUnpackedPage(file)!!.inputStream()).width shouldBe 1
+        Archives.limits = Archives.Limits()
+        // The caps hold for what tar streams too
+        Archives.codecSource = { cipher }
+        Archives.limits = Archives.Limits(entries = 4)
+        shouldThrow<Archives.TooLargeException> { Archives.open(file) }
     }
 
     @Test

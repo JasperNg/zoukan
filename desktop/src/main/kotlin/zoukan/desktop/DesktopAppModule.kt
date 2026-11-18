@@ -6,6 +6,7 @@ import app.cash.sqldelight.db.SqlDriver
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -66,7 +67,8 @@ class DesktopAppModule(
                 get<Context>().getSharedPreferences("${PACKAGE_NAME}_preferences", Context.MODE_PRIVATE),
             )
         }
-        addSingletonFactory { NetworkPreferences(get()) }
+        // DNS over HTTPS is on by default, with Quad9 (Android's default is off)
+        addSingletonFactory { NetworkPreferences(get(), defaultDohProvider = PREF_DOH_QUAD9) }
         addSingletonFactory { SecurityPreferences(get()) }
         addSingletonFactory { ZoukanStorage(dirs, get()) }
         addSingletonFactory { CbzPassword(get(), get()) }
@@ -153,6 +155,11 @@ class DesktopAppModule(
         CefCookieSync.onCopiedFromCef = { url, userAgent ->
             zoukan.desktop.browser.recordClearanceUserAgent(url, userAgent)
         }
+        // Extensions' WebViews: the content blocker, with the app's own list only
+        xyz.nulldev.androidcompat.webkit.KcefRequestFilter.filter =
+            xyz.nulldev.androidcompat.webkit.KcefRequestFilter.Filter { requestUrl, pageUrl ->
+                zoukan.desktop.browser.blocking.ContentBlocker.shouldBlockInExtension(requestUrl, pageUrl)
+            }
     }
 
     companion object {

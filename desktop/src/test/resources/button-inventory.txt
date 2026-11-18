@@ -365,6 +365,8 @@ dialog:settings.CategoriesIncludeExcludeDialog/"Cancel"  calls-back
 dialog:settings.CategoriesIncludeExcludeDialog/"OK"  calls-back
 dialog:settings.CategoriesIncludeExcludeDialog/"Smoke"  ui
 dialog:track.TrackingDialog/"Close"  calls-back
+dialog:whatsnew.DohNoticeDialog/"OK"  calls-back
+dialog:whatsnew.DohNoticeDialog/"Open settings"  calls-back
 dialog:whatsnew.UpdatedDialog/"OK"  calls-back
 dialog:whatsnew.UpdatedDialog/"What's new"  calls-back
 flow:library.selection-download/"All"  selected-already
@@ -845,6 +847,7 @@ settings:Advanced/"About Zoukan #.#.#"  ui
 settings:Advanced/"Advanced Tray, keyboard shortcuts, crash logs"  selected-already
 settings:Advanced/"Appearance Theme, date & time format"  ui
 settings:Advanced/"Back"  nav:back tab:More
+settings:Advanced/"Block ads and trackers In the built-in browser and in ext..."  pref:zoukan_browser_content_blocker
 settings:Advanced/"Browse Sources, extensions, global search"  ui
 settings:Advanced/"Clean up downloaded chapters Delete non-existent, partial..."  dialog:"Clean up downloaded chapters"
 settings:Advanced/"Clear WebView data The built-in browser's cookies and cache"  toast:"WebView data cleared"
@@ -859,6 +862,7 @@ settings:Advanced/"Downloads Automatic download, download ahead"  ui
 settings:Advanced/"E-Hentai E-Hentai settings"  ui
 settings:Advanced/"Enable delegated sources Apply Komikku enhancements to th..."  pref:eh_delegate_sources
 settings:Advanced/"Enable source blacklist Hide extensions/sources that are ..."  pref:eh_enable_source_blacklist
+settings:Advanced/"Extra block lists Addresses of block lists to add, one pe..."  dialog:"Extra block lists"
 settings:Advanced/"Include chapter URL hash Append the first six characters ..."  pref:download_include_chapter_url_hash
 settings:Advanced/"Keep running in the tray Closing the window keeps Zoukan ..."  pref:zoukan_close_to_tray
 settings:Advanced/"Library Categories, global update"  ui

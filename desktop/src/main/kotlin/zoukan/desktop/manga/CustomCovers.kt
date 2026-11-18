@@ -1,18 +1,103 @@
 package zoukan.desktop.manga
 
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import zoukan.desktop.secrets.EncryptedFiles
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 
-/** Where a library entry's custom cover is kept, as Android's CoverCache: covers/custom/<md5 of the id>. */
+/**
+ * Where a library entry's custom cover is kept, as Android's CoverCache: covers/custom/<md5 of the id>.
+ *
+ * ZOUKAN: the files are encrypted with the file key ([codec]), like the cookies and preference
+ * files. Covers saved before that are plain; they are read as they are and rewritten encrypted the
+ * first time they are read. A custom cover is the user's own: it is never deleted here, not even
+ * when it cannot be decrypted (its key may still be recovered from the secret store).
+ */
 object CustomCovers {
     /** The covers folder; set once at start by the image loader's setup. */
     @Volatile
     lateinit var coverDir: File
 
+    /** The file key; set once at start by the image loader's setup. Without it covers are not saved. */
+    @Volatile
+    var codec: SettingsFileCodec? = null
+
     /** The folder of custom covers inside [coverDir]; never part of the cover cache. */
     const val FOLDER = "custom"
 
+    /**
+     * Writes, copies, deletes and lazy rewrites of custom covers, so a rewrite never puts back a
+     * cover just replaced or deleted.
+     */
+    private val lock = Any()
+
     fun file(mangaId: Long): File = File(File(coverDir, FOLDER), md5(mangaId.toString()))
+
+    /** Whether [file] is one of the custom covers (not a local source's cover, which is the user's file as it is). */
+    fun isCustomCover(file: File): Boolean =
+        file.absoluteFile.parentFile?.normalize() == File(coverDir, FOLDER).absoluteFile.normalize()
+
+    /** Saves [image] as [mangaId]'s custom cover, encrypted. */
+    fun save(mangaId: Long, image: File) {
+        val codec = codec ?: throw IOException("The file key is not available, so the cover cannot be saved")
+        val bytes = image.readBytes()
+        synchronized(lock) { EncryptedFiles.write(file(mangaId), bytes, codec) }
+    }
+
+    /**
+     * Deletes [mangaId]'s custom cover, under the same lock as the lazy rewrite in [read], so a
+     * rewrite under way cannot put it back. Returns whether there is none now.
+     */
+    fun delete(mangaId: Long): Boolean = synchronized(lock) {
+        val file = file(mangaId)
+        (file.delete() || !file.exists()).also { deleted ->
+            if (!deleted) logcat(LogPriority.WARN) { "Could not delete the custom cover ${file.name}" }
+        }
+    }
+
+    /**
+     * Copies [fromMangaId]'s custom cover to [toMangaId] as it is stored (both use the same file
+     * key), replacing the one [toMangaId] has, as Android's migration does. The copy is written
+     * whole before it replaces anything, so a failure leaves [toMangaId]'s cover as it was; it runs
+     * under the same lock as [save], [delete] and the lazy rewrite in [read]. Returns whether
+     * there was a cover to copy.
+     */
+    fun copy(fromMangaId: Long, toMangaId: Long): Boolean = synchronized(lock) {
+        val from = file(fromMangaId)
+        if (!from.isFile) return@synchronized false
+        EncryptedFiles.replace(file(toMangaId), from.readBytes())
+        true
+    }
+
+    /**
+     * The image of the custom cover [file], decrypted. A plain one (saved before encryption) is
+     * rewritten encrypted; when that fails it stays plain and is tried again next time.
+     */
+    fun read(file: File): ByteArray {
+        val codec = codec ?: return file.readBytes()
+        val contents = EncryptedFiles.read(file, codec)
+        if (!contents.encrypted) {
+            try {
+                synchronized(lock) {
+                    // Unless it was replaced since it was read
+                    if (file.readBytes().contentEquals(contents.bytes)) EncryptedFiles.write(file, contents.bytes, codec)
+                }
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not encrypt the custom cover ${file.name}; it stays as it is" }
+            }
+        }
+        return contents.bytes
+    }
+
+    /**
+     * Deletes the temporary files that cover writes cut short left in the custom covers folder (the
+     * app was closed or crashed mid-write), never a cover. Called at start, before any cover is
+     * written. Returns how many were deleted.
+     */
+    fun deleteTemporaryFiles(): Int = EncryptedFiles.deleteTemporaryFiles(File(coverDir, FOLDER), COVER_NAME)
 
     /**
      * "Clear cover cache": deletes the source covers kept in [coverDir], which download again when
@@ -21,6 +106,9 @@ object CustomCovers {
      */
     fun clearCache(coverDir: File): Int =
         coverDir.listFiles().orEmpty().count { it.isFile && it.name != FOLDER && it.delete() }
+
+    /** A custom cover's file name: [md5] of the entry's id. */
+    private val COVER_NAME = Regex("[0-9a-f]{32}")
 
     private fun md5(text: String): String =
         MessageDigest.getInstance("MD5").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }

@@ -188,8 +188,12 @@ class PendingCefCookieDeletions {
  * page load, and the app's cookies are copied to Chromium before a browser opens.
  */
 object CefCookieSync {
-    /** Copies every cookie the app has to Chromium. */
-    fun copyToCef() {
+    /**
+     * Copies the app's cookies to Chromium: every one, or with [includeHost] only those whose host
+     * (the Domain attribute without its dot, else the host they were stored for) it accepts. A
+     * cookie Chromium already has is never removed from it.
+     */
+    fun copyToCef(includeHost: ((String) -> Boolean)? = null) {
         val store = (CookieHandler.getDefault() as? java.net.CookieManager)?.cookieStore ?: return
         val cef = CefCookieManager.getGlobalManager() ?: return
         // Before the app's cookies: those set again since are copied back after their deletion
@@ -201,6 +205,8 @@ object CefCookieSync {
                 // A cookie without a Domain attribute is host-only: Chromium keeps it so
                 // when its domain is empty, and would send it to every subdomain otherwise
                 val host = (cookie.domain ?: uri.host).trimStart('.')
+                // A filter that fails leaves the cookie out: it is only not copied
+                if (includeHost != null && !runCatching { includeHost(host) }.getOrDefault(false)) return@runCatching
                 val expiresAt = expiresAt(cookie, expiries?.expiresAt(cookie), System.currentTimeMillis())
                 cef.setCookie("https://$host", cookie.toCefCookie(cookie.domain.orEmpty(), expiresAt))
                 copied += cookie.toSynced(uri)

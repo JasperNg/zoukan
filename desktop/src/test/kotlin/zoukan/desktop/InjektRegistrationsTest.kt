@@ -3,18 +3,20 @@ package zoukan.desktop
 import android.app.Application
 import android.content.pm.PackageManager
 import android.preference.PreferenceManager
+import eu.kanade.tachiyomi.AppInfo
+import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.jupiter.api.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.TypeReference
 import uy.kohesive.injekt.api.get
-import zoukan.desktop.app.AppVersion
 import zoukan.desktop.secrets.SecretStore
 import zoukan.extension.DesktopExtensionLoader
 import java.io.File
@@ -102,7 +104,13 @@ class InjektRegistrationsTest {
         context.deleteSharedPreferences("never_opened_${System.nanoTime()}") shouldBe true
 
         val pm = context.packageManager
-        pm.getPackageInfo(DesktopAppModule.PACKAGE_NAME, 0).versionName shouldBe AppVersion.name
+        // Komikku's version, as AppInfo reports it, not Zoukan's
+        val appInfo = pm.getPackageInfo(DesktopAppModule.PACKAGE_NAME, 0)
+        appInfo.versionName shouldBe AppInfo.getVersionName()
+        appInfo.longVersionCode shouldBe AppInfo.getVersionCode().toLong()
+        // http.agent is the app's Chromium user agent (this OS, Chromium's version), not a fixed one
+        System.getProperty("http.agent") shouldBe DesktopBrowser.userAgent
+        System.getProperty("http.agent").shouldNotBeNull() shouldContain "Chrome/"
 
         // The loader tells the package manager where the extensions are
         Injekt.get<DesktopExtensionLoader>()

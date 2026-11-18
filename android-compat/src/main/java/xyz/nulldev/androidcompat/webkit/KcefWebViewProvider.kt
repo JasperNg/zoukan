@@ -67,8 +67,15 @@ import org.cef.browser.CefMessageRouter
 import org.cef.browser.CefBrowserHeadless
 // ZOUKAN <--
 import org.cef.callback.CefCallback
+// ZOUKAN -->
+import org.cef.callback.CefJSDialogCallback
+// ZOUKAN <--
 import org.cef.callback.CefQueryCallback
 import org.cef.handler.CefDisplayHandlerAdapter
+// ZOUKAN -->
+import org.cef.handler.CefJSDialogHandler
+import org.cef.handler.CefJSDialogHandlerAdapter
+// ZOUKAN <--
 import org.cef.handler.CefLifeSpanHandlerAdapter
 import org.cef.handler.CefLoadHandler
 import org.cef.handler.CefLoadHandlerAdapter
@@ -152,6 +159,15 @@ class KcefWebViewProvider(
     private val requestHandler = RequestHandler()
     private val messageRouterHandler = MessageRouterHandler()
     private val displayHandler = DisplayHandler()
+    private val jsDialogHandler = JsDialogHandler()
+
+    // Which of a page's alerts, confirms and prompts reach the WebChromeClient
+    private val dialogLimiter = JsDialogLimiter()
+
+    // The address the extension last asked to load: the top frame may go there whatever its scheme
+    // (see KcefNavigationPolicy); set on the looper, read on Chromium's UI thread
+    @Volatile
+    private var requestedUrl: String? = null
     // ZOUKAN <--
 
     companion object {
@@ -267,6 +283,25 @@ class KcefWebViewProvider(
             enableTouch(browser)
             // ZOUKAN <--
         }
+
+        // ZOUKAN -->
+        // Never a native window (see KcefPopupPolicy); the address loads here when the extension
+        // let scripts open windows, as Android does with multiple windows off
+        override fun onBeforePopup(
+            browser: CefBrowser,
+            frame: CefFrame?,
+            targetUrl: String?,
+            targetFrameName: String?,
+        ): Boolean {
+            val target = KcefPopupPolicy.loadInPlace(targetUrl, settings.javaScriptCanOpenWindowsAutomatically)
+            if (target != null) {
+                runCatching { browser.loadURL(target) }.onFailure { Log.w(TAG, "Loading a pop-up's address failed", it) }
+            } else {
+                Log.v(TAG, "Dropped a pop-up to ${targetUrl?.take(100)}")
+            }
+            return true
+        }
+        // ZOUKAN <--
     }
 
     private data class InitialRequestData(
@@ -694,6 +729,19 @@ class KcefWebViewProvider(
             initialRequestData?.apply(request)
             initialRequestData = null
 
+            // ZOUKAN -->
+            // The app's content blocker, for what a page loads besides its own main frame
+            val resourceType = runCatching { request.resourceType }.getOrNull()
+            if (resourceType != null && resourceType != CefRequest.ResourceType.RT_MAIN_FRAME) {
+                val pageUrl = runCatching { browser?.url }.getOrNull()?.takeIf { it.isNotBlank() }
+                    ?: runCatching { request.firstPartyForCookies }.getOrNull()?.takeIf { it.isNotBlank() }
+                if (KcefRequestFilter.shouldBlock(request.url, pageUrl)) {
+                    Log.v(TAG, "Blocked ${request.url?.take(100)}")
+                    return true
+                }
+            }
+            // ZOUKAN <--
+
             // TODO: we should be calling this on the handler, since CEF calls us on its IO thread
             // thus if a client tried to use WebView#loadUrl as the docs suggest, this fails
             val cancel =
@@ -763,6 +811,48 @@ class KcefWebViewProvider(
             disableDefaultHandling: BoolRef,
         ): CefResourceRequestHandler = /* ZOUKAN --> */ResourceRequestHandler(isNavigation)/* ZOUKAN <-- */
 
+        // ZOUKAN -->
+        // The top frame goes to web pages only, besides the address the extension asked for (see
+        // KcefNavigationPolicy). The client still hears of the address first, as Android asks
+        // shouldOverrideUrlLoading about every navigation: an extension may catch its own scheme
+        override fun onBeforeBrowse(
+            browser: CefBrowser,
+            frame: CefFrame,
+            request: CefRequest,
+            userGesture: Boolean,
+            isRedirect: Boolean,
+        ): Boolean {
+            if (!frame.isMain) return false
+            val url = runCatching { request.url }.getOrNull()
+            if (KcefNavigationPolicy.isAllowedInWebView(url, requestedUrl)) return false
+            Log.w(TAG, "Cancelled a navigation of the top frame to a ${url?.substringBefore(':')?.take(20)}: address")
+            if (!destroyed) {
+                // Posted, not waited for: the answer is not needed, and an extension that blocks
+                // here must not hold up Chromium's UI thread. The request is read now, while it lives
+                val navigation =
+                    runCatching {
+                        val headers = mutableMapOf<String, String>()
+                        runCatching { request.getHeaderMap(headers) }
+                        SnapshotWebResourceRequest(
+                            url = url,
+                            method = request.method ?: "GET",
+                            headers = headers,
+                            forMainFrame = true,
+                            redirect = isRedirect,
+                        )
+                    }.getOrNull()
+                if (navigation != null) {
+                    KcefCancelledNavigation.tellLater(
+                        post = { handler.post(it) },
+                        tell = { if (!destroyed) viewClient.shouldOverrideUrlLoading(view, navigation) },
+                        onFailure = { Log.w(TAG, "shouldOverrideUrlLoading failed", it) },
+                    )
+                }
+            }
+            return true
+        }
+        // ZOUKAN <--
+
         override fun onRenderProcessTerminated(
             browser: CefBrowser,
             status: CefRequestHandler.TerminationStatus,
@@ -800,6 +890,79 @@ class KcefWebViewProvider(
         }
     }
     */
+    // ZOUKAN <--
+
+    // ZOUKAN -->
+    /**
+     * A page's alert, confirm and prompt go to the extension's WebChromeClient (onJsAlert,
+     * onJsConfirm, onJsPrompt) on the WebView's looper, as on Android; one the client does not
+     * handle is cancelled, as nobody could answer it in a hidden WebView. A dialog from a frame of
+     * another origin, or past the limit (see [JsDialogLimiter]), is suppressed. A page never keeps
+     * itself from being left or closed: onbeforeunload is always answered "leave".
+     */
+    private inner class JsDialogHandler : CefJSDialogHandlerAdapter() {
+        override fun onJSDialog(
+            browser: CefBrowser,
+            originUrl: String?,
+            dialogType: CefJSDialogHandler.JSDialogType?,
+            messageText: String?,
+            defaultPromptText: String?,
+            callback: CefJSDialogCallback,
+            suppressMessage: BoolRef,
+        ): Boolean {
+            val pageUrl = runCatching { browser.url }.getOrNull()
+            if (destroyed || dialogType == null || !dialogLimiter.allow(pageUrl, originUrl, System.currentTimeMillis())) {
+                Log.v(TAG, "Suppressed a JavaScript dialog")
+                suppressMessage.set(true)
+                return false
+            }
+            val answered = java.util.concurrent.atomic.AtomicBoolean(false)
+
+            fun answer(
+                ok: Boolean,
+                text: String?,
+            ) {
+                if (!answered.compareAndSet(false, true)) return
+                runCatching { callback.Continue(ok, text.orEmpty()) }
+                    .onFailure { Log.w(TAG, "Answering a JavaScript dialog failed", it) }
+            }
+            val url = pageUrl ?: originUrl.orEmpty()
+            val message = messageText.orEmpty()
+            handler.post {
+                val handled =
+                    !destroyed &&
+                        runCatching {
+                            when (dialogType) {
+                                CefJSDialogHandler.JSDialogType.JSDIALOGTYPE_ALERT ->
+                                    chromeClient.onJsAlert(view, url, message, android.webkit.JsResult { answer(it.result, null) })
+                                CefJSDialogHandler.JSDialogType.JSDIALOGTYPE_CONFIRM ->
+                                    chromeClient.onJsConfirm(view, url, message, android.webkit.JsResult { answer(it.result, null) })
+                                CefJSDialogHandler.JSDialogType.JSDIALOGTYPE_PROMPT ->
+                                    chromeClient.onJsPrompt(
+                                        view,
+                                        url,
+                                        message,
+                                        defaultPromptText,
+                                        android.webkit.JsPromptResult { answer(it.result, (it as? android.webkit.JsPromptResult)?.stringResult) },
+                                    )
+                            }
+                        }.onFailure { Log.w(TAG, "The WebChromeClient failed on a JavaScript dialog", it) }
+                            .getOrDefault(false)
+                if (!handled) answer(false, null)
+            }
+            return true
+        }
+
+        override fun onBeforeUnloadDialog(
+            browser: CefBrowser,
+            messageText: String?,
+            isReload: Boolean,
+            callback: CefJSDialogCallback,
+        ): Boolean {
+            runCatching { callback.Continue(true, "") }
+            return true
+        }
+    }
     // ZOUKAN <--
 
     private class RenderHandler : CefRenderHandlerAdapter() {
@@ -842,6 +1005,9 @@ class KcefWebViewProvider(
                     addDisplayHandler(WeakDisplayHandler(displayHandler))
                     addLoadHandler(WeakLoadHandler(loadHandler))
                     addRequestHandler(WeakRequestHandler(requestHandler))
+                    addJSDialogHandler(WeakJsDialogHandler(jsDialogHandler))
+                    // A hidden WebView never saves files
+                    addDownloadHandler(CefDownloadBlocker)
                     // ZOUKAN <--
                     // ZOUKAN -->
                     // No addPermissionHandler(PermissionHandler()), see CefPermissionRequest
@@ -968,6 +1134,9 @@ class KcefWebViewProvider(
         // ZOUKAN <--
         chromeClient.onProgressChanged(view, 0)
         initialRequestData = InitialRequestData(additionalHttpHeaders = additionalHttpHeaders)
+        // ZOUKAN -->
+        requestedUrl = loadUrl
+        // ZOUKAN <--
         browser =
             // ZOUKAN -->
             // Upstream JCEF has no CefRendering; a headless browser takes the render handler instead
@@ -998,6 +1167,9 @@ class KcefWebViewProvider(
         // ZOUKAN <--
         chromeClient.onProgressChanged(view, 0)
         initialRequestData = InitialRequestData(myPostData = postData)
+        // ZOUKAN -->
+        requestedUrl = url
+        // ZOUKAN <--
         browser =
             // ZOUKAN -->
             // Upstream JCEF has no CefRendering; a headless browser takes the render handler instead
@@ -1036,6 +1208,9 @@ class KcefWebViewProvider(
         chromeClient.onProgressChanged(view, 0)
         val url = baseUrl ?: "about:blank"
         urlHttpMapping[url.trimEnd('/')] = data
+        // ZOUKAN -->
+        requestedUrl = url
+        // ZOUKAN <--
 
         browser =
             // ZOUKAN -->
@@ -1287,6 +1462,14 @@ class KcefWebViewProvider(
         override fun onAfterCreated(browser: CefBrowser) {
             ref.get()?.onAfterCreated(browser)
         }
+
+        // Also once the WebView is gone: no native window either way
+        override fun onBeforePopup(
+            browser: CefBrowser,
+            frame: CefFrame?,
+            targetUrl: String?,
+            targetFrameName: String?,
+        ): Boolean = ref.get()?.onBeforePopup(browser, frame, targetUrl, targetFrameName) ?: true
     }
 
     private class WeakDisplayHandler(target: CefDisplayHandlerAdapter) : CefDisplayHandlerAdapter() {
@@ -1370,7 +1553,55 @@ class KcefWebViewProvider(
         ) {
             ref.get()?.onRenderProcessTerminated(browser, status, errorCode, errorString)
         }
+
+        // ZOUKAN -->
+        // Once the WebView is gone, the top frame still goes to web pages only
+        override fun onBeforeBrowse(
+            browser: CefBrowser,
+            frame: CefFrame,
+            request: CefRequest,
+            userGesture: Boolean,
+            isRedirect: Boolean,
+        ): Boolean =
+            ref.get()?.onBeforeBrowse(browser, frame, request, userGesture, isRedirect)
+                ?: (frame.isMain && !KcefNavigationPolicy.isAllowedMainFrameUrl(runCatching { request.url }.getOrNull()))
+        // ZOUKAN <--
     }
+
+    // ZOUKAN -->
+    // Once the WebView is gone, a dialog is suppressed and onbeforeunload answered "leave"
+    private class WeakJsDialogHandler(target: CefJSDialogHandlerAdapter) : CefJSDialogHandlerAdapter() {
+        private val ref = java.lang.ref.WeakReference(target)
+
+        override fun onJSDialog(
+            browser: CefBrowser,
+            originUrl: String?,
+            dialogType: CefJSDialogHandler.JSDialogType?,
+            messageText: String?,
+            defaultPromptText: String?,
+            callback: CefJSDialogCallback,
+            suppressMessage: BoolRef,
+        ): Boolean {
+            val target = ref.get()
+            if (target == null) {
+                suppressMessage.set(true)
+                return false
+            }
+            return target.onJSDialog(browser, originUrl, dialogType, messageText, defaultPromptText, callback, suppressMessage)
+        }
+
+        override fun onBeforeUnloadDialog(
+            browser: CefBrowser,
+            messageText: String?,
+            isReload: Boolean,
+            callback: CefJSDialogCallback,
+        ): Boolean {
+            ref.get()?.let { return it.onBeforeUnloadDialog(browser, messageText, isReload, callback) }
+            runCatching { callback.Continue(true, "") }
+            return true
+        }
+    }
+    // ZOUKAN <--
 
     private class WeakMessageRouterHandler(target: CefMessageRouterHandlerAdapter) : CefMessageRouterHandlerAdapter() {
         private val ref = java.lang.ref.WeakReference(target)

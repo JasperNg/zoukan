@@ -8,9 +8,12 @@ import coil3.disk.DiskCache
 import coil3.fetch.FetchResult
 import coil3.fetch.Fetcher
 import coil3.fetch.SourceFetchResult
+import coil3.intercept.Interceptor
 import coil3.key.Keyer
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.CachePolicy
+import coil3.request.ImageResult
 import coil3.request.Options
 import coil3.request.crossfade
 import coil3.serviceLoaderEnabled
@@ -18,22 +21,31 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import okio.Buffer
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.ImageType
 import zoukan.desktop.manga.CustomCovers
+import zoukan.desktop.network.SendOnlyCookieJar
+import zoukan.desktop.secrets.EncryptedFileSystem
+import zoukan.desktop.secrets.EncryptedFiles
+import zoukan.desktop.security.Incognito
 import zoukan.i18n.desktop.DMR
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
@@ -57,10 +69,25 @@ data class Cover(val url: String, val sourceId: Long, val version: Long = 0) {
     }
 }
 
-/** The app's Coil image loader for covers and icons, with covers cached on disk. */
+/**
+ * The app's Coil image loader for covers and icons, with covers cached on disk.
+ *
+ * ZOUKAN: what is kept on disk (source covers, custom covers, Coil's cache of images fetched by
+ * address) is encrypted with the file key, as the cookies and preference files are. Without the key
+ * nothing is cached on disk: covers and images are then kept in memory only. While incognito is on,
+ * nothing new is cached on disk either (source covers and images fetched by address are kept in
+ * memory only); what is already cached is still read.
+ */
 object Images {
     private lateinit var coverDir: File
     private lateinit var diskCacheDir: File
+
+    @Volatile
+    private var codec: SettingsFileCodec? = null
+
+    /** Whether incognito is on, for a source or (null) for the whole app; then nothing new is cached on disk. */
+    @Volatile
+    private var incognito: (sourceId: Long?) -> Boolean = ::incognitoFromSettings
 
     val loader: ImageLoader by lazy {
         ImageLoader.Builder(PlatformContext.INSTANCE)
@@ -73,8 +100,10 @@ object Images {
             // ZOUKAN <--
             .components {
                 // ZOUKAN -->
-                add(OkHttpNetworkFetcherFactory(callFactory = { Injekt.get<NetworkHelper>().client }))
+                add(OkHttpNetworkFetcherFactory(callFactory = { imageClient(Injekt.get<NetworkHelper>().client) }))
                 // ZOUKAN <--
+                // ZOUKAN: nothing new in the disk cache while incognito is on
+                add(IncognitoDiskCacheInterceptor { incognito(null) })
                 add(CoverKeyer())
                 add(CoverFetcher.Factory(coverDir))
                 // ZOUKAN -->
@@ -86,8 +115,9 @@ object Images {
             }
             // ZOUKAN -->
             // Images fetched by address (extension icons, tracker covers, description images); Coil
-            // would otherwise keep them in the system's temporary folder, outside the data folder
-            .diskCache { DiskCache.Builder().directory(diskCacheDir.toOkioPath()).build() }
+            // would otherwise keep them in the system's temporary folder, outside the data folder.
+            // Encrypted, and none at all without the file key.
+            .diskCache { codec?.let { encryptedDiskCache(diskCacheDir, it) } }
             // ZOUKAN <--
             .memoryCache {
                 MemoryCache.Builder().maxSizeBytes(256L * 1024 * 1024).build()
@@ -96,10 +126,70 @@ object Images {
             .build()
     }
 
-    fun init(coverDir: File, diskCacheDir: File = File(coverDir.parentFile, "images")) {
+    /**
+     * [codec] encrypts what is cached on disk; without one, nothing is. While [incognito] is on for a
+     * cover's source (or, given null, for the whole app), nothing new is cached on disk.
+     *
+     * Called once at start, before any cover is read or written: it also deletes the temporary files
+     * that cover writes cut short left behind (the app was closed or crashed mid-write).
+     */
+    fun init(
+        coverDir: File,
+        diskCacheDir: File = File(coverDir.parentFile, "images"),
+        codec: SettingsFileCodec? = SettingsFileCodec.current,
+        incognito: (sourceId: Long?) -> Boolean = ::incognitoFromSettings,
+    ) {
         this.coverDir = coverDir.apply { mkdirs() }
         CustomCovers.coverDir = this.coverDir
+        CustomCovers.codec = codec
         this.diskCacheDir = diskCacheDir
+        this.codec = codec
+        this.incognito = incognito
+        // ZOUKAN -->
+        EncryptedFiles.deleteTemporaryFiles(this.coverDir, CACHED_COVER_NAME)
+        CustomCovers.deleteTemporaryFiles()
+        // ZOUKAN <--
+    }
+
+    /** The names of the source covers kept in the covers folder: [hash] of the source and address. */
+    private val CACHED_COVER_NAME = Regex("[0-9a-f]{64}")
+
+    /**
+     * Incognito mode's setting (Incognito.isOn). When it cannot be read, incognito counts as on, so
+     * that nothing new is cached on disk: that only costs a download.
+     */
+    private fun incognitoFromSettings(sourceId: Long?): Boolean = try {
+        Injekt.get<Incognito>().isOn(sourceId)
+    } catch (e: Exception) {
+        true
+    }
+
+    /**
+     * The client for images fetched by address: the app's (its DNS, Cloudflare solver and
+     * connections), sending the cookies it has but keeping none the image hosts set.
+     */
+    internal fun imageClient(client: okhttp3.OkHttpClient): okhttp3.OkHttpClient =
+        client.newBuilder().cookieJar(SendOnlyCookieJar(client.cookieJar)).build()
+
+    /**
+     * Coil's disk cache in [dir], each file encrypted with [codec]. A cache from before encryption
+     * (its journal is plain) is deleted first: it is only a cache, and it would not be read anyway.
+     */
+    internal fun encryptedDiskCache(dir: File, codec: SettingsFileCodec): DiskCache {
+        val journal = File(dir, "journal")
+        val plain = runCatching {
+            journal.isFile && !EncryptedFileSystem.isEncrypted(journal.inputStream().use { it.readNBytes(64) }, codec)
+        }.getOrDefault(false)
+        if (plain && !zoukan.desktop.CacheFolders.deleteTree(dir.toPath())) {
+            logcat(LogPriority.WARN) { "Could not delete the image cache from before encryption" }
+        }
+        val fileSystem = EncryptedFileSystem(FileSystem.SYSTEM, codec)
+        // Temporary files of writes cut short (the app was closed or crashed mid-write)
+        fileSystem.deleteTemporaryFiles(dir.toOkioPath())
+        return DiskCache.Builder()
+            .directory(dir.toOkioPath())
+            .fileSystem(fileSystem)
+            .build()
     }
 
     /** Empties Coil's disk cache (Data and storage > Clear cover cache). */
@@ -114,58 +204,97 @@ object Images {
     }
 
     /**
-     * The cover's image file: a custom or local cover as it is, a source cover from the disk
-     * cache, downloaded first when it is not there yet.
+     * The cover's image: a custom or local cover from its file, a source cover from the disk cache,
+     * downloaded first when it is not there yet.
      */
-    suspend fun coverFile(cover: Cover): File = coverFile(cover, coverDir)
+    suspend fun coverBytes(cover: Cover): ByteArray = coverBytes(cover, coverDir)
 
-    internal suspend fun coverFile(cover: Cover, dir: File): File {
+    internal suspend fun coverBytes(cover: Cover, dir: File): ByteArray = withContext(Dispatchers.IO) {
         // Custom covers and the local source's covers are files
         if (cover.url.startsWith("file:")) {
             val local = File(java.net.URI(cover.url))
             if (!local.isFile) throw IOException(localized(DMR.strings.is_missing, local.name))
-            return local
+            // A local source's cover is the user's file in the storage folder: read, never rewritten
+            return@withContext if (CustomCovers.isCustomCover(local)) CustomCovers.read(local) else local.readBytes()
         }
         val file = File(dir, hash("${cover.sourceId}:${cover.url}"))
-        if (!file.exists() || file.length() == 0L) {
-            val source = Injekt.get<SourceManager>().get(cover.sourceId) as? HttpSource
-            val client = source?.client ?: Injekt.get<NetworkHelper>().client
-            val request = if (source != null) GET(cover.url, source.headers) else GET(cover.url)
-            client.newCall(request).await().use { response ->
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${cover.url}")
-                // ZOUKAN -->
-                // An HTML or JSON body sent with status 200 is no cover: it is not cached
-                writeCoverFile(file, validate = ::requireImage) { out -> response.body.byteStream().copyTo(out) }
-                // ZOUKAN <--
+        cachedCover(file)?.let { return@withContext it }
+        val source = Injekt.get<SourceManager>().get(cover.sourceId) as? HttpSource
+        val client = source?.client ?: Injekt.get<NetworkHelper>().client
+        val request = if (source != null) GET(cover.url, source.headers) else GET(cover.url)
+        client.newCall(request).await().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code} for ${cover.url}")
+            // ZOUKAN -->
+            // An HTML or JSON body sent with status 200 is no cover: it is not cached
+            val write: (OutputStream) -> Unit = { out -> response.body.byteStream().copyTo(out) }
+            val codec = codec
+            // While incognito is on for the source, the cover is kept in memory only
+            if (codec != null && !incognito(cover.sourceId)) {
+                writeCoverFile(file, codec, validate = ::requireImage, write = write)
+            } else {
+                // Without the file key (or in incognito) nothing is cached on disk
+                ByteArrayOutputStream().also(write).toByteArray().also(::requireImage)
             }
+            // ZOUKAN <--
         }
-        return file
     }
 
     /**
-     * Writes [target] through a temporary file of its own, so two downloads of the same cover at
-     * once never share (and corrupt) one file, then moves it into place. When the move fails, a
-     * complete copy that another download put there first is kept; otherwise it is an error.
+     * A source cover kept in the disk cache, decrypted, or null when there is none or it cannot be
+     * read now. One saved before encryption is rewritten encrypted; one that cannot be decrypted is
+     * deleted (it downloads again). One that cannot be read for another reason (on Windows, a file
+     * held open by another program, such as a virus scanner) is kept: for a source that is gone it
+     * is the only copy.
      */
-    internal fun writeCoverFile(target: File, validate: (File) -> Unit = {}, write: (OutputStream) -> Unit) {
-        val tmp = File.createTempFile("${target.name}.", ".tmp", target.parentFile)
-        try {
-            tmp.outputStream().use(write)
-            validate(tmp)
-            try {
-                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-            } catch (e: IOException) {
-                // On Windows the target can be open for reading; another download's copy then stays
-                if (!target.isFile || target.length() == 0L) throw IOException("Could not save the cover as ${target.name}", e)
-            }
-        } finally {
-            tmp.delete()
+    internal fun cachedCover(file: File): ByteArray? {
+        val codec = codec ?: return null
+        if (!file.isFile || file.length() == 0L) return null
+        val contents = try {
+            EncryptedFiles.read(file, codec)
+        } catch (e: EncryptedFiles.UnreadableFileException) {
+            logcat(LogPriority.WARN, e) { "Could not decrypt the cached cover ${file.name}; it downloads again" }
+            file.delete()
+            return null
+        } catch (e: IOException) {
+            logcat(LogPriority.WARN, e) { "Could not read the cached cover ${file.name}; it is kept" }
+            return null
         }
+        if (!contents.encrypted) {
+            try {
+                EncryptedFiles.write(file, contents.bytes, codec)
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not encrypt the cached cover ${file.name}" }
+            }
+        }
+        return contents.bytes
+    }
+
+    /**
+     * Writes [target] encrypted through a temporary file of its own, so two downloads of the same
+     * cover at once never share (and corrupt) one file, then moves it into place, and returns the
+     * image. When the move fails, a complete copy that another download put there first is kept;
+     * otherwise it is an error.
+     */
+    internal fun writeCoverFile(
+        target: File,
+        codec: SettingsFileCodec,
+        validate: (ByteArray) -> Unit = {},
+        write: (OutputStream) -> Unit,
+    ): ByteArray {
+        val plain = ByteArrayOutputStream().also(write).toByteArray()
+        validate(plain)
+        try {
+            EncryptedFiles.write(target, plain, codec)
+        } catch (e: IOException) {
+            // On Windows the target can be open for reading; another download's copy then stays
+            if (!target.isFile || target.length() == 0L) throw IOException("Could not save the cover as ${target.name}", e)
+        }
+        return plain
     }
 
     /** Fails a downloaded cover that is no known image and looks like text (an error or login page). */
-    internal fun requireImage(file: File) {
-        val header = file.inputStream().use { it.readNBytes(512) }
+    internal fun requireImage(image: ByteArray) {
+        val header = image.copyOf(minOf(image.size, 512))
         if (ImageType.fromBytes(header) == null && ImageType.looksLikeText(header)) {
             throw IOException("The cover is not an image (the server sent text or an HTML page)")
         }
@@ -173,6 +302,19 @@ object Images {
 
     internal fun hash(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
+}
+
+/**
+ * Keeps what is loaded out of Coil's disk cache while [incognito] is on: the request still reads
+ * what is cached there, but writes nothing new (images fetched by address stay in memory only).
+ */
+internal class IncognitoDiskCacheInterceptor(private val incognito: () -> Boolean) : Interceptor {
+    override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
+        val policy = chain.request.diskCachePolicy
+        if (!policy.writeEnabled || !incognito()) return chain.proceed()
+        val readOnly = if (policy.readEnabled) CachePolicy.READ_ONLY else CachePolicy.DISABLED
+        return chain.withRequest(chain.request.newBuilder().diskCachePolicy(readOnly).build()).proceed()
+    }
 }
 
 private class CoverKeyer : Keyer<Cover> {
@@ -184,7 +326,8 @@ private class CoverFetcher(
     private val dir: File,
 ) : Fetcher {
     override suspend fun fetch(): FetchResult = SourceFetchResult(
-        source = ImageSource(Images.coverFile(cover, dir).toOkioPath(), FileSystem.SYSTEM),
+        // ZOUKAN: decrypted in memory; the file on disk is encrypted
+        source = ImageSource(Buffer().write(Images.coverBytes(cover, dir)), FileSystem.SYSTEM),
         mimeType = null,
         dataSource = DataSource.DISK,
     )

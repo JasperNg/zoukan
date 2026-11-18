@@ -48,6 +48,9 @@ import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.FileRequest
 import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.browser.blocking.ContentBlocker
+import zoukan.desktop.browser.blocking.ContentBlockerPreferences
+import zoukan.desktop.browser.blocking.UserBlockLists
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
@@ -109,6 +112,17 @@ fun LazyListScope.advancedSettings() {
             }
         })
     }
+    // ZOUKAN -->
+    item(key = "advanced-content-blocker") {
+        val preferences = remember { ContentBlockerPreferences(Injekt.get()) }
+        SwitchPreference(
+            localized(DMR.strings.block_ads_and_trackers),
+            preferences.enabled(),
+            localized(DMR.strings.block_ads_and_trackers_summary),
+        )
+    }
+    item(key = "advanced-block-lists") { BlockListsPreference() }
+    // ZOUKAN <--
     item(key = "advanced-doh") {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
         val value by preferences.dohProvider().collectAsState()
@@ -275,6 +289,44 @@ private fun UserAgentPreference() {
             }) { Text(localized(MR.strings.action_ok)) }
         },
         dismissButton = { TextButton(onClick = { editing = false }) { Text(localized(MR.strings.action_cancel)) } },
+    )
+}
+
+/** Desktop only: the addresses of extra block lists for the built-in browser (see UserBlockLists). */
+@Composable
+private fun BlockListsPreference() {
+    val preferences = remember { ContentBlockerPreferences(Injekt.get()) }
+    val enabled by preferences.enabled().collectAsState()
+    val urls by preferences.listUrls().collectAsState()
+    var editing by remember { mutableStateOf(false) }
+    SettingRow(
+        localized(DMR.strings.extra_block_lists),
+        localized(DMR.strings.extra_block_lists_summary),
+        enabled = enabled,
+        onClick = { editing = true },
+    )
+    if (!editing) return
+    BlockListsDialog(urls, onDismiss = { editing = false }) { value ->
+        // Only https addresses are kept, one per line
+        val cleaned = UserBlockLists.parseUrls(value).joinToString("\n")
+        if (cleaned != urls) {
+            preferences.listUrls().set(cleaned)
+            ContentBlocker.refreshNow()
+        }
+        editing = false
+    }
+}
+
+/** Edits the block list addresses, one per line; [onConfirm] gets the text as typed. */
+@Composable
+internal fun BlockListsDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var value by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(DMR.strings.extra_block_lists)) },
+        text = { OutlinedTextField(value, { value = it }, singleLine = false, minLines = 3) },
+        confirmButton = { TextButton(onClick = { onConfirm(value) }) { Text(localized(MR.strings.action_ok)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
 

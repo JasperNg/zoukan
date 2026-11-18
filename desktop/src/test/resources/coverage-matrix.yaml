@@ -86,6 +86,12 @@
   smoke: true
   tests: [ui.ScreenSmokeTest, ui.whatsnew.WhatsNewTest]
 
+- key: dialog:whatsnew.DohNoticeDialog
+  feature: "One-time notice that DNS over HTTPS is now on, after an update"
+  tier: smoke
+  smoke: true
+  tests: [ui.ScreenSmokeTest, ui.whatsnew.DohNoticeTest]
+
 - key: screen:whatsnew.WhatsNewScreen
   feature: "What's new screen (release notes)"
   tier: smoke
@@ -1154,6 +1160,12 @@
   tier: smoke
   smoke: true
   tests: [ui.ScreenSmokeTest, e2e.CookieJourneyTest, e2e.SettingsBrowseDataAdvancedJourneyTest]
+
+- key: dialog:settings.BlockListsDialog
+  feature: "Advanced: extra block lists for the built-in browser"
+  tier: smoke
+  smoke: true
+  tests: [ui.ScreenSmokeTest, browser.blocking.UserBlockListsTest]
 
 - key: dialog-inline:AdvancedSettings.kt:UserAgentPreference
   feature: "Advanced: user agent dialog"

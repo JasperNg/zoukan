@@ -65,7 +65,8 @@ const val GETTING_STARTED_URL = "https://komikku-app.github.io/docs/guides/getti
 
 /**
  * What the app shows once at launch, as Android's MainActivity: the first-run setup until it has
- * been finished, else "Updated to …" on the first launch after an update.
+ * been finished, else "Updated to …" on the first launch after an update, then (once) that DNS
+ * over HTTPS is now on.
  */
 @Composable
 fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
@@ -76,6 +77,7 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
     // The setup's state as the check below left it: the preference's flow can reach
     // [onboardingDone] a frame after [checked], which would show the setup for that frame
     var doneAtCheck by remember { mutableStateOf(false) }
+    var dohNotice by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val updated = WhatsNew.updatedFrom(preferences) != null
         if (!preferences.shownOnboardingFlow().get()) {
@@ -87,6 +89,9 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
         }
         doneAtCheck = preferences.shownOnboardingFlow().get()
         updatedDialog = updated && doneAtCheck
+        dohNotice = zoukan.desktop.app.runCatchingCancellable {
+            zoukan.desktop.ui.whatsnew.DohNotice.check(Injekt.get(), Injekt.get(), updated, doneAtCheck)
+        }.getOrDefault(false)
         checked = true
     }
     if (!checked) return
@@ -102,6 +107,15 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
             onOpenWhatsNew = {
                 updatedDialog = false
                 navigator()?.push(WhatsNewScreen())
+            },
+        )
+    } else if (dohNotice) {
+        zoukan.desktop.ui.whatsnew.DohNoticeDialog(
+            onDismiss = { dohNotice = false },
+            onOpenSettings = {
+                dohNotice = false
+                zoukan.desktop.ui.settings.openSettingsCategory(zoukan.desktop.ui.settings.SettingsCategory.Advanced)
+                navigator()?.let(HomeScreen::openSettings)
             },
         )
     }

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.network.PREF_DOH_NJALLA
 import eu.kanade.tachiyomi.network.PREF_DOH_QUAD101
 import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import eu.kanade.tachiyomi.network.PREF_DOH_SHECAN
+import eu.kanade.tachiyomi.network.dnsOverHttps
 import eu.kanade.tachiyomi.network.doh360
 import eu.kanade.tachiyomi.network.dohAdGuard
 import eu.kanade.tachiyomi.network.dohAliDNS
@@ -30,7 +31,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
-import okhttp3.dnsoverhttps.DnsOverHttps
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -53,7 +53,7 @@ class ChromiumDnsTest {
             PREF_DOH_NJALLA to { dohNajalla() },
         )
         okHttp.forEach { (provider, configure) ->
-            val dns = OkHttpClient.Builder().configure().build().dns as DnsOverHttps
+            val dns = OkHttpClient.Builder().configure().build().dns.dnsOverHttps!!
             dohProviderUrl(provider) shouldBe dns.url.toString()
         }
         okHttp.keys.toList() shouldBe DOH_PROVIDERS

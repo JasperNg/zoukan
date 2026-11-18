@@ -1,8 +1,10 @@
 package zoukan.desktop
 
 import android.os.Looper
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
 import eu.kanade.tachiyomi.network.migrateRemovedDohProvider
 import exh.log.EHLogLevel
 import logcat.LogPriority
@@ -18,6 +20,7 @@ import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.androidcompat.network.ExtensionHttp
 import xyz.nulldev.androidcompat.pm.ExternalPackages
+import xyz.nulldev.androidcompat.webkit.KcefWebSettings
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManagerModule
 import zoukan.desktop.app.AppVersion
@@ -26,10 +29,10 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.local.Archives
+import zoukan.desktop.network.AppDnsResolverProvider
 import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
-import java.io.File
 import java.net.CookieHandler
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -73,16 +76,21 @@ object ZoukanRuntime {
         }
     }
 
-    private fun boot(dirs: ZoukanDirs, interactiveBrowser: Boolean) {
-        this.dirs = dirs.create()
-
+    private fun boot(requested: ZoukanDirs, interactiveBrowser: Boolean) {
         if (!LogcatLogger.isInstalled) {
             val debug = System.getProperty("zoukan.debug") == "true"
             LogcatLogger.install(Slf4jLogcatLogger(if (debug) LogPriority.DEBUG else LogPriority.INFO))
         }
-        // The log file, crash reports and the uncaught exception handler (Phase 7)
-        CrashReporter.install(dirs)
-        logcat(LogPriority.INFO) { "Zoukan ${AppVersion.name} on ${Platform.id}, Java ${System.getProperty("java.runtime.version")}, data in ${dirs.root}" }
+        // The log file, crash reports and the uncaught exception handler (Phase 7), in the data folder
+        CrashReporter.install(requested)
+        logcat(LogPriority.INFO) {
+            "Zoukan ${AppVersion.name} on ${Platform.id}, Java ${System.getProperty("java.runtime.version")}, data in ${requested.root}" +
+                if (requested.hasLocalRoot) ", caches in ${requested.localRoot}" else ""
+        }
+        // On Windows the caches move out of the roaming profile (an older version kept them in the
+        // data folder), before anything opens them; one that cannot move is used where it is
+        val dirs = CacheFolders.migrate(requested).create()
+        this.dirs = dirs
 
         // FFmpeg's natives (AVIF and HEIF images) unpack into Zoukan's own cache, not ~/.javacpp
         if (System.getProperty("org.bytedeco.javacpp.cachedir") == null) {
@@ -120,13 +128,17 @@ object ZoukanRuntime {
         Security.addProvider(BouncyCastleProvider())
 
         val app = ZoukanApplication()
-        // The app's PackageInfo, as extensions read it from the package manager
-        ExternalPackages.appVersionName = AppVersion.name
-        // 1.2.3 is 1002003
-        ExternalPackages.appVersionCode =
-            (AppVersion.version.parts + listOf(0, 0, 0))
-                .take(3).fold(0L) { code, part -> code * 1000 + part }
-        Archives.cacheRoot = File(dirs.root, "cache/archives")
+        // The app's PackageInfo, as extensions read it from the package manager: Komikku's version,
+        // the one AppInfo reports, so that an extension sees the Android app and not Zoukan
+        ExternalPackages.appVersionName = AppInfo.getVersionName()
+        ExternalPackages.appVersionCode = AppInfo.getVersionCode().toLong()
+        Archives.cacheRoot = dirs.archives
+        // ZOUKAN: decrypted temporary files go beside the chapter cache, emptied at every start; the
+        // chapter cache from before encryption is cleared (in the background, it may be large)
+        AppTempFiles.init(dirs.archives.resolveSibling("tmp"))
+        kotlin.concurrent.thread(isDaemon = true, name = "chapter-cache-prepare") {
+            runCatching { Archives.prepareCache() }.onFailure { logcat(LogPriority.WARN, it) { "Could not prepare the chapter cache" } }
+        }
         // Clients extensions make for themselves (OkHttpClient(), rewritten to ExtensionHttp) resolve
         // names with the app's DNS, over HTTPS when it is on; asked at each lookup, so never too early
         ExtensionHttp.setDnsProvider { Injekt.get<NetworkHelper>().client.dns }
@@ -142,8 +154,12 @@ object ZoukanRuntime {
         // Quad101 and Shecan are no longer offered: a stored choice of one moves to Cloudflare (after
         // the config modules above, which the preference store needs; before any client is built)
         Injekt.get<NetworkPreferences>().migrateRemovedDohProvider()
+        // The JDK's own lookups (URL.openConnection, java.net.http, InetAddress) go to the app's DNS
+        // too (AppDnsResolverProvider); set once the network module is in place
+        AppDnsResolverProvider.setDnsProvider { Injekt.get<NetworkHelper>().client.dns }
 
         JcefRuntime.install(dirs)
+        useChromiumUserAgent()
         if (interactiveBrowser) {
             BrowserWindow.installChallengeSolver()
             // ZOUKAN -->
@@ -154,6 +170,20 @@ object ZoukanRuntime {
             )
             // ZOUKAN <--
         }
+    }
+
+    /**
+     * Extensions' WebViews and http.agent (which extensions and the JDK's HttpURLConnection send)
+     * use the app's Chromium user agent, so they match the browser that runs the pages and this
+     * OS. The WebViews follow it once Chromium reports its own; http.agent keeps the one known now,
+     * as the JDK reads it once. Before or without Chromium, [JcefRuntime.install] has already set
+     * the one assumed from Chromium's version; never throws.
+     */
+    private fun useChromiumUserAgent() {
+        runCatching {
+            KcefWebSettings.userAgentProvider = { DesktopBrowser.userAgent?.takeIf { it.isNotBlank() } }
+            DesktopBrowser.userAgent?.takeIf { it.isNotBlank() }?.let { System.setProperty("http.agent", it) }
+        }.onFailure { logcat(LogPriority.WARN, it) { "Could not set the user agent" } }
     }
 
     /** Like Suwayomi's LooperThread: extensions and the WebView post to Android's main looper. */

@@ -96,6 +96,7 @@ class TrackerLogin(private val trackerManager: TrackerManager) {
             val window = BrowserWindow(
                 url,
                 message = "Sign in to ${tracker.name}. The window closes by itself when you are done.",
+                purpose = BrowserWindow.Purpose.SIGN_IN,
                 interceptNavigation = { target ->
                     if (isRedirect(target)) {
                         // Stop every app-scheme redirect, but keep only this tracker's own

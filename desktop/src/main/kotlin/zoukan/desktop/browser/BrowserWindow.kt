@@ -10,17 +10,31 @@ import org.cef.CefApp
 import org.cef.CefClient
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
+import org.cef.callback.CefJSDialogCallback
 import org.cef.handler.CefDisplayHandlerAdapter
+import org.cef.handler.CefJSDialogHandler
+import org.cef.handler.CefJSDialogHandlerAdapter
 import org.cef.handler.CefLifeSpanHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefRequestHandlerAdapter
+import org.cef.handler.CefResourceRequestHandler
+import org.cef.handler.CefResourceRequestHandlerAdapter
+import org.cef.misc.BoolRef
 import org.cef.network.CefRequest
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
+import xyz.nulldev.androidcompat.webkit.CefDownloadBlocker
+import xyz.nulldev.androidcompat.webkit.JsDialogLimiter
+import xyz.nulldev.androidcompat.webkit.KcefNavigationPolicy
 import xyz.nulldev.androidcompat.webkit.evaluateJavaScriptDecoded
+import zoukan.desktop.browser.blocking.BlockPolicy
+import zoukan.desktop.browser.blocking.ContentBlocker
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.GraphicsEnvironment
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
@@ -51,7 +65,25 @@ class BrowserWindow(
      * cancels it: tracker logins catch their app-scheme redirect (komikku://anilist-auth) this way.
      */
     private val interceptNavigation: ((String) -> Boolean)? = null,
+    /** What the window is for; decides what its pop-ups and the content blocker do (see [Purpose]). */
+    private val purpose: Purpose = Purpose.BROWSE,
 ) {
+    /**
+     * What a window is for. A Cloudflare check or a sign-in must never be broken by the content
+     * blocker, so it is on only for [BROWSE]; a check's window also drops pop-ups to other sites
+     * without asking (they are ads, the check never needs one).
+     */
+    enum class Purpose(internal val blocksContent: Boolean, internal val offersCrossSitePopups: Boolean) {
+        /** A source's or a site's page the user opened */
+        BROWSE(blocksContent = true, offersCrossSitePopups = true),
+
+        /** A Cloudflare check the app met (see [installChallengeSolver]) */
+        CHALLENGE(blocksContent = false, offersCrossSitePopups = false),
+
+        /** A tracker's or a site's sign-in */
+        SIGN_IN(blocksContent = false, offersCrossSitePopups = true),
+    }
+
     private val closed = CountDownLatch(1)
     private var frame: JFrame? = null
     private var client: CefClient? = null
@@ -64,6 +96,21 @@ class BrowserWindow(
 
     // Whether the window counted itself as open for Discord presence; read and written on the AWT thread
     private var shownForDiscord = false
+
+    // Says that a pop-up to another site was stopped, and opens it here on request; AWT thread only
+    private val popupBar by lazy { PopupBar() }
+
+    // Which cookies the window exchanges with the app; none for a sign-in, which keeps them all
+    private val cookieScope: BrowserCookieScope? = if (purpose == Purpose.SIGN_IN) null else BrowserCookieScope(startUrl)
+
+    /** Copies the cookies of the page at [url] to the app, when it is on a site the window trusts. */
+    private fun copyCookiesFrom(url: String) {
+        if (cookieScope != null && !cookieScope.copiesFromChromium(url)) {
+            logcat { "The browser keeps the cookies of a page the user did not choose to open" }
+            return
+        }
+        CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, null) }
+    }
 
     /**
      * Opens the window. Returns false when there is no display or Chromium cannot start. On every
@@ -92,7 +139,8 @@ class BrowserWindow(
         SwingUtilities.invokeAndWait {
             val client = app.createClient().also { client = it }
             // Chromium starts in the first createClient(), so its cookie store exists only now
-            CefCookieSync.copyToCef()
+            // Only the start site's, outside a sign-in (see BrowserCookieScope)
+            CefCookieSync.copyToCef(cookieScope?.let { scope -> scope::copiesToChromium })
             val address = JTextField(startUrl)
             client.addDisplayHandler(object : CefDisplayHandlerAdapter() {
                 override fun onAddressChange(browser: CefBrowser, frame: CefFrame, url: String) {
@@ -105,30 +153,36 @@ class BrowserWindow(
             })
             client.addLoadHandler(object : CefLoadHandlerAdapter() {
                 override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
-                    if (frame.isMain) {
-                        val url = frame.url
-                        CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, null) }
-                    }
+                    if (frame.isMain) copyCookiesFrom(frame.url)
                 }
             })
-            if (interceptNavigation != null) {
-                client.addRequestHandler(object : CefRequestHandlerAdapter() {
-                    override fun onBeforeBrowse(
-                        browser: CefBrowser,
-                        frame: CefFrame,
-                        request: CefRequest,
-                        userGesture: Boolean,
-                        isRedirect: Boolean,
-                    ): Boolean = frame.isMain && interceptNavigation.invoke(request.url)
-                })
-            }
+            client.addRequestHandler(requestHandler())
+            client.addJSDialogHandler(jsDialogHandler())
+            // Nothing from the web is saved to disk
+            client.addDownloadHandler(CefDownloadBlocker)
+            if (purpose.blocksContent) ContentBlocker.ensureFresh()
             client.addLifeSpanHandler(object : CefLifeSpanHandlerAdapter() {
                 override fun onBeforePopup(
                     browser: CefBrowser,
-                    frame: CefFrame,
+                    frame: CefFrame?,
                     targetUrl: String?,
                     targetFrameName: String?,
-                ): Boolean = BrowserPopups.onPopup(targetUrl) { browser.loadURL(it) }
+                ): Boolean {
+                    val opener = runCatching { browser.url }.getOrNull()
+                    val action = BrowserPopups.decide(
+                        targetUrl,
+                        opener,
+                        offerCrossSite = purpose.offersCrossSitePopups,
+                        isBlockedHost = { purpose.blocksContent && ContentBlocker.isBlockedPopup(it) },
+                    )
+                    when (action) {
+                        is BrowserPopups.Action.LoadHere -> browser.loadURL(action.url)
+                        is BrowserPopups.Action.Offer -> SwingUtilities.invokeLater { popupBar.show(action) }
+                        BrowserPopups.Action.Drop -> Unit
+                    }
+                    // Never a native window: it would escape the app lock and the secure screen
+                    return true
+                }
 
                 override fun onAfterCreated(browser: CefBrowser) {
                     // Chromium's own user agent, never an override: an override leaves
@@ -151,7 +205,11 @@ class BrowserWindow(
             val forward = JButton("Forward").apply { addActionListener { browser.goForward() } }
             val reload = JButton("Reload").apply { addActionListener { browser.reload() } }
             val done = JButton("Done").apply { addActionListener { close() } }
-            address.addActionListener { browser.loadURL(address.text.trim()) }
+            address.addActionListener {
+                val typed = address.text.trim()
+                cookieScope?.userOpened(typed)
+                browser.loadURL(typed)
+            }
 
             val toolbar = JPanel(BorderLayout()).apply {
                 add(
@@ -166,8 +224,13 @@ class BrowserWindow(
                 add(JPanel().apply { add(done) }, BorderLayout.EAST)
             }
             val top = JPanel(BorderLayout()).apply {
-                add(toolbar, BorderLayout.CENTER)
-                message?.let { add(JLabel("  $it"), BorderLayout.SOUTH) }
+                add(toolbar, BorderLayout.NORTH)
+                message?.let { add(JLabel("  $it"), BorderLayout.CENTER) }
+                add(popupBar.panel, BorderLayout.SOUTH)
+            }
+            popupBar.onOpen = {
+                cookieScope?.userOpened(it)
+                browser.loadURL(it)
             }
             discord()?.setWebView(true)
             shownForDiscord = true
@@ -190,6 +253,129 @@ class BrowserWindow(
             }
         }
         return true
+    }
+
+    /**
+     * Sees the window's requests: [interceptNavigation] gets each main-frame navigation, and the
+     * content blocker each request for something inside a page (in a [Purpose.BROWSE] window).
+     */
+    private fun requestHandler() = object : CefRequestHandlerAdapter() {
+        private val blocker = object : CefResourceRequestHandlerAdapter() {
+            override fun onBeforeResourceLoad(browser: CefBrowser?, frame: CefFrame?, request: CefRequest): Boolean {
+                // The page itself, or a request it cannot read, is never blocked
+                val type = runCatching { request.resourceType }.getOrNull() ?: return false
+                if (type == CefRequest.ResourceType.RT_MAIN_FRAME) return false
+                val page = runCatching { browser?.url }.getOrNull()?.takeIf { it.isNotBlank() }
+                    ?: runCatching { request.firstPartyForCookies }.getOrNull()
+                return ContentBlocker.shouldBlockInBrowser(request.url, page)
+            }
+        }
+
+        override fun onBeforeBrowse(
+            browser: CefBrowser,
+            frame: CefFrame,
+            request: CefRequest,
+            userGesture: Boolean,
+            isRedirect: Boolean,
+        ): Boolean {
+            if (!frame.isMain) return false
+            val url = runCatching { request.url }.getOrNull()
+            // First, so a sign-in still hears of its app-scheme redirect, which is cancelled either way
+            if (url != null && interceptNavigation?.invoke(url) == true) return true
+            if (!KcefNavigationPolicy.isAllowedMainFrameUrl(url)) {
+                logcat(LogPriority.WARN) { "The browser cancelled a navigation to a ${url?.substringBefore(':')?.take(20)}: address" }
+                return true
+            }
+            if (url != null) cookieScope?.navigating(url, userGesture, isRedirect)
+            return false
+        }
+
+        override fun getResourceRequestHandler(
+            browser: CefBrowser?,
+            frame: CefFrame?,
+            request: CefRequest?,
+            isNavigation: Boolean,
+            isDownload: Boolean,
+            requestInitiator: String?,
+            disableDefaultHandling: BoolRef?,
+        ): CefResourceRequestHandler? = blocker.takeIf { purpose.blocksContent }
+    }
+
+    /**
+     * A page's alert, confirm and prompt show as Chromium's own dialogs, except one from a frame of
+     * another origin than the page (an ad's iframe) and those past [JsDialogLimiter]'s limit, which
+     * are suppressed. A page never keeps the window from closing or leaving it: onbeforeunload is
+     * always answered "leave".
+     */
+    private fun jsDialogHandler() = object : CefJSDialogHandlerAdapter() {
+        private val limiter = JsDialogLimiter()
+
+        override fun onJSDialog(
+            browser: CefBrowser,
+            originUrl: String?,
+            dialogType: CefJSDialogHandler.JSDialogType?,
+            messageText: String?,
+            defaultPromptText: String?,
+            callback: CefJSDialogCallback,
+            suppressMessage: BoolRef,
+        ): Boolean {
+            val page = runCatching { browser.url }.getOrNull()
+            if (!limiter.allow(page, originUrl, System.currentTimeMillis())) {
+                logcat { "The browser suppressed a page's dialog" }
+                suppressMessage.set(true)
+            }
+            // Chromium's dialog, or none when suppressed
+            return false
+        }
+
+        override fun onBeforeUnloadDialog(
+            browser: CefBrowser,
+            messageText: String?,
+            isReload: Boolean,
+            callback: CefJSDialogCallback,
+        ): Boolean {
+            runCatching { callback.Continue(true, "") }
+            return true
+        }
+    }
+
+    /** The bar under the toolbar that says a pop-up was stopped; built and used on the AWT thread. */
+    private class PopupBar {
+        var onOpen: (String) -> Unit = {}
+        private var pending: String? = null
+        private val label = JLabel()
+        val panel: JPanel = JPanel(BorderLayout()).apply {
+            isVisible = false
+            add(label, BorderLayout.CENTER)
+            add(
+                JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+                    add(
+                        JButton(localized(DMR.strings.open_popup)).apply {
+                            addActionListener {
+                                val url = pending
+                                hide()
+                                url?.let { runCatching { onOpen(it) } }
+                            }
+                        },
+                    )
+                    add(JButton(localized(tachiyomi.i18n.MR.strings.action_close)).apply { addActionListener { hide() } })
+                },
+                BorderLayout.EAST,
+            )
+        }
+
+        fun show(offer: BrowserPopups.Action.Offer) {
+            pending = offer.url
+            label.text = "  " + localized(DMR.strings.popup_blocked_from, offer.host)
+            panel.isVisible = true
+            panel.parent?.revalidate()
+        }
+
+        private fun hide() {
+            pending = null
+            panel.isVisible = false
+            panel.parent?.revalidate()
+        }
     }
 
     /**
@@ -266,9 +452,7 @@ class BrowserWindow(
             shownForDiscord = false
             discord()?.setWebView(false)
         }
-        browser?.url?.let { url ->
-            runCatching { CefCookieSync.copyFromCef(url) { recordClearanceUserAgent(url, null) } }
-        }
+        browser?.url?.let { url -> runCatching { copyCookiesFrom(url) } }
         browser?.run {
             setCloseAllowed()
             close(true)
@@ -369,6 +553,7 @@ class BrowserWindow(
             val window = BrowserWindow(
                 url,
                 message = "This site wants to check you are human. Solve the check; the window closes by itself.",
+                purpose = Purpose.CHALLENGE,
             )
             return window.open() && window.await(timeoutMs, isSolved)
         }
@@ -380,19 +565,41 @@ class BrowserWindow(
  * Chromium types, so tests can drive it without JCEF.
  */
 object BrowserPopups {
+    sealed interface Action {
+        /** Load the address in the window's own browser. */
+        data class LoadHere(val url: String) : Action
+
+        /** Stop it, and tell the user, who may open it here (see BrowserWindow's pop-up bar). */
+        data class Offer(val url: String, val host: String) : Action
+
+        /** Stop it without a word. */
+        data object Drop : Action
+    }
+
     /**
-     * Called for a pop-up to [targetUrl]. Returns true to stop Chromium from creating its own
-     * window; [loadHere] loads an address in the window's own browser.
+     * Decides about a pop-up to [targetUrl] opened by the page at [openerUrl]. A pop-up to the same
+     * site loads in place (a sign-in or a reader page); one to another site is stopped and, when
+     * [offerCrossSite], offered to the user, unless [isBlockedHost] says it goes to an ad host. Any
+     * address that is not a web page is dropped. Never throws.
      */
-    fun onPopup(targetUrl: String?, loadHere: (String) -> Unit): Boolean {
-        // A native pop-up window would escape the app lock and the secure screen setting, which
-        // act only on the windows the app made; the address loads in this window instead
-        if (targetUrl != null && zoukan.desktop.app.ExternalLinks.isWebUrl(targetUrl)) {
-            loadHere(targetUrl)
-        } else {
+    fun decide(
+        targetUrl: String?,
+        openerUrl: String?,
+        offerCrossSite: Boolean,
+        isBlockedHost: (String) -> Boolean = { false },
+    ): Action {
+        val target = targetUrl?.trim()
+        if (target == null || !zoukan.desktop.app.ExternalLinks.isWebUrl(target)) {
             logcat(LogPriority.WARN) { "The browser does not open a pop-up to ${targetUrl?.take(100)}: not a web address" }
+            return Action.Drop
         }
-        return true
+        if (runCatching { BlockPolicy.sameSite(target, openerUrl) }.getOrDefault(false)) return Action.LoadHere(target)
+        if (!offerCrossSite || runCatching { isBlockedHost(target) }.getOrDefault(false)) {
+            logcat { "The browser stopped a pop-up to another site" }
+            return Action.Drop
+        }
+        val host = zoukan.desktop.app.ExternalLinks.webUri(target)?.host ?: return Action.Drop
+        return Action.Offer(target, host)
     }
 }
 

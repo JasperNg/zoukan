@@ -8,9 +8,11 @@ references are repository paths.
 The short version: code the app runs (extensions, updates, Chromium) is signature- or
 hash-verified against a pinned identity; data the app reads (archives, XML, filenames) is parsed
 in-process with path-traversal and external-entity defenses; secrets at rest are encrypted under a key
-that lives in the OS secret store. The largest accepted risk is inherited from the extension
-model itself: an extension runs with the user's full privileges, in-process, and the store that
-names its signing key is trusted over TLS alone.
+that lives in the OS secret store. What the app sends is kept to what a page or source needs: DNS
+over HTTPS by default, the OS proxy followed, an HTTP cache in memory only, and a built-in browser that keeps
+no history and blocks third-party ad and tracker hosts. The largest accepted risk is inherited
+from the extension model itself: an extension runs with the user's full privileges, in-process,
+and the store that names its signing key is trusted over TLS alone.
 
 ## Trust boundaries
 
@@ -24,6 +26,10 @@ Remote:
 - GitHub releases: the update check, the release JSON, the installer assets.
 - jcefmaven mirrors (Maven Central, GitHub): the Chromium natives package.
 - OAuth trackers: the sign-in pages, and the `komikku://` redirect the app catches.
+- The DNS over HTTPS provider (Quad9 unless the user chose another or turned it off): the answer
+  to every public name the app looks up.
+- The proxy set in the OS, when there is one: it carries, and resolves, every connection.
+- Block lists the user adds by address: plain-text host lists, downloaded weekly (sooner after a refresh in which none came through).
 
 Local:
 
@@ -100,7 +106,7 @@ Verified and trusted:
 
 | Control | Where |
 |---|---|
-| Release JSON and downloads over TLS to `api.github.com`; asset names limited to a safe pattern. The token is sent only to `https://` addresses on the API host: an asset address anywhere else is refused before a request is made | `desktop/src/main/kotlin/zoukan/desktop/update/UpdateChecker.kt` (`request`, `assetRequest`, `SAFE_NAME`) |
+| Release JSON and downloads over TLS to `api.github.com`; asset names limited to a safe pattern. The token is sent only to `https://` addresses on the API host: an asset address anywhere else is refused before a request is made. The checker uses the app's plain client: the app's DNS, but no source cookies, no cache, no interceptors (so no Cloudflare window) and OkHttp's own user agent | `desktop/src/main/kotlin/zoukan/desktop/update/UpdateChecker.kt` (`request`, `assetRequest`, `SAFE_NAME`); `Updates.gitHubChecker` (`NetworkHelper.plainClient`) |
 | A detached Ed25519 release signature, `<installer name>.sig`, made by the release job with a key held as a repository secret that only that job reads (`ZOUKAN_RELEASE_SIGNING_KEY`), checked against the public key compiled into the app (`desktop/src/main/resources/zoukan-release-key.pem`). It covers the installer's name and the SHA-256 the app computes itself, so GitHub's digest is not part of the trust. A missing or wrong signature, or a packaged build without the key, is refused (fails closed), and the files are deleted. Releases made before it have no signature, and apps from before it do not check one | `desktop/.../update/ReleaseSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install`; `.github/workflows/desktop-build.yml` (`release` job) |
 | SHA-256 from GitHub's `digest` field checked while streaming; refused outright when GitHub lists none | `UpdateChecker.downloadTo`; the refusal in `desktop/.../update/Updates.kt` (`states.download`) |
 | Only when the running app is itself OS-signed (release builds are not): the installer's signer must match it, by the SHA-256 of the signer certificate's public key on Windows (a renewal that reuses the key passes; the thumbprint is not compared) and by Developer ID team on macOS. A build that says it shipped signed but has no readable signature fails closed. For an unsigned release this check is `Unchecked` and adds nothing | `desktop/.../update/InstallerSignature.kt` (`verify`), invoked in `Updates.download` and again in `Updates.install` |
@@ -128,15 +134,30 @@ Residual risk:
 ## Web and embedded Chromium
 
 The built-in browser (JCEF) solves Cloudflare challenges and hosts site and tracker sign-ins.
+Extensions' hidden WebViews run on the same Chromium and share its profile,
+`<cache>/cache/browser`, where `<cache>` is `%LOCALAPPDATA%\Zoukan-local` for the default Windows
+data folder (outside the roaming profile; Chromium's natives sit beside it in `<cache>/browser`)
+and the data folder itself otherwise (`ZoukanDirs`, `CacheFolders`). A browser window has a purpose: browsing a site (`BROWSE`), a Cloudflare
+check the app met (`CHALLENGE`) or a tracker or E-Hentai sign-in (`SIGN_IN`).
 
 Verified and trusted:
 
 | Control | Where |
 |---|---|
 | Start address must be http/https with a host; `file:` and other schemes refused | `desktop/.../browser/BrowserWindow.kt` (start-URL check) |
+| The top frame of a browser window or an extension's WebView goes only to http, https or `about:blank`: a navigation to `data:`, `javascript:`, `file:`, `blob:`, `chrome:` or an app scheme is cancelled and logged (scheme only). A tracker sign-in still hears of its app-scheme redirect first; an extension's WebView also loads the exact address the extension asked for, and its `shouldOverrideUrlLoading` still hears of a cancelled one, posted to the WebView's looper so an extension that blocks there cannot hold up Chromium, with its answer ignored | `BrowserWindow.requestHandler` (`onBeforeBrowse`); `android-compat/.../webkit/KcefPageRules.kt` (`KcefNavigationPolicy`), `KcefWebViewProvider` (`RequestHandler.onBeforeBrowse`), `KcefCancelledNavigation` |
+| A page's alert, confirm and prompt: suppressed when they come from a frame of another origin than the top page (Chromium reports the origin, not the frame, so a same-origin iframe counts as the page), and a page past 3 in 10 seconds is silenced until the top frame moves on (a `history.pushState` to another address counts as moving on: accepted). A page with no web origin (`about:blank`, an extension's `loadDataWithBaseURL` with no base address) gets its own dialogs under the same limit, as on Android; a dialog with no web origin on an http or https page is another frame's and is suppressed. `onbeforeunload` never keeps a window or WebView from closing or leaving. A browser window shows Chromium's own dialog; an extension's WebView hands it to the extension's `WebChromeClient` and cancels it when the client does not handle it | `KcefPageRules.kt` (`JsDialogLimiter`); `BrowserWindow.jsDialogHandler`; `KcefWebViewProvider.JsDialogHandler`; `android-compat/.../android/webkit/JsResult.java`, `JsPromptResult.java` |
+| Cookie sync of a browsing or challenge window is scoped: at open only the app's cookies for the start site (registrable domain) are copied into Chromium (cookies Chromium already keeps stay), and cookies are copied back only from pages on a trusted site: the start site, sites the user typed, clicked through to or opened from the pop-up bar, and sites a trusted page redirected to. A page a script sent the window to keeps its cookies in Chromium. Sign-in windows keep the unscoped sync (every cookie both ways), since a sign-in may pass through other sites' pages; extensions' WebViews also copy every cookie in at creation and copy back from every page they load, as before | `desktop/.../browser/BrowserCookieScope.kt`; `BrowserWindow` (`copyCookiesFrom`, `onBeforeBrowse`); `CefCookieSync.copyToCef(includeHost)` |
 | No JavaScript-to-Java bridge exists; the only channels out of a page are the cookie sync and the main-frame URL intercept | absence by construction in `BrowserWindow` |
 | Links opened in the system browser are http/https with a host only — `javascript:`, `file:` and custom schemes never reach the OS handler | `desktop/.../app/ExternalLinks.kt` (`webUri`) |
-| Chromium natives downloaded only with the SHA-256 pinned for that exact JCEF build and platform (missing pin = no download), over https mirrors, installed atomically, half-installed state deleted | `desktop/.../browser/ChromiumNatives.kt` (`ensureInstalled`, `pinnedSha256`, the `jcef-natives.sha256` pin file) |
+| Chromium natives downloaded only with the SHA-256 pinned for that exact JCEF build and platform (missing pin = no download), over https mirrors, installed atomically, half-installed state deleted. The download uses the app's DNS but none of its interceptors, cookies or cache, so the mirrors get OkHttp's own user agent and nothing of the sources | `desktop/.../browser/ChromiumNatives.kt` (`ensureInstalled`, `pinnedSha256`, `forDownload`, the `jcef-natives.sha256` pin file) |
+| No page gets a native window: one would escape the app lock and the secure screen. In a browser window a pop-up to the same site (registrable domain) loads in place; one to another site is stopped and offered in a "Pop-up blocked" bar (Open loads it in place), or dropped without a word in a challenge window or when it goes to a blocked host. An extension's WebView loads a pop-up in place only when the extension let scripts open windows and the address is http/https, as Android's WebView with multiple windows off; anything else is dropped | `BrowserWindow` (`onBeforePopup`, `BrowserPopups.decide`, `PopupBar`); `android-compat/.../webkit/KcefContentRules.kt` (`KcefPopupPolicy`), `KcefWebViewProvider` (`onBeforePopup`) |
+| Nothing from the web is saved as a file: every download Chromium starts, in a browser window or an extension's WebView, is cancelled | `KcefContentRules.kt` (`CefDownloadBlocker`), added in `BrowserWindow.open` and `KcefWebViewProvider` |
+| Chromium's background services that contact Google are off (field trials, component and model downloads, Optimization Hints, Domain Reliability, hyperlink auditing, media router discovery, autofill form signatures, network time), as are Reporting and Network Error Logging. Profile preferences turn off Safe Browsing, history, network prediction (preconnects and prefetches), spellcheck (its dictionary download), password saving and autofill, and keep WebRTC off non-proxied UDP, so a page cannot learn the local or public address around a proxy. A preference this Chromium does not know is skipped with a warning in the log | `desktop/.../browser/JcefRuntime.kt` (`PRIVACY_SWITCHES`, `PRIVACY_PREFERENCES`, `applyPrivacyPreferences`) |
+| The profile keeps as little of what was visited as Chromium allows: the HTTP and media caches are capped at about nothing (`--disk-cache-size=1`, `--media-cache-size=1`); History, Top Sites, Favicons, Visited Links, Network Action Predictor, Reporting and NEL, Shortcuts, `Cache`, `Code Cache` and `chrome_debug.log` are deleted before Chromium starts and again at quit (a file Chromium still holds, on Windows, goes at the next start); Chromium writes no log unless `-Dzoukan.cefDebug=true`. Links are never followed or deleted | `JcefRuntime` (`applySettings`, `cleanProfileAtQuit`), `desktop/.../browser/BrowserProfileCleanup.kt`, `Main.kt` |
+| Extensions' WebViews and `http.agent` (sent by extensions and the JDK's `HttpURLConnection`) use the app's Chromium user agent for this OS, and a WebView running the default user agent sends client hints (`Sec-CH-UA`, `navigator.userAgentData`) that match it: desktop, this OS and architecture, the same Chromium version; on Windows the platform version is Chromium's (from the build number, read once with `%SystemRoot%\System32\reg.exe` with a timeout; without it, guessed from the OS name) | `ZoukanRuntime.useChromiumUserAgent`, `android-compat/.../webkit/KcefWebSettings.kt` (`userAgentProvider`, `desktopUserAgentMetadata`) |
+| The content blocker cancels a page's requests for scripts, images and frames from hosts on its list, when they go to another site than the page in the top frame. It never blocks the page itself, a site's own hosts, `/cdn-cgi/` paths, Cloudflare's, hCaptcha's and reCAPTCHA's checks, Google's and several trackers' sign-in hosts, MangaDex or E-Hentai, and it is off in challenge and sign-in windows. It is on by default (Advanced > "Block ads and trackers"); browser windows use the built-in list (`blocklist.txt`, written for this project) and the user's lists, extensions' WebViews the built-in list only. It is a privacy feature, not a security boundary: every error lets the request through | `desktop/.../browser/blocking/BlockPolicy.kt`, `ContentBlocker.kt`; `BrowserWindow.requestHandler`; `KcefContentRules.kt` (`KcefRequestFilter`), `DesktopAppModule` |
+| Block lists the user adds ("Extra block lists") are untrusted input: https addresses only (at most 10), fetched with the plain client (no cookies, the app's DNS) without following a redirect between https and http, refused past 8 MiB, parsed as host names only (hosts files, `\|\|host^` rules and `@@\|\|host^` exceptions; anything else is ignored), capped at 200,000 hosts and exceptions a list and 400,000 in all, and stored with an atomic move in `<data>/blocklists`. An exception only ever lets requests through: in the built-in browser its host and subdomains are blocked by no list, the built-in one included. The weekly clock restarts only when at least one list downloads; when none does, the next try is after an hour, doubling up to a week (kept in memory). The addresses are kept in the encrypted preferences | `desktop/.../browser/blocking/UserBlockLists.kt`, `BlockListParser.kt`, `BlockRules.kt`, `RefreshBackoff.kt`, `ContentBlocker.download` |
 
 Residual risk:
 
@@ -150,6 +171,60 @@ Residual risk:
    trackers move to loopback or https redirects first.
 2. Chromium inside JCEF lags Chromium releases; the sign-in window is a full-JS browser pointed at
    remote content, with the ordinary exposure that implies.
+3. **Third-party cookies are allowed** in the browser windows and extensions' WebViews (a
+   maintainer decision; see Accepted risks). A tracker embedded on several sites can recognize
+   the user across them. The content blocker removes the
+   known ad and tracker hosts, which shrinks this but does not end it. Android's WebView blocks
+   them by default (`desktop/PARITY.md`).
+4. The content blocker matches whole hosts only: no paths, no cosmetic filtering, no first-party
+   trackers, and every error lets the request through. A blocked site can move its ads to its own
+   host. It is not on in challenge and sign-in windows.
+5. Incognito mode does not change the browser: it uses the same profile, and what it keeps
+   (cookies, local storage) stays after incognito ends.
+
+## Network and privacy
+
+Who learns what the user reads: name lookups, the proxy, caches and what the requests say about
+the app.
+
+Verified and trusted:
+
+| Control | Where |
+|---|---|
+| DNS over HTTPS is on by default, with Quad9 (`dns.quad9.net`, the endpoint that blocks known-malicious domains). Only the default changes: a stored choice, off included, is kept, and the app never writes the preference itself. A restored backup's choice is applied only when the user confirms it in a Settings restore; data sync and the command line drop it | `core/common/.../network/NetworkPreferences.kt` (`defaultDohProvider`), `desktop/.../DesktopAppModule.kt`; `DesktopBackups.SENSITIVE_KEYS` |
+| A public name that DNS over HTTPS cannot resolve fails; it is never sent to the system's DNS instead. Only local-only names (single-label names such as `localhost` or `nas`, and `.localhost`, `.local`, `.lan`, `.home`, `.home.arpa`, `.internal`, `.localdomain`, `.corp`, `.intranet`, `.private`, `.test`, `fritz.box`) and the host name of the proxy set in the OS go to the system's DNS, which alone can answer them. The Komga and Kavita trackers' fallback to the system's DNS covers the local-only names only. The DNS over HTTPS queries resolve their server's name to its fixed bootstrap addresses and run on their own threads, whose JDK lookups (a SOCKS proxy's name) use the system's DNS, so a query never waits on another query | `core/common/.../network/DohProviders.kt` (`isLocalOnlyHostName`, `LocalNamesSystemDns`, `desktopDohDns`, `isDohQueryThread`, `withSystemFallback`), `SystemProxyHosts.kt` (`isSystemProxyHost`), `DohPlatform.desktop.kt`, `NetworkPlatform.desktop.kt` (`SelectedProxyRecorder`) |
+| The JDK's own lookups (`InetAddress`, so `URL.openConnection`, `ImageIO`, `java.net.http` and extension code that does not use OkHttp) go through the app's DNS once the runtime has started. The computer's own name, local-only names, the OS proxy's host name, a lookup made on a DNS over HTTPS query's thread and a lookup made inside one (the app's DNS reaching the system's) use the JDK's resolver. A failed lookup fails, with no fallback; reverse lookups fail while DNS over HTTPS is on, so an address is never sent to the system's DNS | `desktop/.../network/AppDnsResolver.kt` (`AppDnsResolverProvider`, registered in `META-INF/services`), `ZoukanRuntime` |
+| Chromium resolves names itself, with the same provider in "secure" mode (no fallback), written to its `Local State` before it starts | `desktop/.../browser/ChromiumDns.kt` |
+| The app's HTTP follows the proxy set in the OS (`-Djava.net.useSystemProxies=true` for the run task and the installers; not for test JVMs), as Chromium does by itself. No client in the app picks a proxy of its own (`Proxy.NO_PROXY`, `.proxy(...)`, a `ProxySelector`), which a source scan enforces | `desktop/build.gradle.kts` (`jvmFlags`), `desktop/packaging.gradle.kts`; `desktop/src/test/kotlin/zoukan/desktop/network/SystemProxySourceScanTest.kt` |
+| No HTTP disk cache on desktop: OkHttp's would keep request addresses (search queries) and responses in plain text. The clients share a 5 MiB cache held only in memory (an in-memory file system that never writes to disk, bounded at three times the cache size, one response at most the cache size), gone when the app quits. The `network_cache` folder earlier versions left is deleted | `core/common/.../network/NetworkPlatform.desktop.kt` (`networkCache`, `MemoryNetworkCache`), `MemoryFileSystem.kt` |
+| Images fetched by address (extension icons, tracker covers, description images from any host) send the cookies the app has but keep none a response sets, so an image host or ad server cannot leave a cookie in the store every source shares | `desktop/.../network/SendOnlyCookieJar.kt`, `Images.imageClient` |
+| Requests that are not for a source (the update check, the Chromium download, user block lists) use the plain client, or for the Chromium download one built the same way: the app's DNS, but no source cookies, no cache, no source user agent | `NetworkHelper.plainClient`, `ChromiumNatives.forDownload` |
+
+Residual risk:
+
+1. **The DNS over HTTPS provider sees every name the app looks up**, Quad9 by default, in place
+   of the system's resolver. Its filtering can block a site it lists as malicious. Lookups made
+   before the runtime starts use the system's DNS.
+2. **A proxy sees every host name.** With an HTTP proxy (CONNECT) or SOCKS5 the proxy resolves the
+   names, so DNS over HTTPS resolves only the proxy's own name, and the DNS over HTTPS queries go
+   through the proxy too. A proxy that asks for a password is not supported (requests fail with
+   407), and a PAC or WPAD setup works only as far as the JDK reads it. A proxy given by host name
+   is resolved with the system's DNS, which so learns that name (and only that name); the app
+   reads the proxy's name from the OS settings (`isSystemProxyHost`, for http, https and SOCKS
+   probe addresses) and remembers each proxy OkHttp picks for the app's clients before it looks
+   the proxy's name up (`SelectedProxyRecorder`, at most 32 names for the run), so a PAC file
+   that picks a different proxy per site works for them too. A per-site proxy first used by code
+   that does not use those clients (the JDK's own connections, a client an extension builds from
+   scratch) can still have its name sent to DNS over HTTPS. A compiled extension can still set a
+   proxy of its own for its client; the source scan covers the app's code only.
+3. **The app can be told apart from a browser.** The JDK's `HttpURLConnection` adds ` Java/21` to
+   `http.agent`, and OkHttp's TLS and HTTP/2 handshakes are the JVM's, not Chromium's, whatever
+   the user agent says. Extensions read Komikku's version from the package manager, as on Android.
+4. **The app contacts servers without being asked**: the extension stores' lists at each start,
+   GitHub's release feed 30 seconds after start and then daily (on by default; About > "Check for
+   updates automatically"), the sources of a saved download queue, which carries on after a
+   restart, and each user block list's host weekly, which learns the user's address. Chromium starts only when a page needs it. Discord Rich Presence is
+   off by default.
 
 ## Local files
 
@@ -163,8 +238,8 @@ Verified and trusted:
 | CBZ entries are generated page names only, on write and on read; a zip entry name never becomes a path | `desktop/.../download/Cbz.kt`, `ChapterDownloader.kt` |
 | ComicInfo.xml parsing refuses doctype declarations, so no XXE | `desktop/.../download/ComicInfoXml.kt` |
 | EPUB XML allows a doctype (XHTML carries one) but fetches nothing outside the file: secure processing on, external general and parameter entities off, external DTDs and schemas not loaded, no XInclude, entity references not expanded | `desktop/.../local/LocalFormat.kt` (`xml`) |
-| Archive entry names can't escape the unpack folder: absolute paths, `..`, and drive-colon parts refused | `desktop/.../local/Archives.kt` (`write`) |
-| Unpacking is capped (per entry, per archive total, per entry count; the system tar is watched while it runs and killed over budget) and symlink entries are skipped, in every path | `Archives.kt` (`Budget`, `Limits`, `systemTar`) (hardened) |
+| Archive entry names can't escape the unpack folder: absolute paths, `..`, and drive-colon parts refused | `desktop/.../local/Archives.kt` (`entryPath`, `unpackEntry`) |
+| Unpacking is capped (per entry, per archive total, per entry count) and symlink entries are skipped, in every path: the system tar writes nothing to disk but streams the entries to the app as a TAR (`tar -cf - @archive`), which goes through the same budget, and it is killed when over budget or after five minutes | `Archives.kt` (`Budget`, `Limits`, `systemTar`) (hardened) |
 | RAR/7z/TAR read in-process by junrar and Commons Compress; anything they cannot read falls back to the system `tar` with a five-minute timeout | `Archives.kt` (`unpack`) |
 | Backup restore refuses a file that is not a backup before it is applied | `desktop/.../backup/RestoreGate.kt` |
 
@@ -177,12 +252,16 @@ Residual risk:
 2. A crafted archive can still cost CPU and disk up to the caps (a budget of gigabytes), and a
    same-user process can tamper with anything in the cache folders. Memory is bounded per page:
    a page or cover read into memory has its own, much smaller cap (`Limits.pageBytes`, 64 MiB),
-   and a larger one fails with a clear message instead of filling the heap.
+   and a larger one fails with a clear message instead of filling the heap; while unpacking, an
+   entry is held in memory up to that cap, one at a time. Without the file key an open chapter's
+   pages are all kept in memory, up to an eighth of the heap in all (`Limits.memoryBytes`); a
+   larger chapter is refused rather than risk running out of memory. A cover holds one page.
 
 ## Secrets at rest
 
-What touches the disk unencrypted is deliberately small, with one accepted exception: automatic
-backups (residual risk 4).
+What touches the disk unencrypted is deliberately small. The accepted exceptions are automatic and
+safety backups (residual risk 4), logs (5), the built-in browser's profile (6) and a page set
+as a cover, for a moment (7).
 
 Verified and trusted:
 
@@ -194,6 +273,9 @@ Verified and trusted:
 | Preferences, cookies and session files encrypted at rest with AES-256-GCM under a second random OS-store key | `desktop/.../secrets/FileCipher.kt` |
 | Windows: Credential Manager generic credentials, per-user, non-roaming; macOS: login Keychain generic passwords | `desktop/.../secrets/WindowsCredentialStore.kt`, `MacKeychainStore.kt` |
 | The app's cookie store (`java.net.CookieManager`, what OkHttp and the sources use) writes only cookies with an expiry, to `cookies.json`, encrypted with `FileCipher`; session cookies stay in memory. It is synced with Chromium's cookies while a browser window is open. Chromium does not persist session cookies either (`persist_session_cookies = false`) | `desktop/.../network/PersistentCookieStore.kt`, `android-compat/.../webkit/CefCookieSync.kt`, `desktop/.../browser/JcefRuntime.kt` (`applySettings`) |
+| Covers and cached images encrypted at rest with the same file key (AES-256-GCM, written through a temporary file and moved into place): the source covers in `cache/covers`, custom covers in `cache/covers/custom`, and Coil's disk cache of images fetched by address (`<cache>/cache/images`, its journal included). Each file is encrypted whole, except Coil's journal, which is framed: each appended chunk is its own AES-GCM frame with a length prefix, so a flush appends a frame instead of rewriting the file, and a torn last frame after a crash is dropped while the frames before it are kept. Every encryption, frame or whole file, takes a fresh random 96-bit nonce from `SecureRandom`, as `FileCipher` does for every file, so no nonce repeats under the key in practice. Without the file key nothing is cached on disk and a custom cover cannot be saved. While incognito is on (for the app, or for a cover's source), no new source cover or Coil image is written to disk; what is cached is still read. Covers saved before encryption are rewritten encrypted when first read, and a plain image cache is deleted; a custom cover is never deleted, even when it cannot be decrypted. Temporary files that writes cut short left behind are deleted at start, matched by the writer's own name pattern only | `desktop/.../secrets/EncryptedFiles.kt`, `EncryptedFileSystem.kt`; `desktop/.../ui/common/Images.kt` (`coverBytes`, `cachedCover`, `encryptedDiskCache`, `IncognitoDiskCacheInterceptor`, `init`), `desktop/.../manga/CustomCovers.kt` (`deleteTemporaryFiles`) |
+| The chapter cache (`<cache>/cache/archives`, the unpacked RAR, 7z and TAR chapters) encrypted at rest with the same file key: each page and ComicInfo.xml is unpacked into memory and written encrypted, whichever reader unpacks it (the system tar included), so no page is plain on disk; a page is decrypted in memory when read. A chapter is reused only when its marker decrypts with the current key, otherwise it is unpacked again. Without the file key nothing is cached and the open chapter's pages stay in memory, at most an eighth of the heap in all (`Limits.memoryBytes`); a larger chapter is refused with a message. A cover read from an archive holds one page in memory at a time and writes nothing to the cache, with or without the key. At start the cache is cleared of what is not a whole encrypted chapter (the plain cache from before encryption, folders a crash cut short); only the cache's own folder, never downloads or the storage folder | `desktop/.../local/Archives.kt` (`open`, `prepareCache`, `FolderSink`, `readCachedPage`), `ZoukanRuntime.kt` |
+| FFmpeg decodes AVIF and HEIF pages and covers from memory (a custom `AVIOContext`), never from a temporary file. A page set as a cover goes through a temporary folder of the app's own (`<cache>/cache/tmp`, beside the chapter cache), deleted right after and emptied at every start, not the system's temporary folder | `desktop/.../image/FfmpegImageDecoder.kt` (`MemoryInput`), `desktop/.../AppTempFiles.kt`, `ReaderScreenModel.kt` (`setPageAsCover`) |
 | App-lock password: PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte per-password salt, constant-time comparison | `desktop/.../security/AppLock.kt` (`hash`, `verify`) |
 
 Residual risk:
@@ -204,10 +286,6 @@ Residual risk:
 2. On Linux — a development target only — secrets go to a plaintext file restricted to 0600 after
    the write (`FileSecretStore.set`), so a same-user process watching the folder can win a
    write-before-chmod race; and Chromium's own cookie DB on disk uses CEF's well-known static key.
-   Chromium also keeps the expiring cookies the app copies into it (`CefCookieSync`) in its own
-   `Cookies` database under the browser cache, protected only by Chromium's `os_crypt` (DPAPI on
-   Windows; on macOS probably a fixed mock-keychain key), outside `FileCipher`. Whoever copies the
-   data folder may be able to read those sign-ins.
 3. App lock has no attempt rate limit; offline guessing is bounded only by PBKDF2 cost. And
    `AppLock.verify` fails open when the stored hash is missing (returns unlocked rather than
    locked-down) — a known nit, harmless while the lock is enabled and the hash exists. When the
@@ -235,6 +313,32 @@ Residual risk:
    codes, tokens and passwords redacted) and copies of JVM crash files (without environment
    variable values). Titles of what was read and file paths can appear there, also in incognito.
    The crash dialog says so. Anyone who can read the data folder can read them.
+6. **The built-in browser's profile is not encrypted.** `<cache>/cache/browser` is shared by the
+   browser windows, the challenge windows and extensions' WebViews, and sits outside `FileCipher`.
+   After the clean-up at start and at quit (Web and embedded Chromium) it still holds what sites
+   need: their cookies, Local Storage and IndexedDB, Local State and Chromium's other profile
+   files. The `Cookies` database, with the expiring cookies the app copies into it
+   (`CefCookieSync`), is protected only by Chromium's `os_crypt` (DPAPI on Windows; on macOS
+   probably a fixed mock-keychain key); Local Storage and IndexedDB are plain. Whoever copies the
+   profile's folder may be able to read those sign-ins and which sites stored data. A file Chromium
+   still holds at quit stays until the next start. On Windows the profile is in `%LOCALAPPDATA%`,
+   so a roaming setup does not copy it; an older version's profile in the roaming data folder is
+   moved there at start (renamed, or copied and then deleted), and stays in the roaming folder for
+   a run in which it cannot move. When an older version was run again after the move and both
+   folders exist, the one used more recently is kept and the other deleted. With a chosen data
+   folder (`zoukan.dataDir`) the profile stays inside that folder and goes wherever it is copied.
+7. **Some files stay plain.** A page set as a cover is written plain for a moment to the app's
+   temporary folder (`<cache>/cache/tmp`) before it is saved encrypted (a local entry's cover is the
+   user's own plain file in the storage folder); a crash at that moment leaves it until the next
+   start. Covers are decrypted in memory, where Coil's memory cache
+   (256 MiB) keeps them; a local source's covers are the user's own files in the storage folder,
+   read as they are. The encrypted caches' file sizes and counts still show how much is cached.
+8. **Encrypted cache files are not bound to their place.** The frames of Coil's journal are not
+   bound to their order, so a same-user process can reorder or drop whole frames without it being
+   noticed, and no ciphertext is bound to its file's name, so a frame, or an encrypted cover or
+   page, can be moved into another file under the same key. This touches the caches only: the
+   effect is a wrong cached image or a wrong journal state, never the key. Binding the file name
+   and the frame's index as associated data is a later change.
 
 ## Processes
 
@@ -261,6 +365,8 @@ fallback's input file is user- or source-chosen content, parsed by libarchive as
 | dex2jar/ASM parse hostile APKs in-process before the trust decision | Only stores without jars reach it; the dominant store publishes jars; dex2jar is unmaintained, so "fix the parser" is not available | Drop the APK path (jars-only stores), or convert in a throwaway subprocess/sandbox with a download size cap |
 | System tar (libarchive) reads RAR 5 and odd 7z archives | RAR 5 has no maintained pure-Java reader; without tar those chapters cannot open at all | The caps and symlink-skip shrink it (hardened); a pure-Java RAR 5 reader would remove it |
 | OAuth login CSRF from unbound `komikku://` redirects | The trackers' app registrations only accept the custom scheme; Android inherits the same flaw | Trackers move to loopback or https redirects, then the window can bind the redirect to the page it was opened from |
+| Third-party cookies allowed in the built-in browser and extensions' WebViews | A maintainer decision: pages, checks and sign-ins work as they do in an ordinary browser. The content blocker removes the known ad and tracker hosts. Android's WebView blocks them, so this is a parity difference (`desktop/PARITY.md`) | Block third-party cookies in Chromium's profile, or partition them per site |
+| The built-in browser's profile (cookies, local storage) is not encrypted by the app | Chromium writes its profile itself, outside `FileCipher`, and sign-ins and Cloudflare clearances should survive a restart; history and caches are deleted, so what is left is what sites need | An in-memory profile (sign-ins then last one run), or one inside an encrypted container |
 | Same-user malware reads secret-store keys | OS design; no desktop API grants per-read prompts or hardware binding for generic credentials | OS-level change; the app can only shrink what is at rest, which it already does |
 | The updater sends its GitHub token to the API host named in the release JSON's asset address | Private-repo support needs it. Only `https://` addresses on the API host get a download request (and so the token); the asset's own redirect to storage on another host drops it. The installer must also pass the release signature, so a tampered release JSON cannot supply one | Fetch assets through a host the token is not sent to, if a private repository ever serves them from elsewhere |
 | Build dependencies have no project-wide `verification-metadata.xml` | Upstream has none, and a partial file fails the build; Maven Central, Google and the Gradle plugin portal serve fixed versions over TLS. The one artifact from a plain GitHub repository, Suwayomi's `android-jar`, is pinned to a commit (`settings.gradle.kts`) and checked against a SHA-256 before anything compiles against it (`android-compat`'s `verifyAndroidJar`) | A complete `gradle/verification-metadata.xml` for every dependency, kept current on each update |

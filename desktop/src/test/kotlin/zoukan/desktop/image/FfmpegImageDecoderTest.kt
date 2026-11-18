@@ -41,6 +41,31 @@ class FfmpegImageDecoderTest {
     }
 
     @Test
+    fun `decodes from memory, in parallel, and the same as from a file`() {
+        val red = fixture("red-32x24.avif")
+        val blue = fixture("blue-16x40.avif")
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+        try {
+            val sizes = (0 until 32).map { i ->
+                pool.submit<Pair<Int, Int>> { FfmpegImageDecoder.decode(if (i % 2 == 0) red else blue).let { it.width to it.height } }
+            }.map { it.get() }
+            sizes.forEachIndexed { i, size -> size shouldBe if (i % 2 == 0) (32 to 24) else (16 to 40) }
+        } finally {
+            pool.shutdown()
+        }
+        val file = kotlin.io.path.createTempFile(suffix = ".avif").toFile()
+        try {
+            file.writeBytes(red)
+            FfmpegImageDecoder.decode(file).getRGB(5, 5) shouldBe FfmpegImageDecoder.decode(red).getRGB(5, 5)
+        } finally {
+            file.delete()
+        }
+        // Cut short or empty: an error (or what could be read), never a crash
+        runCatching { FfmpegImageDecoder.decode(red.copyOf(red.size / 2)) }
+        runCatching { FfmpegImageDecoder.decode(ByteArray(0)) }.isFailure shouldBe true
+    }
+
+    @Test
     fun `recognizes AVIF and HEIF by their brand only`() {
         FfmpegImageDecoder.handles(fixture("red-32x24.avif")) shouldBe true
         val png = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "png", it) }.toByteArray()

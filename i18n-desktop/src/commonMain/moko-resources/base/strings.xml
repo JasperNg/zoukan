@@ -962,4 +962,16 @@
     <string name="sync_skipped_no_safety_backup">Sync did not change the library because a safety backup could not be saved first: %1$s</string>
     <!-- The screen-reader and keyboard name of what a right click (or a long press) does, when the site gives no better one -->
     <string name="more_actions">More actions</string>
+    <!-- The built-in browser's bar when it stops a page from opening a window on another site; %1$s is that site -->
+    <string name="popup_blocked_from">Pop-up blocked: %1$s</string>
+    <!-- The bar's button that opens the blocked pop-up in the same window -->
+    <string name="open_popup">Open</string>
+    <string name="block_ads_and_trackers">Block ads and trackers</string>
+    <string name="block_ads_and_trackers_summary">In the built-in browser and in extensions\' pages. A site\'s own content and Cloudflare\'s checks are never blocked</string>
+    <string name="extra_block_lists">Extra block lists</string>
+    <string name="extra_block_lists_summary">Addresses of block lists to add, one per line (https only). Hosts files and whole-host filter rules are used; the lists are downloaded again every week</string>
+    <!-- Shown once to someone who used Zoukan before DNS over HTTPS became on by default -->
+    <string name="doh_notice_title">DNS over HTTPS is now on</string>
+    <string name="doh_notice_text">Zoukan now looks up site addresses with DNS over HTTPS, using Quad9. You can change this in Settings &gt; Advanced.</string>
+    <string name="doh_notice_open_settings">Open settings</string>
 </resources>

@@ -101,15 +101,15 @@ class EditManga(
             updateManga.await(MangaUpdate(id = manga.id, thumbnailUrl = cover.toURI().toString()))
         } else {
             if (!manga.favorite) return
-            val target = CustomCovers.file(manga.id)
-            target.parentFile.mkdirs()
-            image.copyTo(target, overwrite = true)
+            // ZOUKAN: kept encrypted with the file key
+            CustomCovers.save(manga.id, image)
         }
         updateManga.await(MangaUpdate(id = manga.id, coverLastModified = Instant.now().toEpochMilli()))
     }
 
     suspend fun deleteCustomCover(manga: Manga) {
-        CustomCovers.file(manga.id).delete()
+        // ZOUKAN: under the custom covers' lock, so a lazy rewrite cannot put it back
+        CustomCovers.delete(manga.id)
         updateManga.await(MangaUpdate(id = manga.id, coverLastModified = Instant.now().toEpochMilli()))
     }
 

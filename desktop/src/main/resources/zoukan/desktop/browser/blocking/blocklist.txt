@@ -1,0 +1,92 @@
+# Zoukan's built-in block list: hosts of advertising, tracking and pop-under networks.
+#
+# Written for this project and licensed like it, under the Apache License, Version 2.0
+# (see LICENSE at the root of the repository). Nothing here is copied from another list.
+#
+# One host per line; each also covers its subdomains. A host is blocked only when a page loads
+# it from another site, never in Cloudflare checks or sign-in windows (see BlockPolicy).
+
+# Advertising: exchanges, ad servers and sponsored-content networks
+2mdn.net
+33across.com
+adform.net
+adnxs.com
+adsafeprotected.com
+adservice.google.com
+adsrvr.org
+advertising.com
+amazon-adsystem.com
+bidswitch.net
+casalemedia.com
+contextweb.com
+criteo.com
+criteo.net
+doubleclick.net
+doubleverify.com
+googleadservices.com
+googlesyndication.com
+googletagservices.com
+imasdk.googleapis.com
+indexww.com
+lijit.com
+media.net
+moatads.com
+openx.net
+outbrain.com
+pubmatic.com
+revcontent.com
+rubiconproject.com
+serving-sys.com
+sharethrough.com
+smartadserver.com
+sovrn.com
+taboola.com
+teads.tv
+yieldmo.com
+zedo.com
+
+# Pop-ups, pop-unders, push ads and the ad networks common on comic and video sites
+a-ads.com
+adcash.com
+adskeeper.com
+adsterra.com
+bidvertiser.com
+clickadu.com
+exdynsrv.com
+exoclick.com
+exosrv.com
+hilltopads.com
+hilltopads.net
+juicyads.com
+magsrv.com
+mgid.com
+onclickads.net
+popads.net
+popcash.net
+propellerads.com
+realsrv.com
+trafficjunky.net
+trafficstars.com
+tsyndicate.com
+
+# Tracking and analytics
+addthis.com
+analytics.twitter.com
+bat.bing.com
+chartbeat.com
+chartbeat.net
+clarity.ms
+cloudflareinsights.com
+connect.facebook.net
+google-analytics.com
+googletagmanager.com
+histats.com
+hotjar.com
+mc.yandex.ru
+mixpanel.com
+nr-data.net
+quantcount.com
+quantserve.com
+scorecardresearch.com
+sharethis.com
+statcounter.com

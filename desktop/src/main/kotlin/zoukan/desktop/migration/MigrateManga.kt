@@ -146,9 +146,8 @@ class MigrateManga(
         }
 
         if (MigrationFlag.CUSTOM_COVER in flags) {
-            zoukan.desktop.manga.CustomCovers.file(current.id).takeIf { it.isFile }?.let { cover ->
-                cover.copyTo(zoukan.desktop.manga.CustomCovers.file(target.id).apply { parentFile.mkdirs() }, overwrite = true)
-            }
+            // Written whole before it replaces the target's cover, under the custom covers' lock
+            zoukan.desktop.manga.CustomCovers.copy(current.id, target.id)
         }
 
         // Last, once every database step succeeded: a failure above leaves the user on the old

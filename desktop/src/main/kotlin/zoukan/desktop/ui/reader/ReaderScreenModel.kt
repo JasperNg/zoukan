@@ -770,7 +770,8 @@ class ReaderScreenModel(
             return@pageAction
         }
         val bytes = pageBytes(index)
-        val dir = java.nio.file.Files.createTempDirectory("zoukan-cover").toFile()
+        // ZOUKAN: in the app's own temporary folder, emptied at every start, not the system's
+        val dir = zoukan.desktop.AppTempFiles.newDir("cover")
         try {
             val file = java.io.File(dir, "cover.${PageImages.extension(bytes) ?: "jpg"}")
             file.writeBytes(bytes)

@@ -9,19 +9,41 @@ import org.junit.jupiter.api.Test
  */
 class BrowserWindowRegistryTest {
     @Test
-    fun `a pop-up request is loaded in the window's own browser and never creates a native window`() {
-        val loaded = mutableListOf<String>()
-        BrowserPopups.onPopup("https://accounts.example/signin") { loaded += it } shouldBe true
-        loaded shouldBe listOf("https://accounts.example/signin")
+    fun `a pop-up to the same site loads in the window's own browser`() {
+        BrowserPopups.decide("https://accounts.example.com/signin", "https://www.example.com/page", offerCrossSite = true) shouldBe
+            BrowserPopups.Action.LoadHere("https://accounts.example.com/signin")
+        // Also in a check's window, which drops only other sites' pop-ups
+        BrowserPopups.decide("https://example.com/next", "https://example.com/", offerCrossSite = false) shouldBe
+            BrowserPopups.Action.LoadHere("https://example.com/next")
     }
 
     @Test
-    fun `a pop-up to a non-web address is refused and not loaded`() {
-        val loaded = mutableListOf<String>()
-        listOf("file:///C:/Windows/win.ini", "javascript:alert(1)", null).forEach { url ->
-            BrowserPopups.onPopup(url) { loaded += it } shouldBe true
+    fun `a pop-up to another site is stopped and offered to the user`() {
+        BrowserPopups.decide("https://other.example.org/x", "https://www.example.com/", offerCrossSite = true) shouldBe
+            BrowserPopups.Action.Offer("https://other.example.org/x", "other.example.org")
+        // Unknown opener (the blank page before the first load): not the same site
+        BrowserPopups.decide("https://other.example.org/x", null, offerCrossSite = true) shouldBe
+            BrowserPopups.Action.Offer("https://other.example.org/x", "other.example.org")
+    }
+
+    @Test
+    fun `a pop-up to another site is dropped silently in a check's window or when it goes to a blocked host`() {
+        BrowserPopups.decide("https://other.example.org/", "https://example.com/", offerCrossSite = false) shouldBe BrowserPopups.Action.Drop
+        BrowserPopups.decide("https://ads.example.net/", "https://example.com/", offerCrossSite = true, isBlockedHost = { true }) shouldBe
+            BrowserPopups.Action.Drop
+    }
+
+    @Test
+    fun `a failing block check offers the pop-up instead of failing`() {
+        BrowserPopups.decide("https://ads.example.net/", "https://example.com/", offerCrossSite = true, isBlockedHost = { error("boom") }) shouldBe
+            BrowserPopups.Action.Offer("https://ads.example.net/", "ads.example.net")
+    }
+
+    @Test
+    fun `a pop-up to a non-web address is dropped`() {
+        listOf("file:///C:/Windows/win.ini", "javascript:alert(1)", "about:blank", "", null).forEach { url ->
+            BrowserPopups.decide(url, "https://example.com/", offerCrossSite = true) shouldBe BrowserPopups.Action.Drop
         }
-        loaded shouldBe emptyList()
     }
 
     @Test

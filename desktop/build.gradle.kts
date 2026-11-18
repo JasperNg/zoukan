@@ -309,6 +309,10 @@ val jvmFlags = listOf(
     "--add-opens=java.desktop/sun.awt=ALL-UNNAMED",
     "--add-opens=java.desktop/sun.lwawt=ALL-UNNAMED",
     "--add-opens=java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
+    // HTTP goes through the proxy set in the OS, as the built-in browser's does (the JDK reads
+    // this once, when its default ProxySelector first loads). Not for test JVMs, which must not
+    // depend on the machine's proxy.
+    "-Djava.net.useSystemProxies=true",
 )
 
 application {
