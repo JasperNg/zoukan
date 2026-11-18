@@ -5,7 +5,9 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -17,6 +19,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import zoukan.desktop.Platform
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.Version
+import zoukan.desktop.compat.localized
 import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureReleases
 import zoukan.desktop.e2e.FixtureServer
@@ -24,6 +27,7 @@ import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.testing.fakes.FailingSecretStore
 import zoukan.desktop.testing.fakes.FileFaults
 import zoukan.desktop.testing.fakes.MemorySecretStore
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
 import java.net.URI
@@ -191,6 +195,35 @@ class UpdateFaultsTest {
         // Nothing is written to the store, so a locked store loses no token
         store.attemptedWrites.shouldBeEmpty()
         store.backing.values[UpdateChecker.TOKEN_KEY] shouldBe "a token"
+    }
+
+    @Test
+    fun `a private repository with a locked secret store says the store could not be read, not to add a token`() {
+        publish()
+        // GitHub answers 404 for a private repository read without its token (the list and each release)
+        server.fail(releases.releasesPath, FixtureFailure.Status(404))
+        val store = FailingSecretStore().apply { backing.values[UpdateChecker.TOKEN_KEY] = "a token" }
+        store.failAll(FailingSecretStore.Failure.LOCKED)
+        val checker = checker(store)
+
+        val check = runBlocking { checker.check() }.shouldBeInstanceOf<UpdateChecker.Result.Failed>().message
+        val notes = runBlocking { checker.releaseNotes(Version.parse("2.0.0")!!) }.exceptionOrNull()!!.message!!
+
+        for (message in listOf(check, notes)) {
+            message shouldContain localized(DMR.strings.could_not_use_the_secret_store)
+            message shouldNotContain "add a GitHub token"
+        }
+        store.attemptedWrites.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a private repository with no token stored still says to add one`() {
+        publish()
+        server.fail(releases.releasesPath, FixtureFailure.Status(404))
+        val checker = checker(MemorySecretStore())
+
+        runBlocking { checker.check() }.shouldBeInstanceOf<UpdateChecker.Result.Failed>().message shouldContain "add a GitHub token"
+        runBlocking { checker.releaseNotes(Version.parse("2.0.0")!!) }.exceptionOrNull()!!.message!! shouldContain "add a GitHub token"
     }
 
     private companion object {

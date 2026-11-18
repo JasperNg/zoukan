@@ -13,7 +13,9 @@ import okhttp3.Request
 import zoukan.desktop.Platform
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.Version
+import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -73,9 +75,9 @@ class UpdateChecker(
             .build()
         try {
             client.newCall(request).execute().use { response ->
+                val hint = if (response.code == 404) missingTokenHint("") else null
                 when {
-                    response.code == 404 && token == null ->
-                        Result.Failed("No releases found. If the repository is private, add a GitHub token.")
+                    hint != null -> Result.Failed("No releases found. $hint")
                     response.code == 401 -> Result.Failed("GitHub refused the token (401)")
                     response.code == 403 || response.code == 429 ->
                         Result.Failed("GitHub rate limit or no access (${response.code}); try again later", isRateLimited(response))
@@ -108,9 +110,9 @@ class UpdateChecker(
             .build()
         try {
             client.newCall(request).execute().use { response ->
+                val hint = if (response.code == 404) missingTokenHint(" in Settings > About") else null
                 when {
-                    response.code == 404 && token == null ->
-                        kotlin.Result.failure(IOException("No release notes for $version. If the repository is private, add a GitHub token in Settings > About."))
+                    hint != null -> kotlin.Result.failure(IOException("No release notes for $version. $hint"))
                     response.code == 404 -> kotlin.Result.failure(IOException("No release notes for $version on GitHub"))
                     response.code == 401 -> kotlin.Result.failure(IOException("GitHub refused the token (401)"))
                     !response.isSuccessful -> kotlin.Result.failure(IOException("GitHub answered ${response.code}"))
@@ -124,6 +126,18 @@ class UpdateChecker(
             // portal's page: a failed result, which What's new shows, not an exception it does not catch
             kotlin.Result.failure(IOException("GitHub's answer is not a release", e))
         }
+    }
+
+    /**
+     * Why a 404 may be a private repository read without its token: none is stored (add one,
+     * [where]), or the secret store could not be read, so a stored token was not sent. Null when
+     * a token was read and sent: then the 404 is GitHub's own answer.
+     */
+    private fun missingTokenHint(where: String): String? = try {
+        if (secrets.get(TOKEN_KEY).isNullOrBlank()) "If the repository is private, add a GitHub token$where." else null
+    } catch (e: Exception) {
+        // A locked or unavailable store: telling the user to add a token they have would mislead
+        "${localized(DMR.strings.could_not_use_the_secret_store)}: ${e.message ?: e::class.simpleName}"
     }
 
     /**
