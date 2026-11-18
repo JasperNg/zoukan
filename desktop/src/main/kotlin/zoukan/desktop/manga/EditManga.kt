@@ -138,8 +138,12 @@ class EditManga(
     private fun coverImage(image: File): ByteArray {
         val bytes = image.readBytes()
         if (ImageType.fromBytes(bytes) != null) return bytes
-        val decoded = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }.getOrNull()
-            ?: throw IOException(localized(DMR.strings.not_an_image))
+        // Exception, not Throwable: running out of memory on a huge image is not "not an image"
+        val decoded = try {
+            ImageIO.read(ByteArrayInputStream(bytes))
+        } catch (e: Exception) {
+            null
+        } ?: throw IOException(localized(DMR.strings.not_an_image))
         return ByteArrayOutputStream().also { ImageIO.write(decoded, "png", it) }.toByteArray()
     }
 }
