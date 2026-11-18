@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.network.isDohQueryThread
 import eu.kanade.tachiyomi.network.isLocalOnlyHostName
 import eu.kanade.tachiyomi.network.isSystemProxyHost
 import okhttp3.Dns
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.net.spi.InetAddressResolver
@@ -34,7 +35,8 @@ import java.util.stream.Stream
  * Reverse lookups (address to name) fail while DNS over HTTPS is on, so callers get the address
  * text and the address never goes to the system's DNS.
  *
- * Nothing here throws anything but [UnknownHostException]: a failure of the app's DNS becomes one.
+ * Nothing here throws anything but [UnknownHostException]: a failure of the app's DNS becomes one
+ * (a fatal error, such as running out of memory, goes on up as it is).
  */
 class AppDnsResolverProvider : InetAddressResolverProvider() {
     override fun get(configuration: Configuration): InetAddressResolver {
@@ -103,6 +105,7 @@ internal class AppDnsResolver(
     private fun appDnsOrFail(host: String): Dns? = try {
         appDns()
     } catch (e: Throwable) {
+        e.rethrowIfFatal()
         throw unknownHost(host, e)
     }
 
@@ -113,6 +116,7 @@ internal class AppDnsResolver(
         } catch (e: UnknownHostException) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfFatal()
             throw unknownHost(host, e)
         } finally {
             inLookup.set(false)

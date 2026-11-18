@@ -13,6 +13,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.ZoukanDirs
 import java.io.File
 import java.time.LocalDateTime
@@ -77,6 +78,7 @@ class SafetySnapshot(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
+        e.rethrowIfFatal()
         logcat(LogPriority.ERROR, e) { "The safety backup before ${reason.tag} failed" }
         Result.failure(e)
     }
@@ -93,6 +95,7 @@ class SafetySnapshot(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfFatal()
             // A prompt that cannot be shown keeps the data as it is
             logcat(LogPriority.ERROR, e) { "Could not ask whether to continue without a safety backup" }
             false

@@ -1,5 +1,6 @@
 package zoukan.desktop.backup
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -71,6 +72,11 @@ class SafetySnapshotTest {
         } shouldBe false
         asked!! shouldContain "disk full"
         snapshots.guard(SnapshotReason.CLEAR_DATABASE) { true } shouldBe true
+    }
+
+    @Test
+    fun `running out of memory while writing the snapshot is not a failed write`() = runBlocking<Unit> {
+        shouldThrow<OutOfMemoryError> { snapshot(write = { throw OutOfMemoryError() }).take(SnapshotReason.CLEAR_DATABASE) }
     }
 
     @Test

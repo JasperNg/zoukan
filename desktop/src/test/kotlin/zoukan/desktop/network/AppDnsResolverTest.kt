@@ -90,13 +90,21 @@ class AppDnsResolverTest {
             { Dns { throw UnknownHostException(it) } },
             { Dns { throw IllegalStateException("broken") } },
             { Dns { throw java.io.InterruptedIOException("timeout") } },
-            { Dns { throw StackOverflowError() } },
             { Dns { emptyList() } },
             { throw IllegalStateException("network not set up") },
         )
         for (dns in failures) {
             assertThrows<UnknownHostException> { resolver(builtin, dns).lookupByName("public.example", ipv4AndIpv6) }
         }
+        builtin.names.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a fatal error in the app's DNS goes on up as it is`() {
+        val builtin = FakeBuiltin(builtinAddress)
+        assertThrows<OutOfMemoryError> { resolver(builtin) { Dns { throw OutOfMemoryError() } }.lookupByName("public.example", ipv4AndIpv6) }
+        assertThrows<StackOverflowError> { resolver(builtin) { Dns { throw StackOverflowError() } }.lookupByName("public.example", ipv4AndIpv6) }
+        assertThrows<OutOfMemoryError> { resolver(builtin) { throw OutOfMemoryError() }.lookupByName("public.example", ipv4AndIpv6) }
         builtin.names.shouldBeEmpty()
     }
 

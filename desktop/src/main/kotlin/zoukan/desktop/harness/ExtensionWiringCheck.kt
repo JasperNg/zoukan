@@ -27,6 +27,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.extension.DesktopExtensionInstaller
@@ -204,6 +205,7 @@ class ExtensionWiringCheck(
         val installed = try {
             runBlocking { installer.install(extension) }
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             row.load = "install: ${CompatibilityHarness.describe(e)}"
             return
         }
@@ -320,6 +322,7 @@ class ExtensionWiringCheck(
                     row.networkNotes += "${source.name}: User-Agent replaced by its client (sent ${received["user-agent"]})"
             }
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             // The probe is not the source's site: an interceptor may insist on a login, https or
             // the site's own responses. Only a failure of the app (a missing class or method, a
             // stub) counts
@@ -341,6 +344,7 @@ class ExtensionWiringCheck(
                 source.setupPreferenceScreen(it)
             }
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             row.settings += "${source.name}: the settings screen failed to build: ${CompatibilityHarness.describe(e)}"
             trace(row, "settings", e)
             return
@@ -364,6 +368,7 @@ class ExtensionWiringCheck(
                     row.settings += "${source.name}: $key saved $changed but reads back $readBack"
                 }
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 row.settings += "${source.name}: $key: ${CompatibilityHarness.describe(e)}"
                 trace(row, "settings $key", e)
             } finally {

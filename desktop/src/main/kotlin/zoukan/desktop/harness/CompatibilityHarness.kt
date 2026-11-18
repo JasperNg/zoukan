@@ -10,6 +10,7 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeout
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ui.reader.PageImage
@@ -339,6 +340,7 @@ class CompatibilityHarness(
     private suspend fun optional(row: Row, name: String, block: suspend () -> String): String = try {
         withTimeout(timeout) { block() }
     } catch (e: Throwable) {
+        e.rethrowIfVmFailure()
         trace(row.pkg, name, e)
         "fail: ${describe(e)}"
     }
