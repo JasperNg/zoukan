@@ -249,6 +249,7 @@ class SyncManager(
         }
 
         // ZOUKAN -->
+        val etagBefore = syncPreferences.lastSyncEtag().get()
         restorePending.set(true)
         val remoteBackup = service?.doSync(syncData)
         if (remoteBackup == null) {
@@ -264,7 +265,9 @@ class SyncManager(
         // If-None-Match, and on "not modified" upload this computer's library over the server's,
         // which would delete the entries that never arrived here (a failed or interrupted restore,
         // or the first sync, which only uploads). Without it the next sync merges the server's again
-        val etag = syncPreferences.lastSyncEtag().get()
+        // An ETag the service did not change is not the uploaded library's: the server sent none, or
+        // WebDAV's upload met a conflict
+        val etag = syncPreferences.lastSyncEtag().get().takeIf { it != etagBefore }.orEmpty()
         syncPreferences.lastSyncEtag().delete()
         // ZOUKAN <--
 
@@ -343,7 +346,7 @@ class SyncManager(
         }
         // ZOUKAN <--
         // ZOUKAN -->
-        if (errors.isEmpty()) keepEtag(etag)
+        if (errors.isEmpty()) keepEtag(etag) else syncPreferences.lastSyncEtag().delete()
         // ZOUKAN <--
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
@@ -357,7 +360,7 @@ class SyncManager(
     // ZOUKAN -->
     /** Saves [etag] again once the merged library is all restored here (see doSync). */
     private fun keepEtag(etag: String) {
-        if (etag.isNotEmpty()) syncPreferences.lastSyncEtag().set(etag)
+        if (etag.isNotEmpty()) syncPreferences.lastSyncEtag().set(etag) else syncPreferences.lastSyncEtag().delete()
         restorePending.delete()
     }
     // ZOUKAN <--

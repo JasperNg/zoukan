@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
+import eu.kanade.tachiyomi.data.backup.models.BackupPreference
+import eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.network.NetworkHelper
 import io.kotest.assertions.withClue
@@ -264,6 +266,52 @@ class SyncDatabaseFaultsTest {
         library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
         preferences.lastSyncEtag().get() shouldBe sync.etag
         restorePending.get() shouldBe false
+    }
+
+    @Test
+    fun `another device's sync ETag in the synced settings is never saved here`() = runBlocking<Unit> {
+        // The other device's settings carry its ETag: the one the server will have after this upload
+        // (the server is at v1; this seed makes v2 and the upload v3)
+        sync.seed(
+            BackupCodec.encode(
+                remote.copy(backupPreferences = listOf(BackupPreference("sync_etag", StringPreferenceValue("v3")))),
+            ),
+        )
+        sync.calls.clear()
+        preferences.lastSyncTimestamp().set(1L)
+        // The restore ends with an error, so this computer does not keep the server's ETag
+        driver.failOn(FailingSqlDriver.insertInto("chapters"), nth = 2)
+
+        manager().syncData()
+
+        messages.awaitError { it.text.contains("SQLITE_FULL") }
+        sync.etag shouldBe "v3"
+        preferences.lastSyncEtag().get() shouldBe ""
+        restorePending.get() shouldBe true
+
+        // So the next sync downloads and merges again, and restores the entry
+        driver.heal()
+        sync.calls.clear()
+        manager().syncData()
+        sync.calls.first { it.method == "GET" }.ifNoneMatch shouldBe null
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+    }
+
+    @Test
+    fun `an upload the server confirms without an ETag leaves none saved`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().set(1L)
+        preferences.lastSyncEtag().set("an older one")
+        // The download goes through (a pass-through rule used once); the upload answers 201 with no ETag
+        server.fail("/dav/${sync.davFolder}/backup.proto", FixtureFailure.Slow(0), times = 1)
+        server.fail("/dav/${sync.davFolder}/backup.proto", FixtureFailure.Status(201, ""), times = 1)
+
+        manager().syncData()
+
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get() shouldBe ""
+        preferences.lastSyncEtag().isSet() shouldBe false
     }
 
     @Test

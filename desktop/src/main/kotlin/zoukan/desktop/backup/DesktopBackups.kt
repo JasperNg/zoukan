@@ -189,7 +189,8 @@ class DesktopBackups(
          * [backup] without the preferences a backup file must not set. The app never writes
          * app-state keys into a backup (trusted extensions, the storage folder and other state of
          * this computer), so one that carries them was made by hand; restoring them could trust an
-         * extension nobody approved or move the storage folder to another machine. A restore also
+         * extension nobody approved or move the storage folder to another machine. Nor are the
+         * [NEVER_RESTORED] keys, which Android keeps as settings. A restore also
          * does not switch the app lock off. Source settings go only to `source_<id>` files, the
          * only ones a backup makes, so a backup cannot write into the app's own settings file
          * (and switch the lock off there) by naming it as a source. Sensitive keys
@@ -203,6 +204,7 @@ class DesktopBackups(
         ): Backup {
             fun allowed(preference: BackupPreference): Boolean = when {
                 Preference.isAppState(preference.key) -> false
+                preference.key in NEVER_RESTORED -> false
                 isSensitive(preference.key) -> allowSensitive
                 preference.key == LOCK_KEY -> (preference.value as? BooleanPreferenceValue)?.value == true || !lockIsOn()
                 else -> true
@@ -224,6 +226,14 @@ class DesktopBackups(
                 .distinct()
 
         private const val LOCK_KEY = "use_biometric_lock"
+
+        /**
+         * Settings that are this computer's state although Android keeps them as plain settings, so
+         * they are in backups and in synced settings. The sync ETag is the server version this
+         * computer has restored; another device's would make the next sync upload this computer's
+         * library over the server's (SyncManager.doSync).
+         */
+        private val NEVER_RESTORED = setOf("sync_etag")
 
         /**
          * Settings a restore writes only when the user confirms them: they decide when the app

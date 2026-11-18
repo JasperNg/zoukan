@@ -96,6 +96,16 @@ class RestoreFilterTest {
     }
 
     @Test
+    fun `another device's sync ETag is never restored, even when the user confirms the sensitive keys`() {
+        val etag = BackupPreference("sync_etag", StringPreferenceValue("v2"))
+        filtered(etag, theme) shouldBe listOf(theme)
+        val backup = Backup(backupManga = emptyList(), backupPreferences = listOf(etag, theme))
+        DesktopBackups.withSafePreferences(backup, allowSensitive = true) { false }.backupPreferences shouldBe listOf(theme)
+        // Not a key to confirm: it is never written
+        DesktopBackups.sensitiveKeys(backup) shouldBe emptyList()
+    }
+
+    @Test
     fun `a restore does not switch the app lock off`() {
         filtered(lockOff, lockIsOn = true) shouldBe emptyList()
         filtered(lockOff, lockIsOn = false) shouldBe listOf(lockOff)
