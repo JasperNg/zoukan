@@ -8,6 +8,9 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.storage.ZoukanStorage
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.text.Normalizer
 
 /**
  * Where a chapter's download lives: `downloads/<source>/<manga>/<chapter>[.cbz]`, named as the
@@ -77,16 +80,42 @@ class DownloadPaths(
             ).distinct()
 
     /**
-     * Every folder of [mangaTitle]'s downloads that exists: each of [mangaDirNames] in each folder
-     * of [sourceDirNames], found by listing those folders (on Windows `NUL` is a device).
+     * Every folder of [mangaTitle]'s downloads that exists, each once: each of [mangaDirNames] in
+     * each folder of [sourceDirNames]. A portable name is looked up by the file system's own rules,
+     * so a folder that differs from it only in letter case (on a disk that ignores case) or Unicode
+     * form is found, and is returned as it is spelled on disk; Android's names that are not valid
+     * everywhere only when listed (on Windows `NUL` is a device).
      */
     fun existingMangaDirs(sourceId: Long, mangaTitle: String): List<File> {
         val names = mangaDirNames(mangaTitle)
-        return sourceDirNames(sourceId).distinct().flatMap { source ->
+        val found = mutableListOf<File>()
+        for (source in sourceDirNames(sourceId).distinct()) {
             val dir = File(storage.downloads, source)
-            val onDisk = dir.list()?.toSet() ?: return@flatMap emptyList()
-            names.filter { it in onDisk }.map { File(dir, it) }
+            val onDisk = dir.list()?.toSet() ?: continue
+            for (name in names) {
+                val folder = when {
+                    name in onDisk -> File(dir, name)
+                    FileNames.isPortable(name) && File(dir, name).exists() -> File(dir, spellingOnDisk(dir, name, onDisk))
+                    else -> continue
+                }
+                if (found.none { isSameFile(it, folder) }) found += folder
+            }
         }
+        return found
+    }
+
+    /** The listed name in [dir] that [name] opens, differing only in case or Unicode form; else [name]. */
+    private fun spellingOnDisk(dir: File, name: String, onDisk: Set<String>): String {
+        val key = Normalizer.normalize(name, Normalizer.Form.NFC)
+        return onDisk.firstOrNull {
+            Normalizer.normalize(it, Normalizer.Form.NFC).equals(key, ignoreCase = true) && isSameFile(File(dir, it), File(dir, name))
+        } ?: name
+    }
+
+    private fun isSameFile(a: File, b: File): Boolean = try {
+        Files.isSameFile(a.toPath(), b.toPath())
+    } catch (_: IOException) {
+        false
     }
 
     fun chapterDirName(chapter: Chapter): String =
