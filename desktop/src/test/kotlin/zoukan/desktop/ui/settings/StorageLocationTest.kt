@@ -108,6 +108,50 @@ class StorageLocationTest {
         confirmed shouldBe 1
     }
 
+    @Test
+    fun `iCloud Drive and other synced folders are flagged`() {
+        val home = File("/Users/someone")
+        StorageLocation.cloudSync(File(home, "Library/Mobile Documents/com~apple~CloudDocs/Zoukan"), home) shouldBe StorageLocation.CloudSync.SYNCED
+        StorageLocation.cloudSync(File(home, "Library/Mobile Documents"), home) shouldBe StorageLocation.CloudSync.SYNCED
+        StorageLocation.cloudSync(File(home, "Library/CloudStorage/Dropbox/Zoukan"), home) shouldBe StorageLocation.CloudSync.SYNCED
+        // Case does not matter on macOS, nor a path that is not normalized
+        StorageLocation.cloudSync(File(home, "library/mobile documents/x"), home) shouldBe StorageLocation.CloudSync.SYNCED
+        StorageLocation.cloudSync(File(home, "Downloads/../Library/Mobile Documents/x"), home) shouldBe StorageLocation.CloudSync.SYNCED
+    }
+
+    @Test
+    fun `Desktop and Documents may be synced`() {
+        val home = File("/Users/someone")
+        StorageLocation.cloudSync(File(home, "Documents/Zoukan"), home) shouldBe StorageLocation.CloudSync.MAYBE_SYNCED
+        StorageLocation.cloudSync(File(home, "Desktop"), home) shouldBe StorageLocation.CloudSync.MAYBE_SYNCED
+    }
+
+    @Test
+    fun `other folders are not flagged`() {
+        val home = File("/Users/someone")
+        StorageLocation.cloudSync(File(home, "Library/Application Support/Zoukan"), home) shouldBe null
+        StorageLocation.cloudSync(File(home, "Documents2/Zoukan"), home) shouldBe null
+        StorageLocation.cloudSync(File(home, "Manga"), home) shouldBe null
+        StorageLocation.cloudSync(File("/Volumes/Drive/Documents"), home) shouldBe null
+        StorageLocation.cloudSync(File("/Users/other/Documents"), home) shouldBe null
+    }
+
+    @Test
+    fun `the change dialog warns about a synced folder`() = runDesktopComposeUiTest {
+        setContent {
+            StorageChangeDialog(
+                File(temp, "old"),
+                File(temp, "new"),
+                hasDownloads = false,
+                cloudSync = StorageLocation.CloudSync.MAYBE_SYNCED,
+                onOpenOld = {},
+                onConfirm = {},
+                onDismiss = {},
+            )
+        }
+        onNodeWithText(localized(DMR.strings.storage_folder_may_be_synced)).assertExists()
+    }
+
     private fun hashes(root: File): Map<String, String> = root.walkTopDown().filter { it.isFile }.associate {
         it.relativeTo(root).path to MessageDigest.getInstance("SHA-256").digest(it.readBytes()).joinToString("") { b -> "%02x".format(b) }
     }

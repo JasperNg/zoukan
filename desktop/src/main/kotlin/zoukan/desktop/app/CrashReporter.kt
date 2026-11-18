@@ -39,10 +39,14 @@ import kotlin.system.exitProcess
  *   app goes on.
  * - When the app did not shut down cleanly (killed, out of memory, a JVM crash), the next start
  *   says so and copies any JVM crash file (`hs_err_pid*.log`) into the crash folder.
+ * - While incognito mode is on nothing is logged ([IncognitoLog]), and a report leaves out the log.
+ * - Zoukan's reports older than 30 days, in the crash folder and the reports folder, are deleted at
+ *   start and when a report is written.
  */
 object CrashReporter {
     private const val MAX_REPORTS = 30
     private const val LOG_TAIL_BYTES = 64 * 1024L
+    private const val MAX_REPORT_AGE_DAYS = 30L
 
     @Volatile
     private var dirs: ZoukanDirs? = null
@@ -65,6 +69,7 @@ object CrashReporter {
         dirs.logs.mkdirs()
         dirs.crashes.mkdirs()
         installLogFile(dirs.logs)
+        pruneOldReports(dirs)
         previousRunCrashed = checkPreviousRun(dirs)?.also {
             logcat(LogPriority.WARN) { "The previous run did not shut down cleanly; see $it" }
         }
@@ -99,7 +104,7 @@ object CrashReporter {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"))
         val file = File(dir, "${if (fatal) "crash" else "error"}-$stamp.txt")
         file.writeText(report(thread, e, fatal))
-        prune(dir)
+        runCatching { prune(dir) }
         return file
     }
 
@@ -112,6 +117,11 @@ object CrashReporter {
         appendLine("Stack trace:")
         // Exception messages can carry a sign-in address or a header, like the log
         appendLine(redact(stackTrace(e)))
+        // Incognito mode logs nothing, and its report shows nothing of the log from before it either
+        if (IncognitoLog.isOn) {
+            appendLine("The end of the log is left out because incognito mode is on.")
+            return@buildString
+        }
         val tail = logTail()
         if (tail.isNotBlank()) {
             appendLine("End of the log (${dirs?.logs?.resolve("zoukan.log")}):")
@@ -193,12 +203,49 @@ object CrashReporter {
         }
     }
 
-    /** Keeps the newest reports; background errors are pruned apart, so they never push out a crash. */
-    private fun prune(dir: File) {
-        val (errors, crashes) = dir.listFiles()?.filter { it.isFile }.orEmpty().partition { it.name.startsWith("error-") }
+    /** The crash folder's files Zoukan writes: crash and error reports, unclean-exit notes, JVM crash file copies. */
+    private val CRASH_FOLDER_FILE = Regex(
+        """(crash|error)-\d{8}-\d{6}-\d{3}\.txt|unclean-exit-\d{8}-\d{6}-\d+\.txt|jvm-crash-hs_err_pid\d+\.log""",
+    )
+
+    /** The reports folder's files Zoukan writes: the library update's errors, the extension checks' reports. */
+    private val REPORTS_FOLDER_FILE = Regex("""library-update-errors\.txt|extensions-[A-Za-z0-9._-]+\.(md|txt)""")
+
+    /**
+     * Keeps the newest [MAX_REPORTS] crash reports and as many error reports (pruned apart, so
+     * background errors never push out a crash), and drops any older than [MAX_REPORT_AGE_DAYS].
+     * Only Zoukan's own files are touched.
+     */
+    internal fun prune(dir: File, now: Long = System.currentTimeMillis()) {
+        val (errors, crashes) = ownFiles(dir, CRASH_FOLDER_FILE).partition { it.name.startsWith("error-") }
         listOf(errors, crashes).forEach { files ->
-            files.sortedByDescending { it.lastModified() }.drop(MAX_REPORTS).forEach { it.delete() }
+            files.sortedByDescending { it.lastModified() }.drop(MAX_REPORTS).forEach(::deleteQuietly)
         }
+        pruneByAge(dir, CRASH_FOLDER_FILE, now)
+    }
+
+    /** At start: the crash and reports folders lose Zoukan's files older than [MAX_REPORT_AGE_DAYS]. Never throws. */
+    internal fun pruneOldReports(dirs: ZoukanDirs, now: Long = System.currentTimeMillis()) {
+        runCatching { prune(dirs.crashes, now) }
+        runCatching { pruneByAge(dirs.reports, REPORTS_FOLDER_FILE, now) }
+    }
+
+    private fun pruneByAge(dir: File, pattern: Regex, now: Long) {
+        val cutoff = now - java.util.concurrent.TimeUnit.DAYS.toMillis(MAX_REPORT_AGE_DAYS)
+        ownFiles(dir, pattern).filter { it.lastModified() in 1 until cutoff }.forEach(::deleteQuietly)
+    }
+
+    /** Regular files (not links or folders) directly in [dir] whose names match [pattern]. */
+    private fun ownFiles(dir: File, pattern: Regex): List<File> =
+        runCatching {
+            dir.listFiles().orEmpty().filter { f ->
+                pattern.matches(f.name) &&
+                    java.nio.file.Files.isRegularFile(f.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)
+            }
+        }.getOrDefault(emptyList())
+
+    private fun deleteQuietly(file: File) {
+        runCatching { file.delete() }
     }
 
     /**
@@ -334,6 +381,8 @@ object CrashReporter {
 
     private fun installLogFile(dir: File) {
         val context = LoggerFactory.getILoggerFactory() as? LoggerContext ?: return
+        // Before the appender, so no line of an incognito session reaches the file or the console
+        IncognitoLog.installFilter(context)
         val root = context.getLogger(Logger.ROOT_LOGGER_NAME)
         if (root.getAppender("FILE") != null) return
         val layout = RedactingPatternLayout().apply {

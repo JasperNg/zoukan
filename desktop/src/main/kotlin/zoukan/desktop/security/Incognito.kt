@@ -29,7 +29,7 @@ class Incognito(
     // ZOUKAN <--
 ) {
     /** BasePreferences.incognitoMode() on Android. */
-    fun mode() = preferenceStore.getBoolean(Preference.appStateKey("incognito_mode"), false)
+    fun mode() = mode(preferenceStore)
 
     fun isOn(sourceId: Long?): Boolean {
         if (mode().get()) return true
@@ -50,5 +50,10 @@ class Incognito(
     fun setExtension(pkg: String, incognito: Boolean) {
         val pref = sourcePreferences.incognitoExtensions()
         pref.set(if (incognito) pref.get() + pkg else pref.get() - pkg)
+    }
+
+    companion object {
+        /** BasePreferences.incognitoMode() on Android, without the extension manager [Incognito] needs. */
+        fun mode(preferenceStore: PreferenceStore) = preferenceStore.getBoolean(Preference.appStateKey("incognito_mode"), false)
     }
 }

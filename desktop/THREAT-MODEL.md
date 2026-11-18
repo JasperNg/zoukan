@@ -264,7 +264,8 @@ cache and the chapter cache, and the HTTP cache is kept in memory only. What sti
 unencrypted is deliberately small. The accepted exceptions are automatic and safety backups
 (residual risk 4), logs and crash reports (5), the built-in browser's profile (6) and a page set
 as a cover, for a moment (7). On macOS the logs, crash reports and the disposable caches are kept
-out of Spotlight and Time Machine (5).
+out of Spotlight and Time Machine (5), and by default so are the storage folder's downloads,
+local source and automatic backups (two settings in Settings > Data and storage).
 
 Verified and trusted:
 
@@ -304,7 +305,12 @@ Residual risk:
    way back when the OS secret store loses the database key. Anyone who can read the storage
    folder (a cloud drive, a NAS, another user with access) can read the library and reading
    history that the database encryption protects. Users who keep storage on a shared folder can
-   switch automatic backups off. Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
+   switch automatic backups off. Backups Zoukan writes from now on (automatic, manual and safety
+   backups) are created readable by their owner only (`0600`) where the file system has POSIX
+   permissions; existing files, including the Android app's, keep their permissions. On macOS,
+   Settings > Data and storage warns (without blocking) when the storage folder is in iCloud Drive
+   or a `~/Library/CloudStorage` folder, or in Desktop or Documents, which iCloud may sync.
+   Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
    **Safety backups** (written before a restore, a data sync that changes the library, Clear
    database, a migration and Clear manga's chapter removal) are the same unencrypted format with
    the same default choices (no private settings), but go to `backups/safety` inside the app's
@@ -319,7 +325,13 @@ Residual risk:
    in a URL's path are not recognised. A failed page load in the built-in browser logs only the
    host. Once a JVM crash file (`hs_err_pid<n>.log`) in the temp or working folder has been copied,
    the original, which holds environment variable values, is deleted; if the copy fails it is
-   kept. Titles of what was read, URLs and file paths can appear in the log, also in incognito.
+   kept. Titles of what was read, URLs and file paths can appear in the log and in crash reports.
+   While app-wide incognito mode is on, nothing is logged at all (not to the log file and not to
+   the console), and a crash or error report written then keeps its redacted stack trace but
+   leaves out the end of the log. Lines logged at start before the preferences are open (the
+   version, platform and data folder) are still written. Per-extension incognito does not stop
+   logging. Chromium's own log is outside this rule. Crash and error reports, and Zoukan's
+   reports in the reports folder, are deleted after 30 days. Code: `desktop/.../app/IncognitoLog.kt`.
    The crash dialog says so. Anyone who can read the data folder can read them. On POSIX systems
    the data folder is made `0700` at every start when it is Zoukan's own per-platform folder, or
    when Zoukan created it on that start; a folder chosen with the data folder override
@@ -333,6 +345,24 @@ Residual risk:
    created at start so the first downloaded installer is already excluded. A profile with
    the old names has them renamed at start; if a rename fails, the old folder is used for that
    run. Code: `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
+   On macOS the storage folder's `downloads/`, `local/` and `autobackup/` (never the chosen folder
+   itself) are, by default, added to Spotlight's Search Privacy list and carry Time Machine's
+   exclusion, with a setting for each in Settings > Data and storage. Turning a setting off
+   removes the mark, and a storage folder that is changed loses the marks on its folders if it can
+   still be reached. The folders keep the Android app's names: a `.metadata_never_index` file, a
+   hidden flag or a `.noindex` child do not stop current macOS from indexing a folder, so
+   Spotlight's list is changed through the call System Settings uses (`_MDSetExclusion`, not
+   public API). That call is made only in a short-lived helper process
+   (`SpotlightExclusionHelper`), started with Zoukan's own bundled Java runtime (`bin/java`), a
+   32 MB heap, headless, a class path of only Zoukan's, JNA's and Kotlin's jars, and Java option
+   and agent variables removed from its environment. It touches no data folder, log, preference,
+   lock or secret store, and is stopped after 15 seconds. A crash, a non-zero exit, a timeout or
+   output that does not parse is logged as a warning and never reaches Zoukan's process. The
+   Time Machine attribute is set in Zoukan's process (public `setxattr`/`removexattr`). Search
+   Privacy entries are by path and stay after Zoukan is deleted; turning a setting off also
+   removes an exclusion the user had added to those folders by hand. Code:
+   `desktop/.../storage/StorageFolderPrivacy.kt`, `SpotlightExclusion.kt`,
+   `SpotlightExclusionHelper.kt`, `SpotlightNative.kt`.
 6. **The built-in browser's profile is not encrypted.** `<cache>/cache/browser` is shared by the
    browser windows, the challenge windows and extensions' WebViews, and sits outside `FileCipher`.
    After the clean-up at start and at quit (Web and embedded Chromium) it still holds what sites
@@ -368,7 +398,7 @@ Verified and trusted:
 
 | Control | Where |
 |---|---|
-| Every external process is launched as an argv array through `ProcessBuilder` — no shell string is ever built, so no manga title, folder name or URL can inject a command | `InstallerSignature.kt` (PowerShell, with file paths passed through the environment, not the command line), `Updates.kt` (`msiexec`, `open`), `Archives.kt` (`tar`), `PowerStatus.kt` (`pmset`), `ReaderEffects.kt` (`caffeinate`), `ReducedMotion.kt` |
+| Every external process is launched as an argv array through `ProcessBuilder` — no shell string is ever built, so no manga title, folder name or URL can inject a command | `InstallerSignature.kt` (PowerShell, with file paths passed through the environment, not the command line), `Updates.kt` (`msiexec`, `open`), `Archives.kt` (`tar`), `PowerStatus.kt` (`pmset`), `ReaderEffects.kt` (`caffeinate`), `ReducedMotion.kt`, `SpotlightExclusion.kt` (Zoukan's own `bin/java` running `SpotlightExclusionHelper`, folder paths as separate arguments) |
 | URL opening goes through `java.awt.Desktop.browse`, never a shell | `ExternalLinks.browse` |
 
 No shell out means the classic injection class — a chapter titled `foo"; rm -rf ~; "` — has no

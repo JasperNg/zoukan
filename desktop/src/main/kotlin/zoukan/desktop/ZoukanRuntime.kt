@@ -10,6 +10,7 @@ import exh.log.EHLogLevel
 import logcat.LogPriority
 import logcat.LogcatLogger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -25,6 +26,8 @@ import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManagerModule
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
+import zoukan.desktop.app.IncognitoLog
+import zoukan.desktop.app.ServiceScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
@@ -33,6 +36,7 @@ import zoukan.desktop.network.AppDnsResolverProvider
 import zoukan.desktop.network.PersistentCookieStore
 import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.security.Incognito
 import java.net.CookieHandler
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -167,6 +171,8 @@ object ZoukanRuntime {
         // The JDK's own lookups (URL.openConnection, java.net.http, InetAddress) go to the app's DNS
         // too (AppDnsResolverProvider); set once the network module is in place
         AppDnsResolverProvider.setDnsProvider { Injekt.get<NetworkHelper>().client.dns }
+        // Incognito mode logs nothing from here on (the lines above carry no reading activity)
+        IncognitoLog.follow(ServiceScope, Incognito.mode(Injekt.get<PreferenceStore>()))
 
         JcefRuntime.install(dirs)
         useChromiumUserAgent()

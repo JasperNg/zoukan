@@ -43,6 +43,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.FileRequest
 import zoukan.desktop.app.SystemEffects
@@ -71,6 +72,7 @@ fun LazyListScope.dataSettings() {
     settingsGroup(localized(MR.strings.label_data_storage))
     item(key = "data-storage-location") { StorageLocationPreference() }
     item(key = "data-storage-unavailable") { StorageUnavailableBanner() }
+    item(key = "data-storage-cloud-sync") { StorageCloudSyncWarning() }
     item(key = "data-storage-info") { InfoText(localized(MR.strings.pref_storage_location_info)) }
     item(key = "data-open-downloads") {
         val storage = remember { Injekt.get<ZoukanStorage>() }
@@ -83,6 +85,24 @@ fun LazyListScope.dataSettings() {
             localized(DMR.strings.put_a_folder_per_entry_here),
             onClick = { openFolder(storage.local) },
         )
+    }
+    if (Platform.current == Platform.MACOS) {
+        item(key = "data-storage-spotlight") {
+            val storage = remember { Injekt.get<ZoukanStorage>() }
+            SwitchPreference(
+                localized(DMR.strings.hide_storage_folder_from_spotlight),
+                storage.hideFromSpotlight,
+                localized(DMR.strings.hide_storage_folder_from_spotlight_summary),
+            )
+        }
+        item(key = "data-storage-time-machine") {
+            val storage = remember { Injekt.get<ZoukanStorage>() }
+            SwitchPreference(
+                localized(DMR.strings.leave_storage_folder_out_of_time_machine),
+                storage.excludeFromTimeMachine,
+                localized(DMR.strings.leave_storage_folder_out_of_time_machine_summary),
+            )
+        }
     }
 
     settingsGroup(localized(MR.strings.label_backup))
@@ -199,10 +219,12 @@ internal fun StorageLocationPreference() {
         }
     }
     pending?.let { (path, verdict) ->
+        val newRoot = if (path.isBlank()) Injekt.get<ZoukanDirs>().root else File(path)
         StorageChangeDialog(
             oldRoot = storage.root,
-            newRoot = if (path.isBlank()) Injekt.get<ZoukanDirs>().root else File(path),
+            newRoot = newRoot,
             hasDownloads = verdict.hasDownloads,
+            cloudSync = remember(newRoot) { cloudSyncOf(newRoot) },
             onOpenOld = { openFolder(storage.root) },
             onConfirm = { StorageLocation.apply(storage, path) { Injekt.get<DownloadManager>().invalidateCache() } },
             onDismiss = { pending = null },
@@ -220,6 +242,7 @@ internal fun StorageChangeDialog(
     oldRoot: File,
     newRoot: File,
     hasDownloads: Boolean,
+    cloudSync: StorageLocation.CloudSync? = null,
     onOpenOld: () -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -232,6 +255,7 @@ internal fun StorageChangeDialog(
                 Text(newRoot.path, style = MaterialTheme.typography.bodySmall)
                 Text(localized(DMR.strings.storage_change_warning, oldRoot.path))
                 if (hasDownloads) Text(localized(DMR.strings.storage_folder_has_downloads))
+                cloudSync?.let { Text(cloudSyncMessage(it), color = MaterialTheme.colorScheme.error) }
                 TextButton(onClick = onOpenOld) { Text(localized(DMR.strings.open_the_old_folder)) }
             }
         },
@@ -311,6 +335,32 @@ private fun StorageUnavailableBanner() {
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
         )
     }
+}
+
+/** On macOS, how the storage folder at [root] may be synced to the cloud; null elsewhere or when it is not. */
+private fun cloudSyncOf(root: File): StorageLocation.CloudSync? =
+    if (Platform.current == Platform.MACOS) StorageLocation.cloudSync(root, File(System.getProperty("user.home"))) else null
+
+private fun cloudSyncMessage(sync: StorageLocation.CloudSync): String = when (sync) {
+    StorageLocation.CloudSync.SYNCED -> localized(DMR.strings.storage_folder_is_synced)
+    StorageLocation.CloudSync.MAYBE_SYNCED -> localized(DMR.strings.storage_folder_may_be_synced)
+}
+
+/**
+ * Shown on macOS while the storage folder is in iCloud Drive or another synced folder, or in
+ * Desktop or Documents, which iCloud may sync. A warning only: the folder stays in use.
+ */
+@Composable
+private fun StorageCloudSyncWarning() {
+    val storage = remember { Injekt.get<ZoukanStorage>() }
+    val folder by storage.folderPreference.collectAsState()
+    val sync = remember(folder) { cloudSyncOf(storage.root) } ?: return
+    Text(
+        cloudSyncMessage(sync),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
+    )
 }
 
 /** Android's StorageInfo: the storage location's disk, used and free. */

@@ -135,6 +135,36 @@ internal object BackupExclusion {
         }
     }
 
+    /**
+     * Puts [dir] back into Time Machine backups: removes the exclusion attribute, whatever value it
+     * holds. Returns whether [dir] is free of it now (also when it never had it); false on other
+     * systems. Nothing else about [dir] or its files changes. A failure is passed to [note] and
+     * never thrown.
+     */
+    fun include(dir: File, note: (String) -> Unit, enabled: Boolean = Platform.current == Platform.MACOS): Boolean {
+        if (!enabled) return false
+        return try {
+            LibC.INSTANCE.removexattr(dir.absolutePath, ATTRIBUTE, 0)
+            true
+        } catch (e: LastErrorException) {
+            if (e.errorCode == ENOATTR) {
+                true
+            } else {
+                note("Could not put ${dir.path} back into Time Machine: $e")
+                false
+            }
+        } catch (e: Exception) {
+            note("Could not put ${dir.path} back into Time Machine: $e")
+            false
+        } catch (e: LinkageError) {
+            note("Could not put ${dir.path} back into Time Machine: $e")
+            false
+        }
+    }
+
+    /** macOS's errno when a file has no such extended attribute. */
+    private const val ENOATTR = 93
+
     /** Whether [dir] carries exactly the exclusion; false on other systems or when it cannot be read. */
     fun isExcluded(dir: File, enabled: Boolean = Platform.current == Platform.MACOS): Boolean {
         if (!enabled) return false
@@ -157,6 +187,9 @@ internal object BackupExclusion {
 
         @Throws(LastErrorException::class)
         fun setxattr(path: String, name: String, value: ByteArray, size: NativeLong, position: Int, options: Int): Int
+
+        @Throws(LastErrorException::class)
+        fun removexattr(path: String, name: String, options: Int): Int
 
         companion object {
             val INSTANCE: LibC by lazy {

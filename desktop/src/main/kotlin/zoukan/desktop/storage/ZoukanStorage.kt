@@ -22,6 +22,18 @@ class ZoukanStorage(
     /** The chosen folder as a path; blank means the data folder. */
     val folderPreference: Preference<String> = store.getString(Preference.appStateKey("storage_dir"), "")
 
+    /**
+     * Desktop only, macOS: keeps the storage folder's [zoukanFolders] out of Spotlight
+     * (StorageFolderPrivacy). On by default. An app-state key: it is about this computer's folder.
+     */
+    val hideFromSpotlight: Preference<Boolean> = store.getBoolean(Preference.appStateKey("zoukan_storage_hide_from_spotlight"), true)
+
+    /**
+     * Desktop only, macOS: keeps the storage folder's [zoukanFolders] out of Time Machine
+     * (StorageFolderPrivacy). On by default. An app-state key: it is about this computer's folder.
+     */
+    val excludeFromTimeMachine: Preference<Boolean> = store.getBoolean(Preference.appStateKey("zoukan_storage_exclude_from_time_machine"), true)
+
     val root: File
         get() = folderPreference.get()
             .takeIf { it.isNotBlank() && !it.contains("://") }
@@ -60,6 +72,13 @@ class ZoukanStorage(
         const val DOWNLOADS = "downloads"
         const val LOCAL = "local"
         const val AUTOMATIC_BACKUPS = "autobackup"
+
+        /**
+         * The folders Zoukan makes in a storage folder at [root]: downloads, the local source and
+         * automatic backups. The storage folder itself may hold other things, so only these get
+         * folder-level settings (StorageFolderPrivacy).
+         */
+        fun zoukanFolders(root: File): List<File> = listOf(DOWNLOADS, LOCAL, AUTOMATIC_BACKUPS).map { File(root, it) }
     }
 }
 

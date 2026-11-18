@@ -160,6 +160,10 @@ fun runZoukanApp() {
         Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>(),
         Injekt.get<zoukan.desktop.security.Incognito>().mode(),
     )
+    // The storage folder's downloads, local source and automatic backups stay out of Spotlight
+    // and Time Machine on macOS while their settings are on. Here, not in startUi: the tests'
+    // temporary folders must not end up in Spotlight's Search Privacy list
+    zoukan.desktop.storage.StorageFolderPrivacy(Injekt.get(), note = { message -> logcat.logcat("StorageFolderPrivacy", LogPriority.WARN) { message } }).start(ServiceScope)
 
     // Data and storage > "Clear chapter cache on app launch", as Android's MainActivity on launch
     if (Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>().autoClearChapterCache().get()) {
@@ -250,11 +254,9 @@ fun runZoukanApp() {
                         Notifications.Kind.ERROR -> Notification.Type.Error
                     }
                     // ZOUKAN -->
-                    // "Hide notification content", as on Android
-                    val hide = Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>().hideNotificationContent().get()
-                    trayState.sendNotification(
-                        if (hide) Notification("Zoukan", localized(DMR.strings.open_zoukan_to_see_the_details), type) else Notification(message.title, message.text, type),
-                    )
+                    // "Hide notification content", as on Android, and incognito mode
+                    val shown = Notifications.shown(message, Notifications.hidesContentNow(), localized(DMR.strings.open_zoukan_to_see_the_details))
+                    trayState.sendNotification(Notification(shown.title, shown.text, type))
                     // ZOUKAN <--
                 }
             }

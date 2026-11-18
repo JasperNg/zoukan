@@ -14,10 +14,12 @@ import eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
+import logcat.LogPriority
 import mihon.domain.extension.interactor.GetExtensionStores
 import okio.sink
 import okio.source
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
@@ -27,6 +29,7 @@ import zoukan.extension.DesktopSourceManager
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermissions
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Date
@@ -67,6 +70,7 @@ class DesktopBackups(
         file.absoluteFile.parentFile?.mkdirs()
         val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
         try {
+            createOwnerOnly(temp)
             temp.sink().use { BackupCodec.write(backup, it) }
             // Make sure it reads back before it replaces anything
             temp.source().use { BackupCodec.decode(it) }
@@ -149,6 +153,24 @@ class DesktopBackups(
             .map { it.name.removeSuffix(".xml") }
 
     companion object {
+        /**
+         * Creates [temp] empty and readable by its owner only (0600) where the file system has
+         * POSIX permissions, so the backup moved into place from it is too: it holds the library,
+         * the history and settings. A [temp] left by an earlier failed write is replaced. Best-effort:
+         * when this fails, the backup is written with the usual permissions. Only files Zoukan
+         * writes now get it; existing backups (the Android app's among them) are never changed.
+         */
+        internal fun createOwnerOnly(temp: File) {
+            try {
+                val path = temp.toPath()
+                if ("posix" !in path.fileSystem.supportedFileAttributeViews()) return
+                Files.deleteIfExists(path)
+                Files.createFile(path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN) { "Could not make ${temp.name} private to the user: $e" }
+            }
+        }
+
         /** With [replaceExisting] false an existing [file] is kept and `FileAlreadyExistsException` is thrown. */
         internal fun moveIntoPlace(temp: File, file: File, replaceExisting: Boolean) {
             if (replaceExisting) {
