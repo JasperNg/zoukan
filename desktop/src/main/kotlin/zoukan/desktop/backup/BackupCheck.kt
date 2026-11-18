@@ -51,7 +51,7 @@ object BackupCheck {
                 sizes = BackupComparison.sizes(before),
             )
         } finally {
-            if (keepProfile) println("Profile kept at $profile") else profile.deleteRecursively()
+            if (keepProfile) println("Profile kept at $profile") else zoukan.desktop.download.SafeDelete.deleteTreeNoFollow(profile.toPath())
         }
     }
 

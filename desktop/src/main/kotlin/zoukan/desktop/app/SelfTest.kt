@@ -236,6 +236,8 @@ object SelfTest {
                 it.stop()
             }
         }
-        return profile.deleteRecursively()
+        // Never through a link (Chromium's profile has some): only the profile's own files go
+        zoukan.desktop.download.SafeDelete.deleteTreeNoFollow(profile.toPath())
+        return !Files.exists(profile.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)
     }
 }

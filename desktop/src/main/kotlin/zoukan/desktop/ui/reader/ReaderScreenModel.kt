@@ -782,7 +782,7 @@ class ReaderScreenModel(
             file.writeBytes(bytes)
             edit.setCover(manga, file)
         } finally {
-            dir.deleteRecursively()
+            zoukan.desktop.download.SafeDelete.deleteTreeNoFollow(dir.toPath())
         }
         Toasts.show(localized(MR.strings.cover_updated))
     }
