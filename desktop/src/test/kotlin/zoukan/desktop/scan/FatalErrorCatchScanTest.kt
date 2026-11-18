@@ -170,7 +170,7 @@ class FatalErrorCatchScanTest {
             Allowed("ui/manga/PagePreviews.kt", "} catch (e: Throwable) {", "$SOURCE page previews", count = 2),
             Allowed("ui/manga/EntryActions.kt", "} catch (e: Throwable) {", "runs extension code: the source's client and headers, which fetch a cover to copy or save", function = "run"),
             Allowed("ui/manga/RelatedTitles.kt", "} catch (e: Throwable) {", "$SOURCE related titles", function = "RelatedTitlesSection"),
-            Allowed("ui/recs/RecommendationSearch.kt", "} catch (e: Throwable) {", "$SOURCE search for recommendations"),
+            Allowed("ui/recs/RecommendationSearch.kt", "} catch (e: Throwable) {", "$SOURCE search for recommendations, each source's and the search's as a whole", count = 2),
             Allowed("download/DownloadManager.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images for a download", function = "download"),
             Allowed("download/ChapterDownloader.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images, retried", function = "retry"),
             Allowed("ui/settings/EhSettings.kt", "} catch (e: Throwable) {", "$SOURCE gallery update (the E-Hentai source)"),

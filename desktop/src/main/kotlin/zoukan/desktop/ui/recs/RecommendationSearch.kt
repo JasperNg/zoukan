@@ -80,11 +80,15 @@ internal fun searchStatusAfter(current: SearchStatus, new: SearchStatus, searchA
  * library entry and ranks each service's results by how many of the entries recommend them. The
  * Android wake and Wi-Fi locks have no desktop counterpart.
  */
-class RecommendationSearchHelper {
-    private val getLibraryManga: GetLibraryManga by injectLazy()
+class RecommendationSearchHelper(
+    // ZOUKAN: given by tests, from Injekt otherwise
+    preferences: Lazy<SourcePreferences> = injectLazy(),
+    getLibraryManga: Lazy<GetLibraryManga> = injectLazy(),
+) {
+    private val getLibraryManga: GetLibraryManga by getLibraryManga
     private val getTracks: GetTracks by injectLazy()
     private val networkToLocalManga: NetworkToLocalManga by injectLazy()
-    private val preferences: SourcePreferences by injectLazy()
+    private val preferences: SourcePreferences by preferences
 
     private val smartSearchEngine by lazy { SmartLibrarySearchEngine() }
 
@@ -222,9 +226,11 @@ class RecommendationSearchHelper {
             logcat(LogPriority.ERROR, e) { "Error during recommendation search" }
             publish(SearchStatus.Error(e.message.orEmpty()))
         } catch (e: Throwable) {
-            // A fatal error from a source's search goes on, after the search stops spinning
+            // Throwable: an outdated extension's LinkageError is the search's error, as on every
+            // other path into a source. The VM's own failures go on, after the search stops spinning
             publish(SearchStatus.Error(e.message.orEmpty()))
-            throw e
+            e.rethrowIfVmFailure()
+            logcat(LogPriority.ERROR, e) { "Error during recommendation search" }
         }
     }
 
