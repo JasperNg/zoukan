@@ -18,6 +18,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import java.time.Instant
 import javax.imageio.ImageIO
 
@@ -110,7 +111,11 @@ class EditManga(
             // The new cover is in place before the old one goes, so a failed write keeps the cover.
             // An encrypted cover (cover.cbi) stays encrypted; without the password it is refused
             val cover = local.writeCover(dir, bytes, encrypted = old != null && LocalSource.isCoverArchive(old))
-            if (old != null && old.name != cover.name && !old.delete()) {
+            // The old cover can be the new one under another letter case (Cover.JPG, cover.jpg) on a
+            // file system that ignores case: then the move replaced it, and deleting it would delete
+            // the new cover. When the two cannot be compared, the old one is kept.
+            val replaced = old != null && runCatching { Files.isSameFile(old.toPath(), cover.toPath()) }.getOrDefault(true)
+            if (old != null && !replaced && !old.delete()) {
                 logcat(LogPriority.WARN) { "Could not delete the old cover ${old.name} of a local entry" }
             }
             updateManga.await(MangaUpdate(id = manga.id, thumbnailUrl = cover.toURI().toString()))

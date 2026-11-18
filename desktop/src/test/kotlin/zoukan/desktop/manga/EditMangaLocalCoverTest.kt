@@ -160,4 +160,34 @@ class EditMangaLocalCoverTest {
         archive.readBytes() shouldBe before
         names() shouldContainExactly listOf("cover.cbi")
     }
+
+    @Test
+    fun `a cover whose name differs only in letter case is replaced and the new cover is kept`() = runBlocking<Unit> {
+        // Android finds Cover.JPG as the cover; the new one is written as cover.jpg. On a file system
+        // that ignores case both names are one file, which must not be deleted after the move
+        File(entry, "Cover.JPG").writeBytes(image("jpg", 2))
+        val jpg = image("jpg", 8)
+        edit().setCover(manga, picked("new.jpg", jpg))
+
+        val left = entry.listFiles()!!.toList()
+        left.size shouldBe 1
+        left.single().name.equals("cover.jpg", ignoreCase = true) shouldBe true
+        left.single().readBytes() shouldBe jpg
+        LocalSource.findCover(entry)!!.readBytes() shouldBe jpg
+    }
+
+    @Test
+    fun `an encrypted cover whose name differs only in letter case is replaced and kept`() = runBlocking<Unit> {
+        val archive = File(entry, "Cover.CBI")
+        CbzWriter(archive, CbzEncryption(password.toCharArray(), SecurityPreferences.EncryptionType.AES_256)).use {
+            it.write("cover.jpg", image("jpg"))
+        }
+        val png = image("png", 8)
+        edit().setCover(manga, picked("new.png", png))
+
+        val left = entry.listFiles()!!.toList()
+        left.size shouldBe 1
+        left.single().name.equals("cover.cbi", ignoreCase = true) shouldBe true
+        CbzReader(left.single()) { password.toCharArray() }.use { reader -> reader.read(reader.entries.single()) shouldBe png }
+    }
 }
