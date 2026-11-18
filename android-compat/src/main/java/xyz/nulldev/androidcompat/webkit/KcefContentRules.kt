@@ -7,6 +7,7 @@ import org.cef.callback.CefBeforeDownloadCallback
 import org.cef.callback.CefDownloadItem
 import org.cef.callback.CefDownloadItemCallback
 import org.cef.handler.CefDownloadHandlerAdapter
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 
 private val logger = KotlinLogging.logger {}
 
@@ -34,7 +35,7 @@ object KcefRequestFilter {
         return try {
             current.shouldBlock(requestUrl, pageUrl)
         } catch (e: Throwable) {
-            if (e is VirtualMachineError) throw e
+            e.rethrowIfFatal()
             logger.warn(e) { "The request filter failed; the request goes ahead" }
             false
         }
