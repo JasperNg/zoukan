@@ -39,11 +39,12 @@ import zoukan.desktop.testing.fakes.FailingSecretStore
 import zoukan.desktop.testing.fakes.FileFaults
 import zoukan.desktop.testing.fakes.MemorySecretStore
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * The download queue under injected faults: the image server failing (an error status, a connection
- * cut mid-body, no answer, an HTML page instead of an image), a folder that cannot be written, and a
- * locked secret store. For each, three things:
+ * cut mid-body, no answer, an HTML page instead of an image, a stall the source's read timeout ends),
+ * a folder that cannot be written, and a locked secret store. For each, three things:
  *
  * 1. the user sees it: the chapter is in the error state with a message, and an error notification
  *    names it;
@@ -82,7 +83,8 @@ class DownloadFaultsTest {
         override val lang = "en"
         override val supportsLatest = false
         override val baseUrl get() = server.baseUrl
-        override val client = OkHttpClient()
+        // A short read timeout, so a stalled image fails within the test (the app's client waits 30 s)
+        override val client = OkHttpClient.Builder().readTimeout(1, TimeUnit.SECONDS).build()
         override fun headersBuilder() = Headers.Builder()
 
         override suspend fun getPageList(chapter: SChapter): List<Page> =
@@ -179,6 +181,21 @@ class DownloadFaultsTest {
         File(mangaDir, chapter.name + DownloadPaths.TMP_SUFFIX).exists() shouldBe false
     }
 
+    @Test
+    fun `a download writes one archive with every page in order and ComicInfo, and nothing else`() = runBlocking<Unit> {
+        // Pins what the manager's downloader writes
+        val manager = manager()
+        val chapter = chapter(2)
+
+        manager.enqueue(manga, listOf(chapter))
+        withTimeout(30_000) { manager.awaitIdle() }
+
+        mangaDir.list()!!.toList() shouldBe listOf("${chapter.name}.cbz")
+        ZipFile(File(mangaDir, "${chapter.name}.cbz")).use { zip ->
+            zip.fileHeaders.map { it.fileName } shouldBe pages.indices.map { "%03d.png".format(it + 1) } + ComicInfoXml.FILE
+        }
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("serverFaults")
     fun `an image server fault fails the chapter with an error, keeps nothing half written, and a retry works`(
@@ -264,6 +281,7 @@ class DownloadFaultsTest {
             arrayOf("connection cut mid-body", FixtureFailure.Truncate(keepBytes = 64)),
             arrayOf("connection closed without an answer", FixtureFailure.Drop),
             arrayOf("an HTML page with status 200", FixtureFailure.Answer(200, "text/html", "<html><body>Rate limited</body></html>".toByteArray())),
+            arrayOf("a stall mid-body (the read timeout)", FixtureFailure.Stall(afterBytes = 64)),
         )
     }
 }
