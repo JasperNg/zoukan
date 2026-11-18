@@ -36,6 +36,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
@@ -1086,6 +1087,9 @@ class DownloadManager(
             }
             download.error = errorText(e)
             download.state.value = Download.State.ERROR
+            // After the state, so a fatal error leaves no download stuck at downloading; a source's
+            // LinkageError (an outdated extension) is a failed download like any other
+            e.rethrowIfVmFailure()
             Notifications.post(localized(DMR.strings.download_failed), "${manga.title}: ${chapter.name}\n${download.error}", Notifications.Kind.ERROR)
             false
         }
