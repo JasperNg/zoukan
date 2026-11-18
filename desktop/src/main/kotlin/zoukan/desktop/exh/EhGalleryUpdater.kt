@@ -23,6 +23,7 @@ import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.InsertFlatMetadata
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.PowerStatus
@@ -192,6 +193,7 @@ class EhGalleryUpdater(
             val result = updateMangaFromRemote(source = source, manga = manga, fetchDetails = true, fetchChapters = true).getOrThrow()
             return result.newChapters to getChaptersByMangaId.await(manga.id)
         } catch (t: Throwable) {
+            t.rethrowIfVmFailure()
             if (t is EHentai.GalleryNotFoundException) {
                 val meta = getFlatMetadataById.await(manga.id)?.raise<EHentaiSearchMetadata>()
                 if (meta != null) {

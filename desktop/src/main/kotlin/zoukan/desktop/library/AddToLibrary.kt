@@ -18,6 +18,7 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.domain.RefreshManga
@@ -83,6 +84,7 @@ class AddToLibrary(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfVmFailure()
                     logcat(LogPriority.ERROR, e) { "Could not fetch ${manga.title} after adding it" }
                 }
             }

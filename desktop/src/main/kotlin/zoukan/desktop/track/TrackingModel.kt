@@ -32,6 +32,7 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.Toasts
 
 /** One manga's tracking: the logged-in trackers, its tracks, search and binding, and edits. */
@@ -120,6 +121,7 @@ class TrackingModel(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
+        e.rethrowIfVmFailure()
         logcat(LogPriority.ERROR, e) { "Failed to get tracker ID from metadata" }
         null
     }
@@ -132,6 +134,7 @@ class TrackingModel(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
+        e.rethrowIfVmFailure()
         logcat(LogPriority.ERROR, e) { "Failed to register tracking by id" }
         false
     }
@@ -156,6 +159,7 @@ class TrackingModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             Result.failure(e)
         }
     }

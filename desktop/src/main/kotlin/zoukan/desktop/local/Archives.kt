@@ -7,6 +7,7 @@ import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.download.ChapterDownloader
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.FileNames
@@ -548,6 +549,7 @@ object Archives {
                 Kind.TAR -> TarArchiveInputStream(file.inputStream().buffered()).use { tar -> readTar(tar, sink, budget) }
             }
         } catch (e: Throwable) {
+            e.rethrowIfFatal()
             // Too large for any reader: the system's tar would only take as long to say so
             (budget.failure ?: e as? TooLargeException)?.let { tooLarge ->
                 sink.reset()

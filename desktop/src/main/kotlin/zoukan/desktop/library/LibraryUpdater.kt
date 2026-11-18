@@ -44,6 +44,8 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.i18n.MR
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.RestoreGate
@@ -172,6 +174,7 @@ class LibraryUpdater(
                     // Cancelled by the user or at quit: not a failure
                     logcat { "The library update was cancelled" }
                 } catch (e: Throwable) {
+                    e.rethrowIfVmFailure()
                     logcat(LogPriority.ERROR, e) { "The library update failed" }
                     Notifications.post(localized(DMR.strings.library_update_failed), e.message ?: e::class.simpleName.orEmpty(), Notifications.Kind.ERROR)
                 } finally {
@@ -275,11 +278,13 @@ class LibraryUpdater(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfFatal()
                     logcat(LogPriority.WARN, e) { "Clearing the update error of ${manga.title} failed" }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 val message = errorMessage(e)
                 logcat(LogPriority.WARN, e) { "Updating ${manga.title} failed" }
                 synchronized(lock) { failures += Failure(manga, message) }
@@ -288,6 +293,7 @@ class LibraryUpdater(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfFatal()
                     logcat(LogPriority.WARN, e) { "Saving the update error of ${manga.title} failed" }
                 }
             } finally {

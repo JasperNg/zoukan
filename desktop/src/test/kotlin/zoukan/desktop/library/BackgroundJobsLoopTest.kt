@@ -77,6 +77,19 @@ class BackgroundJobsLoopTest {
     }
 
     @Test
+    fun `an extension's runaway recursion does not end the loop`() {
+        val jobs = jobs { StackOverflowError() }
+        jobs.start(scope)
+
+        runChecks(3)
+
+        ticks.get() shouldBe 3
+        jobs.isRunning shouldBe true
+        uncaught.get() shouldBe null
+        scope.cancel()
+    }
+
+    @Test
     fun `an OutOfMemoryError ends the loop and reaches the scope's handler`() {
         val jobs = jobs { OutOfMemoryError("Java heap space") }
         jobs.start(scope)

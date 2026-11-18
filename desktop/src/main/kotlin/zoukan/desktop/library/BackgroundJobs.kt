@@ -13,6 +13,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.track.TrackChapters
@@ -47,9 +48,9 @@ class BackgroundJobs(
                     throw e
                 } catch (e: Throwable) {
                     // The VM's own failures (out of memory) end the loop and reach the scope's crash
-                    // report; anything else, an outdated extension's LinkageError included, waits
-                    // for the next check
-                    if (e is VirtualMachineError) throw e
+                    // report; anything else, an outdated extension's LinkageError or runaway
+                    // recursion included, waits for the next check
+                    e.rethrowIfVmFailure()
                     logcat(LogPriority.ERROR, e) { "Background work failed" }
                 }
                 delay(CHECK_EVERY)

@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.service.ChapterRecognition
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.download.CbzEncryption
 import zoukan.desktop.download.CbzReader
 import zoukan.desktop.download.CbzWriter
@@ -150,6 +151,7 @@ class LocalSource(
                 }
             }
         } catch (e: Throwable) {
+            e.rethrowIfFatal()
             logcat(LogPriority.ERROR, e) { "Reading the details of a local entry failed" }
         }
         return manga

@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import java.io.File
 import java.io.OutputStream
 import java.nio.file.FileAlreadyExistsException
@@ -160,6 +161,7 @@ class ChapterDownloader(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 last = e
                 kotlinx.coroutines.delay(500L * (attempt + 1))
             }
