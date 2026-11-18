@@ -68,7 +68,8 @@ class ExtensionInstallFaultsTest {
     /** Sends the store's https addresses to the fixture server, as the store is served over https. */
     private val client by lazy {
         val fixture = server.baseUrl.toHttpUrl()
-        OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).addInterceptor { chain ->
+        // A short read timeout, so a stalled download fails within the test (the app's client waits 30 s)
+        OkHttpClient.Builder().readTimeout(2, TimeUnit.SECONDS).addInterceptor { chain ->
             val url = chain.request().url
             if (url.isHttps && url.host == STORE_HOST) {
                 chain.proceed(chain.request().newBuilder().url(url.newBuilder().scheme("http").host(fixture.host).port(fixture.port).build()).build())
@@ -195,6 +196,7 @@ class ExtensionInstallFaultsTest {
             arrayOf("connection closed without an answer", FixtureFailure.Drop),
             arrayOf("corrupt body", FixtureFailure.Corrupt(fromByte = 200)),
             arrayOf("an HTML page with status 200", FixtureFailure.Answer(200, "text/html", "<html>Not found</html>".toByteArray())),
+            arrayOf("a stall mid-body (the read timeout)", FixtureFailure.Stall(afterBytes = 1000)),
         )
 
         @JvmStatic

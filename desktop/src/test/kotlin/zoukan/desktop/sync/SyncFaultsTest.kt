@@ -71,7 +71,9 @@ class SyncFaultsTest {
 
     @BeforeEach
     fun start() {
-        val client = OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).build()
+        // Short timeouts, so a stall fails within the test: SyncYomi uses this client's 2 s read
+        // timeout; WebDAV sets its own 30 s ones but keeps this 5 s call timeout
+        val client = OkHttpClient.Builder().readTimeout(2, TimeUnit.SECONDS).callTimeout(5, TimeUnit.SECONDS).build()
         Injekt.addSingleton<NetworkHelper>(mockk { every { plainClient } returns client })
         preferences.webDavUrl().set(sync.webDavUrl)
         preferences.webDavUsername().set(sync.user)
@@ -212,12 +214,40 @@ class SyncFaultsTest {
         preferences.lastSyncEtag().get() shouldBe ""
     }
 
+    @Test
+    fun `SyncYomi - a stalled remote library download is a sync error, uploads nothing, and the next sync works`() {
+        preferences.clientHost().set(sync.clientHost)
+        preferences.clientAPIKey().set(sync.apiKey)
+        server.fail("/api/sync/content", FixtureFailure.Stall(afterBytes = 10))
+        fun syncYomi() = runBlocking {
+            SyncYomiSyncService(
+                mockk<Application>(relaxed = true),
+                Json { ignoreUnknownKeys = true },
+                preferences,
+                SyncNotifier(mockk<Application>(relaxed = true)),
+                ProtoBuf,
+            ).doSync(local)
+        }
+
+        syncYomi().shouldBeNull()
+
+        messages.awaitError()
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+        sync.remoteBackup shouldBe remoteBytes
+        preferences.lastSyncEtag().get() shouldBe ""
+
+        server.clearFailures()
+        syncYomi().shouldNotBeNull().backupManga.map { it.url }.toSet() shouldBe setOf("/local", "/remote")
+        sync.calls.filter { it.method == "PUT" }.size shouldBe 1
+    }
+
     companion object {
         @JvmStatic
         fun downloadFaults() = listOf(
             arrayOf("HTTP 503", FixtureFailure.Status(503)),
             arrayOf("connection cut mid-body", FixtureFailure.Truncate(keepBytes = 10)),
             arrayOf("connection closed without an answer", FixtureFailure.Drop),
+            arrayOf("a stall mid-body (the call timeout)", FixtureFailure.Stall(afterBytes = 10)),
         )
     }
 }
