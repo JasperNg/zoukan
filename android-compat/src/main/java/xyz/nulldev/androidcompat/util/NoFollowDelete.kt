@@ -42,14 +42,19 @@ object NoFollowDelete {
     }
 
     /**
-     * A symbolic link, a Windows junction or another reparse point: anything whose real location is
-     * not the folder it is listed in.
+     * A symbolic link, a Windows junction or another reparse point that leads elsewhere: anything
+     * whose real location is not the folder it is listed in.
+     *
+     * A folder is judged by its real path alone. Windows reports every reparse point as "other",
+     * and a junction as a folder too; but a cloud-sync placeholder folder or a deduplicated one is a
+     * reparse point whose real path is where it is listed, and is the folder itself. A file that is
+     * a reparse point is still treated as a link: it is removed as itself, which is harmless.
      */
     fun isLink(path: Path): Boolean = try {
         val attrs = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
         when {
-            attrs.isSymbolicLink || attrs.isOther -> true
-            !attrs.isDirectory -> false
+            attrs.isSymbolicLink -> true
+            !attrs.isDirectory -> attrs.isOther
             else -> {
                 val parent = path.toAbsolutePath().parent
                 parent != null && !samePath(path.toRealPath(), parent.toRealPath().resolve(path.fileName.toString()))
@@ -64,11 +69,34 @@ object NoFollowDelete {
      * Whether [real] is [listed]. macOS ignores the Unicode form of names, and its real path gives
      * the form on disk (NFD, from a folder made outside Java or copied from another system) while
      * the listed name may be NFC: the same folder, not a link. Elsewhere the forms are two names.
+     *
+     * The real path also gives the letter case on disk, which on a file system that ignores case
+     * can differ from the listed name (a chapter renamed by case only): the same folder when only
+     * the last name differs, by case alone, in the same parent, and the parent holds no entry of
+     * exactly the listed name. Where case counts (a Windows folder set case-sensitive), a junction
+     * can lead to a sibling named in another case, and then both names are listed.
      */
     private fun samePath(real: Path, listed: Path): Boolean {
         if (real == listed) return true
-        if (!IGNORES_UNICODE_FORM) return false
-        return Normalizer.normalize(real.toString(), Normalizer.Form.NFC) == Normalizer.normalize(listed.toString(), Normalizer.Form.NFC)
+        val realText = form(real.toString())
+        val listedText = form(listed.toString())
+        if (realText == listedText) return true
+        return real.parent == listed.parent &&
+            realText.equals(listedText, ignoreCase = true) &&
+            !hasEntryNamedExactly(listed)
+    }
+
+    private fun form(name: String): String = if (IGNORES_UNICODE_FORM) Normalizer.normalize(name, Normalizer.Form.NFC) else name
+
+    /** Whether [path]'s parent lists an entry of exactly [path]'s name; true when it cannot be read. */
+    private fun hasEntryNamedExactly(path: Path): Boolean {
+        val parent = path.parent ?: return true
+        val name = form(path.fileName.toString())
+        return try {
+            Files.newDirectoryStream(parent).use { children -> children.any { form(it.fileName.toString()) == name } }
+        } catch (e: IOException) {
+            true
+        }
     }
 
     private val IGNORES_UNICODE_FORM = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
