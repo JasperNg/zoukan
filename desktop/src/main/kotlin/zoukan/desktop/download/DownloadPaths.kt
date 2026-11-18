@@ -196,10 +196,17 @@ class DownloadPaths(
          * everywhere; none when it is valid (the desktop then writes it too). Only looked up: never
          * written, and found by listing a folder, so on Windows a device name is never opened. A
          * spelling this OS cannot have as a path (`?` on Windows) cannot be on disk and is left out,
-         * so no lookup fails on it.
+         * so no lookup fails on it. Nor can a Windows device name (`NUL`, `com1.txt`) on [windows]:
+         * it is a valid path there, but names the device, never a folder.
          */
-        internal fun legacyNames(name: String): List<String> =
-            if (FileNames.isPortable(name)) emptyList() else FileNames.spellingsOnDisk(name).filter { isPathHere(it) }
+        internal fun legacyNames(name: String, windows: Boolean = IS_WINDOWS): List<String> =
+            if (FileNames.isPortable(name)) {
+                emptyList()
+            } else {
+                FileNames.spellingsOnDisk(name).filter { isPathHere(it) && !(windows && FileNames.isWindowsDeviceName(it)) }
+            }
+
+        private val IS_WINDOWS = System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
         private fun isPathHere(name: String): Boolean = try {
             java.nio.file.Path.of(name)

@@ -107,7 +107,7 @@ object FileNames {
         }
     }
 
-    private fun isWindowsDeviceName(name: String): Boolean =
+    internal fun isWindowsDeviceName(name: String): Boolean =
         name.substringBefore('.').trimEnd(' ').uppercase(java.util.Locale.ROOT) in windowsDeviceNames
 
     private fun isLoneSurrogate(s: String, i: Int): Boolean {
