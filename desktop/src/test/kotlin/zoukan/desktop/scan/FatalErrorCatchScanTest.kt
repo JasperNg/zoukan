@@ -127,7 +127,6 @@ class FatalErrorCatchScanTest {
         const val PER_ITEM = "one item's failure (an extension's Error included) is recorded and the loop " +
             "goes on to the next item; an OutOfMemoryError there is swallowed too"
         val ALLOWED = listOf(
-            Allowed("library/BackgroundJobs.kt", "} catch (e: Throwable) {", "known defect: the background-work loop keeps running after an OutOfMemoryError, which is only logged", function = "start"),
             Allowed("harness/ExtensionWiringCheck.kt", "} catch (e: Throwable) {", "the extension-wiring check (a test harness, not the app): records each setting's failure and goes on to the next", function = "checkSettings"),
             Allowed("ui/settings/MissingExtensions.kt", "} catch (e: Throwable) {", PER_ITEM, function = "installMissingExtensions"),
             Allowed("ui/reader/ReaderScreenModel.kt", "} catch (e: Throwable) {", "prefetching one page of many; that page loads again when it is shown", function = "prefetchAll"),

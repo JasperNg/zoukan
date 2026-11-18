@@ -46,6 +46,10 @@ class BackgroundJobs(
                     // Stopped: not a failure
                     throw e
                 } catch (e: Throwable) {
+                    // The VM's own failures (out of memory) end the loop and reach the scope's crash
+                    // report; anything else, an outdated extension's LinkageError included, waits
+                    // for the next check
+                    if (e is VirtualMachineError) throw e
                     logcat(LogPriority.ERROR, e) { "Background work failed" }
                 }
                 delay(CHECK_EVERY)
