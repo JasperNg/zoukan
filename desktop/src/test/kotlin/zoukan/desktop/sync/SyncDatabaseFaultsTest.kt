@@ -27,7 +27,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
@@ -60,6 +60,7 @@ import zoukan.desktop.backup.NoStubSources
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.backup.SafetySnapshot
 import zoukan.desktop.db.DesktopDatabase
+import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureServer
 import zoukan.desktop.e2e.FixtureSyncServer
 import zoukan.desktop.testing.Await
@@ -99,7 +100,9 @@ class SyncDatabaseFaultsTest {
     private val executor = Executors.newSingleThreadExecutor { Thread(it, "zoukan-database").apply { isDaemon = true } }
     private lateinit var real: JdbcSqliteDriver
     private lateinit var driver: FailingSqlDriver
-    private val preferences = SyncPreferences(MapPreferenceStore())
+    /** The app's one preference store: the sync settings and what a restore writes share it, as in the app. */
+    private val store = MapPreferenceStore()
+    private val preferences = SyncPreferences(store)
 
     /** Another device's library, already on the server: one entry in the library, with chapters. */
     private val remote = Backup(
@@ -160,7 +163,6 @@ class SyncDatabaseFaultsTest {
         Injekt.addSingleton(mockk<SetCustomMangaInfo>(relaxed = true))
         Injekt.addSingleton(mockk<GetFlatMetadataById>(relaxed = true))
         Injekt.addSingleton(mockk<InsertFlatMetadata>(relaxed = true))
-        val store = InMemoryPreferenceStore()
         Injekt.addSingleton<PreferenceStore>(store)
         Injekt.addSingleton(LibraryPreferences(store))
         Injekt.addSingleton<SourceManager>(mockk<SourceManager>(relaxed = true))
@@ -224,6 +226,45 @@ class SyncDatabaseFaultsTest {
     ).value
 
     private fun remoteUrls(): Set<String> = BackupCodec.decode(sync.remoteBackup!!).backupManga.map { it.url }.toSet()
+
+    /** Set while the server may hold a merged library this computer has not restored (SyncManager.doSync). */
+    private val restorePending get() = store.getBoolean(Preference.appStateKey("zoukan_sync_restore_pending"), false)
+
+    @Test
+    fun `an ETag saved by a sync that quit before its restore is dropped, and the next sync merges and restores`() = runBlocking<Unit> {
+        // The app quit after the service saved the server's ETag and before the merged library was restored
+        preferences.lastSyncTimestamp().set(1L)
+        preferences.lastSyncEtag().set(sync.etag!!)
+        restorePending.set(true)
+
+        manager().syncData()
+
+        // Without the ETag the server sends its library ("not modified" would upload this computer's over it)
+        sync.calls.first { it.method == "GET" }.ifNoneMatch shouldBe null
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+        restorePending.get() shouldBe false
+    }
+
+    @Test
+    fun `a completed sync leaves no restore pending, and a failed download sets none`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().set(1L)
+        server.fail("/dav/${sync.davFolder}/backup.proto", FixtureFailure.Status(503), times = 1)
+
+        manager().syncData()
+
+        messages.awaitError()
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+        restorePending.get() shouldBe false
+        restorePending.isSet() shouldBe false
+
+        manager().syncData()
+
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+        restorePending.get() shouldBe false
+    }
 
     @Test
     fun `a database read that fails while the library is built uploads nothing and keeps the ETag and sync time`() = runBlocking<Unit> {

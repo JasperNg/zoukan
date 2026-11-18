@@ -21,6 +21,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.Chapters
 import tachiyomi.data.DatabaseHandler
@@ -64,6 +66,18 @@ class SyncManager(
     private val notifier = SyncNotifier(context)
     private val mangaRestorer by lazy { MangaRestorer() }
     private val mutex = Mutex()
+
+    // ZOUKAN -->
+    /**
+     * Set from just before the service syncs until the merged library is all restored here (or the
+     * service uploaded nothing). The service saves the server's new ETag itself, before doSync can
+     * set it aside: if the app quits in between (SyncYomi still reports the sync to the server
+     * then), the next sync must not trust that ETag. App state, so in no backup and never synced.
+     */
+    private val restorePending by lazy {
+        Injekt.get<PreferenceStore>().getBoolean(Preference.appStateKey("zoukan_sync_restore_pending"), false)
+    }
+    // ZOUKAN <--
 
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
@@ -186,6 +200,10 @@ class SyncManager(
             mangasQueries.resetIsSyncing()
             chaptersQueries.resetIsSyncing()
         }
+        // ZOUKAN -->
+        // A sync that uploaded but quit before its restore ended: the ETag it saved is not this computer's
+        if (restorePending.get()) syncPreferences.lastSyncEtag().delete()
+        // ZOUKAN <--
 
         val syncOptions = syncPreferences.getSyncSettings()
         val databaseManga = handler.awaitList { mangasQueries.getMangasWithFavoriteTimestamp(::mapManga) }
@@ -230,7 +248,15 @@ class SyncManager(
             }
         }
 
-        val remoteBackup = service?.doSync(syncData) ?: return false
+        // ZOUKAN -->
+        restorePending.set(true)
+        val remoteBackup = service?.doSync(syncData)
+        if (remoteBackup == null) {
+            // Nothing uploaded, so the ETag (if any) is still the one this computer had restored
+            restorePending.delete()
+            return false
+        }
+        // ZOUKAN <--
 
         // ZOUKAN -->
         // The server now has the merged library under this ETag, but this computer has it only once
@@ -332,6 +358,7 @@ class SyncManager(
     /** Saves [etag] again once the merged library is all restored here (see doSync). */
     private fun keepEtag(etag: String) {
         if (etag.isNotEmpty()) syncPreferences.lastSyncEtag().set(etag)
+        restorePending.delete()
     }
     // ZOUKAN <--
 
