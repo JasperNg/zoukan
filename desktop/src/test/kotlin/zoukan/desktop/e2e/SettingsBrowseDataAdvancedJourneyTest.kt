@@ -153,6 +153,9 @@ class SettingsBrowseDataAdvancedJourneyTest {
                     val restart = localized(MR.strings.requires_app_restart)
 
                     fun edit(value: String) {
+                        // Scroll to the row below it, so the user agent row is fully on screen and not
+                        // clipped at the bottom edge, where a click on its centre can miss
+                        list.performScrollToNode(hasText(localized(MR.strings.pref_reset_user_agent_string)))
                         list.performScrollToNode(hasText(title))
                         onAllNodesWithText(title).onFirst().performClick()
                         waitFor(hasText(localized(MR.strings.action_ok)))
