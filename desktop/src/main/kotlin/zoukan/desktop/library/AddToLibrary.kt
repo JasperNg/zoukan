@@ -99,6 +99,8 @@ class AddToLibrary(
         /** How many entries fetch their details and chapters after adding at once, across all adds */
         internal const val PARALLEL_FETCHES = 3
 
-        private val fetches = Semaphore(PARALLEL_FETCHES)
+        /** Internal so a test can put in one that records who asks for a permit: a Semaphore does not show its waiters */
+        @Volatile
+        internal var fetches: Semaphore = Semaphore(PARALLEL_FETCHES)
     }
 }
