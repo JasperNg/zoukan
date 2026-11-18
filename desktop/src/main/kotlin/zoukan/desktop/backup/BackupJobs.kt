@@ -70,6 +70,10 @@ class BackupJobs(
                 throw e
             } catch (e: Exception) {
                 Toasts.error(localized(MR.strings.creating_backup_error), e)
+            } catch (e: Throwable) {
+                // A fatal error goes on to the crash report, after the user is told the backup failed
+                Toasts.error(localized(MR.strings.creating_backup_error), e)
+                throw e
             } finally {
                 _status.value = null
             }
@@ -141,6 +145,10 @@ class BackupJobs(
                         throw e
                     } catch (e: Exception) {
                         Toasts.error(localized(DMR.strings.restore_failed), e)
+                    } catch (e: Throwable) {
+                        // A fatal error goes on to the crash report, after the user is told the restore failed
+                        Toasts.error(localized(DMR.strings.restore_failed), e)
+                        throw e
                     } finally {
                         _status.value = null
                     }

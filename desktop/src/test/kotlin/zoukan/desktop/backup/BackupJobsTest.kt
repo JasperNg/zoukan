@@ -130,4 +130,23 @@ class BackupJobsTest {
         first.await() shouldBe RestoreOutcome.CANCELLED
         jobs.status.value shouldBe null
     }
+
+    @Test
+    fun `a restore that ends with a fatal error tells the user it failed`() = runBlocking<Unit> {
+        val backups = mockk<DesktopBackups>()
+        every { backups.read(any()) } throws InternalError("test")
+        val escaped = CompletableDeferred<Throwable>()
+        val failing = CoroutineScope(SupervisorJob() + Dispatchers.Default + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> escaped.complete(e) })
+        zoukan.desktop.testing.UserMessages().use { messages ->
+            val jobs = BackupJobs(failing, { backups }) { true }
+
+            jobs.restore(file, noStores)!!.await() shouldBe RestoreOutcome.FAILED
+
+            messages.awaitToast { it.startsWith(zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.restore_failed)) }
+            // The error still goes on to the crash report
+            (escaped.await() is InternalError) shouldBe true
+            jobs.status.value shouldBe null
+        }
+        failing.cancel()
+    }
 }
