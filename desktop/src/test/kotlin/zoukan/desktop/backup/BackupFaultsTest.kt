@@ -25,6 +25,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
@@ -51,9 +53,11 @@ import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.UserMessages
 import zoukan.desktop.testing.fakes.FailingSqlDriver
 import zoukan.desktop.testing.fakes.FileFaults
+import zoukan.desktop.testing.fakes.WriteFaults
 import zoukan.desktop.track.MapPreferenceStore
 import zoukan.i18n.desktop.DMR
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.Executors
 
 /**
@@ -64,8 +68,9 @@ import java.util.concurrent.Executors
  * Android app's among them, keep their bytes, and no temporary file is left).
  *
  * The backup is built by the shared code over a real database (categories, saved searches, feeds)
- * through [FailingSqlDriver]; the parts with no rows here are stubs. A full disk cannot be
- * simulated: [DesktopBackups.create] writes with `java.io.File` and has no file-system seam.
+ * through [FailingSqlDriver]; the parts with no rows here are stubs. A full disk (at the start or part
+ * way through the file), a close that fails and a rename that fails go through
+ * [DesktopBackups]' `openSink` and `move` seams ([WriteFaults]).
  */
 class BackupFaultsTest {
 
@@ -125,7 +130,7 @@ class BackupFaultsTest {
     private val preferences = BackupPreferences(MapPreferenceStore())
     private val written = MapPreferenceStore().getString("written", "")
 
-    private fun autoBackup(autoBackups: File = folder) = AutoBackup(
+    private fun autoBackup(autoBackups: File = folder, backups: (() -> DesktopBackups)? = null) = AutoBackup(
         mockk<ZoukanStorage> {
             every { requireAvailable() } just runs
             every { this@mockk.autoBackups } returns autoBackups
@@ -133,6 +138,45 @@ class BackupFaultsTest {
         androidDir,
         preferences,
         written,
+        backups ?: { DesktopBackups(androidDir) },
+    )
+
+    // --- Writes that fail: a full disk, a close or a rename that fails ---
+
+    private val writes = WriteFaults()
+
+    @Volatile
+    private var renameFails = false
+
+    /** Where a backup's write fails. */
+    enum class WriteFailure { DISK_FULL_AT_START, DISK_FULL_PART_WAY, CLOSE, RENAME }
+
+    private fun inject(failure: WriteFailure) {
+        when (failure) {
+            WriteFailure.DISK_FULL_AT_START -> writes.fault = WriteFaults.Fault.AtOpen
+            // Past the gzip header, inside the backup's data
+            WriteFailure.DISK_FULL_PART_WAY -> writes.fault = WriteFaults.Fault.AfterBytes(20)
+            WriteFailure.CLOSE -> writes.fault = WriteFaults.Fault.AtClose
+            WriteFailure.RENAME -> renameFails = true
+        }
+    }
+
+    private fun heal() {
+        writes.fault = null
+        renameFails = false
+    }
+
+    /** Backups written through [writes], whose move fails while [renameFails]. */
+    private fun faultyBackups() = DesktopBackups(
+        androidDir,
+        NoStubSources,
+        {},
+        { null },
+        openSink = writes::sink,
+        move = { temp, file, replace ->
+            if (renameFails) throw IOException("The process cannot access the file because it is being used by another process")
+            DesktopBackups.moveIntoPlace(temp, file, replace)
+        },
     )
 
     /** Backups already in the folder: two of Zoukan's and one of the Android app's, with their bytes. */
@@ -228,5 +272,61 @@ class BackupFaultsTest {
         messages.awaitToast { !it.startsWith(localized(MR.strings.creating_backup_error)) }
         withTimeout(10_000) { jobs.status.first { it == null } }
         DesktopBackups(androidDir, NoStubSources, {}, { null }).read(target).backupCategories.map { it.name } shouldBe listOf("Reading")
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(WriteFailure::class)
+    fun `an automatic backup whose write fails keeps every backup, rotates none out, and the next one works`(failure: WriteFailure) = runBlocking<Unit> {
+        // Four of this install's automatic backups and the Android app's: a new one rotates the oldest out
+        val own = (1..4).map { "zoukan_2024-01-0${it}_10-00.tachibk" }
+        val existing = (own + "app.komikku_2024-01-05_10-00.tachibk").associate { name ->
+            val bytes = kotlin.random.Random(name.hashCode()).nextBytes(512)
+            File(folder.apply { mkdirs() }, name).apply { writeBytes(bytes) } to bytes
+        }
+        written.set(own.joinToString("\n"))
+        inject(failure)
+
+        autoBackup(backups = ::faultyBackups).run().shouldBeNull()
+
+        messages.awaitError { it.title == localized(DMR.strings.automatic_backup_failed) }
+        preferences.lastAutoBackupTimestamp().get() shouldBe 0L
+        // Nothing rotated out, nothing new recorded, no temporary file left
+        written.get() shouldBe own.joinToString("\n")
+        existing.unchanged()
+        folder.list()!!.toSet() shouldBe existing.keys.map { it.name }.toSet()
+        if (failure != WriteFailure.RENAME) writes.failures shouldBe 1
+
+        // Healed: the backup is written and only then the oldest of this install's is rotated out
+        heal()
+        val file = autoBackup(backups = ::faultyBackups).run().shouldNotBeNull()
+        DesktopBackups(androidDir, NoStubSources, {}, { null }).read(file).backupCategories.map { it.name } shouldBe listOf("Reading")
+        written.get().lines() shouldBe own.drop(1) + file.name
+        folder.list()!!.toSet() shouldBe existing.keys.map { it.name }.toSet() - own.first() + file.name
+        existing.filterKeys { it.name != own.first() }.unchanged()
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(WriteFailure::class)
+    fun `a backup from Settings whose write fails keeps the file it would replace and leaves no temporary file`(failure: WriteFailure) = runBlocking<Unit> {
+        val existing = existingBackups()
+        val target = existing.keys.first()
+        val jobs = BackupJobs(scope, ::faultyBackups) { true }
+        inject(failure)
+
+        jobs.create(target, BackupOptions())
+        val toast = messages.awaitToast { it.startsWith(localized(MR.strings.creating_backup_error)) }
+        withTimeout(10_000) { jobs.status.first { it == null } }
+
+        if (failure != WriteFailure.RENAME) toast.contains(WriteFaults.DISK_FULL) shouldBe true
+        existing.unchanged()
+        folder.list()!!.toSet() shouldBe existing.keys.map { it.name }.toSet()
+
+        // Healed: the same backup replaces the file, as asked
+        heal()
+        jobs.create(target, BackupOptions())
+        messages.awaitToast { !it.startsWith(localized(MR.strings.creating_backup_error)) }
+        withTimeout(10_000) { jobs.status.first { it == null } }
+        DesktopBackups(androidDir, NoStubSources, {}, { null }).read(target).backupCategories.map { it.name } shouldBe listOf("Reading")
+        folder.list()!!.toSet() shouldBe existing.keys.map { it.name }.toSet()
     }
 }
