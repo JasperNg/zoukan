@@ -14,16 +14,15 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
-import zoukan.desktop.testing.Await
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.OkHttpClient
@@ -38,6 +37,7 @@ import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureServer
 import zoukan.desktop.e2e.FixtureSyncServer
+import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.UserMessages
 import zoukan.desktop.track.MapPreferenceStore
