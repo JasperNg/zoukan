@@ -135,6 +135,73 @@ class DownloadDatabaseFaultsTest {
 
     private val queueFile get() = File(temp, "downloads-queue.json")
 
+    /** Adds chapter [id] of entry 1. */
+    private fun addChapter(id: Long) {
+        driver.execute(
+            null,
+            "INSERT INTO chapters(_id, manga_id, url, name, read, bookmark, last_page_read, chapter_number, source_order, date_fetch, date_upload) " +
+                "VALUES ($id, 1, '/c$id', 'Chapter $id', 0, 0, 0, $id, $id, 0, 0)",
+            0,
+        )
+    }
+
+    private fun saved(vararg downloads: Pair<Long, Long>) =
+        downloads.joinToString(",", "[", "]") { (manga, chapter) -> """{"mangaId":$manga,"chapterId":$chapter}""" }
+
+    /** The chapter ids in the saved queue file, in order. */
+    private fun savedChapterIds(): List<Long> =
+        Regex(""""chapterId":(\d+)""").findAll(queueFile.readText()).map { it.groupValues[1].toLong() }.toList()
+
+    /** A manager on the same data folder and database, as at the next start. */
+    private fun nextStart() = DownloadManager(
+        ZoukanDirs(temp),
+        kit.paths,
+        kit.sourceManager,
+        DownloadPreferences(MapPreferenceStore()),
+        io.mockk.mockk(),
+        getManga,
+        getChapter,
+        io.mockk.mockk(),
+    )
+
+    @Test
+    fun `a restore keeps the saved order and queues every chapter`() = runBlocking<Unit> {
+        addChapter(2)
+        addChapter(3)
+        queueFile.writeText(saved(1L to 3L, 1L to 1L, 1L to 2L))
+
+        manager.restore(start = false)
+
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(3L, 1L, 2L)
+        manager.queue.value.map { it.state.value }.toSet() shouldBe setOf(Download.State.QUEUED)
+        manager.queue.value.map { it.manga.id }.toSet() shouldBe setOf(1L)
+    }
+
+    @Test
+    fun `a saved download whose entry or chapter was deleted is dropped, and the next save leaves it out`() = runBlocking<Unit> {
+        addChapter(2)
+        // Entry 7 and chapter 9 do not exist (deleted since the queue was saved)
+        queueFile.writeText(saved(1L to 1L, 7L to 70L, 1L to 9L, 1L to 2L))
+
+        manager.restore(start = false)
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(1L, 2L)
+
+        manager.cancel(setOf(2L))
+        manager.awaitBackgroundWork()
+        savedChapterIds() shouldBe listOf(1L)
+    }
+
+    @Test
+    fun `downloads queued before the restore keep their place, and a chapter is never queued twice`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        manager.enqueue(manga(), listOf(getChapter.await(2)!!), start = false)
+
+        manager.restore(start = false)
+
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(2L, 1L)
+    }
+
     @Test
     @Disabled(
         "Known defect: GetManga and GetChapter return null on a database error, so restore() drops " +
