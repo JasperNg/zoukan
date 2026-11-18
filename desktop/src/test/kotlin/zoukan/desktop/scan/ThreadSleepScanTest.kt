@@ -152,87 +152,51 @@ class ThreadSleepScanTest {
             Allowed(
                 "$TESTS/testing/Await.kt",
                 "Thread.sleep(POLL_MILLIS)",
-                "the wait helper's own polling, between checks of the condition",
-            ),
-            Allowed(
-                "$TESTS/e2e/Journey.kt",
-                "Thread.sleep(NOTHING_HAPPENS_MILLIS)",
-                "watchNothingHappens: a journey's check that something did not happen (a file deleted, a " +
-                    "request sent), whose work would start in the background with no event to wait for",
-            ),
-            Allowed(
-                "$TESTS/e2e/SettingsPagesJourneyTest.kt",
-                "Thread.sleep(100)",
-                "watches the reader for 2.5 s: the mode's name would show for 1.5 s, so only watching through " +
-                    "that time shows it never appeared",
+                "the wait helper's own polling between checks of the condition: what every other wait uses, " +
+                    "and it ends as soon as the condition holds",
             ),
             Allowed(
                 "$TESTS/e2e/FixtureServer.kt",
                 "Thread.sleep(failure.delayMillis)",
-                "the fixture server's planned slow answer: a failure's delay",
+                "a fake's behaviour: the fixture server's planned slow answer to a failure, which the journey tests",
                 function = "failWith",
             ),
             Allowed(
                 "$TESTS/e2e/FixtureServer.kt",
                 "Thread.sleep(it)",
-                "the fixture server's planned slow answer: a slow image",
+                "a fake's behaviour: the fixture server's planned slow image, which the journey tests",
                 function = "image",
-            ),
-            Allowed(
-                "extension-jvm/src/test/kotlin/zoukan/extension/DesktopExtensionManagerTest.kt",
-                "delay(NOTHING_HAPPENS_MILLIS)",
-                "a Mutex does not show who waits for it, so only watching for a while shows the uninstall waits " +
-                    "for the install that holds the package's lock",
-                function = "`an uninstall during an install waits for it, and the extension stays uninstalled`",
             ),
             Allowed(
                 "$TESTS/download/DownloadQueueStatesTest.kt",
                 "Thread.sleep(pageDelayMs)",
-                "the test server's time per image, so a download is under way when the test pauses or deletes it",
+                "a fake's behaviour: the test server's time per image, so a download is under way when the test " +
+                    "pauses or deletes it; the test waits on states",
             ),
             Allowed(
                 "$TESTS/download/DownloadQueueStatesTest.kt",
                 "delay(chapter.id % 4)",
-                "jitter between queued chapters, so some are queued just as the previous run finds nothing left",
-            ),
-            Allowed(
-                "$TESTS/browser/ChallengeSerializationTest.kt",
-                "Thread.sleep(100)",
-                "the fake solver keeps its window open while the other challenges arrive",
-            ),
-            Allowed(
-                "$TESTS/compat/LooperWakeTest.kt",
-                "Thread.sleep(1_000)",
-                "measures the looper thread's CPU time over a second: a spinning looper shows only over time",
-            ),
-            Allowed(
-                "$TESTS/app/SingleInstanceTest.kt",
-                "Thread.sleep(CLEANER_PAUSE_MILLIS)",
-                "a lock freed by a cleaner would be freed at no known time: the collector runs several times, " +
-                    "with time for cleaners between",
+                "a fake's behaviour: jitter between queued chapters, so some are queued just as the previous run " +
+                    "finds nothing left; the test waits on states",
             ),
             Allowed(
                 "$TESTS/browser/CefCookieSameSiteLiveTest.kt",
                 "Thread.sleep(250)",
-                "live Chromium check: watches the cookie for 2 s, as Chromium applies a copy on its own thread " +
-                    "and could rewrite it later",
-            ),
-            Allowed(
-                "$TESTS/download/DownloadIndexBenchmarkTest.kt",
-                "Thread.sleep(DownloadIndex.RECHECK_MILLIS",
-                "benchmark of the refresh after the recheck time; the download manager's index reads the real " +
-                    "clock, with no clock a test can set",
+                "a live test, run by hand against real Chromium: watches the cookie for 2 s, as Chromium applies " +
+                    "a copy on its own thread at no time it reports and could rewrite it later",
             ),
             Allowed(
                 "$TESTS/ui/SmokeChecks.kt",
                 "Thread.sleep(pauseMillis)",
                 "settle(): the screen checks and the button crawl open hundreds of screens that share no " +
-                    "\"loaded\" state, and waitForIdle does not see the screen models' dispatchers",
+                    "\"loaded\" state, and waitForIdle does not see the screen models' dispatchers; kept as it is, " +
+                    "as a change could move the crawl's signatures and baselines",
             ),
             Allowed(
                 "$TESTS/ui/ButtonCrawlTest.kt",
                 "Thread.sleep(250)",
-                "measure(): samples a click's effects until they hold still, which only shows over time",
+                "measure(): what it measures is time, a click's effects sampled until they hold still; kept as " +
+                    "it is, as a change could move the crawl's signatures and baselines",
             ),
             Allowed(
                 "$TESTS/ui/EndToEndReadTest.kt",

@@ -226,8 +226,27 @@ attributes, link targets).
 Tests wait for the state they need, never for a guessed time: `zoukan.desktop.testing.Await`
 (`until`, `untilSuspending`, `within`), a `CountDownLatch` or `CompletableDeferred`,
 `StateFlow.first { }` under `withTimeout`, Compose's `waitUntil` (in journeys `waitFor` and
-`waitOrDump`), or virtual time with `runTest`. A check that something does not happen waits for a
-later event that proves it where there is one; journeys otherwise use `watchNothingHappens()`.
+`waitOrDump`), or virtual time with `runTest` (in a Compose test, `mainClock`: an effect's `delay`
+runs on it). A check that something does not happen waits for the point after which it cannot
+happen any more, never for a while:
+
+- in journeys, `awaitAppIdle()`: the UI, the user actions (`launchAction`, which `launchReporting`
+  uses; `zoukan.desktop.ui.common.actionsRunning` counts them), AppScope's work and the download
+  manager's have ended, so a file still there or a request not sent is final. An action a check
+  like this guards starts with `launchAction`, on AppScope or in the download manager; work that
+  lasts the whole run goes on `ServiceScope`;
+- a lock or semaphore does not show who waits for it: the test puts in one that records each
+  request (the download manager's `entryLocks`, the extension manager's `locks`, `AddToLibrary.fetches`)
+  and checks the state once the request is made, while it holds what is asked for;
+- a clock the code reads is a parameter (`DownloadManager`'s `indexClock`), which the test moves;
+- what the garbage collector keeps: a weak reference that survives a full collection, which a
+  canary weak reference shows has happened.
+
+The sleeps that stay are where time itself is the subject: the wait helper's own polling, a fake's
+planned slowness (the fixture and test servers), a live test by hand against real Chromium, the
+manual end-to-end runs' pauses before a screenshot, and the button crawl's `measure()` and
+`SmokeChecks.settle()`, which are left as they are so the crawl's signatures and baselines do not
+move.
 `ThreadSleepScanTest` (in `zoukan.desktop.scan`) fails on `Thread.sleep` (and `TimeUnit.*.sleep`)
 in any test source set, and on a `delay` that pauses a `runBlocking` body, outside its short
 allow-list, in which every entry has a reason. It also sees the block of a test helper that takes a
@@ -257,7 +276,7 @@ feed's); the app's own timeouts are 10 to 30 s.
 
 | Feature | Files | Database | Network (incl. stall) |
 | --- | --- | --- | --- |
-| Download | `DownloadFaultsTest`: read-only folder, file in the way, full disk at the start, in a page and in the archive, close and rename failing (`newDownloader` seam) | `DownloadDatabaseFaultsTest` (automatic deletion, delete; the queue restore is a known defect, its test disabled); ComicInfo's categories are optional | `DownloadFaultsTest`: status, cut, drop, HTML, stall |
+| Download | `DownloadFaultsTest`: read-only folder, file in the way, full disk at the start, in a page and in the archive, close and rename failing (`newDownloader` seam) | `DownloadDatabaseFaultsTest` (automatic deletion, delete, the queue restore: a failed read keeps the downloads not yet restored saved); ComicInfo's categories are optional | `DownloadFaultsTest`: status, cut, drop, HTML, stall |
 | Backup (Settings, automatic) | `BackupFaultsTest`: read-only folder, file in the way, full disk at the start and part way, close and rename failing (`openSink`/`move` seams); rotation does not run after a failure | `BackupFaultsTest` | does not apply |
 | Restore | `RestoreFaultsTest`: bad files; `edits.json` in a read-only folder or with a folder in the way. Not covered: the source settings files, which the settings layer writes in the background | `RestoreFaultsTest`, `RestorePartialFailureTest` | does not apply |
 | Sync | does not apply: sync writes no file of its own; its safety backup failing: `SafetySnapshotTest`, `SyncDatabaseFaultsTest` | `SyncDatabaseFaultsTest` (`SyncManager.syncData` end to end, WebDAV) | `SyncFaultsTest`: status, cut, drop, corrupt, stall (WebDAV and SyncYomi) |
