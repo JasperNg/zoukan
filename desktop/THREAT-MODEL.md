@@ -447,7 +447,8 @@ Residual risk:
    (256 MiB) keeps them; a local source's covers are the user's own files in the storage folder,
    read as they are. The exception is `cover.cbi`, the cover of an entry whose chapters are
    encrypted (Komikku writes it): it is decrypted in memory with the download password and nothing
-   decrypted is written to disk, and a cover taken from an encrypted chapter is written as
+   decrypted is written to disk (the password is read from the secret store once a session for
+   these covers and kept in memory until it is changed in settings, so a grid asks the store once), and a cover taken from an encrypted chapter is written as
    `cover.cbi`, never plain. Without the password it shows as a broken cover. The encrypted
    caches' file sizes and counts still show how much is cached.
 8. **Encrypted cache files are not bound to their place.** The frames of Coil's journal are not

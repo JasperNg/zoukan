@@ -160,11 +160,9 @@ object Images {
     private var coverPassword: () -> CharArray? = ::coverPasswordFromSecretStore
 
     /** The download password from the OS secret store; null when it is not set or cannot be read. */
-    private fun coverPasswordFromSecretStore(): CharArray? = try {
-        Injekt.get<CbzPassword>().get()
-    } catch (e: Exception) {
-        null
-    }
+    private fun coverPasswordFromSecretStore(): CharArray? = sessionCoverPassword.get()
+
+    private val sessionCoverPassword = CoverPasswordCache { Injekt.get<CbzPassword>() }
 
     /** The names of the source covers kept in the covers folder: [hash] of the source and address. */
     private val CACHED_COVER_NAME = Regex("[0-9a-f]{64}")
@@ -355,5 +353,33 @@ private class CoverFetcher(
 
     class Factory(private val dir: File) : Fetcher.Factory<Cover> {
         override fun create(data: Cover, options: Options, imageLoader: ImageLoader): Fetcher = CoverFetcher(data, dir)
+    }
+}
+
+/**
+ * The download password for encrypted covers (`cover.cbi`), read from the OS secret store once a
+ * session and kept, a failure included, so a grid of encrypted covers asks the store once, not once
+ * per cover (a denied Keychain prompt would come back for each). Read again after the password is
+ * set or removed in settings ([CbzPassword.version]). One read at a time, so covers loading at once
+ * wait for that one read. Each caller gets its own copy.
+ */
+internal class CoverPasswordCache(private val password: () -> CbzPassword) {
+    private class Read(val version: Int, val password: CharArray?)
+
+    private var last: Read? = null
+
+    @Synchronized
+    fun get(): CharArray? {
+        val store = try {
+            password()
+        } catch (e: Exception) {
+            return null
+        }
+        val version = store.version
+        last?.takeIf { it.version == version }?.let { return it.password?.copyOf() }
+        // CbzPassword.get gives null when the store fails: that is kept too
+        val read = store.get()
+        last = Read(version, read?.copyOf())
+        return read
     }
 }

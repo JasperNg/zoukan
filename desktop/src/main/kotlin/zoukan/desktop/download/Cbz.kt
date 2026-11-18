@@ -29,8 +29,18 @@ class CbzPassword(
     fun isSet(): Boolean = get() != null
 
     fun set(password: String) {
-        if (password.isEmpty()) secrets.delete(KEY) else secrets.set(KEY, password)
+        try {
+            if (password.isEmpty()) secrets.delete(KEY) else secrets.set(KEY, password)
+        } finally {
+            // Even when the write failed: what the store holds is not known any more
+            changes.incrementAndGet()
+        }
     }
+
+    private val changes = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Changes each time the password is set or removed here, so a copy kept elsewhere is read again. */
+    val version: Int get() = changes.get()
 
     /**
      * The password for a new download, or null when the setting is off. When the setting is on,
