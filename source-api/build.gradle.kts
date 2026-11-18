@@ -7,6 +7,7 @@ plugins {
     id("com.github.ben-manes.versions")
     // ZOUKAN -->
     id("zoukan.kover")
+    id("zoukan.test-home")
     // ZOUKAN <--
 }
 
@@ -50,6 +51,20 @@ kotlin {
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
             }
         }
+        // ZOUKAN -->
+        // The module's own tests run on the desktop target, as the desktop app uses the module:
+        //   ./gradlew :source-api:desktopTest
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.bundles.test)
+                implementation(kotlinx.coroutines.test)
+                // The Android classes the extension API names (Uri, SharedPreferences), as the
+                // desktop app supplies them at run time
+                implementation(projects.androidCompat)
+                runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+        // ZOUKAN <--
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
