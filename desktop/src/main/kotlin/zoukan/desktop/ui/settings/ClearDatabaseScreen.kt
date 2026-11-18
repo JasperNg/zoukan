@@ -46,6 +46,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.SafetySnapshot
 import zoukan.desktop.backup.SnapshotFailedPrompt
@@ -203,6 +204,7 @@ class ClearDatabaseScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 logcat(LogPriority.ERROR, e) { "Clearing the database failed" }
                 Toasts.error(localized(DMR.strings.could_not_clear_the_database), e)
             }

@@ -1,5 +1,6 @@
 package zoukan.desktop.update
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
@@ -143,6 +144,22 @@ class UpdateStatesTest {
         val states = UpdateStates(check = { throw IllegalStateException("bad json") }, download = { _, _ -> error("no") })
         states.check(manual = true) shouldBe UpdateChecker.Result.Failed("bad json")
         states.state.value shouldBe UpdateStates.State.Result(UpdateChecker.Result.Failed("bad json"))
+    }
+
+    @Test
+    fun `a fatal error in the check or the download goes on up and leaves no state stuck`(): Unit = runBlocking {
+        val failing = UpdateStates(check = { throw OutOfMemoryError() }, download = { _, _ -> error("no") })
+        shouldThrow<OutOfMemoryError> { failing.check(manual = true) }
+        failing.state.value shouldBe UpdateStates.State.Idle
+
+        // The secret store's native library failing to load is a failed check, as before
+        val unlinked = UpdateStates(check = { throw UnsatisfiedLinkError("no jnidispatch") }, download = { _, _ -> error("no") })
+        unlinked.check(manual = true) shouldBe UpdateChecker.Result.Failed("no jnidispatch")
+
+        val states = UpdateStates(check = { available }, download = { _, _ -> throw OutOfMemoryError("heap") })
+        states.check(manual = true)
+        shouldThrow<OutOfMemoryError> { states.download(release) }
+        states.state.value shouldBe UpdateStates.State.Failed("Download failed: heap", release)
     }
 
     @Test

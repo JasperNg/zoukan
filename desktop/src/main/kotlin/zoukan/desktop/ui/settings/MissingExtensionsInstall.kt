@@ -14,6 +14,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.RestoreGate
@@ -96,6 +97,7 @@ object MissingExtensionsInstall {
                 setState(token, State.Idle)
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { "Finding the missing extensions failed" }
                 Toasts.error(localized(DMR.strings.could_not_load_the_extension_lists), e)
                 setState(token, State.Idle)
@@ -127,6 +129,7 @@ object MissingExtensionsInstall {
                 setState(token, State.Idle)
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { "Installing the missing extensions failed" }
                 Toasts.error(localized(MR.strings.unknown_error), e)
                 setState(token, State.Idle)

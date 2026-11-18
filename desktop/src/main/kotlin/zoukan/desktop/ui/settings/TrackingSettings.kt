@@ -37,6 +37,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
@@ -124,6 +125,7 @@ private fun TrackerSetting(tracker: Tracker) {
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Throwable) {
+                            e.rethrowIfFatal()
                             Toasts.error(localized(DMR.strings.signing_in_to_failed, tracker.name), e)
                         }
                     }
@@ -205,6 +207,7 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
+                                e.rethrowIfFatal()
                                 logcat(LogPriority.WARN, e) { "Signing in failed" }
                                 error = localized(DMR.strings.could_not_sign_in)
                             }
@@ -267,6 +270,7 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
+                                e.rethrowIfFatal()
                                 logcat(LogPriority.WARN, e) { "Signing in failed" }
                                 error = localized(DMR.strings.could_not_sign_in)
                             }

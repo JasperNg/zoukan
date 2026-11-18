@@ -4,6 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import java.io.File
 
 /**
@@ -68,7 +70,10 @@ class UpdateStates(
             mutableState.compareAndSet(State.Checking, previous)
             throw e
         } catch (e: Throwable) {
-            // Also errors (a LinkageError, out of memory), so the state never stays at Checking
+            // Also errors (a LinkageError from the native secret store), so the state never stays at
+            // Checking; a fatal error puts the state back first, as a cancel does, and goes on up
+            if (e is VirtualMachineError) mutableState.compareAndSet(State.Checking, previous)
+            e.rethrowIfVmFailure()
             UpdateChecker.Result.Failed(e.message ?: e::class.simpleName.orEmpty())
         }
         val next = if (
@@ -107,6 +112,8 @@ class UpdateStates(
             throw e
         } catch (e: Throwable) {
             mutableState.value = State.Failed("Download failed: ${e.message ?: e::class.simpleName}", release)
+            // After the state, so a fatal error does not leave it at Downloading
+            e.rethrowIfFatal()
             null
         }
     }

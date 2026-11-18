@@ -42,6 +42,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.compat.localized
 import zoukan.desktop.security.AppLock
 import zoukan.i18n.desktop.DMR
@@ -73,6 +74,7 @@ fun LockOverlay() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 logcat(LogPriority.WARN, e) { "Unlocking failed" }
                 wrong = false
                 storeError = secretStoreError(e)

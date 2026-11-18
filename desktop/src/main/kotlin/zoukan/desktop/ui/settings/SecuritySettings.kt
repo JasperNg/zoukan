@@ -37,6 +37,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.security.AppLock
@@ -145,6 +146,7 @@ private suspend fun <T> secretStoreCall(block: () -> T): Result<T> =
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
+        e.rethrowIfVmFailure()
         AppLock.logcat(LogPriority.WARN, e) { "App lock: the secret store failed" }
         Result.failure(e)
     }

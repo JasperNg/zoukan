@@ -42,6 +42,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
@@ -377,6 +378,7 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Throwable) {
+                        e.rethrowIfVmFailure()
                         Toasts.error(localized(DMR.strings.updating_galleries_failed), e)
                     }
                 }

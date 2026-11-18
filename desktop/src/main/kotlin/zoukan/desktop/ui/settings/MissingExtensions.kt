@@ -1,6 +1,7 @@
 package zoukan.desktop.ui.settings
 
 import eu.kanade.tachiyomi.extension.model.Extension
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import kotlin.coroutines.cancellation.CancellationException
@@ -142,6 +143,7 @@ suspend fun installMissingExtensions(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             failed += ext.name to (e.message ?: e::class.simpleName.orEmpty())
         }
     }
