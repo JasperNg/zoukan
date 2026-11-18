@@ -386,8 +386,11 @@ class MangaScreenModel(
                 throw e
             } catch (e: Throwable) {
                 // The refresh ends before a fatal error goes on: a screen left refreshing can never
-                // refresh again (the error below replaces this one when the catch goes on)
-                mutableState.update { it.copy(refreshing = false, error = sourceErrorText(e)) }
+                // refresh again. Only then: otherwise the refresh runs on to its end below, and
+                // ending it here would let a second refresh start and be overwritten by this one
+                if (e is VirtualMachineError && e !is StackOverflowError) {
+                    mutableState.update { it.copy(refreshing = false, error = sourceErrorText(e)) }
+                }
                 e.rethrowIfVmFailure()
                 // Throwable, not Exception: an extension built against another API fails with a
                 // LinkageError, which would leave the screen refreshing for good

@@ -7,6 +7,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,11 +15,13 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.app.DesktopPreferences
@@ -55,6 +58,7 @@ class MangaScreenModelMissingEntryTest {
     private fun newModel(
         getMangaWithChapters: GetMangaWithChapters,
         refreshManga: zoukan.desktop.domain.RefreshManga = mockk(relaxed = true),
+        updateErrors: zoukan.desktop.library.LibraryUpdateErrors = mockk(relaxed = true),
     ): MangaScreenModel {
         val downloadedOnly = mockk<tachiyomi.core.common.preference.Preference<Boolean>> { every { changes() } returns flowOf(false) }
         val preferences = mockk<DesktopPreferences> { every { downloadedOnly() } returns downloadedOnly }
@@ -79,7 +83,7 @@ class MangaScreenModelMissingEntryTest {
             setMangaCategories = mockk(relaxed = true),
             chapterSettings = mockk(relaxed = true) { every { excludedScanlators(any()) } returns flowOf(emptySet()) },
             filterChaptersForDownload = mockk(relaxed = true),
-            updateErrors = mockk(relaxed = true),
+            updateErrors = updateErrors,
             refreshTracks = mockk(relaxed = true),
             libraryPreferences = tachiyomi.domain.library.service.LibraryPreferences(InMemoryPreferenceStore()),
             uiPreferences = eu.kanade.domain.ui.UiPreferences(InMemoryPreferenceStore()),
@@ -156,5 +160,39 @@ class MangaScreenModelMissingEntryTest {
         model.state.value.error shouldNotBe null
         // The first load refreshes an entry without chapters too: each refresh's error goes on
         uncaught.forEach { it.shouldBeInstanceOf<OutOfMemoryError>() }
+    }
+
+    @Test
+    fun `a failed refresh stays refreshing until its error is recorded and shown`() {
+        val manga = Manga.create().copy(id = 99, initialized = true)
+        val interactor = mockk<GetMangaWithChapters> {
+            coEvery { awaitManga(99L) } returns manga
+            coEvery { subscribe(99L) } returns flowOf(manga to listOf(Chapter.create().copy(id = 1, mangaId = 99)))
+        }
+        val refresh = mockk<zoukan.desktop.domain.RefreshManga> {
+            coEvery { this@mockk.invoke(any(), any(), any(), any(), any(), any()) } throws NoChaptersException()
+        }
+        val recording = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val errors = mockk<zoukan.desktop.library.LibraryUpdateErrors>(relaxed = true) {
+            coEvery { record(99L, any()) } coAnswers {
+                recording.complete(Unit)
+                release.await()
+            }
+        }
+        val model = newModel(interactor, refresh, errors)
+        waitUntil { model.state.value.manga != null }
+        runBlocking(main) { model.refresh(manualFetch = false) }
+        runBlocking { withTimeout(5_000) { recording.await() } }
+
+        // While the error is recorded the refresh is still running: no second refresh can start
+        // and be overwritten when this one ends, and no generic error shows first
+        runBlocking(main) { model.state.value.refreshing shouldBe true }
+        model.state.value.error shouldBe null
+
+        release.complete(Unit)
+        waitUntil { !model.state.value.refreshing }
+        model.state.value.error shouldBe localized(DMR.strings.the_source_lists_no_chapters)
+        uncaught.shouldBeEmpty()
     }
 }
