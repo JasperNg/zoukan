@@ -214,8 +214,11 @@ class DesktopExtensionManager(
         }
     }
 
-    /** One lock per package: its install, update, uninstall and trust run one at a time. */
-    private val locks = ConcurrentHashMap<String, Mutex>()
+    /**
+     * One lock per package: its install, update, uninstall and trust run one at a time. Internal so a
+     * test can put in a lock that records who asks for it: a Mutex does not show its waiters.
+     */
+    internal val locks = ConcurrentHashMap<String, Mutex>()
 
     private suspend inline fun <T> locked(pkgName: String, block: () -> T): T =
         locks.computeIfAbsent(pkgName) { Mutex() }.withLock { block() }
