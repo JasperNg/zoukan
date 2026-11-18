@@ -15,6 +15,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -140,9 +142,11 @@ class SafetySnapshot(
             write = { file -> DesktopBackups(Injekt.get<ZoukanDirs>().android).create(file, BackupOptions(), replaceExisting = false) },
         )
 
-        /** What a failure says, short enough for a dialog. */
-        internal fun errorText(error: Throwable): String =
-            (error.message?.takeIf { it.isNotBlank() } ?: error::class.simpleName.orEmpty()).take(300)
+        /** What a failure says, short enough for a dialog; running out of memory in the app's words, not the JVM's. */
+        internal fun errorText(error: Throwable): String {
+            if (error is SnapshotTooLargeException) return localized(DMR.strings.safety_backup_too_large)
+            return (error.message?.takeIf { it.isNotBlank() } ?: error::class.simpleName.orEmpty()).take(300)
+        }
 
         /**
          * Deletes [reason]'s snapshots in [folder] beyond the newest [keep], never [justWritten].

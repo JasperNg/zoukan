@@ -85,7 +85,8 @@ class SafetySnapshotTest {
             asked = it
             false
         } shouldBe false
-        asked!! shouldContain "Java heap space"
+        // Said in the app's words, not the JVM's ("Java heap space")
+        asked shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.safety_backup_too_large)
     }
 
     @Test
