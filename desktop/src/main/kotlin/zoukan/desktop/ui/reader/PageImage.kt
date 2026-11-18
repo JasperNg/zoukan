@@ -18,6 +18,7 @@ import zoukan.desktop.ui.common.UnreadableImageException
 import zoukan.i18n.desktop.DMR
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
+import javax.imageio.stream.MemoryCacheImageInputStream
 
 /**
  * A decoded page. Tall pages (webtoon strips) are cut into slices no taller than [MAX_SLICE]
@@ -97,8 +98,9 @@ class PageImage(
                 }
             } catch (e: Exception) {
                 // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys and the AVIF and
-                // HEIF reader covers a few more. Their pages go the same way, cropped as the others
-                val buffered = ImageIO.read(ByteArrayInputStream(bytes))
+                // HEIF reader covers a few more. Their pages go the same way, cropped as the others. Read
+                // through a cache in memory: ImageIO's default spills the page to a temporary file
+                val buffered = ImageIO.read(MemoryCacheImageInputStream(ByteArrayInputStream(bytes)))
                     ?: throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
                 buffered.toComposeImageBitmap().asSkiaBitmap()
             }
@@ -160,7 +162,8 @@ class PageImage(
                 // Not a type Skia reads (it fails with an unchecked exception): ImageIO's readers below
             }
             return try {
-                ImageIO.createImageInputStream(ByteArrayInputStream(bytes))?.use { input ->
+                // A cache in memory: ImageIO.createImageInputStream may spill the page to a temporary file
+                MemoryCacheImageInputStream(ByteArrayInputStream(bytes)).use { input ->
                     val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
                     try {
                         reader.input = input

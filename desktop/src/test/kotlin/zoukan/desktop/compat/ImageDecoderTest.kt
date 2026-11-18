@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageDecoder
+import zoukan.desktop.ui.reader.PageImage
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -149,6 +150,7 @@ class ImageDecoderTest {
         val cacheDirectory = ImageIO.getCacheDirectory()
         val png = png()
         val gif = twoFrameGif()
+        val tiff = ByteArrayOutputStream().also { ImageIO.write(ImageIO.read(ByteArrayInputStream(png)), "tiff", it) }.toByteArray()
         try {
             ImageIO.setUseCache(true)
             ImageIO.setCacheDirectory(dir.toFile())
@@ -160,6 +162,9 @@ class ImageDecoderTest {
             // A cache folder that no longer exists makes any file-backed stream fail
             dir.toFile().delete()
             useEveryImagePath(png, gif) {}
+            // The reader's page header check and its ImageIO fallback, on a type Skia cannot read
+            PageImage.declaredSize(tiff) shouldBe (120 to 80)
+            PageImage.decode(tiff).let { it.width to it.height } shouldBe (120 to 80)
         } finally {
             ImageIO.setUseCache(useCache)
             ImageIO.setCacheDirectory(cacheDirectory)
