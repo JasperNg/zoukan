@@ -232,7 +232,20 @@ class SyncManager(
 
         val remoteBackup = service?.doSync(syncData) ?: return false
 
+        // ZOUKAN -->
+        // The server now has the merged library under this ETag, but this computer has it only once
+        // it is all restored here. Until then the ETag is not kept: the services send it as
+        // If-None-Match, and on "not modified" upload this computer's library over the server's,
+        // which would delete the entries that never arrived here (a failed or interrupted restore,
+        // or the first sync, which only uploads). Without it the next sync merges the server's again
+        val etag = syncPreferences.lastSyncEtag().get()
+        syncPreferences.lastSyncEtag().delete()
+        // ZOUKAN <--
+
         if (remoteBackup === syncData.backup) {
+            // ZOUKAN -->
+            keepEtag(etag)
+            // ZOUKAN <--
             syncPreferences.lastSyncTimestamp().set(Date().time)
             notifier.showSyncSuccess("Sync completed successfully")
             return true
@@ -252,13 +265,13 @@ class SyncManager(
 
         val (favorites, nonFavorites) = splitFavorites(remoteBackup)
         // ZOUKAN -->
-        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites)) {
-            forgetEtag()
-            return false
-        }
+        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites)) return false
         // ZOUKAN <--
 
         if (favorites.isEmpty()) {
+            // ZOUKAN -->
+            keepEtag(etag)
+            // ZOUKAN <--
             syncPreferences.lastSyncTimestamp().set(Date().time)
             notifier.showSyncSuccess("Sync completed successfully")
             return true
@@ -304,7 +317,7 @@ class SyncManager(
         }
         // ZOUKAN <--
         // ZOUKAN -->
-        if (errors.isNotEmpty()) forgetEtag()
+        if (errors.isEmpty()) keepEtag(etag)
         // ZOUKAN <--
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
@@ -316,14 +329,9 @@ class SyncManager(
     }
 
     // ZOUKAN -->
-    /**
-     * Forgets the ETag of the library this sync uploaded, after the merged library was not all
-     * restored here. The service sends it as If-None-Match, and on "not modified" it uploads this
-     * computer's library over the server's, which would delete the entries that did not restore.
-     * Without it the next sync downloads the server's library and merges it again.
-     */
-    private fun forgetEtag() {
-        syncPreferences.lastSyncEtag().delete()
+    /** Saves [etag] again once the merged library is all restored here (see doSync). */
+    private fun keepEtag(etag: String) {
+        if (etag.isNotEmpty()) syncPreferences.lastSyncEtag().set(etag)
     }
     // ZOUKAN <--
 

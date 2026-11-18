@@ -57,6 +57,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.NoStubSources
+import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.backup.SafetySnapshot
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.e2e.FixtureServer
@@ -146,7 +147,14 @@ class SyncDatabaseFaultsTest {
         Injekt.addSingleton(FetchInterval(chapters))
         Injekt.addSingleton(mockk<GetFavorites> { coEvery { await() } returns emptyList() })
         Injekt.addSingleton(mockk<GetMergedManga> { coEvery { await() } returns emptyList() })
-        Injekt.addSingleton(mockk<GetExtensionStores> { coEvery { get() } returns emptyList() })
+        Injekt.addSingleton(
+            mockk<GetExtensionStores> {
+                coEvery { get() } answers {
+                    // Only in the restore: the backup of this computer's library reads them too
+                    if (storesFail && RestoreGate.isRestoring) throw IllegalStateException("The stores could not be read") else emptyList()
+                }
+            },
+        )
         Injekt.addSingleton(mockk<GetHistory>(relaxed = true))
         Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
         Injekt.addSingleton(mockk<SetCustomMangaInfo>(relaxed = true))
@@ -183,6 +191,10 @@ class SyncDatabaseFaultsTest {
 
     @Volatile
     private var snapshotFails = false
+
+    /** Makes the restore throw before it writes anything (its read of the extension stores). */
+    @Volatile
+    private var storesFail = false
 
     private fun manager() = SyncManager(
         context = mockk<Application>(relaxed = true),
@@ -233,8 +245,16 @@ class SyncDatabaseFaultsTest {
         manager().syncData()
         Await.until("the healed sync's notification") { messages.notifications.size >= 2 }
         withClue(messages.notifications.map { it.title + ": " + it.text }) { remoteUrls() shouldBe setOf("/local", "/remote") }
-        preferences.lastSyncEtag().get() shouldBe sync.etag
         (preferences.lastSyncTimestamp().get() > 0L) shouldBe true
+        // The first sync only uploads; this computer has not got the other device's entry yet
+        library() shouldBe mapOf("/local" to 0L)
+        preferences.lastSyncEtag().get() shouldBe ""
+
+        // So the next sync merges the server's library again and restores it, and keeps it on the server
+        manager().syncData()
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get() shouldBe sync.etag
     }
 
     @Test
@@ -274,6 +294,23 @@ class SyncDatabaseFaultsTest {
         library() shouldBe mapOf("/local" to 0L)
 
         snapshotFails = false
+        manager().syncData()
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+    }
+
+    @Test
+    fun `a restore that throws keeps the server's entries, and the next sync restores them`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().set(1L)
+        storesFail = true
+
+        manager().syncData()
+
+        messages.awaitError { it.text.contains("The stores could not be read") }
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L)
+
+        storesFail = false
         manager().syncData()
         remoteUrls() shouldBe setOf("/local", "/remote")
         library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
