@@ -71,6 +71,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.domain.toSManga
@@ -240,6 +241,7 @@ fun PagePreviewSection(manga: Manga, modifier: Modifier = Modifier) {
         } catch (e: OutOfMemoryError) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             // Throwable: an unloaded extension's Error must not leave the spinner
             Result.failure(e)
         }
@@ -326,6 +328,7 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                 } catch (e: OutOfMemoryError) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfVmFailure()
                     // Throwable: an unloaded extension's Error must not leave the spinner
                     logcat(LogPriority.WARN, e) { "Loading the page previews failed" }
                     mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }

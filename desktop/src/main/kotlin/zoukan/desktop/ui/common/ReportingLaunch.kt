@@ -6,6 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.Toasts
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -25,6 +26,7 @@ fun CoroutineScope.launchReporting(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
+        e.rethrowIfVmFailure()
         logcat(LogPriority.ERROR, e) { failedMessage() }
         Toasts.error(failedMessage(), e)
         onError(e)

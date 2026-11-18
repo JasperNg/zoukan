@@ -61,6 +61,7 @@ import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.RowSwitch
@@ -178,6 +179,7 @@ class RecommendationSearchHelper {
                             throw e
                         } catch (e: Throwable) {
                             // Throwable: an unloaded extension's Error must not leave the search spinning
+                            e.rethrowIfVmFailure()
                             logcat(LogPriority.ERROR, e) { "Error while fetching recommendations for $recSourceId" }
                         }
                     }

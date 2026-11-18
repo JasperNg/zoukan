@@ -39,6 +39,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.FileRequest
 import zoukan.desktop.app.SystemEffects
@@ -95,7 +96,9 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                // Throwable: this runs on the window's thread, where an escaping error closes the app
+                e.rethrowIfFatal()
+                // Throwable: this runs on the window's thread, where an escaping error closes the app (only
+                // a fatal one still does)
                 logcat(LogPriority.ERROR, e)
                 Toasts.show(localized(MR.strings.track_error, tracker.name, e.message ?: ""))
             }
@@ -112,8 +115,10 @@ fun EditMangaDialog(manga: Manga, onDismiss: () -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                // Throwable: an OutOfMemoryError on a huge cover still shows "could not save"
+                // Throwable: an OutOfMemoryError on a huge cover still shows "could not save", then goes on
+                // to the crash report
                 Toasts.error(localized(DMR.strings.could_not_save), e)
+                e.rethrowIfFatal()
             }
         }
     }

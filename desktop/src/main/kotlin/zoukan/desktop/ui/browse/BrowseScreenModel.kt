@@ -18,6 +18,8 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
@@ -270,6 +272,7 @@ class BrowseScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 Toasts.error(localized(DMR.strings.could_not_load_the_extension_lists), e)
             } finally {
                 mutableState.update { it.copy(refreshing = false) }
@@ -286,6 +289,7 @@ class BrowseScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 Toasts.error(localized(DMR.strings.failed), e)
             } finally {
                 mutableState.update { it.copy(busy = it.busy - pkg) }

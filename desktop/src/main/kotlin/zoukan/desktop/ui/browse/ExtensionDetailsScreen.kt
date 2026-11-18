@@ -61,6 +61,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
@@ -168,6 +169,7 @@ class ExtensionDetailsScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 Toasts.error(localized(DMR.strings.failed), e)
             }
         }

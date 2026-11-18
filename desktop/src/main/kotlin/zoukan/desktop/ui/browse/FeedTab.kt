@@ -73,6 +73,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
@@ -229,6 +230,7 @@ class FeedScreenModel(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfVmFailure()
                     Result.Error(sourceErrorMessage(e))
                 }
             }

@@ -55,6 +55,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.backup.SafetySnapshot
@@ -147,7 +148,8 @@ private fun MergeDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
                         merge.await()
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (_: Throwable) {
+                    } catch (e: Throwable) {
+                        e.rethrowIfVmFailure()
                         busy = false
                         return@launch
                     }
@@ -204,7 +206,8 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 busy = false
                 return@launch
             }

@@ -56,6 +56,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.FileRequest
 import zoukan.desktop.app.SystemEffects
@@ -195,8 +196,10 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                // Throwable: an OutOfMemoryError on a huge cover still shows the failure
+                // Throwable: an OutOfMemoryError on a huge cover still shows the failure, then goes on to
+                // the crash report
                 Toasts.error(failure, e)
+                e.rethrowIfFatal()
             }
         }
     }

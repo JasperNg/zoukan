@@ -38,6 +38,8 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
@@ -212,6 +214,7 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 logcat(LogPriority.WARN, e) { "The entry $mangaId is gone" }
                 mutableState.update { it.copy(refreshing = false, error = localized(DMR.strings.this_entry_no_longer_exists)) }
             }
@@ -380,6 +383,7 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 // Throwable, not Exception: an extension built against another API fails with a
                 // LinkageError, which would leave the screen refreshing for good
                 // KMK: the failure is the entry's update error, as a library update's
@@ -411,6 +415,7 @@ class MangaScreenModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             logcat(LogPriority.ERROR, e) { "Failed to sync trackers mangaId=$mangaId" }
         }
     }
@@ -703,6 +708,7 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 // The storage drive unplugged, a file that cannot be deleted: said, not only logged
                 logcat(LogPriority.ERROR, e) { "Deleting the downloads of ${manga.title} failed" }
                 Toasts.error(localized(DMR.strings.screen_action_failed_delete_downloads), e)
@@ -752,6 +758,7 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 logcat(LogPriority.ERROR, e)
             }
         }
@@ -768,6 +775,7 @@ class MangaScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 logcat(LogPriority.ERROR, e)
             }
         }

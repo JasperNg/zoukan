@@ -62,6 +62,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
@@ -201,6 +202,7 @@ class GlobalSearchScreenModel(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfVmFailure()
                     Result.Error(sourceErrorMessage(e))
                 }
             }

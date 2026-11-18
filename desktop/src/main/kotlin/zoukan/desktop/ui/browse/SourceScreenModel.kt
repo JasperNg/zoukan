@@ -32,6 +32,7 @@ import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.Toasts
@@ -100,9 +101,8 @@ class SourceScreenModel(
      */
     private fun defaultFilters(): FilterList = try {
         source?.getFilterList() ?: FilterList()
-    } catch (e: VirtualMachineError) {
-        throw e
     } catch (e: Throwable) {
+        e.rethrowIfVmFailure()
         logcat(LogPriority.ERROR, e) { "Failed to get the filters of ${source?.name}" }
         FilterList()
     }
@@ -295,9 +295,8 @@ class SourceScreenModel(
         val copy = defaultFilters()
         try {
             filterSerializer.deserialize(copy, filterSerializer.serialize(filters))
-        } catch (e: VirtualMachineError) {
-            throw e
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             logcat(LogPriority.ERROR, e) { "Failed to copy the filters of ${source?.name}" }
         }
         return copy
@@ -352,6 +351,7 @@ class SourceScreenModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 mutableState.update { it.copy(loading = false, error = sourceErrorMessage(e)) }
             }
         }

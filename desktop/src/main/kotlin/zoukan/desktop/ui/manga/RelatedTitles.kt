@@ -45,6 +45,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.ui.browse.QuickLibraryToggleDialogs
@@ -85,6 +86,7 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
         } catch (e: InternalError) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfVmFailure()
             // Anything else, an Error from the extension's code included (a StackOverflowError too):
             // escaping this composition effect would close the app
             related.orEmpty()
