@@ -56,7 +56,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.FileRequest
 import zoukan.desktop.app.SystemEffects
@@ -197,9 +197,10 @@ fun CoverDialog(manga: Manga, onDismiss: () -> Unit) {
                 throw e
             } catch (e: Throwable) {
                 // Throwable: an OutOfMemoryError on a huge cover still shows the failure, then goes on to
-                // the crash report
+                // the crash report. A LinkageError is an outdated extension's (the cover is fetched with
+                // the source's client and headers): shown as the failure, not reported as a crash
                 Toasts.error(failure, e)
-                e.rethrowIfFatal()
+                e.rethrowIfVmFailure()
             }
         }
     }

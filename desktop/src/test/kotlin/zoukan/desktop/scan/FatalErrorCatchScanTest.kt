@@ -168,6 +168,7 @@ class FatalErrorCatchScanTest {
             Allowed("ui/manga/MangaScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters, and enhanced trackers that ask the source", count = 3),
             Allowed("ui/manga/MergeAndMigrate.kt", "} catch (e: Throwable) {", "$SOURCE search for a merge or a migration", count = 2),
             Allowed("ui/manga/PagePreviews.kt", "} catch (e: Throwable) {", "$SOURCE page previews", count = 2),
+            Allowed("ui/manga/EntryActions.kt", "} catch (e: Throwable) {", "runs extension code: the source's client and headers, which fetch a cover to copy or save", function = "run"),
             Allowed("ui/manga/RelatedTitles.kt", "} catch (e: Throwable) {", "$SOURCE related titles", function = "RelatedTitlesSection"),
             Allowed("ui/recs/RecommendationSearch.kt", "} catch (e: Throwable) {", "$SOURCE search for recommendations"),
             Allowed("download/DownloadManager.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images for a download", function = "download"),
