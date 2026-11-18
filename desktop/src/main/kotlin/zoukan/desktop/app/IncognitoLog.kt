@@ -47,7 +47,12 @@ object IncognitoLog {
     internal fun installFilter(context: LoggerContext) {
         synchronized(context) {
             if (context.turboFilterList.any { it is Filter }) return
-            context.addTurboFilter(Filter().apply { this.context = context; start() })
+            context.addTurboFilter(
+                Filter().apply {
+                    this.context = context
+                    start()
+                },
+            )
         }
     }
 
