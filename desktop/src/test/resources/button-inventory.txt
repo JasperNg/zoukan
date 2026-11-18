@@ -361,6 +361,12 @@ dialog:recs.RecommendationSearchDialog/"Source recommendations"  pref:rec_search
 dialog:recs.RecommendationSearchDialog/"Tracker recommendations"  pref:rec_search_flags
 dialog:recs.RecommendationSearchProgressDialog/"Cancel"  calls-back
 dialog:recs.RecommendationSearchProgressDialog/"OK"  calls-back
+dialog:settings.BlockListsDialog/"Cancel"  calls-back
+dialog:settings.BlockListsDialog/"OK"  calls-back
+dialog:settings.BlockListsDialog/"https://example.org/list.txt"  own-value
+dialog:settings.BlockListsDialog/"https://example.org/list.txt" [type, enter]  field-local
+dialog:settings.BlockListsDialog/"https://example.org/list.txt" [type, escape]  calls-back
+dialog:settings.BlockListsDialog/"https://example.org/list.txt" [type]  field-local
 dialog:settings.CategoriesIncludeExcludeDialog/"Cancel"  calls-back
 dialog:settings.CategoriesIncludeExcludeDialog/"OK"  calls-back
 dialog:settings.CategoriesIncludeExcludeDialog/"Smoke"  ui
@@ -854,7 +860,7 @@ settings:Advanced/"Clear WebView data The built-in browser's cookies and cache" 
 settings:Advanced/"Clear cookies Signs you out of sites and forgets passed C..."  toast:"Cookies cleared"
 settings:Advanced/"Clear database Delete history for entries that are not sa..."  nav:settings.ClearDatabaseScreen
 settings:Advanced/"Connections Discord"  ui
-settings:Advanced/"DNS over HTTPS (DoH) Disabled"  dialog:"DNS over HTTPS (DoH)"
+settings:Advanced/"DNS over HTTPS (DoH) Quad#"  dialog:"DNS over HTTPS (DoH)"
 settings:Advanced/"Data and storage Manual & automatic backups, storage space"  ui
 settings:Advanced/"Default user agent string Mozilla/#.# (Linux; Android #;..."  dialog:"Default user agent string"
 settings:Advanced/"Disallow non-ASCII filenames Ensures compatibility with c..."  pref:disallow_non_ascii_filenames
