@@ -156,8 +156,8 @@ class PageImage(
         internal fun declaredSize(bytes: ByteArray): Pair<Int, Int>? {
             try {
                 Data.makeFromBytes(bytes).use { data -> Codec.makeFromData(data).use { return it.width to it.height } }
-            } catch (_: Exception) {
-                // Not a type Skia reads: ImageIO's readers below
+            } catch (_: RuntimeException) {
+                // Not a type Skia reads (it fails with an unchecked exception): ImageIO's readers below
             }
             return try {
                 ImageIO.createImageInputStream(ByteArrayInputStream(bytes))?.use { input ->
@@ -169,7 +169,9 @@ class PageImage(
                         reader.dispose()
                     }
                 }
-            } catch (_: Exception) {
+            } catch (_: java.io.IOException) {
+                null
+            } catch (_: RuntimeException) {
                 null
             }
         }
