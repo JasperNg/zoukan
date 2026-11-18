@@ -153,4 +153,28 @@ class BrowserProfileCleanupTest {
         BrowserProfileCleanup.clearAll(File(temp, "absent"))
         File(temp, "absent").exists() shouldBe false
     }
+
+    /**
+     * Java reports a Windows junction as a plain folder, not a link: a `Cache` junction was walked
+     * into and the files it points to deleted, and a `Default` junction was cleaned through. Not
+     * run on macOS or Linux: junctions are Windows only (the symbolic link test covers those).
+     */
+    @Test
+    fun `does not follow a Windows junction out of the profile`(@TempDir dir: File) {
+        assumeTrue(System.getProperty("os.name").orEmpty().lowercase().contains("win"), "junctions are Windows only")
+        val outside = File(dir, "outside").apply { mkdirs() }
+        outside.file("History")
+        outside.file("data")
+        val root = File(dir, "browser").apply { mkdirs() }
+        for (name in listOf("Cache", "Default")) {
+            val made = ProcessBuilder("cmd", "/c", "mklink", "/J", File(root, name).absolutePath, outside.absolutePath)
+                .redirectErrorStream(true).start().waitFor()
+            assumeTrue(made == 0, "mklink /J failed")
+        }
+
+        BrowserProfileCleanup.clean(root)
+
+        File(outside, "History").exists() shouldBe true
+        File(outside, "data").exists() shouldBe true
+    }
 }

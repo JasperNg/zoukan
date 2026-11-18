@@ -4,13 +4,9 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import zoukan.desktop.download.SafeDelete
 import java.io.File
-import java.io.IOException
-import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.nio.file.SimpleFileVisitor
-import java.nio.file.attribute.BasicFileAttributes
 
 /**
  * Deletes what the built-in browser's profile (`<data>/cache/browser`) records about the pages it
@@ -47,10 +43,11 @@ internal object BrowserProfileCleanup {
      */
     fun clean(browserCache: File): Int = runCatching {
         val root = browserCache.toPath()
-        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return@runCatching 0
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) || SafeDelete.isLink(root)) return@runCatching 0
         val profile = root.resolve("Default")
+        // A linked folder (a Windows junction too, which Java reports as a plain folder) is not cleaned through
         listOf(root, profile, root.resolve("Network"), profile.resolve("Network"))
-            .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
+            .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) && !SafeDelete.isLink(it) }
             .sumOf { cleanFolder(it) }
     }.onFailure { logcat(LogPriority.WARN, it) { "Could not clean the browser's profile" } }.getOrDefault(0)
 
@@ -59,8 +56,8 @@ internal object BrowserProfileCleanup {
         var deleted = 0
         for (entry in entries) {
             val name = entry.fileName?.toString() ?: continue
-            // A link is never followed, and never deleted: it is not something Chromium made
-            if (Files.isSymbolicLink(entry)) continue
+            // A link (or a Windows junction) is never followed, and never deleted: it is not something Chromium made
+            if (SafeDelete.isLink(entry)) continue
             val isFolder = Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)
             val delete = if (isFolder) name in FOLDER_NAMES else isRecord(name)
             if (!delete) continue
@@ -86,26 +83,9 @@ internal object BrowserProfileCleanup {
     /** Whether the file [name] is one of the browser's records that this deletes. */
     internal fun isRecord(name: String): Boolean = name in FILE_NAMES || FILE_PREFIXES.any { name.startsWith(it) }
 
-    /** Deletes [folder] and what it holds, without following links. True when it is gone. */
+    /** Deletes [folder] and what it holds, without following links or junctions. True when it is gone. */
     private fun deleteTree(folder: Path): Boolean {
-        runCatching {
-            Files.walkFileTree(
-                folder,
-                object : SimpleFileVisitor<Path>() {
-                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                        runCatching { Files.deleteIfExists(file) }
-                        return FileVisitResult.CONTINUE
-                    }
-
-                    override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult = FileVisitResult.CONTINUE
-
-                    override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
-                        runCatching { Files.deleteIfExists(dir) }
-                        return FileVisitResult.CONTINUE
-                    }
-                },
-            )
-        }
+        SafeDelete.deleteTreeNoFollow(folder)
         return !Files.exists(folder, LinkOption.NOFOLLOW_LINKS)
     }
 }
