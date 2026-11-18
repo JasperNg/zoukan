@@ -31,6 +31,7 @@ class ZoukanDirsTest {
         dirs.images shouldBe File(local, "cache/images")
         dirs.javacppCache shouldBe File(local, "cache/javacpp")
         dirs.archives shouldBe File(local, "cache/archives")
+        dirs.tempFiles shouldBe File(local, "cache/tmp")
         // The user's data, and covers (custom covers are the user's own), stay in the data folder
         dirs.database shouldBe File(roaming, "zoukan.db")
         dirs.covers shouldBe File(roaming, "cache/covers")
@@ -96,6 +97,7 @@ class ZoukanDirsTest {
         dirs.hidesFromSpotlight shouldBe true
         dirs.images shouldBe File("/tmp/profile", "cache/images.noindex")
         dirs.archives shouldBe File("/tmp/profile-local", "cache/archives.noindex")
+        dirs.tempFiles shouldBe File("/tmp/profile-local", "cache/tmp.noindex")
     }
 
     @Test

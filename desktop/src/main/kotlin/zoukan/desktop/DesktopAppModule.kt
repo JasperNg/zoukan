@@ -10,10 +10,10 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
 import kotlinx.coroutines.asCoroutineDispatcher
-import logcat.LogPriority
-import logcat.logcat
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
+import logcat.LogPriority
+import logcat.logcat
 import mihon.data.extension.repository.ExtensionStoreRepositoryImpl
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.interactor.AddExtensionStore

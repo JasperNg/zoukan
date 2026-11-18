@@ -279,7 +279,7 @@ Verified and trusted:
 | The app's cookie store (`java.net.CookieManager`, what OkHttp and the sources use) writes only cookies with an expiry, to `cookies.json`, encrypted with `FileCipher`; session cookies stay in memory. It is synced with Chromium's cookies while a browser window is open. Chromium does not persist session cookies either (`persist_session_cookies = false`) | `desktop/.../network/PersistentCookieStore.kt`, `android-compat/.../webkit/CefCookieSync.kt`, `desktop/.../browser/JcefRuntime.kt` (`applySettings`) |
 | Covers and cached images encrypted at rest with the same file key (AES-256-GCM, written through a temporary file and moved into place): the source covers in `cache/covers`, custom covers in `cache/covers/custom`, and Coil's disk cache of images fetched by address (`<cache>/cache/images`, its journal included). Each file is encrypted whole, except Coil's journal, which is framed: each appended chunk is its own AES-GCM frame with a length prefix, so a flush appends a frame instead of rewriting the file, and a torn last frame after a crash is dropped while the frames before it are kept. Every encryption, frame or whole file, takes a fresh random 96-bit nonce from `SecureRandom`, as `FileCipher` does for every file, so no nonce repeats under the key in practice. Without the file key nothing is cached on disk and a custom cover cannot be saved. While incognito is on (for the app, or for a cover's source), no new source cover or Coil image is written to disk; what is cached is still read. Covers saved before encryption are rewritten encrypted when first read, and a plain image cache is deleted; a custom cover is never deleted, even when it cannot be decrypted. Temporary files that writes cut short left behind are deleted at start, matched by the writer's own name pattern only | `desktop/.../secrets/EncryptedFiles.kt`, `EncryptedFileSystem.kt`; `desktop/.../ui/common/Images.kt` (`coverBytes`, `cachedCover`, `encryptedDiskCache`, `IncognitoDiskCacheInterceptor`, `init`), `desktop/.../manga/CustomCovers.kt` (`deleteTemporaryFiles`) |
 | The chapter cache (`<cache>/cache/archives`, the unpacked RAR, 7z and TAR chapters) encrypted at rest with the same file key: each page and ComicInfo.xml is unpacked into memory and written encrypted, whichever reader unpacks it (the system tar included), so no page is plain on disk; a page is decrypted in memory when read. A chapter is reused only when its marker decrypts with the current key, otherwise it is unpacked again. Without the file key nothing is cached and the open chapter's pages stay in memory, at most an eighth of the heap in all (`Limits.memoryBytes`); a larger chapter is refused with a message. A cover read from an archive holds one page in memory at a time and writes nothing to the cache, with or without the key. At start the cache is cleared of what is not a whole encrypted chapter (the plain cache from before encryption, folders a crash cut short); only the cache's own folder, never downloads or the storage folder | `desktop/.../local/Archives.kt` (`open`, `prepareCache`, `FolderSink`, `readCachedPage`), `ZoukanRuntime.kt` |
-| FFmpeg decodes AVIF and HEIF pages and covers from memory (a custom `AVIOContext`), never from a temporary file. A page set as a cover goes through a temporary folder of the app's own (`<cache>/cache/tmp`, beside the chapter cache), deleted right after and emptied at every start, not the system's temporary folder | `desktop/.../image/FfmpegImageDecoder.kt` (`MemoryInput`), `desktop/.../AppTempFiles.kt`, `ReaderScreenModel.kt` (`setPageAsCover`) |
+| FFmpeg decodes AVIF and HEIF pages and covers from memory (a custom `AVIOContext`), never from a temporary file. A page set as a cover goes through a temporary folder of the app's own (`<cache>/cache/tmp`, beside the chapter cache; `cache/tmp.noindex` on macOS), deleted right after and emptied at every start, not the system's temporary folder | `desktop/.../image/FfmpegImageDecoder.kt` (`MemoryInput`), `desktop/.../AppTempFiles.kt`, `ReaderScreenModel.kt` (`setPageAsCover`) |
 | App-lock password: PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte per-password salt, constant-time comparison | `desktop/.../security/AppLock.kt` (`hash`, `verify`) |
 
 Residual risk:
@@ -350,12 +350,13 @@ Residual risk:
    Zoukan's own per-platform folder, or when Zoukan created it on that start; a folder chosen with
    the data folder override (`zoukan.dataDir` or `ZOUKAN_DATA_DIR`) that already existed keeps the
    permissions its owner gave it, and a data folder that is a symbolic link is not changed. On
-   macOS the log, crash and reports folders and the caches (Coil's image cache, the chapter cache,
-   FFmpeg's natives and the Android layer's cache folder) take a `.noindex` name (`logs.noindex`,
-   `crashes.noindex`, `reports.noindex`, `cache/images.noindex`, `cache/archives.noindex`,
-   `cache/javacpp.noindex`, `android/android-compat/appdata/cache.noindex`), so Spotlight does not
-   index them, and carry Time Machine's exclusion (as `tmutil addexclusion` sets it), as does
-   `updates/`, which is created at start so the first downloaded installer is already excluded. A profile with the old
+   macOS the log, crash and reports folders, the caches (Coil's image cache, the chapter cache,
+   FFmpeg's natives and the Android layer's cache folder) and the app's temporary folder take a
+   `.noindex` name (`logs.noindex`, `crashes.noindex`, `reports.noindex`, `cache/images.noindex`,
+   `cache/archives.noindex`, `cache/tmp.noindex`, `cache/javacpp.noindex`,
+   `android/android-compat/appdata/cache.noindex`), so Spotlight does not index them, and carry
+   Time Machine's exclusion (as `tmutil addexclusion` sets it), as does `updates/`, which is
+   created at start so the first downloaded installer is already excluded. A profile with the old
    names has them renamed at start; if a rename fails, the old folder is used for that run. Code:
    `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
 
@@ -408,9 +409,9 @@ Residual risk:
    folders exist, the one used more recently is kept and the other deleted. With a chosen data
    folder (`zoukan.dataDir`) the profile stays inside that folder and goes wherever it is copied.
 7. **Some files stay plain.** A page set as a cover is written plain for a moment to the app's
-   temporary folder (`<cache>/cache/tmp`) before it is saved encrypted (a local entry's cover is the
-   user's own plain file in the storage folder); a crash at that moment leaves it until the next
-   start. Covers are decrypted in memory, where Coil's memory cache
+   temporary folder (`<cache>/cache/tmp`, `cache/tmp.noindex` on macOS) before it is saved
+   encrypted (a local entry's cover is the user's own plain file in the storage folder); a crash
+   at that moment leaves it until the next start. Covers are decrypted in memory, where Coil's memory cache
    (256 MiB) keeps them; a local source's covers are the user's own files in the storage folder,
    read as they are. The encrypted caches' file sizes and counts still show how much is cached.
 8. **Encrypted cache files are not bound to their place.** The frames of Coil's journal are not

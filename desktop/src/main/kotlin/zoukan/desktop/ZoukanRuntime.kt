@@ -149,7 +149,7 @@ object ZoukanRuntime {
         Archives.cacheRoot = dirs.archives
         // ZOUKAN: decrypted temporary files go beside the chapter cache, emptied at every start; the
         // chapter cache from before encryption is cleared (in the background, it may be large)
-        AppTempFiles.init(dirs.archives.resolveSibling("tmp"))
+        AppTempFiles.init(dirs.tempFiles)
         kotlin.concurrent.thread(isDaemon = true, name = "chapter-cache-prepare") {
             runCatching { Archives.prepareCache() }.onFailure { logcat(LogPriority.WARN, it) { "Could not prepare the chapter cache" } }
         }

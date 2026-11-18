@@ -79,6 +79,7 @@ class DataFolderPrivacyTest {
         mac.reports shouldBe File(temp, "reports.noindex")
         mac.images shouldBe File(temp, "cache/images.noindex")
         mac.archives shouldBe File(temp, "cache/archives.noindex")
+        mac.tempFiles shouldBe File(temp, "cache/tmp.noindex")
         mac.javacppCache shouldBe File(temp, "cache/javacpp.noindex")
         mac.androidCache shouldBe File(temp, "android/android-compat/appdata/cache.noindex")
         // User data and the browser keep their names
@@ -89,6 +90,7 @@ class DataFolderPrivacyTest {
         val other = ZoukanDirs(temp, hidesFromSpotlight = false)
         other.logs shouldBe File(temp, "logs")
         other.images shouldBe File(temp, "cache/images")
+        other.tempFiles shouldBe File(temp, "cache/tmp")
         other.androidCache shouldBe File(temp, "android/android-compat/appdata/cache")
     }
 

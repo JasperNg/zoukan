@@ -90,6 +90,12 @@ class ZoukanDirs internal constructor(
     /** The chapter cache: unpacked RAR, 7z and TAR chapters */
     val archives: File by disposableLocal(ARCHIVES)
 
+    /**
+     * The app's temporary folder ([AppTempFiles]: decrypted or downloaded files for a moment),
+     * beside the chapter cache, wherever that is kept
+     */
+    val tempFiles: File by lazy { resolved(File(local(ARCHIVES).parentFile, "tmp")) }
+
     /** The emulated Android app's cache folder (extensions' own cache files) */
     val androidCache: File by disposable(File(android, "android-compat/appdata"), "cache")
 
@@ -100,7 +106,7 @@ class ZoukanDirs internal constructor(
 
     /** Folders whose files can be lost without harm and that may hold private activity. */
     internal val disposableFolders: List<File>
-        get() = listOf(images, archives, javacppCache, androidCache, logs, crashes, reports)
+        get() = listOf(images, archives, tempFiles, javacppCache, androidCache, logs, crashes, reports)
 
     /** Keeps [note] for [takeFolderNotes]. */
     internal fun recordFolderNote(note: String) {
