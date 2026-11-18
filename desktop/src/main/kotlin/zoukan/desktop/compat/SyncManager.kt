@@ -252,7 +252,10 @@ class SyncManager(
 
         val (favorites, nonFavorites) = splitFavorites(remoteBackup)
         // ZOUKAN -->
-        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites)) return false
+        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites)) {
+            forgetEtag()
+            return false
+        }
         // ZOUKAN <--
 
         if (favorites.isEmpty()) {
@@ -300,6 +303,9 @@ class SyncManager(
             )
         }
         // ZOUKAN <--
+        // ZOUKAN -->
+        if (errors.isNotEmpty()) forgetEtag()
+        // ZOUKAN <--
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
             notifier.showSyncSuccess("Sync completed successfully")
@@ -308,6 +314,18 @@ class SyncManager(
         }
         return true
     }
+
+    // ZOUKAN -->
+    /**
+     * Forgets the ETag of the library this sync uploaded, after the merged library was not all
+     * restored here. The service sends it as If-None-Match, and on "not modified" it uploads this
+     * computer's library over the server's, which would delete the entries that did not restore.
+     * Without it the next sync downloads the server's library and merges it again.
+     */
+    private fun forgetEtag() {
+        syncPreferences.lastSyncEtag().delete()
+    }
+    // ZOUKAN <--
 
     private suspend fun allManga(): List<Manga> = handler.awaitList { mangasQueries.getAllManga(::mapManga) }
 
