@@ -74,6 +74,51 @@ class PageSizeLimitTest {
         PageImage.checkDeclaredSize(png(8_000, 8_000))
     }
 
+    /** A real 16 by 16 JPEG whose frame header is rewritten to declare [width] by [height]. */
+    private fun jpeg(width: Int, height: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        javax.imageio.ImageIO.write(java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_RGB), "jpeg", out)
+        val bytes = out.toByteArray()
+        val sof = (0 until bytes.size - 1).first { bytes[it] == 0xFF.toByte() && bytes[it + 1] == 0xC0.toByte() }
+        bytes[sof + 5] = (height shr 8).toByte()
+        bytes[sof + 6] = height.toByte()
+        bytes[sof + 7] = (width shr 8).toByte()
+        bytes[sof + 8] = width.toByte()
+        return bytes
+    }
+
+    // 65,500 is the tallest JPEG libjpeg (Skia's and ImageIO's decoder) reads; a taller one never showed
+    @Test
+    fun `a webtoon strip near JPEG's height limit at an ordinary width is not refused`() {
+        listOf(1080 to 65_500, 1280 to 60_000).forEach { (w, h) ->
+            val page = jpeg(w, h)
+            PageImage.declaredSize(page) shouldBe (w to h)
+            PageImage.checkDeclaredSize(page)
+        }
+    }
+
+    @Test
+    fun `a page as large as WebP allows is not refused on Skia's path`() {
+        PageImage.isTooLarge(16_383, 16_383, PageImage.MAX_DECODED_PIXELS) shouldBe false
+        PageImage.isTooLarge(16_384, 16_384, PageImage.MAX_DECODED_PIXELS) shouldBe false
+    }
+
+    @Test
+    fun `an absurd declared size is a page error`() {
+        val error = shouldThrow<UnreadableImageException> { PageImage.decode(jpeg(60_000, 60_000)) }
+        error.message shouldBe localized(DMR.strings.the_page_is_too_large_to_show)
+    }
+
+    @Test
+    fun `ImageIO's path is bounded by the heap it decodes on`() {
+        val twoGb = 2L * 1024 * 1024 * 1024
+        // A strip fits in the heap the app runs with; the same strip does not fit in a small one
+        PageImage.isTooLarge(1080, 65_535, PageImage.imageIoPixelLimit(twoGb)) shouldBe false
+        PageImage.isTooLarge(1080, 65_535, PageImage.imageIoPixelLimit(256L * 1024 * 1024)) shouldBe true
+        // Never above Skia's bound, however large the heap
+        PageImage.imageIoPixelLimit(Long.MAX_VALUE) shouldBe PageImage.MAX_DECODED_PIXELS
+    }
+
     @Test
     fun `a page response longer than the limit fails before it is read whole`() {
         val declared = Buffer().write(ByteArray(64)).asResponseBody(contentLength = 1L shl 40)
