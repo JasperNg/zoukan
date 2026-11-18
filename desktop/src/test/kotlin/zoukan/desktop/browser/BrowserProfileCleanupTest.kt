@@ -141,7 +141,9 @@ class BrowserProfileCleanupTest {
             assumeTrue(sandbox.link(profile, sandbox.userFolder) != null, "symbolic links cannot be made here")
             sandbox.record()
 
-            BrowserProfileCleanup.clearAll(profile)
+            // The user asked for it to be cleared: they are told it was not, not that it was
+            val error = io.kotest.assertions.throwables.shouldThrow<java.io.IOException> { BrowserProfileCleanup.clearAll(profile) }
+            error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.is_a_link_and_was_not_cleared, profile.name)
 
             Files.isSymbolicLink(profile.toPath()) shouldBe true
             sandbox.assertNothingOutsideAppChanged()

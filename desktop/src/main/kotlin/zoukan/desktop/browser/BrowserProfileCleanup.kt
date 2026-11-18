@@ -2,8 +2,11 @@ package zoukan.desktop.browser
 
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.SafeDelete
+import zoukan.i18n.desktop.DMR
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -34,6 +37,9 @@ internal object BrowserProfileCleanup {
     /** Files with exactly these names. */
     internal val FILE_NAMES = setOf("Visited Links", "chrome_debug.log")
 
+    /** Whether a profile folder that is a link was logged: once a run, not at every clean. */
+    private val linkLogged = java.util.concurrent.atomic.AtomicBoolean()
+
     /** Folders deleted with their contents. */
     internal val FOLDER_NAMES = setOf("Cache", "Code Cache")
 
@@ -43,7 +49,13 @@ internal object BrowserProfileCleanup {
      */
     fun clean(browserCache: File): Int = runCatching {
         val root = browserCache.toPath()
-        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) || SafeDelete.isLink(root)) return@runCatching 0
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return@runCatching 0
+        if (SafeDelete.isLink(root)) {
+            if (linkLogged.compareAndSet(false, true)) {
+                logcat(LogPriority.WARN) { "The browser's profile folder is a link; it is not cleaned" }
+            }
+            return@runCatching 0
+        }
         val profile = root.resolve("Default")
         // A linked folder (a Windows junction too, which Java reports as a plain folder) is not cleaned through
         listOf(root, profile, root.resolve("Network"), profile.resolve("Network"))
@@ -69,13 +81,16 @@ internal object BrowserProfileCleanup {
 
     /**
      * Android's "Clear WebView data": deletes everything in [browserCache], cookies and site data
-     * too. A link (or a Windows junction) in it is removed as itself, never what it points to, and a
-     * [browserCache] that is itself a link is left alone. A file Chromium still holds stays until the
-     * next time.
+     * too. A link (or a Windows junction) in it is removed as itself, never what it points to. A
+     * [browserCache] that is itself a link is left alone, and that fails with an IOException saying
+     * so: the user asked for the data to go, and must not be told it went. A file Chromium still
+     * holds stays until the next time.
      */
     fun clearAll(browserCache: File) {
         val root = browserCache.toPath()
-        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) || SafeDelete.isLink(root)) return
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return
+        if (SafeDelete.isLink(root)) throw IOException(localized(DMR.strings.is_a_link_and_was_not_cleared, browserCache.name))
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return
         val entries = runCatching { Files.list(root).use { it.toList() } }.getOrDefault(emptyList())
         entries.forEach { SafeDelete.deleteTreeNoFollow(it) }
     }

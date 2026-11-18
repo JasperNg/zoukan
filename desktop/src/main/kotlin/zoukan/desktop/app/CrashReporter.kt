@@ -284,13 +284,22 @@ object CrashReporter {
         ownFiles(dir, pattern).filter { it.lastModified() in 1 until cutoff }.forEach(::deleteQuietly)
     }
 
+    /** The linked report folders already logged this run. */
+    private val linkedFoldersLogged: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     /**
      * Regular files (not links or folders) directly in [dir] whose names match [pattern]. None when
      * [dir] is itself a link or a Windows junction: the files it leads to are not Zoukan's.
      */
     private fun ownFiles(dir: File, pattern: Regex): List<File> =
         runCatching {
-            if (SafeDelete.isLink(dir.toPath())) return@runCatching emptyList()
+            if (SafeDelete.isLink(dir.toPath())) {
+                // Reports are still written through it but never pruned: said once a run, for each folder
+                if (linkedFoldersLogged.add(dir.path)) {
+                    logcat(LogPriority.WARN) { "The ${dir.name} folder is a link; its old reports are not deleted" }
+                }
+                return@runCatching emptyList()
+            }
             dir.listFiles().orEmpty().filter { f ->
                 pattern.matches(f.name) &&
                     java.nio.file.Files.isRegularFile(f.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)
