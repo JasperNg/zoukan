@@ -66,7 +66,19 @@ class DownloadIndexBenchmarkTest {
         // An existing library: no folder changed in the last seconds
         mangas.forEach { paths.mangaDir(it).setLastModified(System.currentTimeMillis() - 60_000) }
 
-        fun manager() = DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, mockk(), mockk(), mockk(), mockk(relaxed = true))
+        // The index's clock: the test moves it past the recheck time instead of waiting
+        var now = System.currentTimeMillis()
+        fun manager() = DownloadManager(
+            ZoukanDirs(temp),
+            paths,
+            sourceManager,
+            downloadPreferences,
+            mockk(),
+            mockk(),
+            mockk(),
+            mockk(relaxed = true),
+            indexClock = { now },
+        )
         fun ms(block: () -> Unit): Long {
             val t = System.nanoTime()
             block()
@@ -117,7 +129,7 @@ class DownloadIndexBenchmarkTest {
         val cold = load(manager)
         val warm = (1..3).map { load(manager) }.minBy { it.first + it.second }
         // Past the recheck time every folder's modified time is read again (nothing changed)
-        Thread.sleep(DownloadIndex.RECHECK_MILLIS + 100)
+        now += DownloadIndex.RECHECK_MILLIS + 100
         val readBefore = manager.foldersRead
         val rechecked = load(manager)
         println("DownloadIndexBenchmark recheck: ${manager.foldersRead - readBefore} folders read again")
