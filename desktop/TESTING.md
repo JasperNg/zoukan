@@ -242,6 +242,28 @@ part of the line and, where a file has more than one site, the function the site
 match exactly its count of sites (one by default). A new site in an allowed file fails until it has
 an entry and a reason of its own; a fixed site fails until its entry goes.
 
+## Fault injection
+
+The failure tests make a fault happen for real, or through a seam with today's behaviour as its
+default, and check three things: the user sees an error (`zoukan.desktop.testing.UserMessages`), the
+app keeps going and a retry after the fault is healed works, and nothing is lost or half written.
+The kit is in `zoukan.desktop.testing.fakes`: `FileFaults` (a read-only folder, a file where a
+folder goes), `WriteFaults` (a full disk at the start or part way through a file, a close that
+fails, for code that opens its files through a seam), `FaultyFileSystem` (okio), `FailingSqlDriver`,
+`FailingSecretStore`, and `FixtureServer`'s failure kinds (`Drop`, `Truncate`, `Stall`, `Corrupt`,
+`WrongType`, `Oversize`, `Answer`). A stall test gives the client under test a short timeout (the
+seam is the client: a source's own, `NetworkHelper.plainClient`, the installer's and the release
+feed's); the app's own timeouts are 10 to 30 s.
+
+| Feature | Files | Database | Network (incl. stall) |
+| --- | --- | --- | --- |
+| Download | `DownloadFaultsTest`: read-only folder, file in the way, full disk at the start, in a page and in the archive, close and rename failing (`newDownloader` seam) | `DownloadDatabaseFaultsTest` (automatic deletion, delete; the queue restore is a known defect, its test disabled); ComicInfo's categories are optional | `DownloadFaultsTest`: status, cut, drop, HTML, stall |
+| Backup (Settings, automatic) | `BackupFaultsTest`: read-only folder, file in the way, full disk at the start and part way, close and rename failing (`openSink`/`move` seams); rotation does not run after a failure | `BackupFaultsTest` | does not apply |
+| Restore | `RestoreFaultsTest`: bad files; `edits.json` in a read-only folder or with a folder in the way. Not covered: the source settings files, which the settings layer writes in the background | `RestoreFaultsTest`, `RestorePartialFailureTest` | does not apply |
+| Sync | does not apply: sync writes no file of its own; its safety backup failing: `SafetySnapshotTest`, `SyncDatabaseFaultsTest` | `SyncDatabaseFaultsTest` (`SyncManager.syncData` end to end, WebDAV) | `SyncFaultsTest`: status, cut, drop, corrupt, stall (WebDAV and SyncYomi) |
+| Extension install | `ExtensionInstallFaultsTest` | does not apply | `ExtensionInstallFaultsTest`, stall included |
+| Update | `UpdateFaultsTest` | does not apply | `UpdateFaultsTest` |
+
 ## Old databases, the Android storage folder and backups
 
 - `DatabaseMigrationTest` (in `zoukan.desktop.db`) opens old databases through the desktop's own

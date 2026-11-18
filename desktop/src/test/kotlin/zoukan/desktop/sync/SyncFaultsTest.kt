@@ -43,9 +43,8 @@ import java.util.concurrent.TimeUnit
  * is healed works, and the remote library (another device's data) is not replaced by anything built
  * from a reply the app could not read.
  *
- * This is the nearest seam: SyncManager.syncData also builds the backup from the database and
- * restores the merged one, which the restore fault tests cover (RestoreFaultsTest); its service
- * object is made inside doSync, so a test cannot hand it a client of its own.
+ * The services are tested here on their own; SyncDatabaseFaultsTest runs SyncManager.syncData end
+ * to end, with the database failing.
  */
 class SyncFaultsTest {
     /** Swapped in before each test and put back after it, also when [start] throws. */
