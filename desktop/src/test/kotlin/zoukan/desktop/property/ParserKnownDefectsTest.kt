@@ -20,10 +20,6 @@ import java.io.IOException
 /** Inputs [OutsideDataParserPropertyTest] found that a parser does not handle. Disabled until fixed. */
 class ParserKnownDefectsTest {
 
-    @Disabled(
-        "Known defect: a ComicInfo.xml nested $COMIC_INFO_DEPTH elements deep throws StackOverflowError from " +
-            "Element.getTextContent (ComicInfoXml.kt:115). LocalSource catches Throwable, so the entry still opens.",
-    )
     @Test
     fun `a deeply nested ComicInfo xml is a parse error, not a stack overflow`() {
         val xml = "<ComicInfo><Series>" + "<a>".repeat(COMIC_INFO_DEPTH) + "x" + "</a>".repeat(COMIC_INFO_DEPTH) + "</Series></ComicInfo>"

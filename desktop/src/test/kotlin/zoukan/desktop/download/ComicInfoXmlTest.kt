@@ -51,4 +51,35 @@ class ComicInfoXmlTest {
         xml shouldContain "xmlns:ty=\"http://www.w3.org/2001/XMLSchema\""
         ComicInfoXml.read(xml.byteInputStream()).values shouldBe info.values
     }
+
+    @Test
+    fun `a value with markup inside reads as the DOM's own text content`() {
+        // Nested elements, CDATA, comments, processing instructions, character and predefined
+        // entities, whitespace, an empty element and a second root child after a deep one
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <ComicInfo>
+              <Series>a<b>b<c>c<d/></c><!-- not text -->d</b><?pi not text?><![CDATA[<e>]]>&amp;&#x41;
+                f</Series>
+              <Title><x><y><z>deep</z></y></x>tail</Title>
+              <Writer/>
+              <Summary><p>one</p><p>two</p></Summary>
+            </ComicInfo>
+        """.trimIndent()
+        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+        val doc = factory.newDocumentBuilder().parse(xml.byteInputStream())
+        val children = doc.documentElement.childNodes
+        val expected = (0 until children.length).mapNotNull { children.item(it) as? org.w3c.dom.Element }
+            .associate { it.localName to it.textContent }
+
+        ComicInfoXml.read(xml.byteInputStream()).values shouldBe expected
+        expected["Series"] shouldBe "abcd<e>&A\n    f"
+    }
+
+    @Test
+    fun `a value nested deeper than the stack allows reads without a stack overflow`() {
+        val depth = 100_000
+        val xml = "<ComicInfo><Series>" + "<a>".repeat(depth) + "x" + "</a>".repeat(depth) + "</Series><Title>t</Title></ComicInfo>"
+        ComicInfoXml.read(xml.byteInputStream()).values shouldBe mapOf("Series" to "x", "Title" to "t")
+    }
 }

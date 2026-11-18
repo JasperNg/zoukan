@@ -88,11 +88,9 @@ class OutsideDataParserPropertyTest {
             outcomes.run(
                 input,
                 { it is SAXException || it is IOException },
-                { if (it is StackOverflowError && input.count { b -> b == '<'.code.toByte() } > 10_000) "StackOverflowError (deep nesting)" else it::class.qualifiedName.orEmpty() },
             ) { ComicInfoXml.read(input.inputStream()) }
         }
-        // `a deeply nested ComicInfo xml is a parse error, not a stack overflow` in ParserKnownDefectsTest
-        outcomes.check(known = setOf("ComicInfoXml.read: StackOverflowError (deep nesting)"))
+        outcomes.check()
     }
 
     @Test

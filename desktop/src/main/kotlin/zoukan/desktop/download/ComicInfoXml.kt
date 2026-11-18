@@ -3,6 +3,8 @@ package zoukan.desktop.download
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import org.w3c.dom.Element
+import org.w3c.dom.Node
+import org.w3c.dom.Text
 import java.io.InputStream
 import java.io.StringWriter
 import javax.xml.parsers.DocumentBuilderFactory
@@ -112,9 +114,38 @@ data class ComicInfoXml(val values: Map<String, String>) {
             for (i in 0 until children.length) {
                 val node = children.item(i) as? Element ?: continue
                 val name = node.localName ?: node.tagName.substringAfter(':')
-                values[name] = node.textContent.orEmpty()
+                values[name] = textOf(node)
             }
             return ComicInfoXml(values)
+        }
+
+        /**
+         * The same text as [Node.getTextContent], walked with a loop: the DOM's own method recurses
+         * once per nesting level, so a file nested many thousands of elements deep would end in a
+         * [StackOverflowError] instead of values or a parse error.
+         */
+        private fun textOf(element: Element): String {
+            val text = StringBuilder()
+            var node: Node = element.firstChild ?: return ""
+            while (true) {
+                when (node.nodeType) {
+                    Node.TEXT_NODE, Node.CDATA_SECTION_NODE ->
+                        if (!(node as Text).isElementContentWhitespace) text.append(node.data)
+                    Node.ELEMENT_NODE, Node.ENTITY_REFERENCE_NODE -> {
+                        val child = node.firstChild
+                        if (child != null) {
+                            node = child
+                            continue
+                        }
+                    }
+                }
+                // On to the next sibling of this node or of its nearest ancestor below the value
+                while (node.nextSibling == null) {
+                    node = node.parentNode
+                    if (node === element) return text.toString()
+                }
+                node = node.nextSibling
+            }
         }
 
         /** SManga.getComicInfo, for a local source entry's details. */
