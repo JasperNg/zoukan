@@ -76,6 +76,50 @@ class JavaSharedPreferences(
             return suffix == "size" || suffix.all { it in '0'..'9' }
         }
 
+        /**
+         * Properties.storeToXML writes a tab, line feed or carriage return in a key (an XML
+         * attribute) and a carriage return in a value (text) as they are, and the XML parser
+         * normalises them on reading: a key comes back with a space, a value with a line feed. These
+         * are rewritten as character references, which the parser keeps exactly. Only the inside of
+         * each entry's key and text is touched: the writer escapes '"' in a key and '<' in text, so
+         * the next one ends it. A file written so loads in older versions too (the same parser); a
+         * literal "&#13;" in a key or value is written as "&amp;#13;" and stays as it is.
+         */
+        internal fun keepLineBreaks(xml: ByteArray): ByteArray {
+            val text = xml.toString(Charsets.UTF_8)
+            val out = StringBuilder(text.length + 64)
+            var i = 0
+            while (true) {
+                val entry = text.indexOf(ENTRY_START, i)
+                if (entry < 0) break
+                val keyStart = entry + ENTRY_START.length
+                val keyEnd = text.indexOf('"', keyStart)
+                if (keyEnd < 0) break
+                out.append(text, i, keyStart)
+                for (c in text.substring(keyStart, keyEnd)) {
+                    when (c) {
+                        '\t' -> out.append("&#9;")
+                        '\n' -> out.append("&#10;")
+                        '\r' -> out.append("&#13;")
+                        else -> out.append(c)
+                    }
+                }
+                i = keyEnd
+                // An entry with text: ">" then the text up to the next '<'
+                if (text.startsWith("\">", keyEnd)) {
+                    val valueStart = keyEnd + 2
+                    val valueEnd = text.indexOf('<', valueStart).takeIf { it >= 0 } ?: break
+                    out.append(text, keyEnd, valueStart)
+                    for (c in text.substring(valueStart, valueEnd)) if (c == '\r') out.append("&#13;") else out.append(c)
+                    i = valueEnd
+                }
+            }
+            out.append(text, i, text.length)
+            return out.toString().toByteArray(Charsets.UTF_8)
+        }
+
+        private const val ENTRY_START = "<entry key=\""
+
         /** The file the preferences named [key] are kept in (Context.getSharedPreferencesPath). */
         @JvmStatic
         fun fileFor(key: String): java.io.File =
@@ -610,7 +654,7 @@ class JavaSharedPreferences(
                     val tempFile = file.resolveSibling("${file.name}.tmp")
 
                     // ZOUKAN -->
-                    val plain = java.io.ByteArrayOutputStream().also { properties.storeToXML(it, null) }.toByteArray()
+                    val plain = keepLineBreaks(java.io.ByteArrayOutputStream().also { properties.storeToXML(it, null) }.toByteArray())
                     tempFile.writeBytes(SettingsFileCodec.current?.encode(plain) ?: plain)
                     // ZOUKAN <--
 

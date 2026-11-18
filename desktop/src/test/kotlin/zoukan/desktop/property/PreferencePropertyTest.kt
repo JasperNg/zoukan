@@ -114,17 +114,10 @@ class PreferencePropertyTest {
             val reopened = JavaSharedPreferences(name)
             val read = case.preference(DesktopPreferenceStore(reopened), case.key).get()
             // Boxed equality: NaN equals NaN, -0.0 does not equal 0.0
-            if ((read as Any?) != case.value) {
-                val kind = kindOfChange(part, case)
-                // A known kind counts as known only in the exact shape the defect produces
-                val known = kind in KNOWN_DEFECTS && hasKnownShape(part, case, read, reopened)
-                found.add(if (kind in KNOWN_DEFECTS && !known) "$kind, not as the known defect does" else kind, case.key, "$case, read back ${show(read)}")
-            }
+            if ((read as Any?) != case.value) found.add(kindOfChange(part, case), case.key, "$case, read back ${show(read)}")
             if (File(root, "settings/$name.xml.unreadable").exists()) found.add("$part ${case.type}: file unreadable", case.key, case.toString())
         }
-        val unknown = found.kinds() - KNOWN_DEFECTS
-        if (found.kinds().isNotEmpty()) println("Known preference defects seen:\n" + found.report(found.kinds() intersect KNOWN_DEFECTS))
-        check(unknown.isEmpty()) { "Preferences that did not survive (seed ${PropertyRuns.seed}):\n" + found.report(unknown) }
+        check(found.kinds().isEmpty()) { "Preferences that did not survive (seed ${PropertyRuns.seed}):\n" + found.report(found.kinds()) }
     }
 
     /** A changed value, by what is odd in the key or the value: the characters XML cannot keep as they are. */
@@ -140,49 +133,10 @@ class PreferencePropertyTest {
         return "$part with a $why changed"
     }
 
-    /**
-     * Whether the change is exactly what the known defects do: the settings file is Properties XML,
-     * whose parser normalises line ends in text (`\r\n` and `\r` become `\n`) and, in an attribute (a
-     * key), also turns tab and line feed into a space. So a value comes back with its line ends
-     * normalised, and an odd key reads as unset while the normalised key holds the value.
-     */
-    private fun hasKnownShape(part: String, case: Case, read: Any?, reopened: JavaSharedPreferences): Boolean {
-        val store = DesktopPreferenceStore(reopened)
-        return if (part == "key") {
-            val normalised = attributeNormalised(case.key)
-            normalised != case.key &&
-                read == case.preference(store, case.key).defaultValue() &&
-                case.preference(store, normalised).get() == case.value
-        } else {
-            read == lineEndsNormalised(case.value)
-        }
-    }
-
-    private fun lineEnds(s: String) = s.replace("\r\n", "\n").replace('\r', '\n')
-
-    private fun attributeNormalised(s: String) = lineEnds(s).replace('\t', ' ').replace('\n', ' ')
-
-    private fun lineEndsNormalised(value: Any): Any = when (value) {
-        is String -> lineEnds(value)
-        is Item -> value.copy(label = lineEnds(value.label))
-        is Set<*> -> value.map { if (it is String) lineEnds(it) else it }.toSet()
-        else -> value
-    }
-
     private fun show(value: Any?) = if (value is String) "\"${escaped(value)}\"" else value.toString()
 
     companion object {
         private const val ITERATIONS = 300
         private const val DEFAULT_STRING = "\u0000default"
-
-        /**
-         * Kinds of change known to happen; each has a disabled test in [PreferenceKnownDefectsTest].
-         * Only these kinds are left out: any other change still fails.
-         */
-        val KNOWN_DEFECTS: Set<String> = setOf(
-            "key with a tab or line break changed",
-            "key with a carriage return changed",
-            "value with a carriage return changed",
-        )
     }
 }
