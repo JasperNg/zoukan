@@ -24,6 +24,7 @@ import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.testing.Await
+import zoukan.desktop.testing.UncaughtCoroutineErrors
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
@@ -48,6 +49,7 @@ class MangaScreenModelMissingEntryTest {
         Dispatchers.resetMain()
         main.close()
         Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+        UncaughtCoroutineErrors.drain()
     }
 
     private fun newModel(

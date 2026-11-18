@@ -29,6 +29,7 @@ import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.testing.Await
+import zoukan.desktop.testing.UncaughtCoroutineErrors
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
@@ -57,6 +58,7 @@ class ReaderFatalErrorTest {
         Dispatchers.resetMain()
         main.close()
         Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+        UncaughtCoroutineErrors.drain()
     }
 
     /** The in-memory store has no string sets */

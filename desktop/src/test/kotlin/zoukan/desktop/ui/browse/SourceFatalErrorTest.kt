@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.domain.source.service.SourceManager
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
 import zoukan.desktop.testing.Await
+import zoukan.desktop.testing.UncaughtCoroutineErrors
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
@@ -60,6 +61,7 @@ class SourceFatalErrorTest {
         Dispatchers.resetMain()
         main.close()
         Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+        UncaughtCoroutineErrors.drain()
     }
 
     @Test
