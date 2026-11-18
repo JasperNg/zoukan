@@ -2,6 +2,7 @@ package zoukan.desktop.browser
 
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import zoukan.desktop.download.SafeDelete
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileVisitResult
@@ -67,6 +68,19 @@ internal object BrowserProfileCleanup {
             if (ok) deleted++
         }
         return deleted
+    }
+
+    /**
+     * Android's "Clear WebView data": deletes everything in [browserCache], cookies and site data
+     * too. A link (or a Windows junction) in it is removed as itself, never what it points to, and a
+     * [browserCache] that is itself a link is left alone. A file Chromium still holds stays until the
+     * next time.
+     */
+    fun clearAll(browserCache: File) {
+        val root = browserCache.toPath()
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) || SafeDelete.isLink(root)) return
+        val entries = runCatching { Files.list(root).use { it.toList() } }.getOrDefault(emptyList())
+        entries.forEach { SafeDelete.deleteTreeNoFollow(it) }
     }
 
     /** Whether the file [name] is one of the browser's records that this deletes. */

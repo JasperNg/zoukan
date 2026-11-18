@@ -388,7 +388,7 @@ private fun deleteBrowserCookies() {
  */
 private fun clearBrowserData() {
     deleteBrowserCookies()
-    Injekt.get<ZoukanDirs>().browserCache.listFiles()?.forEach { it.deleteRecursively() }
+    zoukan.desktop.browser.BrowserProfileCleanup.clearAll(Injekt.get<ZoukanDirs>().browserCache)
 }
 
 /** Android's MetadataUpdateJob: each library entry's details and cover, again from its source. */

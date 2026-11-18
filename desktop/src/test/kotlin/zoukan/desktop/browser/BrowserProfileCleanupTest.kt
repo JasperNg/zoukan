@@ -1,8 +1,10 @@
 package zoukan.desktop.browser
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
 import java.nio.file.Files
 
@@ -109,5 +111,46 @@ class BrowserProfileCleanupTest {
         BrowserProfileCleanup.isRecord("Reporting and NEL") shouldBe true
         BrowserProfileCleanup.isRecord("Cookies") shouldBe false
         BrowserProfileCleanup.isRecord("Local State") shouldBe false
+    }
+
+    @Test
+    fun `clearing all browser data empties the profile and follows no link in it`(@TempDir temp: File) {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val profile = File(sandbox.dataFolder, "cache/browser-profile")
+            profile.file("Default/Local Storage/leveldb/000003.log")
+            profile.file("Cache/Cache_Data/data_0")
+            profile.file("Local State")
+            // Links in the profile to the user's folder and to one of the user's files
+            val folderLink = sandbox.link(File(profile, "Default/linked"), sandbox.userFolder)
+            assumeTrue(folderLink != null, "symbolic links cannot be made here")
+            sandbox.link(File(profile, "linked-file"), File(sandbox.userFolder, "notes.txt"))
+            sandbox.record()
+
+            BrowserProfileCleanup.clearAll(profile)
+
+            profile.isDirectory shouldBe true
+            profile.listFiles().orEmpty().toList() shouldBe emptyList()
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `clearing all browser data leaves a profile folder that is a link alone`(@TempDir temp: File) {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val profile = File(sandbox.dataFolder, "cache/browser-profile")
+            assumeTrue(sandbox.link(profile, sandbox.userFolder) != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            BrowserProfileCleanup.clearAll(profile)
+
+            Files.isSymbolicLink(profile.toPath()) shouldBe true
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `clearing all browser data of a missing profile is not an error`(@TempDir temp: File) {
+        BrowserProfileCleanup.clearAll(File(temp, "absent"))
+        File(temp, "absent").exists() shouldBe false
     }
 }
