@@ -322,12 +322,29 @@ private fun BackupButtons() {
  * Asks for a backup file to restore, as Android's restore picker; null when none was chosen. The
  * file then opens in [RestoreBackupScreen]. The first-run setup uses it too.
  */
-internal fun pickBackupFile(window: java.awt.Window?, dirs: ZoukanDirs = Injekt.get()): File? {
+internal fun pickBackupFile(
+    window: java.awt.Window?,
+    dirs: ZoukanDirs = Injekt.get(),
+    storage: ZoukanStorage = Injekt.get(),
+): File? {
+    val start = backupPickerFolder(dirs.backups, storage.autoBackups.takeIf { storage.isAvailable })
     return SystemEffects.current.pickFile(
-        FileRequest(window, localized(MR.strings.file_select_backup), save = false, directory = dirs.backups) { name ->
-            name.endsWith(".tachibk") || name.endsWith(".proto.gz")
+        FileRequest(window, localized(MR.strings.file_select_backup), save = false, directory = start) { name ->
+            isBackupName(name)
         },
     )
+}
+
+private fun isBackupName(name: String) = name.endsWith(".tachibk") || name.endsWith(".proto.gz")
+
+/**
+ * Where the restore picker opens: the app's own backups folder ([manual]), or the storage folder's
+ * automatic backups ([automatic], null when the storage folder is missing) when only that one holds
+ * backups, as a storage folder copied from the Android app does. Only reads the folders.
+ */
+internal fun backupPickerFolder(manual: File, automatic: File?): File {
+    fun holdsBackups(dir: File) = dir.listFiles().orEmpty().any { it.isFile && isBackupName(it.name) }
+    return if (automatic != null && !holdsBackups(manual) && holdsBackups(automatic)) automatic else manual
 }
 
 /**
