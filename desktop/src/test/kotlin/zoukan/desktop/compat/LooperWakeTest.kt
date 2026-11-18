@@ -6,7 +6,7 @@ import android.os.Looper
 import android.os.shadows.ShadowPausedMessageQueue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import java.lang.management.ManagementFactory
+import zoukan.desktop.testing.Await
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -156,14 +156,43 @@ class LooperWakeTest {
                 handler.post { ran.countDown() }
                 ran.await(5, TimeUnit.SECONDS) shouldBe true
             }
-            val mx = ManagementFactory.getThreadMXBean()
-            val before = mx.getThreadCpuTime(thread.id)
-            Thread.sleep(1_000)
-            val usedMillis = (mx.getThreadCpuTime(thread.id) - before) / 1_000_000
-            (usedMillis < 200) shouldBe true
+            // The looper has waited between those messages, and the first wait consumed the interrupt.
+            // Restored after each wait, it would end every later wait at once (the spin), and a
+            // message would run with it still set
+            val interrupted = CompletableFuture<Boolean>()
+            handler.post { interrupted.complete(Thread.currentThread().isInterrupted) }
+            interrupted.get(5, TimeUnit.SECONDS) shouldBe false
         } finally {
             looper.quit()
             thread.join(5_000)
+        }
+    }
+
+    @Test
+    fun `an interrupted poll clears the interrupt, so the next poll waits for a wake`() {
+        val ptr = ShadowPausedMessageQueue.nativeInit()
+        try {
+            val polling = Thread {
+                Thread.currentThread().interrupt()
+                // The interrupt ends this one, as on Android
+                ShadowPausedMessageQueue.nativePollOnce(ptr, -1)
+                ShadowPausedMessageQueue.nativePollOnce(ptr, -1)
+            }.apply {
+                isDaemon = true
+                start()
+            }
+            // Restored, the interrupt would end the second poll at once too, and every later one: a
+            // looper that spins
+            Await.until("the poll to wait", state = { polling.state }) {
+                polling.state == Thread.State.WAITING || !polling.isAlive
+            }
+            polling.isAlive shouldBe true
+            polling.isInterrupted shouldBe false
+            ShadowPausedMessageQueue.nativeWake(ptr)
+            polling.join(5_000)
+            polling.isAlive shouldBe false
+        } finally {
+            ShadowPausedMessageQueue.nativeDestroy(ptr)
         }
     }
 }

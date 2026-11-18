@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.interceptor.HostLocks
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import zoukan.desktop.testing.Await
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -27,19 +28,26 @@ class ChallengeSerializationTest {
         val windows = AtomicInteger(0)
         val concurrent = AtomicInteger(0)
         val maxConcurrent = AtomicInteger(0)
+        val threads: MutableList<Thread> = java.util.Collections.synchronizedList(mutableListOf())
+        val asked = AtomicInteger(0)
         DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { _, _, _ ->
             windows.incrementAndGet()
             maxConcurrent.accumulateAndGet(concurrent.incrementAndGet(), ::maxOf)
-            Thread.sleep(100)
+            // The window stays open until every other challenge has arrived and waits for the host:
+            // a thread that asked and is parked can only be waiting for the host's lock
+            Await.until("the other challenges to wait for the host", timeoutMillis = 5_000) {
+                asked.get() == 8 && threads.filter { it !== Thread.currentThread() }.all { it.state == Thread.State.WAITING }
+            }
             solved.set(true)
             concurrent.decrementAndGet()
             true
         }
-        val pool = Executors.newFixedThreadPool(8)
+        val pool = Executors.newFixedThreadPool(8) { task -> Thread(task).also { threads += it } }
         val start = CountDownLatch(1)
         val results = (1..8).map {
             pool.submit<Boolean> {
                 start.await()
+                asked.incrementAndGet()
                 DesktopBrowser.solveChallenge("https://example.org/page$it", "UA") { solved.get() }
             }
         }

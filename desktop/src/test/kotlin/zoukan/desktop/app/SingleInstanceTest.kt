@@ -6,6 +6,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.util.concurrent.CompletableFuture
@@ -49,16 +50,17 @@ class SingleInstanceTest {
 
     @Test
     fun `the lock holds after the caller drops the instance and the garbage collector runs`() {
-        acquireAndForget(root)
+        val instance = acquireAndForget(root)
         try {
             val dropped = java.lang.ref.WeakReference(Any())
-            // Not a wait for a state: a lock freed by a cleaner would be freed at no known time, so
-            // the collector runs several times, with time between for cleaners to run
-            repeat(GC_ROUNDS) {
+            // A full collection clears every weak reference to what is no longer reachable at once:
+            // once the canary is cleared, an instance (and its channel, whose cleaner would free the
+            // lock) that nothing kept would be cleared too. Still reachable, its cleaner never runs
+            Await.until("a full garbage collection") {
                 System.gc()
-                Thread.sleep(CLEANER_PAUSE_MILLIS)
+                dropped.get() == null
             }
-            dropped.get() shouldBe null
+            instance.get().shouldNotBeNull()
             SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.AlreadyRunning>()
         } finally {
             // Windows cannot delete the temporary folder while the lock file is open
@@ -152,12 +154,7 @@ class SingleInstanceTest {
     }
 
     /** As runZoukanApp does: only checks that it got the lock and keeps no reference. */
-    private fun acquireAndForget(root: File) {
-        SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.Acquired>()
-    }
-
-    private companion object {
-        const val GC_ROUNDS = 20
-        const val CLEANER_PAUSE_MILLIS = 50L
-    }
+    /** Acquires the lock and keeps only a weak reference to the instance, as a caller that drops it. */
+    private fun acquireAndForget(root: File): java.lang.ref.WeakReference<SingleInstance> =
+        java.lang.ref.WeakReference(SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.Acquired>().instance)
 }
