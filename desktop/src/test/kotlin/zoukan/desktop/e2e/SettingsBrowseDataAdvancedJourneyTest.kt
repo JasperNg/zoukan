@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -152,15 +153,12 @@ class SettingsBrowseDataAdvancedJourneyTest {
                     val title = localized(MR.strings.pref_user_agent_string)
                     val restart = localized(MR.strings.requires_app_restart)
 
-                    // Scrolls past the user agent rows to the Library group's first row, so both rows are
-                    // fully on screen and not clipped at the bottom edge, where a click on a row's centre misses
-                    fun showUserAgentRows() {
-                        list.performScrollToNode(hasText(localized(MR.strings.pref_refresh_library_covers)))
-                        list.performScrollToNode(hasText(title))
-                    }
+                    // Scrolls a row to the top of the list by its key. Scrolling by text only brings a row
+                    // just into view, and a row clipped at the page's edge misses a click on its centre.
+                    fun showRow(key: String) = list.performScrollToKey(key)
 
                     fun edit(value: String) {
-                        showUserAgentRows()
+                        showRow("advanced-user-agent")
                         onAllNodesWithText(title).onFirst().performClick()
                         waitFor(hasText(localized(MR.strings.action_ok)))
                         // The page's search field has a text action too: the dialog's is the last one
@@ -189,8 +187,7 @@ class SettingsBrowseDataAdvancedJourneyTest {
                     sentUserAgent() shouldBe listOf("")
 
                     val reset = localized(MR.strings.pref_reset_user_agent_string)
-                    showUserAgentRows()
-                    list.performScrollToNode(hasText(reset))
+                    showRow("advanced-reset-user-agent")
                     onAllNodesWithText(reset).onFirst().performClick()
                     waitOrDump("for the default user agent") { userAgent.get() == default }
                     userAgent.isSet() shouldBe false
