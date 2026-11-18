@@ -5,6 +5,8 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.Codec
+import org.jetbrains.skia.Data
 import org.jetbrains.skia.IRect
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
@@ -81,6 +83,7 @@ class PageImage(
             val format = ImageFormats.sniff(bytes)
             // Neither Skia, ImageIO nor the bundled FFmpeg (no libjxl) reads JPEG XL: say so plainly
             if (format == Format.Jxl) throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
+            checkDeclaredSize(bytes)
             // Animated GIF and WebP pages play, as on Android; they are not cropped, nor given a background
             if (format == Format.Gif || format == Format.Webp) {
                 PageAnimation.of(bytes)?.let { return PageImage(it.width, it.height, emptyList(), null, it) }
@@ -130,6 +133,47 @@ class PageImage(
         }
 
         // ZOUKAN -->
+        /**
+         * The most pixels one page may declare: what the reader keeps decoded at once (4 bytes a
+         * pixel). Android shows such a page through a subsampling view; here a page that large
+         * would need more memory than the app has, and running out of memory on one page from a
+         * source or a file would end the whole session.
+         */
+        internal const val MAX_PAGE_PIXELS = PageWindow.BUDGET_PIXELS
+
+        /**
+         * Fails with a page error when [bytes] declare more than [MAX_PAGE_PIXELS], read from the
+         * image's header before anything that size is allocated.
+         */
+        internal fun checkDeclaredSize(bytes: ByteArray) {
+            val (width, height) = declaredSize(bytes) ?: return
+            if (width.toLong() * height > MAX_PAGE_PIXELS) {
+                throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
+            }
+        }
+
+        /** The width and height the image in [bytes] declares, without decoding it; null when no reader knows it. */
+        internal fun declaredSize(bytes: ByteArray): Pair<Int, Int>? {
+            try {
+                Data.makeFromBytes(bytes).use { data -> Codec.makeFromData(data).use { return it.width to it.height } }
+            } catch (_: Exception) {
+                // Not a type Skia reads: ImageIO's readers below
+            }
+            return try {
+                ImageIO.createImageInputStream(ByteArrayInputStream(bytes))?.use { input ->
+                    val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
+                    try {
+                        reader.input = input
+                        reader.getWidth(0) to reader.getHeight(0)
+                    } finally {
+                        reader.dispose()
+                    }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         /** [source] scaled to [width] pixels wide, keeping its aspect */
         private fun scaledTo(source: Bitmap, width: Int): Bitmap {
             val height = (source.height.toLong() * width / source.width).toInt().coerceAtLeast(1)

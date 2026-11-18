@@ -689,7 +689,7 @@ class ReaderScreenModel(
         return with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
             // ZOUKAN <--
             if (!response.isSuccessful) throw eu.kanade.tachiyomi.network.HttpException(response.code)
-            response.body.bytes()
+            readPageBody(response.body)
         }
     }
 
@@ -1017,6 +1017,24 @@ internal object PageWindow {
         return kept
     }
 }
+
+// ZOUKAN -->
+/**
+ * The most bytes one page's response may have. A page that size is no picture a person reads, and
+ * reading an unbounded response into memory could end the whole session with an out-of-memory error.
+ */
+internal const val MAX_PAGE_BYTES = 128L * 1024 * 1024
+
+/** [body]'s bytes, or an IOException when it says or turns out to be longer than [limit]. */
+internal fun readPageBody(body: okhttp3.ResponseBody, limit: Long = MAX_PAGE_BYTES): ByteArray {
+    val tooLarge = { java.io.IOException(localized(DMR.strings.the_page_is_too_large_to_show)) }
+    if (body.contentLength() > limit) throw tooLarge()
+    val source = body.source()
+    // More than the limit available: the page is refused before it is held whole
+    if (source.request(limit + 1)) throw tooLarge()
+    return source.readByteArray()
+}
+// ZOUKAN <--
 
 internal object ReaderCleanup {
     /**

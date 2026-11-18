@@ -345,6 +345,7 @@
     <string name="not_an_image">Not an image</string>
     <string name="could_not_encode_the_page">Could not encode the page</string>
     <string name="unsupported_image_format">Unsupported image format (%1$s)</string>
+    <string name="the_page_is_too_large_to_show">The page is too large to show</string>
     <string name="an_html_page_not_an_image">an HTML page, not an image</string>
     <string name="bytes">%1$s bytes</string>
     <string name="page_could_not_load">Page %1$s could not load</string>
