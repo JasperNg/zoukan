@@ -160,7 +160,11 @@ class WebDavSyncService(
                         Pair(SyncData(backup = backup), newETag)
                     } catch (e: Exception) {
                         xLogE("Invalid backup format:", e)
-                        Pair(null, "")
+                        // ZOUKAN -->
+                        // A remote file that cannot be read is an error, not a missing one: (null, "")
+                        // made the push replace the other device's library without If-Match
+                        throw WebDavException("The sync file on the server could not be read")
+                        // ZOUKAN <--
                     }
                 } else {
                     val body = response.body.string()

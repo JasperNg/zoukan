@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.sync.SyncNotifier
 import eu.kanade.tachiyomi.data.sync.service.SyncData
+import eu.kanade.tachiyomi.data.sync.service.SyncYomiSyncService
 import eu.kanade.tachiyomi.data.sync.service.WebDavSyncService
 import eu.kanade.tachiyomi.network.NetworkHelper
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -21,7 +22,6 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.params.ParameterizedTest
@@ -139,12 +139,6 @@ class SyncFaultsTest {
     }
 
     @Test
-    @Disabled(
-        "Known defect: a remote library that arrives damaged (or is not a backup) is treated as no remote " +
-            "library: WebDavSyncService.pullSyncData returns (null, \"\") on a decode error, and pushSyncData " +
-            "then uploads this computer's library without If-Match, replacing the other device's data. The " +
-            "user is told the sync succeeded. The Android app does the same.",
-    )
     fun `a damaged remote library is a sync error and is not overwritten`() {
         // Damaged once, in transit: the file on the server is good
         server.fail(davFile, FixtureFailure.Corrupt(fromByte = 0), times = 1)
@@ -153,6 +147,69 @@ class SyncFaultsTest {
 
         sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
         failedAndKeptRemote(result, etagBefore = "")
+
+        syncWorks()
+    }
+
+    @Test
+    fun `a remote file that is not a backup is a sync error and is not overwritten`() {
+        // Stored on the server, not damaged in transit: every sync fails until the user deals with it
+        val notABackup = "<html><body>Sign in</body></html>".toByteArray()
+        sync.seed(notABackup)
+        sync.calls.clear()
+
+        val result = syncNow()
+
+        result.shouldBeNull()
+        messages.awaitError()
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+        sync.remoteBackup shouldBe notABackup
+        preferences.lastSyncEtag().get() shouldBe ""
+    }
+
+    @Test
+    fun `an empty remote file is merged as an empty library and replaced only if it is unchanged`() {
+        sync.seed(ByteArray(0))
+        val etag = sync.etag.shouldNotBeNull()
+        sync.calls.clear()
+
+        val result = syncNow().shouldNotBeNull()
+
+        result.backupManga.map { it.url } shouldBe listOf("/local")
+        sync.calls.single { it.method == "PUT" }.ifMatch?.trim('"') shouldBe etag
+    }
+
+    @Test
+    fun `no remote library (404) is not an error and the first upload has no If-Match`() {
+        server.fail(davFile, FixtureFailure.Status(404, "Not found"), times = 1)
+
+        val result = syncNow().shouldNotBeNull()
+
+        result.backupManga.map { it.url } shouldBe listOf("/local")
+        sync.calls.single { it.method == "PUT" }.ifMatch shouldBe null
+    }
+
+    @Test
+    fun `SyncYomi - a damaged remote library is a sync error and is not overwritten`() {
+        preferences.clientHost().set(sync.clientHost)
+        preferences.clientAPIKey().set(sync.apiKey)
+        server.fail("/api/sync/content", FixtureFailure.Corrupt(fromByte = 0), times = 1)
+
+        val result = runBlocking {
+            SyncYomiSyncService(
+                mockk<Application>(relaxed = true),
+                Json { ignoreUnknownKeys = true },
+                preferences,
+                SyncNotifier(mockk<Application>(relaxed = true)),
+                ProtoBuf,
+            ).doSync(local)
+        }
+
+        result.shouldBeNull()
+        messages.awaitError()
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+        sync.remoteBackup shouldBe remoteBytes
+        preferences.lastSyncEtag().get() shouldBe ""
     }
 
     companion object {

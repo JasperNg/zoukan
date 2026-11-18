@@ -164,9 +164,11 @@ class SyncYomiSyncService(
                 logcat(LogPriority.INFO) {
                     "Bad content responsed from server"
                 }
-                // the body is invalid
-                // return default value so we can overwrite it
-                Pair(null, "")
+                // ZOUKAN -->
+                // A remote library that cannot be read is an error: overwriting it (upstream returned
+                // (null, "") here) replaced the other device's data without If-Match
+                throw SyncYomiException("The sync data on the server could not be read")
+                // ZOUKAN <--
             }
         } else {
             val responseBody = response.body.string()
