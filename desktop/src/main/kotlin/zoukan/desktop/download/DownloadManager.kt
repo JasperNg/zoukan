@@ -882,6 +882,8 @@ class DownloadManager(
             _queue.update { q -> q.filterNot { it.chapter.id in chapterIds } }
             stopping
         }
+        // A chapter the user cancels is not kept for a later restore either
+        if (held.isNotEmpty()) held = held.filterNot { it.chapterId in chapterIds }
         scope.launch {
             // After the cancelled download let go of its files
             stopped?.join()
@@ -1132,12 +1134,16 @@ class DownloadManager(
         scope.launch {
             mutex.withLock {
                 runCatching {
+                    // The saved downloads a restore has not read yet, or could not read, stay saved.
+                    // Read before the queue: restore() adds to the queue first and then lets go of them,
+                    // so each is in one or the other. Before restore() the saved file is all of them;
+                    // one that cannot be read is left for restore() to keep aside
+                    val kept = if (restoreBegun) held else peekSavedQueue() ?: return@runCatching
                     // The queue as it is now, not as it was at the call: saves start on IO threads
                     // and can take the lock out of order, so an older list must never be written last
                     val queued = _queue.value.map { SavedDownload(it.manga.id, it.chapter.id) }
-                    // The saved downloads a restore has not read yet, or could not read, stay saved
                     val ids = queued.mapTo(HashSet()) { it.chapterId }
-                    val saved = queued + held.filterNot { it.chapterId in ids }
+                    val saved = queued + kept.filterNot { it.chapterId in ids }
                     val tmp = File(queueFile.path + ".tmp")
                     tmp.writeText(json.encodeToString(saved))
                     try {
@@ -1147,6 +1153,19 @@ class DownloadManager(
                     }
                 }.onFailure { logcat(LogPriority.WARN, it) { "Saving the download queue failed" } }
             }
+        }
+    }
+
+    /** The saved queue as it is, empty when there is none; null when it cannot be read. Changes nothing. */
+    private fun peekSavedQueue(): List<SavedDownload>? {
+        val file = queueFile
+        if (!file.exists()) return emptyList()
+        return try {
+            json.decodeFromString<List<SavedDownload>>(file.readText())
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (e !is SerializationException && e !is IllegalArgumentException && e !is IOException) throw e
+            null
         }
     }
 
@@ -1203,6 +1222,10 @@ class DownloadManager(
     @Volatile
     private var held: List<SavedDownload> = emptyList()
 
+    /** Whether [restore] has read the saved file; until then, every save keeps what it holds. */
+    @Volatile
+    private var restoreBegun = false
+
     /** The entries and chapters as the database reads them; null when not registered (tests without one). */
     private val restoreRepositories by lazy {
         try {
@@ -1239,9 +1262,11 @@ class DownloadManager(
      * the saved file (see [held]) and the user is told.
      */
     suspend fun restore(start: Boolean = true) {
-        val saved = readSavedQueue() ?: return
+        val saved = readSavedQueue().orEmpty()
         // Until they are in the queue, saves keep them (also when the restore is cancelled)
         held = saved
+        restoreBegun = true
+        if (saved.isEmpty()) return
         val mangas = HashMap<Long, Manga?>()
         val downloads = ArrayList<Download>()
         var unread = emptyList<SavedDownload>()
@@ -1249,8 +1274,6 @@ class DownloadManager(
             val download = try {
                 val chapter = readSavedChapter(s) ?: continue
                 val manga = mangas.getOrPut(s.mangaId) { readSavedManga(s, chapter) } ?: continue
-                // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
-                if (!canDownload(manga)) continue
                 Download(manga, chapter)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -1258,7 +1281,8 @@ class DownloadManager(
                 unread = saved.subList(i, saved.size).toList()
                 break
             }
-            downloads += download
+            // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
+            if (canDownload(download.manga)) downloads += download
         }
         _queue.update { q ->
             val queued = q.mapTo(HashSet()) { it.chapter.id }

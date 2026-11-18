@@ -317,6 +317,56 @@ class DownloadDatabaseFaultsTest {
     }
 
     @Test
+    fun `a save before the restore keeps the saved queue`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L))
+        // The library update queues a chapter while the sources still load, before the restore
+        manager.enqueue(manga(), listOf(getChapter.await(2)!!), start = false)
+        manager.awaitBackgroundWork()
+        savedChapterIds() shouldBe listOf(2L, 1L)
+
+        manager.restore(start = false)
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(2L, 1L)
+    }
+
+    @Test
+    fun `a held download the user queues again and cancels is not kept`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+        manager.restore(start = false)
+
+        manager.enqueue(manga(), listOf(chapter()), start = false)
+        manager.cancel(setOf(1L))
+        manager.awaitBackgroundWork()
+
+        savedChapterIds() shouldBe listOf(2L)
+    }
+
+    @Test
+    fun `a saved download naming another entry than its chapter's does not drop the entry's others`() = runBlocking<Unit> {
+        driver.execute(
+            null,
+            "INSERT INTO mangas(_id, source, url, title, status, favorite, initialized, viewer, chapter_flags, cover_last_modified, date_added) " +
+                "VALUES (2, 1, '/m2', 'Other', 0, 0, 1, 0, 0, 0, 0)",
+            0,
+        )
+        driver.execute(
+            null,
+            "INSERT INTO chapters(_id, manga_id, url, name, read, bookmark, last_page_read, chapter_number, source_order, date_fetch, date_upload) " +
+                "VALUES (20, 2, '/c20', 'Chapter 20', 0, 0, 0, 20, 20, 0, 0)",
+            0,
+        )
+        // Chapter 20 is entry 2's, saved under entry 1; the entry's read fails once
+        queueFile.writeText(saved(1L to 20L, 1L to 1L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+
+        manager.restore(start = false)
+
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(1L)
+    }
+
+    @Test
     fun `a categories read that fails stops an automatic deletion, which keeps the chapter`() = runBlocking<Unit> {
         val (file, bytes) = downloaded()
         driver.failOn(FailingSqlDriver.selectFrom("categories"))
