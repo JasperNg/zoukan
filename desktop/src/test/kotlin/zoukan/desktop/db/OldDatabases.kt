@@ -15,16 +15,45 @@ import java.util.HexFormat
  * Builds encrypted databases at old schema versions for the migration tests, from the repository's
  * own files rather than committed binaries.
  *
- * The oldest schema the repository holds is SQLDelight's snapshot `data/src/commonMain/sqldelight/28.db`
- * (the schema before `28.sqm`; there is no snapshot or base `.sq` for versions 1 to 27, so those
- * migrations cannot be run from here). A database at version N is that snapshot's schema and rows
- * (the system category), copied into a new database encrypted as the desktop encrypts it, then
- * migrated with the generated migrations `28.sqm` to `(N-1).sqm`, with `PRAGMA user_version = N`.
- * [seed] then fills it with [MigrationSeed]'s rows as they existed at N.
+ * From version 28: the oldest schema snapshot the repository holds is SQLDelight's
+ * `data/src/commonMain/sqldelight/28.db` (the schema before `28.sqm`). A database at version N is that
+ * snapshot's schema and rows (the system category), copied into a new database encrypted as the
+ * desktop encrypts it, then migrated with the generated migrations `28.sqm` to `(N-1).sqm`.
+ *
+ * Before 28: the version-1 schema is the SQL text in the test resource [V1_SCHEMA] (how it was
+ * derived is in its header; the cross-check in `DatabaseMigrationTest` proves it against `28.db`),
+ * migrated with the generated `1.sqm` to `(N-1).sqm`. Two steps differ from running the migrations
+ * alone. First, `21.sqm` to `27.sqm` run with the system category's trigger single-quoted, and the
+ * trigger is then put back as the Android app has it ([TRIGGER_VERSION]). Second, a database at 4 to 13 was made by TachiyomiSY's code from before SQLDelight, whose `merged`
+ * table names its source column `manga_source`; `3.sqm` names it `COL_MANGA_SOURCE` (a column
+ * constant's name written as text), which `13.sqm` cannot read. So from version 4 the column takes
+ * the name the real databases had. A database at 1 to 3 keeps `3.sqm`'s name, which is what this
+ * build would do to it, and fails at `13.sqm` (pinned by `DatabaseMigrationTest`).
+ *
+ * Either way the database ends with `PRAGMA user_version = N`, and [seed] then fills it with
+ * [MigrationSeed]'s rows as they existed at N.
  */
 internal object OldDatabases {
     /** The version of the oldest schema snapshot in the repository. */
     const val SNAPSHOT_VERSION = 28L
+
+    /** The first version `3.sqm` has run on; see the class comment. */
+    const val MERGED_SOURCE_COLUMN_VERSION = 4L
+
+    /** The last version whose `history` table still has the `history_` column names (`14.sqm` renames them). */
+    const val HISTORY_PREFIX_VERSION = 14L
+
+    /**
+     * The first version with the system category's trigger. `20.sqm` raises its error with a
+     * double-quoted string, which this build's SQLite (built without double-quoted string
+     * literals) rejects when an `ALTER TABLE … RENAME` checks the schema, so the desktop's start-up
+     * path cannot run `26.sqm` on a database from before 27 (pinned by `DatabaseMigrationTest`).
+     * The trigger is rewritten only after the migrations.
+     */
+    const val TRIGGER_VERSION = 21L
+
+    /** The version-1 schema, as SQL statements separated by lines holding only `;`. */
+    const val V1_SCHEMA = "/db/schema-v1.sql"
 
     private const val SNAPSHOT_PATH = "data/src/commonMain/sqldelight/28.db"
     private const val MIGRATIONS_PATH = "data/src/commonMain/sqldelight/tachiyomi/migrations"
@@ -76,33 +105,105 @@ internal object OldDatabases {
 
     /**
      * Makes [file], encrypted with [key], with the schema at [version] and no rows but the system
-     * category. [migrate] runs the migrations from the snapshot's version to [version]; the
-     * self-checks pass one that skips a migration.
+     * category (where the schema has one). It starts from the version-1 schema when [fromVersion1]
+     * (always below 28), otherwise from the snapshot. [migrate] runs the migrations from the start
+     * to [version]; the self-checks pass one that skips a migration.
      */
     fun create(
         file: File,
         key: ByteArray,
         version: Long,
+        fromVersion1: Boolean = version < SNAPSHOT_VERSION,
         migrate: (SqlDriver, Long, Long) -> Unit = { driver, from, to -> Database.Schema.migrate(driver, from, to) },
     ) {
-        require(version in SNAPSHOT_VERSION..NEWEST) { "No schema for version $version" }
+        require(version in 1..NEWEST) { "No schema for version $version" }
+        require(fromVersion1 || version >= SNAPSHOT_VERSION) { "The snapshot is at $SNAPSHOT_VERSION, after $version" }
         check(!file.exists()) { "$file exists" }
-        val (statements, rows) = readSnapshot(file.parentFile)
+        // The driver has foreign keys on, as the app's own has while it migrates
         JdbcSqliteDriver(url(file), DesktopDatabase.properties(key)).use { driver ->
             object : TransacterImpl(driver) {}.transaction {
-                statements.forEach { driver.execute(null, it, 0) }
-                rows.forEach { (table, tableRows) ->
-                    tableRows.forEach { values ->
-                        val marks = values.joinToString { "?" }
-                        driver.execute(null, "INSERT INTO $table VALUES ($marks)", values.size) {
-                            values.forEachIndexed { i, v -> bind(i, v) }
-                        }
-                    }
-                }
-                if (version > SNAPSHOT_VERSION) migrate(driver, SNAPSHOT_VERSION, version)
+                if (fromVersion1) createFromVersion1(file, driver, version, migrate) else createFromSnapshot(file, driver, version, migrate)
                 driver.execute(null, "PRAGMA user_version = $version", 0)
             }
         }
+    }
+
+    /**
+     * Migrates [file] (with rows) from [from] to [to] as [create] does below 28, getting past the
+     * trigger (see [TRIGGER_VERSION]) the desktop's own start-up path cannot.
+     */
+    fun migrate(file: File, key: ByteArray, from: Long, to: Long) {
+        require(from in MERGED_SOURCE_COLUMN_VERSION..to)
+        JdbcSqliteDriver(url(file), DesktopDatabase.properties(key)).use { driver ->
+            object : TransacterImpl(driver) {}.transaction {
+                migratePastTrigger(file, driver, from, to) { d, a, b -> Database.Schema.migrate(d, a, b) }
+                driver.execute(null, "PRAGMA user_version = $to", 0)
+            }
+        }
+    }
+
+    private fun createFromSnapshot(file: File, driver: SqlDriver, version: Long, migrate: (SqlDriver, Long, Long) -> Unit) {
+        val (statements, rows) = readSnapshot(file.parentFile)
+        statements.forEach { driver.execute(null, it, 0) }
+        rows.forEach { (table, tableRows) ->
+            tableRows.forEach { values ->
+                val marks = values.joinToString { "?" }
+                driver.execute(null, "INSERT INTO $table VALUES ($marks)", values.size) {
+                    values.forEachIndexed { i, v -> bind(i, v) }
+                }
+            }
+        }
+        if (version > SNAPSHOT_VERSION) migrate(driver, SNAPSHOT_VERSION, version)
+    }
+
+    private fun createFromVersion1(file: File, driver: SqlDriver, version: Long, migrate: (SqlDriver, Long, Long) -> Unit) {
+        version1Statements().forEach { driver.execute(null, it, 0) }
+        val merged = MERGED_SOURCE_COLUMN_VERSION
+        if (version > 1) migrate(driver, 1, minOf(version, merged))
+        if (version >= merged) {
+            // As TachiyomiSY's own upgrade named it; see the class comment
+            driver.execute(null, "ALTER TABLE merged RENAME COLUMN COL_MANGA_SOURCE TO manga_source", 0)
+        }
+        if (version > merged) migratePastTrigger(file, driver, merged, version, migrate)
+    }
+
+    /**
+     * Runs [migrate] from [from] to [to] with the system category's trigger single-quoted, as the
+     * desktop's start-up rewrites it, while `21.sqm` to `27.sqm` run; then puts back the trigger as
+     * `20.sqm` and the snapshot have it, so the database is what the Android app leaves.
+     */
+    private fun migratePastTrigger(file: File, driver: SqlDriver, from: Long, to: Long, migrate: (SqlDriver, Long, Long) -> Unit) {
+        val trigger = TRIGGER_VERSION
+        if (from < trigger) migrate(driver, from, minOf(to, trigger))
+        if (to <= trigger) return
+        driver.execute(null, "DROP TRIGGER IF EXISTS system_category_delete_trigger", 0)
+        driver.execute(null, SINGLE_QUOTED_TRIGGER, 0)
+        migrate(driver, maxOf(from, trigger), to)
+        driver.execute(null, "DROP TRIGGER system_category_delete_trigger", 0)
+        driver.execute(null, snapshotTrigger(file.parentFile), 0)
+    }
+
+    /** The system category's trigger as `20.sqm` makes it and the snapshot holds it. */
+    private fun snapshotTrigger(tempDir: File): String =
+        readSnapshot(tempDir).first.single { it.startsWith("CREATE TRIGGER system_category_delete_trigger") }
+
+    /** The trigger as `DesktopDatabase` rewrites it at start-up. */
+    private val SINGLE_QUOTED_TRIGGER = """
+        CREATE TRIGGER system_category_delete_trigger BEFORE DELETE
+        ON categories
+        BEGIN SELECT CASE
+            WHEN old._id <= 0 THEN
+                RAISE(ABORT, 'System category can''t be deleted')
+            END;
+        END
+    """.trimIndent()
+
+    /** [V1_SCHEMA]'s statements, without its comment lines. */
+    fun version1Statements(): List<String> {
+        val text = OldDatabases::class.java.getResourceAsStream(V1_SCHEMA)?.use { it.readBytes().decodeToString() }
+            ?: error("$V1_SCHEMA not found")
+        return text.lines().filterNot { it.trimStart().startsWith("--") }.joinToString("\n")
+            .split(Regex("(?m)^;\\s*$")).map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     /** The snapshot's schema statements (tables, indexes, views, triggers, in that order) and its rows. */
@@ -140,16 +241,32 @@ internal object OldDatabases {
     /**
      * Inserts [MigrationSeed.rows] into [file] (at [version]), each with only the columns and tables
      * that exist at that version, foreign keys off (so the orphans the rows include can be made, as
-     * old Android builds left them). Returns the rows as inserted.
+     * old Android builds left them; without [orphans], [MigrationSeed.orphans] are left out). A whole
+     * REAL value for a column with INTEGER affinity is inserted as the integer SQLite stores. Returns
+     * the rows as inserted.
      */
-    fun seed(file: File, key: ByteArray): List<SeedRow> {
+    fun seed(file: File, key: ByteArray, orphans: Boolean = true): List<SeedRow> {
         val seeded = mutableListOf<SeedRow>()
         connect(file, key).use { c ->
-            val columns = SchemaCompare.tables(c).associateWith { SchemaCompare.columnNames(c, it).toSet() }
+            val tables = SchemaCompare.tables(c)
+            val columns = tables.associateWith { SchemaCompare.columnNames(c, it).toSet() }
+            val info = tables.associateWith { table -> SchemaCompare.query(c, "PRAGMA table_info($table)") }
+            val integerColumns = info.mapValues { (_, cols) ->
+                cols.filter { (it["type"] as String).contains("INT", ignoreCase = true) }.map { it["name"] as String }.toSet()
+            }
+            // From 14.sqm to the snapshot, history.last_read is NOT NULL: 14.sqm wrote 0 for never read
+            val lastReadNotNull = info["history"]?.any { it["name"] == "last_read" && it["notnull"] == 1L } == true
             c.autoCommit = false
             for (row in MigrationSeed.rows) {
+                if (!orphans && row in MigrationSeed.orphans) continue
                 val tableColumns = columns[row.table] ?: continue
-                val values = row.values.filterKeys { it in tableColumns }
+                val values = row.values.filterKeys { it in tableColumns }.mapValues { (column, v) ->
+                    when {
+                        v is Double && column in integerColumns.getValue(row.table) && v % 1.0 == 0.0 -> v.toLong()
+                        v == null && row.table == "history" && column == "last_read" && lastReadNotNull -> 0L
+                        else -> v
+                    }
+                }
                 // Every column the table has at this version, so [MigrationSeed.expected] knows which a migration added
                 val missing = tableColumns - values.keys
                 check(missing.isEmpty()) { "The seed row ${row.values} of ${row.table} sets no value for $missing" }

@@ -9,7 +9,15 @@ package zoukan.desktop.db
  * parent is gone (foreign keys were not always enforced; `47.sqm` removes them), a scanlator with
  * spaces around it (`29.sqm` trims it), a negative score for tracker 7 (`30.sqm`), tracker ids in
  * URLs for trackers 3 and 9 (`42.sqm`) and an extension repository (`46.sqm` moves it to the
- * extension stores).
+ * extension stores). For the migrations before 28: a whole number of chapters read in a tracker's
+ * INTEGER column (`8.sqm` makes it REAL), a chapter with no upload date (`9.sqm` takes the fetch
+ * date), empty read times (`14.sqm` makes them 0), the old `-1` placeholders and a category's
+ * custom entry order (`18.sqm` resets them), an empty scanlator filter (`21.sqm` makes it NULL)
+ * and favourite alternatives (`27.sqm` drops the table).
+ *
+ * A row may name columns of several versions: `history` has `history_id` and the other
+ * `history_` names up to version 14 and `_id` after, and `eh_favorites` has `_id` up to 26.
+ * [OldDatabases.seed] keeps the ones the version has.
  *
  * Rows of a table are inserted in list order. `mangas_categories` comes before `mangas`: its insert
  * trigger (from `31.sqm`) would otherwise bump the entry's version and modified time.
@@ -26,6 +34,18 @@ internal object MigrationSeed {
     private val SIGNING_B = "bb".repeat(32)
 
     private fun row(table: String, vararg values: Pair<String, Any?>) = SeedRow(table, linkedMapOf(*values))
+
+    private val orphanRows = mutableSetOf<SeedRow>()
+
+    /** Marks [row] as one whose parent is gone. */
+    private fun orphan(row: SeedRow) = row.also { orphanRows += it }
+
+    private fun history(id: Long, chapterId: Long, lastRead: Long?, timeRead: Long?) = row(
+        "history",
+        "_id" to id, "chapter_id" to chapterId, "last_read" to lastRead, "time_read" to (timeRead ?: 0L),
+        // Up to version 14 (14.sqm renames them; its NOT NULL time_read had no such rule before)
+        "history_id" to id, "history_chapter_id" to chapterId, "history_last_read" to lastRead, "history_time_read" to timeRead,
+    )
 
     private fun manga(id: Long, source: Long, url: String, title: String, favorite: Long, vararg extra: Pair<String, Any?>) = row(
         "mangas",
@@ -66,14 +86,15 @@ internal object MigrationSeed {
         row("sources", "_id" to 1001L, "lang" to "en", "name" to "Northwind Comics"),
         row("sources", "_id" to 1002L, "lang" to "ja", "name" to "Paper Lantern"),
 
-        row("categories", "_id" to 1L, "name" to "Reading", "sort" to 1L, "flags" to 64L, "manga_order" to "", "hidden" to 1L),
+        // A custom entry order, which 18.sqm clears
+        row("categories", "_id" to 1L, "name" to "Reading", "sort" to 1L, "flags" to 64L, "manga_order" to "3/1", "hidden" to 1L),
         row("categories", "_id" to 2L, "name" to "Later", "sort" to 2L, "flags" to 0L, "manga_order" to "", "hidden" to 0L),
 
         row("mangas_categories", "_id" to 1L, "manga_id" to 1L, "category_id" to 1L),
         row("mangas_categories", "_id" to 2L, "manga_id" to 1L, "category_id" to 2L),
         // Orphans: the entry, or the category, is gone
-        row("mangas_categories", "_id" to 3L, "manga_id" to 999L, "category_id" to 1L),
-        row("mangas_categories", "_id" to 4L, "manga_id" to 1L, "category_id" to 999L),
+        orphan(row("mangas_categories", "_id" to 3L, "manga_id" to 999L, "category_id" to 1L)),
+        orphan(row("mangas_categories", "_id" to 4L, "manga_id" to 1L, "category_id" to 999L)),
 
         manga(
             1, 1001, "/series/harbor-lights", "Harbor Lights", 1,
@@ -94,8 +115,11 @@ internal object MigrationSeed {
             "update_strategy" to 1L,
             "filtered_scanlators" to "Bad Scans",
             "last_modified_at" to 1_700_000_010L,
+            // The -1 placeholders old builds wrote, which 18.sqm resets to 0
+            "viewer" to -1L, "chapter_flags" to -1L, "last_update" to -1L, "cover_last_modified" to -1L, "date_added" to -1L,
         ),
-        manga(4, MERGED_SOURCE, "merged-1", "Harbor Lights", 1, "date_added" to 1_695_000_000_000L),
+        // An empty scanlator filter, which 21.sqm makes NULL
+        manga(4, MERGED_SOURCE, "merged-1", "Harbor Lights", 1, "date_added" to 1_695_000_000_000L, "filtered_scanlators" to ""),
 
         chapter(
             10, 1, "/c/10", "Ch. 1 - Arrival", "Moonlit Scans",
@@ -104,15 +128,17 @@ internal object MigrationSeed {
             "last_modified_at" to 1_700_000_004L, "version" to 2L, "memo" to Blob.of("""{"note":"x"}"""),
         ),
         chapter(11, 1, "/c/11", "Ch. 1.5", "  Padded Group  ", "chapter_number" to 1.5, "last_page_read" to 4L, "source_order" to 1L),
-        chapter(12, 3, "/p/12", "Chapter 1", null, "read" to 1L),
+        // No upload date, which 9.sqm sets to the fetch date
+        chapter(12, 3, "/p/12", "Chapter 1", null, "read" to 1L, "date_fetch" to 1_700_000_200_000L),
         // Orphan: its entry is gone
-        chapter(99, 999, "/gone/99", "Gone", null),
+        orphan(chapter(99, 999, "/gone/99", "Gone", null)),
 
-        row("history", "_id" to 1L, "chapter_id" to 10L, "last_read" to 1_700_001_000_000L, "time_read" to 600_000L),
-        row("history", "_id" to 2L, "chapter_id" to 12L, "last_read" to null, "time_read" to 0L),
+        history(1, 10, 1_700_001_000_000L, 600_000L),
+        // Never read: no read time, which 14.sqm makes 0
+        history(2, 12, null, null),
         // Orphans: the chapter of an orphan chapter, and a chapter that is gone
-        row("history", "_id" to 3L, "chapter_id" to 99L, "last_read" to 1L, "time_read" to 1L),
-        row("history", "_id" to 4L, "chapter_id" to 9999L, "last_read" to 1L, "time_read" to 1L),
+        orphan(history(3, 99, 1L, 1L)),
+        orphan(history(4, 9999, 1L, 1L)),
 
         track(
             1, 1, 2, 4242, 77, 85.0, "https://example.org/track/4242",
@@ -122,30 +148,31 @@ internal object MigrationSeed {
         // Tracker 7 with a negative score; tracker 3 with its id only in the URL
         track(2, 1, 7, 31, null, -1.0, "https://example.org/t7/31"),
         track(3, 3, 3, 5, 6, 0.0, "https://example.org/manga/12345"),
-        track(4, 999, 2, 1, null, 0.0, "https://example.org/gone"),
+        orphan(track(4, 999, 2, 1, null, 0.0, "https://example.org/gone")),
 
         row("excluded_scanlators", "manga_id" to 1L, "scanlator" to "Bad Scans"),
-        row("excluded_scanlators", "manga_id" to 999L, "scanlator" to "Gone"),
+        orphan(row("excluded_scanlators", "manga_id" to 999L, "scanlator" to "Gone")),
 
         row("saved_search", "_id" to 1L, "source" to 1001L, "name" to "Completed", "query" to "action", "filters_json" to "[]"),
         row("feed_saved_search", "_id" to 1L, "source" to 1001L, "saved_search" to 1L, "global" to 0L, "feed_order" to 3L),
         row("feed_saved_search", "_id" to 2L, "source" to 1002L, "saved_search" to null, "global" to 1L, "feed_order" to 4L),
-        row("feed_saved_search", "_id" to 3L, "source" to 1001L, "saved_search" to 77L, "global" to 0L, "feed_order" to 5L),
+        orphan(row("feed_saved_search", "_id" to 3L, "source" to 1001L, "saved_search" to 77L, "global" to 0L, "feed_order" to 5L)),
 
         merged(1, mergeId = 4, mangaId = 4, mangaUrl = "merged-1", source = MERGED_SOURCE, info = 1),
         merged(2, mergeId = 4, mangaId = 1, mangaUrl = "/series/harbor-lights", source = 1001, info = 0),
         // A member whose entry is gone (kept, without it) and a merge whose entry is gone (removed)
-        merged(3, mergeId = 4, mangaId = 555, mangaUrl = "/gone", source = 1002, info = 0),
-        merged(4, mergeId = 888, mangaId = 1, mangaUrl = "/series/harbor-lights", source = 1001, info = 0),
+        orphan(merged(3, mergeId = 4, mangaId = 555, mangaUrl = "/gone", source = 1002, info = 0)),
+        orphan(merged(4, mergeId = 888, mangaId = 1, mangaUrl = "/series/harbor-lights", source = 1001, info = 0)),
 
         row("search_metadata", "manga_id" to 1L, "uploader" to "uploader", "extra" to """{"k":1}""", "indexed_extra" to "idx", "extra_version" to 2L),
-        row("search_metadata", "manga_id" to 999L, "uploader" to null, "extra" to "{}", "indexed_extra" to null, "extra_version" to 1L),
+        orphan(row("search_metadata", "manga_id" to 999L, "uploader" to null, "extra" to "{}", "indexed_extra" to null, "extra_version" to 1L)),
         row("search_tags", "_id" to 1L, "manga_id" to 1L, "namespace" to "genre", "name" to "sea", "type" to 1L),
-        row("search_tags", "_id" to 2L, "manga_id" to 999L, "namespace" to null, "name" to "gone", "type" to 0L),
+        orphan(row("search_tags", "_id" to 2L, "manga_id" to 999L, "namespace" to null, "name" to "gone", "type" to 0L)),
         row("search_titles", "_id" to 1L, "manga_id" to 1L, "title" to "Alt Title", "type" to 0L),
-        row("search_titles", "_id" to 2L, "manga_id" to 999L, "title" to "Gone", "type" to 0L),
+        orphan(row("search_titles", "_id" to 2L, "manga_id" to 999L, "title" to "Gone", "type" to 0L)),
 
-        row("eh_favorites", "gid" to "100", "token" to "abc", "title" to "Favorite Title", "category" to 2L),
+        // _id: up to version 26 (26.sqm keys the table by gid and token)
+        row("eh_favorites", "_id" to 1L, "gid" to "100", "token" to "abc", "title" to "Favorite Title", "category" to 2L),
         row("eh_favorites_alternatives", "id" to 1L, "gid" to "100", "token" to "abc", "otherGid" to "101", "otherToken" to "def"),
 
         row("libraryUpdateErrorMessage", "_id" to 1L, "message" to "Timed out"),
@@ -167,8 +194,20 @@ internal object MigrationSeed {
         ),
     )
 
-    /** The columns that identify a row of each table. */
-    fun keyOf(table: String): List<String> = when (table) {
+    /** The rows [OldDatabases.seed] leaves out when asked for none whose parent is gone. */
+    val orphans: Set<SeedRow> get() = orphanRows
+
+    /**
+     * The columns that identify a row of each table, in the newest schema, or in the one whose
+     * [columns] are given (`history` before 15 and `merged` before 4 name them differently).
+     */
+    fun keyOf(table: String, columns: Set<String>? = null): List<String> = when {
+        table == "history" && columns != null && "history_id" in columns -> listOf("history_id")
+        table == "merged" && columns != null && "_id" !in columns -> listOf("merge_id", "manga_id")
+        else -> newestKeyOf(table)
+    }
+
+    private fun newestKeyOf(table: String): List<String> = when (table) {
         "search_metadata" -> listOf("manga_id")
         "excluded_scanlators" -> listOf("manga_id", "scanlator")
         "eh_favorites" -> listOf("gid", "token")
@@ -187,7 +226,7 @@ internal object MigrationSeed {
      */
     fun expected(from: Long, seeded: List<SeedRow>, newestColumns: Map<String, List<String>>): Map<String, List<Map<String, Any?>>> {
         val tables = newestColumns.keys.associateWith { mutableListOf<MutableMap<String, Any?>>() }
-        // The system category every schema has
+        // The system category: every schema from 21 has it, and 20.sqm adds it to older ones
         tables.getValue("categories") += linkedMapOf<String, Any?>(
             "_id" to 0L,
             "name" to "",
@@ -196,7 +235,8 @@ internal object MigrationSeed {
             "manga_order" to "",
             "hidden" to 0L,
         )
-        for (row in seeded) {
+        for (seededRow in seeded) {
+            val row = renamed(seededRow)
             if (row.table == "extension_repos") {
                 // 46.sqm: every repository becomes a legacy store
                 if (from <= 46) {
@@ -223,7 +263,23 @@ internal object MigrationSeed {
         return tables
     }
 
+    /** A row seeded before 14.sqm, with the `history` column names it gave. */
+    private fun renamed(row: SeedRow): SeedRow =
+        if (row.table == "history" && "history_id" in row.values) {
+            SeedRow(row.table, row.values.mapKeys { (column, _) -> if (column == "history_id") "_id" else column.removePrefix("history_") })
+        } else {
+            row
+        }
+
     private fun added(table: String, column: String, row: Map<String, Any?>): Any? = when ("$table.$column") {
+        // 1.sqm, 5.sqm, 7.sqm (its DEFAULT 0, kept by 13.sqm's copy)
+        "mangas.cover_last_modified" -> 0L
+        "mangas.filtered_scanlators" -> null
+        "mangas.next_update" -> 0L
+        // 2.sqm's value depends on other rows, and a database that old fails at 13.sqm on this build
+        "mangas.date_added" -> error("No expectation for mangas.date_added: a database from before 2.sqm cannot be migrated")
+        // 22.sqm, 25.sqm
+        "mangas.update_strategy", "mangas.calculate_interval" -> 0L
         // 28.sqm
         "mangas.last_modified_at", "chapters.last_modified_at" -> Now
         "mangas.favorite_modified_at" -> if (row["favorite"] == 1L) Now else null
@@ -243,6 +299,37 @@ internal object MigrationSeed {
 
     /** What the data migrations do to rows they apply to. */
     private fun transform(from: Long, tables: Map<String, MutableList<MutableMap<String, Any?>>>) {
+        // 8.sqm rebuilds manga_sync with last_chapter_read REAL; the INTEGER values become reals
+        if (from <= 8) {
+            tables.getValue("manga_sync").forEach { it["last_chapter_read"] = (it["last_chapter_read"] as Number).toDouble() }
+        }
+        // 9.sqm: a chapter with no upload date takes its fetch date
+        if (from <= 9) {
+            tables.getValue("chapters").filter { it["date_upload"] == 0L }.forEach { it["date_upload"] = it["date_fetch"] }
+        }
+        // 14.sqm copies history with coalesce(…, 0) into the renamed columns
+        if (from <= 14) {
+            tables.getValue("history").forEach { history ->
+                history["last_read"] = history["last_read"] ?: 0L
+                history["time_read"] = history["time_read"] ?: 0L
+            }
+        }
+        // 18.sqm: the -1 placeholders become 0, and every category's custom entry order is cleared
+        // (the system category comes later, from 20.sqm, with an empty order)
+        if (from <= 18) {
+            tables.getValue("mangas").forEach { manga ->
+                for (column in listOf("chapter_flags", "viewer", "date_added", "cover_last_modified", "last_update")) {
+                    if (manga[column] == -1L) manga[column] = 0L
+                }
+            }
+            tables.getValue("categories").forEach { it["manga_order"] = "" }
+        }
+        // 21.sqm: an empty scanlator filter becomes NULL
+        if (from <= 21) {
+            tables.getValue("mangas").filter { it["filtered_scanlators"] == "" }.forEach { it["filtered_scanlators"] = null }
+        }
+        // 27.sqm drops and recreates eh_favorites_alternatives, with its rows
+        if (from <= 27) tables.getValue("eh_favorites_alternatives").clear()
         // 29.sqm trims scanlators; the update fires 28.sqm's trigger, which sets last_modified_at
         if (from <= 29) {
             tables.getValue("chapters").filter { it["scanlator"] != null }.forEach {

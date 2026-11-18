@@ -246,12 +246,29 @@ an entry and a reason of its own; a fixed site fails until its entry goes.
 
 - `DatabaseMigrationTest` (in `zoukan.desktop.db`) opens old databases through the desktop's own
   start-up path and checks every row, field by field, the schema against a new install's and
-  `user_version`. `OldDatabases` builds them, encrypted, from the schema snapshot
-  `data/src/commonMain/sqldelight/28.db` and the generated migrations, so no binary is committed:
-  version 28 (the oldest the repository can rebuild; there is no schema for 1 to 27), 38 and the
-  one before the newest. `MigrationSeed` holds the known rows and what each migration does to
-  them. A new migration that adds a table or a column fails these tests until `MigrationSeed` has
-  rows for the table, or says what old rows get in the column.
+  `user_version`. `OldDatabases` builds them, encrypted, from SQL text and the generated
+  migrations, so no binary is committed: from version 28 on, from the schema snapshot
+  `data/src/commonMain/sqldelight/28.db`; before it, from the version-1 schema in
+  `src/test/resources/db/schema-v1.sql`. That file is TachiyomiSY's first database (the table SQL
+  its pre-SQLDelight code used at database version 1, from its public history; `1.sqm` to
+  `13.sqm` repeat that code's upgrades), and a test proves it: running `1.sqm` to `27.sqm` on it
+  gives `28.db`'s schema and rows exactly, apart from what `14.sqm` leaves behind (below).
+  Versions opened through the start-up path: 27, 28, 38 and the one before the newest; 4 and 14
+  are first migrated to 27 by `OldDatabases`, since the start-up path cannot take them (below).
+  Every version from 1 is built and seeded. `MigrationSeed` holds the known rows and what each
+  migration does to them. A new migration that adds a table or a column fails these tests until
+  `MigrationSeed` has rows for the table, or says what old rows get in the column.
+  Only the newest version occurs in the field: the desktop's first release already had it, and data
+  from Android arrives in backups, not database files. The older versions are tested for
+  completeness, since the migrations are shared with the Android app. Pinned as they are: a
+  database from before 4 fails at `13.sqm` (`3.sqm` names a column `COL_MANGA_SOURCE`); before
+  15, a row whose parent is gone fails `13.sqm` or `14.sqm` (the desktop migrates with foreign
+  keys on); before 27, the start-up path fails at `26.sqm`, whose table rename makes SQLite check
+  `20.sqm`'s trigger and its double-quoted string (the trigger is rewritten only after migrating),
+  and past that, two favourites with the same gallery fail `26.sqm`. Each failure leaves the
+  database and the copy made before the migration as they were. A database that went through
+  `14.sqm` keeps `history.last_read` NOT NULL and a stale `history_temp` table, unlike a new
+  install.
 - `AndroidStorageFolderTest` (in `zoukan.desktop.storage`) writes a storage folder as the Android
   app leaves it (`AndroidStorageFolder`: downloads as folders and CBZs, a local source entry,
   automatic backups, `.nomedia` files), reads it with the app's storage code, and fails when a file
