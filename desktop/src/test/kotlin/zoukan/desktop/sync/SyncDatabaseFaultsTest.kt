@@ -357,6 +357,39 @@ class SyncDatabaseFaultsTest {
         restorePending.get() shouldBe false
     }
 
+    @Test
+    fun `SyncYomi - the first syncs upload, then restore, then are not modified, and a quit before the restore is recovered`() = runBlocking<Unit> {
+        preferences.syncService().set(SyncManager.SyncService.SYNCYOMI.value)
+        preferences.clientHost().set(sync.clientHost)
+        preferences.clientAPIKey().set(sync.apiKey)
+
+        // 1: only uploads; the ETag the service saved is set aside
+        manager().syncData()
+        syncCalls().map { it.method to it.ifNoneMatch } shouldBe listOf("GET" to null, "PUT" to null)
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L)
+        preferences.lastSyncEtag().get() shouldBe ""
+
+        // 2: downloads, restores, keeps the ETag
+        manager().syncData()
+        syncCalls().first().ifNoneMatch shouldBe null
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get().trim('"') shouldBe sync.etag
+
+        // 3: not modified
+        manager().syncData()
+        syncCalls().map { it.method to it.status } shouldBe listOf("GET" to 304, "PUT" to 200)
+        remoteUrls() shouldBe setOf("/local", "/remote")
+
+        // The app quit after SyncYomi saved the new ETag, while it reported the sync to the server
+        restorePending.set(true)
+        manager().syncData()
+        syncCalls().first().ifNoneMatch shouldBe null
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        restorePending.get() shouldBe false
+        sync.events.any { "SYNC_SUCCESS" in it } shouldBe true
+    }
+
     /** Each chapter of [url] (by its URL) as read, last page read and version, from the database. */
     private fun progress(url: String): Map<String, Triple<Boolean, Long, Long>> = driver.executeQuery(
         null,
