@@ -17,7 +17,8 @@ import zoukan.desktop.property.PortableName.Problem
 /**
  * Download folder and file names, for any title, chapter name, scanlator and chapter URL:
  * - the desktop builds the name the Android app builds ([DiskUtil], [DownloadProvider] are
- *   Android's code), so a downloads folder works in both apps;
+ *   Android's code) whenever Android's name is valid on every OS; otherwise it builds a valid one
+ *   and still looks downloads up by Android's name, so a downloads folder works in both apps;
  * - the name is one valid file name on Windows, macOS and Linux, inside its folder;
  * - the same input always gives the same name, and a name that is already valid is kept as it is,
  *   so titles that differ only by case or Unicode normalisation stay apart, as on Android.
@@ -42,12 +43,24 @@ class DownloadNamePropertyTest {
     }
 
     @Test
-    fun `entry and source folder names are Android's`() = runBlocking<Unit> {
+    fun `entry and source folder names are Android's, or valid ones that still find Android's`() = runBlocking<Unit> {
         checkAll(PropertyRuns.config(ITERATIONS), strings) { title ->
             for (ascii in listOf(false, true)) {
-                FileNames.buildValidFilename(title, disallowNonAscii = ascii) shouldBe DiskUtil.buildValidFilename(title, disallowNonAscii = ascii)
-                // The chapter name's shorter limit
-                FileNames.buildValidFilename(title, 229, ascii) shouldBe DiskUtil.buildValidFilename(title, 229, ascii)
+                // The entry and source name, and the chapter name's shorter limit
+                for (limit in listOf(FileNames.MAX_FILE_NAME_BYTES, 229)) {
+                    val android = DiskUtil.buildValidFilename(title, limit, ascii)
+                    val desktop = FileNames.buildValidFilename(title, limit, ascii)
+                    if (isPortable(android)) {
+                        desktop shouldBe android
+                    } else {
+                        PortableName.problems(desktop) shouldBe emptySet()
+                    }
+                }
+                // Android's entry folder is looked up
+                val names = paths(ascii, hash = false).mangaDirNames(title)
+                names.first() shouldBe FileNames.buildValidFilename(title, disallowNonAscii = ascii)
+                names shouldContainAll listOf(DiskUtil.buildValidFilename(title, disallowNonAscii = ascii), DiskUtil.buildValidFilename(title, disallowNonAscii = !ascii))
+                    .filter { isPathHere(it) }
             }
         }
     }
@@ -62,14 +75,15 @@ class DownloadNamePropertyTest {
     @Test
     fun `chapter folder names are Android's, also the older names looked up`() = runBlocking<Unit> {
         checkAll(PropertyRuns.config(ITERATIONS), chapters) { c ->
-            DownloadPaths.chapterDirName(c.name, c.scanlator, c.url, c.ascii, c.hash) shouldBe
-                DownloadProvider.getChapterDirName(c.name, c.scanlator, c.url, c.ascii, c.hash)
+            val name = DownloadPaths.chapterDirName(c.name, c.scanlator, c.url, c.ascii, c.hash)
+            val androidName = DownloadProvider.getChapterDirName(c.name, c.scanlator, c.url, c.ascii, c.hash)
+            if (isPortable(androidName)) name shouldBe androidName else PortableName.problems(name) shouldBe emptySet()
 
             // Every name Android looks a chapter up by is looked up on desktop too, the current one first
             val desktop = paths(c.ascii, c.hash).validChapterNames(chapter(c))
             val android = DownloadProvider.getValidChapterDirNames(c.name, c.scanlator, c.url, c.ascii, c.hash)
-            desktop.take(2) shouldBe android.take(2)
-            desktop shouldContainAll android
+            desktop.take(2) shouldBe listOf(name, "$name.cbz")
+            desktop shouldContainAll android.filter { isPathHere(it) }
         }
     }
 
@@ -79,12 +93,12 @@ class DownloadNamePropertyTest {
         checkAll(PropertyRuns.config(ITERATIONS), strings) { title ->
             for (ascii in listOf(false, true)) {
                 val name = FileNames.buildValidFilename(title, disallowNonAscii = ascii)
-                PortableName.problems(name).forEach { found.add(it, title, "\"${escaped(name)}\" (ascii=$ascii)", isKnownDefect(it, title, name, wasCut(title, FileNames.MAX_FILE_NAME_BYTES, ascii))) }
+                PortableName.problems(name).forEach { found.add(it, title, "\"${escaped(name)}\" (ascii=$ascii)") }
                 // Stable: the same title always gives the same name
                 FileNames.buildValidFilename(title, disallowNonAscii = ascii) shouldBe name
             }
         }
-        assertOnlyKnown(found)
+        assertAllValid(found)
     }
 
     @Test
@@ -94,12 +108,11 @@ class DownloadNamePropertyTest {
             val name = DownloadPaths.chapterDirName(c.name, c.scanlator, c.url, c.ascii, c.hash)
             for (file in listOf(name, "$name.cbz", name + DownloadPaths.TMP_SUFFIX)) {
                 val input = (if (c.scanlator.isNullOrBlank()) "" else c.scanlator + "_") + c.name.ifBlank { "Chapter" }
-                val cut = wasCut(input, FileNames.MAX_FILE_NAME_BYTES - 11, c.ascii)
-                PortableName.problems(file).forEach { found.add(it, input, "\"${escaped(file)}\" (ascii=${c.ascii}, hash=${c.hash})", isKnownDefect(it, input, file, cut)) }
+                PortableName.problems(file).forEach { found.add(it, input, "\"${escaped(file)}\" (ascii=${c.ascii}, hash=${c.hash})") }
             }
             DownloadPaths.chapterDirName(c.name, c.scanlator, c.url, c.ascii, c.hash) shouldBe name
         }
-        assertOnlyKnown(found)
+        assertAllValid(found)
     }
 
     @Test
@@ -109,68 +122,35 @@ class DownloadNamePropertyTest {
                 title.trim('.', ' ') == title &&
                 title.none { it.code < 0x20 || it.code == 0x7f || it in "<>:\"/\\|?*" } &&
                 title.toByteArray(Charsets.UTF_8).size <= FileNames.MAX_FILE_NAME_BYTES &&
-                !PortableName.hasLoneSurrogate(title)
+                !PortableName.hasLoneSurrogate(title) &&
+                !PortableName.isWindowsDeviceName(title)
             if (untouched) FileNames.buildValidFilename(title) shouldBe title
         }
     }
 
     private class Found {
         val unknown = Counterexamples<Problem>()
-        val known = Counterexamples<Problem>()
 
-        fun add(problem: Problem, input: String, detail: String, isKnown: Boolean) = (if (isKnown) known else unknown).add(problem, input, detail)
+        fun add(problem: Problem, input: String, detail: String) = unknown.add(problem, input, detail)
     }
 
-    /**
-     * Whether [problem] in [output], the name made from [input], is one of the known defects, each
-     * with a disabled test with its smallest input in [DownloadNameKnownDefectsTest]. Only the exact
-     * shape each defect produces is left out, so the property still fails on every other problem,
-     * also on an input that has the defect's trigger in it.
-     */
-    private fun isKnownDefect(problem: Problem, input: String, output: String, cut: Boolean): Boolean = when (problem) {
-        // `a Windows device name is not a folder name`
-        Problem.WINDOWS_DEVICE_NAME -> true
-        // `a name cut at the limit does not end in a space or a dot`: only a name that was cut
-        Problem.TRAILING_DOT_OR_SPACE -> cut
-        // `half a surrogate pair does not reach the name`: only the input's own halves, kept
-        Problem.LONE_SURROGATE -> loneSurrogates(output) in 1..loneSurrogates(input)
-        // `half a surrogate pair in a long name does not become a question mark`: only in a name that
-        // was cut (the cut encodes to UTF-8, which writes a half pair as `?`), the only reserved
-        // character is `?`, and there is at most one for each half pair of the input
-        Problem.RESERVED_CHARACTER ->
-            cut &&
-                output.filter { it in "<>:\"/\\|?*" }.all { it == '?' } &&
-                output.count { it == '?' } <= loneSurrogates(input)
-        else -> false
-    }
+    private fun isPortable(name: String) = PortableName.problems(name).isEmpty()
 
-    /** How many halves of a surrogate pair [s] has on their own. */
-    private fun loneSurrogates(s: String): Int {
-        var n = 0
-        var i = 0
-        while (i < s.length) {
-            if (s[i].isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()) {
-                i += 2
-            } else {
-                if (s[i].isSurrogate()) n++
-                i++
-            }
-        }
-        return n
-    }
+    /** Whether [name] can be a path on this OS at all: on Windows a name with `?` cannot be on disk, so it is not looked up. */
+    private fun isPathHere(name: String) = runCatching { java.nio.file.Path.of(name) }.isSuccess
 
-    /** Whether the name of [input] was cut to [maxBytes]: its full name is longer. */
-    private fun wasCut(input: String, maxBytes: Int, ascii: Boolean) =
-        FileNames.buildValidFilename(input, Int.MAX_VALUE, ascii).toByteArray(Charsets.UTF_8).size > maxBytes
-
-    private fun assertOnlyKnown(found: Found) {
-        if (found.known.kinds().isNotEmpty()) println("Known name defects seen:\n" + found.known.report())
+    private fun assertAllValid(found: Found) {
         check(found.unknown.kinds().isEmpty()) { "Invalid names (seed ${PropertyRuns.seed}):\n" + found.unknown.report() }
     }
 
     private fun chapter(c: ChapterInput) = Chapter.create().copy(name = c.name, scanlator = c.scanlator, url = c.url)
 
-    private fun paths(ascii: Boolean, hash: Boolean): DownloadPaths {
+    /** Made once for each setting: a mock made on every iteration fails now and then under the JIT. */
+    private val pathsBySetting = listOf(false, true).flatMap { a -> listOf(false, true).map { h -> (a to h) to newPaths(a, h) } }.toMap()
+
+    private fun paths(ascii: Boolean, hash: Boolean): DownloadPaths = pathsBySetting.getValue(ascii to hash)
+
+    private fun newPaths(ascii: Boolean, hash: Boolean): DownloadPaths {
         val library = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames().get() } returns ascii }
         val download = mockk<DownloadPreferences> { every { includeChapterUrlHash().get() } returns hash }
         return DownloadPaths(mockk(relaxed = true), mockk(relaxed = true), library, download)

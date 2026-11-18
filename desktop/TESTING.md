@@ -432,8 +432,9 @@ to fix, or a difference to document in `PARITY.md`.
 ## Property tests
 
 `zoukan.desktop.property` checks rules for any input, with Kotest's property testing run from
-ordinary JUnit tests: download folder and file names equal the Android app's and are valid on
-Windows, macOS and Linux; any backup survives a write and a read; any preference survives a save
+ordinary JUnit tests: download folder and file names are valid on Windows, macOS and Linux and
+equal the Android app's wherever Android's name is valid too (otherwise Android's name is among the
+names looked up); any backup survives a write and a read; any preference survives a save
 and a reload, plain and encrypted; and the parsers of outside data (`ComicInfo.xml`, an extension
 store's index, the update manifest, a backup file) give a result or the error their caller handles
 for any input, in bounded time. The Android name code they compare with is copied in

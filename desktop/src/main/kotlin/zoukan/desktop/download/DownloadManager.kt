@@ -295,7 +295,8 @@ class DownloadManager(
 
     suspend fun renameManga(mangaId: Long, sourceId: Long, fromTitle: String, toTitle: String): Boolean =
         withContext(Dispatchers.IO) {
-            val old = File(paths.sourceDir(sourceId), paths.mangaDirName(fromTitle))
+            // The folder Android named, if the desktop names it differently (see FileNames)
+            val old = paths.existingMangaDir(sourceId, fromTitle)
             val target = File(old.parentFile, paths.mangaDirName(toTitle))
             if (old.name == target.name || !old.exists()) return@withContext true
             if (_queue.value.any { it.manga.id == mangaId }) {
