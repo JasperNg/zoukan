@@ -2,6 +2,7 @@ plugins {
     // ZOUKAN -->
     id("mihon.library.kmp")
     id("zoukan.kover")
+    id("zoukan.test-home")
     // ZOUKAN <--
     kotlin("plugin.serialization")
     id("com.github.ben-manes.versions")
@@ -72,6 +73,18 @@ kotlin {
         androidUnitTest {
             dependencies {
                 implementation(libs.bundles.test)
+                runtimeOnly(libs.junit.platform.launcher)
+            }
+        }
+        // The module's own tests run on the desktop target, as the desktop app uses the module:
+        //   ./gradlew :core:common:desktopTest
+        getByName("desktopTest") {
+            dependencies {
+                implementation(libs.bundles.test)
+                implementation(kotlinx.coroutines.test)
+                // The Android classes the shared code names (SharedPreferences), as the desktop
+                // app supplies them at run time
+                implementation(projects.androidCompat)
                 runtimeOnly(libs.junit.platform.launcher)
             }
         }
