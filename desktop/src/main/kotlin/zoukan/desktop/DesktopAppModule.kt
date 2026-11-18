@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
 import kotlinx.coroutines.asCoroutineDispatcher
+import logcat.LogPriority
+import logcat.logcat
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import mihon.data.extension.repository.ExtensionStoreRepositoryImpl
@@ -39,6 +41,7 @@ import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.storage.StorageFolderPrivacy
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
@@ -71,6 +74,11 @@ class DesktopAppModule(
         addSingletonFactory { NetworkPreferences(get(), defaultDohProvider = PREF_DOH_QUAD9) }
         addSingletonFactory { SecurityPreferences(get()) }
         addSingletonFactory { ZoukanStorage(dirs, get()) }
+        // Made here so Settings can show whether it worked; started only by runZoukanApp, so the
+        // tests' temporary folders never reach Spotlight's Search Privacy list
+        addSingletonFactory {
+            StorageFolderPrivacy(get(), note = { message -> logcat("StorageFolderPrivacy", LogPriority.WARN) { message } })
+        }
         addSingletonFactory { CbzPassword(get(), get()) }
         // Read by HttpSource and EnhancedHttpSource.
         addSingletonFactory { DelegateSourcePreferences(get()) }

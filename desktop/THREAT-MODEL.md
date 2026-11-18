@@ -309,7 +309,8 @@ Residual risk:
    backups) are created readable by their owner only (`0600`) where the file system has POSIX
    permissions; existing files, including the Android app's, keep their permissions. On macOS,
    Settings > Data and storage warns (without blocking) when the storage folder is in iCloud Drive
-   or a `~/Library/CloudStorage` folder, or in Desktop or Documents, which iCloud may sync.
+   or a `~/Library/CloudStorage` folder, or in the folders older Dropbox, OneDrive and Google Drive
+   apps keep in the home folder, or in Desktop or Documents, which iCloud may sync.
    Code: `desktop/.../backup/AutoBackup.kt`, `DesktopBackups.create`.
    **Safety backups** (written before a restore, a data sync that changes the library, Clear
    database, a migration and Clear manga's chapter removal) are the same unencrypted format with
@@ -323,45 +324,74 @@ Residual risk:
    has sign-in codes, tokens, passwords, API keys and `Bearer` values in `name=value` form redacted
    (`CrashReporter.redact`, applied by the log's layout); cookies, other header values and tokens
    in a URL's path are not recognised. A failed page load in the built-in browser logs only the
-   host. Once a JVM crash file (`hs_err_pid<n>.log`) in the temp or working folder has been copied,
-   the original, which holds environment variable values, is deleted; if the copy fails it is
-   kept. Titles of what was read, URLs and file paths can appear in the log and in crash reports.
-   While app-wide incognito mode is on, nothing is logged at all (not to the log file and not to
-   the console), and a crash or error report written then keeps its redacted stack trace but
-   leaves out the end of the log. Lines logged at start before the preferences are open (the
-   version, platform and data folder) are still written. Per-extension incognito does not stop
-   logging. Chromium's own log is outside this rule. Crash and error reports, and Zoukan's
-   reports in the reports folder, are deleted after 30 days. Code: `desktop/.../app/IncognitoLog.kt`.
-   The crash dialog says so. Anyone who can read the data folder can read them. On POSIX systems
-   the data folder is made `0700` at every start when it is Zoukan's own per-platform folder, or
-   when Zoukan created it on that start; a folder chosen with the data folder override
-   (`zoukan.dataDir` or `ZOUKAN_DATA_DIR`) that already existed keeps the permissions its owner
-   gave it, and a data folder that is a symbolic link is not changed. On macOS these folders,
-   `reports/` and the caches (Coil's image cache, the chapter cache, FFmpeg's natives and the
-   Android layer's cache folder) take a `.noindex` name (`logs.noindex`, `crashes.noindex`,
-   `reports.noindex`, `cache/images.noindex`, `cache/archives.noindex`, `cache/javacpp.noindex`,
-   `android/android-compat/appdata/cache.noindex`), so Spotlight does not index them, and carry
-   Time Machine's exclusion (as `tmutil addexclusion` sets it), as does `updates/`, which is
-   created at start so the first downloaded installer is already excluded. A profile with
-   the old names has them renamed at start; if a rename fails, the old folder is used for that
-   run. Code: `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
-   On macOS the storage folder's `downloads/`, `local/` and `autobackup/` (never the chosen folder
-   itself) are, by default, added to Spotlight's Search Privacy list and carry Time Machine's
-   exclusion, with a setting for each in Settings > Data and storage. Turning a setting off
-   removes the mark, and a storage folder that is changed loses the marks on its folders if it can
-   still be reached. The folders keep the Android app's names: a `.metadata_never_index` file, a
-   hidden flag or a `.noindex` child do not stop current macOS from indexing a folder, so
-   Spotlight's list is changed through the call System Settings uses (`_MDSetExclusion`, not
-   public API). That call is made only in a short-lived helper process
-   (`SpotlightExclusionHelper`), started with Zoukan's own bundled Java runtime (`bin/java`), a
-   32 MB heap, headless, a class path of only Zoukan's, JNA's and Kotlin's jars, and Java option
-   and agent variables removed from its environment. It touches no data folder, log, preference,
-   lock or secret store, and is stopped after 15 seconds. A crash, a non-zero exit, a timeout or
-   output that does not parse is logged as a warning and never reaches Zoukan's process. The
-   Time Machine attribute is set in Zoukan's process (public `setxattr`/`removexattr`). Search
-   Privacy entries are by path and stay after Zoukan is deleted; turning a setting off also
-   removes an exclusion the user had added to those folders by hand. Code:
-   `desktop/.../storage/StorageFolderPrivacy.kt`, `SpotlightExclusion.kt`,
+   host. A JVM crash file (`hs_err_pid<n>.log`) in the temp or working folder is copied and its
+   original, which holds environment variable values, deleted only when its command line names
+   Zoukan's main class, so another program's file with a reused process id is left alone; if the
+   copy fails the original is kept. Titles of what was read, URLs and file paths can appear in the log and in crash reports;
+   the crash dialog says so. Anyone who can read the data folder can read them.
+
+   **Incognito.** While app-wide incognito mode is on, nothing is logged at all (not to the log
+   file and not to the console). A crash or error report written then keeps only the exception
+   class names and stack frames, for the exception and all of its causes and suppressed
+   exceptions; it leaves out every exception message, because messages often carry a chapter
+   address or title, and the end of the log, and says so. The crash dialog likewise names only
+   the exception class. Stack frames still name the code that failed, for example an extension's
+   classes. A JVM crash file is copied at the next start with environment values removed and
+   secrets redacted but otherwise unchanged, so it can hold memory fragments from the incognito
+   session. Lines logged at start before the preferences are open (the version, platform and data
+   folder) are still written, and a few lines can be written in the moment after incognito is
+   turned on, until the change reaches the log filter. If the incognito preference cannot be read,
+   logging stays on, so a broken start can still be diagnosed. Per-extension incognito does not
+   stop logging. Chromium's own log is outside this rule. Crash and error reports, and Zoukan's
+   reports in the reports folder, are deleted after 30 days. Code: `desktop/.../app/IncognitoLog.kt`,
+   `CrashReporter.kt`.
+
+   **Data folder.** On POSIX systems the data folder is made `0700` at every start when it is
+   Zoukan's own per-platform folder, or when Zoukan created it on that start; a folder chosen with
+   the data folder override (`zoukan.dataDir` or `ZOUKAN_DATA_DIR`) that already existed keeps the
+   permissions its owner gave it, and a data folder that is a symbolic link is not changed. On
+   macOS the log, crash and reports folders and the caches (Coil's image cache, the chapter cache,
+   FFmpeg's natives and the Android layer's cache folder) take a `.noindex` name (`logs.noindex`,
+   `crashes.noindex`, `reports.noindex`, `cache/images.noindex`, `cache/archives.noindex`,
+   `cache/javacpp.noindex`, `android/android-compat/appdata/cache.noindex`), so Spotlight does not
+   index them, and carry Time Machine's exclusion (as `tmutil addexclusion` sets it), as does
+   `updates/`, which is created at start so the first downloaded installer is already excluded. A profile with the old
+   names has them renamed at start; if a rename fails, the old folder is used for that run. Code:
+   `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
+
+   **Storage folder (macOS).** By default the storage folder's `downloads`, `local` and
+   `autobackup` folders are added to Spotlight's Search Privacy list and carry Time Machine's
+   exclusion, with a setting for each in Settings > Data and storage. Only those three folders are
+   marked, never the chosen folder itself: each must be a real directory directly in the storage
+   folder with exactly that name, case included, after links are resolved. A folder reached
+   through a link, or one whose name differs only in case (such as `~/Downloads` when the home
+   folder is the storage folder), is never marked or created. Zoukan records the canonical path of
+   every folder it marks, in app-state preferences that are never in backups. When a setting is
+   turned off or the storage folder changes, it removes marks only from those recorded paths, so
+   exclusions the user made outside Zoukan stay; a recorded folder that cannot be reached, or whose
+   removal fails, keeps its record and is retried later. A storage folder that is unavailable is
+   marked at the next refresh (a settings or storage change, or the next start), not when it comes
+   back. When the last attempt to apply a setting failed, Settings shows an error line under its
+   switch, so a user in incognito mode, where nothing is logged, still learns of it.
+
+   The folders keep the Android app's names, and a `.metadata_never_index` file, a hidden flag or a
+   `.noindex` child do not stop current macOS from indexing a folder, so Spotlight's list is
+   changed through the call System Settings uses (`_MDSetExclusion`, not public API). That call is
+   made only in a short-lived helper process (`SpotlightExclusionHelper`), started only when an
+   entry is to be added or removed, with Zoukan's own bundled Java runtime (`bin/java`), a 32 MB
+   heap, headless, a class path of only Zoukan's, JNA's and Kotlin's jars, and Java option and
+   agent variables removed from its environment. It opens no data folder, log, preference, lock or
+   secret store; JNA may unpack its native library into its own cache folder
+   (`~/Library/Caches/JNA/temp`) and deletes it once loaded. The helper's JVM writes no core dump,
+   performance-data file or crash report (`-XX:-CreateCoredumpOnCrash`, `-XX:-UsePerfData`,
+   `-XX:ErrorFile=/dev/null`); if a crash report or compiler replay file is written to its working
+   folder anyway, Zoukan deletes that helper's files after it exits, by process id, regular files
+   only. The helper ends itself after 12 seconds, Zoukan stops it after 15 and kills a running
+   helper when it quits. A crash, a non-zero exit, a timeout or output that does not parse is
+   logged as a warning and never reaches Zoukan's process, and the helper is then not started
+   again until Zoukan restarts. The Time Machine attribute is set in Zoukan's process (public
+   `setxattr`/`removexattr`). Search Privacy entries are by path and stay after Zoukan is deleted.
+   Code: `desktop/.../storage/StorageFolderPrivacy.kt`, `SpotlightExclusion.kt`,
    `SpotlightExclusionHelper.kt`, `SpotlightNative.kt`.
 6. **The built-in browser's profile is not encrypted.** `<cache>/cache/browser` is shared by the
    browser windows, the challenge windows and extensions' WebViews, and sits outside `FileCipher`.

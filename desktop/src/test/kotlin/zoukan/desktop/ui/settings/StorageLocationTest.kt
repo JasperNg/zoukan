@@ -1,9 +1,13 @@
 package zoukan.desktop.ui.settings
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeFalse
@@ -124,6 +128,67 @@ class StorageLocationTest {
         val home = File("/Users/someone")
         StorageLocation.cloudSync(File(home, "Documents/Zoukan"), home) shouldBe StorageLocation.CloudSync.MAYBE_SYNCED
         StorageLocation.cloudSync(File(home, "Desktop"), home) shouldBe StorageLocation.CloudSync.MAYBE_SYNCED
+    }
+
+    @Test
+    fun `a privacy setting that could not be applied shows its error line only while it failed`() = runDesktopComposeUiTest {
+        val message = localized(DMR.strings.could_not_hide_storage_folder_from_spotlight)
+        var failed by mutableStateOf(false)
+        setContent { StoragePrivacyFailure(failed, message) }
+        onNodeWithText(message).assertDoesNotExist()
+        failed = true
+        waitForIdle()
+        onNodeWithText(message).assertExists()
+        failed = false
+        waitForIdle()
+        onNodeWithText(message).assertDoesNotExist()
+    }
+
+    @Test
+    fun `older sync apps' folders in the home folder are flagged`() {
+        val home = File("/Users/someone")
+        listOf(
+            "Dropbox",
+            "Dropbox/Zoukan",
+            "Dropbox (Personal)/Zoukan",
+            "Dropbox (Team Name)",
+            "OneDrive",
+            "OneDrive/Manga/Zoukan",
+            "OneDrive - Contoso Ltd/Zoukan",
+            "Google Drive",
+            "Google Drive/My Drive/Zoukan",
+            // Case is ignored, as on macOS file systems
+            "dropbox/zoukan",
+            "ONEDRIVE - School/x",
+            "google drive/my drive",
+            "Manga/../Dropbox/Zoukan",
+        ).forEach { sub ->
+            withClue(sub) { StorageLocation.cloudSync(File(home, sub), home) shouldBe StorageLocation.CloudSync.SYNCED }
+        }
+    }
+
+    @Test
+    fun `only whole folder names directly in the home folder count as older sync folders`() {
+        val home = File("/Users/someone")
+        listOf(
+            "Dropbox2/Zoukan",
+            "My Dropbox",
+            "OneDriveBackup",
+            "OneDrive-Old",
+            "OneDrive -",
+            "Google Drive Old",
+            "GoogleDrive",
+            "Manga/Dropbox",
+            "Manga/OneDrive - Contoso",
+            "Manga/Google Drive/My Drive",
+            "",
+        ).forEach { sub ->
+            withClue(sub) { StorageLocation.cloudSync(File(home, sub), home) shouldBe null }
+        }
+        // Outside the home folder
+        StorageLocation.cloudSync(File("/Volumes/Drive/Dropbox"), home) shouldBe null
+        StorageLocation.cloudSync(File("/Users/other/OneDrive"), home) shouldBe null
+        StorageLocation.cloudSync(File("/Users/someone2/Google Drive"), home) shouldBe null
     }
 
     @Test

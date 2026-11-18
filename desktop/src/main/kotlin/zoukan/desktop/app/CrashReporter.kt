@@ -39,7 +39,8 @@ import kotlin.system.exitProcess
  *   app goes on.
  * - When the app did not shut down cleanly (killed, out of memory, a JVM crash), the next start
  *   says so and copies any JVM crash file (`hs_err_pid*.log`) into the crash folder.
- * - While incognito mode is on nothing is logged ([IncognitoLog]), and a report leaves out the log.
+ * - While incognito mode is on nothing is logged ([IncognitoLog]), and a report leaves out the log
+ *   and the exception messages (class names and stack frames only).
  * - Zoukan's reports older than 30 days, in the crash folder and the reports folder, are deleted at
  *   start and when a report is written.
  */
@@ -115,13 +116,16 @@ object CrashReporter {
         appendLine("Thread: ${thread.name}")
         appendLine()
         appendLine("Stack trace:")
-        // Exception messages can carry a sign-in address or a header, like the log
-        appendLine(redact(stackTrace(e)))
-        // Incognito mode logs nothing, and its report shows nothing of the log from before it either
+        // Incognito mode logs nothing, and its report shows neither the exception messages (they
+        // often carry a chapter address or a title) nor the log from before it
         if (IncognitoLog.isOn) {
+            appendLine("The exception messages are left out because incognito mode is on.")
+            appendLine(stackTraceWithoutMessages(e))
             appendLine("The end of the log is left out because incognito mode is on.")
             return@buildString
         }
+        // Exception messages can carry a sign-in address or a header, like the log
+        appendLine(redact(stackTrace(e)))
         val tail = logTail()
         if (tail.isNotBlank()) {
             appendLine("End of the log (${dirs?.logs?.resolve("zoukan.log")}):")
@@ -150,6 +154,50 @@ object CrashReporter {
             .orEmpty()
 
     private fun stackTrace(e: Throwable): String = StringWriter().also { e.printStackTrace(PrintWriter(it)) }.toString()
+
+    /**
+     * [e]'s stack trace laid out like [Throwable.printStackTrace] (causes, suppressed exceptions,
+     * "... n more" and circular references), but with only the class name of each exception: no
+     * message and no [Throwable.toString], which a class may override to show its message.
+     * Never throws; what cannot be read is replaced by a note.
+     */
+    internal fun stackTraceWithoutMessages(e: Throwable): String = try {
+        buildString {
+            val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
+            appendThrowable(e, enclosing = emptyArray(), caption = "", prefix = "", seen = seen)
+        }
+    } catch (t: Exception) {
+        "<the stack trace could not be written: ${t.javaClass.name}>"
+    } catch (t: StackOverflowError) {
+        "<the stack trace could not be written: ${t.javaClass.name}>"
+    }
+
+    private fun StringBuilder.appendThrowable(
+        e: Throwable,
+        enclosing: Array<StackTraceElement>,
+        caption: String,
+        prefix: String,
+        seen: MutableSet<Throwable>,
+    ) {
+        if (!seen.add(e)) {
+            append(prefix).append(caption).append("[CIRCULAR REFERENCE: ").append(e.javaClass.name).appendLine("]")
+            return
+        }
+        val trace = e.stackTrace
+        // Frames in common with the enclosing trace are counted, not repeated
+        var m = trace.size - 1
+        var n = enclosing.size - 1
+        while (m >= 0 && n >= 0 && trace[m] == enclosing[n]) {
+            m--
+            n--
+        }
+        val inCommon = trace.size - 1 - m
+        append(prefix).append(caption).appendLine(e.javaClass.name)
+        for (i in 0..m) append(prefix).append("\tat ").appendLine(trace[i])
+        if (inCommon != 0) append(prefix).append("\t... ").append(inCommon).appendLine(" more")
+        e.suppressed.forEach { appendThrowable(it, trace, "Suppressed: ", prefix + "\t", seen) }
+        e.cause?.let { appendThrowable(it, trace, "Caused by: ", prefix, seen) }
+    }
 
     private fun logTail(dirs: ZoukanDirs? = this.dirs): String {
         val log = dirs?.logs?.resolve("zoukan.log")?.takeIf { it.isFile } ?: return ""
@@ -419,29 +467,40 @@ object CrashReporter {
         root.addAppender(appender)
     }
 
+    /**
+     * The crash dialog's text. While incognito mode is on, the exception's message (which often
+     * carries a chapter address or a title) is not shown, only its class name. The message of a
+     * [SecretStoreUnavailableException] is the app's own text and is always shown.
+     */
+    internal fun crashDialogMessage(e: Throwable, report: File?, incognito: Boolean = IncognitoLog.isOn): String = buildString {
+        val unavailable = generateSequence(e) { it.cause }.take(10).filterIsInstance<SecretStoreUnavailableException>().firstOrNull()
+        if (unavailable != null) {
+            appendLine(unavailable.message.orEmpty())
+        } else {
+            appendLine("Zoukan ran into a problem and has to close.")
+            appendLine()
+            if (incognito) {
+                appendLine("${e::class.simpleName} (the message is left out because incognito mode is on)")
+            } else {
+                appendLine("${e::class.simpleName}: ${redact(e.message.orEmpty()).take(300)}")
+            }
+        }
+        if (report != null) {
+            appendLine()
+            appendLine("The log can include titles you read and file paths. Check it before you share it.")
+            appendLine()
+            appendLine("The crash log is saved at")
+            append(report.absolutePath)
+        }
+    }
+
     private fun showCrashDialog(e: Throwable, report: File?) {
         if (GraphicsEnvironment.isHeadless() || System.getProperty("zoukan.noCrashDialog") == "true") {
             System.err.println("Zoukan crashed: $e" + (report?.let { "\nCrash log: $it" } ?: ""))
             return
         }
         val show = {
-            val unavailable = generateSequence(e) { it.cause }.take(10).filterIsInstance<SecretStoreUnavailableException>().firstOrNull()
-            val message = buildString {
-                if (unavailable != null) {
-                    appendLine(unavailable.message.orEmpty())
-                } else {
-                    appendLine("Zoukan ran into a problem and has to close.")
-                    appendLine()
-                    appendLine("${e::class.simpleName}: ${redact(e.message.orEmpty()).take(300)}")
-                }
-                if (report != null) {
-                    appendLine()
-                    appendLine("The log can include titles you read and file paths. Check it before you share it.")
-                    appendLine()
-                    appendLine("The crash log is saved at")
-                    append(report.absolutePath)
-                }
-            }
+            val message = crashDialogMessage(e, report)
             val options = if (report != null) arrayOf("Show the crash log", "Close") else arrayOf("Close")
             val choice = JOptionPane.showOptionDialog(
                 null,

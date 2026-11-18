@@ -2,7 +2,11 @@ package zoukan.desktop
 
 import java.io.File
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Keeps folders out of Spotlight on macOS through its Search Privacy list (System Settings >
@@ -15,12 +19,26 @@ import java.util.concurrent.TimeUnit
  * if a later macOS changes them and the call crashes, only the helper ends. Every failure (no Java
  * launcher, a crash, a non-zero exit, a timeout, output that does not parse) is passed to the
  * caller's note and never thrown.
+ *
+ * A helper that crashes, fails or hangs is not started again for the rest of the run: the next
+ * calls return nothing without starting one. A crash leaves no files behind: the helper writes no
+ * core dump, performance data or crash report, and a crash report the JVM writes anyway
+ * (`hs_err_pid<pid>.log`, which holds environment values and paths) is deleted from its working
+ * folder. A helper still running when Zoukan quits is killed, and one left behind by a Zoukan that
+ * was killed ends itself ([SpotlightExclusionHelper.WATCHDOG_MILLIS]).
  */
 internal class SpotlightExclusion(
     /** The command that runs the helper with the given arguments; tests put another one in. */
-    private val command: (List<String>) -> List<String>? = ::helperCommand,
+    private val command: (List<String>) -> List<String>? = HELPER,
     private val timeoutMillis: Long = TIMEOUT_MILLIS,
     private val enabled: Boolean = Platform.current == Platform.MACOS,
+    /** The helper's working folder, where the JVM would write its crash report. */
+    private val workDir: File = File(System.getProperty("java.io.tmpdir")),
+    /**
+     * Set once a helper crashed, failed or hung; no helper is started after that. Shared by every
+     * instance for the real helper, so it holds for the rest of the run; another command gets its own.
+     */
+    private val stopped: AtomicBoolean = if (command === HELPER) stoppedForRun else AtomicBoolean(false),
 ) {
     /**
      * Adds [dirs] to the list ([exclude] true) or takes them off it, in one helper run. Returns the
@@ -41,7 +59,7 @@ internal class SpotlightExclusion(
     }
 
     private fun run(action: String, dirs: List<File>, note: (String) -> Unit, reportFailures: Boolean): Set<File> {
-        if (dirs.isEmpty()) return emptySet()
+        if (dirs.isEmpty() || stopped.get()) return emptySet()
         return try {
             val paths = dirs.map { it.canonicalPath }
             val argv = command(listOf(action) + paths)
@@ -62,15 +80,30 @@ internal class SpotlightExclusion(
         }
     }
 
-    /** Runs [argv]; its standard output, or null (noted) when it failed, crashed or timed out. */
+    /**
+     * Runs [argv]; its standard output, or null (noted) when it failed, crashed or timed out. After
+     * a crash, failure or timeout no helper is started again, and its crash files are deleted.
+     */
     private fun runProcess(argv: List<String>, note: (String) -> Unit): String? {
+        registerKillOnExit()
         val process = ProcessBuilder(argv)
-            .directory(File(System.getProperty("java.io.tmpdir")))
+            .directory(workDir)
             .apply {
                 // No agents or options from the environment in the helper's JVM
                 environment().keys.removeAll(setOf("JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH"))
             }
             .start()
+        running.add(process)
+        try {
+            return waitFor(process, note)
+        } finally {
+            running.remove(process)
+            // Never left running, whatever went wrong (killing does not wait)
+            if (process.isAlive) process.destroyForcibly()
+        }
+    }
+
+    private fun waitFor(process: Process, note: (String) -> Unit): String? {
         process.outputStream.close()
         val out = Drain(process.inputStream).also { it.start() }
         val err = Drain(process.errorStream).also { it.start() }
@@ -78,7 +111,8 @@ internal class SpotlightExclusion(
             if (!process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly()
                 process.waitFor(KILL_WAIT_MILLIS, TimeUnit.MILLISECONDS)
-                note("The Spotlight helper did not finish within ${timeoutMillis / 1000.0} s and was stopped")
+                deleteCrashFiles(process)
+                note("The Spotlight helper did not finish within ${timeoutMillis / 1000.0} s and was stopped${stop()}")
                 return null
             }
         } catch (e: InterruptedException) {
@@ -91,12 +125,37 @@ internal class SpotlightExclusion(
         err.join(KILL_WAIT_MILLIS)
         val code = process.exitValue()
         if (code != 0) {
-            // 128 + n: ended by signal n (a crash)
-            note("The Spotlight helper failed (exit code $code): ${err.text().takeLast(ERROR_TAIL).trim()}")
+            // 128 + n: ended by signal n. A JVM crash without a core dump ends with 1
+            deleteCrashFiles(process)
+            note("The Spotlight helper failed (exit code $code): ${err.text().takeLast(ERROR_TAIL).trim()}${stop()}")
             return null
         }
         err.text().trim().takeIf { it.isNotEmpty() }?.let { note("The Spotlight helper reported: ${it.takeLast(ERROR_TAIL)}") }
         return out.text()
+    }
+
+    /** Stops later runs; the text to add to the note the first time, else nothing. */
+    private fun stop(): String =
+        if (stopped.compareAndSet(false, true)) "; it will not be started again until Zoukan restarts" else ""
+
+    /**
+     * Deletes the crash report and compiler replay file the helper's JVM may have written into
+     * [workDir], named by its process id. Only regular files are deleted, never a link. Best-effort.
+     */
+    private fun deleteCrashFiles(process: Process) {
+        val pid = try {
+            process.pid()
+        } catch (e: Exception) {
+            return
+        }
+        for (name in listOf("hs_err_pid$pid.log", "replay_pid$pid.log")) {
+            try {
+                val file = File(workDir, name).toPath()
+                if (Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) Files.deleteIfExists(file)
+            } catch (_: Exception) {
+                // Left for the system to clear from the temporary folder
+            }
+        }
     }
 
     /** Reads a stream to its end on a daemon thread, keeping at most [MAX_OUTPUT] characters. */
@@ -133,6 +192,38 @@ internal class SpotlightExclusion(
         private const val BUFFER = 4096
         private val LINE = Regex("""(\d+) (ok|failed)""")
 
+        /** The real helper's command; [stoppedForRun] applies to it. */
+        private val HELPER: (List<String>) -> List<String>? = ::helperCommand
+
+        /** Set once the real helper crashed, failed or hung in this run. */
+        private val stoppedForRun = AtomicBoolean(false)
+
+        /** Helpers running now; killed if Zoukan quits while one runs. */
+        private val running: MutableSet<Process> = ConcurrentHashMap.newKeySet()
+
+        private val hookRegistered = AtomicBoolean(false)
+
+        /**
+         * Registers, once, a shutdown hook that kills the running helpers. Killing does not wait, so
+         * the hook cannot hold up quitting. Not registered when Zoukan is already quitting.
+         */
+        private fun registerKillOnExit() {
+            if (!hookRegistered.compareAndSet(false, true)) return
+            try {
+                Runtime.getRuntime().addShutdownHook(
+                    Thread({ running.forEach { runCatching { it.destroyForcibly() } } }, "spotlight-helper-cleanup"),
+                )
+            } catch (_: Exception) {
+                // Zoukan is already quitting, or hooks are not allowed
+            }
+        }
+
+        /** Lets the real helper run again, as in a new run (for tests). */
+        internal fun resetForTests() = stoppedForRun.set(false)
+
+        /** Whether the real helper was stopped for the rest of this run (for tests). */
+        internal val stoppedForThisRun: Boolean get() = stoppedForRun.get()
+
         /** The indexes reported `ok` in the helper's [output], for [count] paths. */
         internal fun parse(output: String, count: Int): Set<Int> = output.lineSequence()
             .mapNotNull { LINE.matchEntire(it.trim()) }
@@ -144,8 +235,10 @@ internal class SpotlightExclusion(
         /**
          * The helper's command line: the Java launcher of the runtime Zoukan runs on (`bin/java` in
          * the bundled runtime, which jlink includes), a small heap, headless, and a class path of
-         * just the jars the helper needs (Zoukan's, JNA's and Kotlin's). Null when the launcher is
-         * not there.
+         * just the jars the helper needs (Zoukan's, JNA's and Kotlin's). It leaves no files from a
+         * crash: no core dump, no crash report (sent to /dev/null; [SpotlightExclusion] deletes one
+         * written anyway) and no performance data file in the temporary folder. Null when the
+         * launcher is not there.
          */
         fun helperCommand(args: List<String>): List<String>? {
             val java = File(System.getProperty("java.home") ?: return null, "bin/java")
@@ -159,6 +252,9 @@ internal class SpotlightExclusion(
                 "-Xmx32m",
                 "-XX:+UseSerialGC",
                 "-XX:TieredStopAtLevel=1",
+                "-XX:-CreateCoredumpOnCrash",
+                "-XX:ErrorFile=/dev/null",
+                "-XX:-UsePerfData",
                 "-Djava.awt.headless=true",
                 "-cp", classPath,
                 SpotlightExclusionHelper::class.java.name,

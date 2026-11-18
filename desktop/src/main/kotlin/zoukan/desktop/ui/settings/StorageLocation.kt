@@ -33,7 +33,11 @@ internal object StorageLocation {
 
     /** Why a storage folder may be copied to a cloud service by macOS. */
     enum class CloudSync {
-        /** In iCloud Drive (`~/Library/Mobile Documents`) or another provider's `~/Library/CloudStorage` folder. */
+        /**
+         * In iCloud Drive (`~/Library/Mobile Documents`), another provider's `~/Library/CloudStorage`
+         * folder, or an older sync app's folder in the home folder ([LEGACY_SYNC_FOLDERS]): those apps
+         * sync everything in their folder, so it counts as synced, not only possibly synced.
+         */
         SYNCED,
 
         /** In `~/Desktop` or `~/Documents`, which iCloud syncs when "Desktop & Documents Folders" is on. */
@@ -50,12 +54,33 @@ internal object StorageLocation {
         val path = File(folder.absoluteFile.normalize().path.lowercase())
         val base = File(home.absoluteFile.normalize().path.lowercase())
         fun under(vararg parts: String) = path.startsWith(parts.fold(base) { dir, part -> File(dir, part.lowercase()) })
+        // The first folder under the home folder, for the older sync apps' folders
+        // Both paths are absolute and normalized, and the folder is inside the home folder, so
+        // relativize cannot throw here
+        val top = if (path.toPath().startsWith(base.toPath())) {
+            base.toPath().relativize(path.toPath()).takeIf { it.nameCount > 0 }?.getName(0)?.toString()
+        } else {
+            null
+        }
         return when {
             under("Library", "Mobile Documents") || under("Library", "CloudStorage") -> CloudSync.SYNCED
+            top != null && LEGACY_SYNC_FOLDERS.any { it.matches(top) } -> CloudSync.SYNCED
             under("Desktop") || under("Documents") -> CloudSync.MAYBE_SYNCED
             else -> null
         }
     }
+
+    /**
+     * Folders directly in the home folder that older versions of sync apps (before macOS's File
+     * Provider moved them to `~/Library/CloudStorage`) keep in sync, lower-case: Dropbox (also
+     * "Dropbox (Personal)" and a team's "Dropbox (Name)"), OneDrive (also a work or school account's
+     * "OneDrive - Name") and Google Drive (with its "My Drive" in it).
+     */
+    private val LEGACY_SYNC_FOLDERS = listOf(
+        Regex("""dropbox( \(.+\))?"""),
+        Regex("""onedrive( - .+)?"""),
+        Regex("""google drive"""),
+    )
 
     /** Uses [folder] (blank path: the data folder). Never moves, copies or deletes anything. */
     fun apply(storage: ZoukanStorage, folder: String, invalidate: () -> Unit) {

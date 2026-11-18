@@ -579,6 +579,17 @@ time, with `--tests`:
 ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
 ```
 
+Two tests in `StorageFolderPrivacyTest` change the real Spotlight Search Privacy list of the
+macOS account that runs them, and one of them makes `zoukan-spotlight-test-*` folders in the home
+folder. They skip themselves unless the environment variable `ZOUKAN_TEST_REAL_SPOTLIGHT=true` is
+set (or `-Dzoukan.test.realSpotlight=true` on the test JVM). They take their entries off the list
+and remove their folders when they end, and first clear what an interrupted earlier run left. The
+other tests of the class use stand-ins and never touch the list.
+
+```bash
+ZOUKAN_TEST_REAL_SPOTLIGHT=true ./gradlew :desktop:test --tests "zoukan.desktop.storage.StorageFolderPrivacyTest" --rerun
+```
+
 `extensionWiringTest` downloads every extension of two stores, so it runs only in `nightlyCheck`
 and `longChecks` (on Windows before each merge to master). The stores are `SampleStores.ALL`, defined in the tests only (the app names no store): Keiyoushi (about 1,700
 extensions) and yuzono's "Cursed" store (six NSFW extensions with their own signing key). Only the

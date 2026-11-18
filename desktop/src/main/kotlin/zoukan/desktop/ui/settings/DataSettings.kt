@@ -53,6 +53,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.Archives
+import zoukan.desktop.storage.StorageFolderPrivacy
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.Images
@@ -95,6 +96,13 @@ fun LazyListScope.dataSettings() {
                 localized(DMR.strings.hide_storage_folder_from_spotlight_summary),
             )
         }
+        item(key = "data-storage-spotlight-failed") {
+            val storage = remember { Injekt.get<ZoukanStorage>() }
+            val privacy = remember { Injekt.get<StorageFolderPrivacy>() }
+            val on by storage.hideFromSpotlight.collectAsState()
+            val applied by privacy.spotlightApplied.collectAsState()
+            StoragePrivacyFailure(on && !applied, localized(DMR.strings.could_not_hide_storage_folder_from_spotlight))
+        }
         item(key = "data-storage-time-machine") {
             val storage = remember { Injekt.get<ZoukanStorage>() }
             SwitchPreference(
@@ -102,6 +110,13 @@ fun LazyListScope.dataSettings() {
                 storage.excludeFromTimeMachine,
                 localized(DMR.strings.leave_storage_folder_out_of_time_machine_summary),
             )
+        }
+        item(key = "data-storage-time-machine-failed") {
+            val storage = remember { Injekt.get<ZoukanStorage>() }
+            val privacy = remember { Injekt.get<StorageFolderPrivacy>() }
+            val on by storage.excludeFromTimeMachine.collectAsState()
+            val applied by privacy.timeMachineApplied.collectAsState()
+            StoragePrivacyFailure(on && !applied, localized(DMR.strings.could_not_leave_storage_folder_out_of_time_machine))
         }
     }
 
@@ -335,6 +350,22 @@ private fun StorageUnavailableBanner() {
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
         )
     }
+}
+
+/**
+ * Under a macOS privacy switch: shown while its setting is on but the last attempt to apply it
+ * failed (see StorageFolderPrivacy), for example when the Spotlight helper failed or the storage
+ * folder cannot be reached. Comes from the attempt itself, not the log, so it shows in incognito too.
+ */
+@Composable
+internal fun StoragePrivacyFailure(failed: Boolean, message: String) {
+    if (!failed) return
+    Text(
+        message,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp),
+    )
 }
 
 /** On macOS, how the storage folder at [root] may be synced to the cloud; null elsewhere or when it is not. */

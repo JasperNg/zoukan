@@ -17,7 +17,7 @@ import java.io.File
  */
 class ZoukanStorage(
     private val dirs: ZoukanDirs,
-    store: PreferenceStore,
+    private val store: PreferenceStore,
 ) {
     /** The chosen folder as a path; blank means the data folder. */
     val folderPreference: Preference<String> = store.getString(Preference.appStateKey("storage_dir"), "")
@@ -33,6 +33,25 @@ class ZoukanStorage(
      * (StorageFolderPrivacy). On by default. An app-state key: it is about this computer's folder.
      */
     val excludeFromTimeMachine: Preference<Boolean> = store.getBoolean(Preference.appStateKey("zoukan_storage_exclude_from_time_machine"), true)
+
+    /**
+     * Desktop only, macOS: the canonical paths of the folders Zoukan put in Spotlight's Search
+     * Privacy list (StorageFolderPrivacy). Only these are ever taken off the list again, so an
+     * entry the user made stays. An app-state key: paths are about this computer. Made on first
+     * use, so a store without string sets serves the rest of this class.
+     */
+    val spotlightMarked: Preference<Set<String>> by lazy {
+        store.getStringSet(Preference.appStateKey("zoukan_storage_spotlight_marked"), emptySet())
+    }
+
+    /**
+     * Desktop only, macOS: the canonical paths of the folders Zoukan excluded from Time Machine
+     * (StorageFolderPrivacy). Only these lose the exclusion again, so one the user set stays. An
+     * app-state key: paths are about this computer. Made on first use, as [spotlightMarked].
+     */
+    val timeMachineMarked: Preference<Set<String>> by lazy {
+        store.getStringSet(Preference.appStateKey("zoukan_storage_time_machine_marked"), emptySet())
+    }
 
     val root: File
         get() = folderPreference.get()
@@ -78,7 +97,10 @@ class ZoukanStorage(
          * automatic backups. The storage folder itself may hold other things, so only these get
          * folder-level settings (StorageFolderPrivacy).
          */
-        fun zoukanFolders(root: File): List<File> = listOf(DOWNLOADS, LOCAL, AUTOMATIC_BACKUPS).map { File(root, it) }
+        fun zoukanFolders(root: File): List<File> = ZOUKAN_FOLDER_NAMES.map { File(root, it) }
+
+        /** The names of [zoukanFolders], exactly as Zoukan and the Android app write them. */
+        val ZOUKAN_FOLDER_NAMES: List<String> = listOf(DOWNLOADS, LOCAL, AUTOMATIC_BACKUPS)
     }
 }
 
