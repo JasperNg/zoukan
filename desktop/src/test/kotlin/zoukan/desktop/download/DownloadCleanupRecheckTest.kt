@@ -3,15 +3,17 @@ package zoukan.desktop.download
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
-import zoukan.desktop.testing.Await
 import java.io.File
 
 /**
@@ -100,24 +102,26 @@ class DownloadCleanupRecheckTest {
         val plan = kit.manager.planCleanup(true, false, { listOf(one, two) }, { chapters[it].orEmpty() })
         plan.others.map { it.file } shouldBe listOf(file)
 
-        // Entry 2's download is writing into the shared folder
-        val lock = kit.manager.entryLock(2)
+        // Entry 2's download is writing into the shared folder; its lock says when the clean-up asks for it
+        val lock = Mutex()
+        val asked = CompletableDeferred<Unit>()
+        kit.manager.entryLocks[2] = object : Mutex by lock {
+            override suspend fun lock(owner: Any?) {
+                asked.complete(Unit)
+                lock.lock(owner)
+            }
+        }
         lock.lock()
         val applying = async(Dispatchers.IO) { kit.manager.applyCleanup(plan) }
-        // The owners' locks are taken in id order: holding entry 1's, the clean-up is at entry 2's
-        Await.untilSuspending("the clean-up to take entry 1's lock") { kit.manager.entryLock(1).isLocked }
-        // A Mutex does not show who waits for it, so only a pause can show that nothing is deleted
-        Await.within(NOTHING_HAPPENS_MILLIS) { applying.isCompleted || !file.exists() }
+        // The owners' locks are taken in id order: holding entry 1's, the clean-up asks for entry 2's,
+        // which this test holds, so nothing can be deleted yet
+        withTimeout(10_000) { asked.await() }
+        kit.manager.entryLock(1).isLocked shouldBe true
         applying.isCompleted shouldBe false
         file.exists() shouldBe true
         lock.unlock()
 
         applying.await() shouldBe 2 // the chapter, then the emptied folder
         file.exists() shouldBe false
-    }
-
-    private companion object {
-        /** How long the test watches for a deletion that must not happen. */
-        const val NOTHING_HAPPENS_MILLIS = 200L
     }
 }

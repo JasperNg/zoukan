@@ -10,10 +10,12 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.domain.extension.model.ExtensionStore
@@ -399,13 +401,24 @@ class DesktopExtensionManagerTest {
         val downloading = CountDownLatch(1)
         gate = release
         atGate = downloading
+        // The package's lock counts who asks for it: the install, then the uninstall
+        val lock = Mutex()
+        val asks = Channel<Unit>(Channel.UNLIMITED)
+        manager.locks[pkgName] = object : Mutex by lock {
+            override suspend fun lock(owner: Any?) {
+                asks.send(Unit)
+                lock.lock(owner)
+            }
+        }
         coroutineScope {
             val install = async(Dispatchers.IO) { manager.installExtension(offer(3, "key-a")) }
             // The install has taken the package's lock and reached its download
             downloading.await(10, TimeUnit.SECONDS) shouldBe true
+            withTimeout(10_000) { asks.receive() }
             val uninstall = launch(Dispatchers.IO) { manager.uninstall(pkgName) }
-            // A Mutex does not show who waits for it, so only a pause can show that the uninstall waits
-            delay(NOTHING_HAPPENS_MILLIS)
+            // The uninstall asks for the lock the install holds until its download is released
+            withTimeout(10_000) { asks.receive() }
+            lock.isLocked shouldBe true
             uninstall.isCompleted shouldBe false
             release.countDown()
             install.await().shouldBeInstanceOf<LoadResult.Success>()
@@ -459,8 +472,5 @@ class DesktopExtensionManagerTest {
 
     private companion object {
         const val SIGNER_ENTRY = "test-signer.txt"
-
-        /** How long a test watches for a step that must not happen. */
-        const val NOTHING_HAPPENS_MILLIS = 200L
     }
 }
