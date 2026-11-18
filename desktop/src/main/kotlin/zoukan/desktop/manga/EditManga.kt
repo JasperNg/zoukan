@@ -2,15 +2,24 @@ package zoukan.desktop.manga
 
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.toSManga
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
 import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.ComicInfoXml
+import zoukan.desktop.download.ImageType
 import zoukan.desktop.local.LocalSource
+import zoukan.i18n.desktop.DMR
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.time.Instant
+import javax.imageio.ImageIO
 
 /**
  * Edits an entry's details, notes and cover, as the Android app's edit dialog and cover screen:
@@ -94,10 +103,15 @@ class EditManga(
 
     suspend fun setCover(manga: Manga, image: File) {
         if (manga.source == LocalSource.ID) {
-            val dir = (sourceManager.get(LocalSource.ID) as? LocalSource)?.mangaDir(manga.url) ?: return
-            LocalSource.findCover(dir)?.delete()
-            val cover = File(dir, "cover.${image.extension.lowercase().ifBlank { "jpg" }}")
-            image.copyTo(cover, overwrite = true)
+            val local = sourceManager.get(LocalSource.ID) as? LocalSource ?: return
+            val dir = local.mangaDir(manga.url) ?: return
+            val bytes = coverImage(image)
+            val old = LocalSource.findCover(dir)
+            // The new cover is in place before the old one goes, so a failed write keeps the cover
+            val cover = local.writeCover(dir, bytes, encrypted = false)
+            if (old != null && old.name != cover.name && !old.delete()) {
+                logcat(LogPriority.WARN) { "Could not delete the old cover ${old.name} of a local entry" }
+            }
             updateManga.await(MangaUpdate(id = manga.id, thumbnailUrl = cover.toURI().toString()))
         } else {
             if (!manga.favorite) return
@@ -114,4 +128,17 @@ class EditManga(
     }
 
     private fun String.trimOrNull() = trim().ifBlank { null }
+
+    /**
+     * The picked [image] as a local cover: as it is when it is a type both apps find as a cover
+     * (by its content, not its file name), a PNG when it is another image Java reads (BMP, TIFF),
+     * and an error when it is no image at all.
+     */
+    private fun coverImage(image: File): ByteArray {
+        val bytes = image.readBytes()
+        if (ImageType.fromBytes(bytes) != null) return bytes
+        val decoded = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }.getOrNull()
+            ?: throw IOException(localized(DMR.strings.not_an_image))
+        return ByteArrayOutputStream().also { ImageIO.write(decoded, "png", it) }.toByteArray()
+    }
 }
