@@ -358,13 +358,15 @@ private class CoverFetcher(
 
 /**
  * The download password for encrypted covers (`cover.cbi`), read from the OS secret store once a
- * session and kept, a failure included, so a grid of encrypted covers asks the store once, not once
- * per cover (a denied Keychain prompt would come back for each). Read again after the password is
- * set or removed in settings ([CbzPassword.version]). One read at a time, so covers loading at once
- * wait for that one read. Each caller gets its own copy.
+ * session and kept, so a grid of encrypted covers asks the store once, not once per cover (a denied
+ * Keychain prompt would come back for each). No password (not set, or the store failed: [CbzPassword.get]
+ * gives null for both) is kept for [RETRY_MILLIS] only, so covers come back after the store is
+ * unlocked without a prompt per cover. Read again after the password is set or removed in settings
+ * ([CbzPassword.version]). One read at a time, so covers loading at once wait for that one read.
+ * Each caller gets its own copy.
  */
-internal class CoverPasswordCache(private val password: () -> CbzPassword) {
-    private class Read(val version: Int, val password: CharArray?)
+internal class CoverPasswordCache(private val now: () -> Long = System::currentTimeMillis, private val password: () -> CbzPassword) {
+    private class Read(val version: Int, val password: CharArray?, val at: Long)
 
     private var last: Read? = null
 
@@ -376,10 +378,14 @@ internal class CoverPasswordCache(private val password: () -> CbzPassword) {
             return null
         }
         val version = store.version
-        last?.takeIf { it.version == version }?.let { return it.password?.copyOf() }
-        // CbzPassword.get gives null when the store fails: that is kept too
+        val time = now()
+        last?.takeIf { it.version == version && (it.password != null || time - it.at < RETRY_MILLIS) }?.let { return it.password?.copyOf() }
         val read = store.get()
-        last = Read(version, read?.copyOf())
+        last = Read(version, read?.copyOf(), time)
         return read
+    }
+
+    private companion object {
+        const val RETRY_MILLIS = 60_000L
     }
 }

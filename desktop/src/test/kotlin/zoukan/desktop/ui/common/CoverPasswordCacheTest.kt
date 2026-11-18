@@ -68,4 +68,30 @@ class CoverPasswordCacheTest {
         cache.get()!!.fill('\u0000')
         String(cache.get()!!) shouldBe "secret"
     }
+
+    @Test
+    fun `a failed read is tried again after a minute, so covers come back once the store is unlocked`() {
+        val failing = FailingSecretStore()
+        failing.backing.set(CbzPassword.KEY, "secret")
+        failing.failAll(FailingSecretStore.Failure.DENIED)
+        val store = Counting(failing)
+        var now = 0L
+        val cache = CoverPasswordCache(now = { now }) { CbzPassword(store, preferences) }
+
+        repeat(20) { cache.get() shouldBe null }
+        store.reads.get() shouldBe 1
+
+        // Unlocked: within the minute the failure is still kept, after it the password is read
+        failing.heal()
+        now += 30_000
+        cache.get() shouldBe null
+        now += 31_000
+        String(cache.get()!!) shouldBe "secret"
+        store.reads.get() shouldBe 2
+
+        // A password read is kept for the session
+        now += 3_600_000
+        String(cache.get()!!) shouldBe "secret"
+        store.reads.get() shouldBe 2
+    }
 }
