@@ -196,14 +196,14 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
     fun ComposeUiTest.awaitAppIdle() {
         val downloads = Injekt.get<zoukan.desktop.download.DownloadManager>()
         fun appScopeBusy() = AppScope.coroutineContext.job.children.filter { it.isActive }.toList()
-        fun busy() = zoukan.desktop.ui.common.actionsRunning.get() > 0 || appScopeBusy().isNotEmpty()
+        fun busy() = zoukan.desktop.app.actionsRunning.get() > 0 || appScopeBusy().isNotEmpty()
         runBlocking {
             withTimeout(APP_IDLE_TIMEOUT) {
                 // An action's end can start more (a refresh after a delete), and the UI more actions
                 do {
                     waitForIdle()
                     Await.untilSuspending("the user actions to end", APP_IDLE_TIMEOUT) {
-                        zoukan.desktop.ui.common.actionsRunning.get() == 0
+                        zoukan.desktop.app.actionsRunning.get() == 0
                     }
                     while (true) {
                         val pending = appScopeBusy()

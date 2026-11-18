@@ -42,6 +42,7 @@ import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.app.launchAction
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.ChaptersByEntry
@@ -51,7 +52,6 @@ import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
-import zoukan.desktop.ui.common.launchAction
 import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR

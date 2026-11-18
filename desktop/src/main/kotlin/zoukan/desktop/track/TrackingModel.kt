@@ -34,7 +34,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.Toasts
-import zoukan.desktop.ui.common.launchAction
+import zoukan.desktop.app.launchAction
 
 /** One manga's tracking: the logged-in trackers, its tracks, search and binding, and edits. */
 class TrackingModel(
