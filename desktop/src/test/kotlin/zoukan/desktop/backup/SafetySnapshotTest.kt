@@ -75,8 +75,23 @@ class SafetySnapshotTest {
     }
 
     @Test
-    fun `running out of memory while writing the snapshot is not a failed write`() = runBlocking<Unit> {
-        shouldThrow<OutOfMemoryError> { snapshot(write = { throw OutOfMemoryError() }).take(SnapshotReason.CLEAR_DATABASE) }
+    fun `running out of memory while writing the snapshot is a failed snapshot the user decides on`() = runBlocking<Unit> {
+        // The backup of a large library is built in memory, and released when the write fails: the
+        // user is asked to continue without a safety backup, as for any failed write
+        val snapshots = snapshot(write = { throw OutOfMemoryError("Java heap space") })
+        snapshots.take(SnapshotReason.CLEAR_DATABASE).isFailure shouldBe true
+        var asked: String? = null
+        snapshots.guard(SnapshotReason.RESTORE) {
+            asked = it
+            false
+        } shouldBe false
+        asked!! shouldContain "Java heap space"
+    }
+
+    @Test
+    fun `other fatal errors while writing the snapshot still go on`() = runBlocking<Unit> {
+        shouldThrow<NoClassDefFoundError> { snapshot(write = { throw NoClassDefFoundError("x") }).take(SnapshotReason.CLEAR_DATABASE) }
+        shouldThrow<InternalError> { snapshot(write = { throw InternalError("x") }).take(SnapshotReason.CLEAR_DATABASE) }
     }
 
     @Test

@@ -65,7 +65,7 @@ class SafetySnapshot(
                 withTimeout(timeoutMillis) {
                     val dir = folder().apply { mkdirs() }
                     val file = freeFile(dir, "${PREFIX}${reason.tag}_${now().format(FILE_TIME)}")
-                    write(file)
+                    writeWithin(file)
                     prune(dir, reason, keep, file)
                     logcat { "Safety backup saved to $file" }
                     Result.success(file)
@@ -82,6 +82,23 @@ class SafetySnapshot(
         logcat(LogPriority.ERROR, e) { "The safety backup before ${reason.tag} failed" }
         Result.failure(e)
     }
+
+    /**
+     * [write]s the snapshot to [file]. The backup of the whole library is built in memory, and a
+     * large library can run out of memory there: that allocation is the write's own and is released
+     * when it fails, so it is a failed snapshot the user decides on (as Android's backup job shows a
+     * failure), not a failure of the app. Only an out-of-memory error from this write is turned into one.
+     */
+    private suspend fun writeWithin(file: File) {
+        try {
+            write(file)
+        } catch (e: OutOfMemoryError) {
+            throw SnapshotTooLargeException(e)
+        }
+    }
+
+    /** The snapshot did not fit in memory; its message is the out-of-memory error's. */
+    class SnapshotTooLargeException(cause: OutOfMemoryError) : java.io.IOException(cause.message ?: "Out of memory", cause)
 
     /**
      * Takes a snapshot before a [reason] change the user started. True when the change may go
