@@ -5,25 +5,27 @@ import org.junit.jupiter.api.Test
 import zoukan.desktop.scan.SourceScan.Allowed
 
 /**
- * A catch that keeps something running after an `Error` must still let the VM's own failures
- * through: an `OutOfMemoryError` swallowed by a loop leaves it running in a broken state, and the
- * crash report never sees it. Fails on:
+ * A catch-all must let the failures through that the app must not keep running after: an
+ * `OutOfMemoryError` that is caught leaves the app running in a broken state, and the crash report
+ * never sees it. Every `catch (e: Throwable)` / `catch (e: Error)` (Kotlin) and
+ * `catch (Throwable t)` / `catch (Error e)` (Java) in the app's own code must, at the top level of
+ * its block (not under an `if`):
  *
- * - every `catch (e: Error)` / `catch (Error e)`;
- * - a `catch (e: Throwable)` / `catch (Throwable t)` inside a loop (`while`, `for`, `do`, `repeat`,
- *   `forEach`...) in the same function, that swallows the failure;
+ * - call `e.rethrowIfFatal()` (`FatalErrors.rethrowIfFatal(e)` in Java), which rethrows a
+ *   `VirtualMachineError` and a `LinkageError`; or
+ * - rethrow the caught error itself unconditionally (`throw e`, after cleanup). Wrapping it
+ *   (`throw IOException(e)`) does not count: the wrapper is an exception the caller catches.
  *
- * unless the handler rethrows unconditionally (`throw e`, or a wrapper), rethrows when the failure
- * is an `OutOfMemoryError`, a `VirtualMachineError` or not an `Exception` (the
- * `if (e !is Exception && e !is LinkageError) throw e` idiom), ends in `CrashReporter.fatal`, or an
- * earlier catch of the same `try` handles `OutOfMemoryError` or `VirtualMachineError` first.
+ * On a path that runs extension code (or loads a native library), a `LinkageError` is an outdated
+ * extension (`SourceErrors.kt`) and is shown as an error: there the catch calls
+ * `e.rethrowIfVmFailure()` instead, or keeps the older `if (e !is Exception && e !is LinkageError)
+ * throw e`. Those are accepted only at the sites [EXTENSION_PATHS] lists, each with what extension
+ * code or native library the path reaches.
  *
- * A `LinkageError` may be caught: an extension built against another API fails with one, and the
- * app shows it as an outdated extension and keeps running (`SourceErrors.kt`, the main looper).
- *
- * A one-off `catch (e: Throwable)` outside a loop is left out on purpose: the app catches Throwable
- * around single user actions so that an extension's Error (out of memory on a huge cover included)
- * becomes a message instead of a crash, and the action ends there.
+ * Kotlin's `runCatching` catches every Throwable too. It is left out of this rule: the app's own
+ * code has about 300 calls, most around one file or preference operation, and moving them all to a
+ * checked helper is a change of its own. The project's `runCatchingCancellable` rethrows the VM's
+ * failures (`app/Cancellation.kt`), so code around suspend calls should use it.
  */
 class FatalErrorCatchScanTest {
     private val sourceDirs = listOf(
@@ -32,151 +34,210 @@ class FatalErrorCatchScanTest {
         "android-compat/src/main/java",
     )
 
-    @Test
-    fun `no catch keeps running after an OutOfMemoryError`() {
-        val findings = SourceScan.sources(sourceDirs).flatMap { source ->
-            FatalErrorCatchScanner.lines(source.text).filter { source.isOwn(it) }.map { SourceScan.finding(source, it) }
+    private val sites by lazy {
+        SourceScan.sources(sourceDirs).flatMap { source ->
+            FatalErrorCatchScanner.sites(source.text).filter { source.isOwn(it.line) }
+                .map { it.kind to SourceScan.finding(source, it.line) }
         }
+    }
+
+    @Test
+    fun `every catch-all rethrows fatal errors`() {
         SourceScan.verify(
-            findings,
+            sites.filter { it.first == FatalErrorCatchScanner.Kind.SWALLOWS }.map { it.second },
             ALLOWED,
-            "Rethrow VirtualMachineError (OutOfMemoryError) from this catch, as Looper.java and " +
-                "KcefContentRules.kt do (or add the site to the allow-list with its reason):",
+            "Call e.rethrowIfFatal() first in this catch (xyz.nulldev.androidcompat.util), or rethrow " +
+                "the caught error after cleanup (or add the site to the allow-list with its reason):",
         )
     }
 
     @Test
-    fun `flags a catch of Error and a Throwable swallowed in a loop`() {
-        FatalErrorCatchScanner.lines(
-            """
-            fun loop() {
-                while (running) {
-                    try {
-                        step()
-                    } catch (e: Throwable) {
-                        log(e)
-                    }
-                }
-            }
-            fun once() {
-                try { step() } catch (e: Error) { log(e) }
-                items.forEach { item ->
-                    try { item.run() } catch (_: Throwable) { }
-                }
-            }
-            class Java {
-                void run() {
-                    for (;;) {
-                        try { step(); } catch (final Throwable t) { Log.e(TAG, "threw", t); }
-                    }
-                }
-            }
-            """.trimIndent(),
-        ) shouldBe listOf(5, 11, 13, 19)
+    fun `a catch-all that keeps a LinkageError is on a path that runs extension code`() {
+        SourceScan.verify(
+            sites.filter { it.first == FatalErrorCatchScanner.Kind.KEEPS_LINKAGE }.map { it.second },
+            EXTENSION_PATHS,
+            "rethrowIfVmFailure() is only for a path that runs extension code or loads a native library; " +
+                "use rethrowIfFatal() here (or list the site with what extension code it runs):",
+        )
     }
 
     @Test
-    fun `accepts rethrows, VM error checks, an earlier VM catch and one-off catches`() {
+    fun `flags every catch-all without a rethrow, a conditional rethrow and a wrapper`() {
         FatalErrorCatchScanner.lines(
             """
-            fun accepted() {
-                while (true) {
-                    try { a() } catch (e: Throwable) { cleanUp(); throw e }
-                    try { a() } catch (e: Throwable) { throw IOException("wrapped", e) }
-                    try { a() } catch (e: Throwable) {
-                        if (e !is Exception && e !is LinkageError) throw e
-                        log(e)
-                    }
-                    try { a() } catch (e: Throwable) {
-                        if (e is VirtualMachineError) throw e
-                    }
-                    try { a() } catch (e: OutOfMemoryError) { throw e } catch (e: Throwable) { log(e) }
-                    try { a() } catch (e: Throwable) { CrashReporter.fatal(e) }
-                    try { a() } catch (e: Exception) { log(e) }
+            fun once() {
+                try { step() } catch (e: Throwable) { log(e) }
+                try { step() } catch (e: Error) { log(e) }
+                try { a() } catch (e: Throwable) {
+                    if (e is VirtualMachineError) throw e
                 }
-                try { a() } catch (e: Throwable) { toast(e) }
+                try { a() } catch (e: Throwable) { throw IOException("wrapped", e) }
+                try { a() } catch (e: Throwable) {
+                    if (bad) e.rethrowIfFatal()
+                }
+                try { a() } catch (e: Throwable) { other.rethrowIfFatal() }
+                try { a() } catch (e: Throwable) { CrashReporter.fatal(e) }
+                try { a() } catch (e: Throwable) { if (x) throw e }
             }
-            class Looper {
-                void loop() {
+            class Java {
+                void run() {
+                    try { step(); } catch (final Throwable t) { Log.e(TAG, "threw", t); }
                     try { a(); } catch (Error error) {
                         if (error instanceof VirtualMachineError) { throw error; }
                     }
                 }
             }
             """.trimIndent(),
-        ) shouldBe emptyList()
+        ) shouldBe listOf(2, 3, 4, 7, 8, 11, 12, 13, 17, 18)
     }
 
     @Test
-    fun `a loop in an outer function does not count for a catch in a nested function`() {
+    fun `accepts the helper, an unconditional rethrow and narrower catches`() {
         FatalErrorCatchScanner.lines(
             """
-            fun outer() {
-                for (x in xs) {
-                    fun inner() {
-                        try { a() } catch (e: Throwable) { log(e) }
-                    }
-                    inner()
+            fun accepted() {
+                try { a() } catch (e: Throwable) { e.rethrowIfFatal(); log(e) }
+                try { a() } catch (e: Throwable) { cleanUp(); throw e }
+                try { a() } catch (e: Throwable) {
+                    toast(e)
+                    e.rethrowIfFatal()
+                }
+                try { a() } catch (e: Exception) { log(e) }
+                try { a() } catch (e: CancellationException) { log(e) }
+                val x = try { a() } catch (t: Throwable) {
+                    t.rethrowIfFatal()
+                    null
+                }
+            }
+            class Java {
+                void run() {
+                    try { a(); } catch (Throwable t) { FatalErrors.rethrowIfFatal(t); log(t); }
+                    try { a(); } catch (Error e) { cleanUp(); throw e; }
                 }
             }
             """.trimIndent(),
         ) shouldBe emptyList()
     }
 
+    @Test
+    fun `tells the extension form apart`() {
+        FatalErrorCatchScanner.sites(
+            """
+            fun extension() {
+                try { a() } catch (e: Throwable) { e.rethrowIfVmFailure(); log(e) }
+                try { a() } catch (e: Throwable) {
+                    // A refusal, or the native store failing to load
+                    if (e !is Exception && e !is LinkageError) throw e
+                    log(e)
+                }
+                try { a() } catch (e: Throwable) { e.rethrowIfFatal() }
+            }
+            class Java {
+                void run() {
+                    try { a(); } catch (Error error) { xyz.nulldev.androidcompat.util.FatalErrors.rethrowIfVmFailure(error); }
+                }
+            }
+            """.trimIndent(),
+        ).map { it.line to it.kind } shouldBe listOf(
+            2 to FatalErrorCatchScanner.Kind.KEEPS_LINKAGE,
+            3 to FatalErrorCatchScanner.Kind.KEEPS_LINKAGE,
+            12 to FatalErrorCatchScanner.Kind.KEEPS_LINKAGE,
+        )
+    }
+
     private companion object {
-        const val PER_ITEM = "one item's failure (an extension's Error included) is recorded and the loop " +
-            "goes on to the next item; an OutOfMemoryError there is swallowed too"
         val ALLOWED = listOf(
-            Allowed("harness/ExtensionWiringCheck.kt", "} catch (e: Throwable) {", "the extension-wiring check (a test harness, not the app): records each setting's failure and goes on to the next", function = "checkSettings"),
-            Allowed("ui/settings/MissingExtensions.kt", "} catch (e: Throwable) {", PER_ITEM, function = "installMissingExtensions"),
-            Allowed("ui/reader/ReaderScreenModel.kt", "} catch (e: Throwable) {", "prefetching one page of many; that page loads again when it is shown", function = "prefetchAll"),
-            Allowed("download/ChapterDownloader.kt", "} catch (e: Throwable) {", "the retry loop keeps the failure in `last` and rethrows it after the last attempt", function = "retry"),
+            Allowed("zoukan/desktop/Main.kt", "} catch (e: Throwable) {", "the start-up's last handler: CrashReporter.fatal reports every failure, fatal ones included, and ends the app", function = "dispatch"),
+            Allowed("app/AppShutdown.kt", "} catch (e: Throwable) {", "the last step before the process exits: the failure is logged and the exit goes on; a rethrow could keep the process from exiting", function = "runForApp"),
+            Allowed("network/AppDnsResolver.kt", "} catch (_: Throwable) {", "loading the JDK's resolver provider: an error escaping it leaves InetAddress unusable for the whole run, so the JDK's own resolver is used instead", function = "get"),
+            Allowed("image/FfmpegImageDecoder.kt", "} catch (_: Throwable) {", "a read or seek callback from FFmpeg's native code: nothing may be thrown back into native code; the error code ends the decode, which then fails", function = "call", count = 2),
+            Allowed("security/SecureScreen.kt", "} catch (e: Throwable) {", "a callback from macOS's main dispatch queue through JNA: nothing may be thrown back into native code", function = "invoke"),
+        )
+
+        const val SOURCE = "runs extension code: a source's"
+        val EXTENSION_PATHS = listOf(
+            // The helpers themselves, for their callers
+            Allowed("app/Cancellation.kt", "} catch (e: Throwable) {", "runs extension code: runCatchingCancellable wraps calls into sources, trackers and the extension manager"),
+            Allowed("ui/common/ReportingLaunch.kt", "} catch (e: Throwable) {", "runs extension code: launchReporting runs any user action, refreshing an entry from its source included", function = "launchReporting"),
+            Allowed("android/os/Looper.java", "} catch (Error error) {", "runs extension code: the main looper runs every extension's handler and WebView callbacks", function = "loopOnce"),
+            // Sources
+            Allowed("ui/reader/ReaderScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE page list, page images and page actions", count = 4),
+            Allowed("ui/browse/SourceScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE filters and browse pages", count = 3),
+            Allowed("ui/browse/GlobalSearchScreen.kt", "} catch (e: Throwable) {", "$SOURCE search"),
+            Allowed("ui/browse/FeedTab.kt", "} catch (e: Throwable) {", "$SOURCE feed"),
+            Allowed("ui/manga/MangaScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters, and enhanced trackers that ask the source", count = 3),
+            Allowed("ui/manga/MergeAndMigrate.kt", "} catch (e: Throwable) {", "$SOURCE search for a merge or a migration", count = 2),
+            Allowed("ui/manga/PagePreviews.kt", "} catch (e: Throwable) {", "$SOURCE page previews", count = 2),
+            Allowed("ui/manga/RelatedTitles.kt", "} catch (e: Throwable) {", "$SOURCE related titles", function = "RelatedTitlesSection"),
+            Allowed("ui/recs/RecommendationSearch.kt", "} catch (e: Throwable) {", "$SOURCE search for recommendations"),
+            Allowed("download/DownloadManager.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images for a download", function = "download"),
+            Allowed("download/ChapterDownloader.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images, retried", function = "retry"),
+            Allowed("ui/settings/EhSettings.kt", "} catch (e: Throwable) {", "$SOURCE gallery update (the E-Hentai source)"),
+            Allowed("track/TrackingModel.kt", "} catch (e: Throwable) {", "$SOURCE metadata, and enhanced trackers that ask the source", count = 3),
+            Allowed("exh/EhGalleryUpdater.kt", "} catch (t: Throwable) {", "$SOURCE gallery update (the E-Hentai source)", function = "updateEntryAndGetChapters"),
+            Allowed("library/AddToLibrary.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters after adding an entry"),
+            Allowed("library/BackgroundJobs.kt", "} catch (e: Throwable) {", "runs extension code: the scheduled library update, gallery update and tracker retries"),
+            Allowed("library/LibraryUpdater.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters in a library update", count = 2),
+            // Loading and managing extensions
+            Allowed("ui/settings/MissingExtensions.kt", "} catch (e: Throwable) {", "runs extension code: installing an extension loads it", function = "installMissingExtensions"),
+            Allowed("ui/settings/MissingExtensionsInstall.kt", "} catch (e: Throwable) {", "runs extension code: installing extensions loads them", count = 2),
+            Allowed("ui/browse/BrowseScreenModel.kt", "} catch (e: Throwable) {", "runs extension code: installing or updating an extension loads it"),
+            Allowed("ui/browse/ExtensionDetailsScreen.kt", "} catch (e: Throwable) {", "runs extension code: uninstalling an extension unloads its sources", function = "uninstall"),
+            Allowed("zoukan/extension/DesktopExtensionLoader.kt", "} catch (e: Throwable) {", "runs extension code: loading an extension's classes and creating its sources, which fail with a LinkageError when it is outdated", count = 2),
+            // The extension test harnesses (run on demand, not by the app)
+            Allowed("harness/ExtensionWiringCheck.kt", "} catch (e: Throwable) {", "runs extension code: the extension-wiring check installs extensions and calls their sources and settings, recording each failure", count = 4),
+            Allowed("harness/CompatibilityHarness.kt", "} catch (e: Throwable) {", "runs extension code: the compatibility harness calls each source's optional steps", function = "optional"),
+            // Native libraries through JNA
+            Allowed("ui/settings/SecuritySettings.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA, which fails with a LinkageError when it cannot load"),
+            Allowed("ui/security/LockOverlay.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA"),
+            Allowed("ui/settings/DownloadPasswordDialog.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA (the older idiom, which also rethrows every other Error)"),
+            Allowed("ui/settings/AboutSettings.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA (the older idiom, which also rethrows every other Error)"),
+            Allowed("update/UpdateStates.kt", "} catch (e: Throwable) {", "loads a native library: the update check reads its token from the OS secret store through JNA", function = "check"),
         )
     }
 }
 
-/** Finds the catches [FatalErrorCatchScanTest] forbids; returns their 1-based lines. */
+/** Finds the catch-alls [FatalErrorCatchScanTest] forbids or restricts. */
 internal object FatalErrorCatchScanner {
-    private val KOTLIN_CATCH = Regex("""\bcatch\s*\(\s*(\w+)\s*:\s*(?:kotlin\.|java\.lang\.)?(Throwable|Error)\s*\)""")
-    private val JAVA_CATCH = Regex("""\bcatch\s*\(\s*(?:final\s+)?(?:[\w.]+\s*\|\s*)*(?:java\.lang\.)?(Throwable|Error)\s+(\w+)\s*\)""")
-    private val ANY_CATCH = Regex("""\bcatch\s*\(([^)]*)\)\s*$""")
-    private val LOOP = listOf(
-        Regex("""(?s)\b(?:while|for)\s*\(.*\)\s*$"""),
-        Regex("""\bdo\s*$"""),
-        Regex("""\b(?:repeat|forEach|forEachIndexed|onEach|forEachLine|loop)\b\s*(?:\([^()]*\))?\s*(?:\w+(?:\s*,\s*\w+)*\s*->)?\s*$"""),
-    )
-    private val VM_CHECK = Regex("""\b(?:OutOfMemoryError|VirtualMachineError)\b|!is\s+Exception\b|!\s*\(\s*\w+\s+instanceof\s+Exception\s*\)""")
+    enum class Kind {
+        /** Lets no fatal error through. */
+        SWALLOWS,
 
-    fun lines(text: String): List<Int> {
+        /** Rethrows the VM's failures but keeps a LinkageError: only on a path that runs extension code. */
+        KEEPS_LINKAGE,
+    }
+
+    data class Site(val line: Int, val kind: Kind)
+
+    private val KOTLIN_CATCH = Regex("""\bcatch\s*\(\s*(\w+)\s*:\s*(?:kotlin\.|java\.lang\.)?(?:Throwable|Error)\s*\)""")
+    private val JAVA_CATCH = Regex("""\bcatch\s*\(\s*(?:final\s+)?(?:[\w.]+\s*\|\s*)*(?:java\.lang\.)?(?:Throwable|Error)\s+(\w+)\s*\)""")
+
+    /** The 1-based lines of the catch-alls that swallow fatal errors. */
+    fun lines(text: String): List<Int> = sites(text).filter { it.kind == Kind.SWALLOWS }.map { it.line }
+
+    fun sites(text: String): List<Site> {
         val source = SourceScan.Source("", text)
         val m = source.masked
-        val catches = KOTLIN_CATCH.findAll(m).map { Triple(it, it.groupValues[2], it.groupValues[1]) } +
-            JAVA_CATCH.findAll(m).map { Triple(it, it.groupValues[1], it.groupValues[2]) }
-        return catches.mapNotNull { (match, type, name) ->
+        val catches = (KOTLIN_CATCH.findAll(m) + JAVA_CATCH.findAll(m)).map { it to it.groupValues[1] }
+        return catches.mapNotNull { (match, name) ->
             val open = m.indexOf('{', match.range.last)
             if (open < 0) return@mapNotNull null
             val block = m.substring(open + 1, SourceScan.closing(m, open))
-            val checked = type == "Error" || inLoop(m, match.range.first)
-            if (!checked || letsFatalThrough(m, match.range.first, block, name)) null else source.lineOf(match.range.first)
-        }.sorted().toList()
+            val kind = classify(block, name) ?: return@mapNotNull null
+            Site(source.lineOf(match.range.first), kind)
+        }.sortedBy { it.line }.toList()
     }
 
-    private fun inLoop(m: String, offset: Int): Boolean {
-        for (brace in SourceScan.enclosingBraces(m, offset)) {
-            val header = SourceScan.header(m, brace)
-            if (SourceScan.isFunctionHeader(header)) return false
-            if (LOOP.any { it.containsMatchIn(header) }) return true
-        }
-        return false
-    }
-
-    private fun letsFatalThrough(m: String, catchAt: Int, block: String, name: String): Boolean {
-        // An unconditional throw: a statement of the block itself that starts with `throw`
+    /** Null when [block] lets every fatal error through. */
+    private fun classify(block: String, name: String): Kind? {
+        val n = Regex.escape(name)
         val topLevel = topLevelText(block)
-        if (Regex("""(?:^|[;\n{])\s*throw\b""").containsMatchIn(topLevel)) return true
-        if ("CrashReporter.fatal(" in block) return true
-        if (Regex("""\bthrow\b""").containsMatchIn(block) && VM_CHECK.containsMatchIn(block)) return true
-        return earlierCatches(m, catchAt).any { Regex("""\b(?:OutOfMemoryError|VirtualMachineError)\b""").containsMatchIn(it) }
+        // An unconditional rethrow of the caught error itself
+        if (Regex("""(?:^|[;\n{])\s*throw\s+$n\s*(?:;|$)""", RegexOption.MULTILINE).containsMatchIn(topLevel)) return null
+        if (Regex("""(?:\b$n\.rethrowIfFatal\s*\(\s*\)|\bFatalErrors\.rethrowIfFatal\s*\(\s*$n\s*\))""").containsMatchIn(topLevel)) return null
+        val keepsLinkage = Regex("""(?:\b$n\.rethrowIfVmFailure\s*\(\s*\)|\bFatalErrors\.rethrowIfVmFailure\s*\(\s*$n\s*\))""").containsMatchIn(topLevel) ||
+            Regex("""(?m)^\s*if\s*\(\s*$n\s*!is\s+Exception\s*&&\s*$n\s*!is\s+LinkageError\s*\)\s*throw\s+$n\s*$""").containsMatchIn(block)
+        return if (keepsLinkage) Kind.KEEPS_LINKAGE else Kind.SWALLOWS
     }
 
     /** [block] without its nested blocks, and without lines that start with `if`/`when`/`else`. */
@@ -192,21 +253,5 @@ internal object FatalErrorCatchScanner {
         }
         return out.lines().filterNot { Regex("""^\s*(?:if|when|else|\?:|\|\||&&)\b""").containsMatchIn(it) || "?:" in it }
             .joinToString("\n")
-    }
-
-    /** The parameter text of the catches before the one at [catchAt] in the same `try`. */
-    private fun earlierCatches(m: String, catchAt: Int): List<String> {
-        val found = mutableListOf<String>()
-        var i = catchAt - 1
-        while (true) {
-            while (i >= 0 && m[i].isWhitespace()) i--
-            if (i < 0 || m[i] != '}') return found
-            val open = SourceScan.opening(m, i)
-            if (open < 0) return found
-            val header = SourceScan.header(m, open)
-            val catch = ANY_CATCH.find(header) ?: return found
-            found += catch.groupValues[1]
-            i = open - header.length + header.indexOf("catch") - 1
-        }
     }
 }
