@@ -139,21 +139,46 @@ class UserBlockListsTest {
         // Never checked and no lists: the first window marks the lists as checked
         val firstDue = backoff.isDue(lastCheckMs = 0, nowMs = week)
         firstDue shouldBe true
-        ContentBlocker.freshAction(firstCall = true, due = firstDue, hasLists = false) shouldBe
+        ContentBlocker.freshAction(enabled = true, firstCall = true, due = firstDue, hasLists = false) shouldBe
             ContentBlocker.FreshAction.MARK_CHECKED
         // The next windows are not due, so they do nothing until the week is up
         val laterDue = backoff.isDue(lastCheckMs = week, nowMs = week + 60_000)
         laterDue shouldBe false
-        ContentBlocker.freshAction(firstCall = false, due = laterDue, hasLists = false) shouldBe
+        ContentBlocker.freshAction(enabled = true, firstCall = false, due = laterDue, hasLists = false) shouldBe
             ContentBlocker.FreshAction.NOTHING
-        ContentBlocker.freshAction(firstCall = false, due = true, hasLists = false) shouldBe
+        ContentBlocker.freshAction(enabled = true, firstCall = false, due = true, hasLists = false) shouldBe
             ContentBlocker.FreshAction.MARK_CHECKED
 
         // With lists, a due check downloads them, and the first call alone loads the saved copies
-        ContentBlocker.freshAction(firstCall = true, due = true, hasLists = true) shouldBe ContentBlocker.FreshAction.REFRESH
-        ContentBlocker.freshAction(firstCall = false, due = true, hasLists = true) shouldBe ContentBlocker.FreshAction.REFRESH
-        ContentBlocker.freshAction(firstCall = true, due = false, hasLists = true) shouldBe ContentBlocker.FreshAction.RELOAD
-        ContentBlocker.freshAction(firstCall = true, due = false, hasLists = false) shouldBe ContentBlocker.FreshAction.RELOAD
-        ContentBlocker.freshAction(firstCall = false, due = false, hasLists = true) shouldBe ContentBlocker.FreshAction.NOTHING
+        ContentBlocker.freshAction(enabled = true, firstCall = true, due = true, hasLists = true) shouldBe ContentBlocker.FreshAction.REFRESH
+        ContentBlocker.freshAction(enabled = true, firstCall = false, due = true, hasLists = true) shouldBe ContentBlocker.FreshAction.REFRESH
+        ContentBlocker.freshAction(enabled = true, firstCall = true, due = false, hasLists = true) shouldBe ContentBlocker.FreshAction.RELOAD
+        ContentBlocker.freshAction(enabled = true, firstCall = true, due = false, hasLists = false) shouldBe ContentBlocker.FreshAction.RELOAD
+        ContentBlocker.freshAction(enabled = true, firstCall = false, due = false, hasLists = true) shouldBe ContentBlocker.FreshAction.NOTHING
+    }
+
+    @Test
+    fun `with the blocker off, opening a browser downloads no list`() {
+        for (firstCall in listOf(true, false)) {
+            for (due in listOf(true, false)) {
+                for (hasLists in listOf(true, false)) {
+                    ContentBlocker.freshAction(enabled = false, firstCall = firstCall, due = due, hasLists = hasLists) shouldBe
+                        ContentBlocker.FreshAction.NOTHING
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `with the blocker on and the lists a week old, opening a browser downloads them`() {
+        val week = UserBlockLists.REFRESH_INTERVAL_MS
+        // Last downloaded more than a week ago: stale, so due
+        val due = RefreshBackoff().isDue(lastCheckMs = 1_000, nowMs = 1_000 + week)
+        due shouldBe true
+        // Also on the first window after the blocker is turned on (the first call was not used up while it was off)
+        ContentBlocker.freshAction(enabled = true, firstCall = true, due = due, hasLists = true) shouldBe
+            ContentBlocker.FreshAction.REFRESH
+        ContentBlocker.freshAction(enabled = true, firstCall = false, due = due, hasLists = true) shouldBe
+            ContentBlocker.FreshAction.REFRESH
     }
 }

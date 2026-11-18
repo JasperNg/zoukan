@@ -260,6 +260,86 @@ class DataFolderPrivacyTest {
     }
 
     @Test
+    fun `a disposable folder that is a symbolic link is neither created nor marked`() {
+        assumePosix()
+        val target = File(temp, "elsewhere").apply { mkdirs() }
+        val link = File(temp, "logs.noindex")
+        Files.createSymbolicLink(link.toPath(), target.toPath())
+        val dangling = File(temp, "crashes.noindex")
+        Files.createSymbolicLink(dangling.toPath(), File(temp, "missing-target").toPath())
+        val marked = mutableListOf<File>()
+        val exclude: (File, (String) -> Unit) -> Boolean = { dir, _ ->
+            marked += dir
+            true
+        }
+
+        DataFolderPrivacy.excludeFromBackup(link, notes::add, exclude) shouldBe false
+        DataFolderPrivacy.excludeFromBackup(dangling, notes::add, exclude) shouldBe false
+
+        marked.shouldBeEmpty()
+        File(temp, "missing-target").exists() shouldBe false
+        notes shouldHaveSize 2
+        notes.forEach { it shouldContain "symbolic link" }
+    }
+
+    @Test
+    fun `a real disposable folder is created and marked`() {
+        val dir = File(temp, "cache/images.noindex")
+        val marked = mutableListOf<File>()
+
+        DataFolderPrivacy.excludeFromBackup(dir, notes::add) { folder, _ ->
+            marked += folder
+            true
+        } shouldBe true
+
+        dir.isDirectory shouldBe true
+        marked shouldBe listOf(dir)
+        notes.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a failing exclusion is noted, not thrown`() {
+        DataFolderPrivacy.excludeFromBackup(File(temp, "logs.noindex"), notes::add) { _, _ -> throw IOException("denied") } shouldBe false
+        notes.single() shouldContain "denied"
+    }
+
+    @Test
+    fun `protect leaves the target of a symlinked disposable folder in Time Machine on macOS`() {
+        assumeTrue(Platform.current == Platform.MACOS)
+        val target = File(temp, "users-own").apply { mkdirs() }
+        Files.createSymbolicLink(File(temp, "logs.noindex").toPath(), target.toPath())
+        val dirs = ZoukanDirs(temp, hidesFromSpotlight = true)
+
+        DataFolderPrivacy.protect(dirs, notes::add)
+
+        BackupExclusion.isExcluded(target) shouldBe false
+        Files.isSymbolicLink(dirs.logs.toPath()) shouldBe true
+        dirs.disposableFolders.filter { it != dirs.logs }.forEach { BackupExclusion.isExcluded(it) shouldBe true }
+        BackupExclusion.isExcluded(dirs.updates) shouldBe true
+        notes.single() shouldContain "symbolic link"
+    }
+
+    @Test
+    fun `the xattr calls act on a link itself, never on its target, on macOS`() {
+        assumeTrue(Platform.current == Platform.MACOS)
+        val target = File(temp, "users-own").apply { mkdirs() }
+        BackupExclusion.exclude(target, notes::add) shouldBe true
+        val link = File(temp, "link")
+        Files.createSymbolicLink(link.toPath(), target.toPath())
+
+        // The target's exclusion is not seen or removed through the link
+        BackupExclusion.isExcluded(link) shouldBe false
+        BackupExclusion.hasAttribute(link, notes::add) shouldBe false
+        BackupExclusion.include(link, notes::add) shouldBe true
+        BackupExclusion.isExcluded(target) shouldBe true
+
+        // Marking the link, whether or not the file system allows it, leaves the target unmarked
+        BackupExclusion.include(target, notes::add) shouldBe true
+        BackupExclusion.exclude(link, notes::add)
+        BackupExclusion.isExcluded(target) shouldBe false
+    }
+
+    @Test
     fun `protect does not create updates on other systems`() {
         DataFolderPrivacy.protect(ZoukanDirs(temp, hidesFromSpotlight = false), notes::add)
         File(temp, "updates").exists() shouldBe false

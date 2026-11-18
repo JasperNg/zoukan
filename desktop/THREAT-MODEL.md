@@ -29,7 +29,7 @@ Remote:
 - The DNS over HTTPS provider (Quad9 unless the user chose another or turned it off): the answer
   to every public name the app looks up.
 - The proxy set in the OS, when there is one: it carries, and resolves, every connection.
-- Block lists the user adds by address: plain-text host lists, downloaded weekly (sooner after a refresh in which none came through).
+- Block lists the user adds by address: plain-text host lists, downloaded weekly (sooner after a refresh in which none came through), only while "Block ads and trackers" is on.
 
 Local:
 
@@ -157,7 +157,7 @@ Verified and trusted:
 | The profile keeps as little of what was visited as Chromium allows: the HTTP and media caches are capped at about nothing (`--disk-cache-size=1`, `--media-cache-size=1`); History, Top Sites, Favicons, Visited Links, Network Action Predictor, Reporting and NEL, Shortcuts, `Cache`, `Code Cache` and `chrome_debug.log` are deleted before Chromium starts and again at quit (a file Chromium still holds, on Windows, goes at the next start); Chromium writes no log unless `-Dzoukan.cefDebug=true`. Links are never followed or deleted | `JcefRuntime` (`applySettings`, `cleanProfileAtQuit`), `desktop/.../browser/BrowserProfileCleanup.kt`, `Main.kt` |
 | Extensions' WebViews and `http.agent` (sent by extensions and the JDK's `HttpURLConnection`) use the app's Chromium user agent for this OS, and a WebView running the default user agent sends client hints (`Sec-CH-UA`, `navigator.userAgentData`) that match it: desktop, this OS and architecture, the same Chromium version; on Windows the platform version is Chromium's (from the build number, read once with `%SystemRoot%\System32\reg.exe` with a timeout; without it, guessed from the OS name) | `ZoukanRuntime.useChromiumUserAgent`, `android-compat/.../webkit/KcefWebSettings.kt` (`userAgentProvider`, `desktopUserAgentMetadata`) |
 | The content blocker cancels a page's requests for scripts, images and frames from hosts on its list, when they go to another site than the page in the top frame. It never blocks the page itself, a site's own hosts, `/cdn-cgi/` paths, Cloudflare's, hCaptcha's and reCAPTCHA's checks, Google's and several trackers' sign-in hosts, MangaDex or E-Hentai, and it is off in challenge and sign-in windows. It is on by default (Advanced > "Block ads and trackers"); browser windows use the built-in list (`blocklist.txt`, written for this project) and the user's lists, extensions' WebViews the built-in list only. It is a privacy feature, not a security boundary: every error lets the request through | `desktop/.../browser/blocking/BlockPolicy.kt`, `ContentBlocker.kt`; `BrowserWindow.requestHandler`; `KcefContentRules.kt` (`KcefRequestFilter`), `DesktopAppModule` |
-| Block lists the user adds ("Extra block lists") are untrusted input: https addresses only (at most 10), fetched with the plain client (no cookies, the app's DNS) without following a redirect between https and http, refused past 8 MiB, parsed as host names only (hosts files, `\|\|host^` rules and `@@\|\|host^` exceptions; anything else is ignored), capped at 200,000 hosts and exceptions a list and 400,000 in all, and stored with an atomic move in `<data>/blocklists`. An exception only ever lets requests through: in the built-in browser its host and subdomains are blocked by no list, the built-in one included. The weekly clock restarts only when at least one list downloads; when none does, the next try is after an hour, doubling up to a week (kept in memory). The addresses are kept in the encrypted preferences | `desktop/.../browser/blocking/UserBlockLists.kt`, `BlockListParser.kt`, `BlockRules.kt`, `RefreshBackoff.kt`, `ContentBlocker.download` |
+| Block lists the user adds ("Extra block lists") are untrusted input: https addresses only (at most 10), fetched with the plain client (no cookies, the app's DNS) without following a redirect between https and http, refused past 8 MiB, parsed as host names only (hosts files, `\|\|host^` rules and `@@\|\|host^` exceptions; anything else is ignored), capped at 200,000 hosts and exceptions a list and 400,000 in all, and stored with an atomic move in `<data>/blocklists`. An exception only ever lets requests through: in the built-in browser its host and subdomains are blocked by no list, the built-in one included. The lists are fetched only while the blocker is on: with it off, opening a browser window downloads nothing, and the first window after it is turned on downloads them when due. The weekly clock restarts only when at least one list downloads; when none does, the next try is after an hour, doubling up to a week (kept in memory). The addresses are kept in the encrypted preferences | `desktop/.../browser/blocking/UserBlockLists.kt`, `BlockListParser.kt`, `BlockRules.kt`, `RefreshBackoff.kt`, `ContentBlocker.download` |
 
 Residual risk:
 
@@ -223,7 +223,7 @@ Residual risk:
 4. **The app contacts servers without being asked**: the extension stores' lists at each start,
    GitHub's release feed 30 seconds after start and then daily (on by default; About > "Check for
    updates automatically"), the sources of a saved download queue, which carries on after a
-   restart, and each user block list's host weekly, which learns the user's address. Chromium starts only when a page needs it. Discord Rich Presence is
+   restart, and each user block list's host weekly while "Block ads and trackers" is on (when a browser window opens), which learns the user's address. Chromium starts only when a page needs it. Discord Rich Presence is
    off by default.
 
 ## Local files
@@ -325,9 +325,12 @@ Residual risk:
    (`CrashReporter.redact`, applied by the log's layout); cookies, other header values and tokens
    in a URL's path are not recognised. A failed page load in the built-in browser logs only the
    host. A JVM crash file (`hs_err_pid<n>.log`) in the temp or working folder is copied and its
-   original, which holds environment variable values, deleted only when its command line names
-   Zoukan's main class, so another program's file with a reused process id is left alone; if the
-   copy fails the original is kept. Titles of what was read, URLs and file paths can appear in the log and in crash reports;
+   original, which holds environment variable values, deleted only when it is Zoukan's: its
+   command line names Zoukan's main class, or its process id (file name and header) is that of a
+   Zoukan run that left its `.running-<pid>` marker and it has a command line that names no other
+   program (empty, `<unknown>`, or the installed launcher, bare or at its installed path, as the
+   first word). A file with no command line in its first 64 KiB, or one that starts with options,
+   is left alone, as is another program's file with a reused process id; if the copy fails the original is kept. Titles of what was read, URLs and file paths can appear in the log and in crash reports;
    the crash dialog says so. Anyone who can read the data folder can read them.
 
    **Incognito.** While app-wide incognito mode is on, nothing is logged at all (not to the log
@@ -356,7 +359,10 @@ Residual risk:
    `cache/archives.noindex`, `cache/tmp.noindex`, `cache/javacpp.noindex`,
    `android/android-compat/appdata/cache.noindex`), so Spotlight does not index them, and carry
    Time Machine's exclusion (as `tmutil addexclusion` sets it), as does `updates/`, which is
-   created at start so the first downloaded installer is already excluded. A profile with the old
+   created at start so the first downloaded installer is already excluded. One of these folders
+   that is a symbolic link is skipped (noted in the log), so the folder it points to is never
+   created or excluded, and every extended-attribute call uses `XATTR_NOFOLLOW`, so it acts on
+   the path itself and never on a link's target. A profile with the old
    names has them renamed at start; if a rename fails, the old folder is used for that run. Code:
    `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
 

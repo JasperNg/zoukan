@@ -41,12 +41,17 @@ object ContentBlocker {
     @Volatile
     private var withUserLists: BlockRules? = null
 
-    private val backoff = RefreshBackoff()
-
-    private val userListsLoaded = AtomicBoolean(false)
-    private val refreshing = AtomicBoolean(false)
-
     private val preferences by lazy { ContentBlockerPreferences(Injekt.get()) }
+
+    private val updater by lazy {
+        BlockListUpdater(
+            // A provider, so a setting that cannot be read fails inside the updater's error handling
+            preferences = { preferences },
+            lists = ::lists,
+            launch = { work -> AppScope.launch { work() } },
+            onLoaded = { user -> withUserLists = if (user.isEmpty) null else builtInRules + user },
+        )
+    }
 
     /** Whether the blocker is on; false when the setting cannot be read. */
     fun isEnabled(): Boolean = runCatching { preferences.enabled().get() }.getOrDefault(false)
@@ -85,75 +90,31 @@ object ContentBlocker {
     /**
      * Loads the user's saved lists once, and downloads them again when they are a week old (or,
      * after a refresh in which none could be downloaded, when [RefreshBackoff] says so). Runs in the
-     * background; call it whenever a browser opens. Never throws.
+     * background; call it whenever a browser opens. Does nothing while the blocker is off, so no list
+     * is downloaded then; the first browser window after it is turned on loads and, when due,
+     * downloads them. Never throws.
      */
-    fun ensureFresh() {
-        runCatching {
-            val due = backoff.isDue(preferences.listsCheckedAt().get(), System.currentTimeMillis())
-            val firstCall = userListsLoaded.compareAndSet(false, true)
-            if (!firstCall && !due) return
-            AppScope.launch {
-                runCatching {
-                    when (freshAction(firstCall, due, hasLists = urls().isNotEmpty())) {
-                        FreshAction.REFRESH -> refresh()
-                        FreshAction.MARK_CHECKED -> {
-                            preferences.listsCheckedAt().set(System.currentTimeMillis())
-                            reload()
-                        }
-                        FreshAction.RELOAD -> reload()
-                        FreshAction.NOTHING -> Unit
-                    }
-                }.onFailure { logcat(LogPriority.WARN, it) { "Could not load the block lists" } }
-            }
-        }.onFailure { logcat(LogPriority.WARN, it) { "Could not load the block lists" } }
-    }
+    fun ensureFresh() = updater.ensureFresh()
 
     /** What [ensureFresh] does. */
     internal enum class FreshAction { NOTHING, RELOAD, REFRESH, MARK_CHECKED }
 
     /**
-     * The step [ensureFresh] takes: download the lists when they are due and there are any; with
-     * none, restart the weekly clock (so later browser windows do nothing until it is due again;
-     * [refreshNow] covers lists added in the meantime); else load the saved lists on the first call.
+     * The step [ensureFresh] takes: nothing while the blocker is off ([enabled] false), so no list is
+     * downloaded; else download the lists when they are due and there are any; with none, restart
+     * the weekly clock (so later browser windows do nothing until it is due again; [refreshNow]
+     * covers lists added in the meantime); else load the saved lists on the first call.
      */
-    internal fun freshAction(firstCall: Boolean, due: Boolean, hasLists: Boolean): FreshAction = when {
+    internal fun freshAction(enabled: Boolean, firstCall: Boolean, due: Boolean, hasLists: Boolean): FreshAction = when {
+        !enabled -> FreshAction.NOTHING
         due && hasLists -> FreshAction.REFRESH
         due -> FreshAction.MARK_CHECKED
         firstCall -> FreshAction.RELOAD
         else -> FreshAction.NOTHING
     }
 
-    /** Downloads the user's lists now (after the setting changed), then uses them. */
-    fun refreshNow() {
-        AppScope.launch { refresh() }
-    }
-
-    private fun refresh() {
-        if (!refreshing.compareAndSet(false, true)) return
-        try {
-            val urls = urls()
-            val updated = lists().refresh(urls)
-            logcat { "Downloaded $updated of ${urls.size} block lists" }
-            val now = System.currentTimeMillis()
-            // The weekly clock restarts only when a list came through; otherwise try again sooner
-            if (backoff.recordRefresh(updated, urls.size, now)) preferences.listsCheckedAt().set(now)
-            reload()
-        } catch (e: Exception) {
-            backoff.recordFailure(System.currentTimeMillis())
-            logcat(LogPriority.WARN, e) { "Updating the block lists failed" }
-        } finally {
-            refreshing.set(false)
-        }
-    }
-
-    private fun reload() {
-        runCatching {
-            val user = lists().load(urls())
-            withUserLists = if (user.isEmpty) null else builtInRules + user
-        }.onFailure { logcat(LogPriority.WARN, it) { "Could not load the block lists" } }
-    }
-
-    private fun urls(): List<String> = UserBlockLists.parseUrls(preferences.listUrls().get())
+    /** Downloads the user's lists now (after the setting changed), then uses them; not while the blocker is off. */
+    fun refreshNow() = updater.refreshNow()
 
     private fun lists() = UserBlockLists(File(Injekt.get<ZoukanDirs>().root, "blocklists"), ::download)
 
@@ -170,4 +131,84 @@ object ContentBlocker {
             return bytes.toString(Charsets.UTF_8)
         }
     }
+}
+
+/**
+ * Loads and downloads the user's block lists for [ContentBlocker]: the first call loads the saved
+ * copies, and a call when they are due downloads them. Nothing is loaded or downloaded while the
+ * blocker is off. [preferences] gives the settings, [lists] the lists' store (with its downloader),
+ * [launch] runs work in the background and [onLoaded] receives the user's rules after each load.
+ * Never throws.
+ */
+internal class BlockListUpdater(
+    private val preferences: () -> ContentBlockerPreferences,
+    private val lists: () -> UserBlockLists,
+    private val launch: (() -> Unit) -> Unit,
+    private val onLoaded: (BlockRules) -> Unit,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
+    private val backoff = RefreshBackoff()
+    private val userListsLoaded = AtomicBoolean(false)
+    private val refreshing = AtomicBoolean(false)
+
+    private fun isEnabled(): Boolean = runCatching { preferences().enabled().get() }.getOrDefault(false)
+
+    fun ensureFresh() {
+        runCatching {
+            // Checked before the first call is recorded, so turning the blocker on later still loads the lists
+            if (!isEnabled()) return
+            val due = backoff.isDue(preferences().listsCheckedAt().get(), clock())
+            val firstCall = userListsLoaded.compareAndSet(false, true)
+            if (!firstCall && !due) return
+            launch {
+                runCatching {
+                    val action = ContentBlocker.freshAction(isEnabled(), firstCall, due, hasLists = urls().isNotEmpty())
+                    // Turned off since the check above: give the first call back, so the lists still
+                    // load on the first browser window after the blocker is turned on again
+                    if (firstCall && action == ContentBlocker.FreshAction.NOTHING) userListsLoaded.set(false)
+                    when (action) {
+                        ContentBlocker.FreshAction.REFRESH -> refresh()
+                        ContentBlocker.FreshAction.MARK_CHECKED -> {
+                            preferences().listsCheckedAt().set(clock())
+                            reload()
+                        }
+                        ContentBlocker.FreshAction.RELOAD -> reload()
+                        ContentBlocker.FreshAction.NOTHING -> Unit
+                    }
+                }.onFailure { logcat(LogPriority.WARN, it) { "Could not load the block lists" } }
+            }
+        }.onFailure { logcat(LogPriority.WARN, it) { "Could not load the block lists" } }
+    }
+
+    fun refreshNow() {
+        runCatching { launch { refresh() } }
+            .onFailure { logcat(LogPriority.WARN, it) { "Could not update the block lists" } }
+    }
+
+    private fun refresh() {
+        // No download while the blocker is off: it would reveal the user's activity for nothing
+        if (!isEnabled()) return
+        if (!refreshing.compareAndSet(false, true)) return
+        try {
+            val urls = urls()
+            val updated = lists().refresh(urls)
+            logcat { "Downloaded $updated of ${urls.size} block lists" }
+            val now = clock()
+            // The weekly clock restarts only when a list came through; otherwise try again sooner
+            if (backoff.recordRefresh(updated, urls.size, now)) preferences().listsCheckedAt().set(now)
+            reload()
+        } catch (e: Exception) {
+            backoff.recordFailure(clock())
+            logcat(LogPriority.WARN, e) { "Updating the block lists failed" }
+        } finally {
+            refreshing.set(false)
+        }
+    }
+
+    private fun reload() {
+        runCatching { onLoaded(lists().load(urls())) }
+            .onFailure { logcat(LogPriority.WARN, it) { "Could not load the block lists" } }
+    }
+
+    private fun urls(): List<String> = UserBlockLists.parseUrls(preferences().listUrls().get())
 }

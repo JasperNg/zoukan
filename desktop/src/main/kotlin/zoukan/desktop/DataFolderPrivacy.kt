@@ -63,20 +63,45 @@ internal object DataFolderPrivacy {
 
     /**
      * On macOS: creates the disposable folders under their new names and `updates/`, and keeps
-     * them out of Time Machine. On POSIX systems: makes the data folder 0700 when it is Zoukan's
+     * them out of Time Machine; one that is a symbolic link is skipped ([excludeFromBackup]). On POSIX systems: makes the data folder 0700 when it is Zoukan's
      * own per-platform folder or Zoukan made it on this start ([ZoukanDirs.rootIsNew]). A folder
      * the user chose (the data folder override) that already existed keeps its permissions.
      */
     fun protect(dirs: ZoukanDirs, note: (String) -> Unit) {
         if (dirs.isDefaultRoot || dirs.rootIsNew) restrictToOwner(dirs.root, note)
         if (!dirs.hidesFromSpotlight) return
-        dirs.disposableFolders.forEach { dir ->
-            runCatching { dir.mkdirs() }
-            BackupExclusion.exclude(dir, note)
-        }
         // Created now, so the first installer downloaded later is already excluded
-        runCatching { dirs.updates.mkdirs() }
-        BackupExclusion.exclude(dirs.updates, note)
+        (dirs.disposableFolders + dirs.updates).forEach { dir -> excludeFromBackup(dir, note) }
+    }
+
+    /**
+     * Creates [dir] and keeps it out of Time Machine with [exclude], unless [dir] is a symbolic
+     * link: then nothing is created or marked and [note] says so, so a folder the link points to
+     * (which may be the user's own) is never excluded from backups. Returns whether [dir] is
+     * excluded now; never throws.
+     */
+    fun excludeFromBackup(
+        dir: File,
+        note: (String) -> Unit,
+        exclude: (File, (String) -> Unit) -> Boolean = { folder, onFailure -> BackupExclusion.exclude(folder, onFailure) },
+    ): Boolean {
+        val isLink = try {
+            Files.isSymbolicLink(dir.toPath())
+        } catch (e: Exception) {
+            note("Could not check ${dir.path}, leaving it in Time Machine: $e")
+            return false
+        }
+        if (isLink) {
+            note("${dir.path} is a symbolic link, so it and the folder it points to are left in Time Machine")
+            return false
+        }
+        runCatching { dir.mkdirs() }
+        return try {
+            exclude(dir, note)
+        } catch (e: Exception) {
+            note("Could not keep ${dir.path} out of Time Machine: $e")
+            false
+        }
     }
 
     /**
@@ -123,7 +148,7 @@ internal object BackupExclusion {
         return try {
             if (isExcluded(dir)) return true
             val libc = LibC.INSTANCE
-            libc.setxattr(dir.absolutePath, ATTRIBUTE, VALUE, NativeLong(VALUE.size.toLong()), 0, 0)
+            libc.setxattr(dir.absolutePath, ATTRIBUTE, VALUE, NativeLong(VALUE.size.toLong()), 0, XATTR_NOFOLLOW)
             true
         } catch (e: Exception) {
             note("Could not keep ${dir.path} out of Time Machine: $e")
@@ -144,7 +169,7 @@ internal object BackupExclusion {
     fun include(dir: File, note: (String) -> Unit, enabled: Boolean = Platform.current == Platform.MACOS): Boolean {
         if (!enabled) return false
         return try {
-            LibC.INSTANCE.removexattr(dir.absolutePath, ATTRIBUTE, 0)
+            LibC.INSTANCE.removexattr(dir.absolutePath, ATTRIBUTE, XATTR_NOFOLLOW)
             true
         } catch (e: LastErrorException) {
             if (e.errorCode == ENOATTR) {
@@ -162,6 +187,12 @@ internal object BackupExclusion {
         }
     }
 
+    /**
+     * macOS's `XATTR_NOFOLLOW`: every call acts on the path itself, never on what a symbolic link
+     * at that path points to, so a folder swapped for a link cannot get its target marked.
+     */
+    private const val XATTR_NOFOLLOW = 0x0001
+
     /** macOS's errno when a file has no such extended attribute. */
     private const val ENOATTR = 93
 
@@ -170,7 +201,7 @@ internal object BackupExclusion {
         if (!enabled) return false
         return try {
             val buffer = ByteArray(VALUE.size + 1)
-            val read = LibC.INSTANCE.getxattr(dir.absolutePath, ATTRIBUTE, buffer, NativeLong(buffer.size.toLong()), 0, 0)
+            val read = LibC.INSTANCE.getxattr(dir.absolutePath, ATTRIBUTE, buffer, NativeLong(buffer.size.toLong()), 0, XATTR_NOFOLLOW)
             read.toLong() == VALUE.size.toLong() && buffer.copyOf(VALUE.size).contentEquals(VALUE)
         } catch (e: LastErrorException) {
             false // ENOATTR: not set
@@ -188,7 +219,7 @@ internal object BackupExclusion {
     fun hasAttribute(dir: File, note: (String) -> Unit, enabled: Boolean = Platform.current == Platform.MACOS): Boolean? {
         if (!enabled) return false
         return try {
-            LibC.INSTANCE.getxattr(dir.absolutePath, ATTRIBUTE, ByteArray(1), NativeLong(1), 0, 0)
+            LibC.INSTANCE.getxattr(dir.absolutePath, ATTRIBUTE, ByteArray(1), NativeLong(1), 0, XATTR_NOFOLLOW)
             true
         } catch (e: LastErrorException) {
             when (e.errorCode) {

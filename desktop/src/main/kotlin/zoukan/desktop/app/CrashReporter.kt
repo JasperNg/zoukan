@@ -331,10 +331,10 @@ object CrashReporter {
         dirs.crashes.mkdirs()
         // The JVM writes hs_err_pid<pid>.log to the working folder, or the temp folder when that
         // is not writable (the installed app's folder). The pid may since have been reused by
-        // another Java program, so a file that does not name Zoukan's main class is left alone.
+        // another Java program, so a file that is not recognisably Zoukan's is left alone.
         val jvmCrash = (jvmCrashFolders + dirs.root)
             .flatMap { runCatching { it.listFiles { f -> f.name == "hs_err_pid$pid.log" }.orEmpty().toList() }.getOrDefault(emptyList()) }
-            .firstOrNull { it.lastModified() >= since && isZoukanJvmCrash(it) }
+            .firstOrNull { it.lastModified() >= since && isZoukanJvmCrash(it, deadZoukanPid = pid) }
         jvmCrash?.let { src ->
             val dest = File(dirs.crashes, "jvm-crash-${src.name}")
             val copied = runCatching { copyRedacted(src, dest) }
@@ -344,7 +344,7 @@ object CrashReporter {
                 }
                 .isSuccess
             if (copied) {
-                deleteJvmCrashOriginal(src, jvmCrashFolders)
+                deleteJvmCrashOriginal(src, jvmCrashFolders, deadZoukanPid = pid)
                 return dest
             }
         }
@@ -362,10 +362,37 @@ object CrashReporter {
         }
     }
 
-    private val HS_ERR_NAME = Regex("""hs_err_pid\d+\.log""")
+    private val HS_ERR_NAME = Regex("""hs_err_pid(\d+)\.log""")
 
     /** The app's main class, as the JVM names it in its crash file (the Gradle run and the installed launcher). */
     private const val MAIN_CLASS = "zoukan.desktop.MainKt"
+
+    /** One character of a launcher path: not a line break, and not a space that starts another absolute path. */
+    private const val PATH_CHAR = """(?:(?!\s(?:/|[a-z]:\\|\\\\))[^\r\n])"""
+
+    /**
+     * A command line whose first word is the installed app's launcher (jpackage's `--name`): the bare
+     * `Zoukan` or `Zoukan.exe`, or an absolute path that ends in a launcher's installed location:
+     * `.../Zoukan.app/Contents/MacOS/Zoukan` (macOS), `...\Zoukan\Zoukan.exe` (Windows, the
+     * per-user install folder under `%LOCALAPPDATA%` or an unpacked app image) or `.../zoukan/bin/Zoukan`
+     * (Linux). The launcher must be followed by the end of the line or whitespace. A path may hold
+     * spaces (`C:\Program Files\...`), but not a space followed by another root (`/`, `\\` or a drive),
+     * so a launcher path that is only a later argument of another program does not count.
+     */
+    private val LAUNCHER_COMMAND = Regex(
+        "^(?:zoukan(?:\\.exe)?" +
+            "|/(?:$PATH_CHAR*/)?zoukan\\.app/contents/macos/zoukan" +
+            "|/(?:$PATH_CHAR*/)?zoukan/bin/zoukan" +
+            "|(?:[a-z]:\\\\|\\\\\\\\)(?:$PATH_CHAR*\\\\)?zoukan\\\\zoukan\\.exe" +
+            ")(?=\\s|$)",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** The process id in a JVM crash file's header, as in `# SIGSEGV (0xb) at pc=0x..., pid=12345, tid=...`. */
+    private val HEADER_PID = Regex("""(?<![A-Za-z0-9_])pid=(\d+)""")
+
+    /** The first line the JVM writes to its crash file. */
+    private const val JVM_CRASH_BANNER = "A fatal error has been detected by the Java Runtime Environment"
 
     /** How much of a JVM crash file is read to find its command line (it is in the summary near the top). */
     private const val CRASH_FILE_HEAD_BYTES = 64 * 1024
@@ -375,37 +402,77 @@ object CrashReporter {
         listOfNotNull(System.getProperty("user.dir"), System.getProperty("java.io.tmpdir")).map(::File)
 
     /**
-     * Whether [file] is a crash file of Zoukan's JVM: its `Command Line:` or `java_command:` line
-     * names Zoukan's main class. Only the first [CRASH_FILE_HEAD_BYTES] are read; a file that
-     * cannot be read, or another program's, is not Zoukan's. Never throws.
+     * Whether [file] is a crash file of Zoukan's JVM. Only the first [CRASH_FILE_HEAD_BYTES] are
+     * read; a file that cannot be read is not Zoukan's. Never throws. It is Zoukan's when either:
+     *
+     * - its `Command Line:` or `java_command:` line names Zoukan's main class, alone, after a
+     *   module (`-m module/zoukan.desktop.MainKt`), and with or without arguments after it; or
+     * - [deadZoukanPid] is the process id of a Zoukan run that ended uncleanly (its `.running-<pid>`
+     *   marker was left behind), the file starts like a JVM crash file, its name and its header (if
+     *   it has a `pid=`) give that same id, and it has a command line that names no other program:
+     *   empty, `<unknown>`, or one whose first word is the installed launcher ([LAUNCHER_COMMAND]).
+     *   A file with no command line in the part read is left alone. This covers a launcher whose JVM does not report the
+     *   main class. A command line naming anything else is another Java program that reused the
+     *   pid, and its file is left alone.
      */
-    internal fun isZoukanJvmCrash(file: File): Boolean = runCatching {
+    internal fun isZoukanJvmCrash(file: File, deadZoukanPid: Long? = null): Boolean = runCatching {
         val head = file.inputStream().use { it.readNBytes(CRASH_FILE_HEAD_BYTES) }
-        // Latin-1 decodes any bytes; the line looked for is ASCII
-        String(head, Charsets.ISO_8859_1).lineSequence().any { raw ->
-            val line = raw.trim()
-            val value = when {
-                line.startsWith("Command Line:") -> line.removePrefix("Command Line:")
-                line.startsWith("java_command:") -> line.removePrefix("java_command:")
-                else -> return@any false
+        // Latin-1 decodes any bytes; the lines looked for are ASCII
+        val lines = String(head, Charsets.ISO_8859_1).lines().map { it.trim() }
+        val commands = lines.mapNotNull { line ->
+            when {
+                line.startsWith("Command Line:") -> line.removePrefix("Command Line:").trim()
+                line.startsWith("java_command:") -> line.removePrefix("java_command:").trim()
+                else -> null
             }
-            value.split(' ', '\t').any { it == MAIN_CLASS }
         }
+        if (commands.any(::namesMainClass)) return@runCatching true
+        if (deadZoukanPid == null) return@runCatching false
+        // Without the main class, the file must at least be a JVM crash file
+        if (lines.none { JVM_CRASH_BANNER in it }) return@runCatching false
+        val namePid = HS_ERR_NAME.matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
+        if (namePid != deadZoukanPid) return@runCatching false
+        val headerPids = lines.filter { it.startsWith("#") }
+            .flatMap { line -> HEADER_PID.findAll(line).map { it.groupValues[1].toLongOrNull() } }
+        if (headerPids.any { it != deadZoukanPid }) return@runCatching false
+        // A file whose command line was not found (truncated, or past the part read) is not known to be Zoukan's
+        commands.isNotEmpty() && commands.all(::namesNoOtherProgram)
     }.getOrDefault(false)
+
+    private fun commandTokens(command: String): List<String> = command.split(' ', '\t').filter { it.isNotEmpty() }
+
+    /** `zoukan.desktop.MainKt` as a word of [command], or after a module name (`module/zoukan.desktop.MainKt`). */
+    private fun namesMainClass(command: String): Boolean =
+        commandTokens(command).any { it == MAIN_CLASS || it.endsWith("/$MAIN_CLASS") }
+
+    /**
+     * An empty or `<unknown>` command line, or one whose first word is the installed launcher
+     * ([LAUNCHER_COMMAND]). A command line that starts with options is not the launcher's: an option's
+     * value cannot be told from the program, so it fails safe.
+     */
+    private fun namesNoOtherProgram(command: String): Boolean {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty() || trimmed == "<unknown>") return true
+        return LAUNCHER_COMMAND.containsMatchIn(trimmed)
+    }
 
     /**
      * Deletes the JVM's crash file once its redacted copy is in the crash folder: the original keeps
      * the values of environment variables. Only a `hs_err_pid*.log` directly in one of [allowedFolders]
-     * (the working and temp folders, never the data folder) that names Zoukan's main class is deleted;
-     * a failure is logged and the file stays.
+     * (the working and temp folders, never the data folder) that is Zoukan's ([isZoukanJvmCrash] with
+     * [deadZoukanPid]) is deleted; a failure is logged and the file stays.
      */
-    internal fun deleteJvmCrashOriginal(src: File, allowedFolders: List<File> = defaultJvmCrashFolders()) {
+    internal fun deleteJvmCrashOriginal(
+        src: File,
+        allowedFolders: List<File> = defaultJvmCrashFolders(),
+        deadZoukanPid: Long? = null,
+    ) {
         runCatching {
             if (!HS_ERR_NAME.matches(src.name) || !src.isFile) return
             val parent = src.absoluteFile.parentFile?.canonicalFile ?: return
             val allowed = allowedFolders.mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
             if (parent !in allowed) return
-            if (!isZoukanJvmCrash(src)) return
+            if (!isZoukanJvmCrash(src, deadZoukanPid)) return
             if (!src.delete()) logcat(LogPriority.WARN) { "Could not delete the JVM crash file ${src.name} after copying it" }
         }.onFailure { logcat(LogPriority.WARN, it) { "Could not delete the JVM crash file ${src.name} after copying it" } }
     }

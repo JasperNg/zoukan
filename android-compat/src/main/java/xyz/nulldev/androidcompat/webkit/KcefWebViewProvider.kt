@@ -916,7 +916,8 @@ class KcefWebViewProvider(
     /**
      * A page's alert, confirm and prompt go to the extension's WebChromeClient (onJsAlert,
      * onJsConfirm, onJsPrompt) on the WebView's looper, as on Android; one the client does not
-     * handle is cancelled, as nobody could answer it in a hidden WebView. A dialog from a frame of
+     * handle is cancelled, as nobody could answer it in a hidden WebView, and so is one it keeps
+     * but does not answer within [JsDialogAnswer.DIALOG_TIMEOUT_MILLIS]. A dialog from a frame of
      * another origin, or past the limit (see [JsDialogLimiter]), is suppressed. A page never keeps
      * itself from being left or closed: onbeforeunload is always answered "leave".
      */
@@ -936,39 +937,32 @@ class KcefWebViewProvider(
                 suppressMessage.set(true)
                 return false
             }
-            val answered = java.util.concurrent.atomic.AtomicBoolean(false)
-
-            fun answer(
-                ok: Boolean,
-                text: String?,
-            ) {
-                if (!answered.compareAndSet(false, true)) return
-                runCatching { callback.Continue(ok, text.orEmpty()) }
-                    .onFailure { Log.w(TAG, "Answering a JavaScript dialog failed", it) }
-            }
+            // Answered exactly once: by the client, by the cancel below, at once when the looper
+            // drops the post, or by the timeout, so the page never waits forever on a dialog
+            val dialog = JsDialogAnswer({ ok, text -> callback.Continue(ok, text) })
             val url = pageUrl ?: originUrl.orEmpty()
             val message = messageText.orEmpty()
-            handler.post {
+            dialog.post({ handler.post(it) }) {
                 val handled =
                     !destroyed &&
                         runCatching {
                             when (dialogType) {
                                 CefJSDialogHandler.JSDialogType.JSDIALOGTYPE_ALERT ->
-                                    chromeClient.onJsAlert(view, url, message, android.webkit.JsResult { answer(it.result, null) })
+                                    chromeClient.onJsAlert(view, url, message, android.webkit.JsResult { dialog.answer(it.result, null) })
                                 CefJSDialogHandler.JSDialogType.JSDIALOGTYPE_CONFIRM ->
-                                    chromeClient.onJsConfirm(view, url, message, android.webkit.JsResult { answer(it.result, null) })
+                                    chromeClient.onJsConfirm(view, url, message, android.webkit.JsResult { dialog.answer(it.result, null) })
                                 CefJSDialogHandler.JSDialogType.JSDIALOGTYPE_PROMPT ->
                                     chromeClient.onJsPrompt(
                                         view,
                                         url,
                                         message,
                                         defaultPromptText,
-                                        android.webkit.JsPromptResult { answer(it.result, (it as? android.webkit.JsPromptResult)?.stringResult) },
+                                        android.webkit.JsPromptResult { dialog.answer(it.result, (it as? android.webkit.JsPromptResult)?.stringResult) },
                                     )
                             }
                         }.onFailure { Log.w(TAG, "The WebChromeClient failed on a JavaScript dialog", it) }
                             .getOrDefault(false)
-                if (!handled) answer(false, null)
+                if (!handled) dialog.answer(false, null)
             }
             return true
         }
@@ -981,6 +975,86 @@ class KcefWebViewProvider(
         ): Boolean {
             runCatching { callback.Continue(true, "") }
             return true
+        }
+    }
+
+    /**
+     * The answer to one JavaScript dialog, given to Chromium ([continueDialog]) exactly once,
+     * whichever comes first: the WebChromeClient's confirm or cancel, a cancel because the post to
+     * the WebView's looper was dropped (see [post]), or a cancel when [scheduleTimeout] runs its
+     * task. Extensions' WebViews are hidden, so a dialog the client keeps but never answers would
+     * otherwise block the page in Chromium forever. Thread-safe; never blocks the caller.
+     */
+    class JsDialogAnswer(
+        private val continueDialog: (ok: Boolean, text: String) -> Unit,
+        scheduleTimeout: (Runnable) -> java.util.concurrent.Future<*> = { scheduleOnTimeoutThread(it, DIALOG_TIMEOUT_MILLIS) },
+    ) {
+        private val answered = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        // Scheduled last: a timeout that fires at once finds the guard ready
+        private val timeout: java.util.concurrent.Future<*>? =
+            runCatching {
+                scheduleTimeout(
+                    Runnable {
+                        if (answer(false, null)) Log.w(TAG, "A JavaScript dialog was not answered in time and was cancelled")
+                    },
+                )
+            }.onFailure { Log.w(TAG, "Could not set a timeout on a JavaScript dialog", it) }
+                .getOrNull()
+
+        /** Whether the dialog has been answered. */
+        val isAnswered: Boolean
+            get() = answered.get()
+
+        /**
+         * Answers the dialog with [ok] and, for a prompt, [text]. Returns false, doing nothing, if
+         * it was answered before. Never throws.
+         */
+        fun answer(
+            ok: Boolean,
+            text: String?,
+        ): Boolean {
+            if (!answered.compareAndSet(false, true)) return false
+            timeout?.cancel(false)
+            runCatching { continueDialog(ok, text.orEmpty()) }
+                .onFailure { Log.w(TAG, "Answering a JavaScript dialog failed", it) }
+            return true
+        }
+
+        /**
+         * Hands [task] to [post]; if the post is refused (false, as when the looper has quit) or
+         * throws, the dialog is cancelled at once. Never throws.
+         */
+        fun post(
+            post: (Runnable) -> Boolean,
+            task: () -> Unit,
+        ) {
+            val posted =
+                try {
+                    post(Runnable { task() })
+                } catch (e: Exception) {
+                    Log.w(TAG, "Posting a JavaScript dialog to the WebView's looper failed", e)
+                    false
+                }
+            if (!posted && answer(false, null)) Log.w(TAG, "A JavaScript dialog could not reach the WebView's looper and was cancelled")
+        }
+
+        companion object {
+            /** How long a dialog waits for the WebChromeClient before it is cancelled. */
+            const val DIALOG_TIMEOUT_MILLIS = 60_000L
+
+            // One daemon thread for all dialogs' timeouts; a cancelled timeout leaves its queue
+            private val timeouts by lazy {
+                java.util.concurrent.ScheduledThreadPoolExecutor(1) { runnable ->
+                    Thread(runnable, "KcefJsDialogTimeout").apply { isDaemon = true }
+                }.apply { removeOnCancelPolicy = true }
+            }
+
+            /** Runs [task] after [delayMillis] on the shared timeout thread. */
+            fun scheduleOnTimeoutThread(
+                task: Runnable,
+                delayMillis: Long,
+            ): java.util.concurrent.Future<*> = timeouts.schedule(task, delayMillis, java.util.concurrent.TimeUnit.MILLISECONDS)
         }
     }
     // ZOUKAN <--
