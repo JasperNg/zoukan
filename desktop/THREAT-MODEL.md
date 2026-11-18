@@ -440,11 +440,10 @@ Residual risk:
    a run in which it cannot move. When an older version was run again after the move and both
    folders exist, the one used more recently is kept and the other deleted. With a chosen data
    folder (`zoukan.dataDir`) the profile stays inside that folder and goes wherever it is copied.
-7. **Some files stay plain.** A page set as a cover is written plain for a moment to the app's
-   temporary folder (`<cache>/cache/tmp`, `cache/tmp.noindex` on macOS) before it is saved
-   encrypted (a local entry's cover is the user's own plain file in the storage folder, or its
-   `cover.cbi`, encrypted with the download password, when it has one); a crash
-   at that moment leaves it until the next start. Covers are decrypted in memory, where Coil's memory cache
+7. **Some files stay plain.** A page set as a cover goes from memory straight to where the cover
+   is kept, never through a temporary file: encrypted with the file key for a library entry, and
+   for a local entry the user's own plain file in the storage folder, or `cover.cbi`, encrypted
+   with the download password, when the entry has one or its chapters are encrypted. Covers are decrypted in memory, where Coil's memory cache
    (256 MiB) keeps them; a local source's covers are the user's own files in the storage folder,
    read as they are. The exception is `cover.cbi`, the cover of an entry whose chapters are
    encrypted (Komikku writes it): it is decrypted in memory with the download password and nothing
