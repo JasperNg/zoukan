@@ -74,16 +74,21 @@ object NoFollowDelete {
      * can differ from the listed name (a chapter renamed by case only): the same folder when only
      * the last name differs, by case alone, in the same parent, and the parent holds no entry of
      * exactly the listed name. Where case counts (a Windows folder set case-sensitive), a junction
-     * can lead to a sibling named in another case, and then both names are listed.
+     * can lead to a sibling named in another case, and then both names are listed. The paths are
+     * compared as text, never with [Path.equals]: on Windows that ignores case, and would call such
+     * a junction the folder it leads to.
      */
-    private fun samePath(real: Path, listed: Path): Boolean {
+    private fun samePath(real: Path, listed: Path): Boolean =
+        samePath(form(real.toString()), form(listed.toString()), real.parent == listed.parent) { hasEntryNamedExactly(listed) }
+
+    /**
+     * [samePath] on the paths' text ([form] already applied): the same when the text is equal, or
+     * when it differs by letter case alone, in [sameParent], and [parentListsExactly] the listed
+     * name is false. Anything else is a link.
+     */
+    internal fun samePath(real: String, listed: String, sameParent: Boolean, parentListsExactly: () -> Boolean): Boolean {
         if (real == listed) return true
-        val realText = form(real.toString())
-        val listedText = form(listed.toString())
-        if (realText == listedText) return true
-        return real.parent == listed.parent &&
-            realText.equals(listedText, ignoreCase = true) &&
-            !hasEntryNamedExactly(listed)
+        return sameParent && real.equals(listed, ignoreCase = true) && !parentListsExactly()
     }
 
     private fun form(name: String): String = if (IGNORES_UNICODE_FORM) Normalizer.normalize(name, Normalizer.Form.NFC) else name
