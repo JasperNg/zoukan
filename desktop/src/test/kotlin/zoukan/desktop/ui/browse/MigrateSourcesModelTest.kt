@@ -19,6 +19,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.testing.Await
 import java.util.concurrent.Executors
 
 class MigrateSourcesModelTest {
@@ -82,13 +83,8 @@ class MigrateSourcesModelTest {
             preferences = SourcePreferences(InMemoryPreferenceStore()),
         )
         try {
-            fun waitUntil(condition: () -> Boolean) {
-                val end = System.currentTimeMillis() + 5_000
-                while (!condition()) {
-                    check(System.currentTimeMillis() < end) { "Timed out; state ${model.state.value}" }
-                    Thread.sleep(10)
-                }
-            }
+            fun waitUntil(condition: () -> Boolean) =
+                Await.until("the source list", 5_000, { model.state.value }, condition)
 
             waitUntil { model.state.value.items != null }
             model.state.value.items!!.map { it.name to it.count } shouldBe listOf("Alpha" to 2, "Zulu" to 1)

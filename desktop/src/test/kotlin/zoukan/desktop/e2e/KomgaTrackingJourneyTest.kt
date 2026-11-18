@@ -44,6 +44,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.BuiltInSources
+import zoukan.desktop.testing.Await
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.MangaScreen
@@ -188,8 +189,7 @@ class KomgaTrackingJourneyTest {
                     waitOrDump("for the track to go") { tracks(mangaId()).isEmpty() }
                     waitFor(hasText("Add tracking"))
                     val after = komgaCalls()
-                    waitForIdle()
-                    Thread.sleep(1_000)
+                    watchNothingHappens()
                     komgaCalls() shouldBe after
                     komga.progressUpdates shouldHaveSize 3
                     shot("7-unbound")
@@ -249,11 +249,7 @@ class KomgaTrackingJourneyTest {
         tests.value = tests.value + source
         val sources = Injekt.get<SourceManager>()
         runBlocking { sources.isInitialized.first { it } }
-        val deadline = System.currentTimeMillis() + 10_000
-        while (sources.get(source.id)?.getMainSource<Komga>() !== source) {
-            check(System.currentTimeMillis() < deadline) { "the SourceManager didn't list the Komga source within 10s" }
-            Thread.sleep(50)
-        }
+        Await.until("the SourceManager to list the Komga source") { sources.get(source.id)?.getMainSource<Komga>() === source }
     }
 
     private companion object {

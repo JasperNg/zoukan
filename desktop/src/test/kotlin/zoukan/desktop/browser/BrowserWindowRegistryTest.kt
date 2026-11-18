@@ -2,6 +2,7 @@ package zoukan.desktop.browser
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import zoukan.desktop.testing.Await
 
 /**
  * The registry the app's quit paths use to dispose the built-in browser windows (see
@@ -151,8 +152,12 @@ class BrowserWindowRegistryTest {
         registry.setLocked(true)
         registry.awaitUnlocked(50) shouldBe false
 
+        val challenge = Thread.currentThread()
         val unlocker = Thread {
-            Thread.sleep(100)
+            // Unlocks only once the challenge waits, so the wait is what the unlock ends
+            Await.until("the challenge to wait for the unlock", state = { challenge.state }) {
+                challenge.state == Thread.State.TIMED_WAITING || challenge.state == Thread.State.WAITING
+            }
             registry.setLocked(false)
         }.apply { start() }
         val started = System.nanoTime()

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
+import zoukan.desktop.testing.Await
 import zoukan.desktop.tray.Notifications
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -116,8 +117,9 @@ class LibraryUpdaterCancelTest {
             inStart.await(10, TimeUnit.SECONDS) shouldBe true
             val canceller = thread { updater.cancel() }
             // The cancel either finishes at once or waits for the start's lock
-            val end = System.currentTimeMillis() + 2_000
-            while (canceller.isAlive && canceller.state != Thread.State.BLOCKED && System.currentTimeMillis() < end) Thread.sleep(5)
+            Await.until("the cancel to finish or wait for the start's lock", 2_000, { canceller.state }) {
+                !canceller.isAlive || canceller.state == Thread.State.BLOCKED
+            }
             release.countDown()
             starter.join(10_000)
             canceller.join(10_000)

@@ -107,11 +107,65 @@ class ReleaseWorkflowTest {
         for (task in listOf(":desktop:journeyTest", ":desktop:buttonCrawlTest", ":desktop:extensionWiringTest", ":desktop:nightlyCheck")) {
             if (task in ci) problems += "ci.yml runs $task, a long check for Windows"
         }
-        val nightlyOn = text(".github/workflows/nightly.yml").substringAfter("\non:\n").substringBefore("\n\n")
-        for (trigger in listOf("schedule:", "pull_request:", "push:")) {
-            if (trigger in nightlyOn) problems += "nightly.yml starts on its own ($trigger); it is manual only"
+        val nightly = text(".github/workflows/nightly.yml")
+        val nightlyOn = nightly.substringAfter("\non:\n").substringBefore("\n\n")
+        for (trigger in listOf("pull_request:", "push:")) {
+            if (trigger in nightlyOn) problems += "nightly.yml starts on $trigger; it runs on its schedule and by hand"
         }
+        if (!Regex("""(?m)^ {2}schedule:\n {4}- cron: '[^']+'""").containsMatchIn(nightlyOn)) problems += "nightly.yml has no schedule"
         if ("workflow_dispatch:" !in nightlyOn) problems += "nightly.yml cannot be started by hand"
+        // A fork inherits the schedule: it must not run the long checks on the fork's minutes
+        for (name in listOf("nightly", "screenshots")) {
+            if ("github.event_name != 'schedule' || !github.event.repository.fork" !in job(nightly, name)) {
+                problems += "nightly.yml: the $name job runs on the schedule in forks too"
+            }
+        }
+        // The journeys on pull requests that change their hotspots, in a workflow of their own
+        val journeys = text(".github/workflows/journeys.yml")
+        if (":desktop:journeyTest" !in journeys) problems += "journeys.yml does not run :desktop:journeyTest"
+        if (!Regex("""(?m)^ {2}pull_request:\n {4}paths:\n""").containsMatchIn(journeys)) {
+            problems += "journeys.yml does not start on pull requests filtered by paths, so it slows every pull request"
+        }
+        if (!Regex("""(?m)^\s*runs-on:\s*windows-""").containsMatchIn(journeys)) problems += "journeys.yml does not run on Windows"
+        // The whole unit tier on Windows and macOS on every push to master
+        val unitTier = ":desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest"
+        val filesOs = job(ci, "files-os")
+        if (unitTier !in filesOs || "macos-" !in filesOs || "windows-" !in filesOs) {
+            problems += "ci.yml: files-os does not run the whole unit tier on Windows and macOS"
+        }
+        val unit = job(ci, "unit")
+        if (unitTier !in unit) problems += "ci.yml: the unit job does not run the whole unit tier on Linux"
+        // The coverage of changed lines is information only: it must not gate a merge
+        for (step in listOf("name: Coverage report", "name: Coverage of changed lines")) {
+            val body = unit.substringAfter(step, "").substringBefore("\n      - ")
+            if (body.isEmpty()) {
+                problems += "ci.yml: the unit job has no step \"$step\""
+            } else if ("continue-on-error: true" !in body) {
+                problems += "ci.yml: \"$step\" can fail the unit job"
+            }
+        }
+        // The report compares with the merge base, so a pull request needs the whole history. In an
+        // expression a number 0 is falsy: `cond && 0 || 1` always gives 1, a shallow checkout
+        val fetchDepth = Regex("""(?m)^\s*fetch-depth:\s*(.+)$""").find(unit)?.groupValues?.get(1)?.trim()
+        if (fetchDepth != "\${{ github.event_name == 'pull_request' && '0' || '1' }}") {
+            problems += "ci.yml: the unit job's checkout does not fetch the whole history on pull requests (fetch-depth: $fetchDepth)"
+        }
+        for (workflow in workflowFiles()) {
+            if (Regex("""&&\s*(0|false|''|"")\s*\|\|""").containsMatchIn(workflow.readText())) {
+                problems += "${workflow.name}: `cond && <falsy> || x` always gives x"
+            }
+        }
+        // A changed-line report that cannot be made must say so in the summary, not only in the log
+        val changedLines = unit.substringAfter("name: Coverage of changed lines", "").substringBefore("\n      - ")
+        if ("::warning" !in changedLines || "Not computed" !in changedLines) {
+            problems += "ci.yml: \"Coverage of changed lines\" does not warn in the job summary when it cannot make the report"
+        }
+        if (":app:testDebugUnitTest" !in job(ci, "android-compile")) problems += "ci.yml does not run the Android app's unit tests"
+        // The record of the long checks, checked before a push to master
+        if (":desktop:verifyLongChecks" !in text("desktop/TESTING.md")) problems += "desktop/TESTING.md does not describe :desktop:verifyLongChecks"
+        if ("tasks.register(\"verifyLongChecks\")" !in text("desktop/build.gradle.kts")) {
+            problems += "desktop/build.gradle.kts has no verifyLongChecks task"
+        }
         val command = ":desktop:longChecks --continue"
         for (doc in listOf("desktop/RELEASING.md", "desktop/TESTING.md")) {
             if (command !in text(doc)) problems += "$doc does not give the pre-merge command `$command`"

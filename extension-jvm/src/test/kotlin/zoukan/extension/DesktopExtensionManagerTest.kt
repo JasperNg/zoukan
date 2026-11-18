@@ -29,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -85,10 +86,17 @@ class DesktopExtensionManagerTest {
     @Volatile
     private var gate: CountDownLatch? = null
 
+    /** While set, counted down when a store download reaches [gate]. */
+    @Volatile
+    private var atGate: CountDownLatch? = null
+
     /** Serves `<storeDir>/<file name>` for any URL ending in that name. */
     private val storeClient = OkHttpClient.Builder()
         .addInterceptor { chain ->
-            gate?.await()
+            gate?.let {
+                atGate?.countDown()
+                it.await()
+            }
             val file = File(storeDir, chain.request().url.pathSegments.last())
             if (!file.isFile) throw IOException("404 ${file.name}")
             Response.Builder()
@@ -388,19 +396,23 @@ class DesktopExtensionManagerTest {
     fun `an uninstall during an install waits for it, and the extension stays uninstalled`() = withStubbedSignatures {
         val manager = manager()
         val release = CountDownLatch(1)
+        val downloading = CountDownLatch(1)
         gate = release
+        atGate = downloading
         coroutineScope {
             val install = async(Dispatchers.IO) { manager.installExtension(offer(3, "key-a")) }
-            // Let the install take the package's lock and reach its download
-            delay(300)
+            // The install has taken the package's lock and reached its download
+            downloading.await(10, TimeUnit.SECONDS) shouldBe true
             val uninstall = launch(Dispatchers.IO) { manager.uninstall(pkgName) }
-            delay(200)
+            // A Mutex does not show who waits for it, so only a pause can show that the uninstall waits
+            delay(NOTHING_HAPPENS_MILLIS)
             uninstall.isCompleted shouldBe false
             release.countDown()
             install.await().shouldBeInstanceOf<LoadResult.Success>()
             uninstall.join()
         }
         gate = null
+        atGate = null
         manager.installedExtensionsFlow.value[pkgName] shouldBe null
         File(extensionsDir, pkgName).exists() shouldBe false
     }
@@ -447,5 +459,8 @@ class DesktopExtensionManagerTest {
 
     private companion object {
         const val SIGNER_ENTRY = "test-signer.txt"
+
+        /** How long a test watches for a step that must not happen. */
+        const val NOTHING_HAPPENS_MILLIS = 200L
     }
 }

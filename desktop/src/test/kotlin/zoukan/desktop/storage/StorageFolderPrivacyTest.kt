@@ -17,10 +17,11 @@ import zoukan.desktop.SpotlightExclusion
 import zoukan.desktop.SpotlightExclusionHelper
 import zoukan.desktop.SpotlightNative
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.testing.FileSystemSandbox
+import zoukan.desktop.testing.TestHome
 import zoukan.desktop.track.MapPreferenceStore
 import java.io.File
 import java.nio.file.Files
-import java.util.UUID
 
 class StorageFolderPrivacyTest {
     @TempDir
@@ -460,6 +461,52 @@ class StorageFolderPrivacyTest {
         notes.shouldBeEmpty()
     }
 
+    /** The real Time Machine mark (an attribute on the folder, nothing system-wide) and the fake Spotlight one. */
+    private fun realTimeMachine(storage: ZoukanStorage) =
+        StorageFolderPrivacy(storage, notes::add, enabled = true, timeMachine = StorageFolderPrivacy.FolderMark.TimeMachine, spotlight = spotlight)
+
+    @Test
+    fun `with the home folder as the storage folder only Zoukan's folders change, never the user's Downloads`() {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val home = sandbox.home
+            // The user's own Time Machine exclusion (macOS), which turning the setting off must keep
+            BackupExclusion.exclude(sandbox.downloads, notes::add)
+            // On a case-insensitive volume "downloads" is the user's Downloads, so it is not Zoukan's
+            val caseInsensitive = File(home, "downloads").exists()
+            ZoukanStorage.zoukanFolders(home).filterNot { caseInsensitive && it.name == "downloads" }.forEach(sandbox::addAppFolder)
+            sandbox.record()
+            val storage = storage(home)
+            val privacy = realTimeMachine(storage)
+
+            privacy.refresh()
+            storage.excludeFromTimeMachine.set(false)
+            storage.hideFromSpotlight.set(false)
+            privacy.refresh()
+
+            sandbox.assertNothingOutsideAppChanged()
+            File(sandbox.downloads, "invoice.pdf").readText() shouldBe "the user's invoice"
+        }
+    }
+
+    @Test
+    fun `a Zoukan folder that is a link leaves its target's marks, permissions and files alone`() {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val local = File(sandbox.storageFolder, "local")
+            local.delete() shouldBe true
+            assumeTrue(sandbox.link(local, sandbox.userFolder) != null, "symbolic links cannot be made here")
+            sandbox.record()
+            val storage = storage(sandbox.storageFolder)
+            val privacy = realTimeMachine(storage)
+
+            privacy.refresh()
+            storage.excludeFromTimeMachine.set(false)
+            privacy.refresh()
+
+            sandbox.assertNothingOutsideAppChanged()
+            Files.isSymbolicLink(local.toPath()) shouldBe true
+        }
+    }
+
     @Test
     fun `nothing happens on other systems`() {
         val root = dir(temp, "chosen")
@@ -549,44 +596,53 @@ class StorageFolderPrivacyTest {
     @Test
     fun `the helper process adds and removes folders in one run on macOS`() {
         assumeRealSpotlight()
-        val home = File(System.getProperty("user.home"))
-        val root = File(home, "$HOME_TEST_PREFIX${UUID.randomUUID()}")
-        val dirs = listOf("downloads", "local", "autobackup").map { File(root, it) }.onEach { it.mkdirs() }
-        // The real command: this test's own Java runtime and the helper's jars (or class folders)
-        val spotlight = SpotlightExclusion()
-        try {
-            spotlight.set(dirs, true, notes::add) shouldBe dirs.toSet()
-            spotlight.excluded(dirs, notes::add) shouldBe dirs.toSet()
-            spotlight.set(dirs, false, notes::add) shouldBe dirs.toSet()
-            spotlight.excluded(dirs, notes::add) shouldBe emptySet()
-            notes.shouldBeEmpty()
-        } finally {
-            dirs.forEach { SpotlightNative.set(it, false) {} }
-            root.deleteRecursively()
+        // In the test JVM's own home folder (under the build folder), never the real one
+        FileSystemSandbox.create(realSpotlightParent()).use { sandbox ->
+            val dirs = sandbox.storageZoukanFolders
+            // The real command: this test's own Java runtime and the helper's jars (or class folders)
+            val spotlight = SpotlightExclusion()
+            try {
+                spotlight.set(dirs, true, notes::add) shouldBe dirs.toSet()
+                spotlight.excluded(dirs, notes::add) shouldBe dirs.toSet()
+                spotlight.set(dirs, false, notes::add) shouldBe dirs.toSet()
+                spotlight.excluded(dirs, notes::add) shouldBe emptySet()
+                notes.shouldBeEmpty()
+                sandbox.assertNothingOutsideAppChanged()
+            } finally {
+                dirs.forEach { SpotlightNative.set(it, false) {} }
+            }
         }
     }
 
+    /** Where the real-Spotlight test makes its sandboxes: in the test JVM's home folder ([TestHome]). */
+    private fun realSpotlightParent() = File(TestHome.root(), HOME_TEST_PREFIX.trimEnd('-'))
+
     /**
-     * The tests that change the real Spotlight Search Privacy list (and make folders in the home
-     * folder) run only when asked: `ZOUKAN_TEST_REAL_SPOTLIGHT=true`, or `-Dzoukan.test.realSpotlight=true`
-     * on the test JVM. Folders an earlier, interrupted run left behind are cleared first.
+     * The tests that change the real Spotlight Search Privacy list run only when asked:
+     * `ZOUKAN_TEST_REAL_SPOTLIGHT=true`, or `-Dzoukan.test.realSpotlight=true` on the test JVM.
+     * Sandboxes an earlier, interrupted run left behind are taken off the list and deleted first.
      */
     private fun assumeRealSpotlight() {
         assumeTrue(Platform.current == Platform.MACOS)
         assumeTrue(System.getProperty("zoukan.test.realSpotlight") == "true" || System.getenv("ZOUKAN_TEST_REAL_SPOTLIGHT") == "true")
-        File(System.getProperty("user.home")).listFiles { f -> f.isDirectory && f.name.startsWith(HOME_TEST_PREFIX) }?.forEach { left ->
-            listOf("downloads", "local", "autobackup").map { File(left, it) }.forEach { SpotlightNative.set(it, false) {} }
-            left.deleteRecursively()
+        realSpotlightParent().listFiles { f -> f.isDirectory && !Files.isSymbolicLink(f.toPath()) }?.forEach { left ->
+            left.walkTopDown().onEnter { !Files.isSymbolicLink(it.toPath()) }
+                .filter { it.isDirectory && it.name in ZoukanStorage.ZOUKAN_FOLDER_NAMES }
+                .forEach { SpotlightNative.set(it, false) {} }
+            FileSystemSandbox.deleteTree(left)
         }
     }
 
+    /** A helper command that runs [script] in /bin/sh. Exit 128 + n stands for signal n (a crash). */
     private fun sh(script: String): (List<String>) -> List<String> = { listOf("/bin/sh", "-c", script) }
 
     @Test
     fun `a crashing helper is noted, never thrown`() {
         assumeTrue(File("/bin/sh").canExecute())
         val dir = File(temp, "downloads").apply { mkdirs() }
-        SpotlightExclusion(sh("echo 'native crash' >&2; kill -SEGV $$"), enabled = true).set(listOf(dir), true, notes::add).shouldBeEmpty()
+        // SpotlightExclusion reads only the exit status and the error output; a real SIGSEGV would
+        // make macOS write a crash report into the user's DiagnosticReports on every run
+        SpotlightExclusion(sh("echo 'native crash' >&2; exit 139"), enabled = true).set(listOf(dir), true, notes::add).shouldBeEmpty()
         notes.single() shouldContain "exit code 139"
         notes.single() shouldContain "native crash"
     }
@@ -648,13 +704,13 @@ class StorageFolderPrivacyTest {
     fun `the helper refuses bad arguments`() {
         assumeTrue(Platform.current == Platform.MACOS)
         val argv = SpotlightExclusion.helperCommand(listOf("delete", "/"))!!
-        val process = ProcessBuilder(argv).redirectErrorStream(true).start()
+        val process = ProcessBuilder(TestHome.javaCommand(argv)).redirectErrorStream(true).start()
         process.inputStream.readBytes()
         process.waitFor() shouldBe SpotlightExclusionHelper.USAGE
     }
 
     private companion object {
-        /** The home-folder test folders of [assumeRealSpotlight]'s tests. */
+        /** The folder, in the test JVM's home folder, of [assumeRealSpotlight]'s sandboxes. */
         const val HOME_TEST_PREFIX = "zoukan-spotlight-test-"
     }
 }

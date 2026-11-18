@@ -1,6 +1,7 @@
 plugins {
     // ZOUKAN -->
     id("mihon.library.kmp")
+    id("zoukan.kover")
     // ZOUKAN <--
     kotlin("plugin.serialization")
     id("com.github.ben-manes.versions")

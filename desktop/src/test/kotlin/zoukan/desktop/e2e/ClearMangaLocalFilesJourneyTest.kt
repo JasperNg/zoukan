@@ -81,8 +81,7 @@ class ClearMangaLocalFilesJourneyTest {
                 }
                 step("Cancel the second question: nothing moves") {
                     onNodeWithText("Cancel").performClick()
-                    waitForIdle()
-                    Thread.sleep(1_000)
+                    watchNothingHappens()
                     trashed.shouldBeEmpty()
                     files.forEach { fingerprint(it) shouldBe before.getValue(it) }
                 }
@@ -96,8 +95,7 @@ class ClearMangaLocalFilesJourneyTest {
                     onNodeWithText("Move to trash").performClick()
                     waitOrDump("for the folder to reach the trash", timeout = 10_000) { trashed.isNotEmpty() }
                     waitOrDump("for the refresh to start", timeout = 10_000) { starts.isNotEmpty() }
-                    waitForIdle()
-                    Thread.sleep(1_000)
+                    watchNothingHappens()
                 }
             }
         }

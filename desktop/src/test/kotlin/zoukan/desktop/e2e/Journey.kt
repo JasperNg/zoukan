@@ -37,6 +37,7 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.secrets.SecretStore
+import zoukan.desktop.testing.Await
 import zoukan.desktop.ui.E2EDiagnostics
 import zoukan.desktop.ui.saveScreenshot
 import zoukan.desktop.ui.startUi
@@ -77,6 +78,9 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
 
         /** How many turns [readThrough] takes to find a page before it fails. */
         const val MAX_TURNS = 2
+
+        /** How long [watchNothingHappens] watches. */
+        const val NOTHING_HAPPENS_MILLIS = 1_000L
 
         /**
          * What [readThrough] does after a look for a page: stay when it drew; turn while another
@@ -134,10 +138,8 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
     fun awaitListed(source: FixtureSource) = runBlocking {
         val sources = Injekt.get<SourceManager>()
         sources.isInitialized.first { it }
-        val deadline = System.currentTimeMillis() + 10_000
-        while (sources.get(source.id)?.getMainSource<FixtureSource>() !== source) {
-            check(System.currentTimeMillis() < deadline) { "the SourceManager didn't list the fixture source \"${source.name}\" within 10s" }
-            Thread.sleep(50)
+        Await.until("the SourceManager to list the fixture source \"${source.name}\"") {
+            sources.get(source.id)?.getMainSource<FixtureSource>() === source
         }
     }
 
@@ -178,6 +180,17 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
             E2EDiagnostics.dump()
             throw AssertionError("Timed out $what", e)
         }
+    }
+
+    /**
+     * Waits for the UI to go idle, then watches for [NOTHING_HAPPENS_MILLIS], for a check that
+     * something did not happen (a file deleted, a request sent, a second refresh). Such work would
+     * start in the background with no event to wait for, so only a pause can show it never came.
+     * Wait on a condition (waitOrDump, waitFor) for anything that must happen.
+     */
+    fun ComposeUiTest.watchNothingHappens() {
+        waitForIdle()
+        Thread.sleep(NOTHING_HAPPENS_MILLIS)
     }
 
     /**

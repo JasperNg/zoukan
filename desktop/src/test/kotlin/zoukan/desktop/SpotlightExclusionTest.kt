@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.FileSystemSandbox
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.ArrayBlockingQueue
@@ -139,6 +141,40 @@ class SpotlightExclusionTest {
     }
 
     @Test
+    fun `a crashed helper's own reports go and nothing else in the temp folder or the home folder changes`() {
+        assumeTrue(File("/bin/sh").canExecute())
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val spotlight = SpotlightExclusion(
+                sh("echo report > hs_err_pid$$.log; echo replay > replay_pid$$.log; exit 134"),
+                enabled = true,
+                workDir = sandbox.otherProgramFolder,
+            )
+
+            spotlight.set(sandbox.storageZoukanFolders, true, notes::add).shouldBeEmpty()
+
+            notes.single() shouldContain "exit code 134"
+            // Another program's crash and replay files in the same folder stay as they were
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `a link the helper left in place of its crash report is the only change, and its target is untouched`() {
+        assumeTrue(File("/bin/sh").canExecute())
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val victim = File(sandbox.userFolder, "notes.txt")
+            val spotlight = SpotlightExclusion(sh("ln -s '${victim.path}' hs_err_pid$$.log; exit 1"), enabled = true, workDir = sandbox.otherProgramFolder)
+
+            spotlight.set(sandbox.storageZoukanFolders, true, notes::add).shouldBeEmpty()
+
+            // The helper made the link, not Zoukan; Zoukan leaves it, and the user's file it points to
+            val changes = sandbox.changesOutsideApp()
+            changes.size shouldBe 1
+            changes.single() shouldContain "created link tmp/hs_err_pid"
+        }
+    }
+
+    @Test
     fun `the watchdog ends a run that hangs with its own exit code`() {
         val codes = ArrayBlockingQueue<Int>(1)
         val watchdog = SpotlightExclusionHelper.startWatchdog(50) { codes.add(it) }
@@ -164,7 +200,7 @@ class SpotlightExclusionTest {
     fun `the helper's JVM accepts its options`() {
         val argv = SpotlightExclusion.helperCommand(listOf("delete", "/"))
         assumeTrue(argv != null)
-        val process = ProcessBuilder(argv!!).directory(workDir()).redirectErrorStream(true).start()
+        val process = ProcessBuilder(TestHome.javaCommand(argv!!)).directory(workDir()).redirectErrorStream(true).start()
         val output = process.inputStream.readBytes().decodeToString()
         process.waitFor() shouldBe SpotlightExclusionHelper.USAGE
         output shouldContain "Usage"

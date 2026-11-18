@@ -140,7 +140,7 @@ fun <T> ChoiceSetting(
     onChoose: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    SettingRow(title, subtitle ?: choices.firstOrNull { it.first == value }?.second, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
+    SettingRow(title, subtitle ?: choiceSummary(value, choices), enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
     // A dialog of choices, as Android's ListPreference
     if (open) {
         AlertDialog(
@@ -190,7 +190,7 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
             onValueChange = { value = it },
             onValueChangeFinished = { preference.set(value.roundToInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first - 1).coerceAtLeast(0),
+            steps = sliderSteps(range),
             // The title above names the slider for screen readers (and the button crawl)
             modifier = Modifier.semantics { contentDescription = title },
         )
@@ -201,7 +201,7 @@ fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange
 @Composable
 fun SetMemberPreference(title: String, preference: Preference<Set<String>>, member: String, subtitle: String? = null) {
     val value by preference.collectAsState()
-    SwitchSetting(title, subtitle, member in value) { on -> preference.set(if (on) value + member else value - member) }
+    SwitchSetting(title, subtitle, member in value) { on -> preference.set(withMember(value, member, on)) }
 }
 
 /** A setting whose value is a set of choices, picked in a dialog of checkboxes, as Android's MultiSelectListPreference. */
@@ -215,7 +215,7 @@ fun MultiSelectPreference(
 ) {
     val value by preference.collectAsState()
     var open by remember { mutableStateOf(false) }
-    val summary = subtitle ?: choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { localized(MR.strings.none) }
+    val summary = subtitle ?: multiSelectSummary(value, choices)
     SettingRow(title, summary, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
     if (open) {
         var chosen by remember { mutableStateOf(value) }
@@ -303,21 +303,12 @@ fun CategoriesIncludeExcludeDialog(
                 Spacer(Modifier.height(8.dp))
                 categories.forEach { category ->
                     val id = category.id.toString()
-                    val state = when (id) {
-                        in inc -> ToggleableState.On
-                        in exc -> ToggleableState.Indeterminate
-                        else -> ToggleableState.Off
-                    }
+                    val state = categoryState(id, inc, exc)
                     Row(
                         Modifier.fillMaxWidth().triStateToggleable(state = state, role = Role.Checkbox) {
-                            when (state) {
-                                ToggleableState.Off -> inc = inc + id
-                                ToggleableState.On -> {
-                                    inc = inc - id
-                                    exc = exc + id
-                                }
-                                ToggleableState.Indeterminate -> exc = exc - id
-                            }
+                            val (nextInc, nextExc) = cycleCategory(state, id, inc, exc)
+                            inc = nextInc
+                            exc = nextExc
                         }.padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -335,6 +326,37 @@ fun CategoriesIncludeExcludeDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_cancel)) } },
     )
 }
+
+/** The summary of a choice setting: the label of [value], or null when it is none of [choices]. */
+internal fun <T> choiceSummary(value: T, choices: List<Pair<T, String>>): String? = choices.firstOrNull { it.first == value }?.second
+
+/** The summary of a multi-select setting: the labels of the chosen [choices] in their order, or "None". */
+internal fun multiSelectSummary(value: Set<String>, choices: List<Pair<String, String>>): String =
+    choices.filter { it.first in value }.joinToString { it.second }.ifEmpty { localized(MR.strings.none) }
+
+/** [value] with [member] added ([on]) or removed; other members stay. */
+internal fun withMember(value: Set<String>, member: String, on: Boolean): Set<String> = if (on) value + member else value - member
+
+/** The slider's steps between its ends: one stop per whole number of [range]. */
+internal fun sliderSteps(range: IntRange): Int = (range.last - range.first - 1).coerceAtLeast(0)
+
+/** A category's box in the include/exclude dialog: included is checked, excluded is indeterminate. */
+internal fun categoryState(id: String, included: Set<String>, excluded: Set<String>): ToggleableState = when (id) {
+    in included -> ToggleableState.On
+    in excluded -> ToggleableState.Indeterminate
+    else -> ToggleableState.Off
+}
+
+/**
+ * A click on category [id], whose box shows [state]: neither, then included, then excluded, then
+ * neither again. Returns the new (included, excluded).
+ */
+internal fun cycleCategory(state: ToggleableState, id: String, included: Set<String>, excluded: Set<String>): Pair<Set<String>, Set<String>> =
+    when (state) {
+        ToggleableState.Off -> (included + id) to excluded
+        ToggleableState.On -> (included - id) to (excluded + id)
+        ToggleableState.Indeterminate -> included to (excluded - id)
+    }
 
 /** A category's name, with the system category shown as "Default", as Android's visualName. */
 fun categoryName(category: Category): String = if (category.isSystemCategory) localized(MR.strings.label_default) else category.name

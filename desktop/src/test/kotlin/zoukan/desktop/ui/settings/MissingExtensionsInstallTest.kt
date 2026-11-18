@@ -9,6 +9,7 @@ import mihon.domain.extension.model.ExtensionStore
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import zoukan.desktop.backup.RestoreGate
+import zoukan.desktop.testing.Await
 import zoukan.desktop.ui.settings.MissingExtensionsInstall.State
 import zoukan.extension.ExtensionException
 import zoukan.extension.LoadResult
@@ -58,13 +59,8 @@ class MissingExtensionsInstallTest {
         MissingExtensionsInstall.dismiss()
     }
 
-    private fun waitUntil(condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + 5_000
-        while (!condition()) {
-            check(System.currentTimeMillis() < end) { "Timed out; state ${MissingExtensionsInstall.state.value}" }
-            Thread.sleep(10)
-        }
-    }
+    private fun waitUntil(condition: () -> Boolean) =
+        Await.until("the install state", 5_000, { MissingExtensionsInstall.state.value }, condition)
 
     @Test
     fun `a find during another restore's install runs when the install ends`() {
@@ -127,8 +123,10 @@ class MissingExtensionsInstallTest {
     fun `a find waits for a running restore before working out the plan`() {
         val token = Any()
         var planned = false
+        var plannedWhileRestoring = false
         MissingExtensionsInstall.planner = {
             planned = true
+            plannedWhileRestoring = RestoreGate.isRestoring
             plan("ext.a", 1)
         }
         val restoreGate = CompletableDeferred<Unit>()
@@ -145,12 +143,13 @@ class MissingExtensionsInstallTest {
 
         MissingExtensionsInstall.find(token)
         waitUntil { MissingExtensionsInstall.state.value.forRestore(token) == State.WaitingForRestore }
-        Thread.sleep(100)
         planned shouldBe false
 
         restoreGate.complete(Unit)
         restore.join()
         waitUntil { MissingExtensionsInstall.state.value.forRestore(token) is State.Ready }
         planned shouldBe true
+        // The plan was worked out only after the restore ended, however long the find waited
+        plannedWhileRestoring shouldBe false
     }
 }

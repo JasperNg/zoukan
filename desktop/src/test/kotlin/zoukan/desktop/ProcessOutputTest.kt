@@ -4,6 +4,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -12,7 +13,7 @@ class ProcessOutputTest {
 
     @Test
     fun `returns the exit code and output`() {
-        val output = ProcessBuilder(java, "-version").redirectErrorStream(true).start()
+        val output = ProcessBuilder(listOf(java) + TestHome.childJvmArguments() + "-version").redirectErrorStream(true).start()
             .outputWithin(60, TimeUnit.SECONDS)
             .shouldNotBeNull()
         output.exitCode shouldBe 0

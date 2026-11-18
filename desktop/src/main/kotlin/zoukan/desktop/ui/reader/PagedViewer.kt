@@ -96,6 +96,35 @@ class PageZoom {
         pan = Offset.Zero
     }
 
+    // ZOUKAN -->
+    /**
+     * The Down (or Up) key on a page taller than the window: pans by most of the window's height.
+     * Returns true when the key was spent on the pan, false at the page's edge (or on a page that
+     * fits), where the key turns the page instead.
+     */
+    internal fun panVertically(down: Boolean): Boolean {
+        if (!overflowsY) return false
+        val step = viewport.height * 0.8f
+        return panBy(Offset(0f, if (down) -step else step)).y == 0f
+    }
+
+    /**
+     * "Pan wide images when tapping": pans a page larger than the window by most of the window
+     * towards [dx], [dy] (-1, 0 or 1). Returns true when it moved at least part of the way, false
+     * when the page fits or is already at that edge, where the tap turns the page instead.
+     */
+    internal fun panTowards(dx: Int, dy: Int): Boolean {
+        if (!overflowsX && !overflowsY) return false
+        val step = Offset(-dx * viewport.width * 0.8f, -dy * viewport.height * 0.8f)
+        return panBy(step) != step
+    }
+
+    /** A double-click: back to the fit when zoomed in, otherwise twice the size around [anchor]. */
+    internal fun toggleDoubleTapZoom(anchor: Offset) {
+        if (zoom > 1.01f) reset() else zoomTo(2f, anchor)
+    }
+    // ZOUKAN <--
+
     companion object {
         /** Centers content smaller than the viewport; keeps larger content covering it. Offset.Zero is the top left. */
         fun clamp(offset: Offset, viewport: IntSize, content: IntSize): Offset {
@@ -141,7 +170,7 @@ fun PagedViewer(
     val layout by model.preferences.pageLayout().collectAsState()
     val invertDouble by model.preferences.invertDoublePages().collectAsState()
     val windowSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
-    val double = layout == 1 || (layout == 2 && windowSize.width > windowSize.height)
+    val double = PagedPager.isDouble(layout, windowSize.width, windowSize.height)
     val prefs = model.preferences
     val split by prefs.dualPageSplitPaged().collectAsState()
     val splitInvert by prefs.dualPageInvertPaged().collectAsState()
@@ -163,7 +192,7 @@ fun PagedViewer(
     val spreads: List<Spread> = remember(pages.size, double, wide, split, content.shiftDoublePages) {
         ReaderSpreads.build(pages.size, double, wide, split, content.shiftDoublePages)
     }
-    fun spreadOf(page: Int) = spreads.indexOfFirst { page in it.pages }.coerceAtLeast(0)
+    fun spreadOf(page: Int) = PagedPager.spreadOf(spreads, page)
     // Pager index 0 and spreads.size + 1 are the chapter transitions. With "Always show chapter
     // transition" off, the one between back-to-back chapters is skipped: turning onto it, or a drag
     // settling on it, opens that chapter, as Android shows its pages there instead
@@ -183,17 +212,15 @@ fun PagedViewer(
 
     fun turn(to: Int) {
         lastTurn = System.currentTimeMillis()
-        when {
-            to < 0 -> model.previousChapter(atEnd = true)
-            to > spreads.size + 1 -> model.nextChapter()
-            // ZOUKAN -->
-            to == 0 && !showPrevious -> model.previousChapter(atEnd = true)
-            to == spreads.size + 1 && !showNext -> model.nextChapter()
-            // Android's "Animate page transitions"
-            transitions && !reduceMotion -> scope.launch { pagerState.animateScrollToPage(to) }
-            else -> scope.launch { pagerState.scrollToPage(to) }
-            // ZOUKAN <--
+        // ZOUKAN -->
+        // Android's "Animate page transitions"
+        when (PagedPager.turn(to, spreads.size, showPrevious, showNext, animate = transitions && !reduceMotion)) {
+            PagedPager.Turn.PREVIOUS_CHAPTER -> model.previousChapter(atEnd = true)
+            PagedPager.Turn.NEXT_CHAPTER -> model.nextChapter()
+            PagedPager.Turn.ANIMATE -> scope.launch { pagerState.animateScrollToPage(to) }
+            PagedPager.Turn.JUMP -> scope.launch { pagerState.scrollToPage(to) }
         }
+        // ZOUKAN <--
     }
 
     // ZOUKAN -->
@@ -202,12 +229,7 @@ fun PagedViewer(
      * the tap first, and turns at its edge. [dx] and [dy] are -1, 0 or 1.
      */
     fun panOrTurn(dx: Int, dy: Int, forward: Boolean) {
-        val zoom = current()
-        if (navigateToPan && (zoom.overflowsX || zoom.overflowsY)) {
-            val step = Offset(-dx * zoom.viewport.width * 0.8f, -dy * zoom.viewport.height * 0.8f)
-            val left = zoom.panBy(step)
-            if (left != step) return
-        }
+        if (navigateToPan && current().panTowards(dx, dy)) return
         if (forward) actions.next() else actions.previous()
     }
     // ZOUKAN <--
@@ -218,15 +240,13 @@ fun PagedViewer(
         actions.next = { turn(pagerState.currentPage + 1) }
         actions.previous = { turn(pagerState.currentPage - 1) }
         actions.down = {
-            val zoom = current()
-            if (zoom.overflowsY && zoom.panBy(Offset(0f, -zoom.viewport.height * 0.8f)).y == 0f) Unit else actions.next()
+            if (!current().panVertically(down = true)) actions.next()
         }
         actions.up = {
-            val zoom = current()
-            if (zoom.overflowsY && zoom.panBy(Offset(0f, zoom.viewport.height * 0.8f)).y == 0f) Unit else actions.previous()
+            if (!current().panVertically(down = false)) actions.previous()
         }
-        actions.first = { scope.launch { pagerState.scrollToPage(1) } }
-        actions.last = { scope.launch { pagerState.scrollToPage(spreads.size) } }
+        actions.first = { scope.launch { pagerState.scrollToPage(PagedPager.FIRST_INDEX) } }
+        actions.last = { scope.launch { pagerState.scrollToPage(PagedPager.lastIndex(spreads.size)) } }
         actions.goTo = { index -> scope.launch { pagerState.scrollToPage(spreadOf(index) + 1) } }
         actions.zoomIn = { current().let { it.zoomTo(it.zoom * 1.25f) } }
         actions.zoomOut = { current().let { it.zoomTo(it.zoom / 1.25f) } }
@@ -254,25 +274,19 @@ fun PagedViewer(
         // decoded as wide keeps its first page, so no page is skipped.
         val layoutSwitched = laidOutDouble[0] != double
         laidOutDouble[0] = double
-        val heading = pagerState.targetPage
-        val target = when {
-            old == null -> spreadOf(model.state.value.currentPage) + 1
-            heading <= 0 -> 0
-            heading > old.size -> spreads.size + 1
-            layoutSwitched -> spreadOf(old[heading - 1].last) + 1
-            else -> spreadOf(old[heading - 1].first) + 1
-        }
+        val target = PagedPager.relayoutTarget(old, spreads, pagerState.targetPage, layoutSwitched) { model.state.value.currentPage }
         if (pagerState.currentPage != target || pagerState.targetPage != target) pagerState.scrollToPage(target)
         // ZOUKAN <--
         snapshotFlow { pagerState.settledPage }.distinctUntilChanged().collect { index ->
             // Leaving a page resets its zoom, as on Android
             zooms.keys.filter { it != index }.forEach { zooms.remove(it) }
-            if (index in 1..spreads.size) spreads[index - 1].let { model.onPageChanged(it.last, first = it.first) }
             // ZOUKAN -->
-            // A drag onto a skipped transition opens that chapter
             val (previousShown, nextShown) = latestShown
-            if (index == 0 && !previousShown) model.previousChapter(atEnd = true)
-            if (index == spreads.size + 1 && !nextShown) model.nextChapter()
+            val settled = PagedPager.settled(index, spreads, previousShown, nextShown)
+            settled.spread?.let { model.onPageChanged(it.last, first = it.first) }
+            // A drag onto a skipped transition opens that chapter
+            if (settled.openPrevious) model.previousChapter(atEnd = true)
+            if (settled.openNext) model.nextChapter()
             // ZOUKAN <--
         }
     }
@@ -282,7 +296,7 @@ fun PagedViewer(
     var secondaryAt by remember { mutableStateOf(0L) }
     // The tap detector lives across compositions, so it reads the spreads and order of the latest one
     val latestSpreads by rememberUpdatedState(spreads)
-    val latestLeftFirst by rememberUpdatedState(!rtl != invertDouble)
+    val latestLeftFirst by rememberUpdatedState(PagedPager.leftFirst(rtl, invertDouble))
     val latestNav by rememberUpdatedState(Triple(navLayout, navInvert, smallerZones))
     val latestDoubleTap by rememberUpdatedState(doubleTapZoom && !disableZoomIn)
     val latestLongTap by rememberUpdatedState(longTap)
@@ -303,7 +317,7 @@ fun PagedViewer(
                 val spread = spreads[index - 1]
                 if (spread.pages.size == 2) {
                     // The first page of a pair sits on the side the reading starts from
-                    val leftFirst = !rtl != invertDouble
+                    val leftFirst = PagedPager.leftFirst(rtl, invertDouble)
                     val (left, right) = if (leftFirst) spread.pages[0] to spread.pages[1] else spread.pages[1] to spread.pages[0]
                     DoublePage(
                         left = pages[left],
@@ -312,17 +326,13 @@ fun PagedViewer(
                         foreground = foreground,
                         onRetry = { model.loadPage(it, retry = true) },
                         // ZOUKAN -->
-                        margin = centerMargin == 1 || centerMargin == 3,
+                        margin = PagedPager.doubleMargin(centerMargin),
                         // ZOUKAN <--
                     )
                 } else {
                     // ZOUKAN -->
                     val isWide = spread.first in wide
-                    val rotation = when {
-                        !isWide || split || !rotateWide -> 0
-                        rotateInvert -> -90
-                        else -> 90
-                    }
+                    val rotation = PagedPager.rotation(isWide, split, rotateWide, rotateInvert)
                     // ZOUKAN <--
                     ZoomablePage(
                         page = pages[spread.first],
@@ -334,7 +344,7 @@ fun PagedViewer(
                         part = spread.part,
                         leftFirst = ReaderSpreads.leftHalfFirst(rtl, splitInvert),
                         rotation = rotation,
-                        wideMargin = isWide && rotation == 0 && spread.part == PagePart.WHOLE && centerMargin >= 2,
+                        wideMargin = PagedPager.wideMargin(isWide, rotation, spread.part, centerMargin),
                         zoomStart = zoomStart,
                         rtl = rtl,
                         autoBackground = autoBackground,
@@ -397,41 +407,15 @@ fun PagedViewer(
                     val zones = ReaderNavigation.zones(latestNav.first, vertical, ReaderNavigation.Invert.of(latestNav.second), latestNav.third)
                     val x = position.x / size.width.coerceAtLeast(1)
                     val y = position.y / size.height.coerceAtLeast(1)
-                    when (ReaderNavigation.regionAt(x, y, zones)) {
-                        ReaderNavigation.Region.NEXT -> panOrTurn(
-                            if (vertical) {
-                                0
-                            } else if (rtl) {
-                                -1
-                            } else {
-                                1
-                            },
-                            if (vertical) 1 else 0,
-                            forward = true,
-                        )
-                        ReaderNavigation.Region.PREV -> panOrTurn(
-                            if (vertical) {
-                                0
-                            } else if (rtl) {
-                                1
-                            } else {
-                                -1
-                            },
-                            if (vertical) -1 else 0,
-                            forward = false,
-                        )
-                        ReaderNavigation.Region.RIGHT -> panOrTurn(1, 0, forward = vertical || !rtl)
-                        ReaderNavigation.Region.LEFT -> panOrTurn(-1, 0, forward = !vertical && rtl)
-                        ReaderNavigation.Region.MENU -> model.toggleMenu()
+                    when (val move = PagedPager.tapMove(ReaderNavigation.regionAt(x, y, zones), vertical, rtl)) {
+                        null -> model.toggleMenu()
+                        else -> panOrTurn(move.dx, move.dy, forward = move.forward)
                     }
                     // ZOUKAN <--
                 },
                 onDoubleTap = { position ->
                     // ZOUKAN -->
-                    if (latestDoubleTap) {
-                        val zoom = current()
-                        if (zoom.zoom > 1.01f) zoom.reset() else zoom.zoomTo(2f, position)
-                    }
+                    if (latestDoubleTap) current().toggleDoubleTapZoom(position)
                     // ZOUKAN <--
                 },
                 // ZOUKAN -->
@@ -526,16 +510,7 @@ private fun ZoomablePage(
                     // Android's "Zoom start position" for a page wider than the window
                     if (!zoom.started && viewport.width > 0) {
                         zoom.started = true
-                        if (content.width > viewport.width + 1) {
-                            val right = (viewport.width - content.width).toFloat()
-                            val x = when (zoomStart) {
-                                2 -> 0f
-                                3 -> right
-                                4 -> right / 2f
-                                else -> if (rtl) right else 0f
-                            }
-                            zoom.pan = Offset(x, zoom.pan.y)
-                        }
+                        PagedPager.startPanX(zoomStart, rtl, viewport.width, content.width)?.let { x -> zoom.pan = Offset(x, zoom.pan.y) }
                     }
                 }
                 val pageModifier = Modifier
@@ -656,3 +631,126 @@ internal object PagedWheel {
         else -> -1
     }
 }
+
+// ZOUKAN -->
+/**
+ * The paged reader's decisions, apart from Compose so tests can call them. Pager index 0 and
+ * `spreadCount + 1` are the chapter transitions; the spreads sit at 1..spreadCount.
+ */
+internal object PagedPager {
+    /** Android's page layout: 1 double pages, 2 automatic (double in a window wider than tall), else single. */
+    fun isDouble(layout: Int, width: Int, height: Int): Boolean = layout == 1 || (layout == 2 && width > height)
+
+    /** The spread that holds [page]: the first one (the first half of a split page), or 0 for a page in none. */
+    fun spreadOf(spreads: List<Spread>, page: Int): Int = spreads.indexOfFirst { page in it.pages }.coerceAtLeast(0)
+
+    /** The pager index of "first page" (Home). */
+    const val FIRST_INDEX = 1
+
+    /** The pager index of "last page" (End). */
+    fun lastIndex(spreadCount: Int): Int = spreadCount
+
+    enum class Turn { PREVIOUS_CHAPTER, NEXT_CHAPTER, ANIMATE, JUMP }
+
+    /**
+     * What a turn to pager index [to] does: past either end, or onto a transition that is not
+     * shown, it opens that chapter; otherwise the pager moves, animated when [animate].
+     */
+    fun turn(to: Int, spreadCount: Int, showPrevious: Boolean, showNext: Boolean, animate: Boolean): Turn = when {
+        to < 0 -> Turn.PREVIOUS_CHAPTER
+        to > spreadCount + 1 -> Turn.NEXT_CHAPTER
+        to == 0 && !showPrevious -> Turn.PREVIOUS_CHAPTER
+        to == spreadCount + 1 && !showNext -> Turn.NEXT_CHAPTER
+        animate -> Turn.ANIMATE
+        else -> Turn.JUMP
+    }
+
+    /**
+     * The pager index to show after the spreads change from [old] to [spreads] while the pager
+     * shows or turns to [heading]. The first layout opens at [currentPage]; a transition stays a
+     * transition; a switch between single and double pages ([layoutSwitched]) keeps the last page
+     * of the spread, any other change its first page.
+     */
+    fun relayoutTarget(old: List<Spread>?, spreads: List<Spread>, heading: Int, layoutSwitched: Boolean, currentPage: () -> Int): Int = when {
+        old == null -> spreadOf(spreads, currentPage()) + 1
+        heading <= 0 -> 0
+        heading > old.size -> spreads.size + 1
+        layoutSwitched -> spreadOf(spreads, old[heading - 1].last) + 1
+        else -> spreadOf(spreads, old[heading - 1].first) + 1
+    }
+
+    /** What settling on pager index [index] does: [spread] is read now, or a skipped transition opens its chapter. */
+    data class Settled(val spread: Spread?, val openPrevious: Boolean, val openNext: Boolean)
+
+    fun settled(index: Int, spreads: List<Spread>, previousShown: Boolean, nextShown: Boolean): Settled = Settled(
+        spread = if (index in 1..spreads.size) spreads[index - 1] else null,
+        openPrevious = index == 0 && !previousShown,
+        openNext = index == spreads.size + 1 && !nextShown,
+    )
+
+    /** A tap's pan direction ([dx], [dy] are -1, 0 or 1) and whether it turns forward. */
+    data class TapMove(val dx: Int, val dy: Int, val forward: Boolean)
+
+    /** What a tap in [region] does; null for the menu region. */
+    fun tapMove(region: ReaderNavigation.Region, vertical: Boolean, rtl: Boolean): TapMove? = when (region) {
+        ReaderNavigation.Region.NEXT -> TapMove(
+            if (vertical) {
+                0
+            } else if (rtl) {
+                -1
+            } else {
+                1
+            },
+            if (vertical) 1 else 0,
+            forward = true,
+        )
+        ReaderNavigation.Region.PREV -> TapMove(
+            if (vertical) {
+                0
+            } else if (rtl) {
+                1
+            } else {
+                -1
+            },
+            if (vertical) -1 else 0,
+            forward = false,
+        )
+        ReaderNavigation.Region.RIGHT -> TapMove(1, 0, forward = vertical || !rtl)
+        ReaderNavigation.Region.LEFT -> TapMove(-1, 0, forward = !vertical && rtl)
+        ReaderNavigation.Region.MENU -> null
+    }
+
+    /** Whether the first page of a pair sits on the left. */
+    fun leftFirst(rtl: Boolean, invertDouble: Boolean): Boolean = !rtl != invertDouble
+
+    /** SY's center margin between double pages: types 1 and 3. */
+    fun doubleMargin(centerMargin: Int): Boolean = centerMargin == 1 || centerMargin == 3
+
+    /** The turn of a page in degrees: a wide page, unsplit, turns to fit when "Rotate wide pages" is on. */
+    fun rotation(isWide: Boolean, split: Boolean, rotateWide: Boolean, rotateInvert: Boolean): Int = when {
+        !isWide || split || !rotateWide -> 0
+        rotateInvert -> -90
+        else -> 90
+    }
+
+    /** SY's center margin in a wide page shown whole and unturned: types 2 and 3. */
+    fun wideMargin(isWide: Boolean, rotation: Int, part: PagePart, centerMargin: Int): Boolean =
+        isWide && rotation == 0 && part == PagePart.WHOLE && centerMargin >= 2
+
+    /**
+     * Android's "Zoom start position" for a page wider than the window: the first horizontal pan,
+     * or null when the page fits (it is then centered). 2 left, 3 right, 4 center, else automatic
+     * (the side the reading starts from).
+     */
+    fun startPanX(zoomStart: Int, rtl: Boolean, viewportWidth: Int, contentWidth: Int): Float? {
+        if (contentWidth <= viewportWidth + 1) return null
+        val right = (viewportWidth - contentWidth).toFloat()
+        return when (zoomStart) {
+            2 -> 0f
+            3 -> right
+            4 -> right / 2f
+            else -> if (rtl) right else 0f
+        }
+    }
+}
+// ZOUKAN <--

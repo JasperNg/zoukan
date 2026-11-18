@@ -6,6 +6,8 @@ plugins {
     id("zoukan.jvm")
     kotlin("plugin.serialization")
     id("mihon.code.lint")
+    id("zoukan.kover")
+    id("zoukan.test-home")
 }
 
 dependencies {

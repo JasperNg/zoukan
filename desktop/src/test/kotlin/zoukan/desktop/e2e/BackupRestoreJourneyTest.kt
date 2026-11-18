@@ -53,6 +53,7 @@ import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.testing.Await
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.settings.CreateBackupScreen
@@ -121,11 +122,7 @@ class BackupRestoreJourneyTest {
             step("Back up") {
                 createBackup(backup, BackupOptions())
                 // The status clears when the backup ends, written or not (a failure is a toast)
-                val deadline = System.currentTimeMillis() + 60_000
-                while (backupStatusFlow.value != null) {
-                    check(System.currentTimeMillis() < deadline) { "the backup did not finish within 60s" }
-                    Thread.sleep(100)
-                }
+                Await.until("the backup to finish", 60_000) { backupStatusFlow.value == null }
                 check(backup.isFile) { "the backup failed; see the toast above" }
             }
 

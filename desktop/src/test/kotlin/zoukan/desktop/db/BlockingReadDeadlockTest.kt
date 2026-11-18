@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
 import java.io.File
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -38,14 +39,18 @@ class BlockingReadDeadlockTest {
         val handler = AndroidDatabaseHandler(DesktopDatabase.createDatabase(driver), driver, dispatcher, dispatcher)
         val ui = Executors.newSingleThreadExecutor { Thread(it, "ui").apply { isDaemon = true } }
         val uiScope = CoroutineScope(ui.asCoroutineDispatcher())
+        val transactionRuns = CountDownLatch(1)
         try {
             val names = ui.submit<List<String>> {
                 // A click handler starts a transaction and suspends while it takes the database thread
                 uiScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    handler.await(inTransaction = true) { categoriesQueries.insert("From the UI", 1, 0, 0L) }
+                    handler.await(inTransaction = true) {
+                        transactionRuns.countDown()
+                        categoriesQueries.insert("From the UI", 1, 0, 0L)
+                    }
                 }
-                // Long enough for the database thread to be taken
-                Thread.sleep(300)
+                // Once the database thread has been taken
+                transactionRuns.await(10, TimeUnit.SECONDS) shouldBe true
                 // Then the UI thread blocks on a read, which runs once the transaction is done
                 runBlocking { handler.awaitList { categoriesQueries.getCategories() }.map { it.name } }
             }

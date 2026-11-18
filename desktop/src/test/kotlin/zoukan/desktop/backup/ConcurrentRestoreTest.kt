@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -15,9 +14,11 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
 import zoukan.desktop.db.DesktopDatabase
+import zoukan.desktop.testing.Await
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 /**
@@ -39,7 +40,10 @@ class ConcurrentRestoreTest {
             schema = Database.Schema,
         )
         val db = DesktopDatabase.createDatabase(driver)
-        val executor = Executors.newSingleThreadExecutor { Thread(it, "zoukan-database").apply { isDaemon = true } }
+        // A single thread, as Executors.newSingleThreadExecutor, whose queue the test can see
+        val executor = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, LinkedBlockingQueue()) {
+            Thread(it, "zoukan-database").apply { isDaemon = true }
+        }
         val dispatcher = executor.asCoroutineDispatcher()
         val handler = AndroidDatabaseHandler(db, driver, queryDispatcher = dispatcher, transactionDispatcher = dispatcher)
         try {
@@ -69,8 +73,11 @@ class ConcurrentRestoreTest {
                     ),
                 )
             }
-            // Give a direct write time to land inside the transaction
-            delay(200)
+            // The store's write is either queued behind the transaction on the database thread, or
+            // (written directly from another thread) done inside the transaction
+            Await.untilSuspending("the store's write to be queued or done") {
+                executor.queue.isNotEmpty() || store.isCompleted
+            }
             write.complete(Unit)
 
             withTimeout(10_000) {

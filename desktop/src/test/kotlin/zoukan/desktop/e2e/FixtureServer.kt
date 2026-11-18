@@ -64,6 +64,42 @@ sealed interface FixtureFailure {
      * Any other path answers 200 JSON that is not valid (`{`).
      */
     data object CorruptImage : FixtureFailure
+
+    // The failures below change the answer the path would give (a route, an image, the store, the
+    // sync server or the release feed), for the fault-injection tests: a client must report each one
+    // and keep nothing it half received.
+
+    /** Closes the connection without any answer, as a server that crashes or a reset does. */
+    data object Drop : FixtureFailure
+
+    /**
+     * Sends the path's status, headers and full Content-Length, then only the first [keepBytes]
+     * bytes of the body, and closes the connection: a connection cut in the middle of the body.
+     */
+    data class Truncate(val keepBytes: Int) : FixtureFailure
+
+    /**
+     * Sends the path's status and full Content-Length and the first [afterBytes] bytes of the body,
+     * then holds the rest until [FixtureServer.clearFailures] or [FixtureServer.close], and closes
+     * the connection without it: a stall in the middle of the body, for a client's read timeout.
+     */
+    data class Stall(val afterBytes: Int) : FixtureFailure
+
+    /** The path's answer at its length and type, with every byte from [fromByte] on inverted. */
+    data class Corrupt(val fromByte: Int = 0) : FixtureFailure
+
+    /** The path's answer with [contentType] in place of its own, as a misconfigured server or proxy sends. */
+    data class WrongType(val contentType: String) : FixtureFailure
+
+    /**
+     * The path's answer with [extraBytes] more bytes after its body, sent chunked so no header gives
+     * its size: for a client that checks a size it was told elsewhere (a release's asset size, a
+     * signature's fixed length, a download cap).
+     */
+    data class Oversize(val extraBytes: Int) : FixtureFailure
+
+    /** Answers [code] with [body] as [contentType] in place of the path's answer, for bad data of any kind. */
+    class Answer(val code: Int, val contentType: String, val body: ByteArray) : FixtureFailure
 }
 
 /**
@@ -184,7 +220,100 @@ class FixtureServer : AutoCloseable {
                 val bytes = imageBytes(parts[1]) ?: return route(exchange, parts)
                 send(exchange, 200, imageType(parts[1]), corrupted(bytes))
             }
+            // Nothing is sent: closing the exchange without headers closes the connection
+            FixtureFailure.Drop -> Unit
+            is FixtureFailure.Answer -> send(exchange, failure.code, failure.contentType, failure.body)
+            is FixtureFailure.Truncate, is FixtureFailure.Stall, is FixtureFailure.Corrupt,
+            is FixtureFailure.WrongType, is FixtureFailure.Oversize,
+            -> reshape(exchange, parts, failure, heal)
         }
+    }
+
+    /** Runs the path's own route into a buffer, then sends its answer changed as [failure] says. */
+    private fun reshape(exchange: HttpExchange, parts: List<String>, failure: FixtureFailure, heal: CountDownLatch) {
+        val captured = CapturedExchange(exchange)
+        route(captured, parts)
+        val status = captured.status ?: return // the route sent nothing: the connection just closes
+        val body = captured.body.toByteArray()
+        when (failure) {
+            is FixtureFailure.Truncate -> cut(exchange, status, body, failure.keepBytes, hold = null)
+            is FixtureFailure.Stall -> cut(exchange, status, body, failure.afterBytes, hold = heal)
+            is FixtureFailure.Corrupt -> sendRaw(
+                exchange,
+                status,
+                ByteArray(body.size) { i -> if (i >= failure.fromByte) body[i].toInt().inv().toByte() else body[i] },
+            )
+            is FixtureFailure.WrongType -> {
+                exchange.responseHeaders.set("Content-Type", failure.contentType)
+                sendRaw(exchange, status, body)
+            }
+            is FixtureFailure.Oversize -> {
+                // Length 0: chunked, so no header says how long the body is
+                exchange.sendResponseHeaders(status, 0)
+                exchange.responseBody.use {
+                    it.write(body)
+                    it.write(ByteArray(failure.extraBytes) { i -> (i % 251).toByte() })
+                }
+            }
+            else -> error("Not a reshaping failure: $failure")
+        }
+    }
+
+    /**
+     * Declares [body]'s whole length, sends its first [keep] bytes and closes the connection, after
+     * waiting for [hold] when there is one (a stall).
+     */
+    private fun cut(exchange: HttpExchange, status: Int, body: ByteArray, keep: Int, hold: CountDownLatch?) {
+        exchange.responseHeaders.set("Connection", "close")
+        exchange.sendResponseHeaders(status, if (body.isEmpty()) -1 else body.size.toLong())
+        if (body.isEmpty()) return
+        val out = exchange.responseBody
+        out.write(body, 0, keep.coerceIn(0, body.size - 1))
+        out.flush()
+        if (hold != null && !closed.get()) {
+            try {
+                hold.await(HANG_LIMIT_MINUTES, TimeUnit.MINUTES)
+            } catch (_: InterruptedException) {
+                // The server is closing
+            }
+        }
+        // Thrown out of the handler, so the server closes the connection; returning would leave it
+        // open, and the client waiting for the bytes that were declared
+        throw java.io.IOException("Fixture cut the connection after $keep of ${body.size} bytes")
+    }
+
+    private fun sendRaw(exchange: HttpExchange, status: Int, bytes: ByteArray) {
+        exchange.sendResponseHeaders(status, if (bytes.isEmpty()) -1 else bytes.size.toLong())
+        if (bytes.isNotEmpty()) exchange.responseBody.use { it.write(bytes) }
+    }
+
+    /**
+     * An exchange whose answer is kept instead of sent: the status the route gave and the body it
+     * wrote, while headers go to [real]'s, so [reshape] can send the answer changed.
+     */
+    private class CapturedExchange(private val real: HttpExchange) : HttpExchange() {
+        var status: Int? = null
+        val body = java.io.ByteArrayOutputStream()
+
+        override fun getRequestHeaders(): com.sun.net.httpserver.Headers = real.requestHeaders
+        override fun getResponseHeaders(): com.sun.net.httpserver.Headers = real.responseHeaders
+        override fun getRequestURI(): java.net.URI = real.requestURI
+        override fun getRequestMethod(): String = real.requestMethod
+        override fun getHttpContext(): com.sun.net.httpserver.HttpContext = real.httpContext
+        override fun close() = Unit
+        override fun getRequestBody(): java.io.InputStream = real.requestBody
+        override fun getResponseBody(): java.io.OutputStream = body
+        override fun sendResponseHeaders(rCode: Int, responseLength: Long) {
+            status = rCode
+        }
+        override fun getRemoteAddress(): InetSocketAddress = real.remoteAddress
+        override fun getResponseCode(): Int = status ?: -1
+        override fun getLocalAddress(): InetSocketAddress = real.localAddress
+        override fun getProtocol(): String = real.protocol
+        override fun getAttribute(name: String?): Any? = real.getAttribute(name)
+        override fun setAttribute(name: String?, value: Any?) = real.setAttribute(name, value)
+        override fun setStreams(i: java.io.InputStream?, o: java.io.OutputStream?) = real.setStreams(i, o)
+        override fun getPrincipal(): com.sun.net.httpserver.HttpPrincipal? = real.principal
     }
 
     private fun route(exchange: HttpExchange, parts: List<String>) {

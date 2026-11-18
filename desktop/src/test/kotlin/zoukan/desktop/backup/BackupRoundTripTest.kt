@@ -6,14 +6,17 @@ import okio.sink
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
  * The Phase 3 gate: every fixture survives a restore and backup on desktop with no field lost.
  *
- * Fixtures are the synthetic full-field backups plus every `.tachibk` and `.proto.gz` in
- * `src/test/resources/backups/` (real exports from Komikku and other apps). Each runs
+ * Fixtures are the synthetic full-field backups ([FullFieldBackup], checked to set every field of
+ * the format by `SyntheticBackupCoverageTest`) plus every `.tachibk` and `.proto.gz` in
+ * `src/test/resources/backups/` (real exports from Komikku and other apps): a backup from another
+ * Android version is tested by dropping it into that folder. Each runs
  * `zoukan backup check` in its own JVM, because the desktop runtime starts once per process. The
  * Markdown reports go to `build/reports/backup/`.
  */
@@ -27,7 +30,7 @@ class BackupRoundTripTest {
         val synthetic = listOf(false, true).map { legacy ->
             DynamicTest.dynamicTest(if (legacy) "synthetic, legacy fields" else "synthetic, every field") {
                 val file = File(temp, if (legacy) "synthetic-legacy.tachibk" else "synthetic.tachibk")
-                file.sink().use { BackupCodec.write(SyntheticBackup.create(legacy), it) }
+                file.sink().use { BackupCodec.write(FullFieldBackup.create(legacy), it) }
                 check(file)
             }
         }
@@ -46,16 +49,17 @@ class BackupRoundTripTest {
         // Forward slashes, because a quoted argument file value treats backslashes as escapes.
         val classPath = System.getProperty("java.class.path").replace('\\', '/')
         val argFile = File(temp, "classpath.args").apply { writeText("-cp \"$classPath\"\n") }
+        // The test home and data folder, so the app does not fall back to the real ones
         val process = ProcessBuilder(
-            java,
-            "-Djava.awt.headless=true",
-            "@${argFile.absolutePath}",
-            "zoukan.desktop.MainKt",
-            "backup",
-            "check",
-            file.absolutePath,
-            "--report",
-            report.absolutePath,
+            listOf(java, "-Djava.awt.headless=true") + TestHome.childJvmArguments() + listOf(
+                "@${argFile.absolutePath}",
+                "zoukan.desktop.MainKt",
+                "backup",
+                "check",
+                file.absolutePath,
+                "--report",
+                report.absolutePath,
+            ),
         )
             .redirectErrorStream(true)
             .redirectOutput(File(temp, "${file.name}.log"))

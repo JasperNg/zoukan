@@ -25,6 +25,14 @@ class CookieVisitEndTest {
         called.countDown()
     }
 
+    /**
+     * Returns once every task the single-thread [scheduler] has due within [millis] has run: a
+     * task scheduled after them on the same thread runs only after them.
+     */
+    private fun afterTasksDueWithin(millis: Long) {
+        scheduler.schedule({}, millis, TimeUnit.MILLISECONDS).get(5, TimeUnit.SECONDS)
+    }
+
     @AfterEach
     fun tearDown() {
         scheduler.shutdownNow()
@@ -63,7 +71,7 @@ class CookieVisitEndTest {
     fun `a visit with no cookies ends after the quiet time`() {
         CookieVisitEnd(onDone, scheduler, quietMillis = 20, maxMillis = 10_000)
         called.await(5, TimeUnit.SECONDS) shouldBe true
-        Thread.sleep(50)
+        afterTasksDueWithin(50)
         calls.get() shouldBe 1
     }
 
@@ -71,7 +79,8 @@ class CookieVisitEndTest {
     fun `a visit under way is not ended by the quiet time, only by the limit`() {
         val end = CookieVisitEnd(onDone, scheduler, quietMillis = 20, maxMillis = 300)
         end.visited(0, 3)
-        Thread.sleep(100)
+        // Past the quiet time: its timer has run and found the visit under way
+        afterTasksDueWithin(100)
         calls.get() shouldBe 0
         called.await(5, TimeUnit.SECONDS) shouldBe true
         end.visited(1, 3)

@@ -19,6 +19,7 @@ import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.testing.Await
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -132,10 +133,8 @@ object LocalFixtures {
         val updater = Injekt.get<LibraryUpdater>()
         check(updater.start()) { "The library update did not start (another update, a sync or a restore is running)" }
         // A failed run logs and never sets lastResult, so the wait is bounded
-        val deadline = System.currentTimeMillis() + 60_000
-        while (updater.progress.value != null || updater.lastResult.value == null) {
-            check(System.currentTimeMillis() < deadline) { "The library update gave no result within 60s; see the log" }
-            Thread.sleep(200)
+        Await.until("the library update's result; see the log", 60_000) {
+            updater.progress.value == null && updater.lastResult.value != null
         }
         updater.lastResult.value!!.failures.shouldBeEmpty()
         return added

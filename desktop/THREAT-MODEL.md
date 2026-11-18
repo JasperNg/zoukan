@@ -39,6 +39,29 @@ Local:
 - The OS secret store: Windows Credential Manager / macOS Keychain, holding the keys everything
   else is encrypted under.
 
+### Checked by
+
+The test classes that check each boundary's controls, and what no test checks yet. A row's
+first cell is the boundary's name as the list above gives it (before the colon, without the
+part in brackets). `ThreatModelCoverageTest` checks that every boundary has a row and that every
+class named here exists and has tests; it does not check what the tests assert, so keep the
+classes to ones that test the boundary.
+
+| Boundary | Checked by | Gap |
+|---|---|---|
+| Manga sites and CDNs | `zoukan.desktop.compat.ImageDecoderTest`, `zoukan.desktop.compat.BitmapFactoryCompatTest`, `zoukan.desktop.network.CloudflareInterceptorTest`, `zoukan.desktop.download.ChapterDownloaderTest` | Only the app's own handling is tested (oversized and broken images, large error bodies, HTML served as a page). Extension code parses pages in-process and nothing contains it (Extensions, residual risk 1) |
+| Extension stores | `zoukan.desktop.extension.ExtensionStoreSafetyTest`, `zoukan.extension.ExtensionVerificationTest`, `zoukan.extension.DesktopExtensionManagerTest`, `zoukan.extension.ExtensionNsfwAndStoreTest` | The index's self-declared signing key is trusted over TLS alone (an accepted risk) |
+| GitHub releases | `zoukan.desktop.update.ReleaseSignatureTest`, `zoukan.desktop.update.UpdatesDownloadTest`, `zoukan.desktop.update.InstallerSignatureTest`, `zoukan.desktop.update.UpdateCheckerTest` | |
+| jcefmaven mirrors | `zoukan.desktop.browser.ChromiumNativesTest` | The pin's presence is tested, not its use: no test feeds a natives package whose SHA-256 does not match and checks that it is refused |
+| OAuth trackers | `zoukan.desktop.track.TrackerLoginTest`, `zoukan.desktop.app.ExternalLinksTest` | The redirect is not bound to the page that sent it (Web and embedded Chromium, residual risk 1) |
+| The DNS over HTTPS provider | `zoukan.desktop.network.AppDnsResolverTest`, `zoukan.desktop.network.DohClientsTest`, `zoukan.desktop.network.DnsLeakSourceScanTest`, `zoukan.extension.ExtensionHttpRewriteTest` | |
+| The proxy set in the OS, when there is one | `zoukan.desktop.network.SystemProxySourceScanTest`, `zoukan.desktop.network.DohProxyTest`, `zoukan.desktop.network.PacProxyTest` | |
+| Block lists the user adds by address | `zoukan.desktop.browser.blocking.UserBlockListsTest`, `zoukan.desktop.browser.blocking.ContentBlockingTest`, `zoukan.desktop.browser.blocking.BlockListUpdaterTest` | |
+| Extension packages | `zoukan.extension.ExtensionVerificationTest`, `zoukan.extension.DesktopExtensionLoaderTest`, `zoukan.extension.PreferenceConvertedJarHashesTest`, `zoukan.extension.ApkConverterTest` | The trust grants are tested only for being left out of backups (`ExtensionTrustTest`); what an extension does once it runs is not contained (an accepted risk) |
+| Files the user opens | `zoukan.desktop.local.ArchivesTest`, `zoukan.desktop.local.LocalSourcePathTest`, `zoukan.desktop.local.EpubExternalEntityTest`, `zoukan.desktop.property.ComicInfoEntityTest`, `zoukan.desktop.backup.BackupCodecTest` | |
+| Same-user processes | `zoukan.desktop.DataFolderPrivacyTest`, `zoukan.desktop.secrets.EncryptedFileSystemTest`, `zoukan.desktop.backup.BackupPermissionsTest`, `zoukan.desktop.app.SingleInstanceTest` | No test checks that the installer is verified again just before it runs, so a file another program swaps after the download and before the install is not known to be caught |
+| The OS secret store | `zoukan.desktop.db.DesktopDatabaseKeyTest`, `zoukan.desktop.secrets.FileCipherTest`, `zoukan.desktop.download.DownloadSafetyTest`, `zoukan.desktop.secrets.SecretStoreFailureTest`, `zoukan.desktop.secrets.FileSecretStoreContractTest`, `zoukan.desktop.secrets.MacKeychainStoreContractTest`, `zoukan.desktop.secrets.WindowsCredentialStoreContractTest` | The Keychain contract test is opt-in (`ZOUKAN_KEYCHAIN_TESTS=true`, set on CI's macOS runner), and the Credential Manager one skips in a logon with no Credential Manager (SSH) |
+
 ## Extensions
 
 An extension is third-party Java code. Everything before it runs is verified; what it does once it

@@ -5,6 +5,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -34,16 +35,20 @@ class SourceTimeoutTest {
     @Test
     fun `cancelling the caller still cancels the request`() {
         var caught: Throwable? = null
+        val requesting = CompletableDeferred<Unit>()
         runBlocking {
             val job = launch {
                 try {
-                    withSourceTimeout(10_000) { delay(10_000) }
+                    withSourceTimeout(10_000) {
+                        requesting.complete(Unit)
+                        delay(10_000)
+                    }
                 } catch (e: Throwable) {
                     caught = e
                     throw e
                 }
             }
-            delay(50)
+            requesting.await()
             job.cancel()
             job.join()
             job.isCancelled shouldBe true

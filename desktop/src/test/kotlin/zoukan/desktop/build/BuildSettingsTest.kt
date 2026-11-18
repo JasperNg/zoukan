@@ -46,7 +46,10 @@ class BuildSettingsTest {
 
         val upstreamModules = upstream.flatMap(::modules).toSet()
         val upstreamGroups = setOf("com.squareup.okhttp3", "app.cash.sqldelight", "org.jetbrains.kotlinx")
+        // In an upstream group, but in no upstream catalog: the build's own coverage plugin
+        val ownInUpstreamGroup = setOf("org.jetbrains.kotlinx:kover-gradle-plugin")
         val pinned = Regex("""(?m)^([\w-]+)\s*=\s*"([\w.-]+):([\w.-]+):[^"]+"""").findAll(zoukan)
+            .filter { m -> "${m.groupValues[2]}:${m.groupValues[3]}" !in ownInUpstreamGroup }
             .filter { m -> m.groupValues[2] in upstreamGroups || "${m.groupValues[2]}:${m.groupValues[3]}" in upstreamModules }
             .map { it.groupValues[1] }.toList()
         withClue("Zoukan catalog entries that pin a version an upstream catalog owns") { pinned.shouldBeEmpty() }
@@ -65,6 +68,27 @@ class BuildSettingsTest {
         withClue("configure-on-demand is on") {
             text("gradle.properties") shouldNotContain "org.gradle.configureondemand=true"
         }
+    }
+
+    @Test
+    fun `a run narrowed with --tests in either form writes no long-check record`() {
+        val build = text("desktop/build.gradle.kts")
+        // Gradle takes a task's filter as `--tests Foo` and as `--tests=Foo`
+        withClue("narrowsTests must see both forms of the filter") {
+            build shouldContain """fun narrowsTests(args: List<String>): Boolean = args.any { it == "--tests" || it.startsWith("--tests=") }"""
+            build shouldContain "val testsNarrowedOnCommandLine = gradle.startParameter.taskRequests.any { narrowsTests(it.args) }"
+        }
+        withClue("a check of the command line that does not go through narrowsTests") {
+            Regex("""taskRequests\.any \{(?! narrowsTests\(it\.args\) \})""").findAll(build).map { it.value }.toList().shouldBeEmpty()
+            build shouldNotContain "\"--tests\" in"
+        }
+        // Every check that vouches for a whole run asks whether the run was narrowed
+        val wiring = build.substringAfter("val wiringTest by tasks.registering", "").substringBefore("\n}")
+        withClue("wiringTest's check of its classes") { wiring shouldContain "val narrowedOnCommandLine = testsNarrowedOnCommandLine" }
+        for (record in listOf("\njourneyTest.configure {\n", "\nbuttonCrawlTest.configure {\n")) {
+            withClue(record.trim()) { build.substringAfter(record, "").substringBefore("\n}") shouldContain "!testsNarrowedOnCommandLine" }
+        }
+        withClue("extensionWiringTest's records") { build shouldContain "val wiringWhole = !testsNarrowedOnCommandLine" }
     }
 
     @Test

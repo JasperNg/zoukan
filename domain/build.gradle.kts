@@ -1,6 +1,8 @@
 plugins {
     // ZOUKAN -->
     id("mihon.library.kmp")
+    id("zoukan.kover")
+    id("zoukan.test-home")
     // ZOUKAN <--
     kotlin("plugin.serialization")
 }

@@ -1,5 +1,6 @@
 package zoukan.desktop.track
 
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
@@ -11,12 +12,17 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.testing.Await
 import java.util.concurrent.Executors
 
 /** A tracker's search results only ever fill that tracker's list (ui.md #8). */
@@ -63,12 +69,15 @@ class TrackingSearchTest {
         main.close()
     }
 
-    private fun waitUntil(condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + 5_000
-        while (!condition()) {
-            check(System.currentTimeMillis() < end) { "Timed out; state ${model.state.value}" }
-            Thread.sleep(10)
-        }
+    private fun waitUntil(condition: () -> Boolean) =
+        Await.until("the tracking search", 5_000, { model.state.value }, condition)
+
+    /**
+     * Waits until every coroutine the model started has ended, so a late result has either been
+     * stored or dropped by the time the test looks at the state.
+     */
+    private fun awaitModelIdle() = runBlocking {
+        withTimeout(5_000) { model.screenModelScope.coroutineContext.job.children.toList().joinAll() }
     }
 
     @Test
@@ -78,7 +87,7 @@ class TrackingSearchTest {
         waitUntil { model.state.value.results?.isNotEmpty() == true }
         // A answers late: it must not replace B's results
         slowA.complete(listOf(result("from A")))
-        Thread.sleep(200)
+        awaitModelIdle()
         model.state.value.searching shouldBe trackerB
         model.state.value.results?.map { it.title } shouldBe listOf("from B")
         model.state.value.loading shouldBe false
@@ -89,7 +98,7 @@ class TrackingSearchTest {
         model.startSearch(trackerA)
         model.closeSearch()
         slowA.complete(listOf(result("from A")))
-        Thread.sleep(200)
+        awaitModelIdle()
         model.state.value.results shouldBe null
         model.state.value.loading shouldBe false
     }

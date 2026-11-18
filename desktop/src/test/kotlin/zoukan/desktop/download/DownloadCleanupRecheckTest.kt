@@ -5,13 +5,13 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
+import zoukan.desktop.testing.Await
 import java.io.File
 
 /**
@@ -104,12 +104,20 @@ class DownloadCleanupRecheckTest {
         val lock = kit.manager.entryLock(2)
         lock.lock()
         val applying = async(Dispatchers.IO) { kit.manager.applyCleanup(plan) }
-        delay(500)
+        // The owners' locks are taken in id order: holding entry 1's, the clean-up is at entry 2's
+        Await.untilSuspending("the clean-up to take entry 1's lock") { kit.manager.entryLock(1).isLocked }
+        // A Mutex does not show who waits for it, so only a pause can show that nothing is deleted
+        Await.within(NOTHING_HAPPENS_MILLIS) { applying.isCompleted || !file.exists() }
         applying.isCompleted shouldBe false
         file.exists() shouldBe true
         lock.unlock()
 
         applying.await() shouldBe 2 // the chapter, then the emptied folder
         file.exists() shouldBe false
+    }
+
+    private companion object {
+        /** How long the test watches for a deletion that must not happen. */
+        const val NOTHING_HAPPENS_MILLIS = 200L
     }
 }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
@@ -29,6 +30,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.ChaptersByEntry
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.storage.StorageUnavailableException
+import zoukan.desktop.testing.Await
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -106,10 +108,13 @@ class MangaScreenModelDeleteFailureTest {
         ).also { models += it }
     }
 
+    /**
+     * Waits for [condition], then for the UI thread to run what was queued on it before: a failure
+     * of that work reaches the default handler on that thread, so it has arrived when this returns.
+     */
     private fun waitUntil(condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + 5_000
-        while (!condition() && System.currentTimeMillis() < end) Thread.sleep(10)
-        Thread.sleep(100)
+        Await.until("the screen model", 5_000, condition = condition)
+        runBlocking(main) {}
     }
 
     private val failed get() = localized(DMR.strings.screen_action_failed_delete_downloads)

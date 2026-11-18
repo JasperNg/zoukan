@@ -78,6 +78,7 @@ import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
+import zoukan.desktop.testing.Await
 import zoukan.desktop.tray.Notifications
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderKeys
@@ -1236,13 +1237,7 @@ class ButtonCrawlTest {
     }
 
     /** waitForIdle, and two short pauses for screen models that load on their own dispatchers. */
-    private fun ComposeUiTest.settleQuickly() {
-        waitForIdle()
-        repeat(2) {
-            Thread.sleep(100)
-            waitForIdle()
-        }
-    }
+    private fun ComposeUiTest.settleQuickly() = settle(rounds = 2, pauseMillis = 100)
 
     // Effects
 
@@ -1474,10 +1469,8 @@ class ButtonCrawlTest {
     /** A click may start a library update, a backup or a restore; the next click waits for it to end. */
     private fun waitForLibraryUpdate() {
         val updater = Injekt.get<LibraryUpdater>()
-        val deadline = System.currentTimeMillis() + 30_000
-        while ((updater.isRunning || zoukan.desktop.ui.settings.backupStatusFlow.value != null) && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100)
-        }
+        // After 30 s the crawl goes on, as before
+        Await.within(30_000) { !updater.isRunning && zoukan.desktop.ui.settings.backupStatusFlow.value == null }
     }
 
     // Report and baseline

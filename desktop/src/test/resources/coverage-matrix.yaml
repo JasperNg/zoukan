@@ -14,7 +14,7 @@
   feature: "Main window, navigation rail with 5 tabs"
   tier: smoke
   smoke: true
-  tests: [ui.ScreenSmokeTest, ui.HomeTabSelectionTest]
+  tests: [ui.ScreenSmokeTest, ui.HomeTabSelectionTest, ui.AppShellTest]
 
 - key: state:shell
   feature: "Window content: theme, snackbar messages, mouse Back button"
@@ -731,7 +731,7 @@
   feature: "Paged viewer (zoom, double pages)"
   tier: journey
   smoke: false
-  tests: [e2e.BrowseAndReadJourneyTest, e2e.AvifJourneyTest, e2e.DescramblingJourneyTest, e2e.DownloadJourneyTest, ui.reader.ReaderSpreadsTest, e2e.ReaderSettingsJourneyTest]
+  tests: [e2e.BrowseAndReadJourneyTest, e2e.AvifJourneyTest, e2e.DescramblingJourneyTest, e2e.DownloadJourneyTest, ui.reader.ReaderSpreadsTest, ui.reader.PagedViewerTest, e2e.ReaderSettingsJourneyTest]
 
 - key: flow:reader.webtoon
   feature: "Webtoon viewer"

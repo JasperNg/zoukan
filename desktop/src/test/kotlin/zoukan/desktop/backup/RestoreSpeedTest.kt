@@ -4,6 +4,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.db.DesktopSqliteDriver
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -37,7 +38,7 @@ class RestoreSpeedTest {
         val jfr = System.getProperty("zoukan.restoreBench.jfr")?.let { listOf("-XX:StartFlightRecording=filename=$it,settings=profile") }.orEmpty()
         val log = File(temp, "bench.log")
         val process = ProcessBuilder(
-            listOf(java, "-Djava.awt.headless=true", "-Xmx1g") + jfr +
+            listOf(java, "-Djava.awt.headless=true", "-Xmx1g") + TestHome.childJvmArguments() + jfr +
                 listOf("@${argFile.absolutePath}", "zoukan.desktop.backup.RestoreBenchmark", work.absolutePath, "$entries", "$chapters"),
         )
             .redirectErrorStream(true)
@@ -46,7 +47,7 @@ class RestoreSpeedTest {
         val finished = process.waitFor(10, TimeUnit.MINUTES)
         if (!finished) {
             // Where it is stuck, for the log
-            ProcessBuilder(File(System.getProperty("java.home"), "bin/jcmd").path, "${process.pid()}", "Thread.print")
+            ProcessBuilder(listOf(File(System.getProperty("java.home"), "bin/jcmd").path) + TestHome.jdkToolArguments() + listOf("${process.pid()}", "Thread.print"))
                 .redirectErrorStream(true)
                 .redirectOutput(File(work, "threads.txt"))
                 .start()

@@ -6,6 +6,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -51,9 +52,11 @@ class SingleInstanceTest {
         acquireAndForget(root)
         try {
             val dropped = java.lang.ref.WeakReference(Any())
-            repeat(20) {
+            // Not a wait for a state: a lock freed by a cleaner would be freed at no known time, so
+            // the collector runs several times, with time between for cleaners to run
+            repeat(GC_ROUNDS) {
                 System.gc()
-                Thread.sleep(50)
+                Thread.sleep(CLEANER_PAUSE_MILLIS)
             }
             dropped.get() shouldBe null
             SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.AlreadyRunning>()
@@ -114,7 +117,7 @@ class SingleInstanceTest {
         val argFile = File(scratch, "args").apply {
             writeText("-cp \"${System.getProperty("java.class.path").replace("\\", "\\\\")}\"\n")
         }
-        val process = ProcessBuilder(java, "@${argFile.path}", SingleInstanceLockHolder::class.java.name, root.path)
+        val process = ProcessBuilder(listOf(java) + TestHome.childJvmArguments() + listOf("@${argFile.path}", SingleInstanceLockHolder::class.java.name, root.path))
             .redirectErrorStream(true)
             .start()
         try {
@@ -151,5 +154,10 @@ class SingleInstanceTest {
     /** As runZoukanApp does: only checks that it got the lock and keeps no reference. */
     private fun acquireAndForget(root: File) {
         SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.Acquired>()
+    }
+
+    private companion object {
+        const val GC_ROUNDS = 20
+        const val CLEANER_PAUSE_MILLIS = 50L
     }
 }

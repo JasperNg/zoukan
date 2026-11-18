@@ -12,9 +12,12 @@ class ZoukanDirsTest {
         "LOCALAPPDATA" to "C:\\Users\\someone\\AppData\\Local",
     )
 
+    /** The value the build set for every test, put back after each one. */
+    private val previousDataDir: String? = System.getProperty("zoukan.dataDir")
+
     @AfterEach
     fun tearDown() {
-        System.clearProperty("zoukan.dataDir")
+        previousDataDir?.let { System.setProperty("zoukan.dataDir", it) } ?: System.clearProperty("zoukan.dataDir")
     }
 
     @Test

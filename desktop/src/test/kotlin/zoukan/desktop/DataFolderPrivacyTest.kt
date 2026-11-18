@@ -7,6 +7,8 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.FileSystemSandbox
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -149,14 +151,7 @@ class DataFolderPrivacyTest {
     private fun permissions(dir: File): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(dir.toPath()))
 
     /** Runs [block] with the data folder override set to [dir]. */
-    private fun <T> withOverride(dir: File, block: () -> T): T {
-        System.setProperty("zoukan.dataDir", dir.path)
-        return try {
-            block()
-        } finally {
-            System.clearProperty("zoukan.dataDir")
-        }
-    }
+    private fun <T> withOverride(dir: File, block: () -> T): T = TestHome.withSystemProperty("zoukan.dataDir", dir.path, block)
 
     @Test
     fun `protect makes the default data folder private to the user`() {
@@ -349,6 +344,36 @@ class DataFolderPrivacyTest {
     fun `protect never throws on a data folder that is a file`() {
         val file = File(temp, "not-a-folder").apply { writeText("") }
         DataFolderPrivacy.protect(ZoukanDirs(file, hidesFromSpotlight = true), notes::add)
+    }
+
+    @Test
+    fun `protect changes nothing outside the data folder, with every kind of neighbour around it`() {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            // A disposable folder that is a link to the user's own folder, as a user might make one
+            sandbox.link(File(sandbox.dataFolder, "logs.noindex"), sandbox.userFolder)
+            sandbox.record()
+
+            DataFolderPrivacy.protect(ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = true, isDefaultRoot = true), notes::add)
+            DataFolderPrivacy.protect(ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false, isDefaultRoot = true), notes::add)
+
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `protect on a data folder that is a link changes neither the target's permissions nor what is in it`() {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val link = sandbox.link(File(sandbox.home, "app-data/Linked"), sandbox.userFolder)
+            assumeTrue(link != null, "symbolic links cannot be made here")
+            sandbox.addAppFolder(link!!)
+            sandbox.record()
+
+            DataFolderPrivacy.protect(ZoukanDirs(link, hidesFromSpotlight = true, isDefaultRoot = true), notes::add)
+
+            // The linked folder is the data folder, so the app's own folders may be made in it; nothing
+            // that was there changes, and the folder keeps its permissions (the link is not followed)
+            sandbox.changesOutsideApp().filterNot { it.startsWith("created folder Documents/Chosen/") }.shouldBeEmpty()
+        }
     }
 
     private companion object {

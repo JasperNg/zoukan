@@ -8,12 +8,13 @@ import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import okio.FileNotFoundException
 import okio.FileSystem
-import okio.ForwardingFileSystem
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.fakes.FaultyFileSystem
+import zoukan.desktop.testing.fakes.FaultyFileSystem.Op
 import zoukan.desktop.ui.common.Images
 import java.io.File
 
@@ -241,13 +242,7 @@ class EncryptedFileSystemTest {
 
     @Test
     fun `a move held up for a moment (a virus scanner on Windows) is tried again`() {
-        var failures = 2
-        val flaky = object : ForwardingFileSystem(FileSystem.SYSTEM) {
-            override fun atomicMove(source: Path, target: Path) {
-                if (failures-- > 0) throw okio.IOException("The file is being used by another process")
-                super.atomicMove(source, target)
-            }
-        }
+        val flaky = FaultyFileSystem().failOn(Op.MOVE, times = 2) { okio.IOException("The file is being used by another process") }
         val fs = EncryptedFileSystem(flaky, cipher)
         val file = File(dir, "file").toOkioPath()
         fs.write(file) { writeUtf8("hello") }
@@ -260,11 +255,45 @@ class EncryptedFileSystemTest {
         val fs = EncryptedFileSystem(FileSystem.SYSTEM, cipher)
         val file = File(dir, "file").toOkioPath()
         fs.write(file) { writeUtf8("hello") }
-        val locked = object : ForwardingFileSystem(FileSystem.SYSTEM) {
-            override fun atomicMove(source: Path, target: Path) = throw okio.IOException("locked")
-        }
+        val locked = FaultyFileSystem().failOn(Op.MOVE, times = Int.MAX_VALUE) { okio.IOException("locked") }
         assertThrows<okio.IOException> { EncryptedFileSystem(locked, cipher).write(file) { writeUtf8("other") } }
         fs.read(file) { readUtf8() } shouldBe "hello"
         dir.list()!!.toList() shouldBe listOf("file")
+    }
+
+    @Test
+    fun `a disk that fills during a write fails it, leaves the file as it was and no temporary file, and the next write works`() {
+        val disk = FaultyFileSystem()
+        val fs = EncryptedFileSystem(disk, cipher)
+        val file = File(dir, "file").toOkioPath()
+        fs.write(file) { writeUtf8("hello") }
+
+        disk.full(freeBytes = 3)
+        val error = assertThrows<okio.IOException> { fs.write(file) { writeUtf8("a longer text than fits") } }
+        error.message shouldBe FaultyFileSystem.DISK_FULL
+        fs.read(file) { readUtf8() } shouldBe "hello"
+        dir.list()!!.toList() shouldBe listOf("file")
+
+        disk.heal()
+        fs.write(file) { writeUtf8("a longer text than fits") }
+        fs.read(file) { readUtf8() } shouldBe "a longer text than fits"
+        dir.list()!!.toList() shouldBe listOf("file")
+    }
+
+    @Test
+    fun `a read-only disk fails an append and keeps the frames already there`() {
+        val disk = FaultyFileSystem()
+        val fs = EncryptedFileSystem(disk, cipher)
+        val journal = File(dir, "journal").toOkioPath()
+        fs.append(journal, "CLEAN a 1 2\n")
+        val before = File(dir, "journal").readBytes()
+
+        disk.readOnly()
+        assertThrows<okio.IOException> { fs.append(journal, "CLEAN b 1 2\n") }
+        File(dir, "journal").readBytes() shouldBe before
+
+        disk.heal()
+        fs.append(journal, "CLEAN b 1 2\n")
+        fs.read(journal) { readUtf8() } shouldBe "CLEAN a 1 2\nCLEAN b 1 2\n"
     }
 }

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
+import zoukan.desktop.testing.Await
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -76,7 +77,7 @@ class DesktopSqliteDriverTest {
         handler.await(inTransaction = true) { categoriesQueries.insert("Before", 1, 0, 0L) }
         val wal = File(temp, "zoukan.db-wal")
         wal.exists() shouldBe true
-        delay(1_000)
+        Await.untilSuspending("the idle connection to close", 1_000) { !wal.exists() }
         // Closing the last connection moves the WAL into the file and deletes it, as before
         wal.exists() shouldBe false
         handler.awaitList { categoriesQueries.getCategories() }.any { it.name == "Before" } shouldBe true

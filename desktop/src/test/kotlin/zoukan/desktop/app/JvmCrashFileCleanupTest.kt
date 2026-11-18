@@ -7,6 +7,7 @@ import io.kotest.matchers.string.shouldStartWith
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
 
 /**
@@ -252,6 +253,33 @@ class JvmCrashFileCleanupTest {
 
         // A missing file does not throw
         CrashReporter.deleteJvmCrashOriginal(File(tmp, "hs_err_pid${PID + 4}.log"), folders)
+    }
+
+    @Test
+    fun `only Zoukan's crash file goes, another program's and the target of a link stay`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder)
+            val temp = sandbox.otherProgramFolder
+            deadRun(dirs, PID)
+            jvmCrashFile(temp, PID)
+            // A link named like a dead run's crash file, to a Zoukan crash file outside the temp folder
+            val linkPid = PID + 70
+            deadRun(dirs, linkPid)
+            val linkedTo = jvmCrashFile(sandbox.userFolder, linkPid)
+            sandbox.link(File(temp, "hs_err_pid$linkPid.log"), linkedTo)
+            // Another program's crash file with a dead run's pid
+            deadRun(dirs, FileSystemSandbox.OTHER_PID)
+            sandbox.record()
+
+            CrashReporter.checkPreviousRun(dirs, listOf(temp))
+
+            // Outside the data folder only Zoukan's own crash file in the temp folder went (and
+            // perhaps the link itself, never what it points to)
+            sandbox.changesOutsideApp().filterNot { it == "deleted link tmp/hs_err_pid$linkPid.log" } shouldBe
+                listOf("deleted file tmp/hs_err_pid$PID.log")
+            linkedTo.readText() shouldContain "ghp_SECRETENV7"
+            sandbox.otherProgramCrashFile.readText() shouldContain "org.example.OtherApp"
+        }
     }
 
     private companion object {

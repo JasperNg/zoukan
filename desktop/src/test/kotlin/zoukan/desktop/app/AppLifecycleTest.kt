@@ -9,6 +9,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.data.DatabaseHandler
@@ -52,13 +58,28 @@ class AppLifecycleTest {
         preferences.setSyncTriggerOptions(triggers)
     }
 
+    /** The coroutines on AppScope (where SyncManager.syncOn starts a sync) that this test has seen already. */
+    private val seen = AppScope.coroutineContext.job.children.toMutableSet()
+
+    /**
+     * Waits until every coroutine started on AppScope since the last check has ended. syncOn
+     * decides and launches before it returns, so a sync that should not start has by then either
+     * read the database or not started at all.
+     */
+    private fun awaitStartedSyncs() {
+        val started = AppScope.coroutineContext.job.children.filter { it !in seen }.toList()
+        seen += started
+        runBlocking { withTimeout(10_000) { started.joinAll() } }
+    }
+
     private fun syncsStarted(count: Int) {
         if (count == 0) {
-            // A sync runs in the background: give one that should not start the time to show up
-            Thread.sleep(500)
+            awaitStartedSyncs()
             coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
         } else {
             coVerify(timeout = 10_000, exactly = count) { handler.await<Any>(any(), any()) }
+            // A sync that is still running is not waited for by a later check
+            seen += AppScope.coroutineContext.job.children
         }
     }
 
@@ -127,11 +148,11 @@ class AppLifecycleTest {
         lifecycle.onHiddenChanged(true)
         lifecycle.onHiddenChanged(false)
         lifecycle.onStart()
-        Thread.sleep(500)
+        // The start and the resume each launched a sync that found the first one running
+        awaitStartedSyncs()
         syncsStarted(1)
         release.complete(Unit)
-        val deadline = System.currentTimeMillis() + 10_000
-        while (sync.running.value && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        runBlocking { withTimeoutOrNull(10_000) { sync.running.first { !it } } }
         sync.running.value shouldBe false
         syncsStarted(1)
     }

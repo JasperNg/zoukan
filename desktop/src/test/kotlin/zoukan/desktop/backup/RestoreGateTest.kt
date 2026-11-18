@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
+import zoukan.desktop.testing.Await
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Restores run alone, and the work that reads the library never overlaps one. */
@@ -57,7 +58,10 @@ class RestoreGateTest {
         }
         withTimeout(10_000) { inside.await() }
         val restore = launch(Dispatchers.Default) { RestoreGate.whileRestoring { restored.complete(Unit) } }
-        delay(200)
+        // The restore has taken every permit but the worker's and waits for that one
+        Await.untilSuspending("the restore to wait for the work under way") {
+            RestoreGate.restores.isLocked && RestoreGate.readers.availablePermits == 0
+        }
         // Asked for, so no new work starts, but it waits for the work under way
         RestoreGate.isRestoring shouldBe true
         restored.isCompleted shouldBe false

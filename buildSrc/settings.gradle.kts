@@ -12,6 +12,11 @@ dependencyResolutionManagement {
         create("kotlinx") {
             from(files("../gradle/kotlinx.versions.toml"))
         }
+        // ZOUKAN -->
+        create("zoukanlibs") {
+            from(files("../gradle/zoukan.versions.toml"))
+        }
+        // ZOUKAN <--
     }
 }
 

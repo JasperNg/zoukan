@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -191,15 +192,18 @@ class DownloadQueueStatesTest {
         val manager = manager()
         val chapter = chapter(1, 12)
         manager.enqueue(manga, listOf(chapter))
-        withTimeout(10_000) { manager.queue.value.single().state.first { it == Download.State.DOWNLOADING } }
-        delay(250)
+        val download = manager.queue.value.single()
+        withTimeout(10_000) { download.state.first { it == Download.State.DOWNLOADING } }
+        // Paused part way through the chapter
+        withTimeout(10_000) { download.progress.first { it.first >= 2 } }
 
         manager.pause()
         manager.running.value shouldBe false
         manager.start()
         manager.running.value shouldBe true
-        // The paused run ending must not mark the new one as stopped
-        delay(500)
+        // The paused run ending must not mark the new one as stopped. The new run starts on the
+        // chapter only after the paused run has ended
+        withTimeout(10_000) { download.state.first { it != Download.State.QUEUED } }
         manager.running.value shouldBe true
 
         withTimeout(30_000) { manager.awaitIdle() }
@@ -216,15 +220,13 @@ class DownloadQueueStatesTest {
             // Queue the next one around the moment the previous run finds nothing left
             delay(chapter.id % 4)
         }
-        withTimeout(60_000) {
-            while (manager.queue.value.isNotEmpty()) {
-                // A chapter left queued with nothing running is the stuck state this guards against
-                if (!manager.running.value) {
-                    delay(200)
-                    manager.queue.value.filter { it.state.value == Download.State.QUEUED }.shouldBeEmpty()
-                }
-                delay(20)
-            }
+        // A chapter left queued with nothing running is the stuck state this guards against: the
+        // queue would never empty
+        val drained = withTimeoutOrNull(60_000) { manager.queue.first { it.isEmpty() } }
+        if (drained == null) {
+            manager.running.value shouldBe false
+            manager.queue.value.filter { it.state.value == Download.State.QUEUED }.shouldBeEmpty()
+            error("The queue did not drain: ${manager.queue.value.map { it.state.value }}")
         }
         manager.downloadedIds(manga, chapters) shouldBe chapters.map { it.id }.toSet()
     }
@@ -285,12 +287,15 @@ class DownloadQueueStatesTest {
         val manager = manager()
         val chapter = chapter(1, 6)
         manager.enqueue(manga, listOf(chapter))
-        withTimeout(10_000) { manager.queue.value.single().state.first { it == Download.State.DOWNLOADING } }
-        delay(120)
+        val download = manager.queue.value.single()
+        withTimeout(10_000) { download.state.first { it == Download.State.DOWNLOADING } }
+        // Deleted part way through the chapter
+        withTimeout(10_000) { download.progress.first { it.first >= 2 } }
 
         manager.delete(manga, listOf(chapter))
         withTimeout(10_000) { manager.awaitIdle() }
-        delay(300)
+        // The clean-up of the cancelled chapter's files
+        withTimeout(10_000) { manager.awaitBackgroundWork() }
         manager.queue.value.shouldBeEmpty()
         manager.invalidateCache()
         manager.isDownloaded(manga, chapter) shouldBe false

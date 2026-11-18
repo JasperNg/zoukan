@@ -3,6 +3,7 @@ package zoukan.desktop
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
 import java.nio.file.AccessDeniedException
 import java.nio.file.AtomicMoveNotSupportedException
@@ -283,6 +284,44 @@ class CacheFoldersTest {
         CacheFolders.migrate(dirs, anotherVolume) shouldBe dirs
         File(roaming, "cache/browser/Default/Cookies").readText() shouldBe "chromium cookies"
         local.exists() shouldBe false
+    }
+
+    @Test
+    fun `moving the caches, by rename or by copy, changes nothing outside the data and local folders`() {
+        for (move in listOf<((Path, Path) -> Unit)?>(null, anotherVolume)) {
+            FileSystemSandbox.create(temp).use { sandbox ->
+                val data = sandbox.dataFolder
+                // As %LOCALAPPDATA%, which is there already; Zoukan-local in it is Zoukan's
+                val localRoot = File(sandbox.home, "app-local/Zoukan-local").apply { parentFile.mkdirs() }
+                sandbox.addAppFolder(localRoot)
+                data.write("cache/browser/Default/Cookies", "chromium cookies")
+                data.write("cache/images/journal", "journal")
+                // A link in a cache to the user's own folder: the copy must not follow it
+                sandbox.link(File(data, "cache/images/elsewhere"), sandbox.userFolder)
+                sandbox.record()
+                val dirs = ZoukanDirs(data, localRoot, hidesFromSpotlight = false)
+
+                if (move == null) CacheFolders.migrate(dirs) else CacheFolders.migrate(dirs, move)
+
+                sandbox.assertNothingOutsideAppChanged()
+            }
+        }
+    }
+
+    @Test
+    fun `deleting a cache folder with links out of it changes nothing outside it`() {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val cache = File(sandbox.dataFolder, "cache/images").apply { mkdirs() }
+            File(cache, "entry").writeText("x")
+            sandbox.link(File(cache, "to-user"), sandbox.userFolder)
+            sandbox.link(File(cache, "to-read-only"), sandbox.readOnlyFolder)
+            sandbox.record()
+
+            CacheFolders.deleteTree(cache.toPath())
+            CacheFolders.deleteTree(File(sandbox.dataFolder, "cache").toPath())
+
+            sandbox.assertNothingOutsideAppChanged()
+        }
     }
 
     @Test

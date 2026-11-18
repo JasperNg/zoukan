@@ -8,11 +8,17 @@
 //   ./gradlew :desktop:run --args="browser https://example.org"
 //   ./gradlew :desktop:packageMsi                       # Windows installer (Phase 7, see RELEASING.md)
 //   ./gradlew :desktop:packageDmg                       # macOS disk image (notarizeDmg to notarize)
+import java.security.MessageDigest
+import java.time.Instant
+import java.util.Properties
+
 plugins {
     id("zoukan.jvm")
     kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
     id("mihon.code.lint")
+    id("zoukan.kover")
+    id("zoukan.test-home")
     application
 }
 
@@ -301,6 +307,8 @@ dependencies {
     testImplementation(libs.junit.platform.launcher)
     // ContextStubsTest builds the emulated Context's files config in a temporary folder
     testImplementation(zoukanlibs.typesafe.config)
+    // Property-based tests (zoukan.desktop.property), run as ordinary JUnit tests
+    testImplementation(libs.kotest.property)
 }
 
 val jvmFlags = listOf(
@@ -337,6 +345,8 @@ tasks.named<JavaExec>("run") {
     }
 }
 
+// Each Test task gets its own home and data folder under build/test-home/<task> (zoukan.test-home)
+
 /** The test classes [wiringTest] must run; a rename needs this one list changed. */
 val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ScreenSmokeSmallWindowTest", "AppLinkageTest", "ZoukanRuntimeStartTest")
 
@@ -363,6 +373,10 @@ tasks.test {
     providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
     // RestoreSpeedTest's size, work folder and JFR file, for timing a larger restore by hand
     listOf("zoukan.restoreBench", "zoukan.restoreBench.dir", "zoukan.restoreBench.jfr").forEach { name ->
+        providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
+    }
+    // The property tests' seed and iteration count, to repeat a failure or run longer by hand
+    listOf("zoukan.property.seed", "zoukan.property.iterations").forEach { name ->
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
     }
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
@@ -396,6 +410,14 @@ tasks.test {
 // The wiring tests catch what compiles but crashes at run time: a lookup with no Injekt
 // registration, a screen or dialog that throws when it opens. They need no network, so `check`
 // (and so `build`) runs them on every change:
+/**
+ * Whether a task on the command line runs only some of its tests: Gradle takes the filter as
+ * `--tests Foo` and as `--tests=Foo`. A narrowed run must not vouch for the whole check (the long-check
+ * records, wiringTest's list of classes). BuildSettingsTest checks every such check uses this.
+ */
+fun narrowsTests(args: List<String>): Boolean = args.any { it == "--tests" || it.startsWith("--tests=") }
+val testsNarrowedOnCommandLine = gradle.startParameter.taskRequests.any { narrowsTests(it.args) }
+
 //   ./gradlew :desktop:wiringTest
 val wiringTest by tasks.registering(Test::class) {
     group = "verification"
@@ -408,7 +430,7 @@ val wiringTest by tasks.registering(Test::class) {
     }
     // A class renamed out of the patterns would otherwise drop out of the wiring tests silently,
     // unless the developer narrowed the run with --tests on purpose
-    val narrowedOnCommandLine = gradle.startParameter.taskRequests.any { "--tests" in it.args }
+    val narrowedOnCommandLine = testsNarrowedOnCommandLine
     val wiringResults = reports.junitXml.outputLocation
     // A local copy: the action must not reference the build script (configuration cache)
     val expected = expectedWiringClasses
@@ -703,6 +725,15 @@ val nightlyCheck by tasks.registering {
     }
 }
 
+/** The three long checks; verifyLongChecks accepts a longChecks record or a record of each of these. */
+val longCheckParts = listOf("journeyTest", "buttonCrawlTest", "extensionWiringTest")
+
+/** Where the long checks leave their records: build/long-checks/<check>.properties. */
+val longCheckRecordsDir: File = layout.buildDirectory.dir("long-checks").get().asFile
+
+/** The checkout the records name the commit of. */
+val repositoryRoot: File = rootProject.projectDir
+
 // The long checks GitHub CI leaves out: the journeys, the whole button crawl and the extension
 // wiring check. They must pass on Windows before each merge to master (desktop/RELEASING.md,
 // "Before merging to master"):
@@ -710,14 +741,238 @@ val nightlyCheck by tasks.registering {
 // One task after another (the journeys already run up to 4 JVMs side by side), and the crawl in one
 // unsharded run: button-inventory.txt is recorded the same way, so a shard split never changes a
 // signature.
+// When every part passed, it leaves the record build/long-checks/longChecks.properties (see
+// LongCheckRecords below), which verifyLongChecks reads before a push to master.
 val longChecks by tasks.registering {
     group = "verification"
     description = "Runs the journeys, the whole button crawl and the extension wiring check (before a merge to master)"
     dependsOn(nightlyCheck, buttonCrawlTest)
+    // Local copies: the action must not reference the build script (configuration cache)
+    val records = longCheckRecordsDir
+    val repo = repositoryRoot
+    val parts = longCheckParts
+    doLast {
+        LongCheckRecords.combine(records, repo, "longChecks", parts, parts.map { ":desktop:$it" }, logger)
+    }
 }
 buttonCrawlTest.configure { mustRunAfter(journeyTest) }
 extensionWiringStoreTests.forEach { it.configure { mustRunAfter(buttonCrawlTest) } }
 if (gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "longChecks" } && providers.gradleProperty("zoukan.shard").isPresent) {
     error("longChecks runs every journey and the whole button crawl: leave out -Pzoukan.shard")
+}
+
+/**
+ * A record of a long check that passed: which check, the commit (`git rev-parse HEAD`), whether
+ * the working tree had changes (`git status --porcelain`, ignored files left out), the date and
+ * the tasks run. A check writes its record only when it ran whole (no --tests, shard or other
+ * narrowing) and the commit and the working tree were the same when it started and when it
+ * passed; a check that starts deletes its old record, so a failed run leaves none. verifyLongChecks
+ * reads the records before a push to master.
+ */
+object LongCheckRecords {
+    class GitState(val commit: String, val status: String) {
+        val dirty: Boolean get() = status.isNotBlank()
+
+        /** A digest of the porcelain status, so two states can be compared without storing the file list. */
+        val tree: String get() = MessageDigest.getInstance("SHA-256")
+            .digest(status.toByteArray()).joinToString("") { "%02x".format(it) }
+    }
+
+    class Record(val file: File, val check: String, val commit: String, val dirty: Boolean, val tree: String, val date: String, val tasks: String)
+
+    private fun git(repo: File, vararg args: String): String? = try {
+        val process = ProcessBuilder(listOf("git", *args)).directory(repo)
+            .redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        process.outputStream.close()
+        val out = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() == 0) out else null
+    } catch (e: java.io.IOException) {
+        null
+    }
+
+    fun gitState(repo: File): GitState {
+        val commit = git(repo, "rev-parse", "HEAD")?.trim()?.takeIf { Regex("[0-9a-f]{40,64}").matches(it) }
+            ?: throw GradleException("Could not read the commit: `git rev-parse HEAD` failed in $repo")
+        val status = git(repo, "status", "--porcelain", "--untracked-files=normal")
+            ?: throw GradleException("Could not read the working tree: `git status --porcelain` failed in $repo")
+        return GitState(commit, status)
+    }
+
+    /** Before a check runs: deletes its old record and notes the commit and the tree it starts on. */
+    fun start(dir: File, repo: File, check: String) {
+        dir.mkdirs()
+        File(dir, "$check.properties").delete()
+        val state = gitState(repo)
+        File(dir, "$check.start").writeText("${state.commit}\n${state.tree}\n")
+    }
+
+    /** After a check passed: writes its record, unless the commit or the tree changed while it ran. */
+    fun finish(dir: File, repo: File, check: String, tasks: List<String>, logger: Logger) {
+        val startFile = File(dir, "$check.start")
+        val started = startFile.takeIf { it.isFile }?.readLines().orEmpty()
+        startFile.delete()
+        val now = gitState(repo)
+        if (started.size < 2 || started[0] != now.commit || started[1] != now.tree) {
+            logger.warn("$check passed, but the commit or the working tree changed while it ran, so it left no record")
+            return
+        }
+        write(dir, check, tasks, now, logger)
+    }
+
+    /** Writes [check]'s record when every one of [parts] left a record on the current commit and tree. */
+    fun combine(dir: File, repo: File, check: String, parts: List<String>, tasks: List<String>, logger: Logger) {
+        val now = gitState(repo)
+        val missing = parts.filter { part ->
+            val record = read(File(dir, "$part.properties"))
+            record == null || record.commit != now.commit || record.tree != now.tree
+        }
+        if (missing.isNotEmpty()) {
+            logger.warn("$check: no record of ${missing.joinToString()} on this commit and tree (narrowed, or the tree changed), so it left no record")
+            return
+        }
+        write(dir, check, tasks, now, logger)
+    }
+
+    private fun write(dir: File, check: String, tasks: List<String>, state: GitState, logger: Logger) {
+        dir.mkdirs()
+        val file = File(dir, "$check.properties")
+        val props = Properties()
+        props["check"] = check
+        props["commit"] = state.commit
+        props["dirty"] = state.dirty.toString()
+        props["tree"] = state.tree
+        props["date"] = Instant.now().toString()
+        props["tasks"] = tasks.joinToString(",")
+        file.outputStream().use { props.store(it, "A long check that passed (verifyLongChecks reads this)") }
+        logger.lifecycle("$check passed on ${state.commit}${if (state.dirty) " with uncommitted changes" else ""}: recorded in $file")
+    }
+
+    fun read(file: File): Record? {
+        if (!file.isFile) return null
+        val props = Properties()
+        try {
+            file.inputStream().use { props.load(it) }
+        } catch (e: Exception) {
+            return null
+        }
+        val check = props.getProperty("check") ?: return null
+        val commit = props.getProperty("commit") ?: return null
+        return Record(
+            file,
+            check,
+            commit,
+            props.getProperty("dirty") != "false",
+            props.getProperty("tree").orEmpty(),
+            props.getProperty("date").orEmpty(),
+            props.getProperty("tasks").orEmpty(),
+        )
+    }
+
+    /** The records in each of [sources]: a record file, or a folder of them. */
+    fun collect(sources: List<File>): List<Record> = sources.flatMap { source ->
+        when {
+            source.isDirectory -> source.listFiles { f -> f.isFile && f.name.endsWith(".properties") }.orEmpty().sortedBy { it.name }.mapNotNull(::read)
+            else -> listOfNotNull(read(source))
+        }
+    }
+
+    /** Null when the records show the long checks passed on [state]; otherwise why not. */
+    fun verify(state: GitState, sources: List<File>, parts: List<String>): String? {
+        val records = collect(sources)
+        val valid = records.filter { it.commit == state.commit && !it.dirty }.map { it.check }.toSet()
+        if (!state.dirty && ("longChecks" in valid || valid.containsAll(parts))) return null
+        return buildString {
+            appendLine(
+                if (state.dirty) {
+                    "The working tree has uncommitted changes, so no record can vouch for it."
+                } else {
+                    "The long checks have no passing record for this commit."
+                },
+            )
+            appendLine("  HEAD: ${state.commit}${if (state.dirty) " (with uncommitted changes: commit or stash them, then run the checks again)" else ""}")
+            appendLine("  Looked in: ${sources.joinToString { it.path }}")
+            if (records.isEmpty()) appendLine("  Found no records.")
+            records.forEach { r ->
+                val why = when {
+                    r.commit != state.commit -> "another commit (${r.commit.take(12)})"
+                    r.dirty -> "ran with uncommitted changes"
+                    else -> "ok"
+                }
+                appendLine("  ${r.check}: $why, ${r.date} (${r.file})")
+            }
+            val missing = parts.filter { it !in valid }
+            if ("longChecks" !in valid && missing.isNotEmpty()) appendLine("  Missing: longChecks, or each of ${missing.joinToString()}")
+            appendLine("Run `gradlew :desktop:longChecks --continue` on this commit, or each long check in its own worktree")
+            append("and pass their record folders with -Pzoukan.longChecks.records=<folder>,<folder> (desktop/TESTING.md).")
+        }
+    }
+}
+
+// Each long check leaves its own record when it runs whole, so the three can run side by side in
+// their own worktrees (desktop/TESTING.md, "Before merging to master")
+journeyTest.configure {
+    val records = longCheckRecordsDir
+    val repo = repositoryRoot
+    val whole = !testsNarrowedOnCommandLine && !providers.gradleProperty("zoukan.shard").isPresent
+    if (whole) {
+        doFirst { LongCheckRecords.start(records, repo, "journeyTest") }
+        doLast { LongCheckRecords.finish(records, repo, "journeyTest", listOf(":desktop:journeyTest"), logger) }
+    }
+}
+buttonCrawlTest.configure {
+    val records = longCheckRecordsDir
+    val repo = repositoryRoot
+    val whole = !testsNarrowedOnCommandLine &&
+        listOf("zoukan.shard", "zoukan.crawl.only", "zoukan.crawl.updateBaseline").none { providers.gradleProperty(it).isPresent }
+    if (whole) {
+        doFirst { LongCheckRecords.start(records, repo, "buttonCrawlTest") }
+        doLast { LongCheckRecords.finish(records, repo, "buttonCrawlTest", listOf(":desktop:buttonCrawlTest"), logger) }
+    }
+}
+// Each store leaves a record; extensionWiringTest combines them when every store ran on every extension
+val wiringWhole = !testsNarrowedOnCommandLine && !providers.gradleProperty("zoukan.e2e.package").isPresent
+extensionWiringStoreTests.forEach { storeTask ->
+    storeTask.configure {
+        val records = longCheckRecordsDir
+        val repo = repositoryRoot
+        val check = name
+        if (wiringWhole) {
+            doFirst { LongCheckRecords.start(records, repo, check) }
+            doLast { LongCheckRecords.finish(records, repo, check, listOf(":desktop:$check"), logger) }
+        }
+    }
+}
+extensionWiringTest.configure {
+    val records = longCheckRecordsDir
+    val repo = repositoryRoot
+    val storeChecks = extensionWiringStoreTests.map { it.name }
+    val allStores = selectedWiringStores.containsAll(extensionWiringStores)
+    if (wiringWhole && allStores) {
+        doLast { LongCheckRecords.combine(records, repo, "extensionWiringTest", storeChecks, storeChecks.map { ":desktop:$it" }, logger) }
+    }
+}
+
+// Before a push to master: fails unless a record shows the long checks passed on HEAD, on a clean
+// tree. It reads build/long-checks/ and, from -Pzoukan.longChecks.records, more record files or
+// folders (comma-separated, relative to the repository root), such as the build/long-checks
+// folders of the worktrees the three checks ran in:
+//   ./gradlew :desktop:verifyLongChecks
+//   ./gradlew :desktop:verifyLongChecks -Pzoukan.longChecks.records=../zoukan-crawl/desktop/build/long-checks
+tasks.register("verifyLongChecks") {
+    group = "verification"
+    description = "Fails unless the long checks left a passing record for the current commit (before a push to master)"
+    val repo = repositoryRoot
+    val sources = listOf(longCheckRecordsDir) + providers.gradleProperty("zoukan.longChecks.records").orNull
+        ?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)
+        ?.map { path -> File(path).let { if (it.isAbsolute) it else File(repo, path) } }
+        .orEmpty()
+    val parts = longCheckParts
+    // Reads the records and the checkout each time
+    outputs.upToDateWhen { false }
+    doLast {
+        val state = LongCheckRecords.gitState(repo)
+        LongCheckRecords.verify(state, sources, parts)?.let { throw GradleException(it) }
+        logger.lifecycle("The long checks passed on ${state.commit}.")
+    }
 }
 // ZOUKAN <--

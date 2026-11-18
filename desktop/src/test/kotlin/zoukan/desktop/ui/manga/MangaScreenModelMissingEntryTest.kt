@@ -10,6 +10,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
@@ -20,6 +21,7 @@ import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
+import zoukan.desktop.testing.Await
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
@@ -79,11 +81,13 @@ class MangaScreenModelMissingEntryTest {
         ).also { models += it }
     }
 
-    /** Waits for [condition] or for 5 s; a failure on the way to the default handler gets time to arrive. */
+    /**
+     * Waits for [condition], then for the UI thread to run what was queued on it before: a failure
+     * of that work reaches the default handler on that thread, so it has arrived when this returns.
+     */
     private fun waitUntil(condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + 5_000
-        while (!condition() && System.currentTimeMillis() < end) Thread.sleep(10)
-        Thread.sleep(100)
+        Await.until("the screen model", 5_000, condition = condition)
+        runBlocking(main) {}
     }
 
     @Test

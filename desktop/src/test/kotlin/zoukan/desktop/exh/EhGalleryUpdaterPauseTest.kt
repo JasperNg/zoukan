@@ -2,9 +2,9 @@ package zoukan.desktop.exh
 
 import io.kotest.matchers.shouldBe
 import io.mockk.coVerify
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
@@ -42,8 +42,8 @@ class EhGalleryUpdaterPauseTest {
         withTimeout(10_000) { fixture.entered.await() }
         fixture.updater.setPaused(true)
 
-        val idle = async(Dispatchers.Default) { fixture.updater.awaitIdle() }
-        delay(300)
+        // Runs until it suspends: it returns at once unless it waits for the round
+        val idle = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) { fixture.updater.awaitIdle() }
         idle.isCompleted shouldBe false
 
         fixture.release.complete(Unit)

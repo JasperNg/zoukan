@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
+import zoukan.desktop.testing.Await
 import java.io.File
 import java.io.FileInputStream
 import java.net.HttpCookie
@@ -48,7 +49,9 @@ class CookieExpiryTest {
         store.add(URI("https://example.org/"), c)
         val expires = store.expiresAt(c)!!
         (expires >= before + 3_600_000) shouldBe true
-        Thread.sleep(20)
+        // A later "now": an expiry worked out again from the max age would differ
+        val added = System.currentTimeMillis()
+        Await.until("the clock to move on") { System.currentTimeMillis() > added }
         store.expiresAt(c) shouldBe expires
         // What a copy to Chromium uses: the known expiry, not the max age from now
         CefCookieSync.expiresAt(c, expires, now = expires) shouldBe expires
@@ -89,14 +92,18 @@ class CookieExpiryTest {
         FileInputStream(file).use {
             store.removeAll()
             // The scheduled save meets the open file
-            Thread.sleep(300)
+            Await.until("the scheduled save to fail on the open file") { failedSaves(store) > 0 }
             file.readText().contains("kept") shouldBe true
         }
 
         // A later try writes the cleared store
-        val deadline = System.currentTimeMillis() + 5_000
-        while (file.readText().contains("kept") && System.currentTimeMillis() < deadline) Thread.sleep(50)
+        Await.until("a later save to write the cleared store", 5_000) { !file.readText().contains("kept") }
         file.readText().contains("kept") shouldBe false
+    }
+
+    /** The store's failed saves in a row, read under its lock as the store writes them. */
+    private fun failedSaves(store: PersistentCookieStore): Int = synchronized(store) {
+        PersistentCookieStore::class.java.getDeclaredField("failedSaves").apply { isAccessible = true }.getInt(store)
     }
 
     private fun save(store: PersistentCookieStore) {

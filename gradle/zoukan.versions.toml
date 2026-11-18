@@ -88,6 +88,10 @@ compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "
 compose-navigationevent = "org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0"
 coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing" }
 
+# Test coverage reports (no thresholds: most of the code comes from upstream), for buildSrc's
+# zoukan.kover convention; desktop/TESTING.md, "Coverage"
+kover-gradle = "org.jetbrains.kotlinx:kover-gradle-plugin:0.9.11"
+
 [bundles]
 twelvemonkeys = [
     "twelvemonkeys-common-lang", "twelvemonkeys-common-io", "twelvemonkeys-common-image",

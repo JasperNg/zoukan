@@ -75,8 +75,7 @@ class ClearMangaDownloadedDataJourneyTest {
                     } else {
                         onNodeWithText("Cancel").performClick()
                     }
-                    waitForIdle()
-                    Thread.sleep(1_000)
+                    watchNothingHappens()
                     assertFilesKept(files)
                 }
                 step("Merged entry with that local part: Clear manga > Downloaded data keeps the files") {
@@ -87,8 +86,7 @@ class ClearMangaDownloadedDataJourneyTest {
                     onAllNodesWithText("Downloaded data").onFirst().performClick()
                     waitForIdle()
                     onNode(hasText("OK") and isEnabled()).performClick()
-                    waitForIdle()
-                    Thread.sleep(1_000)
+                    watchNothingHappens()
                 }
             }
         }

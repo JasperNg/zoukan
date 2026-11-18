@@ -34,6 +34,7 @@ import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.testing.Await
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
@@ -78,11 +79,7 @@ class MetadataJourneyTest {
         Injekt.get<ExhPreferences>().isHentaiEnabled().set(true)
         val sources = Injekt.get<SourceManager>()
         runBlocking { sources.isInitialized.first { it } }
-        val deadline = System.currentTimeMillis() + 30_000
-        while (sources.get(EH_SOURCE_ID) == null) {
-            check(System.currentTimeMillis() < deadline) { "the SourceManager didn't list E-Hentai within 30s" }
-            Thread.sleep(100)
-        }
+        Await.until("the SourceManager to list E-Hentai", 30_000) { sources.get(EH_SOURCE_ID) != null }
         val manga = runBlocking {
             val manga = Injekt.get<NetworkToLocalManga>()(
                 Manga.create().copy(

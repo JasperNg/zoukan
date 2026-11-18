@@ -7,14 +7,13 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.domain.RefreshManga
+import zoukan.desktop.testing.Await
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Adding many entries at once (bulk add) must not fetch them all from the site at the same time. */
@@ -63,12 +62,18 @@ class AddToLibraryFetchTest {
 
         withTimeout(10_000) { allStarted.await() }
         // Give any fetch that would start past the limit the chance to do so before releasing;
-        // with the limit in place this always waits the full half second
-        withTimeoutOrNull(500) { while (running.get() <= AddToLibrary.PARALLEL_FETCHES) delay(5) }
+        // with the limit in place this always waits the full time. Nothing marks a fetch that
+        // does not start, so only a pause can show it
+        Await.within(NOTHING_HAPPENS_MILLIS) { running.get() > AddToLibrary.PARALLEL_FETCHES }
         most.get() shouldBeLessThanOrEqual AddToLibrary.PARALLEL_FETCHES
         release.complete(Unit)
-        withTimeout(10_000) { while (finished.get() < count) delay(10) }
+        Await.untilSuspending("every fetch to finish") { finished.get() >= count }
         most.get() shouldBeLessThanOrEqual AddToLibrary.PARALLEL_FETCHES
         finished.get() shouldBe count
+    }
+
+    private companion object {
+        /** How long the test watches for a fetch past the limit, which must not start. */
+        const val NOTHING_HAPPENS_MILLIS = 500L
     }
 }

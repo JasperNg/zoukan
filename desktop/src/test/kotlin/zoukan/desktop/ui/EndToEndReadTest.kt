@@ -103,8 +103,7 @@ class EndToEndReadTest {
                 onAllNodesWithText(source.name).onFirst().performClick()
                 waitUntil(timeoutMillis = 120_000) { onAllNodesWithTag("manga-item").fetchSemanticsNodes().size >= 2 }
                 waitForIdle()
-                Thread.sleep(3000) // let a few covers load for the screenshot
-                shot("2-source")
+                shot("2-source", settleMillis = 3000)
                 onAllNodesWithTag("manga-item").onFirst().performClick()
             }
 
@@ -113,8 +112,7 @@ class EndToEndReadTest {
                 waitFor(hasText("Start") and isEnabled(), timeout = 120_000)
                 onAllNodesWithText("Add to library").onFirst().performClick()
                 waitFor(hasText("In library"))
-                Thread.sleep(2000)
-                shot("3-manga")
+                shot("3-manga", settleMillis = 2000)
             }
 
             step("Read in the paged mode") {
@@ -152,8 +150,7 @@ class EndToEndReadTest {
                 onRoot().performKeyInput { pressKey(Key.M) }
                 waitUntil(timeoutMillis = 60_000) { onAllNodesWithTag("page-image").fetchSemanticsNodes().isNotEmpty() }
                 onRoot().performKeyInput { pressKey(Key.DirectionDown) }
-                Thread.sleep(1500)
-                shot("6-reader-webtoon")
+                shot("6-reader-webtoon", settleMillis = 1500)
             }
 
             step("Back to the library and history") {
@@ -198,7 +195,10 @@ class EndToEndReadTest {
             bounds.width > 0f && bounds.height > 0f && bounds.right > 0f && bounds.left < 1280f
         }
 
-    private fun androidx.compose.ui.test.ComposeUiTest.shot(name: String) {
+    private fun androidx.compose.ui.test.ComposeUiTest.shot(name: String, settleMillis: Long = 0) {
+        // For the picture only, never for a step's outcome (the steps wait on conditions): covers
+        // and pages that have no state to wait for get time to draw
+        if (settleMillis > 0) Thread.sleep(settleMillis)
         saveScreenshot(shots, name)
     }
 }

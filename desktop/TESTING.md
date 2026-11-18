@@ -7,13 +7,13 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 
 | Tier | Gradle task | What it catches | When it runs |
 | --- | --- | --- | --- |
-| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub on every pull request and every push to master (`.github/workflows/ci.yml`). |
+| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): on Linux on every pull request and every push to master; on Windows and macOS the download, storage, database and secret store tests on every pull request, and the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`, the shared modules' own tests) on every push to master. On pull requests the Linux job also reports the coverage of the changed lines (see [Coverage](#coverage)). |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
 | Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On Windows before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
-| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | Not on GitHub. On Windows before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`. |
-| Extension wiring | `:desktop:extensionWiringTest` (with the journeys: `:desktop:nightlyCheck`) | Downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | Not on GitHub on its own. On Windows before each merge to master, by `:desktop:longChecks`; on that machine every night too if `desktop/packaging/check/nightly-windows.ps1 -Register` was run. `.github/workflows/nightly.yml` has no schedule: start it by hand to run, on Windows and macOS, the build and unit tests, `nightlyCheck` and the live `EndToEndReadTest` and `EndToEndDownloadTest`, and on Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens. |
-| Android compile | `:app:compileDebugKotlin` and `compileDebugKotlinAndroid` of `:data`, `:domain`, `:core:common`, `:source-api` | A desktop change to shared Android code (`app/.../data/track/`, `data/`, `domain/`) that breaks the Android build. Compiles only; runs no Android tests. | Every pull request and every push to master: the "Android compile" job in `.github/workflows/ci.yml`, described in the comment above it. Locally it needs `ANDROID_HOME` set to an Android SDK. |
-| Live | `:desktop:test -Pzoukan.e2e=true` | The `EndToEnd*Test` classes. Most of them use real sites and need the network. | Only when you ask for them. Never in CI. |
+| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On Windows before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`, which `.github/workflows/nightly.yml` runs every night, and on Windows on pull requests that change downloads, the browser, the reader, backup or the storage folder (`.github/workflows/journeys.yml`, see [On GitHub](#on-github)). |
+| Extension wiring | `:desktop:extensionWiringTest` (with the journeys: `:desktop:nightlyCheck`) | Downloads every extension of the Keiyoushi store and of yuzono's "Cursed" store and checks it loads on the desktop. | On Windows before each merge to master, by `:desktop:longChecks`; on that machine every night too if `desktop/packaging/check/nightly-windows.ps1 -Register` was run. On GitHub only with the journeys, in `:desktop:nightlyCheck`, which `.github/workflows/nightly.yml` runs every night (see [On GitHub](#on-github)). |
+| Android compile and unit tests | `:app:compileDebugKotlin` and `compileDebugKotlinAndroid` of `:data`, `:domain`, `:core:common`, `:source-api`, then `:app:testDebugUnitTest` and `:domain:testDebugUnitTest` | A desktop change to shared Android code (`app/.../data/track/`, `data/`, `domain/`) that breaks the Android build or the Android app's unit tests (they run on the JVM, not on a device). | Every pull request and every push to master: the "Android compile and unit tests" job in `.github/workflows/ci.yml`, described in the comment above it. Locally it needs `ANDROID_HOME` set to an Android SDK. |
+| Live | `:desktop:test -Pzoukan.e2e=true` | The `EndToEnd*Test` classes. Most of them use real sites and need the network. | When you ask for them, and every night on GitHub (`EndToEndReadTest` and `EndToEndDownloadTest`, in `.github/workflows/nightly.yml`). Never in the PR gate. |
 
 Use the cheapest tier that can catch the bug:
 
@@ -24,18 +24,46 @@ Use the cheapest tier that can catch the bug:
 - Write a journey only for a flow that crosses screens and needs the real UI, such as "add to
   library, then read". Do not test logic through a journey that a unit test could test.
 - Use a live test only when the behaviour depends on a real site. Live tests do not count as
-  coverage, because CI never runs them.
+  coverage, because the PR gate never runs them.
+
+`DownloadManager.kt` and `KcefWebViewProvider.kt` are too large to reason about a change by
+reading alone. Before you change either file, first write tests that pin the current behaviour of
+the part you will change, and see them pass on the unchanged code. Then make the change.
 
 ## The release gate
 
 The release gate on GitHub (`ci.yml`, which `desktop-build.yml` runs before it publishes) is the
-fast set only: Spotless, the build and unit tests, the wiring shards, the file tests on Windows and
-macOS and the Android compile. Its jobs run side by side and it takes about 10 minutes.
+fast set only: Spotless, the build and unit tests, the wiring shards, the unit tests on Windows and
+macOS and the Android compile and unit tests. Its jobs run side by side and it takes about 10
+minutes on a pull request.
+
+On Windows and macOS a pull request runs only the download, storage folder, database and secret
+store tests, which are the tests most likely to differ between those systems and Linux. Every push to master (and so every
+release, since `desktop-build.yml` calls `ci.yml`) runs the whole unit tier there: `:desktop:test`,
+`:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`.
+The whole tier on every pull request would make the gate wait for the slower Windows and macOS
+runners (the job's limit goes from 20 to 60 minutes). Tests for one system skip themselves on the others with `assumeTrue`.
+
+### On GitHub
+
+- `.github/workflows/nightly.yml` runs every night at 03:17 UTC on master, in the main repository
+  only (forks skip it), and opens, updates or closes the `nightly-failure` issue. A run started by
+  hand reports to the issue only when its `notify` box is ticked. It does not gate a merge. It
+  runs, on Windows and macOS, the build and unit tests, `:desktop:nightlyCheck` (the journeys and
+  the extension wiring check) and the live `EndToEndReadTest` and `EndToEndDownloadTest`, and on
+  Linux (ubuntu-24.04) a comparison of the screenshots with the committed goldens.
+- `.github/workflows/journeys.yml` runs `:desktop:journeyTest` on a Windows runner for pull
+  requests that change `desktop/src/main/kotlin/zoukan/desktop/` `download/`, `browser/`,
+  `ui/reader/`, `ui/downloads/`, `backup/` or `storage/`, the shared `backup/` or `core/archive/`
+  modules, or the journeys themselves. Other pull requests do not start it. It is not part of the PR
+  gate: do not make it a required check, since most pull requests never run it.
 
 ## Before merging to master
 
-The long tiers, the journeys, the button crawl and the extension wiring check, do not run on
-GitHub. They must pass on Windows before a pull request is merged to master (and so before
+The long tiers, the journeys, the button crawl and the extension wiring check, do not gate a
+merge on GitHub: the nightly runs the journeys and the extension wiring check after the merge,
+`journeys.yml` runs the journeys only on some pull requests, and nothing on GitHub runs the button
+crawl (see [On GitHub](#on-github)). They must pass on Windows before a pull request is merged to master (and so before
 it is released). On a Windows machine, in a checkout of the pull request's branch:
 
 ```powershell
@@ -45,6 +73,39 @@ it is released). On a Windows machine, in a checkout of the pull request's branc
 It runs `journeyTest` (up to 4 journeys side by side), then the whole button crawl in one JVM,
 then `extensionWiringTest` (needs the network), one after the other: well over an hour. It refuses `-Pzoukan.shard`. Reports go to `desktop/build/reports/journeys/`,
 `desktop/build/reports/coverage/buttons.md` and `desktop/build/reports/e2e/`.
+
+The three checks can also run side by side, each in its own worktree of the branch, to save time:
+
+```powershell
+.\gradlew.bat :desktop:journeyTest --continue
+.\gradlew.bat :desktop:buttonCrawlTest
+.\gradlew.bat :desktop:extensionWiringTest --continue
+```
+
+### The record of the long checks
+
+Each long check that passes leaves a record in `desktop/build/long-checks/`: `journeyTest`,
+`buttonCrawlTest` and `extensionWiringTest` each write `<check>.properties`, and `longChecks`
+writes `longChecks.properties` when all three passed. A record names the commit
+(`git rev-parse HEAD`), whether the working tree had uncommitted changes, the date and the tasks
+run. A check writes no record when it was narrowed (`--tests`, `-Pzoukan.shard`,
+`-Pzoukan.crawl.only`, `-Pzoukan.crawl.updateBaseline`, `-Pzoukan.e2e.package`, or only some
+stores with `-Pzoukan.e2e.stores`), or when the commit or the working tree changed while it ran.
+A check that starts deletes its old record, so a failed run leaves none.
+
+Before pushing to master, check that the records name the commit you push:
+
+```bash
+./gradlew :desktop:verifyLongChecks
+./gradlew :desktop:verifyLongChecks -Pzoukan.longChecks.records=../zoukan-journeys/desktop/build/long-checks,../zoukan-crawl/desktop/build/long-checks,../zoukan-wiring/desktop/build/long-checks
+```
+
+It fails, and says why, unless the working tree is clean and there is a `longChecks` record, or a
+record of each of the three checks, for the current HEAD with a clean tree. It always reads
+`desktop/build/long-checks/`; `-Pzoukan.longChecks.records` adds record files or folders
+(comma-separated, relative to the repository root), such as the record folders of the worktrees the
+checks ran in, or records copied from a Windows machine. A rebase changes the commit, so run the
+checks again after one.
 
 ## Commands
 
@@ -63,6 +124,7 @@ then `extensionWiringTest` (needs the network), one after the other: well over a
 ./gradlew :desktop:journeyTest --tests "*BrowseAndReadJourneyTest"
 ./gradlew :desktop:nightlyCheck --continue           # journeys and every extension
 ./gradlew :desktop:longChecks --continue             # before merging to master: journeys, crawl, every extension
+./gradlew :desktop:verifyLongChecks                  # before pushing to master: the long checks passed on HEAD
 ```
 
 Notes:
@@ -83,6 +145,140 @@ Notes:
 - Never run two `journeyTest` builds at the same time in one checkout. They share the build
   folder and the screenshot folder.
 - Each journey runs in a JVM of its own.
+
+## Coverage
+
+[Kover](https://github.com/Kotlin/kotlinx-kover) measures which lines the unit tier runs. The
+`zoukan.kover` convention (`buildSrc`) applies it to `desktop`, `extension-jvm`, `android-compat`,
+`backup` and `domain` (the modules with tests) and to `data`, `core:common` and `source-api`
+(no tests of their own, but the desktop tests run their desktop code). The root project
+aggregates them into one report. There is no threshold: most of the code comes from upstream.
+`android-compat` and `backup` have their own tests (`android-compat/src/test`,
+`backup/src/desktopTest`) for the project's own code in them; the desktop tests cover the rest
+from outside.
+
+```bash
+./gradlew :koverXmlReportUnit                       # every module: build/reports/kover/reportUnit.xml
+./gradlew :koverHtmlReportUnit                      # the same as HTML, to browse
+./gradlew :backup:koverXmlReportUnit                # one module: backup/build/reports/kover/reportUnit.xml
+./gradlew :desktop:test --tests "zoukan.desktop.backup.*" :desktop:koverXmlReportUnit   # a few tests
+```
+
+- Each module's `unit` report has its JVM classes (a multiplatform module: its desktop target's),
+  measured by its `test` or `desktopTest` task. The Android variants and the Android unit tests
+  are left out, and so are the other Test tasks (`wiringTest`, `journeyTest`, `buttonCrawlTest`,
+  the `extensionWiringTest` tasks): they are never instrumented, and a report does not run them.
+- The tests are instrumented only when the command line asks for a Kover task, or with
+  `-Pzoukan.coverage=true`, so an ordinary `test` run is not slowed down. Switching between the
+  two makes the tests run again, since the instrumentation is one of their inputs.
+- Use the `unit` reports (`koverXmlReportUnit`). Kover's default reports (`koverXmlReport`) also
+  take the Android variants of the multiplatform modules, which compiles them and needs
+  `ANDROID_HOME`.
+
+On pull requests, the Linux "Build and unit tests" job in `ci.yml` runs the unit tier with
+`-Pzoukan.coverage=true`, makes the report, and writes the coverage of the lines the pull request
+changes to the job summary: per file, how many changed executable lines the tests ran and which
+they did not. `.github/scripts/changed_line_coverage.py` makes it from `git diff --unified=0
+<base>...HEAD` and the report. Only the project's own lines count: in `android-compat` the lines
+inside ZOUKAN markers; elsewhere every line, so upstream files show as they are. It is
+information only: it never fails the job, but a step that breaks shows as failed. To see it for
+your branch, and to test the script after you change it:
+
+```bash
+./gradlew :koverXmlReportUnit
+python3 .github/scripts/changed_line_coverage.py --base origin/master --report build/reports/kover/reportUnit.xml
+python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+```
+
+Later, try mutation testing on the hotspots, to find assertions that are too weak: `PagedViewer.kt`,
+`ZoukanApp.kt`, `SettingsWidgets.kt`, `DownloadManager.kt` and `KcefWebViewProvider.kt`. It is not
+set up yet.
+
+## The home folder and file-system side effects
+
+Every desktop test task gives its JVMs a home folder and a data folder of their own under
+`<module>/build/test-home/<task>` (`user.home`, `zoukan.dataDir`), so no test touches the real
+home folder or Zoukan profile: every Test task of `desktop`, `extension-jvm` and `android-compat`,
+and the `desktopTest` task of `backup` and `domain` (the `zoukan.test-home` convention in
+`buildSrc`). The Android unit test tasks are left as they are. Test code reads the home folder only
+through `zoukan.desktop.testing.TestHome`; `HomeFolderScanTest` fails on any other read.
+
+A test that starts a JVM passes the same folders on: `TestHome.childJvmArguments()` (or
+`TestHome.javaCommand(argv)`) for `java` and the app's `MainKt`, `TestHome.jdkToolArguments()` for
+`keytool`, `jarsigner` and `jcmd`. A child JVM the app itself starts (the Spotlight helper, from
+`SpotlightExclusion`) gets no `-Duser.home`, so in a test it would still use the real home (JNA's
+native cache, for one); the tests that start it for real are opt-in (`ZOUKAN_TEST_REAL_SPOTLIGHT`).
+
+A test of code that creates, deletes, marks or changes the permissions of files uses
+`zoukan.desktop.testing.FileSystemSandbox`: a temporary home with the app's data and storage
+folders, a folder the user chose, a link out of the app's folders, another program's crash files
+and a read-only folder. `assertNothingOutsideAppChanged()` fails, listing each change, when a file
+outside the app's folders was created, deleted or changed (content, permissions, extended
+attributes, link targets).
+
+## Waiting in tests
+
+Tests wait for the state they need, never for a guessed time: `zoukan.desktop.testing.Await`
+(`until`, `untilSuspending`, `within`), a `CountDownLatch` or `CompletableDeferred`,
+`StateFlow.first { }` under `withTimeout`, Compose's `waitUntil` (in journeys `waitFor` and
+`waitOrDump`), or virtual time with `runTest`. A check that something does not happen waits for a
+later event that proves it where there is one; journeys otherwise use `watchNothingHappens()`.
+`ThreadSleepScanTest` (in `zoukan.desktop.scan`) fails on `Thread.sleep` (and `TimeUnit.*.sleep`)
+in any test source set, and on a `delay` that pauses a `runBlocking` body, outside its short
+allow-list, in which every entry has a reason. It also sees the block of a test helper that takes a
+`suspend` lambda and runs it under `runBlocking` (such as `withStubbedSignatures { }`) as such a
+body. It reads the text, so it does not see a `delay` in a block that reaches `runBlocking` another
+way: a wrapper that does not take the block as a `suspend` lambda parameter of its own (a class, a
+stored lambda), or a library function's lambda inside a `runBlocking` body (`mockkObject(...) { }`),
+which reads as any other lambda.
+
+The scan tests' allow-lists (`zoukan.desktop.scan`) name each site: an entry gives the file, a
+part of the line and, where a file has more than one site, the function the site is in, and it must
+match exactly its count of sites (one by default). A new site in an allowed file fails until it has
+an entry and a reason of its own; a fixed site fails until its entry goes.
+
+## Old databases, the Android storage folder and backups
+
+- `DatabaseMigrationTest` (in `zoukan.desktop.db`) opens old databases through the desktop's own
+  start-up path and checks every row, field by field, the schema against a new install's and
+  `user_version`. `OldDatabases` builds them, encrypted, from the schema snapshot
+  `data/src/commonMain/sqldelight/28.db` and the generated migrations, so no binary is committed:
+  version 28 (the oldest the repository can rebuild; there is no schema for 1 to 27), 38 and the
+  one before the newest. `MigrationSeed` holds the known rows and what each migration does to
+  them. A new migration that adds a table or a column fails these tests until `MigrationSeed` has
+  rows for the table, or says what old rows get in the column.
+- `AndroidStorageFolderTest` (in `zoukan.desktop.storage`) writes a storage folder as the Android
+  app leaves it (`AndroidStorageFolder`: downloads as folders and CBZs, a local source entry,
+  automatic backups, `.nomedia` files), reads it with the app's storage code, and fails when a file
+  from Android is changed or deleted, or a file is added anywhere but the expected places.
+- `BackupRoundTripTest` restores and backs up again `FullFieldBackup` (every field of the format
+  set; `SyntheticBackupCoverageTest` checks that against the model classes) and every `.tachibk` in
+  `src/test/resources/backups/`. To test a backup from another Android version, add the file there.
+
+## The secret stores
+
+`SecretStoreContract` (in `zoukan.desktop.secrets`) is what every `SecretStore` must do; each store
+is a small subclass. The file store and the in-memory fakes run it everywhere. On macOS and Windows,
+`MacKeychainStoreContractTest` and `WindowsCredentialStoreContractTest` run it against the real
+Keychain and Credential Manager as part of `:desktop:test`: every key starts with
+`zoukan-contract-test-` and a random part, is never one of the app's keys, and is deleted after
+each case. They skip themselves on other systems, when the environment variable
+`ZOUKAN_SKIP_NATIVE_SECRET_TESTS=true` is set, on a locked login keychain, and in a Windows logon
+with no Credential Manager, such as SSH (error 1312).
+
+The Keychain tests are opt-in: they run only with `ZOUKAN_KEYCHAIN_TESTS=true` (CI's macOS runner
+sets it). So that a test never waits on a prompt, they turn Keychain user interaction off
+(`SecKeychainSetUserInteractionAllowed`) while they run, and Apple does not document that setting
+as the test process's own: its page for the function warns that leaving it off affects other
+clients of Keychain Services. Turn them on by hand only where that does not matter:
+
+```sh
+ZOUKAN_KEYCHAIN_TESTS=true ./gradlew :desktop:test --tests "*MacKeychainStoreContractTest" --rerun
+```
+
+(`--rerun`: the switch is not an input of the task, so a run that skipped them would be up to date.) `SecretStoreFailureTest` uses
+`zoukan.desktop.testing.fakes.FailingSecretStore`, a store that is locked, denied or unavailable on
+demand, to check that a failing store never opens, rewrites or re-keys an existing database.
 
 ## The coverage matrix
 
@@ -209,6 +405,45 @@ A `gap:` says what is not covered and why. Some gaps are manual for good: the sy
 window's size and position, and the operating system's reduced-motion setting cannot be driven
 from a Compose test. Other gaps name the test that will cover them. To find the open gaps, search
 the matrix for `tests: []` and `gap:`.
+
+## Android and contract checks
+
+The unit tier also reads the Android sources and the contract documents
+(`desktop/src/test/kotlin/zoukan/desktop/contract/`). They read source text with regexes, start
+nothing, and fail when they find suspiciously few entries, so a broken regex cannot pass.
+
+| Test | What it checks | When it fails |
+| --- | --- | --- |
+| `PreferenceParityTest` | Each preference key the desktop's own code declares has the Android key and default | Use Android's key and default, name a desktop-only key `zoukan_...`, or list the difference in `PARITY.md` (the key in backticks) or in the test's known differences, with the reason |
+| `StorageNamesParityTest` | The folder and file names in the storage folder (downloads, local source, automatic backups) equal the Android ones | Use the Android name, or record the difference in the test |
+| `ParityReferencesTest` | Every file path and symbol in backticks in a `PARITY.md` row still exists | Update the row to the new name, or remove it |
+| `ThreatModelCoverageTest` | Every trust boundary in `THREAT-MODEL.md` has a row in its "Checked by" table, and every test class named there exists | Add the row, fix the class name, or say what is not covered in the Gap cell |
+
+The preference classes the desktop takes from the shared modules or copies with the app-shared
+sync are Android's own code, so the preference test does not compare them. Known differences
+marked `reviewed = false` were found when the tests were written and wait for a decision: a bug
+to fix, or a difference to document in `PARITY.md`.
+
+## Property tests
+
+`zoukan.desktop.property` checks rules for any input, with Kotest's property testing run from
+ordinary JUnit tests: download folder and file names equal the Android app's and are valid on
+Windows, macOS and Linux; any backup survives a write and a read; any preference survives a save
+and a reload, plain and encrypted; and the parsers of outside data (`ComicInfo.xml`, an extension
+store's index, the update manifest, a backup file) give a result or the error their caller handles
+for any input, in bounded time. The Android name code they compare with is copied in
+`AndroidNameOracle.kt`; `AndroidNameOracleSourceTest` fails when the Android source changes.
+
+Each property runs a few hundred tries with a fixed seed, so a run is repeatable; together they
+take a few seconds. To repeat a failure with another seed or search longer:
+
+```sh
+./gradlew :desktop:test --tests "zoukan.desktop.property.*" -Pzoukan.property.seed=42 -Pzoukan.property.iterations=20000
+```
+
+A defect a property finds gets a disabled test with its smallest input (the `*KnownDefectsTest`
+classes), and only that case is left out of the property, with a comment naming the test. Enable
+the test when the defect is fixed.
 
 ## The smoke test
 
@@ -580,8 +815,9 @@ ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
 ```
 
 Two tests in `StorageFolderPrivacyTest` change the real Spotlight Search Privacy list of the
-macOS account that runs them, and one of them makes `zoukan-spotlight-test-*` folders in the home
-folder. They skip themselves unless the environment variable `ZOUKAN_TEST_REAL_SPOTLIGHT=true` is
+macOS account that runs them, and one of them makes its folders under `zoukan-spotlight-test` in
+the test home folder (`TestHome.root()`, under `desktop/build/test-home/<task>`), not the real home.
+They skip themselves unless the environment variable `ZOUKAN_TEST_REAL_SPOTLIGHT=true` is
 set (or `-Dzoukan.test.realSpotlight=true` on the test JVM). They take their entries off the list
 and remove their folders when they end, and first clear what an interrupted earlier run left. The
 other tests of the class use stand-ins and never touch the list.

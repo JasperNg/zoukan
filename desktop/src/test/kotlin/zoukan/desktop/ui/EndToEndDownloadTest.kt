@@ -189,8 +189,7 @@ class EndToEndDownloadTest {
                 println("E2E: downloading ${queued.size} chapters")
                 downloads.start()
                 runOnUiThread { navigator?.push(zoukan.desktop.ui.downloads.DownloadsScreen) }
-                Thread.sleep(1500)
-                shot("d4-download-queue")
+                shot("d4-download-queue", settleMillis = 1500)
                 waitUntil(timeoutMillis = 600_000) { !downloads.running.value }
                 val failed = queued.filter { it.state.value != Download.State.DOWNLOADED }
                 failed.map { "${it.manga.title} / ${it.chapter.name}: ${it.error}" }.shouldBeEmpty()
@@ -284,7 +283,10 @@ class EndToEndDownloadTest {
             bounds.width > 0f && bounds.height > 0f && bounds.right > 0f && bounds.left < 1280f
         }
 
-    private fun ComposeUiTest.shot(name: String) {
+    private fun ComposeUiTest.shot(name: String, settleMillis: Long = 0) {
+        // For the picture only, never for a step's outcome (the steps wait on conditions): covers
+        // and pages that have no state to wait for get time to draw
+        if (settleMillis > 0) Thread.sleep(settleMillis)
         saveScreenshot(shots, name)
     }
 }

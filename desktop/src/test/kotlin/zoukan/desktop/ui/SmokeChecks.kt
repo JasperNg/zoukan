@@ -90,6 +90,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.security.AppLock
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.testing.Await
 import zoukan.desktop.track.TrackingModel
 import zoukan.desktop.ui.browse.BrowsePage
 import zoukan.desktop.ui.browse.ExtensionDetailsScreen
@@ -296,16 +297,13 @@ internal object SmokeChecks {
         val updater = Injekt.get<LibraryUpdater>()
         val deadline = System.nanoTime() + 60.seconds.inWholeNanoseconds
         fun left() = (deadline - System.nanoTime()).coerceAtLeast(0)
-        while (true) {
-            val done = CountDownLatch(1)
-            if (updater.start(onDone = { done.countDown() })) {
-                check(done.await(left(), TimeUnit.NANOSECONDS)) {
-                    "the library update didn't finish within 60s (progress: ${updater.progress.value})"
-                }
-                return
-            }
-            check(left() > 0) { "the library update couldn't start within 60s: another kept running" }
-            Thread.sleep(200)
+        // A start that is refused (another update runs) never calls onDone
+        val done = CountDownLatch(1)
+        Await.until("the library update to start: another kept running", 60_000) {
+            updater.start(onDone = { done.countDown() })
+        }
+        check(done.await(left(), TimeUnit.NANOSECONDS)) {
+            "the library update didn't finish within 60s (progress: ${updater.progress.value})"
         }
     }
 
@@ -462,10 +460,8 @@ internal object SmokeChecks {
             val enhanced = EnhancedHttpSource(extension, MangaDex(extension, Injekt.get<Application>()))
             testSources.value = listOf(enhanced)
             // The SourceManager picks the test sources up on its own thread
-            val deadline = System.nanoTime() + 10.seconds.inWholeNanoseconds
-            while (MdUtil.getEnabledMangaDexs(Injekt.get()).isEmpty()) {
-                check(System.nanoTime() < deadline) { "the SourceManager didn't list the MangaDex stand-in within 10s" }
-                Thread.sleep(50)
+            Await.until("the SourceManager to list the MangaDex stand-in") {
+                MdUtil.getEnabledMangaDexs(Injekt.get()).isNotEmpty()
             }
         }
 
@@ -801,14 +797,22 @@ internal object SmokeChecks {
     )
 }
 
-/** Lets screen models load on their dispatchers and the UI catch up. */
-internal fun ComposeUiTest.settle() {
+/**
+ * Lets screen models load on their dispatchers and the UI catch up. Not a wait for a state: the
+ * checks open hundreds of screens that share no "loaded" state, and waitForIdle does not see the
+ * screen models' background dispatchers, so this pauses between steps. Checks that need a node
+ * wait for it after this (waitUntil).
+ */
+internal fun ComposeUiTest.settle(rounds: Int = SETTLE_ROUNDS, pauseMillis: Long = SETTLE_PAUSE_MILLIS) {
     waitForIdle()
-    repeat(3) {
-        Thread.sleep(150)
+    repeat(rounds) {
+        Thread.sleep(pauseMillis)
         waitForIdle()
     }
 }
+
+private const val SETTLE_ROUNDS = 3
+private const val SETTLE_PAUSE_MILLIS = 150L
 
 /**
  * One field searches every source; the in-tab fields only filter the list. So the page shows the

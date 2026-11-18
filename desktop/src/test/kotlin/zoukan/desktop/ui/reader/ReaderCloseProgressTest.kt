@@ -12,8 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
@@ -143,9 +143,7 @@ class ReaderCloseProgressTest {
         val folder = chapterFolder(PAGES)
         val screen = TestScreen("reader-close-test-${java.util.UUID.randomUUID()}")
         val model = withContext(Dispatchers.Main) { register(screen) { newModel(row, folder) } }
-        withTimeout(10_000) {
-            while (model.state.value.pages.size != PAGES) delay(5)
-        }
+        withTimeout(10_000) { model.state.first { it.pages.size == PAGES } }
         withContext(Dispatchers.Main) { close(model, screen, PAGES - 1) }
         withTimeout(10_000) { awaitAppWork() }
         row

@@ -5,6 +5,9 @@ plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
     id("com.github.ben-manes.versions")
+    // ZOUKAN -->
+    id("zoukan.kover")
+    // ZOUKAN <--
 }
 
 kotlin {

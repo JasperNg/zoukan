@@ -1,16 +1,19 @@
-# The manual long tier: the long checks, on GitHub, when someone asks for them. On Windows and
-# macOS it runs the full build and unit tests, the offline journeys and the extension wiring check
+# The nightly long tier: the long checks on GitHub, every night and when someone asks. On Windows
+# and macOS it runs the full build and unit tests, the offline journeys and the extension wiring check
 # (nightlyCheck) and the live end-to-end tests, which reach real sites. On ubuntu-24.04 it compares
 # screenshots with the committed goldens. Nothing is packaged or signed here; desktop-build.yml
 # makes the installers.
 #
-# It has no schedule and no pull request trigger, so it never starts on its own: the long checks
-# run on Windows before each merge to master instead (`gradlew.bat :desktop:longChecks
-# --continue`, desktop/RELEASING.md). Start it by hand from the Actions tab (Run workflow) or with
-# `gh workflow run nightly.yml`.
+# It runs on master every night (only in the main repository, not in forks) and reports to the
+# nightly-failure issue. It does not gate a merge or a release: the long checks still run on Windows
+# before each merge to master (`gradlew.bat :desktop:longChecks --continue`, desktop/TESTING.md).
+# Start it by hand from the Actions tab (Run workflow) or with `gh workflow run nightly.yml`.
 name: Nightly
 
 on:
+  # 03:17 UTC, a quiet hour for the runners and away from the top of the hour, when scheduled runs pile up
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       notify:
@@ -28,6 +31,8 @@ permissions:
 jobs:
   nightly:
     name: Nightly (${{ matrix.os }})
+    # Forks inherit the schedule; only the main repository runs it
+    if: github.event_name != 'schedule' || !github.event.repository.fork
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +53,7 @@ jobs:
       - name: Build and unit tests
         id: build
         continue-on-error: true
-        run: ./gradlew :desktop:build :extension-jvm:test :domain:desktopTest --continue
+        run: ./gradlew :desktop:build :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest --continue
 
       # The live run below reuses the test task's report folder, so keep this run's report
       - name: Keep the unit test report
@@ -94,6 +99,7 @@ jobs:
 
   screenshots:
     name: Screenshots (ubuntu-24.04)
+    if: github.event_name != 'schedule' || !github.event.repository.fork
     # Pinned, not -latest: the goldens were recorded on this image
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -125,8 +131,8 @@ jobs:
   notify:
     name: Report to the nightly-failure issue
     needs: [nightly, screenshots]
-    # Reports only when the dispatch asks for it
-    if: always() && inputs.notify
+    # Reports every scheduled run (main repository only), and a dispatch when it asks for it
+    if: always() && ((github.event_name == 'schedule' && !github.event.repository.fork) || inputs.notify)
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:

@@ -6,10 +6,11 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -26,8 +27,15 @@ class DesktopSourceManagerTest {
     @Timeout(10, unit = TimeUnit.SECONDS)
     fun `getOrStub answers at once with a placeholder, then the stub once it is read`() {
         val stubs = MutableStateFlow(emptyList<StubSource>())
+        // The last list the manager's collector has taken in: emit returns once it has
+        val takenIn = MutableStateFlow<List<StubSource>?>(null)
         val repository = mockk<StubSourceRepository> {
-            every { subscribeAll() } returns stubs
+            every { subscribeAll() } returns flow {
+                stubs.collect {
+                    emit(it)
+                    takenIn.value = it
+                }
+            }
             // The database thread is busy (a restore): a lookup would never return
             coEvery { getStubSource(any()) } coAnswers { awaitCancellation() }
         }
@@ -40,11 +48,7 @@ class DesktopSourceManagerTest {
         manager.getOrStub(42).shouldBeInstanceOf<StubSource>().name shouldBe ""
 
         stubs.value = listOf(StubSource(42, "en", "Gone source"))
-        runBlocking {
-            withTimeout(5_000) {
-                while ((manager.getOrStub(42) as StubSource).name.isEmpty()) kotlinx.coroutines.delay(10)
-            }
-        }
+        runBlocking { withTimeout(5_000) { takenIn.first { it == stubs.value } } }
         manager.getOrStub(42).name shouldBe "Gone source"
     }
 
@@ -65,8 +69,8 @@ class DesktopSourceManagerTest {
         val manager = DesktopSourceManager(extensions, repository)
 
         runBlocking {
-            val waiting = async { manager.awaitStubs() }
-            delay(100)
+            // Runs until it suspends: it returns at once unless it waits for the read
+            val waiting = async(start = CoroutineStart.UNDISPATCHED) { manager.awaitStubs() }
             waiting.isCompleted shouldBe false
             gate.complete(Unit)
             withTimeout(5_000) { waiting.await() }

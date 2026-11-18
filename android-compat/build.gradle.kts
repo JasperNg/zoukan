@@ -12,6 +12,8 @@ import java.security.MessageDigest
 plugins {
     id("zoukan.jvm")
     kotlin("plugin.serialization")
+    id("zoukan.kover")
+    id("zoukan.test-home")
 }
 
 // Java 21 (JetBrains Runtime, which the desktop app runs on) comes from the zoukan.jvm convention;
@@ -81,6 +83,14 @@ dependencies {
     // ExtensionHttp: the clients extensions make for themselves (the app provides OkHttp at run time)
     implementation(libs.okhttp.core)
     implementation(libs.okio)
+
+    // Tests of Zoukan's own changes (the ZOUKAN regions); the desktop tests cover the rest from outside
+    testImplementation(libs.bundles.test)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 // Suwayomi's android.jar is served from a GitHub repository (pinned to a commit in

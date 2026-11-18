@@ -176,15 +176,11 @@ fun runZoukanApp() {
         // Quitting (the tray, or the window's X without close-to-tray): the built-in browser
         // windows (a Cloudflare challenge, a tracker login) must be gone before Chromium shuts
         // down at exit, which happens once these Compose windows have closed and main() exits
-        fun quit() {
-            BrowserWindow.disposeAllForQuit()
-            exitApplication()
-        }
+        fun quit() = AppShell.quit(disposeBrowsers = BrowserWindow::disposeAllForQuit, exit = { exitApplication() })
         // Cmd+Q on macOS, once Chromium has taken it over, quits the same way
         DisposableEffect(Unit) {
-            JcefRuntime.quitRequest = ::quit
-            // The app is quitting now: a further Cmd+Q must not let JCEF shut Chromium down under the exit
-            onDispose { JcefRuntime.quitRequest = JcefRuntime.QUIT_UNDERWAY }
+            val quitting = AppShell.installQuitRequest(::quit)
+            onDispose { quitting() }
         }
         // The window opens where it was closed, at the size it had
         val windowState = remember { WindowBounds.initialState(preferences.windowBounds().get()) }
@@ -215,9 +211,9 @@ fun runZoukanApp() {
             val sync = Injekt.get<eu.kanade.tachiyomi.data.sync.SyncManager>()
             zoukan.desktop.app.AppLifecycle(sync::syncOn, appLock::onBackground) { appLock.onForeground() }
         }
-        val hidden = !visible || windowState.isMinimized
+        val hidden = AppShell.hidden(visible, windowState.isMinimized)
         val appActive by zoukan.desktop.security.AppActivity.active.collectAsState()
-        val away = hidden || !appActive
+        val away = AppShell.away(hidden, appActive)
         LaunchedEffect(away) { lifecycle.onAwayChanged(away) }
         // Data sync on start and when the window comes back, as Android's sync triggers
         LaunchedEffect(Unit) { lifecycle.onStart() }
@@ -249,11 +245,7 @@ fun runZoukanApp() {
             )
             LaunchedEffect(Unit) {
                 Notifications.flow.collect { message ->
-                    val type = when (message.kind) {
-                        Notifications.Kind.INFO -> Notification.Type.Info
-                        Notifications.Kind.WARNING -> Notification.Type.Warning
-                        Notifications.Kind.ERROR -> Notification.Type.Error
-                    }
+                    val type = AppShell.notificationType(message.kind)
                     // ZOUKAN -->
                     // "Hide notification content", as on Android, and incognito mode
                     val shown = Notifications.shown(message, Notifications.hidesContentNow(), localized(DMR.strings.open_zoukan_to_see_the_details))
@@ -386,7 +378,7 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
     // True while the root or something inside it has the focus. A focused field that leaves the
     // composition (its screen was closed) drops the focus; the root then takes it back
     var rootHasFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(locked, rootHasFocus) { if (!locked && !rootHasFocus) runCatching { rootFocus.requestFocus() } }
+    LaunchedEffect(locked, rootHasFocus) { if (AppShell.rootTakesFocus(locked, rootHasFocus)) runCatching { rootFocus.requestFocus() } }
     // ZOUKAN <--
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(
@@ -524,15 +516,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         // ZOUKAN -->
         // Discord Rich Presence shows the tab in use, as Android's tabs set it
         LaunchedEffect(tab) {
-            Injekt.get<zoukan.desktop.discord.DiscordPresence>().setScreen(
-                when (tab) {
-                    HomeTab.Library -> zoukan.desktop.discord.DiscordPresence.Screen.LIBRARY
-                    HomeTab.Updates -> zoukan.desktop.discord.DiscordPresence.Screen.UPDATES
-                    HomeTab.History -> zoukan.desktop.discord.DiscordPresence.Screen.HISTORY
-                    HomeTab.Browse -> zoukan.desktop.discord.DiscordPresence.Screen.BROWSE
-                    HomeTab.More -> zoukan.desktop.discord.DiscordPresence.Screen.MORE
-                },
-            )
+            Injekt.get<zoukan.desktop.discord.DiscordPresence>().setScreen(AppShell.discordScreen(tab))
         }
         // ZOUKAN <--
         val library = rememberScreenModel { LibraryScreenModel() }
@@ -560,13 +544,11 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         val extensions = remember { Injekt.get<DesktopExtensionManager>() }
         val installedExtensions by extensions.installedExtensionsFlow.collectAsState()
         val extensionUpdates = installedExtensions.values.count { it.hasUpdate }
-        val shownTabs = HomeTab.entries.filter {
-            (it != HomeTab.Updates || showUpdates) && (it != HomeTab.History || showHistory)
-        }
+        val shownTabs = AppShell.shownTabs(showUpdates, showHistory)
         LaunchedEffect(shownTabs) { tabs.showOnly(shownTabs) }
         // Opening Updates clears the badge, as Android's Updates tab does
         LaunchedEffect(tab, newUpdates) {
-            if (tab == HomeTab.Updates && newUpdates != 0) libraryPreferences.newUpdatesCount().set(0)
+            if (AppShell.clearsUpdatesBadge(tab, newUpdates)) libraryPreferences.newUpdatesCount().set(0)
         }
         // ZOUKAN <--
         Row(Modifier.fillMaxSize()) {
@@ -578,11 +560,7 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                     verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                 ) {
                     shownTabs.forEach { item ->
-                        val badge = when {
-                            item == HomeTab.Updates && showBadge && newUpdates > 0 -> newUpdates
-                            item == HomeTab.Browse && extensionUpdates > 0 -> extensionUpdates
-                            else -> 0
-                        }
+                        val badge = AppShell.railBadge(item, showBadge, newUpdates, extensionUpdates)
                         // With labels turned off, a tooltip names the tab under the mouse
                         TooltipIf(!showLabels, item.label) {
                             NavigationRailItem(
@@ -623,5 +601,67 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
                 }
             }
         }
+    }
+}
+
+/** The main window's decisions, apart from Compose so tests can call them. */
+internal object AppShell {
+    /**
+     * Quitting (the tray, the window's X without close to tray, or Cmd+Q): the built-in browser
+     * windows go first, so they are gone before Chromium shuts down at exit, then the app exits.
+     */
+    fun quit(disposeBrowsers: () -> Unit, exit: () -> Unit) {
+        disposeBrowsers()
+        exit()
+    }
+
+    /**
+     * Hands Cmd+Q on macOS, once Chromium has taken it over, to [quit]. Returns what the window
+     * runs when it leaves: the app is quitting then, and a further Cmd+Q must not let JCEF shut
+     * Chromium down under the exit.
+     */
+    fun installQuitRequest(quit: () -> Unit): () -> Unit {
+        JcefRuntime.quitRequest = quit
+        return { JcefRuntime.quitRequest = JcefRuntime.QUIT_UNDERWAY }
+    }
+
+    /** The window is hidden when closed to the tray or minimized. */
+    fun hidden(visible: Boolean, minimized: Boolean): Boolean = !visible || minimized
+
+    /** The app is away (Android's background) when hidden or another app is in front. */
+    fun away(hidden: Boolean, appActive: Boolean): Boolean = hidden || !appActive
+
+    /** The tray notification's type for a message's kind. */
+    fun notificationType(kind: Notifications.Kind): Notification.Type = when (kind) {
+        Notifications.Kind.INFO -> Notification.Type.Info
+        Notifications.Kind.WARNING -> Notification.Type.Warning
+        Notifications.Kind.ERROR -> Notification.Type.Error
+    }
+
+    /** The content's root takes the focus, so the shortcuts work, when nothing in it has it and the app lock is off. */
+    fun rootTakesFocus(locked: Boolean, rootHasFocus: Boolean): Boolean = !locked && !rootHasFocus
+
+    /** The rail's tabs: Updates and History only while their Appearance > Navigation settings are on. */
+    fun shownTabs(showUpdates: Boolean, showHistory: Boolean): List<HomeTab> = HomeTab.entries.filter {
+        (it != HomeTab.Updates || showUpdates) && (it != HomeTab.History || showHistory)
+    }
+
+    /** The count on a rail tab's badge, 0 for none: new chapters on Updates (when shown), extension updates on Browse. */
+    fun railBadge(tab: HomeTab, showBadge: Boolean, newUpdates: Int, extensionUpdates: Int): Int = when {
+        tab == HomeTab.Updates && showBadge && newUpdates > 0 -> newUpdates
+        tab == HomeTab.Browse && extensionUpdates > 0 -> extensionUpdates
+        else -> 0
+    }
+
+    /** Opening Updates clears its badge, as Android's Updates tab does. */
+    fun clearsUpdatesBadge(tab: HomeTab, newUpdates: Int): Boolean = tab == HomeTab.Updates && newUpdates != 0
+
+    /** The Discord Rich Presence screen of a tab. */
+    fun discordScreen(tab: HomeTab): zoukan.desktop.discord.DiscordPresence.Screen = when (tab) {
+        HomeTab.Library -> zoukan.desktop.discord.DiscordPresence.Screen.LIBRARY
+        HomeTab.Updates -> zoukan.desktop.discord.DiscordPresence.Screen.UPDATES
+        HomeTab.History -> zoukan.desktop.discord.DiscordPresence.Screen.HISTORY
+        HomeTab.Browse -> zoukan.desktop.discord.DiscordPresence.Screen.BROWSE
+        HomeTab.More -> zoukan.desktop.discord.DiscordPresence.Screen.MORE
     }
 }

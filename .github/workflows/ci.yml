@@ -6,10 +6,13 @@
 # below must stay the same as desktop-build.yml's push paths-ignore, which stops docs-only merges
 # from releasing.
 #
-# This is the fast set, and the release gate (desktop-build.yml calls it). The long checks (the
-# journeys, the button crawl and the extension wiring check) do not run on GitHub: they run on
-# Windows before each merge to master, `gradlew.bat :desktop:longChecks --continue`
-# (desktop/RELEASING.md, "Before merging to master"). nightly.yml can still run them by hand.
+# This is the fast set, and the release gate (desktop-build.yml calls it). On Windows and macOS a
+# pull request runs only the file tests, and a push to master the whole unit tier (the files-os
+# job). The long checks (the journeys, the button crawl and the extension wiring check) do not run
+# here: they run on Windows before each merge to master, `gradlew.bat :desktop:longChecks
+# --continue`, and `gradlew :desktop:verifyLongChecks` checks their record before the push
+# (desktop/TESTING.md, "Before merging to master"). nightly.yml runs them every night, and
+# journeys.yml runs the journeys on pull requests that change the code they cover.
 #
 # The end-to-end tests stay out of this workflow: they only run with -Pzoukan.e2e=true, because
 # they reach real extension sites. The installers are built by desktop-build.yml.
@@ -85,19 +88,60 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       - run: ./gradlew spotlessCheck
 
+  # On pull requests the unit tier also measures coverage (Kover, -Pzoukan.coverage=true), and the
+  # job summary lists the changed lines the tests do not run (desktop/TESTING.md, "Coverage"). The
+  # coverage steps are information only: they cannot fail the job, but a step that breaks shows as
+  # failed in the job's log.
   unit:
     name: Build and unit tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # The changed-line report compares with the merge base, so pull requests need the whole
+          # history. The values are strings: a number 0 is falsy in an expression, so with a bare 0
+          # the `||` side, 1, would always win.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      - name: Changed-line coverage script tests
+        run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py'
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       # distTar/distZip are built by assemble but nobody uses them in CI
-      - run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest -x distTar -x distZip --continue
+      - name: Build and unit tests
+        shell: bash
+        env:
+          COVERAGE: ${{ github.event_name == 'pull_request' }}
+        run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest -x distTar -x distZip --continue "-Pzoukan.coverage=$COVERAGE"
+      - name: Coverage report
+        id: kover
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        # The tests above ran instrumented, so they are up to date here and only the report is made
+        run: xvfb-run -a ./gradlew :koverXmlReportUnit -Pzoukan.coverage=true
+      # A report that cannot be made is said in the job summary and as a warning, not only in the log
+      - name: Coverage of changed lines
+        if: github.event_name == 'pull_request' && !cancelled()
+        continue-on-error: true
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          KOVER_OUTCOME: ${{ steps.kover.outcome }}
+        run: |
+          not_computed() {
+            echo "::warning title=Coverage of changed lines::$1"
+            printf '### Coverage of changed lines\n\nNot computed: %s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
+          }
+          if [ "$KOVER_OUTCOME" != "success" ]; then
+            not_computed "the coverage report step did not succeed ($KOVER_OUTCOME)."
+          elif python3 -B .github/scripts/changed_line_coverage.py --base "origin/$BASE_REF" --report build/reports/kover/reportUnit.xml > "$RUNNER_TEMP/changed-lines.md"; then
+            cat "$RUNNER_TEMP/changed-lines.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            not_computed "changed_line_coverage.py failed (see this step's log); the diff with origin/$BASE_REF may be missing."
+          fi
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
@@ -107,13 +151,22 @@ jobs:
             desktop/build/test-results/
             extension-jvm/build/reports/tests/
             domain/build/reports/tests/
+            android-compat/build/reports/tests/
+            backup/build/reports/tests/
           if-no-files-found: ignore
 
-  # The download, storage folder and database tests on the other two desktop systems: they match
-  # names by case and Unicode form, delete through links and Windows junctions, and read SQLite
-  # files, all of which differ from Linux (case-sensitive, no junctions). Only those classes, to stay cheap.
+  # The unit tier on the other two desktop systems. Pull requests run only the download, storage
+  # folder, database and secret store tests: they match names by case and Unicode form, delete
+  # through links and Windows junctions, read SQLite files and use the Keychain and Credential
+  # Manager, all of which differ from Linux (case-sensitive, no junctions, no OS secret store),
+  # and the subset keeps the PR gate at about 10 minutes. Pushes to master (and so the
+  # release, which calls this workflow) and dispatches run the whole tier, :desktop:test,
+  # :extension-jvm:test, :domain:desktopTest, :android-compat:test and :backup:desktopTest, which
+  # also covers the macOS marks, the Keychain and the other code that only does something on
+  # Windows or macOS. Tests for one system skip
+  # themselves on the others (assumeTrue). These runners have a display, so no xvfb.
   files-os:
-    name: File tests (${{ matrix.os }})
+    name: ${{ github.event_name == 'pull_request' && 'File tests' || 'Unit tests' }} (${{ matrix.os }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
     strategy:
@@ -122,14 +175,24 @@ jobs:
         # The same fixed images desktop-build.yml builds the installers on
         os: [windows-2025-vs2026, macos-26]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 20 || 60 }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       - shell: bash
-        run: ./gradlew :desktop:test --tests 'zoukan.desktop.download.*' --tests 'zoukan.desktop.storage.*' --tests 'zoukan.desktop.db.*' --continue
+        env:
+          EVENT: ${{ github.event_name }}
+          # The runner is thrown away after the job, so the Keychain tests may turn its prompts off
+          ZOUKAN_KEYCHAIN_TESTS: 'true'
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            ./gradlew :desktop:test --tests 'zoukan.desktop.download.*' --tests 'zoukan.desktop.storage.*' --tests 'zoukan.desktop.db.*' --tests 'zoukan.desktop.secrets.*' --continue
+          else
+            ./gradlew :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest --continue
+          fi
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
@@ -137,6 +200,10 @@ jobs:
           path: |
             desktop/build/reports/tests/
             desktop/build/test-results/
+            extension-jvm/build/reports/tests/
+            domain/build/reports/tests/
+            android-compat/build/reports/tests/
+            backup/build/reports/tests/
           if-no-files-found: ignore
 
   wiring:
@@ -200,15 +267,16 @@ jobs:
           if-no-files-found: ignore
 
   # The desktop port edits shared Android code (app/.../data/track/, data/, domain/), so compile the
-  # Android app and the Android targets of the shared modules: a desktop change must not break the
-  # Android build. The image's preinstalled Android SDK (ANDROID_HOME, licences already accepted)
-  # has the compileSdk platform and build tools, so nothing is installed here.
+  # Android app and the Android targets of the shared modules, then run the Android app's and the
+  # shared modules' Android unit tests (debug variant, on the JVM): a desktop change must not break
+  # the Android build. The image's preinstalled Android SDK (ANDROID_HOME, licences already
+  # accepted) has the compileSdk platform and build tools, so nothing is installed here.
   android-compile:
-    name: Android compile
+    name: Android compile and unit tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: ./.github/actions/setup-zoukan
@@ -221,6 +289,16 @@ jobs:
           [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/platforms" ] || { echo "::error::No Android SDK at ANDROID_HOME on this image"; exit 1; }
           ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
       - run: ./gradlew :app:compileDebugKotlin :data:compileDebugKotlinAndroid :domain:compileDebugKotlinAndroid :core:common:compileDebugKotlinAndroid :source-api:compileDebugKotlinAndroid
+      # The only Android unit tests: the app's (src/test) and domain's (src/androidUnitTest)
+      - run: ./gradlew :app:testDebugUnitTest :domain:testDebugUnitTest --continue
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: failure()
+        with:
+          name: reports-android-unit
+          path: |
+            app/build/reports/tests/
+            domain/build/reports/tests/
+          if-no-files-found: ignore
 
   pr-gate:
     name: PR gate

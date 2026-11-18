@@ -6,21 +6,23 @@ than docs; the published installers are unsigned. Nothing is published unless it
 gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job)
 and the clean-install check of each installer (below), which `desktop-build.yml` runs on the
 installer it is about to publish. The CI check is the fast set only: Spotless, the build and unit
-tests, the wiring shards, the file tests on Windows and macOS and the Android compile.
+tests, the wiring shards, the unit tests on Windows and macOS (the whole tier on master, the file
+tests on pull requests) and the Android compile and unit tests.
 
 ## Before merging to master
 
-The long checks do not run on GitHub: the journeys, the button crawl and the extension wiring
-check. Every merge to master that changes code is released, so they must pass on Windows
+The long checks do not gate a release on GitHub: the journeys, the button crawl and the extension
+wiring check. Every merge to master that changes code is released, so they must pass on Windows
 before the pull request is merged. On a Windows machine, in a checkout of the pull request's branch:
 
 ```powershell
 .\gradlew.bat :desktop:longChecks --continue
 ```
 
-See `desktop/TESTING.md`, "Before merging to master". `nightly.yml` has no schedule and does not
-gate a release; it can still be started by hand from the Actions tab to run the long checks and the
-live tests on GitHub.
+Then, on the commit you push, `./gradlew :desktop:verifyLongChecks` checks that the long checks
+left a passing record for it. See `desktop/TESTING.md`, "Before merging to master". `nightly.yml`
+runs the long checks and the live tests on GitHub every night, and `journeys.yml` runs the
+journeys on pull requests that change their hotspots; neither gates a release.
 
 ## Installers
 
@@ -62,7 +64,7 @@ while one release is building and another run is already waiting, the newer run 
 waiting one, and the replaced commit ships in the next release instead of alone. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
 if it has no release yet; a re-run of a released commit only rebuilds. The runner images are
 pinned (`ci.yml` runs on `ubuntu-26.04` too); moving to a newer image is a deliberate change made in
-both workflows and here. `ci.yml`'s "Android compile" job (see `desktop/TESTING.md`) uses the
+both workflows and here. `ci.yml`'s "Android compile and unit tests" job (see `desktop/TESTING.md`) uses the
 image's preinstalled Android SDK, so a new Linux image must still ship the `compileSdk` platform.
 
 The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to

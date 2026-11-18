@@ -90,7 +90,9 @@ class ExtensionVerificationTest {
     private fun jdkTool(name: String): String = File(System.getProperty("java.home"), "bin/$name").path
 
     private fun run(vararg command: String) {
-        val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+        // A JDK tool is a JVM: it gets this test JVM's home, which the build points under build/
+        val home = "-J-Duser.home=" + System.getProperty("user.home")
+        val process = ProcessBuilder(listOf(command.first(), home) + command.drop(1)).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
         check(process.waitFor(60, TimeUnit.SECONDS) && process.exitValue() == 0) { "${command.first()}: $output" }
     }

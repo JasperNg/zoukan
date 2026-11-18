@@ -21,6 +21,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import zoukan.desktop.testing.Await
 import java.util.concurrent.Executors
 
 /** SY's "Resolve with source metadata": the tracker id in the entry's metadata before a search. */
@@ -89,13 +90,8 @@ class TrackerMetadataResolveTest {
         ).also { models += it }
     }
 
-    private fun waitUntil(model: TrackingModel, condition: (TrackingModel.State) -> Boolean) {
-        val end = System.currentTimeMillis() + 5_000
-        while (!condition(model.state.value)) {
-            check(System.currentTimeMillis() < end) { "Timed out; state ${model.state.value}" }
-            Thread.sleep(10)
-        }
-    }
+    private fun waitUntil(model: TrackingModel, condition: (TrackingModel.State) -> Boolean) =
+        Await.until("the tracking model", 5_000, { model.state.value }) { condition(model.state.value) }
 
     @Test
     fun `the id in the metadata registers that entry without a search`() {

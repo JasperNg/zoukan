@@ -6,6 +6,8 @@
 plugins {
     id("mihon.library.kmp")
     kotlin("plugin.serialization")
+    id("zoukan.kover")
+    id("zoukan.test-home")
 }
 
 android {
@@ -48,6 +50,15 @@ kotlin {
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
                 implementation(kotlinx.coroutines.android)
                 implementation(kotlinx.coroutines.guava)
+            }
+        }
+        // The module's own tests run on the desktop target, as the desktop app uses the module:
+        //   ./gradlew :backup:desktopTest
+        getByName("desktopTest") {
+            dependencies {
+                implementation(libs.bundles.test)
+                implementation(kotlinx.coroutines.test)
+                runtimeOnly(libs.junit.platform.launcher)
             }
         }
     }

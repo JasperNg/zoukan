@@ -7,6 +7,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.objectweb.asm.ClassReader
 import zoukan.desktop.e2e.extjar.StoreFixtureSource
+import zoukan.desktop.testing.TestHome
 import java.io.File
 import java.nio.file.Files
 import java.security.KeyStore
@@ -220,7 +221,8 @@ class FixtureStore(private val server: FixtureServer) : AutoCloseable {
     private fun jdkTool(name: String): String = File(System.getProperty("java.home"), "bin/$name").path
 
     private fun run(vararg command: String) {
-        val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+        // A JDK tool is a JVM: the test home, not the real one
+        val process = ProcessBuilder(listOf(command.first()) + TestHome.jdkToolArguments() + command.drop(1)).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
         check(process.waitFor(60, TimeUnit.SECONDS) && process.exitValue() == 0) { "${File(command.first()).name}: $output" }
     }

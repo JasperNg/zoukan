@@ -5,11 +5,11 @@ import app.cash.sqldelight.db.SqlDriver
 import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okio.sink
@@ -111,11 +111,15 @@ object RestoreBenchmark {
     /** Collects the library as LibraryScreenModel does; returns the job and how many lists it got. */
     private fun watchLibrary(): Pair<Job, AtomicInteger> {
         val emissions = AtomicInteger()
+        val first = CompletableDeferred<Unit>()
         val job = CoroutineScope(Dispatchers.Default).launch {
-            Injekt.get<GetLibraryManga>().subscribe().collect { emissions.incrementAndGet() }
+            Injekt.get<GetLibraryManga>().subscribe().collect {
+                emissions.incrementAndGet()
+                first.complete(Unit)
+            }
         }
         // Wait for the first list, as an open Library tab has it
-        runBlocking { while (emissions.get() == 0) delay(10) }
+        runBlocking { first.await() }
         return job to emissions
     }
 

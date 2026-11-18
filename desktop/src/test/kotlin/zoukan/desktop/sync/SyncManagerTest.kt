@@ -10,7 +10,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.data.DatabaseHandler
@@ -22,6 +25,7 @@ import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.AppScope
 import zoukan.desktop.backup.SafetySnapshot
 import java.io.File
 import java.io.IOException
@@ -75,6 +79,8 @@ class SyncManagerTest {
         preferences.webDavUrl().set("https://dav.example.com")
         preferences.setSyncTriggerOptions(SyncTriggerOptions(syncOnAppStart = false, syncOnAppResume = true))
 
+        // syncOn decides and launches the sync on AppScope before it returns
+        val earlier = AppScope.coroutineContext.job.children.toSet()
         // No service: never, whatever the trigger
         preferences.syncService().set(SyncManager.SyncService.NONE.value)
         manager.syncOn { it.syncOnAppResume }
@@ -84,7 +90,9 @@ class SyncManagerTest {
         // WebDAV, but the start trigger is off
         preferences.syncService().set(SyncManager.SyncService.WEB_DAV.value)
         manager.syncOn { it.syncOnAppStart }
-        Thread.sleep(500)
+        // A sync that should not start has by now either read the database or not started at all
+        val started = AppScope.coroutineContext.job.children.filter { it !in earlier }.toList()
+        runBlocking { withTimeout(10_000) { started.joinAll() } }
         coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
 
         // WebDAV and the resume trigger on: a sync starts in the background

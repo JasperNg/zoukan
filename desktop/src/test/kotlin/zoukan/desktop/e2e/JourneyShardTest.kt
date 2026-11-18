@@ -90,6 +90,7 @@ class JourneyShardTest {
             JourneyShardTest::class.java.name,
             ReadThroughMovesTest::class.java.name,
             FixtureServerTest::class.java.name,
+            FixtureServerFaultsTest::class.java.name,
             FixtureKomgaTest::class.java.name,
             FixtureSyncServerTest::class.java.name,
             FixtureSourcePreviewsTest::class.java.name,

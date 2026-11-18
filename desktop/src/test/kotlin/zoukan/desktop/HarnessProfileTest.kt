@@ -12,15 +12,19 @@ class HarnessProfileTest {
     @TempDir
     lateinit var tempDir: File
 
+    /** The value the build set for every test, put back afterwards. */
+    private var previousDataDir: String? = null
+
     @BeforeEach
     fun setUp() {
+        previousDataDir = System.getProperty("zoukan.dataDir")
         System.setProperty("zoukan.dataDir", File(tempDir, "data").path)
     }
 
     @AfterEach
     fun tearDown() {
         SingleInstance.closeAll()
-        System.clearProperty("zoukan.dataDir")
+        previousDataDir?.let { System.setProperty("zoukan.dataDir", it) } ?: System.clearProperty("zoukan.dataDir")
     }
 
     @Test
