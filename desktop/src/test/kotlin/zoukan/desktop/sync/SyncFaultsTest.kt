@@ -16,6 +16,13 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import zoukan.desktop.testing.Await
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -35,6 +42,7 @@ import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.UserMessages
 import zoukan.desktop.track.MapPreferenceStore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * WebDAV sync (the shared WebDavSyncService, as SyncManager runs it) against the fixture sync server
@@ -243,6 +251,28 @@ class SyncFaultsTest {
         server.clearFailures()
         syncYomi().shouldNotBeNull().backupManga.map { it.url }.toSet() shouldBe setOf("/local", "/remote")
         sync.calls.filter { it.method == "PUT" }.size shouldBe 1
+    }
+
+    @Test
+    fun `a WebDAV sync that is cancelled mid-download is cancelled, not reported as a sync error`() {
+        server.fail(davFile, FixtureFailure.Hang)
+        val notifier = mockk<SyncNotifier>(relaxed = true)
+        val service = WebDavSyncService(mockk<Application>(relaxed = true), Json { ignoreUnknownKeys = true }, preferences, notifier, ProtoBuf)
+
+        // What doSync did with the cancellation
+        val outcome = AtomicReference<Result<Backup?>>()
+        runBlocking {
+            val job = launch(Dispatchers.IO) { outcome.set(runCatching { service.doSync(local) }) }
+            Await.until("the download to start") { davFile in server.requests }
+            job.cancel()
+            withTimeout(10_000) { job.join() }
+        }
+
+        server.clearFailures()
+        // A swallowed cancellation shows as a finished sync (null) and an error the user sees
+        outcome.get().exceptionOrNull().shouldBeInstanceOf<CancellationException>()
+        verify(exactly = 0) { notifier.showSyncError(any()) }
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
     }
 
     companion object {

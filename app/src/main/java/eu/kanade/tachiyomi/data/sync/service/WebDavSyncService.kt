@@ -120,6 +120,9 @@ class WebDavSyncService(
             pushSyncData(finalSyncData, etag)
             return finalSyncData.backup
         } catch (e: Exception) {
+            // ZOUKAN -->
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // ZOUKAN <--
             xLogE("WebDAV sync error:", e)
             notifier.showSyncError(e.message)
             return null
