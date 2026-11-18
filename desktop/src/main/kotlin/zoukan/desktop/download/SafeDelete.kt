@@ -2,13 +2,12 @@ package zoukan.desktop.download
 
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.nio.file.attribute.BasicFileAttributes
-import java.text.Normalizer
 
 /**
  * Every delete under the downloads folder goes through here. It never follows a symbolic link (a
@@ -134,61 +133,14 @@ object SafeDelete {
     }
 
     /**
-     * Deletes [path] and, for a real folder, everything in it, never following a link. Not
-     * walkFileTree: it walks into a Windows junction (which Java reports as a folder), and would
-     * delete the files the junction points to.
+     * Deletes [path] and, for a real folder, everything in it, never following a link or a Windows
+     * junction ([NoFollowDelete.deleteTree]).
      */
-    fun deleteTreeNoFollow(path: Path) {
-        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
-        if (!isLink(path) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            try {
-                Files.newDirectoryStream(path).use { children -> children.forEach { deleteTreeNoFollow(it) } }
-            } catch (e: IOException) {
-                logcat(LogPriority.WARN, e) { "Could not delete everything in ${path.fileName}" }
-            }
-        }
-        // A link or a junction is removed as itself
-        deleteQuietly(path)
-    }
+    fun deleteTreeNoFollow(path: Path) = NoFollowDelete.deleteTree(path)
 
     /**
      * A symbolic link, a Windows junction or another reparse point: anything whose real location is
-     * not the folder it is listed in.
+     * not the folder it is listed in ([NoFollowDelete.isLink]).
      */
-    internal fun isLink(path: Path): Boolean = try {
-        val attrs = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-        when {
-            attrs.isSymbolicLink || attrs.isOther -> true
-            !attrs.isDirectory -> false
-            else -> {
-                val parent = path.toAbsolutePath().parent
-                parent != null && !samePath(path.toRealPath(), parent.toRealPath().resolve(path.fileName.toString()))
-            }
-        }
-    } catch (e: IOException) {
-        // Unreadable: treated as a link, so nothing behind it is touched
-        true
-    }
-
-    /**
-     * Whether [real] is [listed]. macOS ignores the Unicode form of names, and its real path gives
-     * the form on disk (NFD, from a folder made outside Java or copied from another system) while
-     * the listed name may be NFC: the same folder, not a link. Elsewhere the forms are two names.
-     */
-    private fun samePath(real: Path, listed: Path): Boolean {
-        if (real == listed) return true
-        if (!IGNORES_UNICODE_FORM) return false
-        return Normalizer.normalize(real.toString(), Normalizer.Form.NFC) == Normalizer.normalize(listed.toString(), Normalizer.Form.NFC)
-    }
-
-    private val IGNORES_UNICODE_FORM = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
-
-    /** What is left is reported by the caller, which checks the path is gone. */
-    private fun deleteQuietly(path: Path) {
-        try {
-            Files.delete(path)
-        } catch (e: IOException) {
-            logcat(LogPriority.DEBUG, e) { "Could not delete ${path.fileName}" }
-        }
-    }
+    internal fun isLink(path: Path): Boolean = NoFollowDelete.isLink(path)
 }
