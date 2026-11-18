@@ -111,7 +111,7 @@ class TrackingModel(
                 mutableState.update { it.copy(loading = false) }
                 search()
             }
-        }
+        }.endLoadingOnFailure(tracker)
     }
 
     /** The id of the entry on [trackerId] in the manga's source metadata, as SY's getTrackerIdFromMetadata. */
@@ -154,6 +154,16 @@ class TrackingModel(
         mutableState.update { if (it.searching === tracker) transform(it) else it }
     }
 
+    /**
+     * Ends [tracker]'s loading when this search ends with an error that goes on (a fatal one, which
+     * the catches rethrow): the search dialog would spin for good.
+     */
+    private fun Job.endLoadingOnFailure(tracker: Any): Job = apply {
+        invokeOnCompletion { cause ->
+            if (cause != null && cause !is CancellationException) applyResult(tracker) { it.copy(loading = false) }
+        }
+    }
+
     private suspend fun <T> runSearch(block: suspend () -> T): Result<T> = withContext(Dispatchers.IO) {
         try {
             Result.success(block())
@@ -180,7 +190,7 @@ class TrackingModel(
                     error = result.exceptionOrNull()?.let { e -> e.message ?: e::class.simpleName },
                 )
             }
-        }
+        }.endLoadingOnFailure(tracker)
     }
 
     private fun matchEnhanced(tracker: EnhancedTracker) {
@@ -195,7 +205,7 @@ class TrackingModel(
                     error = result.exceptionOrNull()?.message ?: if (result.getOrNull() == null) "No match on this server" else null,
                 )
             }
-        }
+        }.endLoadingOnFailure(tracker)
     }
 
     fun bind(result: TrackSearch) {

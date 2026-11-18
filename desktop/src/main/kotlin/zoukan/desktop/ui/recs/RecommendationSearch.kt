@@ -221,6 +221,10 @@ class RecommendationSearchHelper {
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Error during recommendation search" }
             publish(SearchStatus.Error(e.message.orEmpty()))
+        } catch (e: Throwable) {
+            // A fatal error from a source's search goes on, after the search stops spinning
+            publish(SearchStatus.Error(e.message.orEmpty()))
+            throw e
         }
     }
 

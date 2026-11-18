@@ -152,4 +152,18 @@ class MissingExtensionsInstallTest {
         // The plan was worked out only after the restore ended, however long the find waited
         plannedWhileRestoring shouldBe false
     }
+
+    @Test
+    fun `running out of memory while finding leaves the panel idle, not finding for good`() {
+        val token = Any()
+        val planned = CompletableDeferred<Unit>()
+        MissingExtensionsInstall.planner = {
+            planned.complete(Unit)
+            throw OutOfMemoryError("test")
+        }
+        MissingExtensionsInstall.find(token)
+        runBlocking { planned.await() }
+        waitUntil { MissingExtensionsInstall.state.value.state == State.Idle }
+        MissingExtensionsInstall.state.value.forRestore(token) shouldBe State.Idle
+    }
 }

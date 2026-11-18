@@ -97,10 +97,11 @@ object MissingExtensionsInstall {
                 setState(token, State.Idle)
                 throw e
             } catch (e: Throwable) {
+                // Idle before a fatal error goes on: the panel would show "finding" for good
+                setState(token, State.Idle)
                 e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { "Finding the missing extensions failed" }
                 Toasts.error(localized(DMR.strings.could_not_load_the_extension_lists), e)
-                setState(token, State.Idle)
             } finally {
                 runQueued()
             }
@@ -129,10 +130,11 @@ object MissingExtensionsInstall {
                 setState(token, State.Idle)
                 throw e
             } catch (e: Throwable) {
+                // Idle before a fatal error goes on: the progress would show for good
+                setState(token, State.Idle)
                 e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { "Installing the missing extensions failed" }
                 Toasts.error(localized(MR.strings.unknown_error), e)
-                setState(token, State.Idle)
             } finally {
                 runQueued()
             }

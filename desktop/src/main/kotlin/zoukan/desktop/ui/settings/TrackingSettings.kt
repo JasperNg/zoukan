@@ -207,6 +207,8 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
+                                // The dialog's buttons work again before a fatal error goes on
+                                busy = false
                                 e.rethrowIfFatal()
                                 logcat(LogPriority.WARN, e) { "Signing in failed" }
                                 error = localized(DMR.strings.could_not_sign_in)
@@ -270,6 +272,8 @@ private fun TrackerSetting(tracker: Tracker) {
                                 }
                                 throw e
                             } catch (e: Throwable) {
+                                // The dialog's buttons work again before a fatal error goes on
+                                busy = false
                                 e.rethrowIfFatal()
                                 logcat(LogPriority.WARN, e) { "Signing in failed" }
                                 error = localized(DMR.strings.could_not_sign_in)

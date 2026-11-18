@@ -128,4 +128,24 @@ class TrackingSearchTest {
         blank.state.value.searching shouldBe trackerB
         blank.state.value.loading shouldBe false
     }
+
+    @Test
+    fun `running out of memory in a search ends the spinner and still reaches the crash report`() {
+        val failing: BaseTracker = mockk(relaxed = true) {
+            every { id } returns 3
+            coEvery { search(any()) } throws OutOfMemoryError("test")
+        }
+        val uncaught = java.util.concurrent.CopyOnWriteArrayList<Throwable>()
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            model.startSearch(failing)
+            waitUntil { uncaught.isNotEmpty() && !model.state.value.loading }
+            model.state.value.loading shouldBe false
+            (uncaught.single() is OutOfMemoryError) shouldBe true
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(previous)
+            zoukan.desktop.testing.UncaughtCoroutineErrors.drain()
+        }
+    }
 }

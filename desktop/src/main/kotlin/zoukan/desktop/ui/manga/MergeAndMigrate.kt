@@ -149,8 +149,9 @@ private fun MergeDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit) {
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Throwable) {
-                        e.rethrowIfVmFailure()
+                        // The dialog works again before a fatal error goes on
                         busy = false
+                        e.rethrowIfVmFailure()
                         return@launch
                     }
                     onDismiss()
@@ -207,8 +208,9 @@ internal fun MigrateDialog(mangaId: Long, picked: Manga, onDismiss: () -> Unit, 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                e.rethrowIfVmFailure()
+                // The dialog works again (and can be closed) before a fatal error goes on
                 busy = false
+                e.rethrowIfVmFailure()
                 return@launch
             }
             onDismiss()

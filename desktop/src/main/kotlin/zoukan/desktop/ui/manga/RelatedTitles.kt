@@ -81,11 +81,9 @@ fun RelatedTitlesSection(manga: Manga, modifier: Modifier = Modifier) {
             loadRelated(manga) { related = it }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: OutOfMemoryError) {
-            throw e
-        } catch (e: InternalError) {
-            throw e
         } catch (e: Throwable) {
+            // Not loading any more before a fatal error goes on, or the spinner stays
+            related = related.orEmpty()
             e.rethrowIfVmFailure()
             // Anything else, an Error from the extension's code included (a StackOverflowError too):
             // escaping this composition effect would close the app

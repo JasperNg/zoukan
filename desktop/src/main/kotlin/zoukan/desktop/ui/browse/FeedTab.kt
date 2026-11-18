@@ -230,8 +230,11 @@ class FeedScreenModel(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    // The row shows the error before a fatal error goes on, not loading for good
+                    val error = Result.Error(sourceErrorMessage(e))
+                    mutableState.update { it.copy(results = it.results + (row.feed.id to error)) }
                     e.rethrowIfVmFailure()
-                    Result.Error(sourceErrorMessage(e))
+                    error
                 }
             }
             mutableState.update { it.copy(results = it.results + (row.feed.id to result)) }

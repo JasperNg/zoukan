@@ -200,20 +200,24 @@ private fun PasswordDialog(lock: AppLock, preferences: SecurityPreferences, onDi
                     val currentPassword = current
                     val newPassword = password
                     scope.launch {
-                        secretStoreCall {
-                            if (check && !lock.verify(currentPassword)) return@secretStoreCall false
-                            lock.setPassword(newPassword)
-                            preferences.useAuthenticator().set(true)
-                            true
-                        }.onSuccess { saved ->
-                            if (saved) {
-                                Toasts.show(localized(DMR.strings.password_set))
-                                onDismiss()
-                            } else {
-                                error = localized(DMR.strings.the_current_password_is_wrong)
-                            }
-                        }.onFailure { error = secretStoreError(it) }
-                        busy = false
+                        // finally: a fatal error going on from the call still frees the buttons
+                        try {
+                            secretStoreCall {
+                                if (check && !lock.verify(currentPassword)) return@secretStoreCall false
+                                lock.setPassword(newPassword)
+                                preferences.useAuthenticator().set(true)
+                                true
+                            }.onSuccess { saved ->
+                                if (saved) {
+                                    Toasts.show(localized(DMR.strings.password_set))
+                                    onDismiss()
+                                } else {
+                                    error = localized(DMR.strings.the_current_password_is_wrong)
+                                }
+                            }.onFailure { error = secretStoreError(it) }
+                        } finally {
+                            busy = false
+                        }
                     }
                 },
                 enabled = hasPasswordState != null && !busy,
@@ -227,12 +231,15 @@ private fun PasswordDialog(lock: AppLock, preferences: SecurityPreferences, onDi
                             busy = true
                             val currentPassword = current
                             scope.launch {
-                                secretStoreCall {
-                                    lock.verify(currentPassword).also { if (it) lock.clearPassword() }
-                                }.onSuccess { removed ->
-                                    if (removed) onDismiss() else error = localized(DMR.strings.enter_the_current_password_to_turn)
-                                }.onFailure { error = secretStoreError(it) }
-                                busy = false
+                                try {
+                                    secretStoreCall {
+                                        lock.verify(currentPassword).also { if (it) lock.clearPassword() }
+                                    }.onSuccess { removed ->
+                                        if (removed) onDismiss() else error = localized(DMR.strings.enter_the_current_password_to_turn)
+                                    }.onFailure { error = secretStoreError(it) }
+                                } finally {
+                                    busy = false
+                                }
                             }
                         },
                         enabled = !busy,

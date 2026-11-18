@@ -238,11 +238,11 @@ fun PagePreviewSection(manga: Manga, modifier: Modifier = Modifier) {
             Result.success(PagePreviews.load(manga, 1))
         } catch (e: CancellationException) {
             throw e
-        } catch (e: OutOfMemoryError) {
-            throw e
         } catch (e: Throwable) {
+            // Throwable: an unloaded extension's Error must not leave the spinner, and a fatal
+            // error goes on only after the spinner is gone
+            value = Result.failure(e)
             e.rethrowIfVmFailure()
-            // Throwable: an unloaded extension's Error must not leave the spinner
             Result.failure(e)
         }
     }
@@ -325,13 +325,12 @@ data class PagePreviewScreen(val mangaId: Long) : Screen {
                     }
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: OutOfMemoryError) {
-                    throw e
                 } catch (e: Throwable) {
-                    e.rethrowIfVmFailure()
-                    // Throwable: an unloaded extension's Error must not leave the spinner
-                    logcat(LogPriority.WARN, e) { "Loading the page previews failed" }
+                    // Throwable: an unloaded extension's Error must not leave the spinner, and a
+                    // fatal error goes on only after the spinner is gone
                     mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }
+                    e.rethrowIfVmFailure()
+                    logcat(LogPriority.WARN, e) { "Loading the page previews failed" }
                 }
             }
         }
