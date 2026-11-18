@@ -7,7 +7,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import mihon.data.extension.service.ExtensionStoreService
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.xml.sax.SAXException
 import zoukan.desktop.Platform
@@ -17,7 +16,7 @@ import zoukan.desktop.testing.fakes.MemorySecretStore
 import zoukan.desktop.update.UpdateChecker
 import java.io.IOException
 
-/** Inputs [OutsideDataParserPropertyTest] found that a parser does not handle. Disabled until fixed. */
+/** Inputs [OutsideDataParserPropertyTest] found that a parser did not handle, kept as regression tests. */
 class ParserKnownDefectsTest {
 
     @Test
@@ -36,10 +35,6 @@ class ParserKnownDefectsTest {
         result.getOrThrow().isFailure shouldBe true
     }
 
-    @Disabled(
-        "Known defect: a store index whose index_v2 names the index itself is fetched again and again, never " +
-            "returning (ExtensionStoreService.kt:63 follows index_v2 with no limit).",
-    )
     @Test
     fun `a store index that names itself as its index_v2 gives a failed result`() = runBlocking<Unit> {
         val url = "https://store.test/repo.json"

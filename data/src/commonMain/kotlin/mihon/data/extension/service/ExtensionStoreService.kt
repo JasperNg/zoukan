@@ -29,7 +29,16 @@ class ExtensionStoreService(
     private val json: Json,
     private val protoBuf: ProtoBuf,
 ) {
-    suspend fun fetch(indexUrl: String): Result<ExtensionStore> {
+    // ZOUKAN -->
+    suspend fun fetch(indexUrl: String): Result<ExtensionStore> = fetch(indexUrl, followIndexV2 = true)
+
+    /**
+     * [followIndexV2]: whether a legacy repo's `index_v2` may still be followed. It names the
+     * store's new-format index, the end of the chain, so it is followed once: a repo that names
+     * itself, a cycle or a chain of legacy repos fails instead of being fetched forever.
+     */
+    private suspend fun fetch(indexUrl: String, followIndexV2: Boolean): Result<ExtensionStore> {
+        // ZOUKAN <--
         var updatedIndexUrl: String = indexUrl
         return try {
             // KMK -->
@@ -60,7 +69,15 @@ class ExtensionStoreService(
                 }
 
                 if (networkStore is NetworkLegacyExtensionRepo && networkStore.indexV2 != null) {
-                    return fetch(networkStore.indexV2)
+                    // ZOUKAN -->
+                    if (!followIndexV2) {
+                        throw IllegalArgumentException(
+                            "The extension store's index_v2 leads to another legacy store, not to an index: " +
+                                networkStore.indexV2.take(200),
+                        )
+                    }
+                    return fetch(networkStore.indexV2, followIndexV2 = false)
+                    // ZOUKAN <--
                 }
 
                 networkStore.toExtensionStore(updatedIndexUrl)

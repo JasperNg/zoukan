@@ -103,10 +103,9 @@ class OutsideDataParserPropertyTest {
         val valid = listOf(ValidDocuments.storeIndex, ValidDocuments.legacyRepo, ValidDocuments.legacyIndex).map { it.toByteArray() } + listOf(proto)
         val outcomes = Outcomes("ExtensionStoreService")
         checkAll(PropertyRuns.config(ITERATIONS), arbFrom { r -> Mutations.input(r, valid, if (r.nextBoolean()) Format.JSON else Format.BINARY) to r.nextInt(4) }) { (input, url) ->
-            // The first request gets the input, any later one a 404: a legacy index's index_v2 is
-            // fetched once. An index_v2 that names the index itself loops; see
-            // ParserKnownDefectsTest's `a store index that names itself as its index_v2 ...`.
-            val http = FakeHttp { _, n -> if (n == 1) input else null }
+            // Every request gets the input, so an index_v2 that names the index itself is fetched
+            // again: once, as the hop limit allows (ExtensionStoreIndexV2Test)
+            val http = FakeHttp { _, _ -> input }
             val service = ExtensionStoreService(http.network, json, ProtoBuf)
             val indexUrl = listOf("https://store.test/index.min.json", "https://store.test/repo.json", "https://store.test/index.pb", "https://store.test/").get(url)
             outcomes.run(input, { false }) {
