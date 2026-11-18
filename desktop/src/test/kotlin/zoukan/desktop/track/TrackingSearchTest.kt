@@ -11,6 +11,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
@@ -65,6 +66,18 @@ class TrackingSearchTest {
     @AfterEach
     fun tearDown() {
         models.forEach { it.onDispose() }
+        // The models' coroutines read Dispatchers.Main until they end: resetting it while one still
+        // runs fails ("used concurrently with setting it"). The scope itself lives on (Voyager cancels
+        // it only for a registered screen), so its coroutines are cancelled and awaited here
+        runBlocking {
+            withTimeout(5_000) {
+                models.forEach { model ->
+                    val job = model.screenModelScope.coroutineContext.job
+                    job.cancelChildren()
+                    job.children.toList().joinAll()
+                }
+            }
+        }
         Dispatchers.resetMain()
         main.close()
     }

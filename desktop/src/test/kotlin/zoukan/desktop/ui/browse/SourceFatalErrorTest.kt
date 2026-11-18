@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.browse
 
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.source.CatalogueSource
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -58,6 +59,16 @@ class SourceFatalErrorTest {
     @AfterEach
     fun tearDown() {
         model.onDispose()
+        // Its coroutines read Dispatchers.Main until they end, and resetting it meanwhile fails
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeout(5_000) {
+                listOf(model).forEach { m ->
+                    val job = m.screenModelScope.coroutineContext[kotlinx.coroutines.Job]!!
+                    job.children.forEach { it.cancel() }
+                    job.children.toList().forEach { it.join() }
+                }
+            }
+        }
         Dispatchers.resetMain()
         main.close()
         Thread.setDefaultUncaughtExceptionHandler(previousHandler)

@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.reader
 
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.collections.shouldContain
@@ -54,6 +55,16 @@ class ReaderFatalErrorTest {
     @AfterEach
     fun tearDown() {
         models.forEach { it.onDispose() }
+        // Its coroutines read Dispatchers.Main until they end, and resetting it meanwhile fails
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeout(5_000) {
+                models.forEach { m ->
+                    val job = m.screenModelScope.coroutineContext[kotlinx.coroutines.Job]!!
+                    job.children.forEach { it.cancel() }
+                    job.children.toList().forEach { it.join() }
+                }
+            }
+        }
         app.cancel()
         Dispatchers.resetMain()
         main.close()
