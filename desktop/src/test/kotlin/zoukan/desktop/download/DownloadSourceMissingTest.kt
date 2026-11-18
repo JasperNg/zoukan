@@ -104,7 +104,8 @@ class DownloadSourceMissingTest {
             mockk<GetManga> { coEvery { await(any<Long>()) } answers { listOf(kept, gone).firstOrNull { it.id == firstArg<Long>() } } },
             mockk<GetChapter> { coEvery { await(any<Long>()) } answers { chapters[firstArg<Long>()] } },
             mockk(relaxed = true),
-        ) { emptyList() }
+            coOwners = { emptyList() },
+        )
 
         manager.restore(start = false)
 

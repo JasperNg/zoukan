@@ -1,6 +1,7 @@
 package zoukan.desktop.download
 
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CancellationException
@@ -84,6 +85,16 @@ class DownloadManager(
      * database; tests without one pass their own.
      */
     coOwners: (suspend (Manga) -> List<Pair<Manga, List<Chapter>>>)? = null,
+    /**
+     * Makes the downloader of one chapter from its page list, image URL and image calls and the
+     * number of pages fetched at once; tests pass one whose file writes fail.
+     */
+    private val newDownloader: (
+        pageList: suspend () -> List<Page>,
+        imageUrl: suspend (Page) -> String,
+        image: suspend (Page) -> ByteArray,
+        parallelPages: Int,
+    ) -> ChapterDownloader = { pageList, imageUrl, image, parallelPages -> ChapterDownloader(pageList, imageUrl, image, parallelPages) },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -1020,10 +1031,10 @@ class DownloadManager(
                 } else {
                     val freeSpace = dir.parentFile?.let { generateSequence(it) { f -> f.parentFile }.firstOrNull(File::exists) }?.usableSpace
                     if (!hasRoom(freeSpace)) error(localized(DMR.strings.download_disk_full))
-                    val downloader = ChapterDownloader(
-                        pageList = { source.getPageList(chapter.toSChapter()) },
-                        imageUrl = { source.getImageUrl(it) },
-                        image = { page ->
+                    val downloader = newDownloader(
+                        { source.getPageList(chapter.toSChapter()) },
+                        { source.getImageUrl(it) },
+                        { page ->
                             // ZOUKAN -->
                             // The SY data saver, when it applies to downloads, as Android's Downloader
                             val prefs = sourcePreferences
@@ -1039,7 +1050,7 @@ class DownloadManager(
                                 response.body.bytes()
                             }
                         },
-                        parallelPages = preferences.parallelPageLimit().get(),
+                        preferences.parallelPageLimit().get(),
                     )
                     // Only a CBZ is encrypted: a folder download never reads the secret store
                     val asCbz = preferences.saveChaptersAsCBZ().get()
