@@ -36,13 +36,13 @@ class BackupPropertyTest {
             val read = BackupCodec.decode(file)
             differences(tree(backup), tree(read), "backup").forEach { (path, detail) ->
                 val kind = path.replace(Regex("""\[\d+]"""), "[]")
-                // `an empty custom genre list survives write then read`: only an empty list read back as null
+                // `an empty custom genre list is read back as no custom genre`: only an empty list read back as null
                 val known = kind == "backup.backupManga[].customGenre" && detail == "was [], is null"
                 found.add(if (known) "$kind (empty list read back as null)" else kind, "", detail)
             }
         }
-        val unknown = found.kinds() - KNOWN_DEFECTS
-        if (found.kinds().isNotEmpty()) println("Known backup round-trip defects seen:\n" + found.report(found.kinds() intersect KNOWN_DEFECTS))
+        val unknown = found.kinds() - FORMAT_LIMITS
+        if (found.kinds().isNotEmpty()) println("Backup format limits seen:\n" + found.report(found.kinds() intersect FORMAT_LIMITS))
         check(unknown.isEmpty()) { "Fields changed by a write and read (seed ${PropertyRuns.seed}):\n" + found.report(unknown) }
     }
 
@@ -63,7 +63,7 @@ class BackupPropertyTest {
     companion object {
         private const val ITERATIONS = 200
 
-        /** Changes a round trip is known to make; each has a disabled test in [BackupKnownDefectsTest]. */
-        val KNOWN_DEFECTS: Set<String> = setOf("backup.backupManga[].customGenre (empty list read back as null)")
+        /** Changes the backup format cannot avoid; each is pinned in [BackupFormatLimitsTest]. */
+        val FORMAT_LIMITS: Set<String> = setOf("backup.backupManga[].customGenre (empty list read back as null)")
     }
 }
