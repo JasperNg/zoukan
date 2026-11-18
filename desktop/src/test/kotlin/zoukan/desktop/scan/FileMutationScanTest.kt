@@ -97,7 +97,6 @@ class FileMutationScanTest {
             Allowed("zoukan/extension/DesktopExtensionInstaller.kt", "checkedPackageDir(extensionsDir, pkgName).deleteRecursively()", "checkedPackageDir resolves links and requires the folder to sit directly in the extensions folder, which holds only files the installer wrote", function = "uninstall"),
             // Suspected defects: should go through SafeDelete
             Allowed("update/Updates.kt", "?.forEach { it.deleteRecursively() }", "known defect: the updates folder is one other programs can write to (see install()); clearing old downloads follows a link planted there", function = "downloadVerified"),
-            Allowed("local/Archives.kt", ".forEach { it.deleteRecursively() }", "known defect: the chapter cache's prune uses deleteRecursively while the rest of the file uses deleteTree (no links followed); unpacked folders can hold links an archive made", function = "prune"),
         )
     }
 }

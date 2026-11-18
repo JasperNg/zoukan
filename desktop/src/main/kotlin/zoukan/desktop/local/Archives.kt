@@ -710,7 +710,8 @@ object Archives {
                 .filterNot { it.name in leases }
                 .sortedByDescending { it.lastModified() }
                 .drop((KEEP - leases.size).coerceAtLeast(0))
-                .forEach { it.deleteRecursively() }
+                // A link (one an archive made, say) is removed as itself, never what it points to
+                .forEach { deleteTree(it) }
         }
     }
 }

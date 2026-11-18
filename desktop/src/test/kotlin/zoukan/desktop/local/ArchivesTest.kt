@@ -17,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.secrets.FileCipher
+import zoukan.desktop.testing.FileSystemSandbox
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -149,6 +150,27 @@ class ArchivesTest {
             open.close()
         }
         Archives.cacheRoot.listFiles { f -> f.isDirectory }!!.size shouldBe 8
+    }
+
+    @Test
+    fun `pruning the cache removes links as themselves, never what they point to`() {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            Archives.cacheRoot = File(sandbox.dataFolder, "cache/archives")
+            LocalFormat.open(tar(File(temp, "first.cbt"))).use { it.pageCount shouldBe 4 }
+            val first = Archives.cacheRoot.listFiles { f -> f.isDirectory }!!.single()
+            // A link in an unpacked chapter, and a chapter-named link in the cache folder itself
+            assumeTrue(sandbox.link(File(first, "linked"), sandbox.userFolder) != null, "symbolic links cannot be made here")
+            val rootLink = sandbox.link(File(Archives.cacheRoot, "0123456789abcdef0123"), sandbox.downloads)!!
+            first.setLastModified(1_000L)
+            sandbox.record()
+
+            // More chapters than the cache keeps, so the oldest go
+            (1..9).forEach { i -> LocalFormat.open(sevenZ(File(temp, "other$i.cb7"))).use { it.pageCount shouldBe 4 } }
+
+            first.exists() shouldBe false
+            Files.exists(rootLink.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) shouldBe false
+            sandbox.assertNothingOutsideAppChanged()
+        }
     }
 
     @Test
