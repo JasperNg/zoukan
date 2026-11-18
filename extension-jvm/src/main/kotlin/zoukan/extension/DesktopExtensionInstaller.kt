@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mihon.data.extension.service.awaitSecureStoreResponse
 import okhttp3.OkHttpClient
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -169,8 +170,9 @@ class DesktopExtensionInstaller(
     }
 
     fun uninstall(pkgName: String) {
-        // Loaded extensions run from memory (ExtensionClassLoader), so no file is held open
-        checkedPackageDir(extensionsDir, pkgName).deleteRecursively()
+        // Loaded extensions run from memory (ExtensionClassLoader), so no file is held open. Never
+        // through a link: the canonical path may leave a Windows junction unresolved
+        NoFollowDelete.deleteTree(checkedPackageDir(extensionsDir, pkgName).toPath())
     }
 
     private fun checkManifest(manifest: ExtensionManifest, extension: Extension.Available, installedVersionCode: Long?) {
