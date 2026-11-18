@@ -35,7 +35,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import zoukan.desktop.compat.localized
+import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.download.ImageType
+import zoukan.desktop.local.LocalSource
 import zoukan.desktop.manga.CustomCovers
 import zoukan.desktop.network.SendOnlyCookieJar
 import zoukan.desktop.secrets.EncryptedFileSystem
@@ -138,6 +140,7 @@ object Images {
         diskCacheDir: File = File(coverDir.parentFile, "images"),
         codec: SettingsFileCodec? = SettingsFileCodec.current,
         incognito: (sourceId: Long?) -> Boolean = ::incognitoFromSettings,
+        coverPassword: () -> CharArray? = ::coverPasswordFromSecretStore,
     ) {
         this.coverDir = coverDir.apply { mkdirs() }
         CustomCovers.coverDir = this.coverDir
@@ -145,10 +148,22 @@ object Images {
         this.diskCacheDir = diskCacheDir
         this.codec = codec
         this.incognito = incognito
+        this.coverPassword = coverPassword
         // ZOUKAN -->
         EncryptedFiles.deleteTemporaryFiles(this.coverDir, CACHED_COVER_NAME)
         CustomCovers.deleteTemporaryFiles()
         // ZOUKAN <--
+    }
+
+    /** The download password, for a local entry's encrypted cover (`cover.cbi`); null when there is none. */
+    @Volatile
+    private var coverPassword: () -> CharArray? = ::coverPasswordFromSecretStore
+
+    /** The download password from the OS secret store; null when it is not set or cannot be read. */
+    private fun coverPasswordFromSecretStore(): CharArray? = try {
+        Injekt.get<CbzPassword>().get()
+    } catch (e: Exception) {
+        null
     }
 
     /** The names of the source covers kept in the covers folder: [hash] of the source and address. */
@@ -214,8 +229,14 @@ object Images {
         if (cover.url.startsWith("file:")) {
             val local = File(java.net.URI(cover.url))
             if (!local.isFile) throw IOException(localized(DMR.strings.is_missing, local.name))
-            // A local source's cover is the user's file in the storage folder: read, never rewritten
-            return@withContext if (CustomCovers.isCustomCover(local)) CustomCovers.read(local) else local.readBytes()
+            // A local source's cover is the user's file in the storage folder: read, never rewritten.
+            // An encrypted one (cover.cbi) is decrypted in memory with the download password; it
+            // fails without the password, and the cover then shows as broken
+            return@withContext when {
+                CustomCovers.isCustomCover(local) -> CustomCovers.read(local)
+                LocalSource.isCoverArchive(local) -> LocalSource.readCoverArchive(local, coverPassword)
+                else -> local.readBytes()
+            }
         }
         val file = File(dir, hash("${cover.sourceId}:${cover.url}"))
         cachedCover(file)?.let { return@withContext it }

@@ -95,6 +95,32 @@ class CoverEncryptionTest {
     }
 
     @Test
+    fun `a local source's encrypted cover is read with the download password, in memory only`() {
+        val entry = File(dir, "storage/local/Title").apply { mkdirs() }
+        val archive = File(entry, "cover.cbi")
+        zoukan.desktop.download.CbzWriter(
+            archive,
+            zoukan.desktop.download.CbzEncryption("secret".toCharArray(), eu.kanade.tachiyomi.core.security.SecurityPreferences.EncryptionType.AES_256),
+        ).use { it.write("cover.jpg", image) }
+        val stored = archive.readBytes()
+        val cover = Cover(archive.toURI().toString(), 0)
+
+        Images.init(covers, File(dir, "cache/images"), cipher, coverPassword = { "secret".toCharArray() })
+        runBlocking { Images.coverBytes(cover, covers) } shouldBe image
+        // Nothing decrypted is written: not beside the archive, not in the covers folder
+        archive.readBytes() shouldBe stored
+        entry.listFiles()!!.map { it.name } shouldBe listOf("cover.cbi")
+        covers.listFiles().orEmpty().toList() shouldBe emptyList()
+
+        // Without the password or with a wrong one the cover fails (the loader shows a broken cover)
+        Images.init(covers, File(dir, "cache/images"), cipher, coverPassword = { null })
+        assertThrows<IllegalStateException> { runBlocking { Images.coverBytes(cover, covers) } }
+        Images.init(covers, File(dir, "cache/images"), cipher, coverPassword = { "wrong".toCharArray() })
+        assertThrows<java.io.IOException> { runBlocking { Images.coverBytes(cover, covers) } }
+        archive.readBytes() shouldBe stored
+    }
+
+    @Test
     fun `a cached source cover from before encryption is read and rewritten encrypted`() {
         val cover = Cover("https://covers.example/1.png", 42)
         val file = File(covers, Images.hash("42:https://covers.example/1.png")).apply { writeBytes(image) }

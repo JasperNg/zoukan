@@ -442,10 +442,15 @@ Residual risk:
    folder (`zoukan.dataDir`) the profile stays inside that folder and goes wherever it is copied.
 7. **Some files stay plain.** A page set as a cover is written plain for a moment to the app's
    temporary folder (`<cache>/cache/tmp`, `cache/tmp.noindex` on macOS) before it is saved
-   encrypted (a local entry's cover is the user's own plain file in the storage folder); a crash
+   encrypted (a local entry's cover is the user's own plain file in the storage folder, or its
+   `cover.cbi`, encrypted with the download password, when it has one); a crash
    at that moment leaves it until the next start. Covers are decrypted in memory, where Coil's memory cache
    (256 MiB) keeps them; a local source's covers are the user's own files in the storage folder,
-   read as they are. The encrypted caches' file sizes and counts still show how much is cached.
+   read as they are. The exception is `cover.cbi`, the cover of an entry whose chapters are
+   encrypted (Komikku writes it): it is decrypted in memory with the download password and nothing
+   decrypted is written to disk, and a cover taken from an encrypted chapter is written as
+   `cover.cbi`, never plain. Without the password it shows as a broken cover. The encrypted
+   caches' file sizes and counts still show how much is cached.
 8. **Encrypted cache files are not bound to their place.** The frames of Coil's journal are not
    bound to their order, so a same-user process can reorder or drop whole frames without it being
    noticed, and no ciphertext is bound to its file's name, so a frame, or an encrypted cover or
