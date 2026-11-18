@@ -43,6 +43,8 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.app.Toasts
@@ -377,6 +379,7 @@ class ReaderScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { "Loading pages of ${chapter.name} failed" }
                 mutableState.update { it.copy(loading = false, error = sourceErrorText(e)) }
             }
@@ -564,6 +567,7 @@ class ReaderScreenModel(
                 // ZOUKAN <--
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 // ZOUKAN -->
                 // A cancelled download can fail with an I/O error ("Canceled"): that is no page error
                 if (!isActive || !owns()) return@launch
@@ -606,6 +610,7 @@ class ReaderScreenModel(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfVmFailure()
                     // The page loads again when it is shown
                     logcat(LogPriority.WARN, e) { "Prefetching page ${page.index + 1} failed" }
                 }
@@ -790,6 +795,7 @@ class ReaderScreenModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                e.rethrowIfVmFailure()
                 logcat(LogPriority.ERROR, e) { failure }
                 Toasts.error(failure, e)
             }
@@ -1016,6 +1022,7 @@ internal object ReaderCleanup {
             try {
                 file.close()
             } catch (e: Throwable) {
+                e.rethrowIfFatal()
                 logcat(LogPriority.WARN, e) { "Closing the chapter file failed" }
             }
         }
@@ -1025,6 +1032,7 @@ internal object ReaderCleanup {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
+            e.rethrowIfFatal()
             logcat(LogPriority.ERROR, e) { "Deleting read chapters failed" }
         }
     }
@@ -1065,6 +1073,7 @@ internal class ProgressWriter(private val scope: CoroutineScope, private val wri
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
+                    e.rethrowIfFatal()
                     logcat(LogPriority.ERROR, e) { "Saving reading progress failed" }
                 }
             }

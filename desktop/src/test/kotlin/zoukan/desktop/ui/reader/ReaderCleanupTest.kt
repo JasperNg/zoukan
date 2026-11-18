@@ -1,5 +1,6 @@
 package zoukan.desktop.ui.reader
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
@@ -28,6 +29,16 @@ class ReaderCleanupTest {
         var closed = false
         ReaderCleanup.closeThenDelete(AutoCloseable { closed = true }, listOf(Chapter.create())) { error("in use") }
         closed shouldBe true
+    }
+
+    @Test
+    fun `running out of memory while closing or deleting is not swallowed`() = runBlocking<Unit> {
+        shouldThrow<OutOfMemoryError> {
+            ReaderCleanup.closeThenDelete(AutoCloseable { throw OutOfMemoryError() }, emptyList()) { }
+        }
+        shouldThrow<OutOfMemoryError> {
+            ReaderCleanup.closeThenDelete(null, listOf(Chapter.create())) { throw OutOfMemoryError() }
+        }
     }
 }
 
