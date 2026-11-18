@@ -130,10 +130,12 @@ class DesktopAppModule(
             val password = get<CbzPassword>()
             // ZOUKAN -->
             val sourcePreferences = get<eu.kanade.domain.source.service.SourcePreferences>()
+            val securityPreferences = get<eu.kanade.tachiyomi.core.security.SecurityPreferences>()
             LocalSource(
                 folder = { storage.local },
                 password = { password.get() },
                 allowHiddenFolders = { sourcePreferences.allowLocalSourceHiddenFolders().get() },
+                encryptionType = { securityPreferences.encryptionType().get() },
             )
             // ZOUKAN <--
         }

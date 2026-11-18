@@ -1,5 +1,6 @@
 package zoukan.desktop.local
 
+import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -14,22 +15,31 @@ import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.service.ChapterRecognition
+import zoukan.desktop.download.CbzEncryption
 import zoukan.desktop.download.CbzReader
+import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.FileNames
 import zoukan.desktop.download.ImageType
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * The local source: manga in `<storage>/local/<title>/`, each chapter a folder of images, a ZIP or
  * CBZ (encrypted ones with the download password), or an EPUB. Like the Android LocalSource
  * (source id 0, chapter URLs `<title>/<file>`), it reads `ComicInfo.xml` and the legacy
  * `details.json` for details and `cover.*` for the cover, so a local folder works on both apps.
+ * An entry whose chapters are encrypted keeps its cover encrypted too, in `cover.cbi`, as Komikku
+ * does; [encryptionType] is the scheme a new one is written with (Android's preferred one).
  */
 class LocalSource(
     private val folder: () -> File,
     private val password: () -> CharArray? = { null },
     private val allowHiddenFolders: () -> Boolean = { false },
+    private val encryptionType: () -> SecurityPreferences.EncryptionType = { SecurityPreferences.EncryptionType.AES_256 },
 ) : CatalogueSource, UnmeteredSource {
 
     override val id: Long = ID
@@ -180,17 +190,58 @@ class LocalSource(
                 runCatching {
                     val file = chapterFile(first.url)
                     // Archives give their first page without unpacking every chapter into the cache
-                    if (Archives.isArchive(file)) Archives.firstImage(file) else LocalFormat.open(file, password).use { it.firstImage() }
-                }.getOrNull()?.let { bytes ->
-                    val ext = ImageType.fromBytes(bytes)?.extension ?: "jpg"
-                    val cover = File(dir, "cover.$ext")
-                    cover.writeBytes(bytes)
+                    val bytes = if (Archives.isArchive(file)) Archives.firstImage(file) else LocalFormat.open(file, password).use { it.firstImage() }
+                    // The cover of an encrypted chapter is written encrypted (cover.cbi), as Android does
+                    bytes?.let { writeCover(dir, it, encrypted = isEncryptedArchive(file)) }
+                }.onFailure { e ->
+                    logcat(LogPriority.WARN, e) { "Could not take a local entry's cover from its first chapter" }
+                }.getOrNull()?.let { cover ->
                     manga.thumbnail_url = cover.toURI().toString()
                 }
             }
         }
         return chapters
     }
+
+    /**
+     * Writes [bytes] as the cover of the entry in [dir] and returns the file. [encrypted]: as
+     * `cover.cbi`, a ZIP with one `cover.jpg` encrypted with the download password, as Android's
+     * LocalCoverManager writes it; it fails (and writes nothing) without the password, so an
+     * encrypted entry's cover is never written in plain. Otherwise as `cover.<type>`, named after
+     * the image's type. The file is written beside its target and then moved over it, so a failed
+     * write leaves the old cover as it was.
+     */
+    fun writeCover(dir: File, bytes: ByteArray, encrypted: Boolean): File {
+        val encryption = if (encrypted) {
+            val pw = password() ?: throw IllegalStateException("The entry's cover is encrypted. Set the download password in Settings.")
+            CbzEncryption(pw, encryptionType())
+        } else {
+            null
+        }
+        val cover = if (encryption != null) {
+            File(dir, COVER_ARCHIVE)
+        } else {
+            val ext = ImageType.fromBytes(bytes)?.extension ?: "jpg"
+            File(dir, "cover.$ext")
+        }
+        val tmp = File.createTempFile(".cover.", ".tmp", dir)
+        try {
+            if (encryption != null) {
+                CbzWriter(tmp, encryption).use { it.write(COVER_ARCHIVE_ENTRY, bytes) }
+            } else {
+                FileOutputStream(tmp).use { it.write(bytes) }
+            }
+            Files.move(tmp.toPath(), cover.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } finally {
+            tmp.delete()
+        }
+        return cover
+    }
+
+    /** Whether [file] is a ZIP or CBZ whose entries are encrypted. */
+    private fun isEncryptedArchive(file: File): Boolean =
+        file.isFile && file.extension.lowercase() in setOf("cbz", "zip") &&
+            runCatching { net.lingala.zip4j.ZipFile(file).use { it.isEncrypted } }.getOrDefault(false)
 
     private fun comicInfoOf(file: File): ComicInfoXml? = when {
         file.isDirectory -> File(file, ComicInfoXml.FILE).takeIf { it.isFile }?.inputStream()?.use { s -> ComicInfoXml.read(s) }
@@ -209,12 +260,31 @@ class LocalSource(
     companion object {
         const val ID = 0L
         const val COMIC_INFO_ARCHIVE = "ComicInfo.cbm"
-        private const val COVER_ARCHIVE = "cover.cbi"
+        const val COVER_ARCHIVE = "cover.cbi"
+
+        /** The one entry of [COVER_ARCHIVE], as Android names it whatever the image is. */
+        private const val COVER_ARCHIVE_ENTRY = "cover.jpg"
         private val CHAPTER_ARCHIVES = setOf("cbz", "zip") + Archives.EXTENSIONS
         private const val LATEST_THRESHOLD = 7L * 24 * 60 * 60 * 1000
 
+        /**
+         * The entry's cover in [dir]: a `cover.*` image, or the encrypted `cover.cbi`, the first
+         * one listed, as Android's LocalCoverManager.find takes it.
+         */
         fun findCover(dir: File): File? = dir.listFiles().orEmpty()
             .filter { it.isFile && it.nameWithoutExtension.equals("cover", ignoreCase = true) }
-            .firstOrNull { ImageType.isImageName(it.name) }
+            .firstOrNull { ImageType.isImageName(it.name) || isCoverArchive(it) }
+
+        /** Whether the cover [file] is an encrypted cover archive (`cover.cbi`), as Android's ImageUtil.isImage tells it. */
+        fun isCoverArchive(file: File): Boolean = file.extension.equals("cbi", ignoreCase = true)
+
+        /**
+         * The image in the encrypted cover archive [file], read into memory with the download
+         * [password]. Fails without the password, with a wrong one or on a broken archive.
+         */
+        fun readCoverArchive(file: File, password: () -> CharArray?): ByteArray = CbzReader(file, password).use { reader ->
+            val entry = reader.images.firstOrNull() ?: reader.entries.firstOrNull() ?: throw IOException("${file.name} holds no image")
+            reader.read(entry)
+        }
     }
 }
