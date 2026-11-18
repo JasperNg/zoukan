@@ -167,7 +167,10 @@ class SyncYomiSyncService(
                 // ZOUKAN -->
                 // A remote library that cannot be read is an error: overwriting it (upstream returned
                 // (null, "") here) replaced the other device's data without If-Match
-                throw SyncYomiException("The sync data on the server could not be read")
+                throw SyncYomiException(
+                    "The sync data on the server could not be read. Check the address, or delete the data on the " +
+                        "server to start again from this device's library.",
+                )
                 // ZOUKAN <--
             }
         } else {

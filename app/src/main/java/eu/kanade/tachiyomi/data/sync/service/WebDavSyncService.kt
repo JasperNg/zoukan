@@ -163,7 +163,10 @@ class WebDavSyncService(
                         // ZOUKAN -->
                         // A remote file that cannot be read is an error, not a missing one: (null, "")
                         // made the push replace the other device's library without If-Match
-                        throw WebDavException("The sync file on the server could not be read")
+                        throw WebDavException(
+                            "The sync file on the server could not be read. Check the address and folder, or delete " +
+                                "the file on the server to start again from this device's library.",
+                        )
                         // ZOUKAN <--
                     }
                 } else {

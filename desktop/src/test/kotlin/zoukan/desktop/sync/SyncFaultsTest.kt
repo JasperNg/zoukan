@@ -162,7 +162,10 @@ class SyncFaultsTest {
         val result = syncNow()
 
         result.shouldBeNull()
-        messages.awaitError()
+        // The user is told what to do about it
+        messages.awaitError().text shouldBe
+            "The sync file on the server could not be read. Check the address and folder, or delete the file on the " +
+            "server to start again from this device's library."
         sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
         sync.remoteBackup shouldBe notABackup
         preferences.lastSyncEtag().get() shouldBe ""
@@ -207,7 +210,9 @@ class SyncFaultsTest {
         }
 
         result.shouldBeNull()
-        messages.awaitError()
+        messages.awaitError().text shouldBe
+            "The sync data on the server could not be read. Check the address, or delete the data on the server " +
+            "to start again from this device's library."
         sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
         sync.remoteBackup shouldBe remoteBytes
         preferences.lastSyncEtag().get() shouldBe ""
