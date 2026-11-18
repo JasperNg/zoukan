@@ -43,6 +43,9 @@ class CustomMangaRepositoryImpl(context: Context) : CustomMangaRepository {
     }
 
     override fun set(mangaInfo: CustomMangaInfo) = synchronized(lock) {
+        // ZOUKAN -->
+        val before = customMangaMap[mangaInfo.id]
+        // ZOUKAN <--
         if (
             mangaInfo.title == null &&
             mangaInfo.author == null &&
@@ -56,7 +59,19 @@ class CustomMangaRepositoryImpl(context: Context) : CustomMangaRepository {
         } else {
             customMangaMap[mangaInfo.id] = mangaInfo
         }
-        saveCustomInfo()
+        // ZOUKAN -->
+        // An edit that was not saved is not kept in memory either: a restore rolls its entry back
+        // and the entry's id goes to the next new entry, which would show it and save it later
+        var saved = false
+        try {
+            saveCustomInfo()
+            saved = true
+        } finally {
+            if (!saved) {
+                if (before == null) customMangaMap.remove(mangaInfo.id) else customMangaMap[mangaInfo.id] = before
+            }
+        }
+        // ZOUKAN <--
     }
 
     private fun saveCustomInfo() {
