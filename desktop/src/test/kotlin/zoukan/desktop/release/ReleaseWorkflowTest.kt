@@ -100,9 +100,11 @@ class ReleaseWorkflowTest {
         val jobs = Regex("""(?m)^ {2}([\w-]+):\s*$""").findAll(ci.substringAfter("\njobs:\n")).map { it.groupValues[1] }.toList()
         val gateNeeds = Regex("""(?m)^ {4}needs: \[([^\]]*)]""").find(job(ci, "pr-gate"))?.groupValues?.get(1).orEmpty()
             .split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        val missing = jobs - "pr-gate" - gateNeeds.toSet()
+        // The coverage job is information only, so it is the one job the gate must not need
+        val missing = jobs - "pr-gate" - "coverage" - gateNeeds.toSet()
         if (jobs.isEmpty() || gateNeeds.isEmpty()) problems += "ci.yml: could not read the jobs or the PR gate's needs"
         if (missing.isNotEmpty()) problems += "ci.yml: PR gate does not need $missing, so they do not gate a merge or a release"
+        if ("coverage" in gateNeeds) problems += "ci.yml: PR gate needs the coverage job, so information only can block a merge"
         // The long checks run on Windows before each merge (desktop/RELEASING.md), not on GitHub
         for (task in listOf(":desktop:journeyTest", ":desktop:buttonCrawlTest", ":desktop:extensionWiringTest", ":desktop:nightlyCheck")) {
             if (task in ci) problems += "ci.yml runs $task, a long check for Windows"
@@ -141,20 +143,40 @@ class ReleaseWorkflowTest {
         }
         val unit = job(ci, "unit")
         if (unitTier !in unit) problems += "ci.yml: the unit job does not run the whole unit tier on Linux"
-        // The coverage of changed lines is information only: it must not gate a merge
-        for (step in listOf("name: Coverage report", "name: Coverage of changed lines")) {
-            val body = unit.substringAfter(step, "").substringBefore("\n      - ")
+        if ("python3 -B -m unittest discover -s .github/scripts" !in unit) {
+            problems += "ci.yml: the unit job does not run the changed-line coverage script's own tests"
+        }
+        // The gating run is never instrumented: the same on pull requests as on master
+        val unitCode = unit.lines().filterNot { it.trimStart().startsWith("#") }.joinToString("\n").lowercase()
+        for (marker in listOf("zoukan.coverage", "kover")) {
+            if (marker in unitCode) problems += "ci.yml: the gating unit job runs with coverage ($marker)"
+        }
+        // The coverage of changed lines is information only, on pull requests: it must not gate a merge
+        val coverage = job(ci, "coverage")
+        if (coverage.isEmpty()) {
+            problems += "ci.yml: no coverage job"
+        } else {
+            if (!Regex("""(?m)^ {4}continue-on-error: true\s*$""").containsMatchIn(coverage)) {
+                problems += "ci.yml: the coverage job can fail the run"
+            }
+            if (!Regex("""(?m)^ {4}if: .*github\.event_name == 'pull_request'""").containsMatchIn(coverage)) {
+                problems += "ci.yml: the coverage job does not run on pull requests only"
+            }
+            if (":koverXmlReportUnit" !in coverage) problems += "ci.yml: the coverage job does not make the Kover report"
+        }
+        for (step in listOf("Coverage report", "Coverage of changed lines")) {
+            val body = coverage.substringAfter("- name: $step\n", "").substringBefore("\n      - ")
             if (body.isEmpty()) {
-                problems += "ci.yml: the unit job has no step \"$step\""
+                problems += "ci.yml: the coverage job has no step \"$step\""
             } else if ("continue-on-error: true" !in body) {
-                problems += "ci.yml: \"$step\" can fail the unit job"
+                problems += "ci.yml: \"$step\" can fail the coverage job"
             }
         }
         // The report compares with the merge base, so a pull request needs the whole history. In an
         // expression a number 0 is falsy: `cond && 0 || 1` always gives 1, a shallow checkout
-        val fetchDepth = Regex("""(?m)^\s*fetch-depth:\s*(.+)$""").find(unit)?.groupValues?.get(1)?.trim()
+        val fetchDepth = Regex("""(?m)^\s*fetch-depth:\s*(.+)$""").find(coverage)?.groupValues?.get(1)?.trim()
         if (fetchDepth != "\${{ github.event_name == 'pull_request' && '0' || '1' }}") {
-            problems += "ci.yml: the unit job's checkout does not fetch the whole history on pull requests (fetch-depth: $fetchDepth)"
+            problems += "ci.yml: the coverage job's checkout does not fetch the whole history on pull requests (fetch-depth: $fetchDepth)"
         }
         for (workflow in workflowFiles()) {
             if (Regex("""&&\s*(0|false|''|"")\s*\|\|""").containsMatchIn(workflow.readText())) {
@@ -162,7 +184,7 @@ class ReleaseWorkflowTest {
             }
         }
         // A changed-line report that cannot be made must say so in the summary, not only in the log
-        val changedLines = unit.substringAfter("name: Coverage of changed lines", "").substringBefore("\n      - ")
+        val changedLines = coverage.substringAfter("- name: Coverage of changed lines\n", "").substringBefore("\n      - ")
         if ("::warning" !in changedLines || "Not computed" !in changedLines) {
             problems += "ci.yml: \"Coverage of changed lines\" does not warn in the job summary when it cannot make the report"
         }

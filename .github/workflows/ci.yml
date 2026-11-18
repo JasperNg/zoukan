@@ -87,10 +87,9 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       - run: ./gradlew spotlessCheck
 
-  # On pull requests the unit tier also measures coverage (Kover, -Pzoukan.coverage=true), and the
-  # job summary lists the changed lines the tests do not run (desktop/TESTING.md, "Coverage"). The
-  # coverage steps are information only: they cannot fail the job, but a step that breaks shows as
-  # failed in the job's log.
+  # The gating unit tier on Linux. It always runs without the coverage agent, the same on pull
+  # requests as on master, so a test that the instrumentation changes cannot pass one and fail the
+  # other, and the test results come from and go to the build cache. Coverage is the job below.
   unit:
     name: Build and unit tests
     needs: changes
@@ -99,11 +98,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          # The changed-line report compares with the merge base, so pull requests need the whole
-          # history. The values are strings: a number 0 is falsy in an expression, so with a bare 0
-          # the `||` side, 1, would always win.
-          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      # The coverage job's script; its own tests gate the merge, so a broken script is caught here
       - name: Changed-line coverage script tests
         run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py'
       - uses: ./.github/actions/setup-zoukan
@@ -111,36 +106,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       # distTar/distZip are built by assemble but nobody uses them in CI
       - name: Build and unit tests
-        shell: bash
-        env:
-          COVERAGE: ${{ github.event_name == 'pull_request' }}
-        run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest -x distTar -x distZip --continue "-Pzoukan.coverage=$COVERAGE"
-      - name: Coverage report
-        id: kover
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        # The tests above ran instrumented, so they are up to date here and only the report is made
-        run: xvfb-run -a ./gradlew :koverXmlReportUnit -Pzoukan.coverage=true
-      # A report that cannot be made is said in the job summary and as a warning, not only in the log
-      - name: Coverage of changed lines
-        if: github.event_name == 'pull_request' && !cancelled()
-        continue-on-error: true
-        shell: bash
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          KOVER_OUTCOME: ${{ steps.kover.outcome }}
-        run: |
-          not_computed() {
-            echo "::warning title=Coverage of changed lines::$1"
-            printf '### Coverage of changed lines\n\nNot computed: %s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
-          }
-          if [ "$KOVER_OUTCOME" != "success" ]; then
-            not_computed "the coverage report step did not succeed ($KOVER_OUTCOME)."
-          elif python3 -B .github/scripts/changed_line_coverage.py --base "origin/$BASE_REF" --report build/reports/kover/reportUnit.xml > "$RUNNER_TEMP/changed-lines.md"; then
-            cat "$RUNNER_TEMP/changed-lines.md" >> "$GITHUB_STEP_SUMMARY"
-          else
-            not_computed "changed_line_coverage.py failed (see this step's log); the diff with origin/$BASE_REF may be missing."
-          fi
+        run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest -x distTar -x distZip --continue
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
@@ -153,6 +119,53 @@ jobs:
             android-compat/build/reports/tests/
             backup/build/reports/tests/
           if-no-files-found: ignore
+
+  # Pull requests only: runs the unit tier again with Kover's agent (koverXmlReportUnit) and lists
+  # in the job summary the changed lines the tests do not run (desktop/TESTING.md, "Coverage"). It
+  # is information only: the PR gate does not need it, and neither the job nor its steps can fail
+  # the run, but a step that breaks shows as failed in the job's log.
+  coverage:
+    name: Coverage (information only)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name == 'pull_request'
+    continue-on-error: true
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # The changed-line report compares with the merge base, so pull requests need the whole
+          # history. The values are strings: a number 0 is falsy in an expression, so with a bare 0
+          # the `||` side, 1, would always win.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      - uses: ./.github/actions/setup-zoukan
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      # The report runs the unit test tasks it measures, instrumented, and then writes the report
+      - name: Coverage report
+        id: kover
+        continue-on-error: true
+        run: xvfb-run -a ./gradlew :koverXmlReportUnit -Pzoukan.coverage=true
+      # A report that cannot be made is said in the job summary and as a warning, not only in the log
+      - name: Coverage of changed lines
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          KOVER_OUTCOME: ${{ steps.kover.outcome }}
+        run: |
+          not_computed() {
+            echo "::warning title=Coverage of changed lines::$1"
+            printf '### Coverage of changed lines\n\nNot computed: %s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
+          }
+          if [ "$KOVER_OUTCOME" != "success" ]; then
+            not_computed "the coverage report step did not succeed ($KOVER_OUTCOME); a failing test also stops the report (see the Build and unit tests job)."
+          elif python3 -B .github/scripts/changed_line_coverage.py --base "origin/$BASE_REF" --report build/reports/kover/reportUnit.xml > "$RUNNER_TEMP/changed-lines.md"; then
+            cat "$RUNNER_TEMP/changed-lines.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            not_computed "changed_line_coverage.py failed (see this step's log); the diff with origin/$BASE_REF may be missing."
+          fi
 
   # The whole unit tier on the other two desktop systems, on every pull request as well as on
   # pushes to master (and so the release, which calls this workflow) and dispatches: :desktop:test,

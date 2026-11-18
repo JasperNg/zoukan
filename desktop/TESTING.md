@@ -7,7 +7,7 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 
 | Tier | Gradle task | What it catches | When it runs |
 | --- | --- | --- | --- |
-| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`, the shared modules' own tests) on Linux, Windows and macOS on every pull request and every push to master. On pull requests the Linux job also reports the coverage of the changed lines (see [Coverage](#coverage)). |
+| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`, the shared modules' own tests) on Linux, Windows and macOS on every pull request and every push to master. On pull requests a separate Linux job, which does not gate, reports the coverage of the changed lines (see [Coverage](#coverage)). |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
 | Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On Windows before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
 | Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On Windows before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`, which `.github/workflows/nightly.yml` runs every night, and on Windows on pull requests that change downloads, the browser, the reader, backup or the storage folder (`.github/workflows/journeys.yml`, see [On GitHub](#on-github)). |
@@ -176,14 +176,18 @@ from outside.
   take the Android variants of the multiplatform modules, which compiles them and needs
   `ANDROID_HOME`.
 
-On pull requests, the Linux "Build and unit tests" job in `ci.yml` runs the unit tier with
-`-Pzoukan.coverage=true`, makes the report, and writes the coverage of the lines the pull request
-changes to the job summary: per file, how many changed executable lines the tests ran and which
+On pull requests, the "Coverage (information only)" job in `ci.yml` (on Linux) runs
+`:koverXmlReportUnit -Pzoukan.coverage=true`, which runs the unit tier again with the coverage
+agent, and writes the coverage of the lines the pull request changes to the job summary: per file, how many changed executable lines the tests ran and which
 they did not. `.github/scripts/changed_line_coverage.py` makes it from `git diff --unified=0
 <base>...HEAD` and the report. Only the project's own lines count: in `android-compat` the lines
 inside ZOUKAN markers; elsewhere every line, so upstream files show as they are. It is
-information only: it never fails the job, but a step that breaks shows as failed. To see it for
-your branch, and to test the script after you change it:
+information only: the PR gate does not need the job and it never fails the run, but a step that
+breaks shows as failed, and a report that cannot be made (a failing test stops it, or the diff
+with the base branch is missing) is said as a warning in the job summary. The gating "Build and
+unit tests" job never runs instrumented, on pull requests or on master, so the tests that gate a
+merge run the same way every time and reuse the build cache; it does run the script's own tests
+(below). To see the report for your branch, and to test the script after you change it:
 
 ```bash
 ./gradlew :koverXmlReportUnit
