@@ -7,7 +7,7 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 
 | Tier | Gradle task | What it catches | When it runs |
 | --- | --- | --- | --- |
-| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`, the shared modules' own tests) on Linux, Windows and macOS on every pull request and every push to master. On pull requests a separate Linux job, which does not gate, reports the coverage of the changed lines (see [Coverage](#coverage)). |
+| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test`, `:backup:desktopTest`, `:data:desktopTest`, `:core:common:desktopTest` and `:source-api:desktopTest`, the shared modules' own tests) on Linux, Windows and macOS on every pull request and every push to master. On pull requests a separate Linux job, which does not gate, reports the coverage of the changed lines (see [Coverage](#coverage)). |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
 | Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On Windows before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
 | Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On Windows before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`, which `.github/workflows/nightly.yml` runs every night, and on Windows on pull requests that change downloads, the browser, the reader, backup or the storage folder (`.github/workflows/journeys.yml`, see [On GitHub](#on-github)). |
@@ -39,7 +39,8 @@ runners are the slowest, so they set how long the gate takes.
 
 Every pull request and every push to master (and so every release, since `desktop-build.yml`
 calls `ci.yml`) runs the whole unit tier on Windows and macOS as well as on Linux: `:desktop:test`,
-`:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`.
+`:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test`, `:backup:desktopTest`,
+`:data:desktopTest`, `:core:common:desktopTest` and `:source-api:desktopTest`.
 A test that fails only on Windows or macOS (file names, links and junctions, the secret stores,
 the macOS marks) therefore fails the pull request, not the first master run after the merge. The
 "PR gate" job needs all of these jobs. Tests for one system skip themselves on the others with
@@ -151,12 +152,12 @@ Notes:
 
 [Kover](https://github.com/Kotlin/kotlinx-kover) measures which lines the unit tier runs. The
 `zoukan.kover` convention (`buildSrc`) applies it to `desktop`, `extension-jvm`, `android-compat`,
-`backup` and `domain` (the modules with tests) and to `data`, `core:common` and `source-api`
-(no tests of their own, but the desktop tests run their desktop code). The root project
+`backup`, `data`, `core:common` and `source-api` (the modules with tests) and to `domain` (no
+desktop tests of its own, but the desktop tests run its desktop code). The root project
 aggregates them into one report. There is no threshold: most of the code comes from upstream.
-`android-compat` and `backup` have their own tests (`android-compat/src/test`,
-`backup/src/desktopTest`) for the project's own code in them; the desktop tests cover the rest
-from outside.
+`android-compat`, `backup`, `data`, `core:common` and `source-api` have their own tests
+(`android-compat/src/test`, `<module>/src/desktopTest`) for the project's own code in them; the
+desktop tests cover the rest from outside.
 
 ```bash
 ./gradlew :koverXmlReportUnit                       # every module: build/reports/kover/reportUnit.xml
@@ -204,8 +205,8 @@ set up yet.
 Every desktop test task gives its JVMs a home folder and a data folder of their own under
 `<module>/build/test-home/<task>` (`user.home`, `zoukan.dataDir`), so no test touches the real
 home folder or Zoukan profile: every Test task of `desktop`, `extension-jvm` and `android-compat`,
-and the `desktopTest` task of `backup` and `domain` (the `zoukan.test-home` convention in
-`buildSrc`). The Android unit test tasks are left as they are. Test code reads the home folder only
+and the `desktopTest` task of `backup`, `domain`, `data`, `core:common` and `source-api` (the
+`zoukan.test-home` convention in `buildSrc`). The Android unit test tasks are left as they are. Test code reads the home folder only
 through `zoukan.desktop.testing.TestHome`; `HomeFolderScanTest` fails on any other read.
 
 A test that starts a JVM passes the same folders on: `TestHome.childJvmArguments()` (or
@@ -507,7 +508,8 @@ take a few seconds. To repeat a failure with another seed or search longer:
 
 A defect a property finds gets a disabled test with its smallest input (the `*KnownDefectsTest`
 classes), and only that case is left out of the property, with a comment naming the test. Enable
-the test when the defect is fixed.
+the test when the defect is fixed, and put the case back in the property; the test stays as a
+regression test. Every defect found so far is fixed, so none of these tests is disabled now.
 
 ## The smoke test
 
