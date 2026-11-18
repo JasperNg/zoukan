@@ -193,6 +193,9 @@ class SyncDatabaseFaultsTest {
 
     private val snapshots = mutableListOf<File>()
 
+    /** The library as each safety snapshot saw it. */
+    private val librariesAtSnapshot = mutableListOf<Map<String, Long>>()
+
     @Volatile
     private var snapshotFails = false
 
@@ -210,6 +213,7 @@ class SyncDatabaseFaultsTest {
             folder = { File(temp, "safety") },
             write = { file ->
                 if (snapshotFails) throw java.io.IOException("No space left on device")
+                librariesAtSnapshot += library()
                 snapshots += file.also { it.writeText("before") }
             },
         ),
@@ -312,6 +316,96 @@ class SyncDatabaseFaultsTest {
         library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
         preferences.lastSyncEtag().get() shouldBe ""
         preferences.lastSyncEtag().isSet() shouldBe false
+    }
+
+    /** The GET and PUT of one sync: what the app sent and what it got. */
+    private fun syncCalls() = sync.calls.filter { it.method == "GET" || it.method == "PUT" }.also { sync.calls.clear() }
+
+    @Test
+    fun `the first sync only uploads, the second restores the other device's entries, the third is not modified`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().get() shouldBe 0L
+
+        // 1: merges both libraries on the server, restores nothing here, keeps no ETag
+        manager().syncData()
+        syncCalls().map { it.method to it.ifNoneMatch } shouldBe listOf("GET" to null, "PUT" to null)
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L)
+        preferences.lastSyncEtag().get() shouldBe ""
+        snapshots.shouldBeEmpty()
+
+        // 2: sends no If-None-Match, so it gets the server's library and restores it; keeps the ETag
+        manager().syncData()
+        syncCalls().map { it.method to it.ifNoneMatch } shouldBe listOf("GET" to null, "PUT" to null)
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+        // The safety snapshot came before the restore
+        librariesAtSnapshot shouldBe listOf(mapOf("/local" to 0L))
+
+        // 3: "not modified", and the upload of this computer's library keeps both entries on the server
+        val etag = sync.etag
+        manager().syncData()
+        val calls = syncCalls()
+        calls.map { it.method to it.status } shouldBe listOf("GET" to 304, "PUT" to 204)
+        calls.first().ifNoneMatch?.trim('"') shouldBe etag
+        remoteUrls() shouldBe setOf("/local", "/remote")
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+
+        // 4: not modified again: no download and merge each time
+        manager().syncData()
+        syncCalls().first().status shouldBe 304
+        restorePending.get() shouldBe false
+    }
+
+    /** Each chapter of [url] (by its URL) as read, last page read and version, from the database. */
+    private fun progress(url: String): Map<String, Triple<Boolean, Long, Long>> = driver.executeQuery(
+        null,
+        "SELECT c.url, c.read, c.last_page_read, c.version FROM chapters c JOIN mangas m ON m._id = c.manga_id WHERE m.url = ? ORDER BY c.url",
+        { cursor ->
+            val rows = linkedMapOf<String, Triple<Boolean, Long, Long>>()
+            while (cursor.next().value) rows[cursor.getString(0)!!] = Triple(cursor.getLong(1)!! == 1L, cursor.getLong(2)!!, cursor.getLong(3)!!)
+            QueryResult.Value(rows)
+        },
+        1,
+    ) { bindString(0, url) }.value
+
+    @Test
+    fun `the second sync keeps this computer's newer reading progress and takes the other device's newer one`() = runBlocking<Unit> {
+        // This computer has read chapter 1 (version 5); the other device has read chapter 2 (version 7)
+        listOf("('/local/1', 'Chapter 1', 1, 12, 1, 5)", "('/local/2', 'Chapter 2', 0, 0, 2, 1)").forEach { values ->
+            driver.execute(
+                null,
+                "INSERT INTO chapters(url, name, read, last_page_read, chapter_number, version, manga_id, bookmark, source_order, date_fetch, date_upload) " +
+                    "SELECT c.*, m._id, 0, 0, 0, 0 FROM (SELECT * FROM (VALUES $values)) c, mangas m WHERE m.url = '/local'",
+                0,
+            )
+        }
+        val shared = BackupManga(
+            source = 1,
+            url = "/local",
+            title = "From this computer",
+            favorite = true,
+            chapters = listOf(
+                BackupChapter(url = "/local/1", name = "Chapter 1", chapterNumber = 1f, read = false, lastPageRead = 0, version = 2),
+                BackupChapter(url = "/local/2", name = "Chapter 2", chapterNumber = 2f, read = true, lastPageRead = 30, version = 7),
+            ),
+        )
+        sync.seed(BackupCodec.encode(remote.copy(backupManga = remote.backupManga + shared)))
+
+        manager().syncData() // the first sync only uploads
+        progress("/local").mapValues { it.value.first } shouldBe mapOf("/local/1" to true, "/local/2" to false)
+
+        manager().syncData()
+
+        val after = progress("/local")
+        // Newer here: kept
+        after.getValue("/local/1").first shouldBe true
+        after.getValue("/local/1").second shouldBe 12L
+        // Newer on the other device: upstream's rule takes it (the safety snapshot is the way back)
+        after.getValue("/local/2").first shouldBe true
+        after.getValue("/local/2").second shouldBe 30L
+        snapshots.size shouldBe 1
+        librariesAtSnapshot.single() shouldBe mapOf("/local" to 2L)
     }
 
     @Test
