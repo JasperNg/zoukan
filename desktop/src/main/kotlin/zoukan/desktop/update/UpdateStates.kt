@@ -72,7 +72,8 @@ class UpdateStates(
         } catch (e: Throwable) {
             // Also errors (a LinkageError from the native secret store), so the state never stays at
             // Checking; a fatal error puts the state back first, as a cancel does, and goes on up
-            if (e is VirtualMachineError) mutableState.compareAndSet(State.Checking, previous)
+            // (only what rethrowIfVmFailure rethrows: a stack overflow is a failed check that shows)
+            if (e is VirtualMachineError && e !is StackOverflowError) mutableState.compareAndSet(State.Checking, previous)
             e.rethrowIfVmFailure()
             UpdateChecker.Result.Failed(e.message ?: e::class.simpleName.orEmpty())
         }

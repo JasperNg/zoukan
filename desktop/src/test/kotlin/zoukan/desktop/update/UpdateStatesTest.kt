@@ -155,6 +155,10 @@ class UpdateStatesTest {
         // The secret store's native library failing to load is a failed check, as before
         val unlinked = UpdateStates(check = { throw UnsatisfiedLinkError("no jnidispatch") }, download = { _, _ -> error("no") })
         unlinked.check(manual = true) shouldBe UpdateChecker.Result.Failed("no jnidispatch")
+        // A stack overflow is not rethrown on this path: it is a failed check that shows
+        val overflow = UpdateStates(check = { throw StackOverflowError("deep") }, download = { _, _ -> error("no") })
+        overflow.check(manual = true) shouldBe UpdateChecker.Result.Failed("deep")
+        overflow.state.value shouldBe UpdateStates.State.Result(UpdateChecker.Result.Failed("deep"))
 
         val states = UpdateStates(check = { available }, download = { _, _ -> throw OutOfMemoryError("heap") })
         states.check(manual = true)
