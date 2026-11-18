@@ -7,7 +7,7 @@ up to date. Run every command from the repository root. On Windows, use `gradlew
 
 | Tier | Gradle task | What it catches | When it runs |
 | --- | --- | --- | --- |
-| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): on Linux on every pull request and every push to master; on Windows and macOS the download, storage, database and secret store tests on every pull request, and the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`, the shared modules' own tests) on every push to master. On pull requests the Linux job also reports the coverage of the changed lines (see [Coverage](#coverage)). |
+| Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables. Also checks the coverage matrix (`CoverageMatrixTest`). | Every build, and on GitHub (`.github/workflows/ci.yml`): the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`, the shared modules' own tests) on Linux, Windows and macOS on every pull request and every push to master. On pull requests the Linux job also reports the coverage of the changed lines (see [Coverage](#coverage)). |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
 | Button crawl | `:desktop:buttonCrawlTest` | A button that throws, logs an error, hangs the window or does nothing, and a button that appeared or went without the inventory being updated. Clicks every button of every check of the smoke test. | Not on GitHub. On Windows before each merge to master, in one unsharded run, by `:desktop:longChecks` (see [Before merging to master](#before-merging-to-master)). Not in `check`: it takes about half an hour in one JVM. |
 | Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On Windows before each merge to master, by `:desktop:longChecks`. Also in `:desktop:nightlyCheck`, which `.github/workflows/nightly.yml` runs every night, and on Windows on pull requests that change downloads, the browser, the reader, backup or the storage folder (`.github/workflows/journeys.yml`, see [On GitHub](#on-github)). |
@@ -34,15 +34,16 @@ the part you will change, and see them pass on the unchanged code. Then make the
 
 The release gate on GitHub (`ci.yml`, which `desktop-build.yml` runs before it publishes) is the
 fast set only: Spotless, the build and unit tests, the wiring shards, the unit tests on Windows and
-macOS and the Android compile and unit tests. Its jobs run side by side and it takes about 10
-minutes on a pull request.
+macOS and the Android compile and unit tests. Its jobs run side by side; the Windows and macOS
+runners are the slowest, so they set how long the gate takes.
 
-On Windows and macOS a pull request runs only the download, storage folder, database and secret
-store tests, which are the tests most likely to differ between those systems and Linux. Every push to master (and so every
-release, since `desktop-build.yml` calls `ci.yml`) runs the whole unit tier there: `:desktop:test`,
+Every pull request and every push to master (and so every release, since `desktop-build.yml`
+calls `ci.yml`) runs the whole unit tier on Windows and macOS as well as on Linux: `:desktop:test`,
 `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test` and `:backup:desktopTest`.
-The whole tier on every pull request would make the gate wait for the slower Windows and macOS
-runners (the job's limit goes from 20 to 60 minutes). Tests for one system skip themselves on the others with `assumeTrue`.
+A test that fails only on Windows or macOS (file names, links and junctions, the secret stores,
+the macOS marks) therefore fails the pull request, not the first master run after the merge. The
+"PR gate" job needs all of these jobs. Tests for one system skip themselves on the others with
+`assumeTrue`.
 
 ### On GitHub
 

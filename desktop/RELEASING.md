@@ -6,8 +6,8 @@ than docs; the published installers are unsigned. Nothing is published unless it
 gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job)
 and the clean-install check of each installer (below), which `desktop-build.yml` runs on the
 installer it is about to publish. The CI check is the fast set only: Spotless, the build and unit
-tests, the wiring shards, the unit tests on Windows and macOS (the whole tier on master, the file
-tests on pull requests) and the Android compile and unit tests.
+tests, the wiring shards, the whole unit tier on Windows and macOS (on pull requests and on
+master alike) and the Android compile and unit tests.
 
 ## Before merging to master
 

@@ -127,11 +127,17 @@ class ReleaseWorkflowTest {
             problems += "journeys.yml does not start on pull requests filtered by paths, so it slows every pull request"
         }
         if (!Regex("""(?m)^\s*runs-on:\s*windows-""").containsMatchIn(journeys)) problems += "journeys.yml does not run on Windows"
-        // The whole unit tier on Windows and macOS on every push to master
+        // The whole unit tier on Windows and macOS on every pull request, not only after the merge
         val unitTier = ":desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest"
         val filesOs = job(ci, "files-os")
         if (unitTier !in filesOs || "macos-" !in filesOs || "windows-" !in filesOs) {
             problems += "ci.yml: files-os does not run the whole unit tier on Windows and macOS"
+        }
+        if ("--tests" in filesOs || "github.event_name" in filesOs || "\$EVENT" in filesOs) {
+            problems += "ci.yml: files-os runs a different set of tests depending on the event, so pull requests do not run the whole tier"
+        }
+        if ("ZOUKAN_KEYCHAIN_TESTS: 'true'" !in filesOs) {
+            problems += "ci.yml: files-os does not turn on the Keychain tests on its throwaway runner"
         }
         val unit = job(ci, "unit")
         if (unitTier !in unit) problems += "ci.yml: the unit job does not run the whole unit tier on Linux"
