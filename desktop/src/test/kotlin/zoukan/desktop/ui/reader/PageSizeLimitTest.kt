@@ -128,6 +128,42 @@ class PageSizeLimitTest {
     }
 
     @Test
+    fun `the page bytes held during an ImageIO read count against its heap budget`() {
+        val twoGb = 2L * 1024 * 1024 * 1024
+        val strip = 1080L * 65_535
+        // A 100 MB page held twice (its bytes and the read's copy) leaves less room for pixels
+        PageImage.imageIoPixelLimit(twoGb, heldBytes = 0) shouldBe twoGb / 2 / 8
+        PageImage.imageIoPixelLimit(twoGb, heldBytes = 200L * 1024 * 1024) shouldBe (twoGb / 2 - 200L * 1024 * 1024) / 8
+        (strip <= PageImage.imageIoPixelLimit(twoGb, heldBytes = 2L * 100 * 1024 * 1024)) shouldBe true
+        // Bytes alone past the budget leave no room at all
+        PageImage.imageIoPixelLimit(256L * 1024 * 1024, heldBytes = 512L * 1024 * 1024) shouldBe 0L
+    }
+
+    @Test
+    fun `ImageIO's path decodes one page at a time`() {
+        val inside = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val secondEntered = java.util.concurrent.atomic.AtomicBoolean(false)
+        val first = Thread {
+            PageImage.oneImageIoDecodeAtATime {
+                inside.countDown()
+                release.await()
+            }
+        }.apply { start() }
+        inside.await()
+        val second = Thread { PageImage.oneImageIoDecodeAtATime { secondEntered.set(true) } }.apply { start() }
+        // The second decode waits for the first: it parks on the gate
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (second.state != Thread.State.WAITING && System.nanoTime() < deadline) Thread.onSpinWait()
+        second.state shouldBe Thread.State.WAITING
+        secondEntered.get() shouldBe false
+        release.countDown()
+        first.join()
+        second.join()
+        secondEntered.get() shouldBe true
+    }
+
+    @Test
     fun `a page response longer than the limit fails before it is read whole`() {
         val declared = Buffer().write(ByteArray(64)).asResponseBody(contentLength = 1L shl 40)
         shouldThrow<IOException> { readPageBody(declared, limit = 1024) }

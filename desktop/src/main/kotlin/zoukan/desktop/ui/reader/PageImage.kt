@@ -101,12 +101,15 @@ class PageImage(
                 // HEIF reader covers a few more. Their pages go the same way, cropped as the others. Read
                 // through a cache in memory: ImageIO's default spills the page to a temporary file.
                 // ImageIO decodes on the Java heap, which holds less than Skia's native memory
-                if (declared != null && isTooLarge(declared.first, declared.second, imageIoPixelLimit())) {
-                    throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show), e)
+                // One page at a time, so the budget is the whole of half the heap, not half per decode
+                oneImageIoDecodeAtATime {
+                    if (declared != null && isTooLarge(declared.first, declared.second, imageIoPixelLimit(heldBytes = imageIoHeldBytes(bytes)))) {
+                        throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show), e)
+                    }
+                    val buffered = ImageIO.read(MemoryCacheImageInputStream(ByteArrayInputStream(bytes)))
+                        ?: throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
+                    buffered.toComposeImageBitmap().asSkiaBitmap()
                 }
-                val buffered = ImageIO.read(MemoryCacheImageInputStream(ByteArrayInputStream(bytes)))
-                    ?: throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
-                buffered.toComposeImageBitmap().asSkiaBitmap()
             }
             // A page far wider than the window can show is scaled down first, and the full one freed
             val bitmap = if (maxWidth != null && maxWidth > 0 && full.width > maxWidth) {
@@ -164,10 +167,27 @@ class PageImage(
 
         /**
          * The most pixels a page may declare on ImageIO's path (TIFF, AVIF, HEIF...), which decodes
-         * on the Java heap: what fits in half of [maxHeap], and never more than [MAX_DECODED_PIXELS].
+         * on the Java heap: what fits in half of [maxHeap] beside the [heldBytes] the read holds,
+         * and never more than [MAX_DECODED_PIXELS]. The reader decodes several pages at once, but
+         * ImageIO's path one at a time ([oneImageIoDecodeAtATime]), so the half is this decode's own.
          */
-        internal fun imageIoPixelLimit(maxHeap: Long = Runtime.getRuntime().maxMemory()): Long =
-            minOf(MAX_DECODED_PIXELS, maxHeap / 2 / IMAGE_IO_BYTES_PER_PIXEL)
+        internal fun imageIoPixelLimit(maxHeap: Long = Runtime.getRuntime().maxMemory(), heldBytes: Long = 0): Long =
+            minOf(MAX_DECODED_PIXELS, ((maxHeap / 2 - heldBytes) / IMAGE_IO_BYTES_PER_PIXEL).coerceAtLeast(0))
+
+        /** The heap a read on ImageIO's path holds besides its pixels: the page's bytes and the stream's copy of them. */
+        private fun imageIoHeldBytes(bytes: ByteArray): Long = 2L * bytes.size
+
+        private val imageIoDecodes = java.util.concurrent.locks.ReentrantLock()
+
+        /** Runs [decode] while no other page decodes on ImageIO's path. */
+        internal fun <T> oneImageIoDecodeAtATime(decode: () -> T): T {
+            imageIoDecodes.lock()
+            try {
+                return decode()
+            } finally {
+                imageIoDecodes.unlock()
+            }
+        }
 
         internal fun isTooLarge(width: Int, height: Int, maxPixels: Long, maxSide: Int = MAX_PAGE_SIDE): Boolean =
             width > maxSide || height > maxSide || width.toLong() * height > maxPixels
@@ -184,7 +204,7 @@ class PageImage(
                 return width to height
             }
             val (width, height) = imageIoSize(bytes) ?: return null
-            if (isTooLarge(width, height, imageIoPixelLimit())) throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
+            if (isTooLarge(width, height, imageIoPixelLimit(heldBytes = imageIoHeldBytes(bytes)))) throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
             return width to height
         }
 
