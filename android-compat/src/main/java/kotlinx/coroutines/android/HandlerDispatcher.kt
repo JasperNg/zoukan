@@ -168,7 +168,12 @@ internal class HandlerContext private constructor(
     }
 
     override fun toString(): String =
-        toStringInternalImpl() ?: run {
+        // ZOUKAN: android-compat has no MainDispatcherFactory service; Dispatchers.Main throws IllegalStateException when missing
+        try {
+            toStringInternalImpl()
+        } catch (_: IllegalStateException) {
+            null
+        } ?: run {
             val str = name ?: handler.toString()
             if (invokeImmediately) "$str.immediate" else str
         }

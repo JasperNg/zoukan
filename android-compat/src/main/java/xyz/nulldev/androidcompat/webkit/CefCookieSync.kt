@@ -113,7 +113,7 @@ fun staleAppCookies(
 }
 
 /** Whether a cookie for [cookiePath] is sent to [pagePath] (RFC 6265 5.1.4, as Chromium does). */
-private fun pathMatches(pagePath: String, cookiePath: String): Boolean {
+internal fun pathMatches(pagePath: String, cookiePath: String): Boolean {
     val page = pagePath.ifEmpty { "/" }
     if (page == cookiePath) return true
     return page.startsWith(cookiePath) && (cookiePath.endsWith('/') || page[cookiePath.length] == '/')
@@ -196,6 +196,14 @@ object CefCookieSync {
     fun copyToCef(includeHost: ((String) -> Boolean)? = null) {
         val store = (CookieHandler.getDefault() as? java.net.CookieManager)?.cookieStore ?: return
         val cef = CefCookieManager.getGlobalManager() ?: return
+        copyToCef(store, cef, includeHost)
+    }
+
+    internal fun copyToCef(
+        store: CookieStore,
+        cef: CefCookieManager,
+        includeHost: ((String) -> Boolean)? = null,
+    ) {
         // Before the app's cookies: those set again since are copied back after their deletion
         applyPendingDeletions(cef)
         val expiries = store as? CookieExpirySource
@@ -221,6 +229,8 @@ object CefCookieSync {
     /** What the last [copyToCef] put in Chromium. */
     private val copiedToCef = HashSet<SyncedCookie>()
 
+    internal fun copiedToCefSnapshot(): Set<SyncedCookie> = synchronized(copiedToCef) { copiedToCef.toSet() }
+
     private fun HttpCookie.toSynced(uri: URI) =
         SyncedCookie(name, (domain ?: uri.host).orEmpty().trimStart('.'), path ?: "/", value)
 
@@ -228,7 +238,7 @@ object CefCookieSync {
      * After a complete visit of [url], removes the app's cookies for it that were copied to Chromium
      * and that Chromium no longer has: the user signed out there. Logs the count only.
      */
-    private fun removeStaleAppCookies(
+    internal fun removeStaleAppCookies(
         url: String,
         inChromium: List<SyncedCookie>,
     ) {
@@ -310,7 +320,7 @@ object CefCookieSync {
     }
 
     /** Deletions made before Chromium ran, made when it starts. */
-    private val pending = PendingCefCookieDeletions()
+    internal val pending = PendingCefCookieDeletions()
 
     /**
      * Called by an extension's WebView with its page URL and user agent once Chromium's cookies for
@@ -369,7 +379,7 @@ object CefCookieSync {
             else -> now + cookie.maxAge * 1000
         }
 
-    private fun HttpCookie.toCefCookie(
+    internal fun HttpCookie.toCefCookie(
         domain: String,
         expiresAt: Long?,
     ): CefCookie {
@@ -378,7 +388,7 @@ object CefCookieSync {
         return CefCookie(name, value, domain, path ?: "/", secure, isHttpOnly, now, now, expires != null, expires)
     }
 
-    private fun CefCookie.toSetCookieHeader(): String =
+    internal fun CefCookie.toSetCookieHeader(): String =
         buildString {
             append(name).append('=').append(value)
             // Chromium gives a host-only cookie its host as domain and a domain cookie a leading
