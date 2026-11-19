@@ -71,8 +71,8 @@ import javax.imageio.ImageIO
 
 /**
  * Keyboard navigation in [ReaderScreen]: page description semantics, `M` opens the overlay,
- * `Enter` on a focused menu button activates it without closing the menu, and `Escape` closes
- * overlays before popping the screen.
+ * `Enter` on a focused menu button activates Settings without stacking overlays, and `Escape`
+ * closes overlays before popping the screen.
  */
 @OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
 class ReaderKeyboardTest {
@@ -202,12 +202,18 @@ class ReaderKeyboardTest {
             waitUntil(timeoutMillis = 5_000) {
                 onAllNodes(hasText(localized(MR.strings.pref_category_general))).fetchSemanticsNodes().isNotEmpty()
             }
-            // Menu stayed open when Enter activated the focused settings button
-            onAllNodes(hasContentDescription(settingsDesc)).fetchSemanticsNodes().isNotEmpty() shouldBe true
+            // Opening Settings replaces the menu so overlays cannot stack
+            onAllNodes(hasContentDescription(settingsDesc)).fetchSemanticsNodes().isEmpty() shouldBe true
 
-            // Close settings dialog, then Escape closes the menu without leaving the reader
+            // Closing Settings stays in the reader, then reopening Menu and pressing Escape dismisses it
             onNode(hasText(localized(MR.strings.action_close))).performClick()
             waitForIdle()
+            navigator!!.size shouldBe 1
+
+            onRoot().performKeyInput { pressKey(Key.M) }
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodes(hasContentDescription(settingsDesc)).fetchSemanticsNodes().isNotEmpty()
+            }
             onRoot().performKeyInput { pressKey(Key.Escape) }
             waitUntil(timeoutMillis = 5_000) {
                 onAllNodes(hasContentDescription(settingsDesc)).fetchSemanticsNodes().isEmpty()

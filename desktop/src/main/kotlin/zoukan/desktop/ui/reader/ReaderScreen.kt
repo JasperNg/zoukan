@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +60,6 @@ import zoukan.desktop.ui.common.HoldMessages
 import zoukan.desktop.ui.common.LocalReducedMotion
 import zoukan.desktop.ui.common.OverlayColors
 import zoukan.desktop.ui.common.Spacing
-import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.reducedMotion
 import zoukan.i18n.desktop.DMR
 
@@ -88,49 +88,37 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         HoldMessages()
         val model = rememberScreenModel { ReaderScreenModel(mangaId, chapterId, initialPage = page) }
         val state by model.state.collectAsState()
-        val menuVisible by model.menuVisible.collectAsState()
+        val overlay by model.overlay.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val windowState = LocalWindowState.current
         val prefs = model.preferences
-        val theme by prefs.readerTheme().collectAsState()
-        val fitMode by prefs.imageScaleType().collectAsState()
-        val sidePadding by prefs.webtoonSidePadding().collectAsState()
-        val showPageNumber by prefs.showPageNumber().collectAsState()
+        val config = ReaderConfig.collect(prefs)
         // ZOUKAN -->
         // The Automatic theme follows the app's light or dark theme, as Android's follows night mode
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        val background = readerBackground(theme, dark)
-        val foreground = readerForeground(theme, dark)
+        val background = readerBackground(config.theme, dark)
+        val foreground = readerForeground(config.theme, dark)
         val tapZones = remember { TapZonesOverlayState(prefs) }
-        val pagerNavInvert by prefs.pagerNavInverted().collectAsState()
-        val webtoonNavInvert by prefs.webtoonNavInverted().collectAsState()
         // ZOUKAN <--
         val actions = remember { ReaderActions() }
         val focus = remember { FocusRequester() }
-        var showKeys by remember { mutableStateOf(false) }
         // ZOUKAN -->
-        var showSettings by remember { mutableStateOf(false) }
-        var showChapters by remember { mutableStateOf(false) }
         var autoScroll by remember { mutableStateOf(false) }
-        val autoScrollInterval by prefs.autoscrollInterval().collectAsState()
-        val filter = ReaderFilter.collect(prefs)
-        val crop by prefs.cropBorders().collectAsState()
-        val cropWebtoon by prefs.cropBordersWebtoon().collectAsState()
-        val cropContinuous by prefs.cropBordersContinuousVertical().collectAsState()
+        val latestSmoothAutoScroll by rememberUpdatedState(config.smoothAutoScroll)
         val cropKey = remember { mutableStateOf<Triple<Boolean, Boolean, Boolean>?>(null) }
-        LaunchedEffect(crop, cropWebtoon, cropContinuous) {
-            val key = Triple(crop, cropWebtoon, cropContinuous)
+        LaunchedEffect(config.cropPaged, config.cropWebtoon, config.cropContinuousVertical) {
+            val key = config.cropKey
             if (cropKey.value != null && cropKey.value != key) model.redecodePages()
             cropKey.value = key
         }
-        LaunchedEffect(autoScroll, autoScrollInterval, state.generation) {
+        LaunchedEffect(autoScroll, config.autoScrollInterval, state.generation) {
             while (autoScroll) {
-                val millis = (autoScrollInterval.coerceAtLeast(0.5f) * 1000).toLong()
+                val millis = (config.autoScrollInterval.coerceAtLeast(0.5f) * 1000).toLong()
                 // SY's "Smooth auto scroll" glides in webtoon modes; the paged modes turn pages
-                val smooth = actions.smoothScroll.takeIf { prefs.smoothAutoScroll().get() }
-                if (smooth != null && !model.menuVisible.value) smooth(millis)
+                val smooth = actions.smoothScroll.takeIf { latestSmoothAutoScroll }
+                if (smooth != null && model.overlay.value == ReaderOverlay.Hidden) smooth(millis)
                 kotlinx.coroutines.delay(millis)
-                if (smooth == null && !model.menuVisible.value) actions.next()
+                if (smooth == null && model.overlay.value == ReaderOverlay.Hidden) actions.next()
             }
         }
         // ZOUKAN <--
@@ -150,7 +138,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
             tapZones.hide()
             // ZOUKAN <--
             // The Left and Right keys follow the taps: flipped in right to left mode or by inverted tap zones
-            val invert = ReaderNavigation.Invert.of(if (webtoon) webtoonNavInvert else pagerNavInvert)
+            val invert = ReaderNavigation.Invert.of(config.navInvert(webtoon))
             val flipped = ReaderNavigation.flipped(
                 rtl = state.readingMode == ReadingModes.RIGHT_TO_LEFT,
                 invert = invert,
@@ -173,19 +161,18 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 ReaderKeys.Action.ZOOM_RESET -> actions.zoomReset()
                 ReaderKeys.Action.TOGGLE_MENU -> model.toggleMenu()
                 ReaderKeys.Action.TOGGLE_FULLSCREEN -> toggleFullscreen()
-                ReaderKeys.Action.TOGGLE_HELP -> showKeys = !showKeys
+                ReaderKeys.Action.TOGGLE_HELP -> model.toggleHelp()
                 // ZOUKAN -->
                 ReaderKeys.Action.TOGGLE_AUTO_SCROLL -> autoScroll = !autoScroll
-                ReaderKeys.Action.TOGGLE_SETTINGS -> showSettings = !showSettings
+                ReaderKeys.Action.TOGGLE_SETTINGS -> model.toggleSettings()
                 ReaderKeys.Action.TOGGLE_BOOKMARK -> model.toggleBookmark()
-                ReaderKeys.Action.TOGGLE_CHAPTERS -> showChapters = !showChapters
+                ReaderKeys.Action.TOGGLE_CHAPTERS -> model.toggleChapters()
                 ReaderKeys.Action.RETRY_PAGES -> model.retryAllPages()
                 ReaderKeys.Action.BOOST_PAGE -> model.boostPage()
                 ReaderKeys.Action.SHIFT_DOUBLE_PAGES -> model.toggleShiftDoublePages()
                 // ZOUKAN <--
                 ReaderKeys.Action.ESCAPE -> when {
-                    showKeys -> showKeys = false
-                    menuVisible -> model.setMenu(false)
+                    model.overlay.value != ReaderOverlay.Hidden -> model.dismissOverlay()
                     windowState.placement == WindowPlacement.Fullscreen -> windowState.placement = WindowPlacement.Floating
                     else -> navigator.pop()
                 }
@@ -194,8 +181,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         }
 
         LaunchedEffect(Unit) { focus.requestFocus() }
-        // While the menu is open the focus stays where the user put it, so its buttons and slider work
-        LaunchedEffect(menuVisible, state.generation) { if (!menuVisible) focus.requestFocus() }
+        // While an overlay is open the focus stays where the user put it, so its buttons and slider work
+        LaunchedEffect(overlay, state.generation) { if (overlay == ReaderOverlay.Hidden) focus.requestFocus() }
 
         // ZOUKAN -->
         // The viewers get only what they draw, not the current page, so a page turn leaves them alone
@@ -220,9 +207,9 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 onBack = { navigator.pop() },
                 onToggleBookmark = { model.toggleBookmark() },
                 onAutoScroll = { autoScroll = !autoScroll },
-                onKeys = { showKeys = true },
+                onKeys = model::openHelp,
                 onFullscreen = { toggleFullscreen() },
-                onChapters = { showChapters = true },
+                onChapters = model::openChapters,
                 onWebView = model::openChapterInWebView,
                 onBrowser = model::openChapterInBrowser,
                 onReadingMode = model::setReadingMode,
@@ -232,7 +219,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                     pref.set(!pref.get())
                 },
                 onPageLayout = { prefs.pageLayout().set(it) },
-                onSettings = { showSettings = true },
+                onSettings = model::openSettings,
                 onPreviousChapter = { model.previousChapter() },
                 onNextChapter = { model.nextChapter() },
                 onPage = { actions.goTo(it) },
@@ -260,15 +247,16 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                     .semantics {
                         with(ReaderKeys) {
                             readerState = {
+                                val currentOverlay = model.overlay.value
                                 ReaderKeys.State(
                                     page = model.state.value.currentPage,
-                                    menu = model.menuVisible.value,
+                                    menu = currentOverlay is ReaderOverlay.Menu,
                                     zoom = actions.zoom(),
                                     fullscreen = windowState.placement == WindowPlacement.Fullscreen,
-                                    help = showKeys,
+                                    help = currentOverlay is ReaderOverlay.Help,
                                     autoScroll = autoScroll,
-                                    settings = showSettings,
-                                    chapters = showChapters,
+                                    settings = currentOverlay is ReaderOverlay.Settings,
+                                    chapters = currentOverlay is ReaderOverlay.Chapters,
                                     hasNext = model.state.value.nextChapter != null,
                                     hasPrevious = model.state.value.previousChapter != null,
                                     ready = model.state.value.let { !it.loading && it.error == null && it.pages.isNotEmpty() },
@@ -293,12 +281,12 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                         // ZOUKAN -->
                         with(ReaderFilter) {
                             val pageDescription = localized(DMR.strings.reader_page_description, state.pageNumber)
-                            Box(Modifier.fillMaxSize().readerFilter(filter).semantics { contentDescription = pageDescription }) {
+                            Box(Modifier.fillMaxSize().readerFilter(config.filter).semantics { contentDescription = pageDescription }) {
                                 // ZOUKAN <--
                                 if (webtoon) {
-                                    WebtoonViewer(model, viewerContent, actions, sidePadding, background, foreground, tapZones)
+                                    WebtoonViewer(model, viewerContent, actions, config.webtoonSidePadding, background, foreground, tapZones, config = config.webtoon)
                                 } else {
-                                    PagedViewer(model, viewerContent, actions, fitMode, background, foreground, tapZones, autoBackground = theme == 3)
+                                    PagedViewer(model, viewerContent, actions, config.fitMode, background, foreground, tapZones, autoBackground = config.theme == 3, config = config.paged)
                                 }
                             }
                         }
@@ -309,7 +297,7 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 ReaderEffects(model, state)
                 // ZOUKAN <--
 
-                if (showPageNumber && !menuVisible && state.pages.isNotEmpty()) {
+                if (config.showPageNumber && overlay == ReaderOverlay.Hidden && state.pages.isNotEmpty()) {
                     Text(
                         state.pageNumber,
                         color = OverlayColors.OnScrim,
@@ -323,13 +311,8 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                 }
 
                 // ZOUKAN -->
-                val buttons by prefs.readerBottomButtons().collectAsState()
-                val forceHorizontal by prefs.forceHorizontalSeekbar().collectAsState()
-                val verticalInLandscape by prefs.landscapeVerticalSeekbar().collectAsState()
-                val leftHanded by prefs.leftVerticalSeekbar().collectAsState()
-                val pageLayout by prefs.pageLayout().collectAsState()
                 ReaderAppBars(
-                    visible = menuVisible,
+                    visible = overlay is ReaderOverlay.Menu,
                     menu = ReaderMenuState(
                         mangaTitle = state.manga?.title.orEmpty(),
                         chapterTitle = state.chapter?.name.orEmpty().let {
@@ -343,17 +326,13 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
                         autoScroll = autoScroll,
                         fullscreen = windowState.placement == WindowPlacement.Fullscreen,
                         readingMode = state.readingMode,
-                        fitMode = fitMode,
-                        cropEnabled = when (state.readingMode) {
-                            ReadingModes.WEBTOON -> cropWebtoon
-                            ReadingModes.CONTINUOUS_VERTICAL -> cropContinuous
-                            else -> crop
-                        },
-                        pageLayout = pageLayout,
-                        buttons = buttons,
-                        forceHorizontalSlider = forceHorizontal,
-                        verticalSliderInLandscape = verticalInLandscape,
-                        leftHandedSlider = leftHanded,
+                        fitMode = config.fitMode,
+                        cropEnabled = config.cropEnabled(state.readingMode),
+                        pageLayout = config.paged.pageLayout,
+                        buttons = config.bottomButtons,
+                        forceHorizontalSlider = config.forceHorizontalSeekbar,
+                        verticalSliderInLandscape = config.landscapeVerticalSeekbar,
+                        leftHandedSlider = config.leftVerticalSeekbar,
                         currentPage = state.currentPage,
                         currentPageText = currentPageText(state),
                         totalPages = state.pages.size,
@@ -369,37 +348,31 @@ data class ReaderScreen(val mangaId: Long, val chapterId: Long, val page: Int? =
         }
         // ZOUKAN <--
 
-        if (showKeys) KeyboardHelp { showKeys = false }
-        if (showSettings) ReaderSettingsDialog(model) { showSettings = false }
         // ZOUKAN -->
-        if (showChapters) {
-            ReaderChapterListDialog(
+        when (val currentOverlay = overlay) {
+            ReaderOverlay.Hidden, ReaderOverlay.Menu -> Unit
+            ReaderOverlay.Help -> KeyboardHelp(model::dismissOverlay)
+            ReaderOverlay.Settings -> ReaderSettingsDialog(model, model::dismissOverlay)
+            ReaderOverlay.Chapters -> ReaderChapterListDialog(
                 chapters = state.navigable,
                 current = state.chapter?.id,
                 onOpen = {
-                    showChapters = false
+                    model.dismissOverlay()
                     model.openChapter(it)
                 },
                 onBookmark = model::toggleBookmark,
-                onDismiss = { showChapters = false },
+                onDismiss = model::dismissOverlay,
             )
-        }
-        LaunchedEffect(showChapters, showSettings) { if (!showChapters && !showSettings) focus.requestFocus() }
-        // ZOUKAN <--
-        // ZOUKAN -->
-        val pageActions by model.pageActions.collectAsState()
-        pageActions?.let { target ->
-            PageActionsDialog(
-                target = target,
+            is ReaderOverlay.PageActions -> PageActionsDialog(
+                target = currentOverlay.target,
                 onDismiss = model::closePageActions,
                 onSetAsCover = model::setPageAsCover,
                 onCopy = model::copyPage,
                 onSave = model::savePage,
-                onCopyCombined = { model.copyCombined(target) },
-                onSaveCombined = { model.saveCombined(target) },
+                onCopyCombined = { model.copyCombined(currentOverlay.target) },
+                onSaveCombined = { model.saveCombined(currentOverlay.target) },
             )
         }
-        LaunchedEffect(pageActions) { if (pageActions == null) focus.requestFocus() }
         // ZOUKAN <--
     }
 }
