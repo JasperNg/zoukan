@@ -100,7 +100,7 @@ jobs:
       # distTar/distZip are built by assemble but nobody uses them in CI
       - name: Build and unit tests
         run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest -x distTar -x distZip --continue
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-unit
@@ -147,7 +147,7 @@ jobs:
           # The runner is thrown away after the job, so the Keychain tests may turn its prompts off
           ZOUKAN_KEYCHAIN_TESTS: 'true'
         run: ./gradlew :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest --continue
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-files-${{ matrix.os }}
@@ -175,7 +175,7 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       - run: xvfb-run -a ./gradlew :desktop:wiringTest
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-wiring
@@ -209,7 +209,7 @@ jobs:
       - run: ./gradlew :app:compileDebugKotlin :data:compileDebugKotlinAndroid :domain:compileDebugKotlinAndroid :core:common:compileDebugKotlinAndroid :source-api:compileDebugKotlinAndroid
       # The only Android unit tests: the app's (src/test) and domain's (src/androidUnitTest)
       - run: ./gradlew :app:testDebugUnitTest :domain:testDebugUnitTest --continue
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-android-unit
@@ -236,7 +236,7 @@ jobs:
         run: ./gradlew :desktop:journeyTest --continue
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: journeys-windows
           retention-days: 14
