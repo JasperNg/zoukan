@@ -85,6 +85,36 @@ class EditMangaLocalCoverTest {
     }
 
     @Test
+    fun `an image that declares an absurd size is refused with a message and the cover is kept`() = runBlocking<Unit> {
+        val old = File(entry, "cover.jpg").apply { writeBytes(image("jpg")) }
+        val before = old.readBytes()
+        // A TIFF (decoded on the Java heap, as a type neither app finds as a cover) declaring 60000 by 60000
+        val tiff = image("tiff", 16)
+        val huge = tiff.copyOf().also { bytes ->
+            // Little- or big-endian TIFF: rewrite ImageWidth (256) and ImageLength (257) in the first IFD
+            val little = bytes[0] == 'I'.code.toByte()
+            fun u16(i: Int) = if (little) (bytes[i].toInt() and 0xFF) or ((bytes[i + 1].toInt() and 0xFF) shl 8) else ((bytes[i].toInt() and 0xFF) shl 8) or (bytes[i + 1].toInt() and 0xFF)
+            fun u32(i: Int) = if (little) u16(i) or (u16(i + 2) shl 16) else (u16(i) shl 16) or u16(i + 2)
+            fun put32(i: Int, v: Int) = (0..3).forEach { k -> bytes[i + k] = (if (little) v shr (8 * k) else v shr (8 * (3 - k))).toByte() }
+            fun put16(i: Int, v: Int) = (0..1).forEach { k -> bytes[i + k] = (if (little) v shr (8 * k) else v shr (8 * (1 - k))).toByte() }
+            val ifd = u32(4)
+            repeat(u16(ifd)) { n ->
+                val at = ifd + 2 + n * 12
+                if (u16(at) == 256 || u16(at) == 257) {
+                    if (u16(at + 2) == 3) put16(at + 8, 60_000) else put32(at + 8, 60_000)
+                }
+            }
+        }
+        val error = assertThrows<zoukan.desktop.ui.common.UnreadableImageException> {
+            runBlocking { edit().setCover(manga, picked("scan.tiff", huge)) }
+        }
+        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.the_image_is_too_large)
+        old.readBytes() shouldBe before
+        names() shouldContainExactly listOf("cover.jpg")
+        updates shouldBe emptyList()
+    }
+
+    @Test
     fun `a cover that cannot be read leaves the old cover in place`() = runBlocking<Unit> {
         val old = File(entry, "cover.jpg").apply { writeBytes(image("jpg")) }
         val before = old.readBytes()

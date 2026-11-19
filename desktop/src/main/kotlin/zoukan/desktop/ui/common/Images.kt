@@ -112,6 +112,8 @@ object Images {
                 // ZOUKAN: nothing new in the disk cache while incognito is on
                 add(IncognitoDiskCacheInterceptor { incognito(null) })
                 add(CoverKeyer())
+                // ZOUKAN: an image that declares an absurd size fails before any decoder allocates it
+                add(zoukan.desktop.image.DeclaredSizeCheck())
                 add(CoverFetcher.Factory(coverDir))
                 // ZOUKAN -->
                 add(zoukan.desktop.ui.manga.PagePreviewKeyer())

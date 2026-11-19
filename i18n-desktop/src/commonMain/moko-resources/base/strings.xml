@@ -346,6 +346,8 @@
     <string name="could_not_encode_the_page">Could not encode the page</string>
     <string name="unsupported_image_format">Unsupported image format (%1$s)</string>
     <string name="the_page_is_too_large_to_show">The page is too large to show</string>
+    <!-- A cover, preview or picked image whose header declares a size too large to decode -->
+    <string name="the_image_is_too_large">The image is too large to open</string>
     <string name="download_folders_not_renamed">Title not changed</string>
     <string name="download_folders_not_renamed_text">%1$s keeps its title instead of %2$s: its downloads are in %3$d folders, and only one could follow the new title. Move the chapters into one folder to let the title change.</string>
     <string name="is_a_link_and_was_not_cleared">%1$s is a link to another folder, so nothing in it was deleted</string>

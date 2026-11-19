@@ -143,6 +143,8 @@ class EditManga(
      * and an error when it is no image at all.
      */
     private fun coverImage(bytes: ByteArray): ByteArray {
+        // An absurd declared size is an error with a message, before it is decoded here or as a cover
+        zoukan.desktop.image.checkImageSize(bytes)
         if (ImageType.fromBytes(bytes) != null) return bytes
         // Exception, not Throwable: running out of memory on a huge image is not "not an image"
         val decoded = try {

@@ -205,16 +205,20 @@ class PageImage(
         /**
          * Fails with a page error when [bytes] declare a page too large for the decoder that will
          * read it ([MAX_DECODED_PIXELS] for Skia, [imageIoPixelLimit] and [MAX_PAGE_SIDE] for ImageIO), read from the
-         * image's header before anything that size is allocated. Returns the declared size, null
-         * when no reader knows it.
+         * image's header before anything that size is allocated, with [tooLarge] as the message
+         * (other images use it too: `checkImageSize`). Returns the declared size, null when no
+         * reader knows it.
          */
-        internal fun checkDeclaredSize(bytes: ByteArray): Pair<Int, Int>? {
+        internal fun checkDeclaredSize(
+            bytes: ByteArray,
+            tooLarge: () -> String = { localized(DMR.strings.the_page_is_too_large_to_show) },
+        ): Pair<Int, Int>? {
             skiaSize(bytes)?.let { (width, height) ->
-                if (isTooLarge(width, height, MAX_DECODED_PIXELS, maxSide = Int.MAX_VALUE)) throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
+                if (isTooLarge(width, height, MAX_DECODED_PIXELS, maxSide = Int.MAX_VALUE)) throw UnreadableImageException(tooLarge())
                 return width to height
             }
             val (width, height) = imageIoSize(bytes) ?: return null
-            if (isTooLarge(width, height, imageIoPixelLimit(heldBytes = imageIoHeldBytes(bytes)))) throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
+            if (isTooLarge(width, height, imageIoPixelLimit(heldBytes = imageIoHeldBytes(bytes)))) throw UnreadableImageException(tooLarge())
             return width to height
         }
 

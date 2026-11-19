@@ -204,6 +204,10 @@ object PageImages {
         }
         try {
             val height = maxOf(a.height, b.height)
+            // The two side by side: no more pixels than one page as large as the reader shows
+            if (PageImage.isTooLarge(a.width + b.width, height, PageImage.MAX_DECODED_PIXELS, maxSide = Int.MAX_VALUE)) {
+                throw zoukan.desktop.ui.common.UnreadableImageException(localized(DMR.strings.the_image_is_too_large))
+            }
             val surface = Surface.makeRasterN32Premul(a.width + b.width, height)
             try {
                 val canvas = surface.canvas
@@ -254,7 +258,11 @@ object PageImages {
     }
 
     private fun decode(bytes: ByteArray): Image = try {
+        // An absurd declared size is an error with a message, not an allocation that size
+        zoukan.desktop.image.checkImageSize(bytes)
         Image.makeFromEncoded(bytes)
+    } catch (e: zoukan.desktop.ui.common.UnreadableImageException) {
+        throw e
     } catch (e: Exception) {
         // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys covers a few more
         val image = MemoryImageIo.read(bytes) ?: throw IllegalArgumentException(localized(DMR.strings.not_an_image), e)
@@ -267,6 +275,12 @@ object PageImages {
 
     /** An opaque AWT image: Windows pastes transparent parts of a clipboard image as black. */
     private fun toAwt(bytes: ByteArray): BufferedImage {
+        // Two copies on the Java heap (the decoded PNG and the opaque one): ImageIO's bound
+        zoukan.desktop.image.checkImageSize(bytes)?.let { (width, height) ->
+            if (PageImage.isTooLarge(width, height, PageImage.imageIoPixelLimit(heldBytes = 2L * bytes.size))) {
+                throw zoukan.desktop.ui.common.UnreadableImageException(localized(DMR.strings.the_image_is_too_large))
+            }
+        }
         val decoded = MemoryImageIo.read(toPng(bytes)) ?: error(localized(DMR.strings.not_an_image))
         val image = BufferedImage(decoded.width, decoded.height, BufferedImage.TYPE_INT_RGB)
         val g = image.createGraphics()
