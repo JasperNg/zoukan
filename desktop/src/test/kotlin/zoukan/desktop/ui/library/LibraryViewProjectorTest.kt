@@ -89,7 +89,7 @@ class LibraryViewProjectorTest {
             source = source,
             ogTitle = title,
             ogStatus = status.toLong(),
-            ogLastUpdate = lastUpdate,
+            lastUpdate = lastUpdate,
             dateAdded = dateAdded,
             fetchInterval = fetchInterval,
             ogGenre = genre,
@@ -303,8 +303,14 @@ class LibraryViewProjectorTest {
     @Test
     fun `selection helpers check download capability, remote presence, and overflow flags`() {
         val local = entry(1L, "Local", source = LocalSource.ID)
+        val modifiedManga = mockk<Manga>(relaxed = true) {
+            every { id } returns 2L
+            every { source } returns 10L
+            every { ogTitle } returns "Original"
+            every { title } returns "Edited"
+        }
         val modified = LibraryManga(
-            manga = Manga.create().copy(id = 2L, source = 10L, ogTitle = "Original", title = "Edited"),
+            manga = modifiedManga,
             categories = listOf(0L),
             totalChapters = 0L,
             readCount = 0L,
@@ -321,6 +327,11 @@ class LibraryViewProjectorTest {
         LibraryViewProjector.selectionCanDownload(items, setOf(2L)) shouldBe true
         LibraryViewProjector.selectionHasRemote(items, setOf(1L)) shouldBe false
         LibraryViewProjector.selectionHasRemote(items, setOf(1L, 2L)) shouldBe true
+        LibraryViewProjector.selectionFlags(items, setOf(1L)) shouldBe LibraryScreenModel.SelectionFlags(
+            cleanTitles = false,
+            addToMangadex = false,
+            resetInfo = false,
+        )
         LibraryViewProjector.selectionFlags(items, setOf(2L)) shouldBe LibraryScreenModel.SelectionFlags(
             cleanTitles = false,
             addToMangadex = false,
@@ -337,7 +348,9 @@ class LibraryViewProjectorTest {
         Await.until("initial load", 5_000, { model.state.value }) { !model.state.value.loading }
 
         model.selectCategory(1L)
-        Await.until("category selected", 5_000, { model.state.value.selectedCategory }) { it == 1L }
+        Await.until("category selected", 5_000, { model.state.value.selectedCategory }) {
+            model.state.value.selectedCategory == 1L
+        }
 
         val p = model.preferences
         p.displayMode().set(LibraryDisplayMode.List)
@@ -364,9 +377,10 @@ class LibraryViewProjectorTest {
         p.groupLibraryBy().set(LibraryGroup.BY_SOURCE)
 
         Await.until("typed settings updated", 5_000, { model.state.value }) {
-            it.settings.display == LibraryDisplayMode.List &&
-                it.settings.group == LibraryGroup.BY_SOURCE &&
-                it.settings.includedCategories == setOf(1L)
+            val current = model.state.value
+            current.settings.display == LibraryDisplayMode.List &&
+                current.settings.group == LibraryGroup.BY_SOURCE &&
+                current.settings.includedCategories == setOf(1L)
         }
 
         val state = model.state.value
