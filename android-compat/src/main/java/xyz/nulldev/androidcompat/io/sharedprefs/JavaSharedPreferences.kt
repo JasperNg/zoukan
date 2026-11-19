@@ -123,7 +123,8 @@ class JavaSharedPreferences(
          * The file the preferences named [key] are kept in (Context.getSharedPreferencesPath).
          * A name valid on every OS ([SafePath.buildValidFilename]); when only a file of the
          * name an older version gave exists ([SafePath.legacyValidFilename]), that one, so no
-         * settings are lost and nothing is renamed.
+         * settings are lost and nothing is renamed. Also when only the old name's `.tmp` is there
+         * (a save the older version left half done), so the leftover is recovered under it.
          */
         @JvmStatic
         fun fileFor(key: String): java.io.File {
@@ -139,7 +140,11 @@ class JavaSharedPreferences(
             } catch (e: java.nio.file.InvalidPathException) {
                 null
             }
-            return if (legacy != null && java.nio.file.Files.isRegularFile(legacy, java.nio.file.LinkOption.NOFOLLOW_LINKS)) legacy.toFile() else file
+            if (legacy == null) return file
+            fun isFile(path: java.nio.file.Path) = java.nio.file.Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+            val legacyLeftover = legacy.resolveSibling("$legacyName.tmp")
+            val leftover = java.io.File(folder, "${file.name}.tmp")
+            return if (isFile(legacy) || (isFile(legacyLeftover) && !leftover.exists())) legacy.toFile() else file
         }
 
         /** True for bytes that are not blank and do not start with the XML header (after a byte order mark and spaces). */

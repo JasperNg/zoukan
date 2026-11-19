@@ -110,6 +110,21 @@ class SavedFileNamePropertyTest {
     }
 
     @Test
+    fun `a save an older version left half done under the old name is recovered`() {
+        val settings = File(root, "settings").apply { mkdirs() }
+        // The file deleted and the new one still in .tmp, under the name an older version gave
+        val leftover = File(settings, "nul.xml.tmp")
+        assumeTrue(
+            runCatching { leftover.outputStream().use { java.util.Properties().apply { setProperty("kept", "yes") }.storeToXML(it, null) } }.isSuccess &&
+                leftover.isFile,
+            "this OS cannot write a device name",
+        )
+
+        JavaSharedPreferences.fileFor("nul").name shouldBe "nul.xml"
+        JavaSharedPreferences("nul").getString("kept", null) shouldBe "yes"
+    }
+
+    @Test
     fun `a settings key with half a surrogate pair has a file, and one written under its old name is still found`() {
         val settings = File(root, "settings").apply { mkdirs() }
         // Where the old name can be spelled (Windows), an older version wrote the file under it;
