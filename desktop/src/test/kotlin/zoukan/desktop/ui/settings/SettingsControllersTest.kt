@@ -163,7 +163,7 @@ class SettingsControllersTest {
 
         controller.startFavoritesSync(FavoritesSyncStatus.Processing.DownloadingFavorites) shouldBe false
         controller.startFavoritesSync(FavoritesSyncStatus.Idle) shouldBe true
-        controller.startFavoritesSync(FavoritesSyncStatus.SyncError("boom")) shouldBe true
+        controller.startFavoritesSync(FavoritesSyncStatus.SyncError.UnknownSyncError("boom")) shouldBe true
         syncRuns shouldBe 2
 
         val rows = controller.loadLanguages().map { it.toMutableList() }
