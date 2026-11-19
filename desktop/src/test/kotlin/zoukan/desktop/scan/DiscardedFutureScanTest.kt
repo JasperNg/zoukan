@@ -2,7 +2,6 @@ package zoukan.desktop.scan
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import zoukan.desktop.scan.SourceScan.Allowed
 
 /**
  * An exception thrown in a future's callback completes the returned future exceptionally; when
@@ -90,14 +89,7 @@ class DiscardedFutureScanTest {
     }
 
     private companion object {
-        val ALLOWED = listOf(
-            Allowed(
-                "android-compat/src/main/java/xyz/nulldev/androidcompat/webkit/KcefHelper.kt",
-                "{ cb(it) }",
-                "known defect: an exception from the extension's evaluateJavascript callback vanishes with " +
-                    "the dropped future, without a log (on Android it would reach the main thread)",
-            ),
-        )
+        val ALLOWED = emptyList<SourceScan.Allowed>()
     }
 }
 

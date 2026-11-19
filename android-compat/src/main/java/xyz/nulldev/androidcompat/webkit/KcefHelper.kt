@@ -36,7 +36,10 @@ fun CefBrowser.evaluateJavaScript(
         .handle { response, error ->
             if (error != null) logger.debug(error) { "JavaScript evaluation failed" }
             androidEvaluationResult(response)
-        }.thenAccept { cb(it) }
+        }.thenAcceptAsync { cb(it) }
+        .whenComplete { _, error ->
+            if (error != null) logger.error(error) { "JavaScript evaluation callback failed" }
+        }
 }
 
 // Passes the result decoded from JSON: a string arrives unquoted and null as null

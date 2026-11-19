@@ -2,7 +2,6 @@ package zoukan.desktop.scan
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import zoukan.desktop.scan.SourceScan.Allowed
 
 /**
  * Chromium delivers a DevTools reply on its UI thread, and a navigation started from inside that
@@ -92,15 +91,7 @@ class DevToolsCallbackScanTest {
     }
 
     private companion object {
-        val ALLOWED = listOf(
-            Allowed(
-                "android-compat/src/main/java/xyz/nulldev/androidcompat/webkit/KcefHelper.kt",
-                ".thenAccept { cb(it) }",
-                "known defect, fix in progress: the evaluateJavascript callback runs inside the DevTools " +
-                    "reply, and an extension (or BrowserWindow) that loads a page from it ends the process. " +
-                    "Remove this entry when the fix (an Async stage) lands",
-            ),
-        )
+        val ALLOWED = emptyList<SourceScan.Allowed>()
     }
 }
 
