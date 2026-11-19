@@ -9,6 +9,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
@@ -20,6 +21,7 @@ import zoukan.desktop.download.CbzEncryption
 import zoukan.desktop.download.CbzReader
 import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.testing.fakes.FileFaults
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -127,11 +129,10 @@ class EditMangaLocalCoverTest {
     fun `a read-only entry folder keeps its cover`() = runBlocking<Unit> {
         val old = File(entry, "cover.jpg").apply { writeBytes(image("jpg")) }
         val before = old.readBytes()
-        entry.setWritable(false)
-        try {
+        val readOnly = FileFaults.readOnly(entry)
+        assumeTrue(readOnly != null, "This OS or user can write in a read-only folder")
+        readOnly!!.use {
             assertThrows<java.io.IOException> { runBlocking { edit().setCover(manga, picked("new.png", image("png"))) } }
-        } finally {
-            entry.setWritable(true)
         }
         old.readBytes() shouldBe before
         names() shouldContainExactly listOf("cover.jpg")
