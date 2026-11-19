@@ -14,6 +14,7 @@ import io.mockk.mockk
 import io.mockk.spyk
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
@@ -22,12 +23,17 @@ import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.manga.EditManga
+import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.ui.common.Images
 import kotlin.io.path.createTempDirectory
 
 /** Save in the edit dialog writes the edited details and notes of a library entry. */
 @OptIn(ExperimentalTestApi::class)
 class EditMangaDialogSaveTest {
+
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
 
     private lateinit var edit: EditManga
 

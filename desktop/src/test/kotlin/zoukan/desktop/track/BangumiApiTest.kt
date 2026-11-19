@@ -15,7 +15,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
+import zoukan.desktop.testing.FreshInjekt
 import java.io.IOException
 
 /**
@@ -25,9 +28,18 @@ import java.io.IOException
  */
 class BangumiApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
     private val bangumi = Bangumi(5L)
+
+    @BeforeEach
+    fun setUp() {
+        env.register()
+    }
 
     private fun signIn(createdAt: Long = System.currentTimeMillis() / 1000) {
         env.preferences.setCredentials(bangumi, USERNAME, ACCESS)
@@ -40,7 +52,6 @@ class BangumiApiTest {
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(ACCESS, REFRESH, "new-access")
-        env.close()
     }
 
     private fun track() = Track.create(5L).apply {

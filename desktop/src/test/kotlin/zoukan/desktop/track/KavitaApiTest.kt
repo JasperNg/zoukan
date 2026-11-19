@@ -15,10 +15,13 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import zoukan.desktop.testing.FreshInjekt
 import java.io.IOException
 import java.security.MessageDigest
 
@@ -29,10 +32,17 @@ import java.security.MessageDigest
  */
 class KavitaApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
+    private val kavita = Kavita(TrackerManager.KAVITA)
 
-    init {
+    @BeforeEach
+    fun setUp() {
+        env.register()
         // The first of the Kavita extension's three sources is set up with this server; the others are not
         val configured = mockk<SharedPreferences> {
             every { getString("APIURL", "") } returns API
@@ -48,12 +58,9 @@ class KavitaApiTest {
         Injekt.addSingleton<SourceManager>(sourceManager)
     }
 
-    private val kavita = Kavita(TrackerManager.KAVITA)
-
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(JWT, https = false)
-        env.close()
     }
 
     private fun configurableSource(id: Long): ConfigurableSource = mockk { every { this@mockk.id } returns id }

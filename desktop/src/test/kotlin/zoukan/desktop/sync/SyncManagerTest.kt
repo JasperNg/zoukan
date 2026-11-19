@@ -14,26 +14,37 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
-import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.testing.FreshInjekt
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 
 class SyncManagerTest {
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     // Not @TempDir: the preferences file is written in the background and may outlive the test
     private val root = Files.createTempDirectory("zoukan-sync").toFile()
+
+    @BeforeEach
+    fun setUp() {
+        Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
+    }
     private val preferences by lazy {
         System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
         SyncPreferences(DesktopPreferenceStore(JavaSharedPreferences("sync_test_${System.nanoTime()}")))
@@ -144,11 +155,8 @@ class SyncManagerTest {
         manager.isDue(System.currentTimeMillis() + 60_000) shouldBe false
     }
 
-    // A favorite Manga reads its custom info through Injekt; Injekt keeps the first one registered
+    // A favorite Manga reads its custom info through Injekt (registered in setUp)
     private val local by lazy {
-        if (runCatching { Injekt.get<GetCustomMangaInfo>() }.isFailure) {
-            Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
-        }
         Manga.create().copy(id = 7, source = 1, url = "/a", ogTitle = "A", favorite = true)
     }
 

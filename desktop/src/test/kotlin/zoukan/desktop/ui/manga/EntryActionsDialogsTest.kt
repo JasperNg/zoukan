@@ -13,6 +13,7 @@ import io.mockk.spyk
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -32,6 +33,7 @@ import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.manga.EditManga
+import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.CopyOnWriteArrayList
@@ -39,11 +41,14 @@ import kotlin.io.path.createTempDirectory
 
 /**
  * The entry actions' dialogs that look their services up in Injekt: each gets a fake here, so the
- * test sees what the dialog's buttons do. Injekt is global and keeps the first registration, so
- * each fake is registered once for the JVM and its recordings are cleared before every test.
+ * test sees what the dialog's buttons do. Each test runs in a fresh Injekt scope via [FreshInjekt].
  */
 @OptIn(ExperimentalTestApi::class, ForTestsOnly::class)
 class EntryActionsDialogsTest {
+
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
 
     @BeforeEach
     fun setUp() {

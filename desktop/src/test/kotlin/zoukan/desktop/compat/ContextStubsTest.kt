@@ -9,6 +9,7 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektScope
@@ -27,6 +28,7 @@ import xyz.nulldev.androidcompat.pm.PackageController
 import xyz.nulldev.androidcompat.service.ServiceSupport
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import xyz.nulldev.ts.config.ConfigManager
+import zoukan.desktop.testing.FreshInjekt
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -37,6 +39,10 @@ import java.io.FileNotFoundException
  * names it, one `catch (Exception)` can handle, not with null or a Kotlin Error.
  */
 class ContextStubsTest {
+
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
 
     @TempDir
     lateinit var root: File

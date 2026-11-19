@@ -20,7 +20,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
+import zoukan.desktop.testing.FreshInjekt
 import java.io.IOException
 import java.util.TimeZone
 import tachiyomi.domain.track.model.Track as DomainTrack
@@ -31,9 +34,18 @@ import tachiyomi.domain.track.model.Track as DomainTrack
  */
 class KitsuApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
     private val kitsu = Kitsu(TrackerManager.KITSU)
+
+    @BeforeEach
+    fun setUp() {
+        env.register()
+    }
 
     private fun signIn(createdAt: Long = System.currentTimeMillis() / 1000) {
         // Kitsu keeps the user id as the "password"
@@ -46,7 +58,6 @@ class KitsuApiTest {
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(ACCESS, REFRESH, "new-access")
-        env.close()
     }
 
     private fun track() = Track.create(TrackerManager.KITSU).apply {

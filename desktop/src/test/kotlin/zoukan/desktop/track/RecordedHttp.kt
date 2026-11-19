@@ -33,9 +33,7 @@ import okio.Buffer
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.InjektScope
 import uy.kohesive.injekt.api.addSingleton
-import uy.kohesive.injekt.registry.default.DefaultRegistrar
 import java.net.URLDecoder
 import java.util.Collections
 
@@ -200,17 +198,15 @@ internal class MapPreferenceStore : PreferenceStore {
 }
 
 /**
- * What a hosted tracker needs to run in a unit test: its own Injekt scope with the app's Json,
- * track preferences in memory and a NetworkHelper whose client is [http]'s. [close] puts the
- * previous scope back, so nothing registered here leaks into other test classes.
+ * What a hosted tracker needs to run in a unit test: registers the app's Json, track preferences
+ * in memory, and a NetworkHelper whose client is [http]'s into the test's [Injekt] scope.
+ * Tests pair this with `FreshInjekt` so nothing registered here leaks into other tests.
  */
-internal class TrackerTestEnvironment : AutoCloseable {
+internal class TrackerTestEnvironment {
     val http = RecordedHttp()
     val preferences = TrackPreferences(MapPreferenceStore())
-    private val previous = Injekt
 
-    init {
-        Injekt = InjektScope(DefaultRegistrar())
+    fun register() {
         // What the app registers (DesktopAppModule)
         Injekt.addSingleton(
             Json {
@@ -220,9 +216,5 @@ internal class TrackerTestEnvironment : AutoCloseable {
         )
         Injekt.addSingleton(preferences)
         Injekt.addSingleton<NetworkHelper>(mockk { every { client } returns http.client })
-    }
-
-    override fun close() {
-        Injekt = previous
     }
 }

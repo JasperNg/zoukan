@@ -27,8 +27,10 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import zoukan.desktop.testing.FreshInjekt
 import java.util.Collections
 import tachiyomi.domain.track.model.Track as DomainTrack
 
@@ -43,6 +45,10 @@ import tachiyomi.domain.track.model.Track as DomainTrack
  * answers, which is the tracker logic the shared code carries.
  */
 class AnilistApiTest {
+
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
 
     private val requests: MutableList<JsonObject> = Collections.synchronizedList(mutableListOf())
     private val answers = ArrayDeque<String>()

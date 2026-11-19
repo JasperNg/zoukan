@@ -27,7 +27,9 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers.Companion.headersOf
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
@@ -36,6 +38,7 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.exh.MangaDexSync
+import zoukan.desktop.testing.FreshInjekt
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 /**
@@ -46,14 +49,20 @@ import tachiyomi.domain.track.model.Track as DomainTrack
  */
 class MangaDexFollowApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
-    private val mdList: MdList
-    private val handler: FollowsHandler
+    private lateinit var mdList: MdList
+    private lateinit var handler: FollowsHandler
     private val mangaDex = mockk<MangaDex>()
     private val previousSourceIds = mangaDexSourceIds
 
-    init {
+    @BeforeEach
+    fun setUp() {
+        env.register()
         signIn()
         // MdList finds the MangaDex source through MdUtil, which reads these from Injekt
         Injekt.addSingleton<SourcePreferences>(mockk(relaxed = true))
@@ -80,7 +89,6 @@ class MangaDexFollowApiTest {
         unmockkObject(MdUtil.Companion)
         mangaDexSourceIds = previousSourceIds
         http.checkAllAnswered(ACCESS, REFRESH)
-        env.close()
     }
 
     private fun answerRemote(status: String?, rating: Int?) {

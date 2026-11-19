@@ -15,6 +15,7 @@ import mihon.domain.chapter.interactor.FilterChaptersForDownload
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.library.model.LibraryManga
@@ -27,7 +28,7 @@ import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
-import java.nio.file.Files
+import java.io.File
 
 /**
  * The library update leaves out the sources Android leaves out, and queues a merged entry's new
@@ -35,10 +36,14 @@ import java.nio.file.Files
  */
 class LibraryUpdaterDownloadsTest {
 
-    private val excludedBefore = LIBRARY_UPDATE_EXCLUDED_SOURCES
+    @TempDir
+    lateinit var temp: File
+
+    private lateinit var excludedBefore: List<Long>
 
     @BeforeEach
     fun setUp() {
+        excludedBefore = LIBRARY_UPDATE_EXCLUDED_SOURCES
         LIBRARY_UPDATE_EXCLUDED_SOURCES = listOf(EH)
     }
 
@@ -84,7 +89,7 @@ class LibraryUpdaterDownloadsTest {
         }
         val downloads = mockk<DownloadManager>(relaxed = true)
         val updater = LibraryUpdater(
-            dirs = ZoukanDirs(Files.createTempDirectory("zoukan-update-downloads").toFile()),
+            dirs = ZoukanDirs(temp),
             getLibraryManga = mockk<GetLibraryManga> { coEvery { await() } returns library },
             refreshManga = refreshManga,
             sourceManager = mockk<SourceManager> { every { this@mockk.get(any<Long>()) } returns mockk() },

@@ -9,6 +9,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -17,10 +18,13 @@ import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.domain.RefreshManga
-import java.nio.file.Files
+import java.io.File
 
 /** An update a restore stops is not a finished update: the schedule must run it again. */
 class LibraryUpdaterRestoreTest {
+
+    @TempDir
+    lateinit var temp: File
 
     private fun entry(id: Long) = LibraryManga(
         manga = mockk<Manga> {
@@ -46,7 +50,7 @@ class LibraryUpdaterRestoreTest {
         val timestamp = mockk<Preference<Long>>(relaxed = true) { every { get() } returns 1234L }
         val refreshManga = mockk<RefreshManga>()
         val updater = LibraryUpdater(
-            dirs = ZoukanDirs(Files.createTempDirectory("zoukan-update-restore").toFile()),
+            dirs = ZoukanDirs(temp),
             getLibraryManga = mockk<GetLibraryManga> { coEvery { await() } returns listOf(entry(1), entry(2)) },
             refreshManga = refreshManga,
             sourceManager = mockk(relaxed = true),

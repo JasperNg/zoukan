@@ -23,10 +23,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import zoukan.desktop.testing.FreshInjekt
 
 /**
  * Suwayomi, the self-hosted tracker: the GraphQL calls it sends to the user's Suwayomi server
@@ -35,11 +38,18 @@ import uy.kohesive.injekt.api.addSingleton
  */
 class SuwayomiApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
     private var deleteDownloads = false
+    private val suwayomi = Suwayomi(9L)
 
-    init {
+    @BeforeEach
+    fun setUp() {
+        env.register()
         val preferences = mockk<SharedPreferences> {
             every { getBoolean("Tracker Delete", false) } answers { deleteDownloads }
         }
@@ -62,12 +72,9 @@ class SuwayomiApiTest {
         Injekt.addSingleton<SourceManager>(sourceManager)
     }
 
-    private val suwayomi = Suwayomi(9L)
-
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(PASSWORD, https = false)
-        env.close()
     }
 
     private fun answerManga(

@@ -18,7 +18,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
+import zoukan.desktop.testing.FreshInjekt
 import java.io.IOException
 import tachiyomi.domain.track.model.Track as DomainTrack
 
@@ -29,9 +32,18 @@ import tachiyomi.domain.track.model.Track as DomainTrack
  */
 class MangaUpdatesApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
     private val mangaUpdates = MangaUpdates(7L)
+
+    @BeforeEach
+    fun setUp() {
+        env.register()
+    }
 
     private fun signIn() {
         // The user id as the name, the session token as the password
@@ -41,7 +53,6 @@ class MangaUpdatesApiTest {
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(SESSION)
-        env.close()
     }
 
     private fun track() = Track.create(7L).apply {

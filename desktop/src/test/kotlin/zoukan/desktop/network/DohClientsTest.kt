@@ -41,12 +41,14 @@ import okhttp3.Dns
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.InMemoryPreferenceStore.InMemoryPreference
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.backup.DesktopBackups
+import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.ui.common.Images
 import java.io.File
 import java.net.InetAddress
@@ -59,6 +61,10 @@ import java.util.concurrent.Callable
  * [NetworkHelper.client]'s DNS, never the system's (which would leak each host name).
  */
 class DohClientsTest {
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     @TempDir
     lateinit var dir: File
 
@@ -275,13 +281,9 @@ class DohClientsTest {
             java.nio.file.Files.createTempDirectory("zoukan-coil-test").toFile().resolve("cache/images")
         }
 
-        private var injekted: RecordingDns? = null
-
-        /** The DNS of the NetworkHelper registered in Injekt (once for the JVM, as Injekt is global). */
-        @Synchronized
-        fun injektNetwork(dir: File): RecordingDns = injekted ?: RecordingDns().also {
+        /** Registers a fresh [FakeNetworkHelper] in the current [Injekt] scope and returns its [RecordingDns]. */
+        fun injektNetwork(dir: File): RecordingDns = RecordingDns().also {
             Injekt.addSingleton<NetworkHelper>(FakeNetworkHelper(dir, it))
-            injekted = it
         }
     }
 }

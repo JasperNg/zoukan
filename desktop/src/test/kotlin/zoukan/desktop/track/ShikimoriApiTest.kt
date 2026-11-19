@@ -15,7 +15,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
+import zoukan.desktop.testing.FreshInjekt
 import java.io.IOException
 import tachiyomi.domain.track.model.Track as DomainTrack
 
@@ -25,9 +28,18 @@ import tachiyomi.domain.track.model.Track as DomainTrack
  */
 class ShikimoriApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
     private val shikimori = Shikimori(4L)
+
+    @BeforeEach
+    fun setUp() {
+        env.register()
+    }
 
     private fun signIn(createdAt: Long = System.currentTimeMillis() / 1000) {
         // Shikimori keeps the user id as the user name
@@ -40,7 +52,6 @@ class ShikimoriApiTest {
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(ACCESS, REFRESH, "new-access")
-        env.close()
     }
 
     private fun track() = Track.create(4L).apply {

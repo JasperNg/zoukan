@@ -14,7 +14,10 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
+import zoukan.desktop.testing.FreshInjekt
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -26,9 +29,18 @@ import tachiyomi.domain.track.model.Track as DomainTrack
  */
 class MyAnimeListApiTest {
 
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
+
     private val env = TrackerTestEnvironment()
     private val http = env.http
     private val mal = MyAnimeList(1L)
+
+    @BeforeEach
+    fun setUp() {
+        env.register()
+    }
 
     private fun signIn(createdAt: Long = System.currentTimeMillis() / 1000) {
         env.preferences.setCredentials(mal, "reader", ACCESS)
@@ -40,7 +52,6 @@ class MyAnimeListApiTest {
     @AfterEach
     fun tearDown() {
         http.checkAllAnswered(ACCESS, REFRESH, "new-access")
-        env.close()
     }
 
     private fun date(text: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(text)!!.time
