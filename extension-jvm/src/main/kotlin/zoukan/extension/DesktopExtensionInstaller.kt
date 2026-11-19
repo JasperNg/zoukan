@@ -98,23 +98,25 @@ class DesktopExtensionInstaller(
             checkSigner(verified.signers, requiredSigner, extension)
             val manifest = ExtensionManifest.fromContents(verified.contents, tmp.name)
                 .also { checkManifest(it, extension, installedVersionCode) }
-            val dir = packageDir(extension.pkgName)
-            val jar = File(dir, "${manifest.versionCode}.jar")
-            // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
-            val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
-            try {
-                Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            } catch (e: Exception) {
-                PreviousFiles.restore(dir, manifest.versionCode)
-                throw e
+            return savingFiles {
+                val dir = packageDir(extension.pkgName)
+                val jar = File(dir, "${manifest.versionCode}.jar")
+                // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
+                val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
+                try {
+                    Files.move(tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                } catch (e: Exception) {
+                    PreviousFiles.restore(dir, manifest.versionCode)
+                    throw e
+                }
+                // The hash sidecar earlier versions of Zoukan wrote for an APK-method install
+                File(dir, "${manifest.versionCode}.sha256").delete()
+                Installed(
+                    DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, null),
+                    Method.JAR,
+                    kept,
+                )
             }
-            // The hash sidecar earlier versions of Zoukan wrote for an APK-method install
-            File(dir, "${manifest.versionCode}.sha256").delete()
-            return Installed(
-                DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, null),
-                Method.JAR,
-                kept,
-            )
         } finally {
             tmp.delete()
         }
@@ -139,29 +141,32 @@ class DesktopExtensionInstaller(
             val apkBytes = tmp.readBytes()
             checkSigner(ExtensionSignatures.verifyApk(apkBytes), requiredSigner, extension)
             val manifest = ExtensionManifest.fromApk(apkBytes).also { checkManifest(it, extension, installedVersionCode) }
-            val dir = packageDir(extension.pkgName)
-            tmpJar = File.createTempFile("${manifest.versionCode}-converting-", ".jar.part", dir)
-            ApkConverter.convert(apkBytes, tmpJar)
-            val sha256 = ApkConverter.sha256Of(tmpJar)
-            tmpApk = File.createTempFile("${manifest.versionCode}-converting-", ".apk.part", dir)
-            tmpApk.writeBytes(apkBytes)
-            val apk = File(dir, "${manifest.versionCode}.apk")
-            val jar = File(dir, "${manifest.versionCode}.jar")
-            // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
-            val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
-            try {
-                Files.move(tmpApk.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            } catch (e: Exception) {
-                PreviousFiles.restore(dir, manifest.versionCode)
-                throw e
+            // The conversion's own failures are ExtensionExceptions of its stage, which pass through
+            return savingFiles {
+                val dir = packageDir(extension.pkgName)
+                tmpJar = File.createTempFile("${manifest.versionCode}-converting-", ".jar.part", dir)
+                ApkConverter.convert(apkBytes, tmpJar)
+                val sha256 = ApkConverter.sha256Of(tmpJar)
+                tmpApk = File.createTempFile("${manifest.versionCode}-converting-", ".apk.part", dir)
+                tmpApk.writeBytes(apkBytes)
+                val apk = File(dir, "${manifest.versionCode}.apk")
+                val jar = File(dir, "${manifest.versionCode}.jar")
+                // A same-version reinstall keeps the working files aside until the caller has loaded the new ones
+                val kept = PreviousFiles.keepAside(dir, manifest.versionCode)
+                try {
+                    Files.move(tmpApk.toPath(), apk.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    Files.move(tmpJar.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                } catch (e: Exception) {
+                    PreviousFiles.restore(dir, manifest.versionCode)
+                    throw e
+                }
+                File(dir, "${manifest.versionCode}.sha256").delete()
+                Installed(
+                    DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, apk, sha256),
+                    Method.APK,
+                    kept,
+                )
             }
-            File(dir, "${manifest.versionCode}.sha256").delete()
-            return Installed(
-                DesktopExtensionLoader.InstalledFiles(manifest.packageName, manifest.versionCode, jar, apk, sha256),
-                Method.APK,
-                kept,
-            )
         } finally {
             tmp.delete()
             tmpJar?.delete()
@@ -201,7 +206,26 @@ class DesktopExtensionInstaller(
 
     private fun packageDir(pkgName: String): File {
         require(pkgName.matches(PACKAGE_NAME)) { "Invalid package name $pkgName" }
-        return File(extensionsDir, pkgName).apply { mkdirs() }
+        val dir = File(extensionsDir, pkgName)
+        // A file in the way, or a folder that cannot be written: reported by savingFiles
+        if (!dir.mkdirs() && !dir.isDirectory) throw IOException("Could not create the folder of $pkgName")
+        return dir
+    }
+
+    /**
+     * Runs [block], which writes an extension's files into its package folder, and reports a folder
+     * that cannot be written (read-only, a file in the way, a full disk) as an extension error the
+     * caller shows, as [download] does for the extensions folder. Only the message's file system
+     * error is kept, not its paths.
+     */
+    private inline fun <T> savingFiles(block: () -> T): T = try {
+        block()
+    } catch (e: IOException) {
+        throw ExtensionException(
+            ExtensionException.Stage.DOWNLOAD,
+            "Could not save the extension in the extensions folder (${e::class.simpleName})",
+            e,
+        )
     }
 
     private suspend fun download(url: String, pkgName: String, suffix: String): File {

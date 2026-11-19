@@ -179,11 +179,48 @@ class ExtensionInstallFaultsTest {
         assumeTrue(readOnly != null, "This OS or user can write in a read-only folder")
 
         readOnly!!.use {
-            shouldThrow<Exception> { runBlocking { installer().install(extension) } }.message.shouldNotBeBlank()
+            // An ExtensionException, which DesktopExtensionManager returns as a load error
+            val error = shouldThrow<ExtensionException> { runBlocking { installer().install(extension) } }
+            error.stage shouldBe ExtensionException.Stage.DOWNLOAD
+            error.message.shouldNotBeBlank()
         }
 
         files() shouldBe before
         reinstallWorks(before)
+    }
+
+    @Test
+    fun `a package folder that cannot be written fails an APK reinstall with an extension error and keeps the installed copy`() {
+        val before = installed()
+        server.fail("/store/${FixtureStore.TRUSTED_PKG}.apk", FixtureFailure.Answer(200, "application/vnd.android.package-archive", FixtureApk.signed(store.storeKey, FixtureStore.TRUSTED_PKG)))
+        val readOnly = FileFaults.readOnly(packageDir)
+        assumeTrue(readOnly != null, "This OS or user can write in a read-only folder")
+
+        readOnly!!.use {
+            // The conversion's temporary files go in the package folder, which cannot be written
+            val error = shouldThrow<ExtensionException> { runBlocking { installer().install(extension, forceApk = true) } }
+            error.stage shouldBe ExtensionException.Stage.DOWNLOAD
+            error.message.shouldNotBeBlank()
+        }
+
+        files() shouldBe before
+    }
+
+    @Test
+    fun `a file where the package folder should be fails the install with an extension error and is left alone`() {
+        val blocker = FileFaults.fileInTheWay(packageDir)
+
+        for (apk in listOf(false, true)) {
+            if (apk) server.fail("/store/${FixtureStore.TRUSTED_PKG}.apk", FixtureFailure.Answer(200, "application/vnd.android.package-archive", FixtureApk.signed(store.storeKey, FixtureStore.TRUSTED_PKG)))
+            val error = shouldThrow<ExtensionException> { runBlocking { installer().install(extension, forceApk = apk) } }
+            error.stage shouldBe ExtensionException.Stage.DOWNLOAD
+            error.message.shouldNotBeBlank()
+            blocker.readText() shouldBe "A file where a folder is needed"
+        }
+        // Nothing else was written: no temporary download is left next to it
+        files().keys shouldBe setOf(FixtureStore.TRUSTED_PKG)
+        blocker.delete() shouldBe true
+        reinstallWorks(installed())
     }
 
     companion object {
