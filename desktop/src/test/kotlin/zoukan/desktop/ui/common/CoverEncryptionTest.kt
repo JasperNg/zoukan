@@ -77,6 +77,28 @@ class CoverEncryptionTest {
     }
 
     @Test
+    fun `a picked file that is not an image is refused and the custom cover is kept`() {
+        CustomCovers.save(7, image)
+        val before = CustomCovers.file(7).readBytes()
+        val error = assertThrows<java.io.IOException> { CustomCovers.save(7, "<html>not an image</html>".toByteArray()) }
+        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.not_an_image)
+        CustomCovers.file(7).readBytes() shouldBe before
+        CustomCovers.read(CustomCovers.file(7)) shouldBe image
+        // None for an entry that had no custom cover either
+        assertThrows<java.io.IOException> { CustomCovers.save(8, ByteArray(0)) }
+        CustomCovers.file(8).exists() shouldBe false
+    }
+
+    @Test
+    fun `an image type Java reads besides the cover types is a custom cover too`() {
+        val bmp = java.io.ByteArrayOutputStream().also {
+            javax.imageio.ImageIO.write(java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB), "bmp", it)
+        }.toByteArray()
+        CustomCovers.save(9, bmp)
+        CustomCovers.read(CustomCovers.file(9)) shouldBe bmp
+    }
+
+    @Test
     fun `without the file key a custom cover is not saved`() {
         CustomCovers.codec = null
         val picked = File(dir, "picked.png").apply { writeBytes(image) }
@@ -258,7 +280,8 @@ class CoverEncryptionTest {
     @Test
     fun `copying a custom cover to another entry replaces its cover and keeps the original`() {
         CustomCovers.save(8, File(dir, "first.png").apply { writeBytes(image) })
-        val other = byteArrayOf(9, 9, 9)
+        // Another image (a JPEG's signature): a custom cover must be an image
+        val other = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 9, 9, 9)
         CustomCovers.save(9, File(dir, "second.png").apply { writeBytes(other) })
 
         CustomCovers.copy(8, 9) shouldBe true

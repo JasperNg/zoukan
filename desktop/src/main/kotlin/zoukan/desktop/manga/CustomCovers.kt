@@ -3,7 +3,11 @@ package zoukan.desktop.manga
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
+import zoukan.desktop.compat.localized
+import zoukan.desktop.download.ImageType
+import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.secrets.EncryptedFiles
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -43,10 +47,27 @@ object CustomCovers {
     /** Saves [image] as [mangaId]'s custom cover, encrypted. */
     fun save(mangaId: Long, image: File) = save(mangaId, image.readBytes())
 
-    /** Saves the image [bytes] as [mangaId]'s custom cover, encrypted, without a plain copy on disk. */
+    /**
+     * Saves the image [bytes] as [mangaId]'s custom cover, encrypted, without a plain copy on disk.
+     * What is no image (by its content, as a local entry's cover) or declares an absurd size is
+     * refused before anything is written, so the cover it had is kept.
+     */
     fun save(mangaId: Long, bytes: ByteArray) {
         val codec = codec ?: throw IOException("The file key is not available, so the cover cannot be saved")
+        requireImage(bytes)
         synchronized(lock) { EncryptedFiles.write(file(mangaId), bytes, codec) }
+    }
+
+    private fun requireImage(bytes: ByteArray) {
+        zoukan.desktop.image.checkImageSize(bytes)
+        if (ImageType.fromBytes(bytes) != null) return
+        // Exception, not Throwable: running out of memory on a huge image is not "not an image"
+        val readable = try {
+            MemoryImageIo.read(bytes) != null
+        } catch (e: Exception) {
+            false
+        }
+        if (!readable) throw IOException(localized(DMR.strings.not_an_image))
     }
 
     /**
