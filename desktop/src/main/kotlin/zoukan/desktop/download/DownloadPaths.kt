@@ -191,14 +191,8 @@ class DownloadPaths(
     }
 
     /** The chapter's download, a folder of images or a CBZ, if it exists, in any of [mangaDirs]. */
-    fun findChapter(manga: Manga, chapter: Chapter): File? = mangaDirs(manga).firstNotNullOfOrNull { dir ->
-        // Android's names that are not valid everywhere only when listed: on Windows `NUL` is a device
-        val listed = dir.list()?.toSet() ?: return@firstNotNullOfOrNull null
-        validChapterNames(chapter).asSequence()
-            .filter { FileNames.isPortable(it) || it in listed }
-            .map { File(dir, it) }
-            .firstOrNull { it.exists() }
-    }
+    fun findChapter(manga: Manga, chapter: Chapter): File? =
+        DownloadFolderOps.findChapter(this, DownloadIndex(recheckMillis = 0L), manga, chapter)
 
     companion object {
         const val TMP_SUFFIX = "_tmp"
