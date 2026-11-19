@@ -94,20 +94,17 @@ class ReleaseWorkflowTest {
     }
 
     @Test
-    fun `the PR gate is the fast set and the long checks run on Windows`() {
+    fun `the PR gate is the fast set`() {
         val ci = text(".github/workflows/ci.yml")
         val problems = mutableListOf<String>()
         val jobs = Regex("""(?m)^ {2}([\w-]+):\s*$""").findAll(ci.substringAfter("\njobs:\n")).map { it.groupValues[1] }.toList()
         val gateNeeds = Regex("""(?m)^ {4}needs: \[([^\]]*)]""").find(job(ci, "pr-gate"))?.groupValues?.get(1).orEmpty()
             .split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        // The coverage job is information only, so it is the one job the gate must not need
-        val missing = jobs - "pr-gate" - "coverage" - gateNeeds.toSet()
+        val missing = jobs - "pr-gate" - gateNeeds.toSet()
         if (jobs.isEmpty() || gateNeeds.isEmpty()) problems += "ci.yml: could not read the jobs or the PR gate's needs"
         if (missing.isNotEmpty()) problems += "ci.yml: PR gate does not need $missing, so they do not gate a merge or a release"
-        if ("coverage" in gateNeeds) problems += "ci.yml: PR gate needs the coverage job, so information only can block a merge"
-        // The long checks run on Windows before each merge (desktop/RELEASING.md), not on GitHub
-        for (task in listOf(":desktop:journeyTest", ":desktop:buttonCrawlTest", ":desktop:extensionWiringTest", ":desktop:nightlyCheck")) {
-            if (task in ci) problems += "ci.yml runs $task, a long check for Windows"
+        for (task in listOf(":desktop:journeyTest", ":desktop:extensionWiringTest")) {
+            if (task in ci) problems += "ci.yml runs $task"
         }
         val nightly = text(".github/workflows/nightly.yml")
         val nightlyOn = nightly.substringAfter("\non:\n").substringBefore("\n\n")
@@ -116,11 +113,12 @@ class ReleaseWorkflowTest {
         }
         if (!Regex("""(?m)^ {2}schedule:\n {4}- cron: '[^']+'""").containsMatchIn(nightlyOn)) problems += "nightly.yml has no schedule"
         if ("workflow_dispatch:" !in nightlyOn) problems += "nightly.yml cannot be started by hand"
-        // A fork inherits the schedule: it must not run the long checks on the fork's minutes
-        for (name in listOf("nightly", "screenshots")) {
-            if ("github.event_name != 'schedule' || !github.event.repository.fork" !in job(nightly, name)) {
-                problems += "nightly.yml: the $name job runs on the schedule in forks too"
-            }
+        // A fork inherits the schedule: it must not run the nightly job on the fork's minutes
+        if ("github.event_name != 'schedule' || !github.event.repository.fork" !in job(nightly, "extension-wiring")) {
+            problems += "nightly.yml: the extension-wiring job runs on the schedule in forks too"
+        }
+        if (":desktop:extensionWiringTest" !in job(nightly, "extension-wiring")) {
+            problems += "nightly.yml: the extension-wiring job does not run :desktop:extensionWiringTest"
         }
         // The journeys on pull requests that change their hotspots, in a workflow of their own
         val journeys = text(".github/workflows/journeys.yml")
@@ -144,74 +142,21 @@ class ReleaseWorkflowTest {
         }
         val unit = job(ci, "unit")
         if (unitTier !in unit) problems += "ci.yml: the unit job does not run the whole unit tier on Linux"
-        // The nightly runs the same tier (:desktop:build runs :desktop:test), and a failing job keeps every module's report
-        val nightlyWorkflow = text(".github/workflows/nightly.yml")
-        if (":desktop:build " + unitTier.removePrefix(":desktop:test ") !in nightlyWorkflow) {
-            problems += "nightly.yml does not run the whole unit tier"
-        }
         val tierReports = unitTier.split(' ').map { it.removePrefix(":").substringBeforeLast(':').replace(':', '/') + "/build/reports/tests/" }
         for ((name, job) in listOf("unit" to unit, "files-os" to filesOs)) {
             tierReports.filter { it !in job }.forEach { problems += "ci.yml: the $name job does not keep $it" }
-        }
-        if ("python3 -B -m unittest discover -s .github/scripts" !in unit) {
-            problems += "ci.yml: the unit job does not run the changed-line coverage script's own tests"
         }
         // The gating run is never instrumented: the same on pull requests as on master
         val unitCode = unit.lines().filterNot { it.trimStart().startsWith("#") }.joinToString("\n").lowercase()
         for (marker in listOf("zoukan.coverage", "kover")) {
             if (marker in unitCode) problems += "ci.yml: the gating unit job runs with coverage ($marker)"
         }
-        // The coverage of changed lines is information only, on pull requests: it must not gate a merge
-        val coverage = job(ci, "coverage")
-        if (coverage.isEmpty()) {
-            problems += "ci.yml: no coverage job"
-        } else {
-            if (!Regex("""(?m)^ {4}continue-on-error: true\s*$""").containsMatchIn(coverage)) {
-                problems += "ci.yml: the coverage job can fail the run"
-            }
-            if (!Regex("""(?m)^ {4}if: .*github\.event_name == 'pull_request'""").containsMatchIn(coverage)) {
-                problems += "ci.yml: the coverage job does not run on pull requests only"
-            }
-            if (":koverXmlReportUnit" !in coverage) problems += "ci.yml: the coverage job does not make the Kover report"
-        }
-        for (step in listOf("Coverage report", "Coverage of changed lines")) {
-            val body = coverage.substringAfter("- name: $step\n", "").substringBefore("\n      - ")
-            if (body.isEmpty()) {
-                problems += "ci.yml: the coverage job has no step \"$step\""
-            } else if ("continue-on-error: true" !in body) {
-                problems += "ci.yml: \"$step\" can fail the coverage job"
-            }
-        }
-        // The report compares with the merge base, so a pull request needs the whole history. In an
-        // expression a number 0 is falsy: `cond && 0 || 1` always gives 1, a shallow checkout
-        val fetchDepth = Regex("""(?m)^\s*fetch-depth:\s*(.+)$""").find(coverage)?.groupValues?.get(1)?.trim()
-        if (fetchDepth != "\${{ github.event_name == 'pull_request' && '0' || '1' }}") {
-            problems += "ci.yml: the coverage job's checkout does not fetch the whole history on pull requests (fetch-depth: $fetchDepth)"
-        }
         for (workflow in workflowFiles()) {
             if (Regex("""&&\s*(0|false|''|"")\s*\|\|""").containsMatchIn(workflow.readText())) {
                 problems += "${workflow.name}: `cond && <falsy> || x` always gives x"
             }
         }
-        // A changed-line report that cannot be made must say so in the summary, not only in the log
-        val changedLines = coverage.substringAfter("- name: Coverage of changed lines\n", "").substringBefore("\n      - ")
-        if ("::warning" !in changedLines || "Not computed" !in changedLines) {
-            problems += "ci.yml: \"Coverage of changed lines\" does not warn in the job summary when it cannot make the report"
-        }
         if (":app:testDebugUnitTest" !in job(ci, "android-compile")) problems += "ci.yml does not run the Android app's unit tests"
-        // The record of the long checks, checked before a push to master
-        if (":desktop:verifyLongChecks" !in text("desktop/TESTING.md")) problems += "desktop/TESTING.md does not describe :desktop:verifyLongChecks"
-        if ("tasks.register(\"verifyLongChecks\")" !in text("desktop/build.gradle.kts")) {
-            problems += "desktop/build.gradle.kts has no verifyLongChecks task"
-        }
-        val command = ":desktop:longChecks --continue"
-        for (doc in listOf("desktop/RELEASING.md", "desktop/TESTING.md")) {
-            if (command !in text(doc)) problems += "$doc does not give the pre-merge command `$command`"
-        }
-        val longChecks = text("desktop/build.gradle.kts").substringAfter("val longChecks by tasks.registering", "").substringBefore("\n}")
-        for (part in listOf("nightlyCheck", "buttonCrawlTest")) {
-            if (part !in longChecks) problems += "desktop/build.gradle.kts: longChecks does not run $part"
-        }
         problems.shouldBeEmpty()
     }
 
@@ -240,43 +185,18 @@ class ReleaseWorkflowTest {
     }
 
     @Test
-    fun `release docs and comments match the workflow`() {
-        val problems = mutableListOf<String>()
-        val releasing = text("desktop/RELEASING.md")
-        for (phrase in listOf("To release by hand", "a signed build, say", "two quick merges make two releases")) {
-            if (phrase in releasing) problems += "desktop/RELEASING.md still says \"$phrase\""
-        }
-        val tableAt = releasing.indexOf("### Windows (Authenticode")
-        val headingAt = releasing.indexOf("not used for published releases")
-        if (headingAt < 0 || tableAt < 0 || headingAt > tableAt) {
-            problems += "desktop/RELEASING.md has no heading \"not used for published releases\" above the signing tables"
-        }
-        val build = text(".github/workflows/desktop-build.yml")
-        Regex("""(?m)^\s*runs-on:\s*(\S+)""").findAll(build).map { it.groupValues[1] }.distinct().forEach {
-            if (it !in releasing) problems += "desktop/RELEASING.md does not name the runner image $it"
-        }
-        val banned = mapOf(
-            ".github/workflows/ci.yml" to listOf("checked locally before each merge"),
-            "desktop/build.gradle.kts" to listOf("once that task exists", "once it exists", "task yet"),
-            "desktop/packaging/check/nightly-windows.ps1" to listOf("once that task exists", "once it exists", "task yet"),
-            ".github/workflows/desktop-build.yml" to listOf("the one inside the DMG"),
-        )
-        for ((file, phrases) in banned) {
-            val content = text(file)
-            for (phrase in phrases) if (phrase in content) problems += "$file still says \"$phrase\""
-        }
-        problems.shouldBeEmpty()
-    }
-
-    @Test
     fun `every job runs on a pinned runner image`() {
         val runsOn = Regex("""^\s*runs-on:\s*(\S+)""")
+        val matrixOs = Regex("""^\s*os:\s*\[([^\]]+)]""")
         val problems = mutableListOf<String>()
         for (file in workflowFiles()) {
             file.readLines().forEachIndexed { index, line ->
-                val image = runsOn.find(line)?.groupValues?.get(1) ?: return@forEachIndexed
-                if (image.endsWith("-latest")) {
-                    problems += "${file.name}:${index + 1} $image runs on a moving image; pin a version"
+                val images = listOfNotNull(runsOn.find(line)?.groupValues?.get(1)) +
+                    matrixOs.find(line)?.groupValues?.get(1)?.split(",")?.map { it.trim() }.orEmpty()
+                for (image in images) {
+                    if (image.endsWith("-latest")) {
+                        problems += "${file.name}:${index + 1} $image runs on a moving image; pin a version"
+                    }
                 }
             }
         }

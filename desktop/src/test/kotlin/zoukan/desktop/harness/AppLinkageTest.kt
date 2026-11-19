@@ -18,7 +18,7 @@ import java.util.zip.ZipFile
  *
  * A gap that is reviewed and unreachable on desktop goes in app-linkage-allowlist.txt, with its reason.
  *
- *   ./gradlew :desktop:wiringTest --tests '*AppLinkageTest'
+ *   ./gradlew :desktop:test --tests '*AppLinkageTest'
  */
 class AppLinkageTest {
 

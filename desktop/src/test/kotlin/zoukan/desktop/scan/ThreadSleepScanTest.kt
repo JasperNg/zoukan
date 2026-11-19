@@ -185,30 +185,6 @@ class ThreadSleepScanTest {
                 "a live test, run by hand against real Chromium: watches the cookie for 2 s, as Chromium applies " +
                     "a copy on its own thread at no time it reports and could rewrite it later",
             ),
-            Allowed(
-                "$TESTS/ui/SmokeChecks.kt",
-                "Thread.sleep(pauseMillis)",
-                "settle(): the screen checks and the button crawl open hundreds of screens that share no " +
-                    "\"loaded\" state, and waitForIdle does not see the screen models' dispatchers; kept as it is, " +
-                    "as a change could move the crawl's signatures and baselines",
-            ),
-            Allowed(
-                "$TESTS/ui/ButtonCrawlTest.kt",
-                "Thread.sleep(250)",
-                "measure(): what it measures is time, a click's effects sampled until they hold still; kept as " +
-                    "it is, as a change could move the crawl's signatures and baselines",
-            ),
-            Allowed(
-                "$TESTS/ui/EndToEndReadTest.kt",
-                "Thread.sleep(settleMillis)",
-                "manual run against a real store: a pause before a screenshot only, so covers and pages draw; " +
-                    "the steps wait on conditions",
-            ),
-            Allowed(
-                "$TESTS/ui/EndToEndDownloadTest.kt",
-                "Thread.sleep(settleMillis)",
-                "manual run against a real store: a pause before a screenshot only; the steps wait on conditions",
-            ),
         )
     }
 }

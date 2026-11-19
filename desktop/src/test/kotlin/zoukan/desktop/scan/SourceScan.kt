@@ -1,6 +1,5 @@
 package zoukan.desktop.scan
 
-import zoukan.desktop.ui.InlineDialogScanner
 import java.io.File
 
 /**
@@ -9,7 +8,7 @@ import java.io.File
  * match exactly the sites it names (so a new site in an allowed file fails too).
  *
  * This is text scanning, not a Kotlin or Java parser: it only needs braces, parentheses, strings
- * and comments right ([InlineDialogScanner.mask]).
+ * and comments right ([mask]).
  */
 internal object SourceScan {
     val root: File = generateSequence(File("").absoluteFile) { it.parentFile }
@@ -18,7 +17,7 @@ internal object SourceScan {
     /** One source file: its [path] from the repository root and its [text]. */
     class Source(val path: String, val text: String) {
         /** [text] with comments and string contents turned into spaces; offsets and lines kept. */
-        val masked: String by lazy { InlineDialogScanner.mask(text) }
+        val masked: String by lazy { mask(text) }
 
         /** [text] with only the comments blanked, so string literals (process arguments) stay. */
         val withoutComments: String by lazy { blankComments(text) }
@@ -51,7 +50,7 @@ internal object SourceScan {
          * Same length, so offsets stay.
          */
         private val structure: String by lazy {
-            InlineDialogScanner.mask(BACKTICKED.replace(text) { "`" + "x".repeat(it.value.length - 2) + "`" })
+            mask(BACKTICKED.replace(text) { "`" + "x".repeat(it.value.length - 2) + "`" })
         }
 
         /** The name of the innermost function or method around 1-based [line], or null outside one. */
@@ -217,7 +216,7 @@ internal object SourceScan {
         enclosingBraces(masked, offset).firstOrNull { isFunctionHeader(header(masked, it)) }
 
     private fun blankComments(text: String): String {
-        val masked = InlineDialogScanner.mask(text)
+        val masked = mask(text)
         // A comment is code that mask blanked outside any string: blank the same span in the text
         val out = StringBuilder(text)
         var i = 0
@@ -264,4 +263,104 @@ internal object SourceScan {
             }
         }
     }
+
+    /**
+     * [source] with comments and the text of string and char literals turned into spaces, line
+     * breaks kept, so braces and calls inside them do not count. The code in a `${...}` template
+     * stays.
+     */
+    internal fun mask(source: String): String {
+        val out = StringBuilder(source)
+        fun blank(from: Int, to: Int) {
+            for (k in from until minOf(to, source.length)) if (out[k] != '\n') out[k] = ' '
+        }
+
+        // Innermost first: PLAIN or RAW for a string, or a template's open-brace count (>= 0)
+        val stack = ArrayDeque<Int>()
+        var i = 0
+        while (i < source.length) {
+            val c = source[i]
+            val top = stack.lastOrNull()
+            if (top == null || top >= 0) {
+                when {
+                    source.startsWith("//", i) -> {
+                        val end = source.indexOf('\n', i).let { if (it < 0) source.length else it }
+                        blank(i, end)
+                        i = end
+                    }
+                    source.startsWith("/*", i) -> {
+                        val end = source.indexOf("*/", i + 2).let { if (it < 0) source.length else it + 2 }
+                        blank(i, end)
+                        i = end
+                    }
+                    source.startsWith("\"\"\"", i) -> {
+                        stack.addLast(RAW)
+                        blank(i, i + 3)
+                        i += 3
+                    }
+                    c == '"' -> {
+                        stack.addLast(PLAIN)
+                        blank(i, i + 1)
+                        i++
+                    }
+                    c == '\'' -> {
+                        // A char literal: 'x', '\n', 'A' or '\''
+                        val from = if (source.getOrNull(i + 1) == '\\') i + 3 else i + 2
+                        val end = source.indexOf('\'', from).let { if (it < 0) source.length else it + 1 }
+                        blank(i, end)
+                        i = end
+                    }
+                    c == '{' && top != null -> {
+                        stack[stack.lastIndex] = top + 1
+                        i++
+                    }
+                    c == '}' && top != null -> {
+                        if (top == 0) {
+                            // The end of a ${...} template: back in the string
+                            stack.removeLast()
+                            blank(i, i + 1)
+                        } else {
+                            stack[stack.lastIndex] = top - 1
+                        }
+                        i++
+                    }
+                    else -> i++
+                }
+            } else {
+                val raw = top == RAW
+                when {
+                    !raw && c == '\\' -> {
+                        blank(i, i + 2)
+                        i += 2
+                    }
+                    raw && source.startsWith("\"\"\"", i) -> {
+                        // A raw string may end with more quotes: the last three close it
+                        var end = i + 3
+                        while (end < source.length && source[end] == '"') end++
+                        blank(i, end)
+                        stack.removeLast()
+                        i = end
+                    }
+                    !raw && c == '"' -> {
+                        blank(i, i + 1)
+                        stack.removeLast()
+                        i++
+                    }
+                    c == '$' && source.getOrNull(i + 1) == '{' -> {
+                        blank(i, i + 2)
+                        stack.addLast(0)
+                        i += 2
+                    }
+                    else -> {
+                        blank(i, i + 1)
+                        i++
+                    }
+                }
+            }
+        }
+        return out.toString()
+    }
+
+    private const val PLAIN = -1
+    private const val RAW = -2
 }

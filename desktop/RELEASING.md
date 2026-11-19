@@ -6,23 +6,10 @@ than docs; the published installers are unsigned. Nothing is published unless it
 gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job)
 and the clean-install check of each installer (below), which `desktop-build.yml` runs on the
 installer it is about to publish. The CI check is the fast set only: Spotless, the build and unit
-tests, the wiring shards, the whole unit tier on Windows and macOS (on pull requests and on
-master alike) and the Android compile and unit tests.
-
-## Before merging to master
-
-The long checks do not gate a release on GitHub: the journeys, the button crawl and the extension
-wiring check. Every merge to master that changes code is released, so they must pass on Windows
-before the pull request is merged. On a Windows machine, in a checkout of the pull request's branch:
-
-```powershell
-.\gradlew.bat :desktop:longChecks --continue
-```
-
-Then, on the commit you push, `./gradlew :desktop:verifyLongChecks` checks that the long checks
-left a passing record for it. See `desktop/TESTING.md`, "Before merging to master". `nightly.yml`
-runs the long checks and the live tests on GitHub every night, and `journeys.yml` runs the
-journeys on pull requests that change their hotspots; neither gates a release.
+tests, the wiring tests, the whole unit tier on Windows and macOS (on pull requests and on
+master alike) and the Android compile and unit tests. `journeys.yml` runs the offline journeys on
+pull requests that change their hotspots, and `nightly.yml` runs the extension wiring check every
+night; neither gates a release.
 
 ## Installers
 

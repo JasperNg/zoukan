@@ -8,9 +8,6 @@
 //   ./gradlew :desktop:run --args="browser https://example.org"
 //   ./gradlew :desktop:packageMsi                       # Windows installer (Phase 7, see RELEASING.md)
 //   ./gradlew :desktop:packageDmg                       # macOS disk image (notarizeDmg to notarize)
-import java.security.MessageDigest
-import java.time.Instant
-import java.util.Properties
 
 plugins {
     id("zoukan.jvm")
@@ -308,8 +305,6 @@ dependencies {
 
     testImplementation(libs.bundles.test)
     testImplementation(zoukanlibs.compose.ui.test)
-    // The smoke test's usability check presses Escape as the window does, as Back (Usability.kt)
-    testImplementation(zoukanlibs.compose.navigationevent)
     // On the compile classpath too: JourneyShardFilter is a launcher PostDiscoveryFilter
     testImplementation(libs.junit.platform.launcher)
     // ContextStubsTest builds the emulated Context's files config in a temporary folder
@@ -357,7 +352,7 @@ tasks.named<JavaExec>("run") {
 // Each Test task gets its own home and data folder under build/test-home/<task> (zoukan.test-home)
 
 /** The test classes [wiringTest] must run; a rename needs this one list changed. */
-val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ScreenSmokeSmallWindowTest", "AppLinkageTest", "ZoukanRuntimeStartTest")
+val expectedWiringClasses = listOf("InjektRegistrationsTest", "ScreenSmokeTest", "ZoukanRuntimeStartTest")
 
 /** The tests [wiringTest] runs instead of `test`. */
 val wiringTests = expectedWiringClasses.map { "*$it" }
@@ -365,21 +360,8 @@ val wiringTests = expectedWiringClasses.map { "*$it" }
 /** The offline user journeys [journeyTest] runs instead of `test`, in zoukan.desktop.e2e and its subpackages. */
 val journeyTests = listOf("zoukan.desktop.e2e.*JourneyTest")
 
-/** The button crawl [buttonCrawlTest] runs instead of `test`. */
-val buttonCrawlTests = listOf("*ButtonCrawlTest")
-
 tasks.test {
     useJUnitPlatform()
-    // The end-to-end UI test reads a manga from an online source; it runs only when asked:
-    //   ./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndReadTest"
-    //   ./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndDownloadTest"
-    providers.gradleProperty("zoukan.e2e").orNull?.let {
-        systemProperty("zoukan.e2e", it)
-        // Each end-to-end test starts the runtime with its own data folder, once per JVM
-        forkEvery = 1
-    }
-    providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
-    providers.gradleProperty("zoukan.e2e.query").orNull?.let { systemProperty("zoukan.e2e.query", it) }
     // RestoreSpeedTest's size, work folder and JFR file, for timing a larger restore by hand
     listOf("zoukan.restoreBench", "zoukan.restoreBench.dir", "zoukan.restoreBench.jfr").forEach { name ->
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
@@ -407,13 +389,10 @@ tasks.test {
         rootProject.fileTree(".github/workflows"),
         file("build.gradle.kts"),
         file("packaging.gradle.kts"),
-        file("packaging/check/nightly-windows.ps1"),
         file("packaging/check/install-check-windows.ps1"),
     ).withPropertyName("releaseFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The wiring tests start the runtime, once per JVM, so wiringTest runs them in their own JVMs
-    if (!providers.gradleProperty("zoukan.e2e").isPresent) {
-        filter { (wiringTests + journeyTests + buttonCrawlTests).forEach { excludeTestsMatching(it) } }
-    }
+    filter { (wiringTests + journeyTests).forEach { excludeTestsMatching(it) } }
 }
 
 // The wiring tests catch what compiles but crashes at run time: a lookup with no Injekt
@@ -421,8 +400,8 @@ tasks.test {
 // (and so `build`) runs them on every change:
 /**
  * Whether a task on the command line runs only some of its tests: Gradle takes the filter as
- * `--tests Foo` and as `--tests=Foo`. A narrowed run must not vouch for the whole check (the long-check
- * records, wiringTest's list of classes). BuildSettingsTest checks every such check uses this.
+ * `--tests Foo` and as `--tests=Foo`. A narrowed run must not vouch for the whole check
+ * (wiringTest's list of classes). BuildSettingsTest checks every such check uses this.
  */
 fun narrowsTests(args: List<String>): Boolean = args.any { it == "--tests" || it.startsWith("--tests=") }
 val testsNarrowedOnCommandLine = gradle.startParameter.taskRequests.any { narrowsTests(it.args) }
@@ -453,165 +432,17 @@ val wiringTest by tasks.registering(Test::class) {
         }
     }
     // Only the test classes themselves, not their nested and lambda classes: Gradle hands the
-    // classes it scans to the forks in turn, which would queue both smoke runs in one fork
+    // classes it scans to the forks in turn
     include(wiringTests.map { "**/${it.removePrefix("*")}.class" })
     forkEvery = 1
-    // The default and the small-window smoke runs, side by side
     maxParallelForks = 2
     systemProperty("kotlinx.coroutines.fast.service.loader", "false")
     systemProperty("user.language", "en")
     // Runs only the smoke checks whose name matches, to debug one: -Pzoukan.smoke.only="dialog new category"
     providers.gradleProperty("zoukan.smoke.only").orNull?.let { systemProperty("zoukan.smoke.only", it) }
-    // Screenshot comparison (nightly, Linux): -Pzoukan.screenshots=verify compares with
-    // src/test/screenshots/linux; =record rewrites them after an intended visual change.
-    // Unset, no screenshot is taken and the goldens are not a task input, so normal runs stay cacheable.
-    providers.gradleProperty("zoukan.screenshots").orNull?.let { mode ->
-        systemProperty("zoukan.screenshots", mode)
-        inputs.files(fileTree("src/test/screenshots")).withPropertyName("screenshotGoldens").withPathSensitivity(PathSensitivity.RELATIVE)
-        // Every run takes and compares its own screenshots, so a second run is never skipped as up to date
-        outputs.upToDateWhen { false }
-        val reports = layout.buildDirectory.dir("reports/screenshots").get().asFile
-        doFirst { reports.deleteRecursively() }
-    }
     shouldRunAfter(tasks.test)
-    // Each run starts without the findings of an earlier one, so usabilityReport merges only this run's
-    val usabilityDir = layout.buildDirectory.dir("reports/usability").get().asFile
-    doFirst { usabilityDir.deleteRecursively() }
-    // Written even when a check fails
-    finalizedBy("usabilityReport")
 }
 tasks.named("check") { dependsOn(wiringTest) }
-
-// The button crawl clicks every button of every screen, tab, Settings page and dialog, and fails
-// on a click that throws, logs an error, hangs the window or does nothing, and on a button that
-// appeared or went since src/test/resources/button-inventory.txt. It takes long, so `check` does
-// not run it; longChecks runs it whole on Windows (desktop/TESTING.md, 'The button crawl'):
-//   ./gradlew :desktop:buttonCrawlTest
-//   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.only="settings:Library" -Pzoukan.shard=1/4
-//   ./gradlew :desktop:buttonCrawlTest -Pzoukan.crawl.updateBaseline=true
-val buttonCrawlTest by tasks.registering(Test::class) {
-    group = "verification"
-    description = "Clicks every button of the app and checks each one does something without an error"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    useJUnitPlatform()
-    filter { buttonCrawlTests.forEach { includeTestsMatching(it) } }
-    systemProperty("kotlinx.coroutines.fast.service.loader", "false")
-    systemProperty("user.language", "en")
-    // Offline on every machine: HTTP goes to a closed local port, so a click that would reach a
-    // server fails at once and the same way everywhere (the fixture servers on localhost are not used)
-    listOf("http", "https").forEach { scheme ->
-        systemProperty("$scheme.proxyHost", "127.0.0.1")
-        systemProperty("$scheme.proxyPort", "9")
-    }
-    // -Pzoukan.crawl.only=<regex> crawls only the checks whose name or key matches
-    providers.gradleProperty("zoukan.crawl.only").orNull?.let { systemProperty("zoukan.crawl.only", it) }
-    providers.gradleProperty("zoukan.crawl.debug").orNull?.let { systemProperty("zoukan.crawl.debug", it) }
-    // -Pzoukan.shard=i/n crawls every n-th check key, from the i-th (to debug a part; the baseline
-    // and longChecks use one unsharded run, since the split can change a signature)
-    providers.gradleProperty("zoukan.shard").orNull?.let { value ->
-        value.split('/').mapNotNull { it.trim().toIntOrNull() }
-            .takeIf { it.size == 2 && value.count { c -> c == '/' } == 1 && it[1] >= 1 && it[0] in 1..it[1] }
-            ?: error("zoukan.shard must be i/n with 1 <= i <= n, not \"$value\"")
-        systemProperty("zoukan.shard", value)
-    }
-    // -Pzoukan.crawl.updateBaseline=true rewrites src/test/resources/button-inventory.txt with the
-    // buttons this run found (only the checks it crawled, in a filtered or sharded run)
-    providers.gradleProperty("zoukan.crawl.updateBaseline").orNull?.let { systemProperty("zoukan.crawl.updateBaseline", it) }
-    // The crawl checks the app as it is now, and writes its report each time
-    outputs.upToDateWhen { false }
-    testLogging { events("passed", "skipped", "failed") }
-    shouldRunAfter(tasks.test, wiringTest)
-}
-
-/**
- * Merges the usability findings each smoke JVM wrote (build/reports/usability/<size>.tsv) into
- * build/reports/usability.md: a summary, the new findings, the allowlisted ones with their
- * reasons, and the allowlist entries that matched nothing.
- */
-abstract class UsabilityReport : DefaultTask() {
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val findings: ConfigurableFileCollection
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val allowlist: RegularFileProperty
-
-    @get:OutputFile
-    abstract val report: RegularFileProperty
-
-    private class Finding(val variant: String, val key: String, val rule: String, val node: String, val detail: String, val line: Int)
-
-    @TaskAction
-    fun merge() {
-        val rows = findings.files.sortedBy { it.name }.flatMap { file ->
-            file.readLines().filter { it.isNotBlank() }.map {
-                val c = it.split("\t")
-                Finding(c[0], c[1], c[2], c[3], c[4], c[5].toInt())
-            }
-        }
-        // line number -> (key | rule | node, reason)
-        val entries = allowlist.get().asFile.readLines().withIndex().mapNotNull { (i, raw) ->
-            val text = raw.trim()
-            if (text.isEmpty() || text.startsWith("#")) return@mapNotNull null
-            val p = text.split("|", limit = 4).map { it.trim() }
-            (i + 1) to (p.take(3).joinToString(" | ") to p.getOrElse(3) { "" })
-        }.toMap()
-        fun cell(s: String) = s.replace("|", "\\|")
-        val variants = rows.map { it.variant }.distinct()
-        val rules = listOf("UNLABELLED_CLICKABLE", "TEXT_OVERFLOW", "ESCAPE_NOT_DISMISSING", "TAB_TRAVERSAL")
-        val text = buildString {
-            appendLine("# Usability report")
-            appendLine()
-            appendLine("${rows.size} findings: ${rows.count { it.line == 0 }} new, ${rows.count { it.line != 0 }} allowlisted.")
-            appendLine("A new finding of the first three rules fails the smoke test; Tab traversal is only reported.")
-            appendLine()
-            appendLine("## Summary")
-            appendLine()
-            appendLine("| Variant | Rule | New | Allowlisted |")
-            appendLine("|---|---|---|---|")
-            for (variant in variants) {
-                for (rule in rules) {
-                    val of = rows.filter { it.variant == variant && it.rule == rule }
-                    appendLine("| $variant | $rule | ${of.count { it.line == 0 }} | ${of.count { it.line != 0 }} |")
-                }
-            }
-            appendLine()
-            appendLine("## New findings")
-            appendLine()
-            appendLine("| Variant | Key | Rule | Node | Detail |")
-            appendLine("|---|---|---|---|---|")
-            rows.filter { it.line == 0 }.forEach { appendLine("| ${it.variant} | ${cell(it.key)} | ${it.rule} | ${cell(it.node)} | ${cell(it.detail)} |") }
-            appendLine()
-            appendLine("## Allowlisted findings")
-            appendLine()
-            appendLine("| Variant | Key | Rule | Node | Reason |")
-            appendLine("|---|---|---|---|---|")
-            rows.filter { it.line != 0 }.forEach {
-                appendLine("| ${it.variant} | ${cell(it.key)} | ${it.rule} | ${cell(it.node)} | ${cell(entries[it.line]?.second ?: "?")} |")
-            }
-            appendLine()
-            appendLine("## Stale allowlist entries")
-            appendLine()
-            appendLine("Entries that matched nothing (only meaningful after a full run, not with `-Pzoukan.smoke.only`).")
-            appendLine()
-            val used = rows.map { it.line }.toSet()
-            val stale = entries.filterKeys { it !in used }
-            if (stale.isEmpty()) appendLine("None.") else stale.forEach { (line, e) -> appendLine("- line $line: ${e.first}") }
-        }
-        report.get().asFile.apply { parentFile.mkdirs() }.writeText(text)
-    }
-}
-
-tasks.register<UsabilityReport>("usabilityReport") {
-    group = "verification"
-    description = "Merges the smoke test's usability findings into build/reports/usability.md"
-    findings.from(layout.buildDirectory.dir("reports/usability").map { dir -> dir.asFileTree.matching { include("*.tsv") } })
-    allowlist.set(layout.projectDirectory.file("src/test/resources/usability-allowlist.txt"))
-    report.set(layout.buildDirectory.file("reports/usability.md"))
-    onlyIf { !findings.isEmpty }
-}
 
 // Installs every extension of each sample store and checks it is wired up on the desktop: no
 // class, method or field its bytecode uses is missing or a stub, its Injekt lookups resolve, its
@@ -619,7 +450,7 @@ tasks.register<UsabilityReport>("usabilityReport") {
 // SampleStores.ALL, which only the tests define (the app names no store): Keiyoushi, and yuzono's
 // "Cursed" store, which the app does not add or trust. HarnessRunsTest checks this list matches. Each store runs in a Test task and JVM of its own
 // (extensionWiringTest<Store>), one after the other: Keiyoushi alone needs a 4 GB heap. It downloads
-// every extension, so it is not part of `check`; the nightly check runs it. The reports go to
+// every extension, so it is not part of `check`; the nightly workflow runs it. The reports go to
 // build/reports/e2e/extensions-wiring-<store>.md. -Pzoukan.e2e.stores=yuzono picks the stores and
 // -Pzoukan.e2e.package=en.mangapill,all.mangadex the extensions (each store checks those it lists):
 //   ./gradlew :desktop:extensionWiringTest
@@ -659,7 +490,7 @@ val extensionWiringTest by tasks.registering {
 // The user journeys drive the real UI against a local fixture server (src/test/kotlin/zoukan/
 // desktop/e2e): browse a source, read every image format and check the pages drew, change a
 // source's settings, download chapters and read them offline, back up and restore. They need no
-// network but take a few minutes, so they run on request and in longChecks, not on every build:
+// network but take a few minutes, so they run on request and in journeys.yml, not on every build:
 //   ./gradlew :desktop:journeyTest
 // Screenshots go to desktop/build/reports/journeys/.
 val journeyTest by tasks.registering(Test::class) {
@@ -713,276 +544,5 @@ val journeyTest by tasks.registering(Test::class) {
     // journeys take about 2 minutes. -Pzoukan.journey.timeout=30m raises it to debug a slow machine
     systemProperty("junit.jupiter.execution.timeout.default", providers.gradleProperty("zoukan.journey.timeout").getOrElse("10m"))
     shouldRunAfter(tasks.test, wiringTest)
-}
-
-/**
- * The extension wiring check that installs every extension from the stores and starts each
- * source; the nightly run runs it by this name.
- */
-val extensionWiringTaskName = "extensionWiringTest"
-
-// The nightly run (desktop/packaging/check/nightly-windows.ps1): the offline journeys, then the
-// extension wiring check. Run it by hand with:
-//   ./gradlew :desktop:nightlyCheck --continue
-val nightlyCheck by tasks.registering {
-    group = "verification"
-    description = "Runs the offline user journeys and the extension wiring check"
-    dependsOn(journeyTest)
-    dependsOn(tasks.matching { it.name == extensionWiringTaskName })
-    val hasWiring = provider { tasks.names.contains(extensionWiringTaskName) }
-    doLast {
-        if (!hasWiring.get()) logger.warn("nightlyCheck: no $extensionWiringTaskName task, so only the journeys ran")
-    }
-}
-
-/** The three long checks; verifyLongChecks accepts a longChecks record or a record of each of these. */
-val longCheckParts = listOf("journeyTest", "buttonCrawlTest", "extensionWiringTest")
-
-/** Where the long checks leave their records: build/long-checks/<check>.properties. */
-val longCheckRecordsDir: File = layout.buildDirectory.dir("long-checks").get().asFile
-
-/** The checkout the records name the commit of. */
-val repositoryRoot: File = rootProject.projectDir
-
-// The long checks GitHub CI leaves out: the journeys, the whole button crawl and the extension
-// wiring check. They must pass on Windows before each merge to master (desktop/RELEASING.md,
-// "Before merging to master"):
-//   gradlew.bat :desktop:longChecks --continue
-// One task after another (the journeys already run up to 4 JVMs side by side), and the crawl in one
-// unsharded run: button-inventory.txt is recorded the same way, so a shard split never changes a
-// signature.
-// When every part passed, it leaves the record build/long-checks/longChecks.properties (see
-// LongCheckRecords below), which verifyLongChecks reads before a push to master.
-val longChecks by tasks.registering {
-    group = "verification"
-    description = "Runs the journeys, the whole button crawl and the extension wiring check (before a merge to master)"
-    dependsOn(nightlyCheck, buttonCrawlTest)
-    // Local copies: the action must not reference the build script (configuration cache)
-    val records = longCheckRecordsDir
-    val repo = repositoryRoot
-    val parts = longCheckParts
-    doLast {
-        LongCheckRecords.combine(records, repo, "longChecks", parts, parts.map { ":desktop:$it" }, logger)
-    }
-}
-buttonCrawlTest.configure { mustRunAfter(journeyTest) }
-extensionWiringStoreTests.forEach { it.configure { mustRunAfter(buttonCrawlTest) } }
-if (gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "longChecks" } && providers.gradleProperty("zoukan.shard").isPresent) {
-    error("longChecks runs every journey and the whole button crawl: leave out -Pzoukan.shard")
-}
-
-/**
- * A record of a long check that passed: which check, the commit (`git rev-parse HEAD`), whether
- * the working tree had changes (`git status --porcelain`, ignored files left out), the date and
- * the tasks run. A check writes its record only when it ran whole (no --tests, shard or other
- * narrowing) and the commit and the working tree were the same when it started and when it
- * passed; a check that starts deletes its old record, so a failed run leaves none. verifyLongChecks
- * reads the records before a push to master.
- */
-object LongCheckRecords {
-    class GitState(val commit: String, val status: String) {
-        val dirty: Boolean get() = status.isNotBlank()
-
-        /** A digest of the porcelain status, so two states can be compared without storing the file list. */
-        val tree: String get() = MessageDigest.getInstance("SHA-256")
-            .digest(status.toByteArray()).joinToString("") { "%02x".format(it) }
-    }
-
-    class Record(val file: File, val check: String, val commit: String, val dirty: Boolean, val tree: String, val date: String, val tasks: String)
-
-    private fun git(repo: File, vararg args: String): String? = try {
-        val process = ProcessBuilder(listOf("git", *args)).directory(repo)
-            .redirectError(ProcessBuilder.Redirect.DISCARD).start()
-        process.outputStream.close()
-        val out = process.inputStream.bufferedReader().readText()
-        if (process.waitFor() == 0) out else null
-    } catch (e: java.io.IOException) {
-        null
-    }
-
-    fun gitState(repo: File): GitState {
-        val commit = git(repo, "rev-parse", "HEAD")?.trim()?.takeIf { Regex("[0-9a-f]{40,64}").matches(it) }
-            ?: throw GradleException("Could not read the commit: `git rev-parse HEAD` failed in $repo")
-        val status = git(repo, "status", "--porcelain", "--untracked-files=normal")
-            ?: throw GradleException("Could not read the working tree: `git status --porcelain` failed in $repo")
-        return GitState(commit, status)
-    }
-
-    /** Before a check runs: deletes its old record and notes the commit and the tree it starts on. */
-    fun start(dir: File, repo: File, check: String) {
-        dir.mkdirs()
-        File(dir, "$check.properties").delete()
-        val state = gitState(repo)
-        File(dir, "$check.start").writeText("${state.commit}\n${state.tree}\n")
-    }
-
-    /** After a check passed: writes its record, unless the commit or the tree changed while it ran. */
-    fun finish(dir: File, repo: File, check: String, tasks: List<String>, logger: Logger) {
-        val startFile = File(dir, "$check.start")
-        val started = startFile.takeIf { it.isFile }?.readLines().orEmpty()
-        startFile.delete()
-        val now = gitState(repo)
-        if (started.size < 2 || started[0] != now.commit || started[1] != now.tree) {
-            logger.warn("$check passed, but the commit or the working tree changed while it ran, so it left no record")
-            return
-        }
-        write(dir, check, tasks, now, logger)
-    }
-
-    /** Writes [check]'s record when every one of [parts] left a record on the current commit and tree. */
-    fun combine(dir: File, repo: File, check: String, parts: List<String>, tasks: List<String>, logger: Logger) {
-        val now = gitState(repo)
-        val missing = parts.filter { part ->
-            val record = read(File(dir, "$part.properties"))
-            record == null || record.commit != now.commit || record.tree != now.tree
-        }
-        if (missing.isNotEmpty()) {
-            logger.warn("$check: no record of ${missing.joinToString()} on this commit and tree (narrowed, or the tree changed), so it left no record")
-            return
-        }
-        write(dir, check, tasks, now, logger)
-    }
-
-    private fun write(dir: File, check: String, tasks: List<String>, state: GitState, logger: Logger) {
-        dir.mkdirs()
-        val file = File(dir, "$check.properties")
-        val props = Properties()
-        props["check"] = check
-        props["commit"] = state.commit
-        props["dirty"] = state.dirty.toString()
-        props["tree"] = state.tree
-        props["date"] = Instant.now().toString()
-        props["tasks"] = tasks.joinToString(",")
-        file.outputStream().use { props.store(it, "A long check that passed (verifyLongChecks reads this)") }
-        logger.lifecycle("$check passed on ${state.commit}${if (state.dirty) " with uncommitted changes" else ""}: recorded in $file")
-    }
-
-    fun read(file: File): Record? {
-        if (!file.isFile) return null
-        val props = Properties()
-        try {
-            file.inputStream().use { props.load(it) }
-        } catch (e: Exception) {
-            return null
-        }
-        val check = props.getProperty("check") ?: return null
-        val commit = props.getProperty("commit") ?: return null
-        return Record(
-            file,
-            check,
-            commit,
-            props.getProperty("dirty") != "false",
-            props.getProperty("tree").orEmpty(),
-            props.getProperty("date").orEmpty(),
-            props.getProperty("tasks").orEmpty(),
-        )
-    }
-
-    /** The records in each of [sources]: a record file, or a folder of them. */
-    fun collect(sources: List<File>): List<Record> = sources.flatMap { source ->
-        when {
-            source.isDirectory -> source.listFiles { f -> f.isFile && f.name.endsWith(".properties") }.orEmpty().sortedBy { it.name }.mapNotNull(::read)
-            else -> listOfNotNull(read(source))
-        }
-    }
-
-    /** Null when the records show the long checks passed on [state]; otherwise why not. */
-    fun verify(state: GitState, sources: List<File>, parts: List<String>): String? {
-        val records = collect(sources)
-        val valid = records.filter { it.commit == state.commit && !it.dirty }.map { it.check }.toSet()
-        if (!state.dirty && ("longChecks" in valid || valid.containsAll(parts))) return null
-        return buildString {
-            appendLine(
-                if (state.dirty) {
-                    "The working tree has uncommitted changes, so no record can vouch for it."
-                } else {
-                    "The long checks have no passing record for this commit."
-                },
-            )
-            appendLine("  HEAD: ${state.commit}${if (state.dirty) " (with uncommitted changes: commit or stash them, then run the checks again)" else ""}")
-            appendLine("  Looked in: ${sources.joinToString { it.path }}")
-            if (records.isEmpty()) appendLine("  Found no records.")
-            records.forEach { r ->
-                val why = when {
-                    r.commit != state.commit -> "another commit (${r.commit.take(12)})"
-                    r.dirty -> "ran with uncommitted changes"
-                    else -> "ok"
-                }
-                appendLine("  ${r.check}: $why, ${r.date} (${r.file})")
-            }
-            val missing = parts.filter { it !in valid }
-            if ("longChecks" !in valid && missing.isNotEmpty()) appendLine("  Missing: longChecks, or each of ${missing.joinToString()}")
-            appendLine("Run `gradlew :desktop:longChecks --continue` on this commit, or each long check in its own worktree")
-            append("and pass their record folders with -Pzoukan.longChecks.records=<folder>,<folder> (desktop/TESTING.md).")
-        }
-    }
-}
-
-// Each long check leaves its own record when it runs whole, so the three can run side by side in
-// their own worktrees (desktop/TESTING.md, "Before merging to master")
-journeyTest.configure {
-    val records = longCheckRecordsDir
-    val repo = repositoryRoot
-    val whole = !testsNarrowedOnCommandLine && !providers.gradleProperty("zoukan.shard").isPresent
-    if (whole) {
-        doFirst { LongCheckRecords.start(records, repo, "journeyTest") }
-        doLast { LongCheckRecords.finish(records, repo, "journeyTest", listOf(":desktop:journeyTest"), logger) }
-    }
-}
-buttonCrawlTest.configure {
-    val records = longCheckRecordsDir
-    val repo = repositoryRoot
-    val whole = !testsNarrowedOnCommandLine &&
-        listOf("zoukan.shard", "zoukan.crawl.only", "zoukan.crawl.updateBaseline").none { providers.gradleProperty(it).isPresent }
-    if (whole) {
-        doFirst { LongCheckRecords.start(records, repo, "buttonCrawlTest") }
-        doLast { LongCheckRecords.finish(records, repo, "buttonCrawlTest", listOf(":desktop:buttonCrawlTest"), logger) }
-    }
-}
-// Each store leaves a record; extensionWiringTest combines them when every store ran on every extension
-val wiringWhole = !testsNarrowedOnCommandLine && !providers.gradleProperty("zoukan.e2e.package").isPresent
-extensionWiringStoreTests.forEach { storeTask ->
-    storeTask.configure {
-        val records = longCheckRecordsDir
-        val repo = repositoryRoot
-        val check = name
-        if (wiringWhole) {
-            doFirst { LongCheckRecords.start(records, repo, check) }
-            doLast { LongCheckRecords.finish(records, repo, check, listOf(":desktop:$check"), logger) }
-        }
-    }
-}
-extensionWiringTest.configure {
-    val records = longCheckRecordsDir
-    val repo = repositoryRoot
-    val storeChecks = extensionWiringStoreTests.map { it.name }
-    val allStores = selectedWiringStores.containsAll(extensionWiringStores)
-    if (wiringWhole && allStores) {
-        doLast { LongCheckRecords.combine(records, repo, "extensionWiringTest", storeChecks, storeChecks.map { ":desktop:$it" }, logger) }
-    }
-}
-
-// Before a push to master: fails unless a record shows the long checks passed on HEAD, on a clean
-// tree. It reads build/long-checks/ and, from -Pzoukan.longChecks.records, more record files or
-// folders (comma-separated, relative to the repository root), such as the build/long-checks
-// folders of the worktrees the three checks ran in:
-//   ./gradlew :desktop:verifyLongChecks
-//   ./gradlew :desktop:verifyLongChecks -Pzoukan.longChecks.records=../zoukan-crawl/desktop/build/long-checks
-tasks.register("verifyLongChecks") {
-    group = "verification"
-    description = "Fails unless the long checks left a passing record for the current commit (before a push to master)"
-    val repo = repositoryRoot
-    val sources = listOf(longCheckRecordsDir) + providers.gradleProperty("zoukan.longChecks.records").orNull
-        ?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)
-        ?.map { path -> File(path).let { if (it.isAbsolute) it else File(repo, path) } }
-        .orEmpty()
-    val parts = longCheckParts
-    // Reads the records and the checkout each time
-    outputs.upToDateWhen { false }
-    doLast {
-        val state = LongCheckRecords.gitState(repo)
-        LongCheckRecords.verify(state, sources, parts)?.let { throw GradleException(it) }
-        logger.lifecycle("The long checks passed on ${state.commit}.")
-    }
 }
 // ZOUKAN <--

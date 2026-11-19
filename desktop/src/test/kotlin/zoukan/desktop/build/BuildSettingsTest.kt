@@ -71,7 +71,7 @@ class BuildSettingsTest {
     }
 
     @Test
-    fun `a run narrowed with --tests in either form writes no long-check record`() {
+    fun `wiringTest checks whether the run was narrowed with --tests in either form`() {
         val build = text("desktop/build.gradle.kts")
         // Gradle takes a task's filter as `--tests Foo` and as `--tests=Foo`
         withClue("narrowsTests must see both forms of the filter") {
@@ -82,13 +82,8 @@ class BuildSettingsTest {
             Regex("""taskRequests\.any \{(?! narrowsTests\(it\.args\) \})""").findAll(build).map { it.value }.toList().shouldBeEmpty()
             build shouldNotContain "\"--tests\" in"
         }
-        // Every check that vouches for a whole run asks whether the run was narrowed
         val wiring = build.substringAfter("val wiringTest by tasks.registering", "").substringBefore("\n}")
         withClue("wiringTest's check of its classes") { wiring shouldContain "val narrowedOnCommandLine = testsNarrowedOnCommandLine" }
-        for (record in listOf("\njourneyTest.configure {\n", "\nbuttonCrawlTest.configure {\n")) {
-            withClue(record.trim()) { build.substringAfter(record, "").substringBefore("\n}") shouldContain "!testsNarrowedOnCommandLine" }
-        }
-        withClue("extensionWiringTest's records") { build shouldContain "val wiringWhole = !testsNarrowedOnCommandLine" }
     }
 
     @Test

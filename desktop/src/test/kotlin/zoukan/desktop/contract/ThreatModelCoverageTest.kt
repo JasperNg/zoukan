@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Every trust boundary `desktop/THREAT-MODEL.md` lists has a row in its "Checked by" table, and
- * every test class a row names exists and has tests, as `CoverageMatrixTest` does for features.
+ * every test class a row names exists and has tests.
  * The classes may be in any module (`extension-jvm`'s tests are not on this class path), so they
  * are found as source files: `zoukan.extension.Foo` is `<module>/src/<test source set>/kotlin/zoukan/extension/Foo.kt`
  * declaring `class Foo` with an `@Test`. A row with no test must say why in its Gap cell.

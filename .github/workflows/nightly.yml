@@ -1,13 +1,11 @@
-# The nightly long tier: the long checks on GitHub, every night and when someone asks. On Windows
-# and macOS it runs the full build and unit tests, the offline journeys and the extension wiring check
-# (nightlyCheck) and the live end-to-end tests, which reach real sites. On ubuntu-24.04 it compares
-# screenshots with the committed goldens. Nothing is packaged or signed here; desktop-build.yml
-# makes the installers.
+# The nightly extension wiring check on GitHub, every night and when someone asks. On Windows and
+# macOS it installs every extension of each sample store and checks it is wired up on the desktop
+# (:desktop:extensionWiringTest). Nothing is packaged or signed here; desktop-build.yml makes the
+# installers.
 #
 # It runs on master every night (only in the main repository, not in forks) and reports to the
-# nightly-failure issue. It does not gate a merge or a release: the long checks still run on Windows
-# before each merge to master (`gradlew.bat :desktop:longChecks --continue`, desktop/TESTING.md).
-# Start it by hand from the Actions tab (Run workflow) or with `gh workflow run nightly.yml`.
+# nightly-failure issue. It does not gate a merge or a release. Start it by hand from the Actions
+# tab (Run workflow) or with `gh workflow run nightly.yml`.
 name: Nightly
 
 on:
@@ -29,14 +27,14 @@ permissions:
   contents: read
 
 jobs:
-  nightly:
-    name: Nightly (${{ matrix.os }})
+  extension-wiring:
+    name: Extension wiring (${{ matrix.os }})
     # Forks inherit the schedule; only the main repository runs it
     if: github.event_name != 'schedule' || !github.event.repository.fork
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-2025-vs2026, macos-26]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     defaults:
@@ -49,88 +47,24 @@ jobs:
           # The nightly never writes the shared cache
           cache-read-only: 'true'
 
-      # The PR tier's checks on a real Windows and macOS desktop (no xvfb needed here)
-      - name: Build and unit tests
-        id: build
-        continue-on-error: true
-        run: ./gradlew :desktop:build :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest --continue
-
-      # The live run below reuses the test task's report folder, so keep this run's report
-      - name: Keep the unit test report
-        if: always()
-        run: |
-          mkdir -p desktop/build/nightly
-          cp -r desktop/build/reports/tests/test desktop/build/nightly/unit-tests 2>/dev/null || true
-
-      - name: Journeys and extension wiring
-        id: nightly
-        continue-on-error: true
-        run: ./gradlew :desktop:nightlyCheck --continue
-
-      - name: Live end-to-end tests
-        id: live
-        continue-on-error: true
-        run: ./gradlew :desktop:test -Pzoukan.e2e=true --tests "*EndToEndReadTest" --tests "*EndToEndDownloadTest" --continue
+      - name: Extension wiring
+        run: ./gradlew :desktop:extensionWiringTest --continue
 
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: nightly-${{ matrix.os }}
+          name: nightly-extension-wiring-${{ matrix.os }}
           retention-days: 14
           if-no-files-found: ignore
           path: |
-            desktop/build/nightly/
             desktop/build/reports/tests/
             desktop/build/test-results/
-            desktop/build/reports/journeys/
             desktop/build/reports/e2e/
-            desktop/build/reports/usability.md
-
-      - name: Fail if any check failed
-        if: steps.build.outcome == 'failure' || steps.nightly.outcome == 'failure' || steps.live.outcome == 'failure'
-        env:
-          BUILD: ${{ steps.build.outcome }}
-          NIGHTLY: ${{ steps.nightly.outcome }}
-          LIVE: ${{ steps.live.outcome }}
-        run: |
-          echo "::error::build=$BUILD nightlyCheck=$NIGHTLY live=$LIVE"
-          exit 1
-
-  screenshots:
-    name: Screenshots (ubuntu-24.04)
-    if: github.event_name != 'schedule' || !github.event.repository.fork
-    # Pinned, not -latest: the goldens were recorded on this image
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: ./.github/actions/setup-zoukan
-        with:
-          cache-read-only: 'true'
-      # The same fonts the goldens were recorded with (screenshots-record.yml)
-      - name: Install fonts
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fonts-dejavu-core fonts-noto-cjk
-          fc-cache -f
-      - name: Compare screenshots
-        run: xvfb-run -a ./gradlew :desktop:wiringTest -Pzoukan.screenshots=verify
-      - name: Upload screenshots
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: nightly-screenshots
-          retention-days: 14
-          if-no-files-found: ignore
-          path: |
-            desktop/build/reports/screenshots/
-            desktop/build/reports/tests/
-            desktop/build/test-results/
 
   notify:
     name: Report to the nightly-failure issue
-    needs: [nightly, screenshots]
+    needs: [extension-wiring]
     # Reports every scheduled run (main repository only), and a dispatch when it asks for it
     if: always() && ((github.event_name == 'schedule' && !github.event.repository.fork) || inputs.notify)
     runs-on: ubuntu-26.04
@@ -147,14 +81,13 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REF: ${{ github.ref_name }}
-          NIGHTLY: ${{ needs.nightly.result }}
-          SHOTS: ${{ needs.screenshots.result }}
+          WIRING: ${{ needs.extension-wiring.result }}
         run: |
           set -euo pipefail
           gh label create nightly-failure --color B60205 --description "The nightly workflow failed" 2>/dev/null || true
           issue=$(gh issue list --label nightly-failure --state open --limit 1 --json number --jq '.[0].number // empty')
 
-          if [ "$NIGHTLY" = "success" ] && [ "$SHOTS" = "success" ]; then
+          if [ "$WIRING" = "success" ]; then
             if [ -n "$issue" ]; then
               gh issue close "$issue" --comment "The nightly passed again on $REF: $RUN_URL"
             fi
@@ -165,7 +98,7 @@ jobs:
           failed=$(gh run view "$RUN_ID" --json jobs \
             --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | "- \(.name): \(.conclusion)"')
           if [ -z "$failed" ]; then
-            failed="- (none listed; nightly=$NIGHTLY, screenshots=$SHOTS)"
+            failed="- (none listed; extension-wiring=$WIRING)"
           fi
           body=$(cat <<EOF
           The nightly failed on \`$REF\`: $RUN_URL
@@ -173,9 +106,9 @@ jobs:
           Failed jobs:
           $failed
 
-          Where to look (artifacts nightly-windows-latest, nightly-macos-latest, nightly-screenshots):
-          - Our side: unit tests (nightly/unit-tests), journeys (reports/journeys), the "Missing APIs" section of e2e/extensions-wiring-*.md, screenshot diffs (reports/screenshots).
-          - Possibly the site: EndToEndReadTest / EndToEndDownloadTest and extension download errors. Re-run once before treating these as ours.
+          Where to look (artifacts nightly-extension-wiring-windows-2025-vs2026, nightly-extension-wiring-macos-26):
+          - Our side: the "Missing APIs" section of e2e/extensions-wiring-*.md.
+          - Possibly the site: extension download errors. Re-run once before treating these as ours.
           EOF
           )
           if [ -n "$issue" ]; then

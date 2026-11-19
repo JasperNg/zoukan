@@ -41,13 +41,13 @@ import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.testing.Await
 import zoukan.desktop.ui.E2EDiagnostics
-import zoukan.desktop.ui.saveScreenshot
 import zoukan.desktop.ui.startUi
 import zoukan.desktop.update.Updates
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.util.Collections
+import javax.imageio.ImageIO
 import kotlin.math.abs
 
 /**
@@ -225,7 +225,42 @@ class Journey private constructor(val name: String, sourceReadTimeoutSeconds: Lo
 
     /** Saves what is on screen, dialogs and popups included, as `<journey>-<title>.png`. */
     fun ComposeUiTest.shot(title: String) {
-        saveScreenshot(shots, "$name-$title")
+        val file = File(shots.apply { mkdirs() }, "$name-$title.png")
+        ImageIO.write(captureAllRoots(), "png", file)
+    }
+
+    private fun ComposeUiTest.captureAllRoots(): BufferedImage {
+        waitForIdle()
+        val roots = onAllNodes(isRoot())
+        val count = roots.fetchSemanticsNodes().size
+        val image = roots[0].captureToImage().toAwtImage().toArgb()
+        val graphics = image.createGraphics()
+        try {
+            (1 until count).forEach { index ->
+                runCatching {
+                    val node = roots[index]
+                    val bounds = node.fetchSemanticsNode().boundsInWindow
+                    node.captureToImage().toAwtImage() to bounds
+                }.onSuccess { (layer, bounds) ->
+                    graphics.drawImage(layer, bounds.left.toInt(), bounds.top.toInt(), null)
+                }
+            }
+        } finally {
+            graphics.dispose()
+        }
+        return image
+    }
+
+    private fun BufferedImage.toArgb(): BufferedImage {
+        if (type == BufferedImage.TYPE_INT_ARGB) return this
+        val copy = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        val graphics = copy.createGraphics()
+        try {
+            graphics.drawImage(this, 0, 0, null)
+        } finally {
+            graphics.dispose()
+        }
+        return copy
     }
 
     /** The same as [shot], which already draws dialogs and popups; kept for the journeys that call it. */

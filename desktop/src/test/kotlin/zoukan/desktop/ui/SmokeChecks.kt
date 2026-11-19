@@ -9,7 +9,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
@@ -20,7 +19,6 @@ import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -29,38 +27,26 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.printToString
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.sync.SyncPreferences
-import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.all.MangaDex
 import exh.md.utils.MdUtil
 import exh.source.EnhancedHttpSource
 import exh.source.ExhPreferences
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
-import org.junit.jupiter.api.Test
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -154,22 +140,19 @@ import zoukan.desktop.ui.whatsnew.DohNoticeDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
-import java.awt.EventQueue
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * One screen or dialog to open: [open] runs on the UI thread, then [drive] in the test, and
  * [cleanup] on the UI thread even when they fail, to undo state that later checks would see.
- * [key] is its coverage-matrix key (coverage-matrix.yaml); variants of one screen share it.
+ * [key] is its UI inventory key; variants of one screen share it.
  */
 @OptIn(ExperimentalTestApi::class)
 internal class SmokeCheck(
@@ -178,10 +161,6 @@ internal class SmokeCheck(
     val open: (Navigator) -> Unit,
     val drive: ComposeUiTest.() -> Unit = {},
     val cleanup: () -> Unit = {},
-    /** Matrix keys this check also opens, such as a dialog its [drive] waits for. */
-    val alsoCovers: List<String> = emptyList(),
-    /** A dialog's dismiss, which the usability check's Escape rule asserts. */
-    val probe: DismissProbe? = null,
 )
 
 internal class SmokeFixture(val alpha: Manga, val bravo: Manga, val chapters: List<Chapter>, val backup: File)
@@ -194,20 +173,6 @@ internal class SmokeHost(private val name: String, @Transient private val conten
     override fun Content() = content()
 }
 
-/**
- * The callbacks the directly rendered dialogs get instead of the app's: each call is counted, so
- * the button crawl sees that a dialog's button called back, where the smoke test ignores it.
- */
-internal object HostCalls {
-    @Volatile
-    var count = 0
-        private set
-
-    fun record() {
-        count++
-    }
-}
-
 /** Rows per scroll step: fewer than a screen holds, so every row composes on the way. */
 internal const val SCROLL_STEP = 6
 
@@ -217,13 +182,13 @@ private const val MAX_SCROLL_STEPS = 500
 private val OUT_OF_BOUNDS = Regex("""^Can't scroll to index -?\d+, it is out of bounds \[0, (\d+)\)""")
 
 /**
- * What [ScreenSmokeTest] and [ButtonCrawlTest] share: the runtime they start, the library they
- * seed and the list of checks, one per screen, tab, Settings page and dialog of the app. See
- * [ScreenSmokeTest] for what the checks open and why.
+ * The runtime [ScreenSmokeTest] starts, the library it seeds and the list of checks, one per
+ * screen, tab, Settings page and dialog of the app. See [ScreenSmokeTest] for what the checks
+ * open and why.
  */
 @OptIn(ExperimentalTestApi::class)
 internal object SmokeChecks {
-    /** The date of the seeded entries and chapters (2024-01-15), fixed so screenshots show the same dates every day. */
+    /** The date of the seeded entries and chapters (2024-01-15). */
     const val SEED_DATE = 1_705_314_000_000L
 
     /**
@@ -239,12 +204,7 @@ internal object SmokeChecks {
         return dirs
     }
 
-    /**
-     * A new folder `<prefix><18 digits>` in the system temp folder. Files.createTempDirectory adds a
-     * random number of 1 to 20 digits, and labels that show the data folder are cut to a fixed
-     * length before ButtonCrawl.stable turns the digits into `#`, so a different count could move
-     * the cut and change a button key between two runs on the same machine. A fixed count cannot.
-     */
+    /** A new folder `<prefix><18 digits>` in the system temp folder. */
     private fun newTempDir(prefix: String): File {
         val temp = File(System.getProperty("java.io.tmpdir"))
         repeat(100) {
@@ -419,8 +379,6 @@ internal object SmokeChecks {
             "tab:${tab.name}",
             "tab ${tab.name}",
             { HomeScreen.selectTab(tab) },
-            // Every check renders the main window and its shell; the first tab's check names them
-            alsoCovers = if (tab == HomeTab.entries.first()) listOf("screen:HomeScreen", "state:shell") else emptyList(),
         )
     } + BrowsePage.entries.map { page ->
         // The default preferences show every page (hiding the feed is a setting); clickTag fails
@@ -498,8 +456,6 @@ internal object SmokeChecks {
                     // The follows dialog's title repeats the row's text
                     waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(sync).fetchSemanticsNodes().size >= 2 }
                 },
-                // The follows dialog opens only through this page
-                alsoCovers = listOf("dialog:settings.SyncFollowsDialog"),
                 // The page and its dialog close before the source goes away under them
                 cleanup = {
                     try {
@@ -578,21 +534,17 @@ internal object SmokeChecks {
 
     /**
      * A check that renders [content]; [key] is "dialog:" + the dialog function's package under ui and name.
-     * [content] gets the dialog's dismiss, which records its call for the usability check's Escape rule.
      */
-    private fun dialog(key: String, name: String, content: @Composable Screen.(dismiss: () -> Unit) -> Unit): SmokeCheck {
-        val probe = DismissProbe()
-        return SmokeCheck(key, "dialog $name", {
-            probe.called = false
-            it.push(SmokeHost(name) { content(probe.dismiss) })
-        }, probe = probe)
-    }
+    private fun dialog(key: String, name: String, content: @Composable Screen.(dismiss: () -> Unit) -> Unit): SmokeCheck =
+        SmokeCheck(key, "dialog $name", {
+            it.push(SmokeHost(name) { content {} })
+        })
 
     /** The dialogs that other code can show, rendered directly. */
     fun dialogs(f: SmokeFixture): List<SmokeCheck> {
         // As the app hands them to the dialogs: the nameless system category is never offered
         val categories = runBlocking { Injekt.get<GetCategories>().await() }.filterNot { it.isSystemCategory }
-        val noop = { HostCalls.record() }
+        val noop = {}
         return listOf(
             dialog("dialog:manga.CategoryDialog", "CategoryDialog") { CategoryDialog(categories, { noop() }, it) },
             dialog("dialog:manga.ChangeCategoryDialog", "ChangeCategoryDialog") {
@@ -797,22 +749,10 @@ internal object SmokeChecks {
     )
 }
 
-/**
- * Lets screen models load on their dispatchers and the UI catch up. Not a wait for a state: the
- * checks open hundreds of screens that share no "loaded" state, and waitForIdle does not see the
- * screen models' background dispatchers, so this pauses between steps. Checks that need a node
- * wait for it after this (waitUntil).
- */
-internal fun ComposeUiTest.settle(rounds: Int = SETTLE_ROUNDS, pauseMillis: Long = SETTLE_PAUSE_MILLIS) {
+/** Waits for the Compose UI and pending main-thread work to go idle. */
+internal fun ComposeUiTest.settle() {
     waitForIdle()
-    repeat(rounds) {
-        Thread.sleep(pauseMillis)
-        waitForIdle()
-    }
 }
-
-private const val SETTLE_ROUNDS = 3
-private const val SETTLE_PAUSE_MILLIS = 150L
 
 /**
  * One field searches every source; the in-tab fields only filter the list. So the page shows the

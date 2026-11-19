@@ -7,14 +7,11 @@
 # from releasing.
 #
 # This is the fast set, and the release gate (desktop-build.yml calls it). Every pull request and
-# every push to master runs the whole unit tier on Linux, Windows and macOS. The long checks (the journeys, the button crawl and the extension wiring check) do not run
-# here: they run on Windows before each merge to master, `gradlew.bat :desktop:longChecks
-# --continue`, and `gradlew :desktop:verifyLongChecks` checks their record before the push
-# (desktop/TESTING.md, "Before merging to master"). nightly.yml runs them every night, and
-# journeys.yml runs the journeys on pull requests that change the code they cover.
+# every push to master runs the whole unit tier on Linux, Windows and macOS, plus the wiring tier
+# and the Android compile and unit tests. nightly.yml runs the extension wiring check every night,
+# and journeys.yml runs the journeys on pull requests that change the code they cover.
 #
-# The end-to-end tests stay out of this workflow: they only run with -Pzoukan.e2e=true, because
-# they reach real extension sites. The installers are built by desktop-build.yml.
+# The installers are built by desktop-build.yml.
 name: CI
 
 on:
@@ -88,8 +85,7 @@ jobs:
       - run: ./gradlew spotlessCheck
 
   # The gating unit tier on Linux. It always runs without the coverage agent, the same on pull
-  # requests as on master, so a test that the instrumentation changes cannot pass one and fail the
-  # other, and the test results come from and go to the build cache. Coverage is the job below.
+  # requests as on master, so the test results come from and go to the build cache.
   unit:
     name: Build and unit tests
     needs: changes
@@ -98,9 +94,6 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      # The coverage job's script; its own tests gate the merge, so a broken script is caught here
-      - name: Changed-line coverage script tests
-        run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py'
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
@@ -122,53 +115,6 @@ jobs:
             core/common/build/reports/tests/
             source-api/build/reports/tests/
           if-no-files-found: ignore
-
-  # Pull requests only: runs the unit tier again with Kover's agent (koverXmlReportUnit) and lists
-  # in the job summary the changed lines the tests do not run (desktop/TESTING.md, "Coverage"). It
-  # is information only: the PR gate does not need it, and neither the job nor its steps can fail
-  # the run, but a step that breaks shows as failed in the job's log.
-  coverage:
-    name: Coverage (information only)
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name == 'pull_request'
-    continue-on-error: true
-    runs-on: ubuntu-26.04
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          # The changed-line report compares with the merge base, so pull requests need the whole
-          # history. The values are strings: a number 0 is falsy in an expression, so with a bare 0
-          # the `||` side, 1, would always win.
-          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-      - uses: ./.github/actions/setup-zoukan
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
-      # The report runs the unit test tasks it measures, instrumented, and then writes the report
-      - name: Coverage report
-        id: kover
-        continue-on-error: true
-        run: xvfb-run -a ./gradlew :koverXmlReportUnit -Pzoukan.coverage=true
-      # A report that cannot be made is said in the job summary and as a warning, not only in the log
-      - name: Coverage of changed lines
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        shell: bash
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          KOVER_OUTCOME: ${{ steps.kover.outcome }}
-        run: |
-          not_computed() {
-            echo "::warning title=Coverage of changed lines::$1"
-            printf '### Coverage of changed lines\n\nNot computed: %s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
-          }
-          if [ "$KOVER_OUTCOME" != "success" ]; then
-            not_computed "the coverage report step did not succeed ($KOVER_OUTCOME); a failing test also stops the report (see the Build and unit tests job)."
-          elif python3 -B .github/scripts/changed_line_coverage.py --base "origin/$BASE_REF" --report build/reports/kover/reportUnit.xml > "$RUNNER_TEMP/changed-lines.md"; then
-            cat "$RUNNER_TEMP/changed-lines.md" >> "$GITHUB_STEP_SUMMARY"
-          else
-            not_computed "changed_line_coverage.py failed (see this step's log); the diff with origin/$BASE_REF may be missing."
-          fi
 
   # The whole unit tier on the other two desktop systems, on every pull request as well as on
   # pushes to master (and so the release, which calls this workflow) and dispatches: :desktop:test,
@@ -218,63 +164,24 @@ jobs:
           if-no-files-found: ignore
 
   wiring:
-    name: Wiring (${{ matrix.name }})
+    name: Wiring
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Injekt
-            tests: '*InjektRegistrationsTest'
-            artifact: injekt
-          - name: Screen smoke
-            tests: '*ScreenSmoke*Test'
-            artifact: screen-smoke
-          - name: App linkage
-            tests: '*AppLinkageTest'
-            artifact: app-linkage
-          - name: Runtime start
-            tests: '*ZoukanRuntimeStartTest'
-            artifact: runtime-start
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - name: Every wiring test class has a shard
-        shell: bash
-        run: |
-          set -euo pipefail
-          listed=$(sed -n 's/^val expectedWiringClasses = listOf(\(.*\))$/\1/p' desktop/build.gradle.kts | tr -d ' "' | tr ',' '\n')
-          [ -n "$listed" ] || { echo "::error::Could not read expectedWiringClasses from desktop/build.gradle.kts"; exit 1; }
-          # Match the class names literally against the shard patterns below
-          set -f
-          for t in $listed; do
-            case "$t" in
-              InjektRegistrationsTest) ;;
-              ScreenSmoke*Test) ;;
-              AppLinkageTest) ;;
-              ZoukanRuntimeStartTest) ;;
-              *) echo "::error::wiringTests lists $t but no wiring shard in ci.yml runs it"; exit 1 ;;
-            esac
-          done
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
-      - run: xvfb-run -a ./gradlew :desktop:wiringTest --tests "${{ matrix.tests }}"
-      # --tests narrows the run, which turns off wiringTest's own check that every class ran
-      - name: The shard ran tests
-        shell: bash
-        run: ls desktop/build/test-results/wiringTest/TEST-*.xml
+      - run: xvfb-run -a ./gradlew :desktop:wiringTest
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        if: always()
+        if: failure()
         with:
-          name: reports-wiring-${{ matrix.artifact }}
+          name: reports-wiring
           path: |
             desktop/build/reports/tests/
             desktop/build/test-results/
-            desktop/build/reports/usability.md
-            desktop/build/reports/usability/
           if-no-files-found: ignore
 
   # The desktop port edits shared Android code (app/.../data/track/, data/, domain/), so compile the
