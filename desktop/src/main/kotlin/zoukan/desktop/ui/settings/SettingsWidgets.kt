@@ -77,15 +77,10 @@ fun SettingRow(
     subtitle: String? = null,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
-    searchTerms: List<String> = emptyList(),
     /** The state of a switch in [trailing]: the row then is the switch (one node with the title), and the switch has no handler of its own. */
     switched: Boolean? = null,
     trailing: @Composable () -> Unit = {},
 ) {
-    // Settings search matches the title, the summary and [searchTerms] (such as the choices of a
-    // setting); in its results only matching rows show
-    LocalSearchTexts.current?.add(title, subtitle, *searchTerms.toTypedArray())
-    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOfNotNull(title, subtitle) + searchTerms)) return }
     Row(
         Modifier
             .fillMaxWidth()
@@ -140,7 +135,7 @@ fun <T> ChoiceSetting(
     onChoose: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    SettingRow(title, subtitle ?: choiceSummary(value, choices), enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
+    SettingRow(title, subtitle ?: choiceSummary(value, choices), enabled, onClick = { open = true })
     // A dialog of choices, as Android's ListPreference
     if (open) {
         AlertDialog(
@@ -176,8 +171,6 @@ fun <T> ChoicePreference(title: String, preference: Preference<T>, choices: List
 
 @Composable
 fun SliderPreference(title: String, preference: Preference<Int>, range: IntRange, label: (Int) -> String) {
-    LocalSearchTexts.current?.add(title)
-    LocalSearchQuery.current?.let { if (!SettingsSearch.matches(it, listOf(title))) return }
     val saved by preference.collectAsState()
     var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
@@ -216,7 +209,7 @@ fun MultiSelectPreference(
     val value by preference.collectAsState()
     var open by remember { mutableStateOf(false) }
     val summary = subtitle ?: multiSelectSummary(value, choices)
-    SettingRow(title, summary, enabled, onClick = { open = true }, searchTerms = choices.map { it.second })
+    SettingRow(title, summary, enabled, onClick = { open = true })
     if (open) {
         var chosen by remember { mutableStateOf(value) }
         AlertDialog(

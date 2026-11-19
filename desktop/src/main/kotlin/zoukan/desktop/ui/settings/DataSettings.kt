@@ -44,8 +44,6 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.manga.interactor.GetFavorites
-import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
@@ -59,11 +57,9 @@ import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.download.DownloadManager
-import zoukan.desktop.local.Archives
 import zoukan.desktop.storage.StorageFolderPrivacy
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.LocalWindow
-import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.checkRow
@@ -171,13 +167,11 @@ fun LazyListScope.dataSettings() {
     }
     item(key = "data-cover-cache") {
         val dirs = remember { Injekt.get<ZoukanDirs>() }
+        val controller = remember(dirs) { DataSettingsController(dirs) }
         val scope = rememberCoroutineScope()
         SettingRow(localized(DMR.strings.clear_cover_cache), localized(DMR.strings.covers_download_again_when_shown), onClick = {
-            scope.launch(Dispatchers.IO) {
-                // Custom covers (covers/custom) are kept
-                zoukan.desktop.manga.CustomCovers.clearCache(dirs.covers)
-                // ZOUKAN: and the other images kept on disk (extension icons, tracker covers, ...)
-                runCatching { Images.clearDiskCache() }
+            scope.launch {
+                controller.clearCoverCache()
                 Toasts.show(localized(DMR.strings.cover_cache_cleared))
             }
         })
@@ -194,6 +188,8 @@ fun LazyListScope.dataSettings() {
 /** Android's "Storage location": the folder for downloads, the local source and automatic backups. */
 @Composable
 internal fun StorageLocationPreference() {
+    val dirs = remember { Injekt.get<ZoukanDirs>() }
+    val controller = remember(dirs) { DataSettingsController(dirs) }
     val storage = remember { Injekt.get<ZoukanStorage>() }
     val window = LocalWindow.current?.window
     val folder by storage.folderPreference.collectAsState()
@@ -208,7 +204,7 @@ internal fun StorageLocationPreference() {
             chooseFolder(window, storage.root)?.let { picked ->
                 scope.launch {
                     // The folder may be on a network drive
-                    when (val verdict = withContext(Dispatchers.IO) { StorageLocation.check(picked) }) {
+                    when (val verdict = controller.checkStorageFolder(picked)) {
                         is StorageLocation.Verdict.Ok -> pending = picked.path to verdict
                         StorageLocation.Verdict.NotWritable -> Toasts.show(localized(DMR.strings.storage_folder_not_writable, picked.path))
                     }
@@ -219,21 +215,21 @@ internal fun StorageLocationPreference() {
         if (folder.isNotBlank()) {
             TextButton(onClick = {
                 scope.launch {
-                    val hasDownloads = withContext(Dispatchers.IO) { File(Injekt.get<ZoukanDirs>().root, ZoukanStorage.DOWNLOADS).listFiles()?.isNotEmpty() == true }
+                    val hasDownloads = controller.hasDefaultStorageDownloads()
                     pending = "" to StorageLocation.Verdict.Ok(hasDownloads)
                 }
             }) { Text(localized(MR.strings.action_reset)) }
         }
     }
     pending?.let { (path, verdict) ->
-        val newRoot = if (path.isBlank()) Injekt.get<ZoukanDirs>().root else File(path)
+        val newRoot = if (path.isBlank()) dirs.root else File(path)
         StorageChangeDialog(
             oldRoot = storage.root,
             newRoot = newRoot,
             hasDownloads = verdict.hasDownloads,
             cloudSync = remember(newRoot) { cloudSyncOf(newRoot) },
             onOpenOld = { openFolder(storage.root) },
-            onConfirm = { StorageLocation.apply(storage, path) { Injekt.get<DownloadManager>().invalidateCache() } },
+            onConfirm = { controller.applyStorageFolder(storage, path) { Injekt.get<DownloadManager>().invalidateCache() } },
             onDismiss = { pending = null },
         )
     }
@@ -280,16 +276,17 @@ internal fun StorageChangeDialog(
 @Composable
 internal fun BackupButtons() {
     val dirs = remember { Injekt.get<ZoukanDirs>() }
+    val controller = remember(dirs) { DataSettingsController(dirs) }
     val window = LocalWindow.current?.window
     val status by backupStatusFlow.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
     // The restore picker is being opened: its start folder is looked up first
     var picking by remember { mutableStateOf(false) }
-    SearchTerms(localized(MR.strings.pref_create_backup), localized(MR.strings.pref_restore_backup))
+    val canStart = controller.canStartBackupOrRestore(status)
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { navigator.push(CreateBackupScreen) }, enabled = status == null, modifier = Modifier.weight(1f)) {
+            OutlinedButton(onClick = { navigator.push(CreateBackupScreen) }, enabled = canStart, modifier = Modifier.weight(1f)) {
                 Text(localized(MR.strings.pref_create_backup))
             }
             OutlinedButton(
@@ -306,7 +303,7 @@ internal fun BackupButtons() {
                         }
                     }
                 },
-                enabled = status == null && !picking,
+                enabled = canStart && !picking,
                 modifier = Modifier.weight(1f),
             ) { Text(localized(MR.strings.pref_restore_backup)) }
         }
@@ -454,7 +451,6 @@ private fun StorageUsage() {
     val root = remember(folder) { storage.root }
     val total = remember(root) { root.totalSpace }
     val available = remember(root) { root.usableSpace }
-    SearchTerms(localized(MR.strings.pref_storage_usage), localized(DMR.strings.disk_space))
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(root.absolutePath, style = MaterialTheme.typography.bodyMedium)
         LinearProgressIndicator(
@@ -475,19 +471,16 @@ private fun StorageUsage() {
  */
 @Composable
 private fun ChapterCachePreference() {
+    val dirs = remember { Injekt.get<ZoukanDirs>() }
+    val controller = remember(dirs) { DataSettingsController(dirs) }
     val scope = rememberCoroutineScope()
     var version by remember { mutableIntStateOf(0) }
-    val size by produceState(0L, version) { value = withContext(Dispatchers.IO) { Archives.cacheSize() } }
+    val size by produceState(0L, version) { value = controller.readChapterCacheSize() }
     SettingRow(localized(MR.strings.pref_clear_chapter_cache), localized(MR.strings.used_cache, formatSize(size)), onClick = {
         scope.launch {
-            try {
-                val deleted = withContext(Dispatchers.IO) { Archives.clearCache() }
-                Toasts.show(localizedPlural(DMR.plurals.cache_cleared_files_deleted, deleted, deleted))
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Toasts.error(localized(MR.strings.cache_delete_error), e)
-            }
+            controller.clearChapterCache()
+                .onSuccess { deleted -> Toasts.show(localizedPlural(DMR.plurals.cache_cleared_files_deleted, deleted, deleted)) }
+                .onFailure { Toasts.error(localized(MR.strings.cache_delete_error), it) }
             version++
         }
     })
@@ -496,6 +489,8 @@ private fun ChapterCachePreference() {
 /** Android's Export > Library List: the library's titles, authors and artists as CSV. */
 @Composable
 private fun ExportLibraryPreference() {
+    val dirs = remember { Injekt.get<ZoukanDirs>() }
+    val controller = remember(dirs) { DataSettingsController(dirs) }
     val window = LocalWindow.current?.window
     val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf(false) }
@@ -522,16 +517,9 @@ private fun ExportLibraryPreference() {
                 ) ?: return@TextButton
                 val options = LibraryCsv.Options(title, title && author, title && artist)
                 scope.launch {
-                    try {
-                        withContext(Dispatchers.IO) {
-                            target.writeText(LibraryCsv.generate(Injekt.get<GetFavorites>().await(), options))
-                        }
-                        Toasts.show(localized(MR.strings.library_exported))
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Toasts.error(localized(DMR.strings.could_not_export_the_library), e)
-                    }
+                    controller.exportLibraryCsv(target, options)
+                        .onSuccess { Toasts.show(localized(MR.strings.library_exported)) }
+                        .onFailure { Toasts.error(localized(DMR.strings.could_not_export_the_library), it) }
                 }
             }) { Text(localized(MR.strings.action_save)) }
         },

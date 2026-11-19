@@ -1,34 +1,35 @@
 package zoukan.desktop.ui.settings
 
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import org.junit.jupiter.api.Test
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 
-/** What settings search can find: the choices of a setting and the terms of sections that are not shown. */
-@OptIn(ExperimentalTestApi::class)
+/** What the declarative settings search index can find: choice labels and settings behind toggles. */
 class SettingsSearchCoverageTest {
 
     @Test
-    fun `a choice setting is found by any of its choices`() = runDesktopComposeUiTest {
-        val texts = SearchTexts()
-        setContent {
-            CompositionLocalProvider(LocalSearchTexts provides texts, LocalSearchQuery provides "Weekly") {
-                ChoiceSetting("Interval", 1, listOf(1 to "Daily", 2 to "Weekly")) {}
-            }
-        }
-        texts.texts shouldContain "Weekly"
-        onNodeWithText("Interval").assertExists()
+    fun `a choice setting is found by any of its choices`() {
+        val index = SettingsSearch.index()
+        val nord = SettingsSearch.search(localized(MR.strings.theme_nord), index)
+        nord.shouldNotBeEmpty()
+        nord.map { it.title } shouldContain localized(MR.strings.pref_app_theme)
+
+        val webDav = SettingsSearch.search(localized(KMR.strings.web_dav), index)
+        webDav.shouldNotBeEmpty()
+        webDav.map { it.title } shouldContain localized(DMR.strings.sync_service)
     }
 
     @Test
-    fun `search terms of a hidden section are reported`() = runDesktopComposeUiTest {
-        val texts = SearchTexts()
-        setContent {
-            CompositionLocalProvider(LocalSearchTexts provides texts) { SearchTerms("Use Japanese titles") }
-        }
-        texts.texts shouldContain "Use Japanese titles"
+    fun `settings behind conditional toggles remain searchable in the declarative index`() {
+        val index = SettingsSearch.index()
+        val japaneseTitles = SettingsSearch.search(localized(DMR.strings.use_japanese_titles), index)
+        japaneseTitles.map { it.category } shouldContain SettingsCategory.EHentai
+
+        val lockDays = SettingsSearch.search(localized(DMR.strings.lock_on_these_days), index)
+        lockDays.map { it.category } shouldContain SettingsCategory.Security
     }
 }

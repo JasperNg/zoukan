@@ -1,7 +1,6 @@
 package zoukan.desktop.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
@@ -34,7 +34,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -42,12 +41,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +64,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -76,7 +73,6 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
-import exh.md.utils.MdUtil
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -145,18 +141,9 @@ enum class SettingsCategory(val title: String, val subtitle: String, val icon: I
     About(localized(MR.strings.pref_category_about), localized(DMR.strings.zoukan, AppVersion.name), Icons.Outlined.Info),
 }
 
-/** The open settings page, kept while other tabs are open, as the Android app's settings navigator. */
-private var selectedCategory by mutableStateOf(SettingsCategory.Appearance)
-
-/** What settings search looks for; blank when the pages show. Kept while other tabs are open. */
-private var searchQuery by mutableStateOf("")
-
-/** The setting a search result opened, flashed on its page. */
-private var highlightedItem by mutableStateOf<Pair<SettingsCategory, Any>?>(null)
-
-/** Opens Settings on [category] the next time the Settings tab shows. */
+/** Opens Settings on [category] the next time the Settings tab shows, or switches the open tab. */
 fun openSettingsCategory(category: SettingsCategory) {
-    selectedCategory = category
+    SettingsScreenModel.openCategory(category)
 }
 
 /** How wide the list of pages is when [available] width is shared with the open page. */
@@ -173,6 +160,20 @@ internal fun settingsListWidth(available: Dp): Dp =
  */
 @Composable
 fun SettingsTab() {
+    val model = remember { SettingsScreenModel() }
+    DisposableEffect(model) {
+        onDispose { model.onDispose() }
+    }
+    SettingsTab(model)
+}
+
+@Composable
+fun SettingsTab(model: SettingsScreenModel) {
+    DisposableEffect(model) {
+        SettingsScreenModel.register(model)
+        onDispose { SettingsScreenModel.unregister(model) }
+    }
+    val state by model.state.collectAsState()
     val preferences = remember { Injekt.get<DesktopPreferences>() }
     val getCategories = remember { Injekt.get<GetCategories>() }
     val categories by getCategories.subscribe().collectAsState(emptyList())
@@ -182,20 +183,16 @@ fun SettingsTab() {
     val cbzPassword = remember { Injekt.get<CbzPassword>() }
     var passwordDialog by remember { mutableStateOf(false) }
     var hasPassword by remember { mutableStateOf(cbzPassword.isSet()) }
-    val mangaDexInstalled = remember { MdUtil.getEnabledMangaDexs(Injekt.get()).isNotEmpty() }
-    val pages = remember(mangaDexInstalled) {
-        SettingsCategory.entries.filter { it != SettingsCategory.MangaDex || mangaDexInstalled }
-    }
-    val selected = selectedCategory.takeIf { it in pages } ?: SettingsCategory.Appearance
+    val pages = state.pages
+    val selected = state.selectedCategory.takeIf { it in pages } ?: SettingsCategory.Appearance
 
-    // One page's settings; search lists every page's through it
     fun LazyListScope.settingsPage(page: SettingsCategory) {
         when (page) {
             SettingsCategory.Appearance -> appearanceSettings()
             SettingsCategory.Library -> {
                 settingsGroup(localized(MR.strings.label_library))
                 // Android's "Edit categories": the number of categories, and the screen that edits them
-                item {
+                item(key = "library-edit-categories") {
                     val count = categories.count { !it.isSystemCategory }
                     SettingRow(
                         localized(MR.strings.action_edit_categories),
@@ -222,7 +219,7 @@ fun SettingsTab() {
             SettingsCategory.MangaDex -> mangaDexSettings()
             SettingsCategory.Advanced -> {
                 settingsGroup(localized(MR.strings.pref_category_general))
-                item {
+                item(key = "advanced-tray") {
                     SwitchPreference(
                         localized(DMR.strings.keep_running_in_the_tray),
                         preferences.closeToTray(),
@@ -236,55 +233,37 @@ fun SettingsTab() {
         }
     }
 
-    val query = searchQuery
+    val query = state.searchQuery
     val searching = query.isNotBlank()
-
-    @Composable
-    fun SearchResults(pages: List<SettingsCategory>, query: String, onOpen: (SettingsCategory, Any) -> Unit) {
-        val state = rememberLazyListState()
-        // Every item but the end spacer has no height when nothing matches
-        val nothing by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.none { it.size > 0 && it.key != "search-end" } } }
-        Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
-                pages.forEach { SearchScope(this, it, query, onOpen).settingsPage(it) }
-                item(key = "search-end") { Spacer(Modifier.height(24.dp)) }
-            }
-            if (nothing) {
-                Text(
-                    localized(DMR.strings.no_settings_match, query.trim()),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.TopCenter).padding(32.dp),
-                )
-            }
-        }
-    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val listWidth = settingsListWidth(maxWidth)
         Row(Modifier.fillMaxSize()) {
             Surface(color = palerSurface(), modifier = Modifier.width(listWidth).fillMaxHeight()) {
-                SettingsCategoryList(pages, if (searching) null else selected) {
-                    searchQuery = ""
-                    selectedCategory = it
-                }
+                SettingsCategoryList(
+                    pages = pages,
+                    selected = if (searching) null else selected,
+                    searchQuery = query,
+                    onSearchQueryChange = model::setSearchQuery,
+                    onSelect = model::selectCategory,
+                )
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 if (searching) {
-                    ScreenHeader(localized(DMR.strings.search_results), subtitle = localized(DMR.strings.change_a_setting_here_or_open), showBack = false)
-                    SearchResults(pages, query) { page, id ->
-                        searchQuery = ""
-                        selectedCategory = page
-                        highlightedItem = page to id
-                    }
+                    ScreenHeader(localized(DMR.strings.search_results), showBack = false)
+                    SearchResults(
+                        results = state.searchResults,
+                        query = query,
+                        onOpen = model::openSearchResult,
+                    )
                 } else {
                     ScreenHeader(selected.title, showBack = false)
                     // A new list for each page, so each page opens at its top
                     key(selected) {
-                        val state = rememberLazyListState()
+                        val listState = rememberLazyListState()
                         val ids = remember { mutableListOf<Any>() }
-                        val highlight = highlightedItem?.takeIf { it.first == selected }?.second
-                        LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
+                        val highlight = state.highlightedItem?.takeIf { it.first == selected }?.second
+                        LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = listState) {
                             ids.clear()
                             HighlightScope(this, highlight, ids).settingsPage(selected)
                             item { Spacer(Modifier.height(24.dp)) }
@@ -293,10 +272,10 @@ fun SettingsTab() {
                         LaunchedEffect(highlight) {
                             if (highlight != null) {
                                 // The list's items are known once it has been laid out
-                                snapshotFlow { state.layoutInfo.totalItemsCount }.first { it > 0 }
-                                ids.indexOf(highlight).takeIf { it >= 0 }?.let { state.scrollToItem(it) }
+                                snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+                                ids.indexOf(highlight).takeIf { it >= 0 }?.let { listState.scrollToItem(it) }
                                 delay(2000)
-                                highlightedItem = null
+                                model.clearHighlight()
                             }
                         }
                     }
@@ -312,13 +291,48 @@ fun SettingsTab() {
     }
 }
 
+@Composable
+private fun SearchResults(
+    results: List<SettingsSearchEntry>,
+    query: String,
+    onOpen: (SettingsSearchEntry) -> Unit,
+) {
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        if (results.isEmpty()) {
+            Text(
+                localized(DMR.strings.no_settings_match, query.trim()),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.TopCenter).padding(32.dp),
+            )
+        } else {
+            LazyColumn(Modifier.fillMaxSize().widthIn(max = Spacing.SettingsPageMaxWidth), state = state) {
+                itemsIndexed(
+                    results,
+                    key = { index, entry -> "${entry.category.name}/$index/${entry.title}" },
+                ) { _, entry ->
+                    SearchResultRow(entry) { onOpen(entry) }
+                }
+                item(key = "search-end") { Spacer(Modifier.height(24.dp)) }
+            }
+        }
+    }
+}
+
 /** The settings list on the left: one row per page, the open page highlighted, as on Android. */
 @Composable
-private fun SettingsCategoryList(pages: List<SettingsCategory>, selected: SettingsCategory?, onSelect: (SettingsCategory) -> Unit) {
+private fun SettingsCategoryList(
+    pages: List<SettingsCategory>,
+    selected: SettingsCategory?,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSelect: (SettingsCategory) -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         // A back button when More opened Settings as its own screen
         ScreenHeader(localized(MR.strings.action_settings), color = Color.Transparent)
-        SearchField()
+        SearchField(searchQuery, onSearchQueryChange)
         LazyColumn(Modifier.fillMaxSize()) {
             items(pages, key = { it.name }) { page ->
                 val isSelected = page == selected
@@ -394,19 +408,19 @@ internal fun palerSurface(surface: Color): Color {
 /** Settings > Reader. */
 internal fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
     settingsGroup(localized(MR.strings.pref_category_reader))
-    item {
+    item(key = "reader-default-mode") {
         ChoicePreference(
             localized(MR.strings.pref_viewer_type),
             preferences.defaultReadingMode(),
             ReadingModes.all.map { it to ReadingModes.label(it) },
         )
     }
-    item { ChoicePreference(localized(DMR.strings.page_scaling_paged_modes), preferences.imageScaleType(), FitModes.all.map { it to FitModes.label(it) }) }
-    item {
+    item(key = "reader-image-scale-type") { ChoicePreference(localized(DMR.strings.page_scaling_paged_modes), preferences.imageScaleType(), FitModes.all.map { it to FitModes.label(it) }) }
+    item(key = "reader-theme") {
         ChoicePreference(localized(DMR.strings.background), preferences.readerTheme(), ReaderSettingChoices.themes)
     }
-    item { SliderPreference(localized(DMR.strings.webtoon_side_padding), preferences.webtoonSidePadding(), 0..25) { "$it%" } }
-    item { SwitchPreference(localized(MR.strings.pref_show_page_number), preferences.showPageNumber()) }
+    item(key = "reader-webtoon-side-padding") { SliderPreference(localized(DMR.strings.webtoon_side_padding), preferences.webtoonSidePadding(), 0..25) { "$it%" } }
+    item(key = "reader-show-page-number") { SwitchPreference(localized(MR.strings.pref_show_page_number), preferences.showPageNumber()) }
     // ZOUKAN -->
     readerBehaviourSettings(preferences)
     // ZOUKAN <--
@@ -421,12 +435,12 @@ private fun LazyListScope.downloadSettings(
 ) {
     settingsGroup(localized(MR.strings.pref_category_downloads))
     // ZOUKAN: the storage location and its folders are in Data and storage, as on Android
-    item { SwitchPreference(localized(MR.strings.save_chapter_as_cbz), downloadPreferences.saveChaptersAsCBZ()) }
-    item { SwitchPreference(localized(MR.strings.split_tall_images), downloadPreferences.splitTallImages(), localized(MR.strings.split_tall_images_summary)) }
-    item { SliderPreference(localized(MR.strings.pref_download_concurrent_sources), downloadPreferences.parallelSourceLimit(), 1..10) { "$it" } }
-    item { SliderPreference(localized(MR.strings.pref_download_concurrent_pages), downloadPreferences.parallelPageLimit(), 1..15) { "$it" } }
+    item(key = "downloads-cbz") { SwitchPreference(localized(MR.strings.save_chapter_as_cbz), downloadPreferences.saveChaptersAsCBZ()) }
+    item(key = "downloads-split-tall") { SwitchPreference(localized(MR.strings.split_tall_images), downloadPreferences.splitTallImages(), localized(MR.strings.split_tall_images_summary)) }
+    item(key = "downloads-concurrent-sources") { SliderPreference(localized(MR.strings.pref_download_concurrent_sources), downloadPreferences.parallelSourceLimit(), 1..10) { "$it" } }
+    item(key = "downloads-concurrent-pages") { SliderPreference(localized(MR.strings.pref_download_concurrent_pages), downloadPreferences.parallelPageLimit(), 1..15) { "$it" } }
     // ZOUKAN: "Include chapter URL hash" is in Advanced, as on Android
-    item {
+    item(key = "downloads-password-protect") {
         SwitchPreference(
             localized(DMR.strings.password_protect_downloads),
             securityPreferences.passwordProtectDownloads(),
@@ -435,7 +449,7 @@ private fun LazyListScope.downloadSettings(
             enabled = hasPassword,
         )
     }
-    item {
+    item(key = "downloads-set-password") {
         SettingRow(
             if (hasPassword) localized(DMR.strings.change_the_download_password) else localized(DMR.strings.set_the_download_password),
             localized(DMR.strings.kept_in_use_the_same_password, Injekt.get<zoukan.desktop.secrets.SecretStore>().name) +
@@ -443,7 +457,7 @@ private fun LazyListScope.downloadSettings(
             onClick = onEditPassword,
         )
     }
-    item {
+    item(key = "downloads-encryption") {
         ChoicePreference(
             localized(DMR.strings.encryption),
             securityPreferences.encryptionType(),
@@ -516,21 +530,21 @@ fun openFolder(folder: File) {
 
 /** The search field over the settings list, as the search button of the Android app's settings. */
 @Composable
-private fun SearchField() {
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
     // Ctrl/Cmd + F puts the cursor here, as in the other screens' search boxes
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     zoukan.desktop.ui.OnShortcut { action ->
         action == zoukan.desktop.ui.Shortcuts.Action.Find && runCatching { focus.requestFocus() }.isSuccess
     }
     OutlinedTextField(
-        value = searchQuery,
-        onValueChange = { searchQuery = it },
+        value = query,
+        onValueChange = onQueryChange,
         singleLine = true,
         placeholder = { Text(localized(MR.strings.action_search_settings)) },
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
         trailingIcon = {
-            if (searchQuery.isNotEmpty()) {
-                IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Outlined.Close, contentDescription = localized(DMR.strings.clear_search)) }
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Outlined.Close, contentDescription = localized(DMR.strings.clear_search)) }
             }
         },
         shape = Corners.ExtraLarge,
@@ -541,8 +555,8 @@ private fun SearchField() {
             .focusRequester(focus)
             // Escape clears the search before it goes back
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && searchQuery.isNotEmpty()) {
-                    searchQuery = ""
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && query.isNotEmpty()) {
+                    onQueryChange("")
                     true
                 } else {
                     false

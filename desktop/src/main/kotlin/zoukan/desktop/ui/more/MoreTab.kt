@@ -69,6 +69,7 @@ import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.UpdateErrorsScreen
 import zoukan.desktop.ui.settings.SettingsCategory
+import zoukan.desktop.ui.settings.SettingsScreenModel
 import zoukan.desktop.ui.settings.SettingsTab
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.stats.StatsScreen
@@ -162,7 +163,10 @@ object SettingsScreen : Screen {
     override val key: ScreenKey = "settings"
 
     @Composable
-    override fun Content() = SettingsTab()
+    override fun Content() {
+        val model = rememberScreenModel { SettingsScreenModel() }
+        SettingsTab(model)
+    }
 }
 
 /** Updates opened from More, when the rail hides it. */

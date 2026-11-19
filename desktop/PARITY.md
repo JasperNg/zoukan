@@ -126,7 +126,7 @@ between the two. "Exception" rows are the proposed differences; each says why.
 | Advanced: enable delegated sources, log level | Yes | Read at start, as on Android |
 | Advanced: hentai features toggle | Yes | Settings > E-Hentai |
 | Advanced: encrypt database | Yes, changed | The desktop database is always encrypted (SQLCipher), so there is no switch |
-| Settings search | Yes, changed | A field over the settings list matches every setting's title and summary. The results are the settings themselves, so they can be changed there; each one's page and group opens the page at it, highlighted, as on Android |
+| Settings search | Yes | A field over the settings list searches a declarative jump-to-page index of every setting's title, summary and choices (`SettingsSearch.kt`, `SettingsScreenModel`). Picking a result opens its `SettingsCategory` and scrolls to the item, highlighted, as on Android |
 | Advanced: onboarding guide | Yes | Opens the first-run setup again |
 | Advanced: notifications, battery optimization, hardware bitmap threshold, long strip decoding, display profile, extension installer, debug info and menu | No | Android system or Android image decoder settings with nothing to set on desktop |
 | Advanced: automatic app updates (Wi-Fi, charging) | No | The desktop updater has its own settings in About |

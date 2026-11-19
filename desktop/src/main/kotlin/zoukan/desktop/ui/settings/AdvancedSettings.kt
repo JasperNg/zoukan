@@ -13,7 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.network.PREF_DOH_360
 import eu.kanade.tachiyomi.network.PREF_DOH_ADGUARD
@@ -28,15 +28,10 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import exh.log.EHLogLevel
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.Headers
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.manga.interactor.GetFavorites
-import tachiyomi.domain.manga.interactor.ResetViewerFlags
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -48,19 +43,28 @@ import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.FileRequest
 import zoukan.desktop.app.SystemEffects
 import zoukan.desktop.app.Toasts
-import zoukan.desktop.browser.blocking.ContentBlocker
 import zoukan.desktop.browser.blocking.ContentBlockerPreferences
-import zoukan.desktop.browser.blocking.UserBlockLists
 import zoukan.desktop.compat.localized
-import zoukan.desktop.domain.RefreshManga
-import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.collectAsState
-import zoukan.extension.ExtensionTrust
 import zoukan.i18n.desktop.DMR
 import java.io.File
-import java.net.CookieHandler
-import java.net.CookieManager
+
+@Composable
+private fun rememberAdvancedController(): AdvancedSettingsController {
+    val networkPreferences = remember { Injekt.get<NetworkPreferences>() }
+    val store = remember { Injekt.get<PreferenceStore>() }
+    val exhPreferences = remember { Injekt.get<ExhPreferences>() }
+    val dirs = remember { Injekt.get<ZoukanDirs>() }
+    return remember(networkPreferences, store, exhPreferences, dirs) {
+        AdvancedSettingsController(
+            networkPreferences = networkPreferences,
+            contentBlockerPreferences = ContentBlockerPreferences(store),
+            exhPreferences = exhPreferences,
+            dirs = dirs,
+        )
+    }
+}
 
 /**
  * Settings > Advanced, as the Android app's SettingsAdvancedScreen, without its Android-only parts
@@ -72,13 +76,15 @@ fun LazyListScope.advancedSettings() {
     item(key = "advanced-crash-logs") { CrashLogsPreference() }
     // Android's "Onboarding guide": the first-run setup again
     item(key = "advanced-onboarding") {
-        SettingRow(localized(MR.strings.pref_onboarding_guide), onClick = { zoukan.desktop.ui.onboarding.Onboarding.reopen.value = true })
+        val controller = rememberAdvancedController()
+        SettingRow(localized(MR.strings.pref_onboarding_guide), onClick = controller::reopenOnboarding)
     }
 
     settingsGroup(localized(MR.strings.label_data))
     item(key = "advanced-reindex") {
+        val controller = rememberAdvancedController()
         SettingRow(localized(MR.strings.pref_invalidate_download_cache), localized(MR.strings.pref_invalidate_download_cache_summary), onClick = {
-            Injekt.get<DownloadManager>().invalidateCache()
+            controller.reindexDownloads()
             Toasts.show(localized(MR.strings.download_cache_invalidated))
         })
     }
@@ -93,22 +99,19 @@ fun LazyListScope.advancedSettings() {
 
     settingsGroup(localized(MR.strings.label_network))
     item(key = "advanced-cookies") {
+        val controller = rememberAdvancedController()
         SettingRow(localized(MR.strings.pref_clear_cookies), localized(DMR.strings.signs_you_out_of_sites_and), onClick = {
-            clearCookies()
+            controller.clearCookies()
             Toasts.show(localized(MR.strings.cookies_cleared))
         })
     }
     item(key = "advanced-webview") {
+        val controller = rememberAdvancedController()
         SettingRow(localized(MR.strings.pref_clear_webview_data), localized(DMR.strings.the_built_in_browsers_cookies_and), onClick = {
             AppScope.launch {
-                try {
-                    withContext(Dispatchers.IO) { clearBrowserData() }
-                    Toasts.show(localized(MR.strings.webview_data_deleted))
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Toasts.error(localized(MR.strings.cache_delete_error), e)
-                }
+                controller.clearWebViewData()
+                    .onSuccess { Toasts.show(localized(MR.strings.webview_data_deleted)) }
+                    .onFailure { Toasts.error(localized(MR.strings.cache_delete_error), it) }
             }
         })
     }
@@ -125,6 +128,7 @@ fun LazyListScope.advancedSettings() {
     // ZOUKAN <--
     item(key = "advanced-doh") {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
+        val controller = rememberAdvancedController()
         val value by preferences.dohProvider().collectAsState()
         ChoiceSetting(
             localized(MR.strings.pref_dns_over_https),
@@ -143,8 +147,7 @@ fun LazyListScope.advancedSettings() {
                 PREF_DOH_NJALLA to "Njalla",
             ),
         ) {
-            if (it != value) {
-                preferences.dohProvider().set(it)
+            if (controller.setDohProvider(it)) {
                 Toasts.show(localized(MR.strings.requires_app_restart))
             }
         }
@@ -152,31 +155,46 @@ fun LazyListScope.advancedSettings() {
     item(key = "advanced-user-agent") { UserAgentPreference() }
     item(key = "advanced-reset-user-agent") {
         val preferences = remember { Injekt.get<NetworkPreferences>() }
+        val controller = rememberAdvancedController()
         val userAgent by preferences.defaultUserAgent().collectAsState()
         SettingRow(
             localized(MR.strings.pref_reset_user_agent_string),
             enabled = userAgent != preferences.defaultUserAgent().defaultValue(),
             onClick = {
-                preferences.defaultUserAgent().delete()
-                Toasts.show(localized(MR.strings.requires_app_restart))
+                if (controller.resetUserAgent()) {
+                    Toasts.show(localized(MR.strings.requires_app_restart))
+                }
             },
         )
     }
 
     settingsGroup(localized(MR.strings.label_library), id = "advanced-library")
     item(key = "advanced-refresh-covers") {
-        val running by refreshingCovers.collectAsState()
+        val controller = rememberAdvancedController()
+        val running by controller.refreshingCoversState.collectAsState()
         SettingRow(
             localized(MR.strings.pref_refresh_library_covers),
             running,
             enabled = running == null,
-            onClick = ::refreshLibraryCovers,
+            onClick = {
+                AppScope.launch {
+                    val failed = controller.refreshLibraryCovers() ?: return@launch
+                    Toasts.show(
+                        if (failed == 0) {
+                            localized(DMR.strings.library_covers_refreshed)
+                        } else {
+                            localized(DMR.strings.library_covers_refreshed_failed, failed)
+                        },
+                    )
+                }
+            },
         )
     }
     item(key = "advanced-reset-viewer") {
+        val controller = rememberAdvancedController()
         SettingRow(localized(MR.strings.pref_reset_viewer_flags), localized(MR.strings.pref_reset_viewer_flags_summary), onClick = {
             AppScope.launch {
-                val success = zoukan.desktop.app.runCatchingCancellable { Injekt.get<ResetViewerFlags>().await() }.getOrDefault(false)
+                val success = controller.resetViewerFlags()
                 Toasts.show(if (success) localized(MR.strings.pref_reset_viewer_flags_success) else localized(MR.strings.pref_reset_viewer_flags_error))
             }
         })
@@ -211,8 +229,9 @@ fun LazyListScope.advancedSettings() {
 
     settingsGroup(localized(MR.strings.label_extensions))
     item(key = "advanced-revoke-trust") {
+        val controller = rememberAdvancedController()
         SettingRow(localized(MR.strings.ext_revoke_trust), localized(DMR.strings.extensions_trusted_on_this_computer_must), onClick = {
-            Injekt.get<ExtensionTrust>().revokeAll()
+            controller.revokeExtensionTrust()
             Toasts.show(localized(DMR.strings.revoked_trust_for_all_unknown_extensions))
         })
     }
@@ -228,7 +247,7 @@ fun LazyListScope.advancedSettings() {
     }
     // ZOUKAN -->
     item(key = "advanced-source-blacklist") {
-        val preferences = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>() }
+        val preferences = remember { Injekt.get<SourcePreferences>() }
         SwitchPreference(
             localized(SYMR.strings.enable_source_blacklist),
             preferences.enableSourceBlacklist(),
@@ -238,6 +257,7 @@ fun LazyListScope.advancedSettings() {
     // ZOUKAN <--
     item(key = "advanced-log-level") {
         val preferences = remember { Injekt.get<ExhPreferences>() }
+        val controller = rememberAdvancedController()
         val level by preferences.logLevel(false).collectAsState()
         ChoiceSetting(
             localized(SYMR.strings.log_level),
@@ -252,8 +272,7 @@ fun LazyListScope.advancedSettings() {
                 listOf(localized(SYMR.strings.log_minimal), localized(SYMR.strings.log_extra), localized(SYMR.strings.log_extreme)).getOrElse(level) { localized(SYMR.strings.log_minimal) },
             ),
         ) {
-            if (it != level) {
-                preferences.logLevel(false).set(it)
+            if (controller.setLogLevel(it)) {
                 Toasts.show(localized(MR.strings.requires_app_restart))
             }
         }
@@ -264,6 +283,7 @@ fun LazyListScope.advancedSettings() {
 @Composable
 private fun UserAgentPreference() {
     val preferences = remember { Injekt.get<NetworkPreferences>() }
+    val controller = rememberAdvancedController()
     val userAgent by preferences.defaultUserAgent().collectAsState()
     var editing by remember { mutableStateOf(false) }
     SettingRow(localized(MR.strings.pref_user_agent_string), userAgent, onClick = { editing = true })
@@ -275,16 +295,14 @@ private fun UserAgentPreference() {
         text = { OutlinedTextField(value, { value = it }, singleLine = false) },
         confirmButton = {
             TextButton(onClick = {
-                try {
-                    // OkHttp checks for valid values internally
-                    Headers.Builder().add("User-Agent", value)
-                    if (value != userAgent) {
-                        preferences.defaultUserAgent().set(value)
+                when (controller.setUserAgent(value)) {
+                    AdvancedSettingsController.UserAgentResult.Unchanged -> editing = false
+                    AdvancedSettingsController.UserAgentResult.UpdatedRestartRequired -> {
                         Toasts.show(localized(MR.strings.requires_app_restart))
+                        editing = false
                     }
-                    editing = false
-                } catch (_: IllegalArgumentException) {
-                    Toasts.show(localized(MR.strings.error_user_agent_string_invalid))
+                    AdvancedSettingsController.UserAgentResult.Invalid ->
+                        Toasts.show(localized(MR.strings.error_user_agent_string_invalid))
                 }
             }) { Text(localized(MR.strings.action_ok)) }
         },
@@ -296,6 +314,7 @@ private fun UserAgentPreference() {
 @Composable
 private fun BlockListsPreference() {
     val preferences = remember { ContentBlockerPreferences(Injekt.get()) }
+    val controller = rememberAdvancedController()
     val enabled by preferences.enabled().collectAsState()
     val urls by preferences.listUrls().collectAsState()
     var editing by remember { mutableStateOf(false) }
@@ -307,12 +326,7 @@ private fun BlockListsPreference() {
     )
     if (!editing) return
     BlockListsDialog(urls, onDismiss = { editing = false }) { value ->
-        // Only https addresses are kept, one per line
-        val cleaned = UserBlockLists.parseUrls(value).joinToString("\n")
-        if (cleaned != urls) {
-            preferences.listUrls().set(cleaned)
-            ContentBlocker.refreshNow()
-        }
+        controller.updateBlockLists(value)
         editing = false
     }
 }
@@ -333,20 +347,16 @@ internal fun BlockListsDialog(initial: String, onDismiss: () -> Unit, onConfirm:
 /** Android's "Share crash logs": the environment, the crash reports and the log, saved to a file. */
 @Composable
 private fun CrashLogsPreference() {
+    val controller = rememberAdvancedController()
     val window = LocalWindow.current?.window
     SettingRow(localized(MR.strings.pref_dump_crash_logs), localized(MR.strings.pref_dump_crash_logs_summary), onClick = {
         val target = SystemEffects.current.pickFile(
             FileRequest(window, localized(MR.strings.pref_dump_crash_logs), save = true, fileName = "komikku_crash_logs.txt"),
         ) ?: return@SettingRow
         AppScope.launch {
-            try {
-                withContext(Dispatchers.IO) { target.writeText(crashLogs(Injekt.get())) }
-                Toasts.show(localized(DMR.strings.saved_crash_logs_to, target.name))
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Toasts.error(localized(DMR.strings.could_not_save_the_crash_logs), e)
-            }
+            controller.saveCrashLogs(target)
+                .onSuccess { Toasts.show(localized(DMR.strings.saved_crash_logs_to, target.name)) }
+                .onFailure { Toasts.error(localized(DMR.strings.could_not_save_the_crash_logs), it) }
         }
     })
 }
@@ -371,54 +381,6 @@ internal fun crashLogs(dirs: ZoukanDirs): String = buildString {
 
 /** Android's networkHelper.cookieJar.removeAll(), for the app's and Chromium's cookies. */
 internal fun clearCookies() {
-    (CookieHandler.getDefault() as? CookieManager)?.cookieStore?.removeAll()
-    runCatching { Injekt.get<NetworkHelper>().cookieJar.removeAll() }
-    deleteBrowserCookies()
-}
-
-private fun deleteBrowserCookies() {
-    // Now when Chromium is running, else when it starts: it keeps its cookies on disk
-    xyz.nulldev.androidcompat.webkit.CefCookieSync.deleteFromCef("", "")
-}
-
-/**
- * Android's "Clear WebView data": the built-in browser's cookies, then its cache and site data
- * (local storage, cached pages). Chromium holds some files while it runs; those stay until the
- * next time.
- */
-private fun clearBrowserData() {
-    deleteBrowserCookies()
-    zoukan.desktop.browser.BrowserProfileCleanup.clearAll(
-        Injekt.get<ZoukanDirs>().browserCache,
-        // A running Chromium holds files open (on Windows they cannot be deleted) and makes some
-        // again at once (its lock files, Local State), so what is left then is no failure
-        chromiumMayHoldFiles = zoukan.desktop.browser.JcefRuntime.startedInThisProcess,
-    )
-}
-
-/** Android's MetadataUpdateJob: each library entry's details and cover, again from its source. */
-private val refreshingCovers = MutableStateFlow<String?>(null)
-
-private fun refreshLibraryCovers() {
-    if (refreshingCovers.value != null) return
-    refreshingCovers.value = localized(DMR.strings.refreshing_covers)
-    AppScope.launch {
-        try {
-            val favorites = Injekt.get<GetFavorites>().await()
-            val refresh = Injekt.get<RefreshManga>()
-            var failed = 0
-            favorites.forEachIndexed { index, manga ->
-                refreshingCovers.value = localized(DMR.strings.refreshing_covers_of, index + 1, favorites.size)
-                zoukan.desktop.app.runCatchingCancellable {
-                    zoukan.desktop.ui.common.Images.forget(manga)
-                    val updated = refresh(manga, fetchDetails = true, fetchChapters = false).manga
-                    zoukan.desktop.ui.common.Images.forget(updated)
-                }.onFailure { failed++ }
-            }
-            zoukan.desktop.ui.common.Images.loader.memoryCache?.clear()
-            Toasts.show(if (failed == 0) localized(DMR.strings.library_covers_refreshed) else localized(DMR.strings.library_covers_refreshed_failed, failed))
-        } finally {
-            refreshingCovers.value = null
-        }
-    }
+    AdvancedSettingsController.clearAppCookies()
+    AdvancedSettingsController.deleteBrowserCookies()
 }

@@ -30,19 +30,13 @@ import exh.favorites.FavoritesSyncHelper
 import exh.favorites.FavoritesSyncStatus
 import exh.source.ExhPreferences
 import exh.uconfig.EHConfigurator
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import logcat.LogPriority
-import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.DeleteFavoriteEntries
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
@@ -63,6 +57,18 @@ fun LazyListScope.ehSettings() {
 private fun EhSettings() {
     val preferences = remember { Injekt.get<ExhPreferences>() }
     val login = remember { Injekt.get<EhLogin>() }
+    val controller = remember(preferences, login) {
+        EhSettingsController(
+            preferences = preferences,
+            loginAction = login::login,
+            cookieLoginAction = login::loginWithCookies,
+            logoutAction = login::logout,
+            configureSiteAction = { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() },
+            runGalleryUpdateAction = { Injekt.get<EhGalleryUpdater>().run() },
+            runFavoritesSyncAction = { Injekt.get<FavoritesSyncHelper>().runSync(AppScope) },
+            resetFavoritesSyncAction = { Injekt.get<DeleteFavoriteEntries>().await() },
+        )
+    }
     val enabled by preferences.isHentaiEnabled().collectAsState()
     val exhentai by preferences.enableExhentai().collectAsState()
     val scope = rememberCoroutineScope()
@@ -75,37 +81,20 @@ private fun EhSettings() {
             preferences.isHentaiEnabled(),
             localized(DMR.strings.adds_the_built_in_e_hentai),
         )
-        if (!enabled) {
-            // Search finds the settings behind the switch, which opens the page at it
-            SearchTerms(
-                "ExHentai",
-                localized(DMR.strings.use_japanese_titles),
-                localized(DMR.strings.original_images),
-                localized(DMR.strings.watched_list_by_default),
-                localized(DMR.strings.enhanced_e_hentai_view),
-                localized(DMR.strings.incognito),
-                localized(SYMR.strings.eh_image_quality),
-                "Hentai@Home",
-                localized(DMR.strings.tag_filtering_threshold),
-                localized(DMR.strings.tag_watching_threshold),
-                localized(DMR.strings.language_filtering),
-                localized(DMR.strings.front_page_categories),
-            )
-            return@Column
-        }
+        if (!enabled) return@Column
         SettingRow(
             "ExHentai",
             if (exhentai) localized(DMR.strings.signed_in_exhentai_sources_are_in) else localized(DMR.strings.sign_in_with_an_e_hentai),
         ) {
             when {
                 busy -> CircularProgressIndicator(Modifier.size(24.dp))
-                exhentai -> TextButton(onClick = { login.logout() }) { Text(localized(DMR.strings.sign_out)) }
+                exhentai -> TextButton(onClick = { controller.logout() }) { Text(localized(DMR.strings.sign_out)) }
                 else -> Row {
                     TextButton(onClick = { cookieDialog = true }) { Text(localized(DMR.strings.use_cookies)) }
                     OutlinedButton(onClick = {
                         busy = true
                         scope.launch {
-                            zoukan.desktop.app.runCatchingCancellable { login.login() }
+                            controller.signIn()
                                 .onSuccess { if (it) Toasts.show(localized(DMR.strings.signed_in_to_exhentai)) }
                                 .onFailure { Toasts.error(localized(DMR.strings.signing_in_to_exhentai_failed), it) }
                             busy = false
@@ -123,9 +112,9 @@ private fun EhSettings() {
         )
         SwitchPreference(localized(DMR.strings.enhanced_e_hentai_view), preferences.enhancedEHentaiView(), localized(DMR.strings.show_gallery_details_rating_tags_uploader))
         SwitchPreference(localized(DMR.strings.incognito), preferences.ehIncognitoMode(), localized(DMR.strings.do_not_add_read_galleries_to))
-        if (exhentai) EhSiteSettings(preferences)
-        EhUpdateSettings(preferences)
-        if (exhentai) EhFavoritesSync(preferences)
+        if (exhentai) EhSiteSettings(preferences, controller)
+        EhUpdateSettings(preferences, controller)
+        if (exhentai) EhFavoritesSync(preferences, controller)
     }
 
     if (cookieDialog) {
@@ -153,19 +142,18 @@ private fun EhSettings() {
                         busy = true
                         error = null
                         scope.launch {
-                            zoukan.desktop.app.runCatchingCancellable { login.loginWithCookies(memberId, passHash, igneous) }
-                                .onSuccess { ok ->
-                                    if (ok) {
-                                        cookieDialog = false
-                                        Toasts.show(localized(DMR.strings.signed_in_to_exhentai))
-                                    } else {
-                                        error = localized(DMR.strings.these_cookies_did_not_sign_in)
-                                    }
+                            when (controller.signInWithCookies(memberId, passHash, igneous)) {
+                                EhSettingsController.CookieLoginResult.Success -> {
+                                    cookieDialog = false
+                                    Toasts.show(localized(DMR.strings.signed_in_to_exhentai))
                                 }
-                                .onFailure {
-                                    logcat(LogPriority.WARN, it) { "Signing in failed" }
+                                EhSettingsController.CookieLoginResult.Rejected -> {
+                                    error = localized(DMR.strings.these_cookies_did_not_sign_in)
+                                }
+                                is EhSettingsController.CookieLoginResult.Failed -> {
                                     error = localized(DMR.strings.could_not_sign_in)
                                 }
+                            }
                             busy = false
                         }
                     },
@@ -194,7 +182,7 @@ internal fun EhCookieFields(
 
 /** The site settings Zoukan uploads to the account (EHConfigurator), as Android's E-Hentai settings. */
 @Composable
-private fun EhSiteSettings(preferences: ExhPreferences) {
+private fun EhSiteSettings(preferences: ExhPreferences, controller: EhSettingsController) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var languages by remember { mutableStateOf(false) }
@@ -221,7 +209,7 @@ private fun EhSiteSettings(preferences: ExhPreferences) {
             onClick = {
                 busy = true
                 scope.launch {
-                    zoukan.desktop.app.runCatchingCancellable { withContext(Dispatchers.IO) { EHConfigurator(Injekt.get<android.app.Application>()).configureAll() } }
+                    controller.applySiteSettings()
                         .onSuccess { Toasts.show(localized(DMR.strings.e_hentai_settings_applied)) }
                         .onFailure { Toasts.error(localized(DMR.strings.applying_the_e_hentai_settings_failed), it) }
                     busy = false
@@ -229,8 +217,8 @@ private fun EhSiteSettings(preferences: ExhPreferences) {
             },
         ) { if (busy) CircularProgressIndicator(Modifier.size(24.dp)) }
     }
-    if (languages) LanguagesDialog(preferences) { languages = false }
-    if (categories) CategoriesDialog(preferences) { categories = false }
+    if (languages) LanguagesDialog(controller) { languages = false }
+    if (categories) CategoriesDialog(controller) { categories = false }
 }
 
 private val EH_LANGUAGES = listOf(
@@ -274,8 +262,8 @@ internal object EhSettingsFormat {
 
 /** "original*translated*rewrite" per language, one line each; Japanese has no "original" filter. */
 @Composable
-private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) {
-    val rows = remember { mutableStateListOf(*EhSettingsFormat.parseLanguages(preferences.exhSettingsLanguages().get()).toTypedArray()) }
+private fun LanguagesDialog(controller: EhSettingsController, onDismiss: () -> Unit) {
+    val rows = remember { mutableStateListOf(*controller.loadLanguages().toTypedArray()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(localized(DMR.strings.language_filtering)) },
@@ -304,7 +292,7 @@ private fun LanguagesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) 
         },
         confirmButton = {
             TextButton(onClick = {
-                preferences.exhSettingsLanguages().set(EhSettingsFormat.formatLanguages(rows))
+                controller.saveLanguages(rows)
                 onDismiss()
             }) { Text(localized(MR.strings.action_ok)) }
         },
@@ -318,8 +306,8 @@ private val EH_CATEGORIES = listOf(
 
 /** Stored as "is hidden" per category, comma separated. */
 @Composable
-private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit) {
-    val shown = remember { mutableStateListOf(*EhSettingsFormat.parseShownCategories(preferences.exhEnabledCategories().get()).toTypedArray()) }
+private fun CategoriesDialog(controller: EhSettingsController, onDismiss: () -> Unit) {
+    val shown = remember { mutableStateListOf(*controller.loadShownCategories().toTypedArray()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(localized(DMR.strings.front_page_categories)) },
@@ -335,7 +323,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
         },
         confirmButton = {
             TextButton(onClick = {
-                preferences.exhEnabledCategories().set(EhSettingsFormat.formatShownCategories(shown))
+                controller.saveShownCategories(shown)
                 onDismiss()
             }) { Text(localized(MR.strings.action_ok)) }
         },
@@ -345,7 +333,7 @@ private fun CategoriesDialog(preferences: ExhPreferences, onDismiss: () -> Unit)
 
 /** Gallery updates (EHentaiUpdateWorker on Android). */
 @Composable
-private fun EhUpdateSettings(preferences: ExhPreferences) {
+private fun EhUpdateSettings(preferences: ExhPreferences, controller: EhSettingsController) {
     val updater = remember { Injekt.get<EhGalleryUpdater>() }
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
@@ -373,14 +361,8 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
                 busy = true
                 // In the app's scope, so leaving Settings doesn't stop the update partway
                 val job = AppScope.launch {
-                    try {
-                        updater.run()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        e.rethrowIfVmFailure()
-                        Toasts.error(localized(DMR.strings.updating_galleries_failed), e)
-                    }
+                    controller.updateGalleriesNow()
+                        .onFailure { Toasts.error(localized(DMR.strings.updating_galleries_failed), it) }
                 }
                 scope.launch {
                     job.join()
@@ -393,7 +375,7 @@ private fun EhUpdateSettings(preferences: ExhPreferences) {
 
 /** Favorites sync between the ExHentai favorites and the library categories. */
 @Composable
-private fun EhFavoritesSync(preferences: ExhPreferences) {
+private fun EhFavoritesSync(preferences: ExhPreferences, controller: EhSettingsController) {
     val sync = remember { Injekt.get<FavoritesSyncHelper>() }
     val status by sync.status.collectAsState()
     val scope = rememberCoroutineScope()
@@ -402,9 +384,8 @@ private fun EhFavoritesSync(preferences: ExhPreferences) {
         SettingRow(
             localized(DMR.strings.sync_favorites),
             localized(DMR.strings.two_way_sync_of_your_exhentai, favoritesSyncText(status)),
-            enabled = status is FavoritesSyncStatus.Idle || status is FavoritesSyncStatus.SyncError || status is FavoritesSyncStatus.CompleteWithErrors ||
-                status is FavoritesSyncStatus.BadLibraryState,
-            onClick = { sync.runSync(AppScope) },
+            enabled = controller.canStartFavoritesSync(status),
+            onClick = { controller.startFavoritesSync(status) },
         )
         SwitchPreference(localized(SYMR.strings.disable_favorites_uploading), preferences.exhReadOnlySync(), localized(DMR.strings.favorites_are_only_downloaded_from_exhentai))
         SwitchPreference(localized(SYMR.strings.ignore_sync_errors), preferences.exhLenientSync())
@@ -418,9 +399,9 @@ private fun EhFavoritesSync(preferences: ExhPreferences) {
             confirmButton = {
                 TextButton(onClick = {
                     reset = false
-                    scope.launch(Dispatchers.IO) {
-                        Injekt.get<DeleteFavoriteEntries>().await()
-                        Toasts.show(localized(SYMR.strings.sync_state_reset))
+                    scope.launch {
+                        controller.resetFavoritesSyncState()
+                            .onSuccess { Toasts.show(localized(SYMR.strings.sync_state_reset)) }
                     }
                 }) { Text(localized(MR.strings.action_reset)) }
             },

@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
@@ -342,6 +343,46 @@ object ReaderSettingRows {
     }
 
     private val invertChoices = ReaderNavigation.inverts.map { it.first.name to it.second }
+
+    /** Declarative search entries for all reader settings beyond the top five in [SettingsTab]. */
+    internal fun searchEntries(): List<SettingsSearchEntry> {
+        val rows = settings(DesktopPreferences(InMemoryPreferenceStore()))
+        var group: String? = null
+        return rows.map { row ->
+            when (row) {
+                is ReaderSettingRow.Group -> {
+                    group = row.title
+                    null
+                }
+                is ReaderSettingRow.Switch -> SettingsSearchEntry(
+                    category = SettingsCategory.Reader,
+                    group = group,
+                    title = row.title,
+                    summary = row.subtitle,
+                    itemKey = "reader-${row.preference.key()}",
+                )
+                is ReaderSettingRow.Choice<*> -> SettingsSearchEntry(
+                    category = SettingsCategory.Reader,
+                    group = group,
+                    title = row.title,
+                    keywords = row.choices.map { it.second },
+                    itemKey = "reader-${row.preference.key()}",
+                )
+                is ReaderSettingRow.Slider -> SettingsSearchEntry(
+                    category = SettingsCategory.Reader,
+                    group = group,
+                    title = row.title,
+                    itemKey = "reader-${row.preference.key()}",
+                )
+                is ReaderSettingRow.Custom -> SettingsSearchEntry(
+                    category = SettingsCategory.Reader,
+                    group = group,
+                    title = localized(MR.strings.pref_flash_duration),
+                    itemKey = "reader-${row.preference.key()}",
+                )
+            }
+        }.filterNotNull()
+    }
 }
 
 /** A heading in the reader's settings sheet. */

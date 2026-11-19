@@ -30,10 +30,9 @@ import kotlin.math.roundToInt
  */
 fun LazyListScope.readerBehaviourSettings(preferences: DesktopPreferences) {
     ReaderSettingRows.settings(preferences).forEach { row ->
-        if (row is ReaderSettingRow.Group) {
-            settingsGroup(row.title)
-        } else {
-            item { ReaderSettingRowView(row) }
+        when (row) {
+            is ReaderSettingRow.Group -> settingsGroup(row.title)
+            is ReaderSettingRow.Keyed -> item(key = "reader-${row.preference.key()}") { ReaderSettingRowView(row) }
         }
     }
 }
