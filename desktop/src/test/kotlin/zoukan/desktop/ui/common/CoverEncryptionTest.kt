@@ -262,18 +262,49 @@ class CoverEncryptionTest {
             file.parentFile.mkdirs()
             file.writeBytes(image)
             val start = java.util.concurrent.CountDownLatch(1)
+            var deleted = false
             val reader = kotlin.concurrent.thread {
                 start.await()
                 runCatching { CustomCovers.read(file) }
             }
             val deleter = kotlin.concurrent.thread {
                 start.await()
-                CustomCovers.delete(7)
+                deleted = CustomCovers.delete(7)
             }
             start.countDown()
             reader.join()
             deleter.join()
+            deleted shouldBe true
             file.exists() shouldBe false
+        }
+    }
+
+    @Test
+    fun `a plain custom cover replaced while it is read and rewritten keeps the new cover`() {
+        val file = CustomCovers.file(13)
+        val other = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 9, 9, 9)
+        repeat(200) {
+            file.parentFile.mkdirs()
+            file.writeBytes(image)
+            val start = java.util.concurrent.CountDownLatch(1)
+            var readResult: Result<ByteArray>? = null
+            var saveResult: Result<Unit>? = null
+            val reader = kotlin.concurrent.thread {
+                start.await()
+                readResult = runCatching { CustomCovers.read(file) }
+            }
+            val saver = kotlin.concurrent.thread {
+                start.await()
+                saveResult = runCatching { CustomCovers.save(13, other) }
+            }
+            start.countDown()
+            reader.join()
+            saver.join()
+            saveResult!!.getOrThrow()
+            val readBytes = readResult!!.getOrThrow()
+            (readBytes.contentEquals(image) || readBytes.contentEquals(other)) shouldBe true
+            cipher.isEncoded(file.readBytes()) shouldBe true
+            CustomCovers.read(file) shouldBe other
         }
     }
 

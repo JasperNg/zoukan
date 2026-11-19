@@ -33,8 +33,9 @@ object CustomCovers {
     const val FOLDER = "custom"
 
     /**
-     * Writes, copies, deletes and lazy rewrites of custom covers, so a rewrite never puts back a
-     * cover just replaced or deleted.
+     * Reads, writes, copies, deletes and lazy rewrites of custom covers, so a rewrite never puts
+     * back a cover just replaced or deleted, and a read never holds the file open while another
+     * operation deletes or replaces it.
      */
     private val lock = Any()
 
@@ -96,23 +97,21 @@ object CustomCovers {
     }
 
     /**
-     * The image of the custom cover [file], decrypted. A plain one (saved before encryption) is
-     * rewritten encrypted; when that fails it stays plain and is tried again next time.
+     * The image of the custom cover [file], decrypted. Held under [lock] so an open read handle
+     * cannot block a concurrent delete or replace on Windows; a plain cover (saved before
+     * encryption) is rewritten encrypted in the same critical section, and stays plain if that fails.
      */
-    fun read(file: File): ByteArray {
-        val codec = codec ?: return file.readBytes()
+    fun read(file: File): ByteArray = synchronized(lock) {
+        val codec = codec ?: return@synchronized file.readBytes()
         val contents = EncryptedFiles.read(file, codec)
         if (!contents.encrypted) {
             try {
-                synchronized(lock) {
-                    // Unless it was replaced since it was read
-                    if (file.readBytes().contentEquals(contents.bytes)) EncryptedFiles.write(file, contents.bytes, codec)
-                }
+                EncryptedFiles.write(file, contents.bytes, codec)
             } catch (e: IOException) {
                 logcat(LogPriority.WARN, e) { "Could not encrypt the custom cover ${file.name}; it stays as it is" }
             }
         }
-        return contents.bytes
+        contents.bytes
     }
 
     /**
