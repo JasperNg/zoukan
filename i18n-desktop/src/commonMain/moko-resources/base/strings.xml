@@ -977,6 +977,8 @@
     <string name="screen_action_failed_remove_store">Removing the extension store failed</string>
     <string name="safety_backup_failed_title">Safety backup failed</string>
     <string name="safety_backup_too_large">The library is too large to back up in the memory Zoukan has.</string>
+    <string name="safety_backup_took_too_long">Saving the backup took too long.</string>
+    <string name="safety_backup_could_not_be_written">The backup could not be written. Zoukan\'s log in the log folder has the details.</string>
     <string name="safety_backup_failed_text">Zoukan could not save a backup of the library before this change, so it cannot be undone with Restore backup.\n\n%1$s\n\nContinue without a backup?</string>
     <string name="continue_without_backup">Continue without a backup</string>
     <string name="saving_safety_backup">Saving a safety backup…</string>

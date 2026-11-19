@@ -16,6 +16,7 @@ import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -61,6 +62,7 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.NoStubSources
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.backup.SafetySnapshot
+import zoukan.desktop.compat.localized
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureServer
@@ -70,6 +72,7 @@ import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.UserMessages
 import zoukan.desktop.testing.fakes.FailingSqlDriver
 import zoukan.desktop.track.MapPreferenceStore
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -504,7 +507,9 @@ class SyncDatabaseFaultsTest {
 
         manager().syncData()
 
-        messages.awaitError { it.text.contains("No space left on device") }
+        // In the app's words: the error's own message can name the data folder (SafetySnapshot.errorText)
+        messages.awaitError { it.text.contains(localized(DMR.strings.safety_backup_could_not_be_written)) }
+            .text shouldNotContain "No space left on device"
         // Uploaded before the snapshot was tried; nothing written here
         remoteUrls() shouldBe setOf("/local", "/remote")
         library() shouldBe mapOf("/local" to 0L)

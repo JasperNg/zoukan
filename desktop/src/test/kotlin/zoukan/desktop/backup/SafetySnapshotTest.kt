@@ -3,14 +3,16 @@ package zoukan.desktop.backup
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
 import java.time.LocalDateTime
@@ -70,8 +72,35 @@ class SafetySnapshotTest {
             asked = it
             false
         } shouldBe false
-        asked!! shouldContain "disk full"
+        // In the app's words; the error itself is in the app log
+        asked shouldBe localized(DMR.strings.safety_backup_could_not_be_written)
         snapshots.guard(SnapshotReason.CLEAR_DATABASE) { true } shouldBe true
+    }
+
+    @Test
+    fun `a failed write's message never reaches the prompt or the sync notification, which can show paths`() {
+        // An I/O error names the file, and so the data folder and the user's name; the text also goes
+        // to the OS notification centre when sync fails
+        val path = File(root, "backups/safety/safety_sync_2026-01-01_10-00-00.tachibk").path
+        val texts = listOf(
+            java.nio.file.AccessDeniedException(path),
+            java.nio.file.FileSystemException(path, null, "No space left on device"),
+            IOException("Could not write $path"),
+            IllegalStateException(path),
+        ).map { SafetySnapshot.errorText(it) }
+
+        texts.forEach { text ->
+            text shouldNotContain root.path
+            text shouldBe localized(DMR.strings.safety_backup_could_not_be_written)
+        }
+    }
+
+    @Test
+    fun `a write that took too long says so in the app's words`() = runBlocking<Unit> {
+        val error = snapshot(write = { awaitCancellation() }, timeout = 200).take(SnapshotReason.SYNC).exceptionOrNull()!!
+
+        // Not kotlinx's "Timed out waiting for 200 ms"
+        SafetySnapshot.errorText(error) shouldBe localized(DMR.strings.safety_backup_took_too_long)
     }
 
     @Test
@@ -86,7 +115,7 @@ class SafetySnapshotTest {
             false
         } shouldBe false
         // Said in the app's words, not the JVM's ("Java heap space")
-        asked shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.safety_backup_too_large)
+        asked shouldBe localized(DMR.strings.safety_backup_too_large)
     }
 
     @Test

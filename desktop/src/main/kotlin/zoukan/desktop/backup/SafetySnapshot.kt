@@ -142,10 +142,16 @@ class SafetySnapshot(
             write = { file -> DesktopBackups(Injekt.get<ZoukanDirs>().android).create(file, BackupOptions(), replaceExisting = false) },
         )
 
-        /** What a failure says, short enough for a dialog; running out of memory in the app's words, not the JVM's. */
-        internal fun errorText(error: Throwable): String {
-            if (error is SnapshotTooLargeException) return localized(DMR.strings.safety_backup_too_large)
-            return (error.message?.takeIf { it.isNotBlank() } ?: error::class.simpleName.orEmpty()).take(300)
+        /**
+         * What a failure says, in the app's words: for the prompt before a change and for the sync
+         * notification, which the OS notification centre can show and keep. Never the error's own
+         * message, which can name the backup file and so the data folder and the user's name; [take]
+         * logs it to the app log.
+         */
+        internal fun errorText(error: Throwable): String = when (error) {
+            is SnapshotTooLargeException -> localized(DMR.strings.safety_backup_too_large)
+            is TimeoutCancellationException -> localized(DMR.strings.safety_backup_took_too_long)
+            else -> localized(DMR.strings.safety_backup_could_not_be_written)
         }
 
         /**
