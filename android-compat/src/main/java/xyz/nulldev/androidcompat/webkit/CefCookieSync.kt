@@ -207,32 +207,71 @@ object CefCookieSync {
         // Before the app's cookies: those set again since are copied back after their deletion
         applyPendingDeletions(cef)
         val expiries = store as? CookieExpirySource
-        val copied = HashSet<SyncedCookie>()
+        val copiedByHost = HashMap<String, MutableSet<SyncedCookie>>()
         store.cookiesByUri().forEach { (uri, cookie) ->
             runCatching {
                 // A cookie without a Domain attribute is host-only: Chromium keeps it so
                 // when its domain is empty, and would send it to every subdomain otherwise
-                val host = (cookie.domain ?: uri.host).trimStart('.')
+                val cookieDomain = cookie.domain?.takeIf { it.isNotBlank() }.orEmpty()
+                val host = normalizeHost(cookieDomain.ifEmpty { uri.host.orEmpty() })
+                if (host.isEmpty()) return@runCatching
                 // A filter that fails leaves the cookie out: it is only not copied
                 if (includeHost != null && !runCatching { includeHost(host) }.getOrDefault(false)) return@runCatching
                 val expiresAt = expiresAt(cookie, expiries?.expiresAt(cookie), System.currentTimeMillis())
-                cef.setCookie("https://$host", cookie.toCefCookie(cookie.domain.orEmpty(), expiresAt))
-                copied += cookie.toSynced(uri)
+                cef.setCookie("https://$host", cookie.toCefCookie(cookieDomain, expiresAt))
+                copiedByHost.getOrPut(host) { HashSet() } += cookie.toSynced(uri)
             }.onFailure { logger.warn(it) { "Copying cookie ${cookie.name} to Chromium failed" } }
         }
         synchronized(copiedToCef) {
-            copiedToCef.clear()
-            copiedToCef.addAll(copied)
+            if (includeHost == null) {
+                copiedToCef.clear()
+            } else {
+                copiedToCef.keys.removeAll { bucketHost ->
+                    runCatching { includeHost(bucketHost) }.getOrDefault(false)
+                }
+            }
+            copiedByHost.forEach { (host, cookies) ->
+                copiedToCef[host] = cookies
+            }
         }
     }
 
-    /** What the last [copyToCef] put in Chromium. */
-    private val copiedToCef = HashSet<SyncedCookie>()
+    /** What the last [copyToCef] put in Chromium, partitioned by normalized host. */
+    private val copiedToCef = HashMap<String, MutableSet<SyncedCookie>>()
 
-    internal fun copiedToCefSnapshot(): Set<SyncedCookie> = synchronized(copiedToCef) { copiedToCef.toSet() }
+    internal fun copiedToCefSnapshot(): Set<SyncedCookie> =
+        synchronized(copiedToCef) { copiedToCef.values.flatMapTo(HashSet()) { it } }
+
+    internal fun copiedToCefSnapshot(host: String): Set<SyncedCookie> {
+        val normalized = normalizeHost(host)
+        if (normalized.isEmpty()) return emptySet()
+        return synchronized(copiedToCef) { copiedToCef[normalized]?.toSet().orEmpty() }
+    }
+
+    private fun copiedCookiesForHost(host: String): Set<SyncedCookie> {
+        val normalized = normalizeHost(host)
+        if (normalized.isEmpty()) return emptySet()
+        return synchronized(copiedToCef) {
+            copiedToCef.entries.flatMapTo(HashSet()) { (bucketHost, cookies) ->
+                if (hostMatchesDomain(normalized, bucketHost)) cookies else emptyList()
+            }
+        }
+    }
+
+    private fun normalizeHost(host: String): String = host.trim().trimStart('.').lowercase()
+
+    private fun hostMatchesDomain(
+        host: String,
+        domain: String,
+    ): Boolean = domain.isNotEmpty() && (host == domain || host.endsWith(".$domain"))
 
     private fun HttpCookie.toSynced(uri: URI) =
-        SyncedCookie(name, (domain ?: uri.host).orEmpty().trimStart('.'), path ?: "/", value)
+        SyncedCookie(
+            name,
+            (domain?.takeIf { it.isNotBlank() } ?: uri.host).orEmpty().trim().trimStart('.'),
+            path ?: "/",
+            value,
+        )
 
     /**
      * After a complete visit of [url], removes the app's cookies for it that were copied to Chromium
@@ -244,8 +283,9 @@ object CefCookieSync {
     ) {
         val store = (CookieHandler.getDefault() as? java.net.CookieManager)?.cookieStore ?: return
         val uri = runCatching { URI(url) }.getOrNull() ?: return
+        val host = uri.host?.let(::normalizeHost)?.takeIf { it.isNotEmpty() } ?: return
         val app = store.get(uri).associateBy { it.toSynced(uri) }
-        val copied = synchronized(copiedToCef) { copiedToCef.toSet() }
+        val copied = copiedCookiesForHost(host)
         val stale = staleAppCookies(app.keys.toList(), copied, inChromium, uri.rawPath.orEmpty())
         stale.forEach { app[it]?.let { cookie -> store.remove(uri, cookie) } }
         if (stale.isNotEmpty()) logger.info { "Removed ${stale.size} cookies the built-in browser no longer has" }

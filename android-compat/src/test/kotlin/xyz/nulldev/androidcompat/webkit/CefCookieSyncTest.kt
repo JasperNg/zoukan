@@ -291,6 +291,145 @@ class CefCookieSyncTest {
     }
 
     @Test
+    fun `scoped copyToCef for another host preserves existing host snapshots and normalizes host keys`() {
+        val store = CookieManager(null, CookiePolicy.ACCEPT_ALL).cookieStore
+        store.add(URI("https://A.Example/"), HttpCookie("a1", "1").apply { path = "/" })
+        store.add(URI("https://b.example/"), HttpCookie("b1", "2").apply { path = "/" })
+        store.add(URI("https://c.example/"), HttpCookie("c1", "3").apply { path = "/" })
+
+        val cef = mockk<CefCookieManager>(relaxed = true)
+        CefCookieSync.copyToCef(store, cef) { it == "a.example" }
+
+        CefCookieSync.copiedToCefSnapshot("A.Example").map { it.name } shouldContainExactly listOf("a1")
+        CefCookieSync.copiedToCefSnapshot(".a.example").map { it.name } shouldContainExactly listOf("a1")
+        CefCookieSync.copiedToCefSnapshot("b.example") shouldBe emptySet()
+        CefCookieSync.copiedToCefSnapshot().map { it.name } shouldContainExactly listOf("a1")
+
+        CefCookieSync.copyToCef(store, cef) { it == "b.example" }
+
+        CefCookieSync.copiedToCefSnapshot("a.example").map { it.name } shouldContainExactly listOf("a1")
+        CefCookieSync.copiedToCefSnapshot("b.example").map { it.name } shouldContainExactly listOf("b1")
+        CefCookieSync.copiedToCefSnapshot("c.example") shouldBe emptySet()
+        CefCookieSync.copiedToCefSnapshot().map { it.name } shouldContainExactlyInAnyOrder listOf("a1", "b1")
+    }
+
+    @Test
+    fun `scoped copyToCef replaces only matched host buckets and clears emptied matched buckets`() {
+        val store = CookieManager(null, CookiePolicy.ACCEPT_ALL).cookieStore
+        val uriA = URI("https://a.example/")
+        val uriB = URI("https://b.example/")
+        val cookieB1 = HttpCookie("b1", "2").apply { path = "/" }
+        store.add(uriA, HttpCookie("a1", "1").apply { path = "/" })
+        store.add(uriB, cookieB1)
+
+        val cef = mockk<CefCookieManager>(relaxed = true)
+        CefCookieSync.copyToCef(store, cef) { it == "a.example" }
+        CefCookieSync.copyToCef(store, cef) { it == "b.example" }
+
+        // Replace b1 with b2 in app store, then re-sync only b.example
+        store.remove(uriB, cookieB1)
+        val cookieB2 = HttpCookie("b2", "3").apply { path = "/" }
+        store.add(uriB, cookieB2)
+        CefCookieSync.copyToCef(store, cef) { it == "b.example" }
+
+        CefCookieSync.copiedToCefSnapshot("a.example").map { it.name } shouldContainExactly listOf("a1")
+        CefCookieSync.copiedToCefSnapshot("b.example").map { it.name } shouldContainExactly listOf("b2")
+
+        // Remove all b.example cookies and re-sync b.example; a.example stays intact even if filter throws on it
+        store.remove(uriB, cookieB2)
+        CefCookieSync.copyToCef(store, cef) { host ->
+            if (host == "a.example") error("filter exception must preserve bucket")
+            host == "b.example"
+        }
+
+        CefCookieSync.copiedToCefSnapshot("a.example").map { it.name } shouldContainExactly listOf("a1")
+        CefCookieSync.copiedToCefSnapshot("b.example") shouldBe emptySet()
+    }
+
+    @Test
+    fun `removeStaleAppCookies removes host A stale cookies after a scoped copyToCef for host B`() {
+        val manager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
+        CookieHandler.setDefault(manager)
+        val uriA = URI("https://a.example/reader")
+        val uriB = URI("https://b.example/reader")
+        manager.cookieStore.add(uriA, HttpCookie("staleA", "1").apply { path = "/reader" })
+        manager.cookieStore.add(uriA, HttpCookie("keepA", "2").apply { path = "/reader" })
+        manager.cookieStore.add(uriB, HttpCookie("keepB", "3").apply { path = "/reader" })
+
+        val cef = mockk<CefCookieManager>(relaxed = true)
+        CefCookieSync.copyToCef(manager.cookieStore, cef) { it == "a.example" }
+        CefCookieSync.copyToCef(manager.cookieStore, cef) { it == "b.example" }
+
+        CefCookieSync.removeStaleAppCookies(
+            url = "https://a.example/reader",
+            inChromium = listOf(SyncedCookie("keepA", "a.example", "/reader", "2")),
+        )
+
+        manager.cookieStore.get(uriA).map { it.name } shouldContainExactly listOf("keepA")
+        manager.cookieStore.get(uriB).map { it.name } shouldContainExactly listOf("keepB")
+    }
+
+    @Test
+    fun `removeStaleAppCookies reconciles domain cookies on subdomains without leaking across lookalike hosts`() {
+        val manager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
+        CookieHandler.setDefault(manager)
+        val subUri = URI("https://sub.a.example/page")
+        val lookalikeUri = URI("https://mya.example/page")
+        manager.cookieStore.add(
+            subUri,
+            HttpCookie("dom", "1").apply {
+                domain = ".a.example"
+                path = "/"
+            },
+        )
+        manager.cookieStore.add(subUri, HttpCookie("sub", "2").apply { path = "/" })
+        manager.cookieStore.add(lookalikeUri, HttpCookie("other", "3").apply { path = "/" })
+
+        val cef = mockk<CefCookieManager>(relaxed = true)
+        CefCookieSync.copyToCef(manager.cookieStore, cef) { it == "a.example" || it == "sub.a.example" }
+        CefCookieSync.copyToCef(manager.cookieStore, cef) { it == "mya.example" }
+
+        CefCookieSync.removeStaleAppCookies(url = "https://sub.a.example/page", inChromium = emptyList())
+        CefCookieSync.removeStaleAppCookies(url = "mailto:user@a.example", inChromium = emptyList())
+
+        manager.cookieStore.get(subUri) shouldBe emptyList()
+        manager.cookieStore.get(lookalikeUri).map { it.name } shouldContainExactly listOf("other")
+        CefCookieSync.copiedToCefSnapshot("mya.example").map { it.name } shouldContainExactly listOf("other")
+    }
+
+    @Test
+    fun `unscoped copyToCef reconciles all hosts cleanly`() {
+        val manager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
+        CookieHandler.setDefault(manager)
+        val uriA = URI("https://a.example/")
+        val uriB = URI("https://b.example/")
+        val uriC = URI("https://c.example/")
+        val cookieA1 = HttpCookie("a1", "1").apply { path = "/" }
+        manager.cookieStore.add(uriA, cookieA1)
+        manager.cookieStore.add(uriB, HttpCookie("b1", "2").apply { path = "/" })
+
+        val cef = mockk<CefCookieManager>(relaxed = true)
+        CefCookieSync.copyToCef(manager.cookieStore, cef) { it == "a.example" }
+        CefCookieSync.copyToCef(manager.cookieStore, cef) { it == "b.example" }
+
+        manager.cookieStore.remove(uriA, cookieA1)
+        manager.cookieStore.add(uriC, HttpCookie("c1", "3").apply { path = "/" })
+        CefCookieSync.copyToCef(manager.cookieStore, cef, includeHost = null)
+
+        CefCookieSync.copiedToCefSnapshot("a.example") shouldBe emptySet()
+        CefCookieSync.copiedToCefSnapshot("b.example").map { it.name } shouldContainExactly listOf("b1")
+        CefCookieSync.copiedToCefSnapshot("c.example").map { it.name } shouldContainExactly listOf("c1")
+
+        // A cookie added to a.example after the unscoped sync is not treated as stale; b1 is
+        manager.cookieStore.add(uriA, HttpCookie("freshA", "4").apply { path = "/" })
+        CefCookieSync.removeStaleAppCookies(url = "https://a.example/", inChromium = emptyList())
+        CefCookieSync.removeStaleAppCookies(url = "https://b.example/", inChromium = emptyList())
+
+        manager.cookieStore.get(uriA).map { it.name } shouldContainExactly listOf("freshA")
+        manager.cookieStore.get(uriB) shouldBe emptyList()
+    }
+
+    @Test
     fun `CookieVisitEnd completes once and handles quiet and max timers`() {
         val scheduled = mutableListOf<Runnable>()
         val futures = mutableListOf<ScheduledFuture<*>>()
