@@ -183,23 +183,7 @@ class SyncManager(
     private suspend fun doSync(): Boolean {
         // ZOUKAN -->
         // Checked before the database and the network are touched
-        val serverUrl = when (SyncService.fromInt(syncPreferences.syncService().get())) {
-            SyncService.WEB_DAV -> syncPreferences.webDavUrl().get()
-            SyncService.SYNCYOMI -> syncPreferences.clientHost().get()
-            else -> null
-        }
-        if (serverUrl != null) {
-            if (!isAllowedSyncUrl(serverUrl)) {
-                logcat(LogPriority.ERROR) { "Sync refused: plain http to a server outside the local network" }
-                // Only the host: the address may carry a user name and password
-                val host = serverUrl.trim().toHttpUrlOrNull()?.host?.take(100) ?: "?"
-                notifier.showSyncError(localized(DMR.strings.sync_refused_plain_http, host))
-                return false
-            }
-            if (serverUrl.trim().startsWith("http://", ignoreCase = true)) {
-                logcat(LogPriority.WARN) { "Syncing over plain http to a local network server" }
-            }
-        }
+        if (!serverAllowed()) return false
         // ZOUKAN <--
 
         // Reset isSyncing in case it was left over or failed syncing during restore.
@@ -212,37 +196,11 @@ class SyncManager(
         if (restorePending().get()) syncPreferences.lastSyncEtag().delete()
         // ZOUKAN <--
 
-        val syncOptions = syncPreferences.getSyncSettings()
         val databaseManga = handler.awaitList { mangasQueries.getMangasWithFavoriteTimestamp(::mapManga) }
-
-        val backupOptions = BackupOptions(
-            libraryEntries = syncOptions.libraryEntries,
-            categories = syncOptions.categories,
-            chapters = syncOptions.chapters,
-            tracking = syncOptions.tracking,
-            history = syncOptions.history,
-            extensionStores = syncOptions.extensionStores,
-            appSettings = syncOptions.appSettings,
-            sourceSettings = syncOptions.sourceSettings,
-            privateSettings = syncOptions.privateSettings,
-            customInfo = syncOptions.customInfo,
-            readEntries = syncOptions.readEntries,
-            savedSearchesFeeds = syncOptions.savedSearchesFeeds,
-        )
-
+        // ZOUKAN -->
         val backups = DesktopBackups(dirs.android)
-        val creator = backups.contentCreator()
-        val backupManga = creator.backupMangas(databaseManga, backupOptions)
-        val backup = Backup(
-            backupManga = backupManga,
-            backupCategories = creator.backupCategories(backupOptions),
-            backupSources = creator.backupSources(backupManga),
-            backupPreferences = creator.backupAppPreferences(backupOptions),
-            backupSourcePreferences = creator.backupSourcePreferences(backupOptions),
-            backupExtensionStores = creator.backupExtensionStores(backupOptions),
-            backupSavedSearches = creator.backupSavedSearches(backupOptions),
-            backupFeeds = creator.backupFeeds(backupOptions),
-        )
+        val backup = localBackup(backups, databaseManga)
+        // ZOUKAN <--
 
         val syncData = SyncData(deviceId = syncPreferences.uniqueDeviceID(), backup = backup)
 
@@ -254,6 +212,7 @@ class SyncManager(
                 null
             }
         }
+
 
         // ZOUKAN -->
         val etagBefore = syncPreferences.lastSyncEtag().get()
@@ -368,6 +327,117 @@ class SyncManager(
     }
 
     // ZOUKAN -->
+    /**
+     * This computer's library as a sync uploads it: what Settings > Data sync > What to sync
+     * chooses, from [databaseManga] (the library and the entries with a favorite time).
+     */
+    private suspend fun localBackup(backups: DesktopBackups, databaseManga: List<Manga>): Backup {
+        val syncOptions = syncPreferences.getSyncSettings()
+        val backupOptions = BackupOptions(
+            libraryEntries = syncOptions.libraryEntries,
+            categories = syncOptions.categories,
+            chapters = syncOptions.chapters,
+            tracking = syncOptions.tracking,
+            history = syncOptions.history,
+            extensionStores = syncOptions.extensionStores,
+            appSettings = syncOptions.appSettings,
+            sourceSettings = syncOptions.sourceSettings,
+            privateSettings = syncOptions.privateSettings,
+            customInfo = syncOptions.customInfo,
+            readEntries = syncOptions.readEntries,
+            savedSearchesFeeds = syncOptions.savedSearchesFeeds,
+        )
+        val creator = backups.contentCreator()
+        val backupManga = creator.backupMangas(databaseManga, backupOptions)
+        return Backup(
+            backupManga = backupManga,
+            backupCategories = creator.backupCategories(backupOptions),
+            backupSources = creator.backupSources(backupManga),
+            backupPreferences = creator.backupAppPreferences(backupOptions),
+            backupSourcePreferences = creator.backupSourcePreferences(backupOptions),
+            backupExtensionStores = creator.backupExtensionStores(backupOptions),
+            backupSavedSearches = creator.backupSavedSearches(backupOptions),
+            backupFeeds = creator.backupFeeds(backupOptions),
+        )
+    }
+
+    /**
+     * Whether the sync server's address may be sent the library: false (and the user is told) for
+     * plain http to a server outside this computer and the local network.
+     */
+    private fun serverAllowed(): Boolean {
+        val serverUrl = when (SyncService.fromInt(syncPreferences.syncService().get())) {
+            SyncService.WEB_DAV -> syncPreferences.webDavUrl().get()
+            SyncService.SYNCYOMI -> syncPreferences.clientHost().get()
+            else -> return true
+        }
+        if (!isAllowedSyncUrl(serverUrl)) {
+            logcat(LogPriority.ERROR) { "Sync refused: plain http to a server outside the local network" }
+            // Only the host: the address may carry a user name and password
+            val host = serverUrl.trim().toHttpUrlOrNull()?.host?.take(100) ?: "?"
+            notifier.showSyncError(localized(DMR.strings.sync_refused_plain_http, host))
+            return false
+        }
+        if (serverUrl.trim().startsWith("http://", ignoreCase = true)) {
+            logcat(LogPriority.WARN) { "Syncing over plain http to a local network server" }
+        }
+        return true
+    }
+
+    /**
+     * Uploads this computer's library over the server's, whatever the server holds (no If-Match):
+     * the way out of a library on the server that cannot be read, which every sync stops at. Only
+     * on the user's confirmation (Settings > Data sync): the other devices' entries that are not on
+     * this computer are gone from the server. Nothing here changes: a safety backup of this
+     * computer's library comes first all the same, as before the other destructive actions, and
+     * without one nothing is sent. Afterwards the server holds this computer's library under the
+     * ETag the service saved, so the next sync is an ordinary one.
+     *
+     * @return whether the server's library was replaced; the user is told either way
+     */
+    suspend fun replaceServerLibrary(): Boolean {
+        if (mutex.isLocked) return false
+        return mutex.withLock {
+            _running.value = true
+            try {
+                replaceServerLibraryNow()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                logcat(LogPriority.ERROR, e) { "Replacing the server's library failed" }
+                notifier.showSyncError(e.message)
+                false
+            } finally {
+                _running.value = false
+            }
+        }
+    }
+
+    private suspend fun replaceServerLibraryNow(): Boolean {
+        val type = SyncService.fromInt(syncPreferences.syncService().get())
+        if (type !in SUPPORTED || !serverAllowed()) return false
+        safetySnapshot.take(SnapshotReason.SYNC).onFailure { e ->
+            notifier.showSyncError(localized(DMR.strings.server_library_not_replaced_no_safety_backup, SafetySnapshot.errorText(e)))
+            return false
+        }
+        val databaseManga = handler.awaitList { mangasQueries.getMangasWithFavoriteTimestamp(::mapManga) }
+        val syncData = SyncData(deviceId = syncPreferences.uniqueDeviceID(), backup = localBackup(DesktopBackups(dirs.android), databaseManga))
+        // The ETag of the file being replaced is no version this computer has; the upload saves the new one
+        syncPreferences.lastSyncEtag().delete()
+        val replaced = when (type) {
+            SyncService.WEB_DAV -> WebDavSyncService(context, json, syncPreferences, notifier).replaceRemote(syncData)
+            SyncService.SYNCYOMI -> SyncYomiSyncService(context, json, syncPreferences, notifier).replaceRemote(syncData)
+            else -> false
+        }
+        if (!replaced) return false
+        // The server holds this computer's library: nothing is waiting to be restored here
+        restorePending().delete()
+        sectionsPending().delete()
+        syncPreferences.lastSyncTimestamp().set(Date().time)
+        lastFailure = 0L
+        notifier.showSyncSuccess(localized(DMR.strings.server_library_replaced))
+        return true
+    }
+
     /** Saves [etag] again once the merged library is all restored here (see doSync). */
     private fun keepEtag(etag: String) {
         if (etag.isNotEmpty()) syncPreferences.lastSyncEtag().set(etag) else syncPreferences.lastSyncEtag().delete()

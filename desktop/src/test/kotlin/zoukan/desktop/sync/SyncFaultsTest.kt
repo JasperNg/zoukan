@@ -185,8 +185,9 @@ class SyncFaultsTest {
         result.shouldBeNull()
         // The user is told what to do about it
         messages.awaitError().text shouldBe
-            "The sync file on the server could not be read. Check the address and folder, or delete the file on the " +
-            "server to start again from this device's library."
+            "The sync file on the server could not be read. Check the address and folder. To start again from this " +
+            "device's library, delete the file on the server, or in Zoukan use Data sync > Replace the server's library " +
+            "with this computer's."
         sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
         sync.remoteBackup shouldBe notABackup
         preferences.lastSyncEtag().get() shouldBe ""
@@ -232,8 +233,9 @@ class SyncFaultsTest {
 
         result.shouldBeNull()
         messages.awaitError().text shouldBe
-            "The sync data on the server could not be read. Check the address, or delete the data on the server " +
-            "to start again from this device's library."
+            "The sync data on the server could not be read. Check the address. To start again from this device's " +
+            "library, delete the data on the server, or in Zoukan use Data sync > Replace the server's library with " +
+            "this computer's."
         sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
         sync.remoteBackup shouldBe remoteBytes
         preferences.lastSyncEtag().get() shouldBe ""

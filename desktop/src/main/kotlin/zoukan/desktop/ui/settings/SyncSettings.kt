@@ -98,6 +98,7 @@ private fun SyncSettingsSection() {
                 localized(DMR.strings.when_to_sync),
                 localized(SYMR.strings.pref_sync_now),
                 localized(DMR.strings.reset_the_last_sync_time),
+                localized(DMR.strings.replace_server_library),
             )
         }
         when (syncService) {
@@ -147,6 +148,7 @@ private fun SyncSettingsSection() {
                 onClick = { if (!running) AppScope.launch { manager.syncData() } },
             )
             ResetSyncTimeRow { preferences.lastSyncTimestamp().set(0L) }
+            ReplaceServerLibraryRow(enabled = !running) { AppScope.launch { manager.replaceServerLibrary() } }
         }
     }
 
@@ -189,6 +191,31 @@ internal fun ResetSyncTimeRow(onReset: () -> Unit) {
             text = localized(DMR.strings.reset_sync_time_warning),
             confirmLabel = localized(MR.strings.action_reset),
             onConfirm = onReset,
+            onDismiss = { confirming = false },
+        )
+    }
+}
+
+/**
+ * "Replace the server's library with this computer's": the way out of a library on the server that
+ * cannot be read. It deletes the other devices' entries from the server, so it asks first and says
+ * so; [onReplace] runs only on confirmation, and not while a sync runs ([enabled]).
+ */
+@Composable
+internal fun ReplaceServerLibraryRow(enabled: Boolean, onReplace: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    SettingRow(
+        localized(DMR.strings.replace_server_library),
+        localized(DMR.strings.replace_server_library_summary),
+        enabled = enabled,
+        onClick = { confirming = true },
+    )
+    if (confirming) {
+        ConfirmDestructiveDialog(
+            title = localized(DMR.strings.replace_server_library),
+            text = localized(DMR.strings.replace_server_library_warning),
+            confirmLabel = localized(DMR.strings.replace),
+            onConfirm = onReplace,
             onDismiss = { confirming = false },
         )
     }

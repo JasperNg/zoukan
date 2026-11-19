@@ -89,6 +89,37 @@ class SyncSettingsValidationTest {
     }
 
     @Test
+    fun `replacing the server's library asks first, says what is lost, and cancel sends nothing`() = runDesktopComposeUiTest {
+        var replaces = 0
+        setContent { ReplaceServerLibraryRow(enabled = true) { replaces++ } }
+
+        onNodeWithText(localized(DMR.strings.replace_server_library)).performClick()
+        waitForIdle()
+        onNodeWithText(localized(DMR.strings.replace_server_library_warning)).assertExists()
+        onNodeWithText(localized(MR.strings.action_cancel)).performClick()
+        waitForIdle()
+        onNodeWithText(localized(DMR.strings.replace_server_library_warning)).assertDoesNotExist()
+        replaces shouldBe 0
+
+        onNodeWithText(localized(DMR.strings.replace_server_library)).performClick()
+        waitForIdle()
+        onNodeWithText(localized(DMR.strings.replace)).performClick()
+        waitForIdle()
+        replaces shouldBe 1
+    }
+
+    @Test
+    fun `the server's library cannot be replaced while a sync runs`() = runDesktopComposeUiTest {
+        var replaces = 0
+        setContent { ReplaceServerLibraryRow(enabled = false) { replaces++ } }
+
+        onNodeWithText(localized(DMR.strings.replace_server_library)).performClick()
+        waitForIdle()
+        onNodeWithText(localized(DMR.strings.replace_server_library_warning)).assertDoesNotExist()
+        replaces shouldBe 0
+    }
+
+    @Test
     fun `a sync address that is refused cannot be saved`() = runDesktopComposeUiTest {
         val store = DesktopPreferenceStore(JavaSharedPreferences("sync_address_test_${System.nanoTime()}"))
         val preference = store.getString("address", "")

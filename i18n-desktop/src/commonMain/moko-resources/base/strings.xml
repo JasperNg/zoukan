@@ -984,6 +984,12 @@
     <string name="safety_backup_failed_text">Zoukan could not save a backup of the library before this change, so it cannot be undone with Restore backup.\n\n%1$s\n\nContinue without a backup?</string>
     <string name="continue_without_backup">Continue without a backup</string>
     <string name="saving_safety_backup">Saving a safety backup…</string>
+    <string name="replace_server_library">Replace the server\'s library with this computer\'s</string>
+    <string name="replace_server_library_summary">When the library on the server cannot be read and every sync stops there</string>
+    <string name="replace_server_library_warning">This computer\'s library is uploaded over the server\'s, whatever the server holds. Entries, categories and progress that other devices synced and that are not on this computer are lost from the server, and those devices get this computer\'s library at their next sync. Nothing on this computer changes; a safety backup of its library is saved first.</string>
+    <string name="replace">Replace</string>
+    <string name="server_library_replaced">The server\'s library was replaced with this computer\'s</string>
+    <string name="server_library_not_replaced_no_safety_backup">The server\'s library was not replaced because a safety backup could not be saved first: %1$s</string>
     <string name="sync_skipped_no_safety_backup">Sync did not change the library because a safety backup could not be saved first: %1$s</string>
     <!-- The screen-reader and keyboard name of what a right click (or a long press) does, when the site gives no better one -->
     <string name="more_actions">More actions</string>

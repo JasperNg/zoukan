@@ -109,6 +109,17 @@ class SyncYomiSyncService(
         }
     }
 
+    // ZOUKAN -->
+    /**
+     * Uploads [syncData] over the server's data with no If-Match, whatever the server holds: the
+     * user's confirmed way out of a library on the server that cannot be read (the desktop's
+     * Settings > Data sync). Saves the server's new ETag.
+     *
+     * @return whether the server took it (a refusal is shown to the user); throws on a failed request
+     */
+    suspend fun replaceRemote(syncData: SyncData): Boolean = pushSyncData(syncData, eTag = "")
+    // ZOUKAN <--
+
     private suspend fun pullSyncData(): Pair<SyncData?, String> {
         val host = syncPreferences.clientHost().get()
         val apiKey = syncPreferences.clientAPIKey().get()
@@ -168,8 +179,9 @@ class SyncYomiSyncService(
                 // A remote library that cannot be read is an error: overwriting it (upstream returned
                 // (null, "") here) replaced the other device's data without If-Match
                 throw SyncYomiException(
-                    "The sync data on the server could not be read. Check the address, or delete the data on the " +
-                        "server to start again from this device's library.",
+                    "The sync data on the server could not be read. Check the address. To start again from this " +
+                        "device's library, delete the data on the server, or in Zoukan use Data sync > Replace the " +
+                        "server's library with this computer's.",
                 )
                 // ZOUKAN <--
             }

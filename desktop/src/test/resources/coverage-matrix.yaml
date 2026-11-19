@@ -1075,6 +1075,13 @@
   tests: [e2e.SyncYomiJourneyTest, app.AppLifecycleTest]
   gap: "The journey sets the triggers in the dialog; AppLifecycleTest checks what they do on start and on resume"
 
+- key: flow:settings.sync-replace-server-library
+  feature: "Data sync: replace the server's library with this computer's (asks first; WebDAV and SyncYomi)"
+  tier: unit
+  smoke: false
+  tests: [ui.settings.SyncSettingsValidationTest, sync.SyncDatabaseFaultsTest]
+  gap: "The row and its confirmation are unit tested (cancel sends nothing), and SyncManager's replace against the fixture sync server; no journey clicks it in the app"
+
 - key: dialog-inline:DataSaverSettings.kt:DataSaverSettings
   feature: "Data saver dialogs"
   tier: journey

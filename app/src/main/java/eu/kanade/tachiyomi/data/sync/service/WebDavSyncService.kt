@@ -135,6 +135,22 @@ class WebDavSyncService(
         }
     }
 
+    // ZOUKAN -->
+    /**
+     * Uploads [syncData] over the server's file with no If-Match, whatever the server holds: the
+     * user's confirmed way out of a library on the server that cannot be read (the desktop's
+     * Settings > Data sync). Saves the server's new ETag. Throws on a failed upload.
+     *
+     * @return false when the settings are not complete (the user is told)
+     */
+    suspend fun replaceRemote(syncData: SyncData): Boolean {
+        if (!validateSettings()) return false
+        ensureFolderExists()
+        pushSyncData(syncData, eTag = "")
+        return true
+    }
+    // ZOUKAN <--
+
     private suspend fun pullSyncData(): Pair<SyncData?, String> {
         if (!validateSettings()) return Pair(null, "")
 
@@ -173,8 +189,9 @@ class WebDavSyncService(
                         // A remote file that cannot be read is an error, not a missing one: (null, "")
                         // made the push replace the other device's library without If-Match
                         throw WebDavException(
-                            "The sync file on the server could not be read. Check the address and folder, or delete " +
-                                "the file on the server to start again from this device's library.",
+                            "The sync file on the server could not be read. Check the address and folder. To start " +
+                                "again from this device's library, delete the file on the server, or in Zoukan use " +
+                                "Data sync > Replace the server's library with this computer's.",
                         )
                         // ZOUKAN <--
                     }

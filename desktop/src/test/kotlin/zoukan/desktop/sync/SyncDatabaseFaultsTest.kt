@@ -610,6 +610,73 @@ class SyncDatabaseFaultsTest {
         snapshots.size shouldBe snapshotsBefore
     }
 
+    /** A file on the server that is not a backup: every sync stops at it. */
+    private fun unreadableRemote(): ByteArray = "<html><body>Sign in</body></html>".toByteArray().also {
+        sync.seed(it)
+        sync.calls.clear()
+    }
+
+    @Test
+    fun `an unreadable server library is replaced with this computer's only on request, and the next sync works`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().set(1L)
+        val unreadable = unreadableRemote()
+        manager().syncData()
+        messages.awaitError { "could not be read" in it.text }
+        sync.remoteBackup shouldBe unreadable
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+
+        manager().replaceServerLibrary() shouldBe true
+
+        // Uploaded whatever the server held (no If-Match), after a safety backup
+        sync.calls.single { it.method == "PUT" }.ifMatch shouldBe null
+        remoteUrls() shouldBe setOf("/local")
+        snapshots.size shouldBe 1
+        Await.until("the success notification") { messages.notifications.any { it.text == localized(DMR.strings.server_library_replaced) } }
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+        restorePending.get() shouldBe false
+        library() shouldBe mapOf("/local" to 0L)
+
+        // The next sync is an ordinary one: "not modified", no error
+        val errors = messages.errors.size
+        sync.calls.clear()
+        manager().syncData()
+        sync.calls.first { it.method == "GET" }.status shouldBe 304
+        messages.errors.size shouldBe errors
+        remoteUrls() shouldBe setOf("/local")
+    }
+
+    @Test
+    fun `SyncYomi - an unreadable server library is replaced with this computer's, and the next sync works`() = runBlocking<Unit> {
+        preferences.syncService().set(SyncManager.SyncService.SYNCYOMI.value)
+        preferences.clientHost().set(sync.clientHost)
+        preferences.clientAPIKey().set(sync.apiKey)
+        preferences.lastSyncTimestamp().set(1L)
+        unreadableRemote()
+        manager().syncData()
+        messages.awaitError { "could not be read" in it.text }
+
+        manager().replaceServerLibrary() shouldBe true
+
+        sync.calls.single { it.method == "PUT" }.ifMatch shouldBe null
+        remoteUrls() shouldBe setOf("/local")
+        sync.calls.clear()
+        manager().syncData()
+        sync.calls.first { it.method == "GET" }.status shouldBe 304
+        remoteUrls() shouldBe setOf("/local")
+    }
+
+    @Test
+    fun `without a safety backup the server's library is not replaced`() = runBlocking<Unit> {
+        val unreadable = unreadableRemote()
+        snapshotFails = true
+
+        manager().replaceServerLibrary() shouldBe false
+
+        messages.awaitError { localized(DMR.strings.safety_backup_could_not_be_written) in it.text }
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+        sync.remoteBackup shouldBe unreadable
+    }
+
     @Test
     fun `a sync whose safety backup fails restores nothing, and the next sync restores the other device's entries`() = runBlocking<Unit> {
         preferences.lastSyncTimestamp().set(1L)
