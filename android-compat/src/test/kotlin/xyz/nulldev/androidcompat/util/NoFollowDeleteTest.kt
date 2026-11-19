@@ -55,6 +55,59 @@ class NoFollowDeleteTest {
         page.exists() shouldBe true
     }
 
+    @Test
+    fun `a very deep tree is deleted without running out of stack`() {
+        // As deep as the file system lets a path be, up to a few thousand levels
+        val root = File(temp, "deep")
+        var dir = root.apply { mkdirs() }
+        var depth = 0
+        while (depth < 3000) {
+            val next = File(dir, "d")
+            if (!next.mkdir()) break
+            dir = next
+            depth++
+        }
+        assumeTrue(depth >= 300, "the file system does not allow a deep enough tree")
+        // A few levels up, where a file name still fits in the longest path
+        File(generateSequence(dir) { it.parentFile }.drop(4).first(), "page.png").writeBytes(byteArrayOf(1))
+
+        // A small stack, as a deeper tree on a normal stack: one call per level would overflow it
+        var failure: Throwable? = null
+        val thread = Thread(null, {
+            try {
+                NoFollowDelete.deleteTree(root.toPath())
+            } catch (e: Throwable) {
+                failure = e
+            }
+        }, "deep-delete", 128L * 1024)
+        thread.start()
+        thread.join()
+
+        failure shouldBe null
+        root.exists() shouldBe false
+    }
+
+    @Test
+    fun `a deep tree with a link at the bottom loses the link, never what it points to`() {
+        val outside = File(temp, "outside").apply { mkdirs() }
+        val kept = File(outside, "kept.txt").apply { writeText("kept") }
+        val root = File(temp, "tree")
+        var dir = root
+        repeat(50) { dir = File(dir, "d") }
+        dir.mkdirs()
+        val link = try {
+            java.nio.file.Files.createSymbolicLink(File(dir, "link").toPath(), outside.toPath())
+        } catch (e: Exception) {
+            null
+        }
+        assumeTrue(link != null, "symbolic links cannot be made here")
+
+        NoFollowDelete.deleteTree(root.toPath())
+
+        root.exists() shouldBe false
+        kept.readText() shouldBe "kept"
+    }
+
     private fun run(vararg command: String): Int = ProcessBuilder(*command).redirectErrorStream(true).start().let {
         it.inputStream.readAllBytes()
         it.waitFor()

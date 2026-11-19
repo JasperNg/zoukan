@@ -4,6 +4,7 @@ package xyz.nulldev.androidcompat.util
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.IOException
+import java.nio.file.DirectoryIteratorException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -23,21 +24,36 @@ object NoFollowDelete {
      * walkFileTree: it walks into a Windows junction (which Java reports as a folder), and would
      * delete the files the junction points to. Nor Kotlin's deleteRecursively, which follows a
      * symbolic link to a folder. What could not be deleted stays; the caller checks the path is gone.
+     *
+     * The walk keeps its own stack rather than calling itself once per level, so a very deep tree
+     * cannot overflow the thread's stack. Each path is checked for a link when it is reached.
      */
     fun deleteTree(path: Path) {
-        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
-        if (!isLink(path) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            try {
-                Files.newDirectoryStream(path).use { children -> children.forEach { deleteTree(it) } }
-            } catch (e: IOException) {
-                logger.warn(e) { "Could not delete everything in ${path.fileName}" }
+        // A path, and whether its children are already on the stack (it is deleted when it comes back)
+        val stack = ArrayDeque<Pair<Path, Boolean>>()
+        stack.addLast(path to false)
+        while (stack.isNotEmpty()) {
+            val (current, listed) = stack.removeLast()
+            if (!listed) {
+                if (!Files.exists(current, LinkOption.NOFOLLOW_LINKS)) continue
+                if (!isLink(current) && Files.isDirectory(current, LinkOption.NOFOLLOW_LINKS)) {
+                    stack.addLast(current to true)
+                    try {
+                        Files.newDirectoryStream(current).use { children -> children.forEach { stack.addLast(it to false) } }
+                    } catch (e: IOException) {
+                        logger.warn(e) { "Could not delete everything in ${current.fileName}" }
+                    } catch (e: DirectoryIteratorException) {
+                        logger.warn(e) { "Could not delete everything in ${current.fileName}" }
+                    }
+                    continue
+                }
             }
-        }
-        // A link or a junction is removed as itself
-        try {
-            Files.delete(path)
-        } catch (e: IOException) {
-            logger.debug(e) { "Could not delete ${path.fileName}" }
+            // A link or a junction is removed as itself
+            try {
+                Files.delete(current)
+            } catch (e: IOException) {
+                logger.debug(e) { "Could not delete ${current.fileName}" }
+            }
         }
     }
 
