@@ -63,9 +63,10 @@ object Archives {
     private const val MAX_TOTAL_BYTES = 4L shl 30
     private const val MAX_ENTRIES = 10_000
 
-    // What one page or cover may be when it is read into memory. Far above any real page, and low
-    // enough that a crafted archive cannot exhaust the heap.
-    private const val MAX_PAGE_BYTES = 64L shl 20
+    // What one page or cover may be when it is read into memory: the page limit of downloads and
+    // the reader's network path, so a page a download saved (in a folder) is read back. Far above
+    // any real page, and low enough that a crafted archive cannot exhaust the heap.
+    private const val MAX_PAGE_BYTES = zoukan.desktop.image.PageSizeLimits.MAX_PAGE_BYTES
 
     // What a chapter's pages may come to when they are held in memory (no file key, so no cache):
     // an eighth of the heap, since the reader may hold two chapters at once with room to spare.

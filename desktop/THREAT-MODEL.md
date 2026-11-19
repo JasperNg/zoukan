@@ -274,7 +274,7 @@ Residual risk:
    bound the blast radius; they do not remove memory-safety exposure in those parsers.
 2. A crafted archive can still cost CPU and disk up to the caps (a budget of gigabytes), and a
    same-user process can tamper with anything in the cache folders. Memory is bounded per page:
-   a page or cover read into memory has its own, much smaller cap (`Limits.pageBytes`, 64 MiB),
+   a page or cover read into memory has its own, much smaller cap (`Limits.pageBytes`, 128 MiB, the same as a page a download saves),
    and a larger one fails with a clear message instead of filling the heap; while unpacking, an
    entry is held in memory up to that cap, one at a time. Without the file key an open chapter's
    pages are all kept in memory, up to an eighth of the heap in all (`Limits.memoryBytes`); a

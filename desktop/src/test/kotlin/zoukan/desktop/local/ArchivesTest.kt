@@ -277,6 +277,24 @@ class ArchivesTest {
     }
 
     @Test
+    fun `a downloaded page is read back up to the size a download may save`() {
+        // A chapter downloaded as a folder is read page by page through readPage: a page the
+        // download kept (up to the page response limit) must open, and one past it must not
+        val max = zoukan.desktop.image.PageSizeLimits.MAX_PAGE_BYTES
+        Archives.Limits().pageBytes shouldBe max
+        val chapter = File(temp, "Chapter 1").apply { mkdirs() }
+        fun page(name: String, size: Long) = File(chapter, name).also { file ->
+            java.io.RandomAccessFile(file, "rw").use { it.setLength(size) }
+        }
+        page("001.jpg", 64L * 1024 * 1024 + 1)
+        page("002.jpg", max + 1)
+        LocalFormat.Directory(chapter).use { format ->
+            format.page(0).size shouldBe 64 * 1024 * 1024 + 1
+            shouldThrow<Archives.TooLargeException> { format.page(1) }
+        }
+    }
+
+    @Test
     fun `an unpacked page over the in-memory cap is refused`() {
         val file = tar(File(temp, "a.cbt"))
         val before = file.readBytes()

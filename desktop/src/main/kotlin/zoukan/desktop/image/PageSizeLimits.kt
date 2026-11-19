@@ -23,7 +23,7 @@ internal class PageTooLargeException(message: String) : java.io.IOException(mess
  * end the whole session with an out-of-memory error.
  */
 internal object PageSizeLimits {
-    /** The most bytes one page's response may have. */
+    /** The most bytes one page's response may have, and one page read from disk (`Archives.Limits.pageBytes`). */
     const val MAX_PAGE_BYTES = 128L * 1024 * 1024
 
     /** [body]'s bytes, or a [PageTooLargeException] when it says or turns out to be longer than [limit]. */
