@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -546,7 +547,9 @@ class ReaderScreenModel(
                 // ZOUKAN -->
                 val widthPx = viewportWidth
                 val maxWidth = if (widthPx > 0) (widthPx * MAX_ZOOM).toInt() else null
-                val image = decodes.withPermit { PageImage.decode(bytes, cropBorders(), maxWidth) }
+                // Interruptible: a load cancelled while it waits at PageImage's decode gate leaves
+                // the queue instead of decoding a page nobody waits for
+                val image = decodes.withPermit { runInterruptible { PageImage.decode(bytes, cropBorders(), maxWidth) } }
                 if (!isActive || !owns()) {
                     image.release()
                     ensureActive()

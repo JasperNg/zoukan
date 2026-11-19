@@ -51,11 +51,17 @@ internal class DecodeGate(private val capacity: Long) {
         lock.notifyAll()
     }
 
-    /** Runs [decode] with the share for [pixels] taken, and gives it back after. */
+    /**
+     * Runs [decode] with the share for [pixels] taken, and gives it back after. A thread
+     * interrupted while it waits, or by the time it has its share (a page load cancelled by
+     * fast paging, through runInterruptible), gives the share back without decoding and throws
+     * [InterruptedException], so a page nobody waits for no longer delays the others.
+     */
     fun <T> withPermit(pixels: Long?, decode: () -> T): T {
         val weight = weightOf(pixels)
         acquire(weight)
         try {
+            if (Thread.interrupted()) throw InterruptedException("The decode was cancelled")
             return decode()
         } finally {
             release(weight)

@@ -1,6 +1,7 @@
 package zoukan.desktop.ui.reader
 
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.launch
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -79,5 +80,43 @@ class DecodeGateTest {
         val done = CountDownLatch(1)
         gate.withPermit(100) { done.countDown() }
         done.count shouldBe 0
+    }
+
+    @Test
+    fun `a decode whose thread is interrupted by the time it gets its turn is skipped`() {
+        val gate = DecodeGate(capacity = 100)
+        val decoded = AtomicBoolean(false)
+        Thread.currentThread().interrupt()
+        val skipped = runCatching { gate.withPermit(10) { decoded.set(true) } }.exceptionOrNull()
+        Thread.interrupted()
+
+        (skipped is InterruptedException) shouldBe true
+        decoded.get() shouldBe false
+        gate.inUse shouldBe 0
+    }
+
+    @Test
+    fun `a load cancelled while it waits at the gate leaves the queue and never decodes`() = kotlinx.coroutines.runBlocking<Unit> {
+        val gate = DecodeGate(capacity = 100)
+        gate.acquire(100)
+        val decoded = AtomicBoolean(false)
+        val waiting = java.util.concurrent.atomic.AtomicReference<Thread>()
+        // As the reader loads a page: the blocking decode runs interruptibly, so a cancel reaches it
+        val load = launch(kotlinx.coroutines.Dispatchers.IO) {
+            kotlinx.coroutines.runInterruptible {
+                waiting.set(Thread.currentThread())
+                gate.withPermit(10) { decoded.set(true) }
+            }
+        }
+        zoukan.desktop.testing.Await.until("the load to wait at the gate") { waiting.get()?.state == Thread.State.WAITING }
+
+        load.cancel()
+        load.join()
+        gate.release(100)
+
+        decoded.get() shouldBe false
+        gate.inUse shouldBe 0
+        // Its place in the queue is given up: the next decode goes ahead at once
+        gate.tryAcquire(10) shouldBe true
     }
 }
