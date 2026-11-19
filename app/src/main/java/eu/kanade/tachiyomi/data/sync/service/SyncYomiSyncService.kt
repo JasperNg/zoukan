@@ -113,11 +113,15 @@ class SyncYomiSyncService(
     /**
      * Uploads [syncData] over the server's data with no If-Match, whatever the server holds: the
      * user's confirmed way out of a library on the server that cannot be read (the desktop's
-     * Settings > Data sync). Saves the server's new ETag.
+     * Settings > Data sync). Saves the server's new ETag, or none when the server sent none.
      *
-     * @return whether the server took it (a refusal is shown to the user); throws on a failed request
+     * @return whether the server took it (another failure is shown to the user); throws
+     *   [ReplaceRefusedException] on a 412, for the caller to tell the user, and throws on a failed request
      */
-    suspend fun replaceRemote(syncData: SyncData): Boolean = pushSyncData(syncData, eTag = "")
+    suspend fun replaceRemote(syncData: SyncData): Boolean = pushSyncData(syncData, eTag = "", replacing = true)
+
+    /** The server refused a [replaceRemote] upload (412); nothing was replaced and the user is not told yet. */
+    class ReplaceRefusedException : Exception("The server refused to replace its sync data")
     // ZOUKAN <--
 
     private suspend fun pullSyncData(): Pair<SyncData?, String> {
@@ -196,7 +200,13 @@ class SyncYomiSyncService(
     /**
      * Return true if update success
      */
-    private suspend fun pushSyncData(syncData: SyncData, eTag: String): Boolean {
+    private suspend fun pushSyncData(
+        syncData: SyncData,
+        eTag: String,
+        // ZOUKAN -->
+        replacing: Boolean = false,
+        // ZOUKAN <--
+    ): Boolean {
         val backup = syncData.backup ?: return true
 
         val host = syncPreferences.clientHost().get()
@@ -226,6 +236,15 @@ class SyncYomiSyncService(
             .use { response ->
                 // KMK <--
                 if (response.isSuccessful) {
+                    // ZOUKAN -->
+                    // The server took the replacing upload: without its ETag none is kept, and the
+                    // next sync merges the server's library again, which is harmless
+                    if (replacing && response.headers["ETag"].isNullOrEmpty()) {
+                        syncPreferences.lastSyncEtag().delete()
+                        logcat(LogPriority.WARN) { "SyncYomi replaced the sync data but sent no ETag" }
+                        return true
+                    }
+                    // ZOUKAN <--
                     val newETag = response.headers["ETag"]
                         .takeIf { it?.isNotEmpty() == true } ?: throw SyncYomiException("Missing ETag")
                     syncPreferences.lastSyncEtag().set(newETag)
@@ -234,6 +253,9 @@ class SyncYomiSyncService(
                 } else if (response.code == HttpStatus.SC_PRECONDITION_FAILED) {
                     // other clients updated remote data, will try next time
                     logcat(LogPriority.DEBUG) { "SyncYomi sync failed with 412" }
+                    // ZOUKAN -->
+                    if (replacing) throw ReplaceRefusedException()
+                    // ZOUKAN <--
                     return false
                 } else {
                     val responseBody = response.body.string()

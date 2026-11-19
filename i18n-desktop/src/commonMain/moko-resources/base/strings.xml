@@ -991,6 +991,9 @@
     <string name="replace_server_library_warning">This computer\'s library is uploaded over the server\'s, whatever the server holds. What only the server holds (for example from devices that no longer sync) is lost. Other devices merge their own library into it again at their next sync. Nothing on this computer changes; a safety backup of its library is saved first.</string>
     <string name="replace">Replace</string>
     <string name="server_library_replaced">The server\'s library was replaced with this computer\'s</string>
+    <string name="server_library_not_replaced_sync_running">The server\'s library was not replaced because a sync is running. Try again when it ends.</string>
+    <string name="server_library_not_replaced_service">The server\'s library was not replaced because this sync service is not available here.</string>
+    <string name="server_library_not_replaced_refused">The server\'s library was not replaced because the server refused the upload. Try again.</string>
     <string name="server_library_not_replaced_no_safety_backup">The server\'s library was not replaced because a safety backup could not be saved first: %1$s</string>
     <string name="sync_skipped_no_safety_backup">Sync did not change the library because a safety backup could not be saved first: %1$s</string>
     <!-- The screen-reader and keyboard name of what a right click (or a long press) does, when the site gives no better one -->

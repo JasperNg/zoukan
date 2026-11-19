@@ -24,6 +24,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.protobuf.ProtoBuf
 import mihon.domain.extension.interactor.GetExtensionStores
@@ -207,6 +208,10 @@ class SyncDatabaseFaultsTest {
     @Volatile
     private var snapshotFails = false
 
+    /** When set, a safety snapshot says it was reached and waits until it may go on. */
+    @Volatile
+    private var snapshotGate: Pair<java.util.concurrent.CountDownLatch, java.util.concurrent.CountDownLatch>? = null
+
     /** Makes the restore throw before it writes anything (its read of the extension stores). */
     @Volatile
     private var storesFail = false
@@ -220,6 +225,10 @@ class SyncDatabaseFaultsTest {
         safetySnapshot = SafetySnapshot(
             folder = { File(temp, "safety") },
             write = { file ->
+                snapshotGate?.let { (reached, go) ->
+                    reached.countDown()
+                    go.await()
+                }
                 if (snapshotFails) throw java.io.IOException("No space left on device")
                 librariesAtSnapshot += library()
                 snapshots += file.also { it.writeText("before") }
@@ -712,5 +721,64 @@ class SyncDatabaseFaultsTest {
         manager().syncData()
         remoteUrls() shouldBe setOf("/local", "/remote")
         library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+    }
+
+    private fun useSyncYomi() {
+        preferences.syncService().set(SyncManager.SyncService.SYNCYOMI.value)
+        preferences.clientHost().set(sync.clientHost)
+        preferences.clientAPIKey().set(sync.apiKey)
+    }
+
+    @Test
+    fun `a replace asked for while a sync runs tells the user it was not done`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().set(1L)
+        val reached = java.util.concurrent.CountDownLatch(1)
+        val go = java.util.concurrent.CountDownLatch(1)
+        snapshotGate = reached to go
+        val manager = manager()
+        val syncing = launch(kotlinx.coroutines.Dispatchers.IO) { manager.syncData() }
+        kotlinx.coroutines.runInterruptible(kotlinx.coroutines.Dispatchers.IO) { reached.await() }
+        snapshotGate = null
+
+        manager.replaceServerLibrary() shouldBe false
+
+        go.countDown()
+        syncing.join()
+        messages.awaitError { it.text == localized(DMR.strings.server_library_not_replaced_sync_running) }
+    }
+
+    @Test
+    fun `a replace with a sync service the desktop does not have tells the user`() = runBlocking<Unit> {
+        preferences.syncService().set(SyncManager.SyncService.GOOGLE_DRIVE.value)
+
+        manager().replaceServerLibrary() shouldBe false
+
+        messages.awaitError { it.text == localized(DMR.strings.server_library_not_replaced_service) }
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+    }
+
+    @Test
+    fun `SyncYomi - a replace the server refuses with 412 tells the user`() = runBlocking<Unit> {
+        useSyncYomi()
+        val unreadable = unreadableRemote()
+        server.fail("/api/sync/content", FixtureFailure.Status(412, ""), times = 1)
+
+        manager().replaceServerLibrary() shouldBe false
+
+        messages.awaitError { it.text == localized(DMR.strings.server_library_not_replaced_refused) }
+        sync.remoteBackup shouldBe unreadable
+    }
+
+    @Test
+    fun `SyncYomi - a replace the server takes without an ETag is reported as done, and the next sync merges`() = runBlocking<Unit> {
+        useSyncYomi()
+        unreadableRemote()
+        server.fail("/api/sync/content", FixtureFailure.Status(200, ""), times = 1)
+
+        manager().replaceServerLibrary() shouldBe true
+
+        Await.until("the success notification") { messages.notifications.any { it.text == localized(DMR.strings.server_library_replaced) } }
+        preferences.lastSyncEtag().isSet() shouldBe false
+        messages.errors.shouldBeEmpty()
     }
 }

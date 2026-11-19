@@ -397,11 +397,19 @@ class SyncManager(
      * @return whether the server's library was replaced; the user is told either way
      */
     suspend fun replaceServerLibrary(): Boolean {
-        if (mutex.isLocked) return false
+        if (mutex.isLocked) {
+            // An automatic sync started before the user confirmed
+            notifier.showSyncError(localized(DMR.strings.server_library_not_replaced_sync_running))
+            return false
+        }
         return mutex.withLock {
             _running.value = true
             try {
                 replaceServerLibraryNow()
+            } catch (e: SyncYomiSyncService.ReplaceRefusedException) {
+                logcat(LogPriority.WARN, e) { "The server refused to replace its library" }
+                notifier.showSyncError(localized(DMR.strings.server_library_not_replaced_refused))
+                false
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 logcat(LogPriority.ERROR, e) { "Replacing the server's library failed" }
@@ -415,7 +423,12 @@ class SyncManager(
 
     private suspend fun replaceServerLibraryNow(): Boolean {
         val type = SyncService.fromInt(syncPreferences.syncService().get())
-        if (type !in SUPPORTED || !serverAllowed()) return false
+        if (type !in SUPPORTED) {
+            notifier.showSyncError(localized(DMR.strings.server_library_not_replaced_service))
+            return false
+        }
+        // Tells the user itself
+        if (!serverAllowed()) return false
         safetySnapshot.take(SnapshotReason.SYNC).onFailure { e ->
             notifier.showSyncError(localized(DMR.strings.server_library_not_replaced_no_safety_backup, SafetySnapshot.errorText(e)))
             return false
@@ -429,6 +442,7 @@ class SyncManager(
             SyncService.SYNCYOMI -> SyncYomiSyncService(context, json, syncPreferences, notifier).replaceRemote(syncData)
             else -> false
         }
+        // The services tell the user why (WebDAV's settings, SyncYomi's refusal)
         if (!replaced) return false
         // The server holds this computer's library: nothing is waiting to be restored here
         restorePending().delete()
