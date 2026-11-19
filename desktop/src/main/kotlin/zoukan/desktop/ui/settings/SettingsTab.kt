@@ -396,7 +396,7 @@ internal fun palerSurface(surface: Color): Color {
 }
 
 /** Settings > Reader. */
-private fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
+internal fun LazyListScope.readerSettings(preferences: DesktopPreferences) {
     settingsGroup(localized(MR.strings.pref_category_reader))
     item {
         ChoicePreference(

@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.jupiter.api.AfterEach
@@ -63,6 +64,7 @@ import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.DesktopPreferences
@@ -152,9 +154,11 @@ class SettingsScreensBehaviorTest {
         Injekt.addSingleton<SecretStore>(MemorySecretStore())
         Injekt.addSingleton(mockk<Application>(relaxed = true))
         Injekt.addSingleton(mockk<SourceManager>(relaxed = true))
-        Injekt.addSingleton(mockk<DesktopExtensionManager>(relaxed = true) {
-            every { installedExtensionsFlow } returns MutableStateFlow(emptyMap())
-        })
+        Injekt.addSingleton(
+            mockk<DesktopExtensionManager>(relaxed = true) {
+                every { installedExtensionsFlow } returns MutableStateFlow(emptyMap())
+            },
+        )
     }
 
     @AfterEach
@@ -270,7 +274,7 @@ class SettingsScreensBehaviorTest {
     fun `security incognito toggle updates Incognito mode`() {
         val incognito = Incognito(store, sourcePrefs, Injekt.get(), exhPrefs)
         Injekt.addSingleton(incognito)
-        Injekt.addSingleton(AppLock(store, Injekt.get()))
+        Injekt.addSingleton(AppLock(Injekt.get(), MemorySecretStore()))
 
         runDesktopComposeUiTest {
             setContent { LazyColumn(Modifier.testTag("security-settings")) { securitySettings() } }
@@ -344,9 +348,10 @@ class SettingsScreensBehaviorTest {
 
     @Test
     fun `discord connections hides options when off and stores hidden categories as ids`() {
+        val uncategorized = Category(id = Category.UNCATEGORIZED_ID, name = "", order = 0L, flags = 0L, hidden = false)
         val shelf = Category(id = 42L, name = "Private Shelf", order = 1L, flags = 0L, hidden = false)
         val getCategories = mockk<GetCategories> {
-            coEvery { await() } returns listOf(Category.UNCATEGORIZED, shelf)
+            coEvery { await() } returns listOf(uncategorized, shelf)
             coEvery { await(any<Long>()) } returns emptyList()
         }
         val presence = DiscordPresence(store, getCategories, Incognito(store, sourcePrefs, Injekt.get(), exhPrefs))
@@ -489,7 +494,7 @@ class SettingsScreensBehaviorTest {
                         updateStrategy = eu.kanade.tachiyomi.source.model.UpdateStrategy.ALWAYS_UPDATE,
                         version = 0L,
                         notes = "",
-                        memo = null,
+                        memo = JsonObject(emptyMap()),
                     )
                     mangasQueries.selectLastInsertedRowId()
                 }
@@ -518,7 +523,7 @@ class SettingsScreensBehaviorTest {
                         updateStrategy = eu.kanade.tachiyomi.source.model.UpdateStrategy.ALWAYS_UPDATE,
                         version = 0L,
                         notes = "",
-                        memo = null,
+                        memo = JsonObject(emptyMap()),
                     )
                     mangasQueries.selectLastInsertedRowId()
                 }
@@ -547,7 +552,7 @@ class SettingsScreensBehaviorTest {
             Dispatchers.resetMain()
             mainDispatcher.close()
             driver.close()
-            dbThread.close()
+            dbThread.executor.shutdownNow()
         }
     }
 

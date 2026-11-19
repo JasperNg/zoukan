@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
@@ -87,15 +88,19 @@ class SourceSettingsScreenTest {
         override suspend fun getPopularManga(page: Int) = MangasPage(emptyList(), false)
         override suspend fun getSearchManga(page: Int, query: String, filters: FilterList) = MangasPage(emptyList(), false)
         override suspend fun getLatestUpdates(page: Int) = MangasPage(emptyList(), false)
-        override suspend fun getMangaDetails(manga: SManga) = manga
-        override suspend fun getChapterList(manga: SManga) = emptyList<SChapter>()
+        override suspend fun getMangaUpdate(
+            manga: SManga,
+            chapters: List<SChapter>,
+            fetchDetails: Boolean,
+            fetchChapters: Boolean,
+        ) = SMangaUpdate(manga, chapters)
         override suspend fun getPageList(chapter: SChapter) = emptyList<eu.kanade.tachiyomi.source.model.Page>()
     }
 
     private fun registerSource(prefsKey: String, setup: (PreferenceScreen) -> Unit): JavaSharedPreferences {
         val prefs = JavaSharedPreferences(prefsKey)
         val app = mockk<Application>(relaxed = true) {
-            every { getSharedPreferences(any(), any()) } returns prefs
+            every { getSharedPreferences(any<String>(), any<Int>()) } returns prefs
         }
         val source = FakeConfigurableSource(SOURCE_ID, setup)
         val sourceManager = mockk<SourceManager>(relaxed = true) {

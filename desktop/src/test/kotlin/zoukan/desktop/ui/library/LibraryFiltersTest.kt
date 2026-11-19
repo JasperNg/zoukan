@@ -38,12 +38,17 @@ class LibraryFiltersTest {
         entry(4, listOf(0L)),
     )
 
-    private fun state(settings: LibraryScreenModel.Settings, tracks: Map<Long, List<Track>> = emptyMap()) = LibraryScreenModel.State(
+    private fun state(
+        settings: LibraryScreenModel.Settings,
+        tracks: Map<Long, List<Track>> = emptyMap(),
+        downloadCounts: Map<Long, Int> = emptyMap(),
+    ) = LibraryScreenModel.State(
         loading = false,
         items = items,
         categories = listOf(category(0), category(1), category(2, hidden = true)),
         settings = settings,
         tracks = tracks,
+        downloadCounts = downloadCounts,
     )
 
     private fun LibraryScreenModel.State.shown() = visible.map { it.id }
@@ -97,6 +102,15 @@ class LibraryFiltersTest {
         val searching = state(LibraryScreenModel.Settings()).copy(query = "x")
         searching.shown().size shouldBe 4
         searching.copy(searchResults = setOf(2L)).shown() shouldContainExactly listOf(2L)
+    }
+
+    @Test
+    fun `downloaded filter keeps only downloaded entries and restores all when disabled`() {
+        val counts = mapOf(2L to 1, 4L to 0)
+        state(LibraryScreenModel.Settings(downloaded = TriState.ENABLED_IS), downloadCounts = counts)
+            .shown() shouldContainExactly listOf(2L)
+        state(LibraryScreenModel.Settings(downloaded = TriState.DISABLED), downloadCounts = counts)
+            .shown() shouldContainExactly listOf(1L, 2L, 3L, 4L)
     }
 
     @Test
