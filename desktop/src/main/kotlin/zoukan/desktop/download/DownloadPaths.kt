@@ -162,12 +162,14 @@ class DownloadPaths(
         fun name(a: Boolean, h: Boolean) = chapterDirName(chapter.name, chapter.scanlator, a, if (h) md5 else null)
         fun android(a: Boolean, h: Boolean) = androidChapterDirName(chapter.name, chapter.scanlator, a, if (h) md5 else null)
         val current = listOf(name(ascii, hash), FileNames.buildValidFilename(v1Input), name(!ascii, !hash), name(!ascii, hash), name(ascii, !hash))
-        // Android's names where they are not valid everywhere, after the desktop's own
-        val legacy = listOf(android(ascii, hash), FileNames.androidValidFilename(v1Input), android(!ascii, !hash), android(!ascii, hash), android(ascii, !hash))
-            .flatMap { legacyNames(it) }
-        val names = (current + legacy)
-            .distinct()
             .flatMap { listOf(it, "$it.cbz") }
+        // Android's names where they are not valid everywhere, after the desktop's own: a folder
+        // ending in a space is not a valid path on Windows, while its .cbz file ("<name> .cbz") is
+        val legacy = listOf(android(ascii, hash), FileNames.androidValidFilename(v1Input), android(!ascii, !hash), android(!ascii, hash), android(ascii, !hash))
+            .filterNot { FileNames.isPortable(it) }
+            .flatMap { listOf(it, "$it.cbz") }
+            .flatMap { legacyCandidateNames(it) }
+        val names = (current + legacy).distinct()
         synchronized(namesCache) { namesCache[key] = names }
         return names
     }
@@ -253,11 +255,10 @@ class DownloadPaths(
          * it is a valid path there, but names the device, never a folder.
          */
         internal fun legacyNames(name: String, windows: Boolean = IS_WINDOWS): List<String> =
-            if (FileNames.isPortable(name)) {
-                emptyList()
-            } else {
-                FileNames.spellingsOnDisk(name).filter { isPathHere(it) && !(windows && FileNames.isWindowsDeviceName(it)) }
-            }
+            if (FileNames.isPortable(name)) emptyList() else legacyCandidateNames(name, windows)
+
+        private fun legacyCandidateNames(name: String, windows: Boolean = IS_WINDOWS): List<String> =
+            FileNames.spellingsOnDisk(name).filter { isPathHere(it) && !(windows && FileNames.isWindowsDeviceName(it)) }
 
         private val IS_WINDOWS = System.getProperty("os.name").orEmpty().lowercase().contains("win")
 

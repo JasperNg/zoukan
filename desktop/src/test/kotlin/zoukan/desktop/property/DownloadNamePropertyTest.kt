@@ -440,6 +440,25 @@ class DownloadNameKnownDefectsTest {
     }
 
     @Test
+    fun `a chapter name cut at a trailing space still finds Android's CBZ`() {
+        val cut229 = "a".repeat(228) + " b"
+        val android229 = DownloadProvider.getChapterDirName(cut229, null, "/c/1", false, false)
+        android229 shouldBe "a".repeat(228) + " "
+        val names229 = paths(ascii = false, hash = false).validChapterNames(chapter(cut229))
+        names229.first() shouldBe "a".repeat(228)
+        // On Windows a folder ending in a space is not a valid path, but the CBZ file ("... .cbz") is
+        names229 shouldContain "$android229.cbz"
+        if (isPathHere(android229)) names229 shouldContain android229 else names229 shouldNotContain android229
+
+        val cut240 = "a".repeat(239) + " b"
+        val androidV1 = DiskUtil.buildValidFilename(cut240)
+        androidV1 shouldBe "a".repeat(239) + " "
+        val names240 = paths(ascii = false, hash = false).validChapterNames(chapter(cut240))
+        names240 shouldContain "$androidV1.cbz"
+        if (isPathHere(androidV1)) names240 shouldContain androidV1 else names240 shouldNotContain androidV1
+    }
+
+    @Test
     fun `half a surrogate pair does not reach the name`() {
         assertValid("\udbff", FileNames.buildValidFilename("\udbff"))
         FileNames.buildValidFilename("a\udbffb") shouldBe "a_b"
