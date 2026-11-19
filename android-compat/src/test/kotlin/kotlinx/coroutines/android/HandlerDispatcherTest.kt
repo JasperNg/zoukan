@@ -182,6 +182,8 @@ class HandlerDispatcherTest {
     @Test
     fun `rejected dispatch after looper quit cancels job and runs fallback on IO`() =
         withHandlerThread { thread, handler, dispatcher ->
+            handler.looper shouldBe thread.looper
+
             val delayedCancelled = CompletableFuture<Throwable?>()
             runBlocking {
                 val delayedJob =
@@ -224,7 +226,6 @@ class HandlerDispatcherTest {
             handle shouldBe NonDisposableHandle
             timeoutJob.isCancelled shouldBe true
             timeoutFallback.get(5, TimeUnit.SECONDS) shouldNotBe thread.name
-            handler.looper shouldBe thread.looper
         }
 
     @Test
