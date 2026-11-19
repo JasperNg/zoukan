@@ -209,6 +209,27 @@ class KcefLifecycleCleanerTest {
     }
 
     @Test
+    fun `disposeLater falls back to AWT when postToLooper returns false`() {
+        val awtQueue = ArrayDeque<Runnable>()
+        val registry = KcefCleanupRegistry<FakeOwner>(scheduleAwt = { awtQueue += it })
+        val browser = mockk<CefBrowser>(relaxed = true)
+        val client = mockk<CefClient>(relaxed = true)
+        val disposal = PendingDisposal(registry, browser, client)
+
+        registry.disposeLater(postToLooper = { false }, disposal = disposal)
+
+        registry.pendingCount shouldBe 1
+        awtQueue.size shouldBe 1
+        verify(exactly = 0) { browser.close(true) }
+        verify(exactly = 0) { client.dispose() }
+
+        awtQueue.removeFirst().run()
+        registry.pendingCount shouldBe 0
+        verify(exactly = 1) { browser.close(true) }
+        verify(exactly = 1) { client.dispose() }
+    }
+
+    @Test
     fun `weak handler forwarders delegate when alive and enforce safe defaults when collected`() {
         val browser = mockk<CefBrowser>(relaxed = true)
         val mainFrame = mockk<CefFrame>(relaxed = true) { every { isMain } returns true }

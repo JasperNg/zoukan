@@ -80,14 +80,20 @@ internal class KcefCleanupRegistry<T : Any>(
         pendingDisposals += disposal
     }
 
-    /** Enqueues [disposal] and schedules it on the AWT thread after [postToLooper] runs. */
+    /**
+     * Enqueues [disposal] and schedules it on the AWT thread after [postToLooper] runs, or directly
+     * on AWT when [postToLooper] returns `false` (such as after the looper has quit).
+     */
     fun disposeLater(
         postToLooper: (Runnable) -> Boolean,
         disposal: PendingDisposal?,
     ) {
         disposal ?: return
         pendingDisposals += disposal
-        postToLooper(Runnable { scheduleAwt(Runnable { disposal.run() }) })
+        val disposeOnAwt = Runnable { disposal.run() }
+        if (!postToLooper(Runnable { scheduleAwt(disposeOnAwt) })) {
+            scheduleAwt(disposeOnAwt)
+        }
     }
 
     fun disposeBrowserLater(

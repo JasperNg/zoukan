@@ -7,6 +7,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.download.ImageType
 import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.secrets.EncryptedFiles
+import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
@@ -126,8 +127,9 @@ object CustomCovers {
      * shown. Custom covers (the [FOLDER] subfolder) are the user's own and are never touched, as
      * Android's CoverCache keeps them apart. Returns how many files were deleted.
      */
-    fun clearCache(coverDir: File): Int =
+    fun clearCache(coverDir: File): Int = Images.withCoverLock {
         coverDir.listFiles().orEmpty().count { it.isFile && it.name != FOLDER && it.delete() }
+    }
 
     /** A custom cover's file name: [md5] of the entry's id. */
     private val COVER_NAME = Regex("[0-9a-f]{32}")

@@ -90,14 +90,17 @@ object Images {
     private lateinit var diskCacheDir: File
 
     @Volatile
-    private var codec: SettingsFileCodec? = null
+    internal var codec: SettingsFileCodec? = null
 
     /**
      * Reads, writes, deletes and lazy rewrites of cached source covers, so a rewrite never puts
      * back a cover just forgotten or replaced, a read never holds the file open while another
      * operation deletes or replaces it, and disk-cache clears are serialized.
      */
-    private val coverLock = Any()
+    @PublishedApi
+    internal val coverLock = Any()
+
+    internal inline fun <T> withCoverLock(block: () -> T): T = synchronized(coverLock, block)
 
     /** Whether incognito is on, for a source or (null) for the whole app; then nothing new is cached on disk. */
     @Volatile

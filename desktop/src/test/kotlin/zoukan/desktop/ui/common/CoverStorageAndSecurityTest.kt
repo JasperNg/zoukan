@@ -60,6 +60,7 @@ class CoverStorageAndSecurityTest {
 
         @AfterEach
         fun tearDown() {
+            Images.codec = null
             CustomCovers.codec = null
         }
 
@@ -415,8 +416,9 @@ class CoverStorageAndSecurityTest {
     }
 
     /**
-     * [Images.cachedCover], [Images.writeCoverFile], and [Images.forget] synchronize on the same
-     * cover lock so reads/rewrites never race with deletes, replacements, or other reads.
+     * [Images.cachedCover], [Images.writeCoverFile], [Images.forget], and [CustomCovers.clearCache]
+     * synchronize on the same cover lock so reads/rewrites never race with deletes, replacements,
+     * or other reads.
      */
     @Nested
     inner class CachedCoverRace {
@@ -437,7 +439,35 @@ class CoverStorageAndSecurityTest {
 
         @AfterEach
         fun tearDown() {
+            Images.codec = null
             CustomCovers.codec = null
+        }
+
+        @Test
+        fun `a plain cached cover cleared by clearCache while it is read and rewritten is never put back`() {
+            val file = File(covers, Images.hash("42:https://covers.example/clear-cache-race.png"))
+            repeat(200) {
+                file.parentFile.mkdirs()
+                file.writeBytes(image)
+                val start = CountDownLatch(1)
+                var readResult: Result<ByteArray?>? = null
+                var cleared = 0
+                val reader = thread {
+                    start.await()
+                    readResult = runCatching { Images.cachedCover(file) }
+                }
+                val clearer = thread {
+                    start.await()
+                    cleared = CustomCovers.clearCache(covers)
+                }
+                start.countDown()
+                reader.join()
+                clearer.join()
+                val bytes = readResult!!.getOrThrow()
+                (bytes == null || bytes.contentEquals(image)) shouldBe true
+                cleared shouldBe 1
+                file.exists() shouldBe false
+            }
         }
 
         @Test

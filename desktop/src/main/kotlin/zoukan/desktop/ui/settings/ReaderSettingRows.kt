@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,6 +88,7 @@ sealed interface ReaderSettingRow {
 
     /** A row that needs its own controls, such as the color filter's channels. */
     class Custom(
+        val title: StringResource,
         override val preference: Preference<*>,
         override val shownWhen: Preference<Boolean>? = null,
         val content: @Composable () -> Unit,
@@ -252,7 +254,7 @@ object ReaderSettingRows {
         val keepScreenOn = ReaderSettingRow.Switch(localized(MR.strings.pref_keep_screen_on), p.keepScreenOn())
         val flashOnPageChange = ReaderSettingRow.Switch(localized(MR.strings.pref_flash_page), p.flashOnPageChange(), localized(DMR.strings.reduces_ghosting_on_e_ink_monitors))
         val flashColor = ReaderSettingRow.Choice(localized(MR.strings.pref_flash_with), p.flashColor(), ReaderSettingChoices.flashColors, shownWhen = p.flashOnPageChange())
-        val flashDuration = ReaderSettingRow.Custom(p.flashDurationMillis(), shownWhen = p.flashOnPageChange()) { FlashDurationPreference(p) }
+        val flashDuration = ReaderSettingRow.Custom(MR.strings.pref_flash_duration, p.flashDurationMillis(), shownWhen = p.flashOnPageChange()) { FlashDurationPreference(p) }
         val flashInterval = ReaderSettingRow.Slider(
             localized(MR.strings.pref_flash_page_interval),
             p.flashPageInterval(),
@@ -321,14 +323,14 @@ object ReaderSettingRows {
         val forceHorizontalSeekbar = ReaderSettingRow.Switch(localized(DMR.strings.force_horizontal_page_slider), p.forceHorizontalSeekbar(), localized(DMR.strings.vertical_modes_keep_the_slider_at))
         val landscapeVerticalSeekbar = ReaderSettingRow.Switch(localized(DMR.strings.vertical_page_slider_in_a_wide), p.landscapeVerticalSeekbar(), localized(DMR.strings.in_vertical_modes_also_when_the))
         val leftVerticalSeekbar = ReaderSettingRow.Switch(localized(DMR.strings.left_handed_vertical_page_slider), p.leftVerticalSeekbar())
-        val bottomButtons = ReaderSettingRow.Custom(p.readerBottomButtons()) { BottomButtonsRow(p) }
-        val autoscrollInterval = ReaderSettingRow.Custom(p.autoscrollInterval()) { AutoScrollIntervalRow(p) }
+        val bottomButtons = ReaderSettingRow.Custom(DMR.strings.bottom_bar_buttons, p.readerBottomButtons()) { BottomButtonsRow(p) }
+        val autoscrollInterval = ReaderSettingRow.Custom(DMR.strings.auto_scroll, p.autoscrollInterval()) { AutoScrollIntervalRow(p) }
 
         // The sheet's Filter tab
         val customBrightness = ReaderSettingRow.Switch(localized(MR.strings.pref_custom_brightness), p.customBrightness())
-        val brightnessValue = ReaderSettingRow.Custom(p.customBrightnessValue(), shownWhen = p.customBrightness()) { BrightnessRow(p) }
+        val brightnessValue = ReaderSettingRow.Custom(DMR.strings.brightness, p.customBrightnessValue(), shownWhen = p.customBrightness()) { BrightnessRow(p) }
         val colorFilter = ReaderSettingRow.Switch(localized(DMR.strings.color_filter), p.colorFilter())
-        val colorFilterValue = ReaderSettingRow.Custom(p.colorFilterValue(), shownWhen = p.colorFilter()) { ColorFilterRow(p) }
+        val colorFilterValue = ReaderSettingRow.Custom(DMR.strings.color_filter, p.colorFilterValue(), shownWhen = p.colorFilter()) { ColorFilterRow(p) }
         val colorFilterMode = ReaderSettingRow.Choice(
             localized(DMR.strings.blend_mode),
             p.colorFilterMode(),
@@ -381,7 +383,7 @@ object ReaderSettingRows {
                 is ReaderSettingRow.Custom -> SettingsSearchEntry(
                     category = SettingsCategory.Reader,
                     group = group,
-                    title = localized(MR.strings.pref_flash_duration),
+                    title = localized(row.title),
                     itemKey = "reader-${row.preference.key()}",
                 )
             }
