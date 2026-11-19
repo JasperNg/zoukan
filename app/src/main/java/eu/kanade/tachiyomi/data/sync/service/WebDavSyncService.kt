@@ -104,8 +104,14 @@ class WebDavSyncService(
     }
 
     override suspend fun doSync(syncData: SyncData): Backup? {
-        ensureFolderExists()
+        // ZOUKAN -->
+        // ensureFolderExists() moved into the try: a folder that cannot be created is a sync error
+        // like any other, which doSync reports and returns as null
+        // ZOUKAN <--
         try {
+            // ZOUKAN -->
+            ensureFolderExists()
+            // ZOUKAN <--
             val (remoteData, etag) = pullSyncData()
 
             val finalSyncData = if (remoteData != null) {

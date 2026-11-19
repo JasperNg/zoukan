@@ -136,6 +136,19 @@ class SyncFaultsTest {
         syncWorks()
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("folderFaults")
+    fun `a sync folder that cannot be created is a handled sync error, uploads nothing, and the next sync works`(name: String, failure: FixtureFailure) {
+        // The first request is the folder's MKCOL (its path is a prefix of the file's)
+        server.fail("/dav/${sync.davFolder}", failure, times = 1)
+
+        // doSync returns its handled failure, as for any other failure, rather than throwing
+        failedAndKeptRemote(syncNow(), etagBefore = "")
+        sync.calls.filter { it.method == "PUT" }.shouldBeEmpty()
+
+        syncWorks()
+    }
+
     @Test
     fun `an upload that fails is a sync error, keeps the remote library and the last ETag, and the next sync works`() {
         // The download goes through (a pass-through rule used once), the upload fails
@@ -276,6 +289,12 @@ class SyncFaultsTest {
     }
 
     companion object {
+        @JvmStatic
+        fun folderFaults() = listOf(
+            arrayOf("HTTP 403", FixtureFailure.Status(403)),
+            arrayOf("connection closed without an answer", FixtureFailure.Drop),
+        )
+
         @JvmStatic
         fun downloadFaults() = listOf(
             arrayOf("HTTP 503", FixtureFailure.Status(503)),
