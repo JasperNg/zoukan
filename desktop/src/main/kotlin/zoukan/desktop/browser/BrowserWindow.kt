@@ -27,6 +27,7 @@ import xyz.nulldev.androidcompat.webkit.CefCookieSync
 import xyz.nulldev.androidcompat.webkit.CefDownloadBlocker
 import xyz.nulldev.androidcompat.webkit.JsDialogLimiter
 import xyz.nulldev.androidcompat.webkit.KcefNavigationPolicy
+import xyz.nulldev.androidcompat.webkit.NativeCallback
 import xyz.nulldev.androidcompat.webkit.evaluateJavaScriptDecoded
 import zoukan.desktop.browser.blocking.BlockPolicy
 import zoukan.desktop.browser.blocking.ContentBlocker
@@ -143,16 +144,17 @@ class BrowserWindow(
             CefCookieSync.copyToCef(cookieScope?.let { scope -> scope::copiesToChromium })
             val address = JTextField(startUrl)
             client.addDisplayHandler(object : CefDisplayHandlerAdapter() {
-                override fun onAddressChange(browser: CefBrowser, frame: CefFrame, url: String) {
+                // Callbacks from Chromium's native code: none throws back there (NativeCallback)
+                override fun onAddressChange(browser: CefBrowser, frame: CefFrame, url: String) = NativeCallback.guard(Unit, "The address change") {
                     if (frame.isMain) SwingUtilities.invokeLater { address.text = url }
                 }
 
-                override fun onTitleChange(browser: CefBrowser, title: String?) {
+                override fun onTitleChange(browser: CefBrowser, title: String?) = NativeCallback.guard(Unit, "The title change") {
                     SwingUtilities.invokeLater { this@BrowserWindow.frame?.title = title ?: "Zoukan" }
                 }
             })
             client.addLoadHandler(object : CefLoadHandlerAdapter() {
-                override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
+                override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) = NativeCallback.guard(Unit, "The end of a page load") {
                     if (frame.isMain) copyCookiesFrom(frame.url)
                 }
             })
@@ -167,7 +169,8 @@ class BrowserWindow(
                     frame: CefFrame?,
                     targetUrl: String?,
                     targetFrameName: String?,
-                ): Boolean {
+                    // On a failure the pop-up is dropped: never a native window
+                ): Boolean = NativeCallback.guard(true, "The pop-up handler") {
                     val opener = runCatching { browser.url }.getOrNull()
                     val action = BrowserPopups.decide(
                         targetUrl,
@@ -181,10 +184,10 @@ class BrowserWindow(
                         BrowserPopups.Action.Drop -> Unit
                     }
                     // Never a native window: it would escape the app lock and the secure screen
-                    return true
+                    true
                 }
 
-                override fun onAfterCreated(browser: CefBrowser) {
+                override fun onAfterCreated(browser: CefBrowser) = NativeCallback.guard(Unit, "The new browser's set-up") {
                     // Chromium's own user agent, never an override: an override leaves
                     // navigator.userAgent, navigator.userAgentData and the Sec-CH-UA headers
                     // disagreeing (the app's default is an Android one), and Cloudflare's Turnstile
@@ -261,13 +264,14 @@ class BrowserWindow(
      */
     private fun requestHandler() = object : CefRequestHandlerAdapter() {
         private val blocker = object : CefResourceRequestHandlerAdapter() {
-            override fun onBeforeResourceLoad(browser: CefBrowser?, frame: CefFrame?, request: CefRequest): Boolean {
+            // A failure lets the request through, as the content blocker does
+            override fun onBeforeResourceLoad(browser: CefBrowser?, frame: CefFrame?, request: CefRequest): Boolean = NativeCallback.guard(false, "The content blocker's request check") {
                 // The page itself, or a request it cannot read, is never blocked
                 val type = runCatching { request.resourceType }.getOrNull() ?: return false
                 if (type == CefRequest.ResourceType.RT_MAIN_FRAME) return false
                 val page = runCatching { browser?.url }.getOrNull()?.takeIf { it.isNotBlank() }
                     ?: runCatching { request.firstPartyForCookies }.getOrNull()
-                return ContentBlocker.shouldBlockInBrowser(request.url, page)
+                ContentBlocker.shouldBlockInBrowser(request.url, page)
             }
         }
 
@@ -277,7 +281,8 @@ class BrowserWindow(
             request: CefRequest,
             userGesture: Boolean,
             isRedirect: Boolean,
-        ): Boolean {
+            // On a failure the navigation is cancelled: the check keeps local files and other schemes out
+        ): Boolean = NativeCallback.guard(true, "The navigation check") {
             if (!frame.isMain) return false
             val url = runCatching { request.url }.getOrNull()
             // First, so a sign-in still hears of its app-scheme redirect, which is cancelled either way
@@ -287,7 +292,7 @@ class BrowserWindow(
                 return true
             }
             if (url != null) cookieScope?.navigating(url, userGesture, isRedirect)
-            return false
+            false
         }
 
         override fun getResourceRequestHandler(
@@ -298,7 +303,7 @@ class BrowserWindow(
             isDownload: Boolean,
             requestInitiator: String?,
             disableDefaultHandling: BoolRef?,
-        ): CefResourceRequestHandler? = blocker.takeIf { purpose.blocksContent }
+        ): CefResourceRequestHandler? = NativeCallback.guard(null, "The request handler's look-up") { blocker.takeIf { purpose.blocksContent } }
     }
 
     /**
@@ -318,14 +323,14 @@ class BrowserWindow(
             defaultPromptText: String?,
             callback: CefJSDialogCallback,
             suppressMessage: BoolRef,
-        ): Boolean {
+        ): Boolean = NativeCallback.guard(false, "The page dialog check") {
             val page = runCatching { browser.url }.getOrNull()
             if (!limiter.allow(page, originUrl, System.currentTimeMillis())) {
                 logcat { "The browser suppressed a page's dialog" }
                 suppressMessage.set(true)
             }
             // Chromium's dialog, or none when suppressed
-            return false
+            false
         }
 
         override fun onBeforeUnloadDialog(

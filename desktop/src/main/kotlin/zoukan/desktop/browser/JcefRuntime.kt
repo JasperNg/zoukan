@@ -18,6 +18,7 @@ import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefHelper
+import xyz.nulldev.androidcompat.webkit.NativeCallback
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
 import java.awt.EventQueue
@@ -209,11 +210,13 @@ object JcefRuntime {
             setAppHandler(
                 object : MavenCefAppHandlerAdapter() {
                     // On Chromium's UI thread, where its preferences can be set
-                    override fun onContextInitialized() = applyPrivacyPreferences()
+                    // Callbacks from Chromium's native code: none throws back there (NativeCallback)
+                    override fun onContextInitialized() = NativeCallback.guard(Unit, "Chromium's start") { applyPrivacyPreferences() }
 
                     // Once Chromium runs, it takes over macOS's Cmd+Q and calls this on the AWT
-                    // thread; false would let JCEF shut Chromium down under a running app (see quitRequest)
-                    override fun onBeforeTerminate(): Boolean = onBeforeTerminate(quitRequest)
+                    // thread; false would let JCEF shut Chromium down under a running app (see
+                    // quitRequest), so a failure answers true and Chromium keeps running
+                    override fun onBeforeTerminate(): Boolean = NativeCallback.guard(true, "The quit request") { onBeforeTerminate(quitRequest) }
                 },
             )
         }
