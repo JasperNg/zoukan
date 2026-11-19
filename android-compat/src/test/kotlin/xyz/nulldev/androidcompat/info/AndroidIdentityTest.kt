@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.info
 
 import android.content.Context
 import android.content.ContextWrapper

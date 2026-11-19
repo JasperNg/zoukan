@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.webkit
 
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly

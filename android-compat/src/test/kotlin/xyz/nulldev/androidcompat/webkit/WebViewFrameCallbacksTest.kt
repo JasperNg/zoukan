@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.webkit
 
 import android.graphics.Bitmap
 import android.os.Handler

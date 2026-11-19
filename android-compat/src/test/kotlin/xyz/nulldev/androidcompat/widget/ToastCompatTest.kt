@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.widget
 
 import android.content.Context
 import android.content.res.Resources

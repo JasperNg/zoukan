@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.text
 
 import android.app.ActivityManager
 import android.content.res.Resources

@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.graphics
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

@@ -1,4 +1,4 @@
-package zoukan.desktop.compat
+package xyz.nulldev.androidcompat.view
 
 import android.view.View
 import android.view.View.MeasureSpec
