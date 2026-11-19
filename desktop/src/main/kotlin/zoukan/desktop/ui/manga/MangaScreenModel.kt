@@ -39,6 +39,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.isVmFailure
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts
@@ -390,7 +391,7 @@ class MangaScreenModel(
                     throw e
                 } catch (e: Throwable) {
                     // A fatal error goes on to the crash report, after the refresh ends with an error
-                    if (e is VirtualMachineError && e !is StackOverflowError) error = sourceErrorText(e)
+                    if (e.isVmFailure()) error = sourceErrorText(e)
                     e.rethrowIfVmFailure()
                     // Throwable, not Exception: an extension built against another API fails with a
                     // LinkageError, which would leave the screen refreshing for good

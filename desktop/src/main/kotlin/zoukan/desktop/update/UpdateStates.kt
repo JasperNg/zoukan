@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import xyz.nulldev.androidcompat.util.isVmFailure
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import java.io.File
 
@@ -73,7 +74,7 @@ class UpdateStates(
             // Also errors (a LinkageError from the native secret store), so the state never stays at
             // Checking; a fatal error puts the state back first, as a cancel does, and goes on up
             // (only what rethrowIfVmFailure rethrows: a stack overflow is a failed check that shows)
-            if (e is VirtualMachineError && e !is StackOverflowError) mutableState.compareAndSet(State.Checking, previous)
+            if (e.isVmFailure()) mutableState.compareAndSet(State.Checking, previous)
             e.rethrowIfVmFailure()
             UpdateChecker.Result.Failed(e.message ?: e::class.simpleName.orEmpty())
         }

@@ -13,6 +13,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.util.isVmFailure
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.backup.RestoreGate
@@ -57,7 +58,7 @@ class BackgroundJobs(
                     // recursion included, waits for the next check. The loop is not restarted: what
                     // ran out of memory once would likely do it again, half-done. The user is told
                     // once that automatic backups, sync and updates stopped until a restart
-                    if (e is VirtualMachineError && e !is StackOverflowError) {
+                    if (e.isVmFailure()) {
                         try {
                             onStopped()
                         } catch (notTold: Exception) {

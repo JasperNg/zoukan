@@ -38,6 +38,15 @@ class FatalErrorsTest {
     }
 
     @Test
+    fun `isVmFailure is what rethrowIfVmFailure rethrows`() {
+        listOf(OutOfMemoryError(), InternalError(), StackOverflowError(), NoClassDefFoundError("x"), IOException()).forEach { e ->
+            e.isVmFailure() shouldBe rethrown(e, Throwable::rethrowIfVmFailure)
+        }
+        OutOfMemoryError().isVmFailure() shouldBe true
+        StackOverflowError().isVmFailure() shouldBe false
+    }
+
+    @Test
     fun `a catch with the helper first lets an OutOfMemoryError out and handles an exception`() {
         fun guarded(failure: Throwable): String = try {
             throw failure

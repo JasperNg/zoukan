@@ -39,7 +39,14 @@ fun Throwable.rethrowIfFatal() {
  * code the path runs.
  */
 fun Throwable.rethrowIfVmFailure() {
-    if (this is VirtualMachineError && this !is StackOverflowError) throw this
+    if (isVmFailure()) throw this
 }
+
+/**
+ * Whether this is what [rethrowIfVmFailure] rethrows: a [VirtualMachineError] other than a
+ * [StackOverflowError]. For a catch that must end something (a busy state, a loop) before the error
+ * goes on.
+ */
+fun Throwable.isVmFailure(): Boolean = this is VirtualMachineError && this !is StackOverflowError
 
 // ZOUKAN: whole file <--
