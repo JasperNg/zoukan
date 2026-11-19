@@ -96,12 +96,14 @@ class CookieJourneyTest {
                 step("Clear cookies in Settings (Advanced), found with settings search") {
                     runOnUiThread { navigator?.push(SettingsScreen) }
                     waitFor(hasText("Search settings"))
-                    // Search results are the settings themselves: clicking one runs it
+                    // Search results jump to the setting's page and highlight it; click the row there to clear cookies
                     onAllNodes(hasSetTextAction()).onFirst().performTextInput("Clear cookies")
                     val clearCookies = hasText("Clear cookies") and !hasSetTextAction()
                     waitFor(clearCookies)
                     shot("3-search")
                     onAllNodes(clearCookies).onFirst().performClick()
+                    waitFor(hasText("Signs you out of sites and forgets passed Cloudflare checks"))
+                    onAllNodes(clearCookies).onFirst().performScrollTo().performClick()
                     waitOrDump("for the Cookies cleared toast") { "Cookies cleared" in toasts }
                     shot("4-cleared")
                 }

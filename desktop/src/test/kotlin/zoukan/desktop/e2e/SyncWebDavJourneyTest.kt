@@ -113,6 +113,7 @@ class SyncWebDavJourneyTest {
                     }
 
                     step("Wrong credentials: an error message, the library as it was") {
+                        openSettingsCategory(SettingsCategory.Data)
                         runOnUiThread { navigator?.push(SettingsScreen) }
                         waitFor(hasText("Search settings"))
                         editText("Password", "not-the-password")
