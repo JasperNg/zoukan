@@ -21,8 +21,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import tachiyomi.core.common.preference.DesktopPreferenceStore
+import org.junit.jupiter.api.extension.RegisterExtension
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
@@ -31,22 +32,31 @@ import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.model.Track
-import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
-import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.testing.Await
+import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import java.util.concurrent.Executors
 
-@OptIn(ForTestsOnly::class, ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewProjectorTest {
+
+    @JvmField
+    @RegisterExtension
+    val injekt = FreshInjekt()
 
     private val main = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val models = mutableListOf<LibraryScreenModel>()
 
-    init {
+    @BeforeEach
+    fun setUp() {
         Dispatchers.setMain(main)
+        Injekt.addSingleton(mockk<SourceManager>(relaxed = true))
     }
 
     @AfterEach
@@ -62,7 +72,6 @@ class LibraryViewProjectorTest {
                     }
                 }
             }
-            JavaSharedPreferences.awaitPendingSaves()
         } finally {
             Dispatchers.resetMain()
             main.close()
@@ -126,9 +135,8 @@ class LibraryViewProjectorTest {
         items: List<LibraryManga> = emptyList(),
         categories: List<Category> = emptyList(),
     ): LibraryScreenModel {
-        val suffix = System.nanoTime()
-        val libraryPrefs = LibraryPreferences(DesktopPreferenceStore(JavaSharedPreferences("lib_proj_$suffix")))
-        val desktopPrefs = DesktopPreferences(DesktopPreferenceStore(JavaSharedPreferences("desktop_proj_$suffix")))
+        val libraryPrefs = LibraryPreferences(TestPreferenceStore())
+        val desktopPrefs = DesktopPreferences(TestPreferenceStore())
         return LibraryScreenModel(
             getLibraryManga = mockk { every { subscribe() } returns flowOf(items) },
             getCategories = mockk { every { subscribe() } returns flowOf(categories) },
@@ -189,7 +197,7 @@ class LibraryViewProjectorTest {
     @Test
     fun `pure projection handles tabs, empty search categories, item metadata, and counts`() {
         val items = listOf(
-            entry(1, "Alpha", categories = listOf(1L), source = 10L, totalChapters = 4, readCount = 4),
+            entry(1, "Alpha", categories = listOf(1L), source = 10L, status = SManga.COMPLETED, totalChapters = 4, readCount = 4),
             entry(2, "Bravo", categories = listOf(1L, 2L), source = 20L, totalChapters = 4, readCount = 1),
             entry(3, "Charlie", categories = emptyList(), source = LocalSource.ID, totalChapters = 4, readCount = 0),
         )
@@ -229,21 +237,33 @@ class LibraryViewProjectorTest {
         val localItem = projected.visible.first { it.id == 3L }
         localItem.isLocal shouldBe true
 
-        // Filtering out everything in category 2 hides category 2 unless showEmptyCategoriesSearch is true
-        val downloadedOnly = unreadOnly.copy(
-            filterPrefs = LibraryScreenModel.FilterPrefs(downloaded = TriState.ENABLED_IS, unread = TriState.ENABLED_IS),
-        )
-        LibraryViewProjector.project(input.copy(settings = downloadedOnly)).tabs.map { it.id } shouldContainExactly listOf(0L, 1L, 2L)
-
-        val localOnly = downloadedOnly.copy(
+        // Filtering to completed entries leaves only entry 1 in category 1, hiding empty tabs unless showEmptyCategoriesSearch is true
+        val completedOnly = unreadOnly.copy(
             filterPrefs = LibraryScreenModel.FilterPrefs(completed = TriState.ENABLED_IS),
         )
-        LibraryViewProjector.project(input.copy(settings = localOnly)).tabs.map { it.id } shouldContainExactly listOf(1L)
+        LibraryViewProjector.project(input.copy(settings = completedOnly)).tabs.map { it.id } shouldContainExactly listOf(1L)
 
-        val keepEmpty = localOnly.copy(
-            displayPrefs = localOnly.displayPrefs.copy(showEmptyCategoriesSearch = true),
+        val keepEmptyFilter = completedOnly.copy(
+            displayPrefs = completedOnly.displayPrefs.copy(showEmptyCategoriesSearch = true),
         )
-        LibraryViewProjector.project(input.copy(settings = keepEmpty)).tabs.map { it.id } shouldContainExactly listOf(0L, 1L, 2L)
+        LibraryViewProjector.project(input.copy(settings = keepEmptyFilter)).tabs.map { it.id } shouldContainExactly listOf(0L, 1L, 2L)
+
+        // Searching also hides empty category tabs unless showEmptyCategoriesSearch is true
+        val searchInput = input.copy(
+            query = "Alpha",
+            searchResults = setOf(1L),
+            settings = LibraryScreenModel.Settings(
+                displayPrefs = LibraryScreenModel.DisplayPrefs(showEmptyCategoriesSearch = false),
+            ),
+        )
+        LibraryViewProjector.project(searchInput).tabs.map { it.id } shouldContainExactly listOf(1L)
+
+        val keepEmptySearch = searchInput.copy(
+            settings = LibraryScreenModel.Settings(
+                displayPrefs = LibraryScreenModel.DisplayPrefs(showEmptyCategoriesSearch = true),
+            ),
+        )
+        LibraryViewProjector.project(keepEmptySearch).tabs.map { it.id } shouldContainExactly listOf(0L, 1L, 2L)
     }
 
     @Test
@@ -379,8 +399,12 @@ class LibraryViewProjectorTest {
         Await.until("typed settings updated", 5_000, { model.state.value }) {
             val current = model.state.value
             current.settings.display == LibraryDisplayMode.List &&
+                current.settings.showEmptyCategoriesSearch &&
+                !current.settings.useLangIcon &&
                 current.settings.group == LibraryGroup.BY_SOURCE &&
-                current.settings.includedCategories == setOf(1L)
+                current.settings.includedCategories == setOf(1L) &&
+                current.settings.excludedCategories == setOf(2L) &&
+                current.settings.lewd == TriState.ENABLED_NOT
         }
 
         val state = model.state.value
