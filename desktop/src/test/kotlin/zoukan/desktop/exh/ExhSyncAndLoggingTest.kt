@@ -5,9 +5,11 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.all.MangaDex
+import exh.log.maybeInjectEHLogger
 import exh.md.utils.MdUtil
 import exh.metadata.metadata.MangaDexSearchMetadata
 import exh.metadata.metadata.RaisedSearchMetadata
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -18,6 +20,7 @@ import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import mihon.domain.source.interactor.UpdateMangaFromRemote
 import mihon.domain.source.models.RemoteMangaUpdate
+import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
@@ -129,5 +132,14 @@ class MangaDexSyncTest {
         coVerify(exactly = 0) { updateManga.awaitUpdateFavorite(any(), any()) }
         coVerify(exactly = 0) { updateMangaFromRemote.invoke(manga = any(), manualFetch = any()) }
         coVerify(exactly = 0) { insertFlatMetadata.await(any<RaisedSearchMetadata>()) }
+    }
+}
+
+class EhNetworkLoggingTest {
+    @Test
+    fun `the E-Hentai client adds no logging interceptor, so cookies and bodies never reach the log`() {
+        val builder = OkHttpClient.Builder().maybeInjectEHLogger()
+        builder.interceptors().shouldBeEmpty()
+        builder.networkInterceptors().shouldBeEmpty()
     }
 }

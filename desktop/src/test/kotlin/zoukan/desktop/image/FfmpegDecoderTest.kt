@@ -1,25 +1,42 @@
 package zoukan.desktop.image
 
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.decode.ImageSource
+import coil3.fetch.SourceFetchResult
+import coil3.request.Options
+import coil3.size.Size
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.runBlocking
+import okio.Buffer
+import okio.FileSystem
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.download.ImageType
 import zoukan.desktop.ui.reader.PageImage
 import java.awt.Rectangle
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import javax.imageio.ImageIO
 import kotlin.math.abs
+
+private fun imageResource(path: String): ByteArray =
+    FfmpegImageDecoderTest::class.java.getResourceAsStream(path)!!.use { it.readBytes() }
 
 /**
  * AVIF pages and covers (Atsumaru serves only AVIF) decode on desktop, where Skia and ImageIO
  * alone cannot read them.
  */
 class FfmpegImageDecoderTest {
-    private fun fixture(name: String): ByteArray = javaClass.getResourceAsStream("/images/$name")!!.use { it.readBytes() }
+    private fun fixture(name: String): ByteArray = imageResource("/images/$name")
 
     private fun assertColor(argb: Int, r: Int, g: Int, b: Int) {
         val (ar, ag, ab) = listOf(16, 8, 0).map { (argb shr it) and 0xFF }
@@ -152,7 +169,7 @@ class FfmpegImageDecoderTest {
         HeifHeader.primaryImageSize(fixture("blue-16x40.avif")) shouldBe (16 to 40)
         HeifHeader.primaryImageSize(fixture("alpha-32x24.avif")) shouldBe (32 to 24)
         listOf("avif-1", "avif-2", "avif-3").forEach { name ->
-            val bytes = javaClass.getResourceAsStream("/e2e-fixtures/images/$name.avif")!!.use { it.readBytes() }
+            val bytes = imageResource("/e2e-fixtures/images/$name.avif")
             val decoded = FfmpegImageDecoder.decode(bytes)
             HeifHeader.primaryImageSize(bytes) shouldBe (decoded.width to decoded.height)
         }
@@ -231,5 +248,96 @@ class FfmpegImageDecoderTest {
         part.height shouldBe 20
         decoder.recycle()
         decoder.decode() shouldBe null
+    }
+}
+
+/**
+ * Covers AVIF decoding through Coil ([FfmpegCoilDecoder]) and multi-page AVIF reader decoding
+ * ([PageImage.decode]), ensuring AVIF chapters and covers render on desktop without Skia support.
+ */
+class FfmpegCoilDecoderTest {
+
+    @TempDir
+    lateinit var tempDir: File
+
+    private fun options(size: Size = Size.ORIGINAL): Options =
+        Options(context = PlatformContext.INSTANCE, size = size)
+
+    @Test
+    fun `factory handles AVIF bytes and leaves other formats to the next decoder`() {
+        val factory = FfmpegCoilDecoder.Factory()
+        val loader = ImageLoader.Builder(PlatformContext.INSTANCE).build()
+        val opts = options()
+
+        val avifResult = SourceFetchResult(
+            source = ImageSource(Buffer().write(imageResource("/images/red-32x24.avif")), FileSystem.SYSTEM),
+            mimeType = "image/avif",
+            dataSource = coil3.decode.DataSource.NETWORK,
+        )
+        factory.create(avifResult, opts, loader).shouldNotBeNull()
+
+        val pngBytes = ByteArrayOutputStream().also {
+            ImageIO.write(BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), "png", it)
+        }.toByteArray()
+        val pngResult = SourceFetchResult(
+            source = ImageSource(Buffer().write(pngBytes), FileSystem.SYSTEM),
+            mimeType = "image/png",
+            dataSource = coil3.decode.DataSource.NETWORK,
+        )
+        factory.create(pngResult, opts, loader).shouldBeNull()
+    }
+
+    @Test
+    fun `decodes AVIF from memory and downscales when target size is smaller than half`() = runBlocking<Unit> {
+        val bytes = imageResource("/images/blue-16x40.avif")
+        val factory = FfmpegCoilDecoder.Factory()
+        val loader = ImageLoader.Builder(PlatformContext.INSTANCE).build()
+
+        val fullFetch = SourceFetchResult(
+            source = ImageSource(Buffer().write(bytes), FileSystem.SYSTEM),
+            mimeType = "image/avif",
+            dataSource = coil3.decode.DataSource.MEMORY,
+        )
+        val full = factory.create(fullFetch, options(), loader)!!.decode()!!
+        full.isSampled shouldBe false
+        full.image.width shouldBe 16
+        full.image.height shouldBe 40
+
+        val scaledFetch = SourceFetchResult(
+            source = ImageSource(Buffer().write(bytes), FileSystem.SYSTEM),
+            mimeType = "image/avif",
+            dataSource = coil3.decode.DataSource.MEMORY,
+        )
+        val scaled = factory.create(scaledFetch, options(Size(4, 10)), loader)!!.decode()!!
+        scaled.isSampled shouldBe true
+        scaled.image.width shouldBe 4
+        scaled.image.height shouldBe 10
+    }
+
+    @Test
+    fun `decodes AVIF pages from e2e fixtures into drawable PageImage slices`() {
+        listOf("avif-1", "avif-2", "avif-3").forEach { name ->
+            val bytes = imageResource("/e2e-fixtures/images/$name.avif")
+            val page = PageImage.decode(bytes)
+            try {
+                page.width shouldBe 600
+                page.height shouldBe 900
+                page.slices.shouldNotBeEmpty()
+                page.slices.first().width shouldBe 600
+            } finally {
+                page.release()
+            }
+        }
+    }
+
+    @Test
+    fun `decodes AVIF directly from a system file`() = runBlocking<Unit> {
+        val avifFile = File(tempDir, "sample.avif").apply {
+            writeBytes(imageResource("/images/red-32x24.avif"))
+        }
+        val source = ImageSource(okio.Path.Companion.run { avifFile.toOkioPath() }, FileSystem.SYSTEM)
+        val result = FfmpegCoilDecoder(source, options()).decode()
+        result.image.width shouldBe 32
+        result.image.height shouldBe 24
     }
 }
