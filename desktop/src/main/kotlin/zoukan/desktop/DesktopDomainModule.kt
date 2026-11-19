@@ -231,7 +231,6 @@ class DesktopDomainModule : InjektModule {
             )
         }
         addSingletonFactory { BackgroundJobs(get(), get(), get(), get()) }
-        addSingletonFactory { zoukan.desktop.discord.DiscordPresence(get(), get(), get()) }
 
         // Trackers (Phase 6): the Android app's tracker code, see app-shared.txt
         addSingletonFactory { TrackPreferences(get()) }

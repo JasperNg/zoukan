@@ -544,9 +544,6 @@
     <string name="disk_space">Disk space</string>
     <string name="export_library">Export library</string>
     <string name="could_not_export_the_library">Could not export the library</string>
-    <string name="show_what_you_read_on_your">Show what you read on your Discord profile. Needs the Discord app running on this computer.</string>
-    <string name="connected_to_discord">Connected to Discord</string>
-    <string name="waiting_for_the_discord_app">Waiting for the Discord app</string>
     <string name="hide_what_i_read">Hide what I read</string>
     <string name="show_only_that_zoukan_is_in">Show only that Zoukan is in use</string>
     <string name="hide_these_categories">Hide these categories</string>

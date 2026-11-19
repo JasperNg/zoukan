@@ -246,8 +246,7 @@ Residual risk:
 4. **The app contacts servers without being asked**: the extension stores' lists at each start,
    GitHub's release feed 30 seconds after start and then daily (on by default; About > "Check for
    updates automatically"), the sources of a saved download queue, which carries on after a
-   restart, and each user block list's host weekly while "Block ads and trackers" is on (when a browser window opens), which learns the user's address. Chromium starts only when a page needs it. Discord Rich Presence is
-   off by default.
+   restart, and each user block list's host weekly while "Block ads and trackers" is on (when a browser window opens), which learns the user's address. Chromium starts only when a page needs it.
 
 ## Local files
 

@@ -218,7 +218,6 @@ fun runZoukanApp() {
         LaunchedEffect(away) { lifecycle.onAwayChanged(away) }
         // Data sync on start and when the window comes back, as Android's sync triggers
         LaunchedEffect(Unit) { lifecycle.onStart() }
-        remember { Injekt.get<zoukan.desktop.discord.DiscordPresence>().apply { start() } }
         LaunchedEffect(hidden) { lifecycle.onHiddenChanged(hidden) }
         // ZOUKAN <--
 
@@ -585,12 +584,6 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         }
         val tabs = home.tabs
         val tab = tabs.selected
-        // ZOUKAN -->
-        // Discord Rich Presence shows the tab in use, as Android's tabs set it
-        LaunchedEffect(tab) {
-            Injekt.get<zoukan.desktop.discord.DiscordPresence>().setScreen(AppShell.discordScreen(tab))
-        }
-        // ZOUKAN <--
         val library = rememberScreenModel { LibraryScreenModel() }
         // ZOUKAN -->
         DisposableEffect(home, library) {
@@ -730,13 +723,4 @@ internal object AppShell {
 
     /** Opening Updates clears its badge, as Android's Updates tab does. */
     fun clearsUpdatesBadge(tab: HomeTab, newUpdates: Int): Boolean = tab == HomeTab.Updates && newUpdates != 0
-
-    /** The Discord Rich Presence screen of a tab. */
-    fun discordScreen(tab: HomeTab): zoukan.desktop.discord.DiscordPresence.Screen = when (tab) {
-        HomeTab.Library -> zoukan.desktop.discord.DiscordPresence.Screen.LIBRARY
-        HomeTab.Updates -> zoukan.desktop.discord.DiscordPresence.Screen.UPDATES
-        HomeTab.History -> zoukan.desktop.discord.DiscordPresence.Screen.HISTORY
-        HomeTab.Browse -> zoukan.desktop.discord.DiscordPresence.Screen.BROWSE
-        HomeTab.More -> zoukan.desktop.discord.DiscordPresence.Screen.MORE
-    }
 }

@@ -254,7 +254,7 @@ class DesktopBackups(
          * Settings a restore writes only when the user confirms them: they decide when the app
          * locks, which DNS it uses, where sync sends the library and whether it sends logins too,
          * whether the built-in browser blocks ads and trackers and which block lists it downloads,
-         * and whether the app talks to Discord or checks for updates. Never written by a restore
+         * and whether the app checks for updates. Never written by a restore
          * nobody confirms (data sync, the command line).
          */
         internal val SENSITIVE_KEYS = setOf(
@@ -264,7 +264,6 @@ class DesktopBackups(
             "sync_service", "connection_sync_client_host", "connection_sync_client_api_key", "sync_privateSettings",
             "connection_webdav_url", "connection_webdav_username", "connection_webdav_password", "connection_webdav_folder",
             "zoukan_update_check", "zoukan_update_prereleases",
-            "pref_enable_discord_rpc",
         )
 
         internal fun isSensitive(key: String) = key in SENSITIVE_KEYS || Preference.isPrivate(key)

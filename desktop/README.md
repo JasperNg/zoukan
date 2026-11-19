@@ -257,7 +257,6 @@ asks once more.
 
 - Converting APKs with dex2jar fails JVM bytecode verification for R8-minified APKs, which is every
   current APK of the main extension store. Stores without jars only work for unminified extensions.
-- Discord Rich Presence talks to the Discord app on the same computer, not to Discord's servers.
 - Google Drive sync and the secure screen are Android only. See [PARITY.md](PARITY.md) for the
   other differences from Android.
 - The local source reads RAR 5 chapters through the system's `tar` command (bsdtar, on macOS and

@@ -29,7 +29,6 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import exh.source.ExhPreferences
 import io.kotest.matchers.shouldBe
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -53,8 +52,6 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
 import tachiyomi.data.DatabaseHandler
-import tachiyomi.domain.category.interactor.GetCategories
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -77,7 +74,6 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.db.DatabaseThread
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.db.DesktopSqliteDriver
-import zoukan.desktop.discord.DiscordPresence
 import zoukan.desktop.e2e.FixtureReleases
 import zoukan.desktop.e2e.FixtureServer
 import zoukan.desktop.exh.EhLogin
@@ -105,9 +101,9 @@ import kotlin.math.abs
 /**
  * Isolated Compose UI and database-level coverage for the settings pages pushed down from the
  * settings journeys: Appearance custom color picker, Library dialogs, Reader settings rows,
- * Security incognito toggle, E-Hentai language/category dialogs, Connections (Discord) hidden
- * categories, Advanced user-agent validation + HTTP header + onboarding guide reopen,
- * Clear database SQL deletion, and What's new external link filtering.
+ * Security incognito toggle, E-Hentai language/category dialogs, Advanced user-agent validation
+ * + HTTP header + onboarding guide reopen, Clear database SQL deletion, and What's new external
+ * link filtering.
  */
 @OptIn(ExperimentalTestApi::class)
 class SettingsScreensBehaviorTest {
@@ -343,37 +339,6 @@ class SettingsScreensBehaviorTest {
             onNodeWithText(localized(MR.strings.action_ok)).performClick()
             waitForIdle()
             exhPrefs.exhEnabledCategories().get() shouldBe "true,false,false,false,false,false,false,false,false,true"
-        }
-    }
-
-    @Test
-    fun `discord connections hides options when off and stores hidden categories as ids`() {
-        val uncategorized = Category(id = Category.UNCATEGORIZED_ID, name = "", order = 0L, flags = 0L, hidden = false)
-        val shelf = Category(id = 42L, name = "Private Shelf", order = 1L, flags = 0L, hidden = false)
-        val getCategories = mockk<GetCategories> {
-            coEvery { await() } returns listOf(uncategorized, shelf)
-            coEvery { await(any<Long>()) } returns emptyList()
-        }
-        val presence = DiscordPresence(store, getCategories, Incognito(store, sourcePrefs, Injekt.get(), exhPrefs))
-        Injekt.addSingleton(getCategories)
-        Injekt.addSingleton(presence)
-
-        runDesktopComposeUiTest {
-            setContent { LazyColumn(Modifier.testTag("discord-settings")) { discordSettings() } }
-            onNodeWithText(localized(DMR.strings.hide_what_i_read)).assertDoesNotExist()
-
-            presence.enabled().set(true)
-            waitForIdle()
-            onNodeWithText(localized(DMR.strings.hide_what_i_read)).assertExists()
-
-            onNodeWithText(localized(DMR.strings.hide_these_categories)).performClick()
-            waitForIdle()
-            onNodeWithText("Private Shelf").assertExists()
-            val boxes = onAllNodes(isToggleable())
-            boxes[boxes.fetchSemanticsNodes().size - 1].performClick()
-            onNodeWithText(localized(MR.strings.action_ok)).performClick()
-            waitForIdle()
-            presence.hiddenCategories().get() shouldBe setOf("42")
         }
     }
 

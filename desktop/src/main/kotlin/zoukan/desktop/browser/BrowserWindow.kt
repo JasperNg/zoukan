@@ -95,9 +95,6 @@ class BrowserWindow(
     // While the app lock is on, the window hides (see [Companion.followAppLock])
     private val registration = registry.register(onLockChange = { SwingUtilities.invokeLater(::applyLock) }) { disposeForQuit() }
 
-    // Whether the window counted itself as open for Discord presence; read and written on the AWT thread
-    private var shownForDiscord = false
-
     // Says that a pop-up to another site was stopped, and opens it here on request; AWT thread only
     private val popupBar by lazy { PopupBar() }
 
@@ -235,8 +232,6 @@ class BrowserWindow(
                 cookieScope?.userOpened(it)
                 browser.loadURL(it)
             }
-            discord()?.setWebView(true)
-            shownForDiscord = true
             frame = JFrame("Zoukan").apply {
                 defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
                 contentPane.add(top, BorderLayout.NORTH)
@@ -420,8 +415,6 @@ class BrowserWindow(
         }
     }
 
-    private fun discord() = runCatching { uy.kohesive.injekt.Injekt.get<zoukan.desktop.discord.DiscordPresence>() }.getOrNull()
-
     /** Waits until the window closes, [isDone] returns true (the window then closes) or the timeout. */
     fun await(timeoutMs: Long, isDone: () -> Boolean = { false }): Boolean {
         val now = System.currentTimeMillis()
@@ -454,10 +447,6 @@ class BrowserWindow(
 
     private fun cleanUp() {
         if (closed.count == 0L) return
-        if (shownForDiscord) {
-            shownForDiscord = false
-            discord()?.setWebView(false)
-        }
         browser?.url?.let { url -> runCatching { copyCookiesFrom(url) } }
         browser?.run {
             setCloseAllowed()

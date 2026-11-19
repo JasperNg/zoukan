@@ -5,7 +5,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.jupiter.api.Test
 import zoukan.desktop.browser.JcefRuntime
-import zoukan.desktop.discord.DiscordPresence
 import zoukan.desktop.tray.Notifications
 
 /**
@@ -101,16 +100,5 @@ class AppShellTest {
         // As it is: a negative count (never written by the app) shows no badge but is still cleared
         AppShell.railBadge(HomeTab.Updates, showBadge = true, newUpdates = -1, extensionUpdates = 0) shouldBe 0
         AppShell.clearsUpdatesBadge(HomeTab.Updates, newUpdates = -1) shouldBe true
-    }
-
-    @Test
-    fun `each tab has its Discord screen`() {
-        HomeTab.entries.associateWith { AppShell.discordScreen(it) } shouldBe mapOf(
-            HomeTab.Library to DiscordPresence.Screen.LIBRARY,
-            HomeTab.Updates to DiscordPresence.Screen.UPDATES,
-            HomeTab.History to DiscordPresence.Screen.HISTORY,
-            HomeTab.Browse to DiscordPresence.Screen.BROWSE,
-            HomeTab.More to DiscordPresence.Screen.MORE,
-        )
     }
 }

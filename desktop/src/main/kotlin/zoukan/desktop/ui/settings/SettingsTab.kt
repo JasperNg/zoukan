@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Search
@@ -88,7 +87,6 @@ import kotlinx.coroutines.withContext
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanRuntime
@@ -129,8 +127,8 @@ internal val backupStatusFlow: StateFlow<String?> get() = backupJobs.status
 
 /**
  * The settings pages, in the order and with the names of the Android app's settings list. Desktop
- * extras go on the page they belong to: the tray and keyboard shortcuts in Advanced, Discord in
- * Connections, data sync and data saver in Data and storage.
+ * extras go on the page they belong to: the tray and keyboard shortcuts in Advanced, data sync
+ * and data saver in Data and storage.
  */
 enum class SettingsCategory(val title: String, val subtitle: String, val icon: ImageVector) {
     Appearance(localized(MR.strings.pref_category_appearance), localized(MR.strings.pref_appearance_summary), Icons.Outlined.Palette),
@@ -138,7 +136,6 @@ enum class SettingsCategory(val title: String, val subtitle: String, val icon: I
     Reader(localized(MR.strings.pref_category_reader), localized(MR.strings.pref_reader_summary), Icons.AutoMirrored.Outlined.ChromeReaderMode),
     Downloads(localized(MR.strings.pref_category_downloads), localized(MR.strings.pref_downloads_summary), Icons.Outlined.GetApp),
     Tracking(localized(MR.strings.track), localized(MR.strings.pref_tracking_summary), Icons.Outlined.Sync),
-    Connections(localized(KMR.strings.pref_category_connections), "Discord", Icons.Outlined.Link),
     Browse(localized(MR.strings.browse), localized(MR.strings.pref_browse_summary), Icons.Outlined.Explore),
     Data(localized(MR.strings.label_data_storage), localized(MR.strings.pref_backup_summary), Icons.Outlined.Storage),
     Security(localized(MR.strings.pref_category_security), localized(MR.strings.pref_security_summary), Icons.Outlined.Security),
@@ -214,7 +211,6 @@ fun SettingsTab() {
                 downloadBehaviorSettings(categories)
             }
             SettingsCategory.Tracking -> trackingSettings()
-            SettingsCategory.Connections -> discordSettings()
             SettingsCategory.Browse -> browseSettings()
             SettingsCategory.Data -> {
                 dataSettings()

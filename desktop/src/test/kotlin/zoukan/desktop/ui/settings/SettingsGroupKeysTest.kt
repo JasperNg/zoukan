@@ -34,7 +34,6 @@ class SettingsGroupKeysTest {
         "Appearance" to page { appearanceSettings() },
         "Library" to page { librarySettings(emptyList()) },
         "Downloads" to page { downloadBehaviorSettings(emptyList()) },
-        "Connections" to page { discordSettings() },
         "Browse" to page { browseSettings() },
         "Data" to page {
             dataSettings()
@@ -64,6 +63,6 @@ class SettingsGroupKeysTest {
             val duplicates = keys.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
             check(duplicates.isEmpty()) { "$name has duplicate list keys: $duplicates" }
         }
-        pages.size shouldBe 10
+        pages.size shouldBe 9
     }
 }

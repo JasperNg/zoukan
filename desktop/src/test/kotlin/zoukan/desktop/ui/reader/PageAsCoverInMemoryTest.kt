@@ -187,7 +187,6 @@ class PageAsCoverInMemoryTest {
                     preferences = DesktopPreferences(store),
                     incognitoPolicy = lazyOf(mockk { every { isOn(any()) } returns false }),
                     syncManager = lazyOf(mockk(relaxed = true)),
-                    discordPresence = lazyOf(mockk(relaxed = true)),
                     trackChapters = lazyOf(mockk(relaxed = true)),
                     editManga = lazyOf(newEditManga()),
                     appScope = app,

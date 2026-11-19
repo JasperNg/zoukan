@@ -167,7 +167,6 @@ class WebtoonEndOfChapterTest {
                 preferences = prefs,
                 incognitoPolicy = lazyOf(mockk { every { isOn(any()) } returns true }),
                 syncManager = lazyOf(mockk(relaxed = true)),
-                discordPresence = lazyOf(mockk(relaxed = true)),
                 trackChapters = lazyOf(mockk(relaxed = true)),
                 appScope = app,
             ).also { models += it }

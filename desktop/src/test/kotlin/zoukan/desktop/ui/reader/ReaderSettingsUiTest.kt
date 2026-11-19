@@ -177,7 +177,6 @@ class ReaderSettingsUiTest {
         Injekt.addSingleton(prefs)
         Injekt.addSingleton(mockk<zoukan.desktop.security.Incognito> { every { isOn(any()) } returns true })
         Injekt.addSingleton(mockk<eu.kanade.tachiyomi.data.sync.SyncManager>(relaxed = true))
-        Injekt.addSingleton(mockk<zoukan.desktop.discord.DiscordPresence>(relaxed = true))
         Injekt.addSingleton(mockk<zoukan.desktop.track.TrackChapters>(relaxed = true))
     }
 

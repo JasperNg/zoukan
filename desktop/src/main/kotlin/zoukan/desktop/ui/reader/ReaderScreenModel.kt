@@ -77,7 +77,6 @@ class ReaderScreenModel(
     private val getMergedChapters: Lazy<GetMergedChaptersByMangaId> = injectLazy(),
     private val incognitoPolicy: Lazy<zoukan.desktop.security.Incognito> = injectLazy(),
     private val syncManager: Lazy<eu.kanade.tachiyomi.data.sync.SyncManager> = injectLazy(),
-    private val discordPresence: Lazy<zoukan.desktop.discord.DiscordPresence> = injectLazy(),
     private val trackChapters: Lazy<TrackChapters> = injectLazy(),
     private val sourcePreferences: Lazy<eu.kanade.domain.source.service.SourcePreferences> = injectLazy(),
     private val editManga: Lazy<zoukan.desktop.manga.EditManga> = injectLazy(),
@@ -308,18 +307,6 @@ class ReaderScreenModel(
                 onPageChanged(start)
                 // ZOUKAN -->
                 if (preferences.aggressivePageLoading().get() && file == null) pageLoader.prefetchAll(pages)
-                // ZOUKAN <--
-                // ZOUKAN -->
-                discordPresence.value.setReading(
-                    zoukan.desktop.discord.DiscordPresence.Reading(
-                        mangaId = readerManga.id,
-                        title = readerManga.title,
-                        chapter = chapter.name,
-                        chapterNumber = chapter.chapterNumber,
-                        coverUrl = readerManga.thumbnailUrl,
-                        sourceId = readerManga.source,
-                    ),
-                )
                 // ZOUKAN <--
             } catch (e: CancellationException) {
                 throw e
@@ -585,9 +572,6 @@ class ReaderScreenModel(
         if (old != null || deletes.isNotEmpty()) {
             appScope.launch(Dispatchers.IO) { ReaderCleanup.closeThenDelete(old, deletes) { downloadManager.deleteRead(it) } }
         }
-        // ZOUKAN <--
-        // ZOUKAN -->
-        discordPresence.value.clearReading()
         // ZOUKAN <--
         val chapter = state.value.chapter
         if (chapter != null && state.value.pages.isNotEmpty() && !incognito) {
