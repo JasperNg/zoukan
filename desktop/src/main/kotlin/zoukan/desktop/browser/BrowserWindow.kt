@@ -291,7 +291,8 @@ class BrowserWindow(
                 logcat(LogPriority.WARN) { "The browser cancelled a navigation to a ${url?.substringBefore(':')?.take(20)}: address" }
                 return true
             }
-            if (url != null) cookieScope?.navigating(url, userGesture, isRedirect)
+            // Bookkeeping only: its failure must not cancel a navigation the check allowed
+            if (url != null) NativeCallback.guard(Unit, "The cookie scope's record of a navigation") { cookieScope?.navigating(url, userGesture, isRedirect) }
             false
         }
 
