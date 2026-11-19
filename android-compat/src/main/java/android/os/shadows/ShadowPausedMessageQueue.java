@@ -52,6 +52,9 @@ public class ShadowPausedMessageQueue {
     }
     synchronized (this) {
       // ZOUKAN -->
+      // Clear any pending interrupt even on a wakePending fast return so MessageQueue.next()
+      // never spins with a stale interrupt flag (Android's native poll ignores interrupts).
+      Thread.interrupted();
       if (wakePending) {
         wakePending = false;
         return;

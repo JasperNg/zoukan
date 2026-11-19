@@ -257,6 +257,7 @@ class LooperWakeTest {
         val looper = ready.get(5, TimeUnit.SECONDS)
         val handler = Handler(looper)
         try {
+            Await.until("the looper to wait", state = { thread.state }) { thread.state == Thread.State.WAITING }
             thread.interrupt()
             repeat(100) {
                 val ran = CountDownLatch(1)

@@ -70,20 +70,29 @@ class WebViewThreadTest {
         val provider = provider()
         val probe = Probe()
 
-        WebView.callClientOffThread {
-            provider.addJavascriptInterface(probe, "probe")
-            true
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        Handler(looper).post {
+            entered.countDown()
+            release.await(5, TimeUnit.SECONDS)
         }
-        // Handed to the looper, not applied on the calling thread
-        if (provider.mappings().isEmpty()) {
-            val drained = CountDownLatch(1)
-            Handler(looper).post { drained.countDown() }
-            drained.await(5, TimeUnit.SECONDS) shouldBe true
-            provider.mappings() shouldHaveSize 1
-        } else {
-            // Applied at once on the calling thread: the bug
+        entered.await(5, TimeUnit.SECONDS) shouldBe true
+
+        try {
+            WebView.callClientOffThread {
+                provider.addJavascriptInterface(probe, "probe")
+                true
+            }
+            // Handed to the looper, not applied on the calling thread
             provider.mappings().shouldBeEmpty()
+        } finally {
+            release.countDown()
         }
+
+        val drained = CountDownLatch(1)
+        Handler(looper).post { drained.countDown() }
+        drained.await(5, TimeUnit.SECONDS) shouldBe true
+        provider.mappings() shouldHaveSize 1
     }
 
     @Test
