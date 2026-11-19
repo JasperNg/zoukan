@@ -390,9 +390,9 @@ private fun clearBrowserData() {
     deleteBrowserCookies()
     zoukan.desktop.browser.BrowserProfileCleanup.clearAll(
         Injekt.get<ZoukanDirs>().browserCache,
-        // Only Windows keeps a file open in another process from being deleted
-        chromiumMayHoldFiles = zoukan.desktop.Platform.current == zoukan.desktop.Platform.WINDOWS &&
-            zoukan.desktop.browser.JcefRuntime.startedInThisProcess,
+        // A running Chromium holds files open (on Windows they cannot be deleted) and makes some
+        // again at once (its lock files, Local State), so what is left then is no failure
+        chromiumMayHoldFiles = zoukan.desktop.browser.JcefRuntime.startedInThisProcess,
     )
 }
 

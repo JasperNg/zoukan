@@ -86,8 +86,8 @@ internal object BrowserProfileCleanup {
      * [browserCache] that is itself a link, or that could not be checked, is left alone, and that
      * fails with an IOException saying which: the user asked for the data to go, and must not be
      * told it went. A file Chromium still holds stays until the next time: when
-     * [chromiumMayHoldFiles] (Chromium runs, on Windows, where an open file cannot be deleted),
-     * what is left is no failure; otherwise anything left (a folder that could not be listed, a
+     * [chromiumMayHoldFiles] (Chromium runs: on Windows an open file cannot be deleted, and on
+     * every system it makes some files again at once), what is left is no failure; otherwise anything left (a folder that could not be listed, a
      * file that could not be deleted) fails with an IOException saying how many.
      */
     fun clearAll(
