@@ -166,6 +166,31 @@ class BrowserProfileCleanupTest {
     }
 
     @Test
+    fun `clearing all browser data that leaves some behind says so instead of reporting success`(@TempDir temp: File) {
+        assumeTrue(!System.getProperty("os.name").startsWith("Windows") && System.getProperty("user.name") != "root", "needs a folder that cannot be listed")
+        val profile = File(temp, "browser-profile").apply { mkdirs() }
+        File(profile, "Cache/data_0").apply { parentFile.mkdirs() }.writeText("x")
+        val locked = File(profile, "Cache")
+        locked.setReadable(false)
+        try {
+            val error = io.kotest.assertions.throwables.shouldThrow<java.io.IOException> {
+                BrowserProfileCleanup.clearAll(profile, chromiumMayHoldFiles = false)
+            }
+            error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.browser_data_not_all_cleared, 1, profile.name)
+        } finally {
+            locked.setReadable(true)
+        }
+
+        // While Chromium runs and may hold a file, what is left is no failure
+        locked.setReadable(false)
+        try {
+            BrowserProfileCleanup.clearAll(profile, chromiumMayHoldFiles = true)
+        } finally {
+            locked.setReadable(true)
+        }
+    }
+
+    @Test
     fun `clearing all browser data of a missing profile is not an error`(@TempDir temp: File) {
         BrowserProfileCleanup.clearAll(File(temp, "absent"))
         File(temp, "absent").exists() shouldBe false

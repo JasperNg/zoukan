@@ -85,9 +85,16 @@ internal object BrowserProfileCleanup {
      * too. A link (or a Windows junction) in it is removed as itself, never what it points to. A
      * [browserCache] that is itself a link, or that could not be checked, is left alone, and that
      * fails with an IOException saying which: the user asked for the data to go, and must not be
-     * told it went. A file Chromium still holds stays until the next time.
+     * told it went. A file Chromium still holds stays until the next time: when
+     * [chromiumMayHoldFiles] (Chromium runs, on Windows, where an open file cannot be deleted),
+     * what is left is no failure; otherwise anything left (a folder that could not be listed, a
+     * file that could not be deleted) fails with an IOException saying how many.
      */
-    fun clearAll(browserCache: File, linkState: (Path) -> NoFollowDelete.LinkState = NoFollowDelete::linkState) {
+    fun clearAll(
+        browserCache: File,
+        chromiumMayHoldFiles: Boolean = false,
+        linkState: (Path) -> NoFollowDelete.LinkState = NoFollowDelete::linkState,
+    ) {
         val root = browserCache.toPath()
         if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return
         when (linkState(root)) {
@@ -96,8 +103,20 @@ internal object BrowserProfileCleanup {
             NoFollowDelete.LinkState.UNKNOWN -> throw IOException(localized(DMR.strings.could_not_be_checked_and_was_not_cleared, browserCache.name))
         }
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return
-        val entries = runCatching { Files.list(root).use { it.toList() } }.getOrDefault(emptyList())
-        entries.forEach { SafeDelete.deleteTreeNoFollow(it) }
+        fun entries() = try {
+            Files.list(root).use { it.toList() }
+        } catch (e: IOException) {
+            throw IOException(localized(DMR.strings.could_not_be_checked_and_was_not_cleared, browserCache.name), e)
+        }
+        entries().forEach { SafeDelete.deleteTreeNoFollow(it) }
+        // The delete logs what it could not remove and goes on: the user is told it did not all go
+        val left = entries()
+        if (left.isEmpty()) return
+        if (chromiumMayHoldFiles) {
+            logcat(LogPriority.INFO) { "${left.size} items of the browser's data stay until Chromium lets go of them" }
+            return
+        }
+        throw IOException(localized(DMR.strings.browser_data_not_all_cleared, left.size, browserCache.name))
     }
 
     /** Whether the file [name] is one of the browser's records that this deletes. */

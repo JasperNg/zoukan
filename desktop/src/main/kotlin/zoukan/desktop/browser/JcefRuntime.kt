@@ -38,6 +38,9 @@ object JcefRuntime {
 
     // Whether this process started Chromium on the data folder (see cleanProfileAtQuit)
     private val started = AtomicBoolean(false)
+
+    /** Whether this process started Chromium, which may then hold some of its profile's files open. */
+    val startedInThisProcess: Boolean get() = started.get()
     private lateinit var dirs: ZoukanDirs
 
     /** -Dzoukan.cefDebug=true writes a verbose Chromium log to `<data>/browser/chromium.log` */

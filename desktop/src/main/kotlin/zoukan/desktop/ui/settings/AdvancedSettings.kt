@@ -388,7 +388,12 @@ private fun deleteBrowserCookies() {
  */
 private fun clearBrowserData() {
     deleteBrowserCookies()
-    zoukan.desktop.browser.BrowserProfileCleanup.clearAll(Injekt.get<ZoukanDirs>().browserCache)
+    zoukan.desktop.browser.BrowserProfileCleanup.clearAll(
+        Injekt.get<ZoukanDirs>().browserCache,
+        // Only Windows keeps a file open in another process from being deleted
+        chromiumMayHoldFiles = zoukan.desktop.Platform.current == zoukan.desktop.Platform.WINDOWS &&
+            zoukan.desktop.browser.JcefRuntime.startedInThisProcess,
+    )
 }
 
 /** Android's MetadataUpdateJob: each library entry's details and cover, again from its source. */

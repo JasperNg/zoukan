@@ -353,6 +353,8 @@
     <string name="download_folder_shared_not_renamed_text">%1$s keeps its title instead of %2$s: its download folder %3$s also holds another entry\'s downloads.</string>
     <string name="download_folder_not_moved_back_text">The download folder %1$s could not be moved back to %2$s. Rename it to %2$s to see its chapters again.</string>
     <string name="is_a_link_and_was_not_cleared">%1$s is a link to another folder, so nothing in it was deleted</string>
+    <!-- Clear WebView data left items behind; %1$d is how many, %2$s the folder's name -->
+    <string name="browser_data_not_all_cleared">%1$d items in %2$s could not be deleted</string>
     <string name="could_not_be_checked_and_was_not_cleared">%1$s could not be checked, so nothing in it was deleted</string>
     <string name="an_html_page_not_an_image">an HTML page, not an image</string>
     <string name="bytes">%1$s bytes</string>
