@@ -138,6 +138,28 @@ class LooperWakeTest {
     }
 
     @Test
+    fun `a wake pending before a poll also clears a pending interrupt`() {
+        val ptr = ShadowPausedMessageQueue.nativeInit()
+        try {
+            ShadowPausedMessageQueue.nativeWake(ptr)
+            val interruptedAfterPoll = CompletableFuture<Boolean>()
+            val polling = Thread {
+                Thread.currentThread().interrupt()
+                ShadowPausedMessageQueue.nativePollOnce(ptr, -1)
+                interruptedAfterPoll.complete(Thread.currentThread().isInterrupted)
+            }.apply {
+                isDaemon = true
+                start()
+            }
+            runCatching { interruptedAfterPoll.get(5, TimeUnit.SECONDS) }.getOrNull() shouldBe false
+            polling.join(5_000)
+            polling.isAlive shouldBe false
+        } finally {
+            ShadowPausedMessageQueue.nativeDestroy(ptr)
+        }
+    }
+
+    @Test
     fun `messages posted from another thread always run`() {
         val ready = CompletableFuture<Looper>()
         val thread = Thread {
