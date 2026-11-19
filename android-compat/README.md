@@ -68,6 +68,7 @@ Paths below are relative to `src/main/java`.
 | File names valid on Windows, macOS and Linux alike (`PortableFileNames`: no Windows device name, no half surrogate pair, cut within the byte limit), shared by the app's download, saved-picture and settings file names. `SafePath.buildValidFilename` uses them; a settings file an older version wrote under the old name (`SafePath.legacyValidFilename`) is still found and kept where it is. | `xyz/nulldev/androidcompat/util/PortableFileNames.kt` (new), `xyz/nulldev/androidcompat/util/SafePath.kt`, `xyz/nulldev/androidcompat/io/sharedprefs/JavaSharedPreferences.kt` |
 | Catch-alls in Zoukan's code rethrow fatal errors through one helper (`rethrowIfFatal`, and `rethrowIfVmFailure` on paths that run extension code), shared by the app and the extension loader. | `xyz/nulldev/androidcompat/util/FatalErrors.kt` (new) |
 | `HandlerContext.toString()` catches `IllegalStateException` when `Dispatchers.Main` has no `MainDispatcherFactory` service in `android-compat`, falling back to the handler's name. | `kotlinx/coroutines/android/HandlerDispatcher.kt` |
+| `debugLogsEnabled` defaults to `false` when `server-reference.conf` is not on the classpath (standalone `android-compat` tests). | `xyz/nulldev/ts/config/Logging.kt` |
 
 `AndroidCompatInitializer` and `AndroidCompat.startApp` are called by `zoukan.desktop.ZoukanRuntime`, after it registers the Injekt modules.
 

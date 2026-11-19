@@ -135,5 +135,11 @@ fun setLogLevelFor(
     logger.level = level
 }
 
-fun debugLogsEnabled(config: Config) =
-    System.getProperty("suwayomi.tachidesk.config.server.debugLogsEnabled", config.getString("server.debugLogsEnabled")).toBoolean()
+// ZOUKAN -->
+// server-reference.conf lives in desktop, so fall back to false when android-compat runs standalone
+fun debugLogsEnabled(config: Config): Boolean {
+    val prop = System.getProperty("suwayomi.tachidesk.config.server.debugLogsEnabled")
+    if (prop != null) return prop.toBoolean()
+    return if (config.hasPath("server.debugLogsEnabled")) config.getString("server.debugLogsEnabled").toBoolean() else false
+}
+// ZOUKAN <--

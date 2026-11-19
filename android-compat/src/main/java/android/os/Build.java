@@ -21,7 +21,7 @@ public class Build {
         try {
             ConfigManager configManager = GlobalConfigManager.INSTANCE;
             SystemConfigModule configModule = configManager.module(SystemConfigModule.class);
-            return configModule.isDebuggable();
+            return configModule != null && configModule.isDebuggable();
         } catch (RuntimeException e) {
             return false;
         }
