@@ -293,7 +293,7 @@ internal fun StorageChangeDialog(
 
 /** Android's Create backup and Restore backup buttons, side by side. */
 @Composable
-private fun BackupButtons() {
+internal fun BackupButtons() {
     val dirs = remember { Injekt.get<ZoukanDirs>() }
     val window = LocalWindow.current?.window
     val status by backupStatusFlow.collectAsState()
@@ -309,12 +309,15 @@ private fun BackupButtons() {
             }
             OutlinedButton(
                 onClick = {
-                    picking = true
-                    scope.launch {
-                        try {
-                            pickBackupFile(window, dirs)?.let { navigator.push(RestoreBackupScreen(it.path)) }
-                        } finally {
-                            picking = false
+                    // A second click can land before the recomposition that disables the button
+                    if (!picking) {
+                        picking = true
+                        scope.launch {
+                            try {
+                                pickBackupFile(window, dirs)?.let { navigator.push(RestoreBackupScreen(it.path)) }
+                            } finally {
+                                picking = false
+                            }
                         }
                     }
                 },
