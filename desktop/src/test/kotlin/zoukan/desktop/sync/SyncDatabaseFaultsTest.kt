@@ -619,6 +619,29 @@ class SyncDatabaseFaultsTest {
         snapshots.size shouldBe snapshotsBefore
     }
 
+    @Test
+    fun `a section that fails to restore every time is retried a few times, told once, then left until the next change`() = runBlocking<Unit> {
+        sync.seed(BackupCodec.encode(remote.copy(backupCategories = listOf(BackupCategory("From the other device", order = 1)))))
+        preferences.lastSyncTimestamp().set(1L)
+        driver.failOn(FailingSqlDriver.insertInto("categories"), times = Int.MAX_VALUE)
+
+        manager().syncData()
+        messages.awaitError { it.text.contains("Categories") }
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+
+        repeat(SyncManager.MAX_SECTION_RETRIES) { manager().syncData() }
+        // The first sync and each retry took a safety snapshot; then the retries stop
+        snapshots.size shouldBe 1 + SyncManager.MAX_SECTION_RETRIES
+        sync.calls.clear()
+        manager().syncData()
+        manager().syncData()
+
+        snapshots.size shouldBe 1 + SyncManager.MAX_SECTION_RETRIES
+        sync.calls.filter { it.method == "GET" }.map { it.status } shouldBe listOf(304, 304)
+        messages.errors.count { it.text.contains("Categories") } shouldBe 1
+        categories() shouldBe emptyList()
+    }
+
     /** A file on the server that is not a backup: every sync stops at it. */
     private fun unreadableRemote(): ByteArray = "<html><body>Sign in</body></html>".toByteArray().also {
         sync.seed(it)

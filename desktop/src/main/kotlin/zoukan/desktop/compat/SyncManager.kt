@@ -84,6 +84,15 @@ class SyncManager(
      */
     private fun sectionsPending() =
         Injekt.get<PreferenceStore>().getBoolean(Preference.appStateKey("zoukan_sync_sections_pending"), false)
+
+    /**
+     * How many syncs in a row retried [sectionsPending] and failed again. At [MAX_SECTION_RETRIES]
+     * the flag is cleared and the ETag kept, so a section that fails every time is not restored
+     * (with a safety snapshot and a full download and upload) at every sync; the next change on the
+     * server restores the library again.
+     */
+    private fun sectionRetries() =
+        Injekt.get<PreferenceStore>().getInt(Preference.appStateKey("zoukan_sync_section_retries"), 0)
     // ZOUKAN <--
 
     private val _running = MutableStateFlow(false)
@@ -105,6 +114,9 @@ class SyncManager(
         /** The services desktop has; Google Drive needs the Android build's OAuth client. */
         val SUPPORTED = setOf(SyncService.SYNCYOMI, SyncService.WEB_DAV)
         const val RETRY_AFTER = 60 * 60_000L
+
+        /** How many syncs in a row retry the sections a restore left behind ([sectionsPending]) before they stop. */
+        const val MAX_SECTION_RETRIES = 3
 
         private val IPV4 = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
 
@@ -313,12 +325,35 @@ class SyncManager(
         }
         // ZOUKAN <--
         // ZOUKAN -->
-        if (errors.isEmpty()) keepEtag(etag) else syncPreferences.lastSyncEtag().delete()
-        if (errors.isEmpty()) sectionsPending().delete() else sectionsPending().set(true)
+        // A retry of the sections alone that failed again: the user was told at the first failure
+        val retriedInVain = retrySections && errors.isNotEmpty()
+        val retries = if (retriedInVain) sectionRetries().get() + 1 else 0
+        when {
+            errors.isEmpty() -> {
+                keepEtag(etag)
+                sectionsPending().delete()
+                sectionRetries().delete()
+            }
+            retries >= MAX_SECTION_RETRIES -> {
+                logcat(LogPriority.WARN) { "Sync stops retrying the sections that failed to restore until the server's library changes" }
+                keepEtag(etag)
+                sectionsPending().delete()
+                sectionRetries().delete()
+            }
+            else -> {
+                syncPreferences.lastSyncEtag().delete()
+                sectionsPending().set(true)
+                if (retriedInVain) sectionRetries().set(retries) else sectionRetries().delete()
+            }
+        }
         // ZOUKAN <--
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
             notifier.showSyncSuccess("Sync completed successfully")
+        } else if (retriedInVain) {
+            // ZOUKAN -->
+            logcat(LogPriority.WARN) { "Sync's retry of the sections that failed to restore failed again: ${errors.first().second}" }
+            // ZOUKAN <--
         } else {
             notifier.showSyncError("Sync finished with ${errors.size} errors: ${errors.first().second}")
         }
@@ -447,6 +482,7 @@ class SyncManager(
         // The server holds this computer's library: nothing is waiting to be restored here
         restorePending().delete()
         sectionsPending().delete()
+        sectionRetries().delete()
         syncPreferences.lastSyncTimestamp().set(Date().time)
         lastFailure = 0L
         notifier.showSyncSuccess(localized(DMR.strings.server_library_replaced))
