@@ -121,6 +121,7 @@ class FileMutationScanTest {
             Allowed("app/SingleInstance.kt", "", "$DATA: the single-instance port and command files", count = 3),
             Allowed("app/SelfTest.kt", "file.delete()", "$DATA: the crash report the self-test has just written", function = "run"),
             Allowed("backup/SafetySnapshot.kt", "file.delete()", "$DATA: the safety-backup folder, only names this class writes for that reason", function = "prune"),
+            Allowed("backup/SafetySnapshot.kt", "written.delete()", "$DATA: the safety-backup folder, the snapshot take() has just written under a free name, dropped because it has the same bytes as the newest one", function = "sameAsNewest"),
             Allowed("browser/ChromiumNatives.kt", "", "$DATA: the Chromium install folder, its own download file", count = 2),
             Allowed("browser/blocking/UserBlockLists.kt", "", "$DATA: the block-list folder, its own lists and their .tmp files", count = 2),
             Allowed("compat/AtomicFile.kt", "newFile.delete()", "the `.new` file AtomicFile writes beside the file it replaces", count = 2),
