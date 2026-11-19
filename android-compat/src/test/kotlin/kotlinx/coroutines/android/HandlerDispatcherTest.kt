@@ -9,6 +9,8 @@ import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonDisposableHandle
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -180,27 +182,11 @@ class HandlerDispatcherTest {
     @Test
     fun `rejected dispatch after looper quit cancels job and runs fallback on IO`() =
         withHandlerThread { thread, handler, dispatcher ->
-            thread.quit()
-            thread.join(5_000)
-
-            val fallbackRan = CompletableFuture<String>()
-            val job =
-                runBlocking {
-                    launch(dispatcher) {
-                        fallbackRan.complete(Thread.currentThread().name)
-                    }.also {
-                        it.join()
-                    }
-                }
-
-            job.isCancelled shouldBe true
-            val threadName = fallbackRan.get(5, TimeUnit.SECONDS)
-            threadName shouldNotBe thread.name
-
             val delayedCancelled = CompletableFuture<Throwable?>()
             runBlocking {
                 val delayedJob =
                     launch(dispatcher) {
+                        thread.quit()
                         try {
                             delay(50)
                         } catch (e: CancellationException) {
@@ -212,6 +198,32 @@ class HandlerDispatcherTest {
                 delayedJob.isCancelled shouldBe true
             }
             (delayedCancelled.get(5, TimeUnit.SECONDS) is CancellationException) shouldBe true
+            thread.join(5_000)
+
+            val fallbackRan = CompletableFuture<String>()
+            val directJob = Job()
+            dispatcher.dispatch(directJob + dispatcher, Runnable { fallbackRan.complete(Thread.currentThread().name) })
+            directJob.isCancelled shouldBe true
+            fallbackRan.get(5, TimeUnit.SECONDS) shouldNotBe thread.name
+
+            var bodyEntered = false
+            runBlocking {
+                val rejectedLaunch = launch(dispatcher) { bodyEntered = true }
+                rejectedLaunch.join()
+                rejectedLaunch.isCancelled shouldBe true
+            }
+            bodyEntered shouldBe false
+
+            val timeoutFallback = CompletableFuture<String>()
+            val timeoutJob = Job()
+            val handle = dispatcher.invokeOnTimeout(
+                50,
+                Runnable { timeoutFallback.complete(Thread.currentThread().name) },
+                timeoutJob + dispatcher,
+            )
+            handle shouldBe NonDisposableHandle
+            timeoutJob.isCancelled shouldBe true
+            timeoutFallback.get(5, TimeUnit.SECONDS) shouldNotBe thread.name
             handler.looper shouldBe thread.looper
         }
 
