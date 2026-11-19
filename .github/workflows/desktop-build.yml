@@ -108,7 +108,7 @@ jobs:
           # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
           echo "9d244c480cc3b5b77c06753ad8f32e2f40ded94ee02fc3ff6c2bee06fac3d5f1cc42cb1f7b7fa8f8a6e0b14a7dafa2451cd2781d6d5f1c2f598c511f53e2ffe9  jbrsdk-21.0.11-windows-x64-b1163.125.zip" | sha512sum -c -
 
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: jdkfile
           jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-windows-x64-b1163.125.zip
@@ -166,7 +166,7 @@ jobs:
           # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
           echo "4b2769d097547b70df3cd8ff49d137579acb7fea874419052ec3450565665dc3262caa9a7a9f7e9ca611fd02650eb002845b3cd029cebc300eb00dd00ef45c43  jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" | shasum -a 512 -c -
 
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: jdkfile
           jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz
