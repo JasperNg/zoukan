@@ -1,6 +1,7 @@
 package zoukan.desktop.property
 
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.every
@@ -21,6 +22,7 @@ import zoukan.desktop.property.PortableName.Problem
 class DownloadNameKnownDefectsTest {
 
     private val paths = paths(ascii = false, hash = false)
+    private val isWindows = System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
     /** The desktop writes a valid name, and looks the entry up by Android's name too. */
     private fun assertValid(input: String, name: String) {
@@ -28,11 +30,21 @@ class DownloadNameKnownDefectsTest {
         val android = DiskUtil.buildValidFilename(input)
         name shouldNotBe android
         paths.mangaDirNames(input).first() shouldBe name
-        // A name this OS cannot have as a path (`?` on Windows) cannot be on disk, so it is not looked up
-        if (isPathHere(android)) paths.mangaDirNames(input) shouldContain android
+        // A name this OS cannot have as a folder (`?`, or a device name on Windows) cannot be on disk, so it is not looked up
+        if (isPathHere(android)) {
+            paths.mangaDirNames(input) shouldContain android
+        } else {
+            paths.mangaDirNames(input) shouldNotContain android
+        }
     }
 
-    private fun isPathHere(name: String) = runCatching { java.nio.file.Path.of(name) }.isSuccess
+    /**
+     * Whether [name] can be a folder on this OS: [java.nio.file.Path.of] accepts it and, on
+     * Windows, it is not a device name (`NUL`, `CON.1`: `Path.of` accepts those too, but they name
+     * the device, never a folder, so [DownloadPaths] does not look them up there).
+     */
+    private fun isPathHere(name: String) =
+        runCatching { java.nio.file.Path.of(name) }.isSuccess && !(isWindows && PortableName.isWindowsDeviceName(name))
 
     @Test
     fun `a Windows device name is not a folder name`() {
@@ -48,8 +60,14 @@ class DownloadNameKnownDefectsTest {
             DownloadProvider.getChapterDirName("CON", null, "/c/1", false, true)
         for (hash in listOf(false, true)) {
             val names = paths(ascii = false, hash = hash).validChapterNames(chapter("CON.1"))
-            names shouldContain DownloadProvider.getChapterDirName("CON.1", null, "/c/1", false, hash)
-            names shouldContain DownloadProvider.getChapterDirName("CON.1", null, "/c/1", false, hash) + ".cbz"
+            val android = DownloadProvider.getChapterDirName("CON.1", null, "/c/1", false, hash)
+            if (isPathHere(android)) {
+                names shouldContain android
+                names shouldContain "$android.cbz"
+            } else {
+                names shouldNotContain android
+                names shouldNotContain "$android.cbz"
+            }
         }
     }
 

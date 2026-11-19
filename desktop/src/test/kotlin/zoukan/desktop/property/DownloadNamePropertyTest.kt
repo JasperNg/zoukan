@@ -61,6 +61,7 @@ class DownloadNamePropertyTest {
                 names.first() shouldBe FileNames.buildValidFilename(title, disallowNonAscii = ascii)
                 names shouldContainAll listOf(DiskUtil.buildValidFilename(title, disallowNonAscii = ascii), DiskUtil.buildValidFilename(title, disallowNonAscii = !ascii))
                     .filter { isPathHere(it) }
+                names.none { !isPathHere(it) } shouldBe true
             }
         }
     }
@@ -84,6 +85,7 @@ class DownloadNamePropertyTest {
             val android = DownloadProvider.getValidChapterDirNames(c.name, c.scanlator, c.url, c.ascii, c.hash)
             desktop.take(2) shouldBe listOf(name, "$name.cbz")
             desktop shouldContainAll android.filter { isPathHere(it) }
+            desktop.none { !isPathHere(it) } shouldBe true
         }
     }
 
@@ -136,8 +138,14 @@ class DownloadNamePropertyTest {
 
     private fun isPortable(name: String) = PortableName.problems(name).isEmpty()
 
-    /** Whether [name] can be a path on this OS at all: on Windows a name with `?` cannot be on disk, so it is not looked up. */
-    private fun isPathHere(name: String) = runCatching { java.nio.file.Path.of(name) }.isSuccess
+    private val isWindows = System.getProperty("os.name").orEmpty().lowercase().contains("win")
+
+    /**
+     * Whether [name] can be a folder on this OS at all: on Windows `?` is rejected by `Path.of`,
+     * and a device name (`NUL`, `CON.1`) names the device rather than a folder so it is not looked up.
+     */
+    private fun isPathHere(name: String) =
+        runCatching { java.nio.file.Path.of(name) }.isSuccess && !(isWindows && PortableName.isWindowsDeviceName(name))
 
     private fun assertAllValid(found: Found) {
         check(found.unknown.kinds().isEmpty()) { "Invalid names (seed ${PropertyRuns.seed}):\n" + found.unknown.report() }
