@@ -150,7 +150,14 @@ class CbzWriter(
  * Reads a CBZ or ZIP, encrypted or not. The password for encrypted ones comes from [password];
  * opening an entry of an encrypted archive without one fails with a message saying so.
  */
-class CbzReader(val file: File, password: () -> CharArray? = { null }) : Closeable {
+class CbzReader(
+    val file: File,
+    password: () -> CharArray?,
+    /** The most bytes one entry may unpack to ([read]); tests pass a small one. */
+    private val maxEntryBytes: Long,
+) : Closeable {
+    constructor(file: File, password: () -> CharArray? = { null }) : this(file, password, zoukan.desktop.image.PageSizeLimits.MAX_PAGE_BYTES)
+
     private val zip = ZipFile(file)
 
     val encrypted: Boolean = runCatching { zip.isEncrypted }.getOrDefault(false)
@@ -176,7 +183,27 @@ class CbzReader(val file: File, password: () -> CharArray? = { null }) : Closeab
 
     fun open(header: FileHeader): InputStream = zip.getInputStream(header)
 
-    fun read(header: FileHeader): ByteArray = open(header).use { it.readBytes() }
+    /**
+     * [header]'s bytes, or a [zoukan.desktop.image.PageTooLargeException] (the reader's "too large
+     * to show", for that page alone) when it unpacks to more than [maxEntryBytes]: as the reader
+     * and the downloads bound a page, so a crafted archive cannot fill the heap. The size the
+     * header declares is checked first, and the read stops past the cap all the same, as a header
+     * can lie.
+     */
+    fun read(header: FileHeader): ByteArray {
+        val tooLarge = { zoukan.desktop.image.PageTooLargeException(localized(DMR.strings.the_page_is_too_large_to_show)) }
+        if (header.uncompressedSize > maxEntryBytes) throw tooLarge()
+        return open(header).use { readBounded(it, maxEntryBytes) } ?: throw tooLarge()
+    }
 
     override fun close() = zip.close()
+
+    companion object {
+        /** [input]'s bytes when there are at most [limit]; null when there are more. */
+        internal fun readBounded(input: InputStream, limit: Long): ByteArray? {
+            // One byte past the limit says there is more; readNBytes grows its buffer as it reads
+            val bytes = input.readNBytes((limit + 1).coerceAtMost(Int.MAX_VALUE - 8L).toInt())
+            return bytes.takeIf { it.size <= limit }
+        }
+    }
 }
