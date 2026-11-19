@@ -69,6 +69,17 @@ class UpdateChecker(
             if (value.isNullOrBlank()) secrets.delete(TOKEN_KEY) else secrets.set(TOKEN_KEY, value.trim())
         }
 
+    /**
+     * The stored token (null when none is stored), or a failure when the secret store could not be
+     * read: a locked Keychain, a denied prompt, or the native store failing to load (a LinkageError
+     * from JNA). Unlike [token], a store that cannot be read is not taken for no token.
+     */
+    fun storedToken(): kotlin.Result<String?> = try {
+        readToken()
+    } catch (e: LinkageError) {
+        kotlin.Result.failure(e)
+    }
+
     suspend fun check(includePrereleases: Boolean = false): Result = withContext(Dispatchers.IO) {
         val stored = readToken()
         val request = request("$apiUrl/repos/$repo/releases?per_page=30", stored.getOrNull())

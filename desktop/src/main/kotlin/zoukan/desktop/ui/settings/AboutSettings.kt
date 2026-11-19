@@ -152,11 +152,12 @@ private fun UpdateRow() {
 @Composable
 private fun TokenRow() {
     var dialog by remember { mutableStateOf(false) }
-    var hasToken by remember { mutableStateOf(Updates.checker.token != null) }
+    var state by remember { mutableStateOf(tokenState(Updates.checker)) }
+    val hasToken = state == TokenState.SET
     val storeName = remember { Injekt.get<SecretStore>().name }
     SettingRow(
         if (hasToken) localized(DMR.strings.github_token_set) else localized(DMR.strings.github_token),
-        localized(DMR.strings.needed_while_the_release_repository_is, storeName),
+        tokenSubtitle(state, storeName),
         onClick = { dialog = true },
     )
     if (dialog) {
@@ -176,7 +177,7 @@ private fun TokenRow() {
             confirmButton = {
                 TextButton(enabled = value.isNotBlank(), onClick = {
                     if (storeTokenOrToast(value)) {
-                        hasToken = true
+                        state = TokenState.SET
                         dialog = false
                     }
                 }) { Text(localized(MR.strings.action_save)) }
@@ -185,7 +186,7 @@ private fun TokenRow() {
                 if (hasToken) {
                     TextButton(onClick = {
                         if (storeTokenOrToast(null)) {
-                            hasToken = false
+                            state = TokenState.NOT_SET
                             dialog = false
                         }
                     }) { Text(localized(MR.strings.action_remove)) }
@@ -194,6 +195,26 @@ private fun TokenRow() {
             },
         )
     }
+}
+
+/** Whether an update-check token is stored, or the secret store could not be read to tell. */
+internal enum class TokenState { SET, NOT_SET, UNREADABLE }
+
+internal fun tokenState(checker: UpdateChecker): TokenState = checker.storedToken().fold(
+    onSuccess = { if (it != null) TokenState.SET else TokenState.NOT_SET },
+    onFailure = { e ->
+        logcat("AboutSettings", LogPriority.WARN) { "Could not read the update-check token: ${e::class.simpleName}" }
+        TokenState.UNREADABLE
+    },
+)
+
+/**
+ * The token row's second line: what the token is for, or that the secret store could not be read,
+ * as the update check says (a locked store must not read as "no token").
+ */
+internal fun tokenSubtitle(state: TokenState, storeName: String): String = when (state) {
+    TokenState.UNREADABLE -> localized(DMR.strings.could_not_use_the_secret_store)
+    else -> localized(DMR.strings.needed_while_the_release_repository_is, storeName)
 }
 
 private fun browse(url: String) {
