@@ -704,7 +704,10 @@ class ReaderProgressAndLifecycleTest {
             }
             try {
                 withTimeout(10_000) { model.state.first { it.pages.size == 1 } }
-                model.state.value.pages[0].bytes shouldBe null
+                val page = model.state.value.pages[0]
+                withTimeout(10_000) { page.state.first { it is ReaderPage.State.Ready } }
+                page.bytes = null
+                page.bytes shouldBe null
 
                 CustomCovers.file(manga.id).exists() shouldBe false
                 val sysTmp = File(System.getProperty("java.io.tmpdir"))
