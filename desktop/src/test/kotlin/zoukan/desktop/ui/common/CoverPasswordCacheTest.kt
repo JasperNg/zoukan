@@ -94,4 +94,21 @@ class CoverPasswordCacheTest {
         String(cache.get()!!) shouldBe "secret"
         store.reads.get() shouldBe 2
     }
+
+    @Test
+    fun `a failed read is not kept longer when the clock goes back`() {
+        val failing = FailingSecretStore()
+        failing.backing.set(CbzPassword.KEY, "secret")
+        failing.failAll(FailingSecretStore.Failure.DENIED)
+        val store = Counting(failing)
+        var now = 10_000_000L
+        val cache = CoverPasswordCache(now = { now }) { CbzPassword(store, preferences) }
+        cache.get() shouldBe null
+
+        failing.heal()
+        // A clock set back an hour: the failure would otherwise be kept until it catches up
+        now -= 3_600_000
+        String(cache.get()!!) shouldBe "secret"
+        store.reads.get() shouldBe 2
+    }
 }

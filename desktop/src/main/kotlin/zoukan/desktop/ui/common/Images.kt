@@ -394,12 +394,12 @@ private class CoverFetcher(
  * The download password for encrypted covers (`cover.cbi`), read from the OS secret store once a
  * session and kept, so a grid of encrypted covers asks the store once, not once per cover (a denied
  * Keychain prompt would come back for each). No password (not set, or the store failed: [CbzPassword.get]
- * gives null for both) is kept for [RETRY_MILLIS] only, so covers come back after the store is
+ * gives null for both) is kept for [RETRY_MILLIS] only (by a monotonic clock), so covers come back after the store is
  * unlocked without a prompt per cover. Read again after the password is set or removed in settings
  * ([CbzPassword.version]). One read at a time, so covers loading at once wait for that one read.
  * Each caller gets its own copy.
  */
-internal class CoverPasswordCache(private val now: () -> Long = System::currentTimeMillis, private val password: () -> CbzPassword) {
+internal class CoverPasswordCache(private val now: () -> Long = ::monotonicMillis, private val password: () -> CbzPassword) {
     private class Read(val version: Int, val password: CharArray?, val at: Long)
 
     private var last: Read? = null
@@ -413,7 +413,8 @@ internal class CoverPasswordCache(private val now: () -> Long = System::currentT
         }
         val version = store.version
         val time = now()
-        last?.takeIf { it.version == version && (it.password != null || time - it.at < RETRY_MILLIS) }?.let { return it.password?.copyOf() }
+        // A clock that went back counts as the minute being over
+        last?.takeIf { it.version == version && (it.password != null || time - it.at in 0 until RETRY_MILLIS) }?.let { return it.password?.copyOf() }
         val read = store.get()
         last = Read(version, read?.copyOf(), time)
         return read
@@ -428,5 +429,8 @@ internal class CoverPasswordCache(private val now: () -> Long = System::currentT
 
     private companion object {
         const val RETRY_MILLIS = 60_000L
+
+        /** Milliseconds that only go forward: a wall clock set back would keep a failure for as long */
+        fun monotonicMillis(): Long = System.nanoTime() / 1_000_000
     }
 }
