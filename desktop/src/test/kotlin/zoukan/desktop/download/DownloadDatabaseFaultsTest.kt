@@ -344,6 +344,45 @@ class DownloadDatabaseFaultsTest {
     }
 
     @Test
+    fun `a held queue is restored in the same run when the queue is started after the database reads again`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        // The database keeps failing until it is healed
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"), times = Int.MAX_VALUE)
+        manager.restore(start = false)
+        manager.queue.value.shouldBeEmpty()
+
+        // Started while the database still fails: nothing is lost and nothing is queued twice
+        manager.start()
+        manager.awaitBackgroundWork()
+        manager.queue.value.shouldBeEmpty()
+        savedChapterIds() shouldBe listOf(1L, 2L)
+
+        driver.heal()
+        manager.start()
+        manager.awaitBackgroundWork()
+
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(1L, 2L)
+        savedChapterIds() shouldBe listOf(1L, 2L)
+    }
+
+    @Test
+    fun `a held download the user queued again meanwhile is not queued twice when the held queue is restored`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+        manager.restore(start = false)
+        driver.heal()
+
+        // The user queues chapter 2 again, which starts the queue and with it the restore of the held ones
+        manager.enqueue(manga(), listOf(getChapter.await(2)!!))
+        manager.awaitBackgroundWork()
+
+        manager.queue.value.map { it.chapter.id }.sorted() shouldBe listOf(1L, 2L)
+        savedChapterIds().sorted() shouldBe listOf(1L, 2L)
+    }
+
+    @Test
     fun `a saved download naming another entry than its chapter's does not drop the entry's others`() = runBlocking<Unit> {
         driver.execute(
             null,

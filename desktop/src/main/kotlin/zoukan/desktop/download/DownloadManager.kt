@@ -842,8 +842,20 @@ class DownloadManager(
         if (start) start()
     }
 
-    /** Starts downloading, retrying failed chapters. A running queue picks them up as it goes. */
+    /**
+     * Starts downloading, retrying failed chapters. A running queue picks them up as it goes. Saved
+     * downloads that a failed database read held back at start-up ([held]) are read again first.
+     */
     fun start() {
+        if (heldUnread && heldRetry.compareAndSet(false, true)) {
+            scope.launch {
+                try {
+                    restoreHeld()
+                } finally {
+                    heldRetry.set(false)
+                }
+            }
+        }
         synchronized(lock) { startLocked() }
     }
 
@@ -902,7 +914,7 @@ class DownloadManager(
             stopping
         }
         // A chapter the user cancels is not kept for a later restore either
-        if (held.isNotEmpty()) held = held.filterNot { it.chapterId in chapterIds }
+        synchronized(lock) { if (held.isNotEmpty()) held = held.filterNot { it.chapterId in chapterIds } }
         scope.launch {
             // After the cancelled download let go of its files
             stopped?.join()
@@ -1236,10 +1248,18 @@ class DownloadManager(
 
     /**
      * The saved downloads [restore] has not put in the queue yet, or could not read from the
-     * database: every save writes them after the queue, so they are restored at the next start.
+     * database: every save writes them after the queue, so they are restored when the queue next
+     * starts ([restoreHeld]) or, failing that, at the next start of the app.
      */
     @Volatile
     private var held: List<SavedDownload> = emptyList()
+
+    /** Whether [held] has downloads a failed database read left unread, which [start] reads again. */
+    @Volatile
+    private var heldUnread = false
+
+    /** Whether a [restoreHeld] is running, so a second [start] does not read the same downloads again. */
+    private val heldRetry = java.util.concurrent.atomic.AtomicBoolean()
 
     /** Whether [restore] has read the saved file; until then, every save keeps what it holds. */
     @Volatile
@@ -1278,7 +1298,8 @@ class DownloadManager(
     /**
      * Loads the saved queue and starts it. Called once at start-up. A download whose entry or chapter
      * was deleted is dropped; when the database cannot be read, the downloads from there on stay in
-     * the saved file (see [held]) and the user is told.
+     * the saved file (see [held]) and the user is told. They are read again when the queue next
+     * starts ([start]), in this run.
      */
     suspend fun restore(start: Boolean = true) {
         val saved = readSavedQueue().orEmpty()
@@ -1286,29 +1307,14 @@ class DownloadManager(
         held = saved
         restoreBegun = true
         if (saved.isEmpty()) return
-        val mangas = HashMap<Long, Manga?>()
-        val downloads = ArrayList<Download>()
-        var unread = emptyList<SavedDownload>()
-        for ((i, s) in saved.withIndex()) {
-            val download = try {
-                val chapter = readSavedChapter(s) ?: continue
-                val manga = mangas.getOrPut(s.mangaId) { readSavedManga(s, chapter) } ?: continue
-                Download(manga, chapter)
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                logcat(LogPriority.ERROR, e) { "The saved download queue could not be read from the database" }
-                unread = saved.subList(i, saved.size).toList()
-                break
-            }
-            // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
-            if (canDownload(download.manga)) downloads += download
-        }
+        val (downloads, unread) = readSaved(saved)
         _queue.update { q ->
             val queued = q.mapTo(HashSet()) { it.chapter.id }
             q + downloads.distinctBy { it.chapter.id }.filterNot { d -> d.chapter.id in queued }
         }
         // After the queue has them, so a save in between writes each download at least once
         held = unread
+        heldUnread = unread.isNotEmpty()
         if (unread.isNotEmpty()) {
             Notifications.post(
                 localized(DMR.strings.download_queue_restore_failed),
@@ -1317,6 +1323,59 @@ class DownloadManager(
             )
         }
         if (start) start()
+    }
+
+    /**
+     * The downloads of [saved] as the database reads them, in order, and the saved downloads from
+     * the first read that failed on (empty when every read worked). A download whose entry or chapter
+     * was deleted, or whose source can no longer download, is dropped.
+     */
+    private suspend fun readSaved(saved: List<SavedDownload>): Pair<List<Download>, List<SavedDownload>> {
+        val mangas = HashMap<Long, Manga?>()
+        val downloads = ArrayList<Download>()
+        for ((i, s) in saved.withIndex()) {
+            val download = try {
+                val chapter = readSavedChapter(s) ?: continue
+                val manga = mangas.getOrPut(s.mangaId) { readSavedManga(s, chapter) } ?: continue
+                Download(manga, chapter)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                logcat(LogPriority.ERROR, e) { "The saved download queue could not be read from the database" }
+                return downloads to saved.subList(i, saved.size).toList()
+            }
+            // As Android's DownloadStore.restore: a chapter whose source can no longer download is dropped
+            if (canDownload(download.manga)) downloads += download
+        }
+        return downloads to emptyList()
+    }
+
+    /**
+     * Reads the downloads [restore] held back again, as the queue starts: the database may read
+     * again by now. Those it reads join the queue, after what is queued and never twice; a held
+     * download the user cancelled meanwhile stays out. What still cannot be read stays held, and the
+     * user, told once at start-up, is not told again.
+     */
+    private suspend fun restoreHeld() {
+        val snapshot = held
+        if (snapshot.isEmpty()) return
+        val (downloads, unread) = readSaved(snapshot)
+        val unreadIds = unread.mapTo(HashSet()) { it.chapterId }
+        val added = synchronized(lock) {
+            // Still held: not cancelled (cancel() takes it out of [held]) while the database was read
+            val stillHeld = held.mapTo(HashSet()) { it.chapterId }
+            val adding = downloads.distinctBy { it.chapter.id }.filter { it.chapter.id in stillHeld }
+            _queue.update { q ->
+                val queued = q.mapTo(HashSet()) { it.chapter.id }
+                q + adding.filterNot { d -> d.chapter.id in queued }
+            }
+            // After the queue has them, so a save in between writes each download at least once
+            held = held.filter { it.chapterId in unreadIds }
+            heldUnread = held.isNotEmpty()
+            adding
+        }
+        if (unread.isEmpty()) logcat(LogPriority.INFO) { "The held download queue was restored" }
+        save()
+        if (added.isNotEmpty()) synchronized(lock) { startLocked() }
     }
 
     companion object {
