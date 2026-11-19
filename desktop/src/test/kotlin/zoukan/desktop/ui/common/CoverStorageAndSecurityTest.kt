@@ -443,7 +443,7 @@ class CoverStorageAndSecurityTest {
         @Test
         fun `a plain cached cover forgotten while it is read and rewritten is never put back`() {
             val url = "https://covers.example/forget-race.png"
-            val manga = Manga.create().copy(source = 42, thumbnailUrl = url)
+            val manga = Manga.create().copy(source = 42, ogThumbnailUrl = url)
             val file = File(covers, Images.hash("42:$url"))
             repeat(200) {
                 file.parentFile.mkdirs()
