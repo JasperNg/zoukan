@@ -10,9 +10,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
 /**
- * The fixture source's page previews and related titles, which the entry screen shows
- * (PagePreviewsJourneyTest). Neither touches the network or the source's settings, so this needs
- * no app runtime.
+ * The fixture source's page previews and related titles, which the entry screen shows. Neither
+ * touches the network or the source's settings, so this needs no app runtime.
  */
 class FixtureSourcePreviewsTest {
 

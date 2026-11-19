@@ -498,7 +498,7 @@ object FixtureCatalog {
     const val FORMATS_TITLE = "Fixture Formats"
     const val BONUS_TITLE = "Fixture Bonus"
 
-    /** Search-only: its description from the server is HTML (see HtmlDescriptionJourneyTest). */
+    /** Search-only: its description from the server is HTML. */
     const val HTML_TITLE = "Markup Description"
     const val HTML_DESCRIPTION = "Tom &amp; Jerry<br>Second line &lt;3"
 
