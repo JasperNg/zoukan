@@ -122,6 +122,7 @@ class DownloadFaultsTest {
     private fun manager(
         secrets: SecretStore = MemorySecretStore(),
         protect: Boolean = false,
+        maxPageBytes: Long = zoukan.desktop.image.PageSizeLimits.MAX_PAGE_BYTES,
         newDownloader: (suspend () -> List<Page>, suspend (Page) -> String, suspend (Page) -> ByteArray, Int) -> ChapterDownloader =
             { pageList, imageUrl, image, parallelPages -> ChapterDownloader(pageList, imageUrl, image, parallelPages) },
     ): DownloadManager {
@@ -148,7 +149,7 @@ class DownloadFaultsTest {
         }
         val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
         val password = CbzPassword(secrets, securityPreferences)
-        return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, password, mockk(), mockk(), mockk(relaxed = true), newDownloader = newDownloader)
+        return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, password, mockk(), mockk(), mockk(relaxed = true), newDownloader = newDownloader, maxPageBytes = maxPageBytes)
             .also { managers += it }
     }
 
@@ -229,6 +230,41 @@ class DownloadFaultsTest {
         server.clearFailures()
         manager.retrySucceeds(chapter)
         existing.readBytes() shouldBe existingBytes
+    }
+
+    @Test
+    fun `a page response over the size limit fails the chapter with the reader's message, is fetched once, and a retry works`() = runBlocking<Unit> {
+        // The limit just above the largest fixture page, so a page with more bytes after it is over it
+        val limit = pages.maxOf { imageBytes(it).size }.toLong() + 16
+        val manager = manager(maxPageBytes = limit)
+        val (existing, existingBytes) = existingChapter()
+        // No length header: the body is cut off at the limit, not read whole
+        server.fail("/images/${pages[1]}", FixtureFailure.Oversize(extraBytes = 1024 * 1024))
+        val chapter = chapter(2)
+
+        val download = manager.failing(chapter)
+
+        shownToUser(download)
+        download.error shouldBe localized(DMR.strings.the_page_is_too_large_to_show)
+        // Not retried: the same page comes back the same size
+        server.imageRequests(pages[1]) shouldBe 1
+        nothingHalfWritten(chapter.name)
+        existing.readBytes() shouldBe existingBytes
+
+        server.clearFailures()
+        manager.retrySucceeds(chapter)
+    }
+
+    @Test
+    fun `a page whose length header is over the size limit fails the chapter before its body is read`() = runBlocking<Unit> {
+        val manager = manager(maxPageBytes = 64)
+        val chapter = chapter(2)
+
+        val download = manager.failing(chapter)
+
+        download.error shouldBe localized(DMR.strings.the_page_is_too_large_to_show)
+        server.imageRequests(pages[0]) shouldBe 1
+        nothingHalfWritten(chapter.name)
     }
 
     @Test

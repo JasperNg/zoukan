@@ -42,6 +42,15 @@ class TallImageSplitterTest {
     }
 
     @Test
+    fun `a tall page more pixels than ImageIO may decode on the heap stays whole`() {
+        val image = File(temp, "001.png").apply { writeBytes(png(100, 1000)) }
+        // 100,000 pixels, over a limit of 50,000: not decoded, not split
+        TallImageSplitter.splitIfTall(image, "001", partHeight = 300, maxPixels = 50_000) shouldContainExactly listOf(image)
+        image.exists() shouldBe true
+        temp.list()!!.toList() shouldBe listOf("001.png")
+    }
+
+    @Test
     fun `downloads split tall pages and resume without fetching them again`() = runBlocking<Unit> {
         // Taller than twice any screen, so it splits at the default part height
         val tall = png(10, 20_000)

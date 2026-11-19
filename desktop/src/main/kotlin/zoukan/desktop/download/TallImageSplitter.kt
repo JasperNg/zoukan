@@ -2,6 +2,7 @@ package zoukan.desktop.download
 
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import zoukan.desktop.image.PageSizeLimits
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.image.BufferedImage
@@ -53,11 +54,18 @@ object TallImageSplitter {
 
     /**
      * Splits [image] (named `<base>.<ext>`) in its folder when it is tall. Animated images and
-     * formats ImageIO cannot read are kept as they are.
+     * formats ImageIO cannot read are kept as they are, and so is an image that declares more than
+     * [maxPixels]: ImageIO decodes on the Java heap, and some formats (a progressive JPEG) whole,
+     * so it is bounded as the reader bounds ImageIO ([PageSizeLimits.imageIoPixelLimit]).
      *
      * @return the files that now hold the page
      */
-    fun splitIfTall(image: File, base: String, partHeight: Int = optimalHeight): List<File> {
+    fun splitIfTall(
+        image: File,
+        base: String,
+        partHeight: Int = optimalHeight,
+        maxPixels: Long = PageSizeLimits.imageIoPixelLimit(heldBytes = 2 * image.length()),
+    ): List<File> {
         if (image.extension.lowercase() == "gif" || isAnimatedWebp(image)) return listOf(image)
         val dir = image.parentFile
         val written = mutableListOf<File>()
@@ -69,6 +77,10 @@ object TallImageSplitter {
                     val width = reader.getWidth(0)
                     val height = reader.getHeight(0)
                     if (width <= 0 || height / width <= 3) return listOf(image)
+                    if (PageSizeLimits.isTooLarge(width, height, maxPixels)) {
+                        logcat(LogPriority.WARN) { "Not splitting ${image.name}: it is too large to decode" }
+                        return listOf(image)
+                    }
 
                     // -1 so an image exactly partHeight tall stays whole
                     val parts = (height - 1) / partHeight + 1

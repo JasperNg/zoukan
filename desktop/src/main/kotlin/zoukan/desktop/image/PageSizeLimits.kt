@@ -14,6 +14,9 @@ import javax.imageio.ImageIO
  */
 internal class UnreadableImageException(override val message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
 
+/** A page response longer than [PageSizeLimits.MAX_PAGE_BYTES]: the same page comes back the same size, so it is not fetched again. */
+internal class PageTooLargeException(message: String) : java.io.IOException(message)
+
 /**
  * How large a page may be, in bytes and in the pixels its header declares, for the reader and the
  * downloads alike: a page larger than these is no picture a person reads, and holding it would
@@ -23,9 +26,9 @@ internal object PageSizeLimits {
     /** The most bytes one page's response may have. */
     const val MAX_PAGE_BYTES = 128L * 1024 * 1024
 
-    /** [body]'s bytes, or an IOException when it says or turns out to be longer than [limit]. */
+    /** [body]'s bytes, or a [PageTooLargeException] when it says or turns out to be longer than [limit]. */
     fun readPageBody(body: okhttp3.ResponseBody, limit: Long = MAX_PAGE_BYTES): ByteArray {
-        val tooLarge = { java.io.IOException(localized(DMR.strings.the_page_is_too_large_to_show)) }
+        val tooLarge = { PageTooLargeException(localized(DMR.strings.the_page_is_too_large_to_show)) }
         if (body.contentLength() > limit) throw tooLarge()
         val source = body.source()
         // More than the limit available: the page is refused before it is held whole

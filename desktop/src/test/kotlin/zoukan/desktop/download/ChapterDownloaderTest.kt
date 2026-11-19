@@ -241,4 +241,60 @@ class ChapterDownloaderTest {
             sandbox.assertNothingOutsideAppChanged()
         }
     }
+
+    /** A grey PNG that declares [width] by [height] pixels and holds one row of data. */
+    private fun declaredPng(width: Int, height: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val data = java.io.DataOutputStream(out)
+        fun chunk(type: String, body: ByteArray) {
+            data.writeInt(body.size)
+            val typed = type.toByteArray() + body
+            data.write(typed)
+            data.writeInt(java.util.zip.CRC32().apply { update(typed) }.value.toInt())
+        }
+        data.write(byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 13, 10, 26, 10))
+        val ihdr = ByteArrayOutputStream().also { b ->
+            java.io.DataOutputStream(b).apply {
+                writeInt(width)
+                writeInt(height)
+                write(byteArrayOf(1, 0, 0, 0, 0))
+            }
+        }.toByteArray()
+        chunk("IHDR", ihdr)
+        val row = ByteArray(1 + (width + 7) / 8)
+        val deflater = java.util.zip.Deflater().apply {
+            setInput(row)
+            finish()
+        }
+        chunk("IDAT", ByteArray(row.size + 64).let { it.copyOf(deflater.deflate(it)) })
+        chunk("IEND", ByteArray(0))
+        return out.toByteArray()
+    }
+
+    @Test
+    fun `a page that declares more pixels than the reader shows fails the chapter, fetched once, and is not saved`() = runBlocking<Unit> {
+        val fetches = AtomicInteger()
+        val huge = declaredPng(60_000, 60_000)
+        val downloader = ChapterDownloader(
+            pageList = { pages.indices.map { Page(it, url = "p$it") } },
+            imageUrl = { "https://example.org/${it.url}.png" },
+            image = { page ->
+                if (page.index == 3) {
+                    fetches.incrementAndGet()
+                    huge
+                } else {
+                    pages[page.index]
+                }
+            },
+            parallelPages = 1,
+        )
+
+        val error = shouldThrow<Exception> { downloader.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> } }
+
+        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.the_page_is_too_large_to_show)
+        // Refused as it is, not fetched again: a retry gets the same page
+        fetches.get() shouldBe 1
+        File(temp, "Chapter 1.cbz").exists() shouldBe false
+        File(temp, "Chapter 1_tmp").list().orEmpty().none { it.startsWith("004") } shouldBe true
+    }
 }

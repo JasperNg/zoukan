@@ -98,6 +98,8 @@ class DownloadManager(
     ) -> ChapterDownloader = { pageList, imageUrl, image, parallelPages -> ChapterDownloader(pageList, imageUrl, image, parallelPages) },
     /** The clock [index] checks its folders' age by; tests pass one they move on. */
     indexClock: () -> Long = System::currentTimeMillis,
+    /** The most bytes a page's response may have, as in the reader; tests pass a small one. */
+    private val maxPageBytes: Long = zoukan.desktop.image.PageSizeLimits.MAX_PAGE_BYTES,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -1157,7 +1159,8 @@ class DownloadManager(
                             with(exh.util.DataSaver) { source.getImage(page, dataSaver) }.use { response ->
                                 // ZOUKAN <--
                                 if (!response.isSuccessful) error("HTTP ${response.code}")
-                                response.body.bytes()
+                                // Bounded as the reader bounds it: an endless body cannot fill the heap
+                                zoukan.desktop.image.PageSizeLimits.readPageBody(response.body, maxPageBytes)
                             }
                         },
                         preferences.parallelPageLimit().get(),
