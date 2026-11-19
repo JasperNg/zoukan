@@ -344,6 +344,57 @@ class DownloadDatabaseFaultsTest {
     }
 
     @Test
+    fun `clearing the queue removes every queued download and the saved file is left empty`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        manager.restore(start = false)
+
+        manager.clearQueue()
+        manager.awaitBackgroundWork()
+
+        manager.queue.value.shouldBeEmpty()
+        savedChapterIds().shouldBeEmpty()
+    }
+
+    @Test
+    fun `cancelling a download that is only held takes it out of the saved queue`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+        manager.restore(start = false)
+        manager.queue.value.shouldBeEmpty()
+
+        manager.cancel(setOf(2L))
+        manager.awaitBackgroundWork()
+
+        savedChapterIds() shouldBe listOf(1L)
+        // Nor does it come back when the held queue is read again
+        manager.start()
+        manager.awaitBackgroundWork()
+        manager.queue.value.map { it.chapter.id } shouldBe listOf(1L)
+    }
+
+    @Test
+    fun `clearing the queue clears the held downloads too, also in the saved file`() = runBlocking<Unit> {
+        addChapter(2)
+        addChapter(3)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"))
+        manager.restore(start = false)
+        manager.enqueue(manga(), listOf(getChapter.await(3)!!), start = false)
+
+        manager.clearQueue()
+        manager.awaitBackgroundWork()
+        savedChapterIds().shouldBeEmpty()
+
+        // They do not come back in the same run when the queue starts again
+        manager.start()
+        manager.awaitBackgroundWork()
+        manager.queue.value.shouldBeEmpty()
+        savedChapterIds().shouldBeEmpty()
+    }
+
+    @Test
     fun `a held queue is restored in the same run when the queue is started after the database reads again`() = runBlocking<Unit> {
         addChapter(2)
         queueFile.writeText(saved(1L to 1L, 1L to 2L))

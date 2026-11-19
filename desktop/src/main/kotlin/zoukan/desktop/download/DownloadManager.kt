@@ -981,15 +981,23 @@ class DownloadManager(
         var removed: List<Download> = emptyList()
         var restart = false
         val stopped = synchronized(lock) {
+            // A chapter the user cancels is not kept for a later restore either, also one that is
+            // only held (not in the queue): the saved file then leaves it out
+            val heldBefore = held
+            if (heldBefore.isNotEmpty()) {
+                held = heldBefore.filterNot { it.chapterId in chapterIds }
+                if (held.isEmpty()) heldUnread = false
+            }
             removed = _queue.value.filter { it.chapter.id in chapterIds }
-            if (removed.isEmpty()) return
+            if (removed.isEmpty()) {
+                if (held.size != heldBefore.size) save()
+                return
+            }
             restart = job != null && removed.any { it.state.value == Download.State.DOWNLOADING }
             if (restart) pause()
             _queue.update { q -> q.filterNot { it.chapter.id in chapterIds } }
             stopping
         }
-        // A chapter the user cancels is not kept for a later restore either
-        synchronized(lock) { if (held.isNotEmpty()) held = held.filterNot { it.chapterId in chapterIds } }
         scope.launch {
             // After the cancelled download let go of its files
             stopped?.join()
@@ -1014,8 +1022,9 @@ class DownloadManager(
         if (restart) start()
     }
 
+    /** Cancels every download: those queued and those [held] back by a failed database read. */
     fun clearQueue() {
-        cancel(_queue.value.mapTo(HashSet()) { it.chapter.id })
+        cancel(_queue.value.mapTo(HashSet()) { it.chapter.id } + held.map { it.chapterId })
     }
 
     /** Moves a queued download to the front. */
