@@ -8,7 +8,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -16,6 +15,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.testkit.TestPreferenceStore
 import java.io.File
 
 /** A download manager on a temporary folder, with real preferences and sources, for the download tests. */
@@ -37,8 +37,8 @@ internal class DownloadKit(
         override fun headersBuilder() = Headers.Builder()
     }
 
-    val libraryPreferences = LibraryPreferences(InMemoryPreferenceStore())
-    val downloadPreferences = DownloadPreferences(InMemoryPreferenceStore())
+    val libraryPreferences = LibraryPreferences(TestPreferenceStore())
+    val downloadPreferences = DownloadPreferences(TestPreferenceStore())
     val downloads = File(temp, "downloads")
 
     val storage = mockk<ZoukanStorage> {
