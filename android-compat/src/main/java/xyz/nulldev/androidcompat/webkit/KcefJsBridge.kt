@@ -4,6 +4,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.concurrent.CopyOnWriteArrayList
@@ -148,8 +149,9 @@ internal class KcefJsBridge(
                     val retval = mapping.fn.call(mapping.obj, *invoke.args)
                     responder.success(retval.toString())
                 } catch (e: Exception) {
-                    Log.w(TAG, "JS-invoke on ${mapping.toNice()} failed:", e)
-                    responder.failure(0, e.message)
+                    val cause = (e as? InvocationTargetException)?.targetException ?: e
+                    Log.w(TAG, "JS-invoke on ${mapping.toNice()} failed:", cause)
+                    responder.failure(0, cause.message)
                 }
             },
         )
