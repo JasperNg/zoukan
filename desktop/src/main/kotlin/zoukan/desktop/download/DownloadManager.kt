@@ -300,62 +300,135 @@ class DownloadManager(
         }
     }
 
+    /** A download folder a rename moved: [from] is where it was, [to] where it is now. */
+    data class FolderMove(val from: File, val to: File)
+
     /**
-     * Moves an entry's download folder to the name [newTitle] gives it, as Android's renameManga.
-     * Never replaces anything: returns false, and moves nothing, when a folder of that name exists,
-     * a chapter of the entry is in the queue, or the entry's downloads are in more than one folder
-     * (Android's name and the desktop's, both on disk): moving one would leave the other's chapters
-     * out of view, so the user is notified. True when there is nothing to move.
+     * Moves an entry's download folders to the names [newTitle] gives them, as Android's renameManga
+     * ([renameMangaFolders]). True when they moved or there was nothing to move.
      */
-    suspend fun renameManga(manga: Manga, newTitle: String): Boolean =
-        renameManga(manga.id, manga.source, manga.ogTitle, newTitle)
+    suspend fun renameManga(manga: Manga, newTitle: String): Boolean = renameMangaFolders(manga, newTitle) != null
 
-    /** The name of [title]'s one download folder on disk (Android's or the desktop's), so a rename can be undone to it. */
-    suspend fun mangaFolderName(sourceId: Long, title: String): String? =
-        withContext(Dispatchers.IO) { paths.existingMangaDirs(sourceId, title).singleOrNull()?.name }
-
-    /** [toName]: the folder name to move to, instead of the one [toTitle] gives (moving a rename back). */
-    suspend fun renameManga(mangaId: Long, sourceId: Long, fromTitle: String, toTitle: String, toName: String? = null): Boolean =
-        withContext(Dispatchers.IO) {
-            // The folder Android named, if the desktop names it differently (see FileNames)
-            val existing = paths.existingMangaDirs(sourceId, fromTitle)
-            if (existing.size > 1) {
-                logcat(LogPriority.WARN) { "Not renaming the download folders of the entry: its downloads are in ${existing.size} folders" }
-                // A lasting state (downloads made before and after "Disallow non-ASCII filenames"
-                // changed, or Android's folder beside the desktop's): told, not only logged
-                Notifications.post(
-                    localized(DMR.strings.download_folders_not_renamed),
-                    localized(DMR.strings.download_folders_not_renamed_text, fromTitle, toTitle, existing.size),
-                    Notifications.Kind.WARNING,
-                )
-                return@withContext false
+    /**
+     * Moves each of [manga]'s download folders to the name [newTitle] gives a folder of its kind
+     * ([DownloadPaths.existingMangaDirRenames]), as Android's renameManga: an entry can have several
+     * (downloads made before and after "Disallow non-ASCII filenames" changed, Android's name beside
+     * the desktop's).
+     *
+     * All or none, and never over anything on disk: nothing moves when a chapter of the entry is
+     * queued, when a folder is also another entry's ([sharesDownloadFolder]), when a folder of a new
+     * name exists, or when two folders would get the same name (their chapters would have to be
+     * merged). A move that fails puts the folders moved before it back. When several folders, or a
+     * shared one, keep the entry's title, the user is told once per entry and title in a run.
+     *
+     * @return the moves made, empty when there was nothing to move; null when nothing moved
+     */
+    suspend fun renameMangaFolders(manga: Manga, newTitle: String): List<FolderMove>? = withContext(Dispatchers.IO) {
+        val moves = paths.existingMangaDirRenames(manga.source, manga.ogTitle, newTitle)
+            .map { (folder, name) -> FolderMove(folder, File(folder.parentFile, name)) }
+            // Already the new name; or a case-only change on a disk that ignores case, which names the same folder
+            .filterNot { it.from.name == it.to.name || !it.from.exists() || isSameFolder(it.from, it.to) }
+        if (moves.isEmpty()) return@withContext emptyList()
+        if (_queue.value.any { it.manga.id == manga.id }) {
+            logcat(LogPriority.WARN) { "Not renaming the download folders of the entry: chapters of the entry are queued" }
+            return@withContext null
+        }
+        val others = try {
+            coOwnerLookup?.invoke(manga).orEmpty().map { it.first }.filter { it.id != manga.id }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Without knowing who else uses the folder, it does not move
+            logcat(LogPriority.WARN, e) { "Not renaming the download folders of the entry: the entries sharing them could not be read" }
+            return@withContext null
+        }
+        if (others.isNotEmpty()) {
+            logcat(LogPriority.WARN) { "Not renaming the download folders of the entry: another entry's downloads are in them too" }
+            warnRenameOnce(manga.id, newTitle) {
+                localized(DMR.strings.download_folder_shared_not_renamed_text, manga.ogTitle, newTitle, moves.first().from.name)
             }
-            val old = existing.singleOrNull() ?: return@withContext true
-            val target = File(old.parentFile, toName ?: paths.mangaDirName(toTitle))
-            if (old.name == target.name || !old.exists()) return@withContext true
-            if (_queue.value.any { it.manga.id == mangaId }) {
-                logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: chapters of the entry are queued" }
-                return@withContext false
+            return@withContext null
+        }
+        val targets = moves.map { folderKey(it.to) }
+        val taken = moves.filter { Files.exists(it.to.toPath(), LinkOption.NOFOLLOW_LINKS) }
+        if (taken.isNotEmpty() || targets.distinct().size != targets.size) {
+            logcat(LogPriority.WARN) {
+                "Not renaming the download folders of the entry: " +
+                    if (taken.isNotEmpty()) "a folder named ${taken.first().to.name} exists" else "two folders would get one name"
             }
-            if (target.exists()) {
-                // A case-only change on a case-insensitive disk names the same folder
-                if (runCatching { Files.isSameFile(old.toPath(), target.toPath()) }.getOrDefault(false)) {
-                    return@withContext true
+            // One folder whose new name is taken keeps its title quietly, as before; several are told
+            if (moves.size > 1) {
+                warnRenameOnce(manga.id, newTitle) {
+                    localized(DMR.strings.download_folders_not_renamed_text, manga.ogTitle, newTitle, moves.size)
                 }
-                logcat(LogPriority.WARN) { "Not renaming the download folder ${old.name}: a folder named ${target.name} exists" }
-                return@withContext false
             }
+            return@withContext null
+        }
+        val done = ArrayList<FolderMove>()
+        for (move in moves) {
             try {
                 // No REPLACE_EXISTING: nothing already on disk is ever overwritten
-                Files.move(old.toPath(), target.toPath())
+                moveFolder(move.from.toPath(), move.to.toPath())
+                done += move
             } catch (e: IOException) {
-                logcat(LogPriority.WARN, e) { "Could not rename the download folder ${old.name} to ${target.name}" }
-                return@withContext false
+                logcat(LogPriority.WARN, e) { "Could not rename the download folder ${move.from.name} to ${move.to.name}" }
+                moveBack(done)
+                return@withContext null
+            } finally {
+                invalidate(move.from)
+                invalidate(move.to)
             }
-            invalidate(old)
-            invalidate(target)
-            true
         }
+        done
+    }
+
+    /**
+     * Moves back what [renameMangaFolders] moved, the last move first, when the new title could not
+     * be saved: each folder to the name it had, never over anything on disk.
+     *
+     * @return whether every folder is back
+     */
+    suspend fun moveFoldersBack(moves: List<FolderMove>): Boolean = withContext(Dispatchers.IO) { moveBack(moves) }
+
+    private fun moveBack(moves: List<FolderMove>): Boolean {
+        var all = true
+        for (move in moves.asReversed()) {
+            try {
+                moveFolder(move.to.toPath(), move.from.toPath())
+            } catch (e: IOException) {
+                // Its chapters are out of view until it has its name again: the user is told which
+                logcat(LogPriority.ERROR, e) { "Could not move the download folder ${move.to.name} back to ${move.from.name}" }
+                Notifications.post(
+                    localized(DMR.strings.download_folders_not_renamed),
+                    localized(DMR.strings.download_folder_not_moved_back_text, move.to.name, move.from.name),
+                    Notifications.Kind.ERROR,
+                )
+                all = false
+            } finally {
+                invalidate(move.from)
+                invalidate(move.to)
+            }
+        }
+        return all
+    }
+
+    /** Moves a download folder; tests make it fail. Never replaces anything (no REPLACE_EXISTING). */
+    @Volatile
+    internal var moveFolder: (java.nio.file.Path, java.nio.file.Path) -> Unit = { from, to -> Files.move(from, to) }
+
+    /** The entries and titles whose folders could not follow a new title and the user was told about, in this run. */
+    private val renameWarned = ConcurrentHashMap.newKeySet<Pair<Long, String>>()
+
+    private fun warnRenameOnce(mangaId: Long, newTitle: String, text: () -> String) {
+        if (!renameWarned.add(mangaId to newTitle)) return
+        Notifications.post(localized(DMR.strings.download_folders_not_renamed), text(), Notifications.Kind.WARNING)
+    }
+
+    /** [folder]'s source folder and name as the file system compares names (see [DownloadIndex.key]). */
+    private fun folderKey(folder: File): String = index.key(root, folder.parentFile.name) + "/" + index.key(root, folder.name)
+
+    private fun isSameFolder(a: File, b: File): Boolean =
+        Files.exists(b.toPath(), LinkOption.NOFOLLOW_LINKS) && runCatching { Files.isSameFile(a.toPath(), b.toPath()) }.getOrDefault(false)
 
     /** Forgets what was read from disk, for example after the storage folder moved. */
     fun invalidateCache() {

@@ -349,7 +349,9 @@
     <!-- A cover, preview or picked image whose header declares a size too large to decode -->
     <string name="the_image_is_too_large">The image is too large to open</string>
     <string name="download_folders_not_renamed">Title not changed</string>
-    <string name="download_folders_not_renamed_text">%1$s keeps its title instead of %2$s: its downloads are in %3$d folders, and only one could follow the new title. Move the chapters into one folder to let the title change.</string>
+    <string name="download_folders_not_renamed_text">%1$s keeps its title instead of %2$s: its downloads are in %3$d folders, and they cannot all follow the new title without mixing with another folder. Move the chapters into one folder to let the title change.</string>
+    <string name="download_folder_shared_not_renamed_text">%1$s keeps its title instead of %2$s: its download folder %3$s also holds another entry\'s downloads.</string>
+    <string name="download_folder_not_moved_back_text">The download folder %1$s could not be moved back to %2$s. Rename it to %2$s to see its chapters again.</string>
     <string name="is_a_link_and_was_not_cleared">%1$s is a link to another folder, so nothing in it was deleted</string>
     <string name="could_not_be_checked_and_was_not_cleared">%1$s could not be checked, so nothing in it was deleted</string>
     <string name="an_html_page_not_an_image">an HTML page, not an image</string>

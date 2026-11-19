@@ -86,9 +86,35 @@ class DownloadPaths(
      * form is found, and is returned as it is spelled on disk; Android's names that are not valid
      * everywhere only when listed (on Windows `NUL` is a device).
      */
-    fun existingMangaDirs(sourceId: Long, mangaTitle: String): List<File> {
-        val names = mangaDirNames(mangaTitle)
-        val found = mutableListOf<File>()
+    fun existingMangaDirs(sourceId: Long, mangaTitle: String): List<File> =
+        existingMangaDirsByName(sourceId, mangaDirNames(mangaTitle)).map { it.first }
+
+    /**
+     * [existingMangaDirs] of [fromTitle], each with the name [toTitle] gives a folder of its kind, in
+     * the same source folder: the desktop's name under each "Disallow non-ASCII filenames" setting
+     * goes to [toTitle]'s name under the same setting, and Android's name that is not valid
+     * everywhere to [toTitle]'s name under that setting as the desktop writes it (the desktop never
+     * writes a name that is not valid everywhere). Two folders can get the same name.
+     */
+    fun existingMangaDirRenames(sourceId: Long, fromTitle: String, toTitle: String): List<Pair<File, String>> {
+        val ascii = disallowNonAscii
+        val kinds = LinkedHashMap<String, String>()
+        fun kind(from: String, to: String) {
+            kinds.putIfAbsent(from, to)
+        }
+        for (a in listOf(ascii, !ascii)) {
+            kind(FileNames.buildValidFilename(fromTitle, disallowNonAscii = a), FileNames.buildValidFilename(toTitle, disallowNonAscii = a))
+        }
+        for (a in listOf(ascii, !ascii)) {
+            val to = FileNames.buildValidFilename(toTitle, disallowNonAscii = a)
+            legacyNames(FileNames.androidValidFilename(fromTitle, disallowNonAscii = a)).forEach { kind(it, to) }
+        }
+        return existingMangaDirsByName(sourceId, kinds.keys.toList()).map { (folder, name) -> folder to kinds.getValue(name) }
+    }
+
+    /** Each folder of [names] that exists in each source folder of [sourceId], once, with the name it was found by. */
+    private fun existingMangaDirsByName(sourceId: Long, names: List<String>): List<Pair<File, String>> {
+        val found = mutableListOf<Pair<File, String>>()
         for (source in sourceDirNames(sourceId).distinct()) {
             val dir = File(storage.downloads, source)
             val onDisk = dir.list()?.toSet() ?: continue
@@ -101,7 +127,7 @@ class DownloadPaths(
                         spellingOnDisk(name, onDisk) { isSameFile(File(dir, it), File(dir, name)) }?.let { File(dir, it) } ?: continue
                     else -> continue
                 }
-                if (found.none { isSameFile(it, folder) }) found += folder
+                if (found.none { isSameFile(it.first, folder) }) found += folder to name
             }
         }
         return found

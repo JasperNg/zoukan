@@ -251,4 +251,30 @@ class RefreshMangaRenameTest {
         File(paths.mangaDir(android).parentFile, "aux_").exists() shouldBe false
         File(paths.mangaDir(renamed).parentFile, paths.mangaDirName("New title")).exists() shouldBe false
     }
+
+    @Test
+    fun `an entry's two download folders both follow a new title, and both move back when it is not saved`() = runBlocking<Unit> {
+        for (saves in listOf(true, false)) {
+            temp.resolve("downloads").deleteRecursively()
+            setUp()
+            val source = paths.mangaDir(old).parentFile
+            val ascii = { title: String -> zoukan.desktop.download.FileNames.buildValidFilename(title, disallowNonAscii = true) }
+            // Made before and after "Disallow non-ASCII filenames" changed: the ASCII-only name differs
+            val oldTitle = manga("Café")
+            write(File(source, "Café"), "Chapter 1.cbz", Random(7).nextBytes(512))
+            write(File(source, ascii("Café")), "Chapter 2.cbz", Random(8).nextBytes(512))
+            val refresh = refreshManga(saves = saves)
+
+            val newTitle = mockk<Source>(relaxed = true) {
+                coEvery { getMangaUpdate(any(), any(), any(), any()) } returns
+                    SMangaUpdate(SManga.create().apply { title = "Café Two" }, emptyList())
+            }
+
+            refresh(oldTitle, fetchDetails = true, fetchChapters = false, source = newTitle)
+
+            val expected = if (saves) listOf("Café Two", ascii("Café Two")) else listOf("Café", ascii("Café"))
+            source.list()!!.sorted() shouldBe expected.sorted()
+            updates.captured.title shouldBe "Café Two"
+        }
+    }
 }

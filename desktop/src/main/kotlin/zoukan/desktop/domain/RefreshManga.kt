@@ -86,14 +86,11 @@ class RefreshManga(
         }
         // As Android's renameManga: the download folder follows the title, and a title whose folder
         // cannot move stays as it is, so the entry keeps its downloads
-        var renamedTo: String? = null
-        // The folder's name before the rename (Android's, when it named it), to move it back to
-        var renamedFrom: String? = null
+        // The folders the rename moved (several when the entry had several), to move them back
+        var moved: List<DownloadManager.FolderMove>? = null
         if (title != null && title != local.ogTitle && local.source != LocalSource.ID) {
-            renamedFrom = downloadManager.mangaFolderName(local.source, local.ogTitle)
-            if (downloadManager.renameManga(local, title)) {
-                renamedTo = title
-            } else {
+            moved = downloadManager.renameMangaFolders(local, title)
+            if (moved == null) {
                 logcat(LogPriority.WARN) { "Keeping the title ${local.ogTitle}: its download folder could not move to $title" }
                 title = null
             }
@@ -122,17 +119,15 @@ class RefreshManga(
             )
         } catch (e: Throwable) {
             // Also on cancellation: the folder goes back to the name the stored title gives it
-            moveBack(local, renamedTo, renamedFrom)
+            moveBack(moved)
             throw e
         }
-        if (!saved) moveBack(local, renamedTo, renamedFrom)
-        return saved && renamedTo != null
+        if (!saved) moveBack(moved)
+        return saved && moved != null
     }
 
-    private suspend fun moveBack(local: Manga, renamedTo: String?, renamedFrom: String?) {
-        if (renamedTo == null) return
-        withContext(NonCancellable) {
-            downloadManager.renameManga(local.id, local.source, renamedTo, local.ogTitle, toName = renamedFrom)
-        }
+    private suspend fun moveBack(moved: List<DownloadManager.FolderMove>?) {
+        if (moved.isNullOrEmpty()) return
+        withContext(NonCancellable) { downloadManager.moveFoldersBack(moved) }
     }
 }
