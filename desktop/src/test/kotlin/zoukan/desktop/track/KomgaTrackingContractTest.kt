@@ -145,13 +145,17 @@ class KomgaTrackingContractTest {
             every { get(source.id) } returns source
             every { getOrStub(source.id) } returns source
         }
+        val syncProgress = SyncChapterProgressWithTrack(
+            updateChapter = updateChapter,
+            insertTrack = insertTrack,
+            getChaptersByMangaId = getChapters,
+        )
         val addTracks = AddTracks(
             insertTrack = insertTrack,
-            syncChapterProgressWithTrack = SyncChapterProgressWithTrack(updateChapter, getChapters),
+            syncChapterProgressWithTrack = syncProgress,
             getChaptersByMangaId = getChapters,
             trackerManager = trackerManager,
         )
-        val syncProgress = SyncChapterProgressWithTrack(updateChapter, getChapters)
         val refreshTracks = RefreshTracks(getTracks, trackerManager, insertTrack, syncProgress)
         val delayedStore = mockk<DelayedTrackingStore>(relaxed = true)
 

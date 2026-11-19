@@ -48,6 +48,7 @@ import tachiyomi.data.source.SavedSearchRepositoryImpl
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.interactor.DeleteFeedSavedSearchById
 import tachiyomi.domain.source.interactor.DeleteSavedSearchById
 import tachiyomi.domain.source.interactor.GetFeedSavedSearchBySourceId
@@ -334,7 +335,7 @@ class BrowseAndSourceBehaviorTest {
         }
         val mangaRepo = mockk<MangaRepositoryImpl>(relaxed = true)
         val networkToLocal = mockk<NetworkToLocalManga> {
-            coEvery { invoke(any<List<tachiyomi.domain.manga.model.Manga>>(), any()) } answers { firstArg() }
+            coEvery { invoke(any<List<Manga>>(), any<Boolean>()) } answers { firstArg<List<Manga>>() }
         }
         Injekt.addSingleton(sourceManager)
         Injekt.addSingleton(networkToLocal)
