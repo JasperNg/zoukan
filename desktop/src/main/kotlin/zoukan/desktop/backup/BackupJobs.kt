@@ -90,70 +90,67 @@ class BackupJobs(
         scope.launch {
             var result = RestoreOutcome.FAILED
             try {
-                // The gate holds the background jobs off while the library is half-restored
-                RestoreGate.whileRestoring {
-                    try {
-                        val desktopBackups = backups()
-                        val backup = desktopBackups.read(file)
-                        // Extension stores decide whose code runs, so a backup adds them only when the user
-                        // has seen which ones
-                        val newStores = if (options.extensionStores) desktopBackups.newExtensionStores(backup) else emptyList()
-                        val chosen = when {
-                            newStores.isEmpty() -> options
-                            else -> when (storePrompt.confirm(newStores.map { "${it.name}: ${it.extensionListUrl ?: it.indexUrl}" })) {
-                                true -> options
-                                false -> options.copy(extensionStores = false)
-                                null -> {
-                                    result = RestoreOutcome.CANCELLED
-                                    return@launch
-                                }
-                            }
-                        }
-                        // Security settings and logins change when the app locks and where data goes, so a
-                        // backup writes them only when the user has been told
-                        val sensitive = DesktopBackups.sensitiveKeys(
-                            backup.copy(
-                                backupPreferences = if (chosen.appSettings) backup.backupPreferences else emptyList(),
-                                backupSourcePreferences = if (chosen.sourceSettings) backup.backupSourcePreferences else emptyList(),
-                            ),
-                        )
-                        val allowSensitive = when {
-                            sensitive.isEmpty() -> false
-                            else -> when (sensitivePrompt.confirm(sensitive.size)) {
-                                true -> true
-                                false -> false
-                                null -> {
-                                    result = RestoreOutcome.CANCELLED
-                                    return@launch
-                                }
-                            }
-                        }
-                        // A copy of the library as it is, so the restore can be undone; the user
-                        // decides when it cannot be saved
-                        _status.value = localized(DMR.strings.saving_safety_backup)
-                        if (!snapshot.guard(SnapshotReason.RESTORE, snapshotPrompt)) {
+                val desktopBackups = backups()
+                val backup = desktopBackups.read(file)
+                // Extension stores decide whose code runs, so a backup adds them only when the user
+                // has seen which ones
+                val newStores = if (options.extensionStores) desktopBackups.newExtensionStores(backup) else emptyList()
+                val chosen = when {
+                    newStores.isEmpty() -> options
+                    else -> when (storePrompt.confirm(newStores.map { "${it.name}: ${it.extensionListUrl ?: it.indexUrl}" })) {
+                        true -> options
+                        false -> options.copy(extensionStores = false)
+                        null -> {
                             result = RestoreOutcome.CANCELLED
                             return@launch
                         }
-                        _status.value = localized(DMR.strings.restoring, file.name)
-                        val errors = desktopBackups.restore(backup, chosen, allowSensitive = allowSensitive) { _, progress, total ->
-                            _status.value = localized(DMR.strings.restoring_of, file.name, progress, total)
-                        }
-                        result = RestoreOutcome.OK
-                        Toasts.show(restoredMessage(backup.backupManga.size, errors.size))
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Toasts.error(localized(DMR.strings.restore_failed), e)
-                    } catch (e: Throwable) {
-                        // A fatal error goes on to the crash report, after the user is told the restore failed
-                        Toasts.error(localized(DMR.strings.restore_failed), e)
-                        throw e
-                    } finally {
-                        _status.value = null
                     }
                 }
+                // Security settings and logins change when the app locks and where data goes, so a
+                // backup writes them only when the user has been told
+                val sensitive = DesktopBackups.sensitiveKeys(
+                    backup.copy(
+                        backupPreferences = if (chosen.appSettings) backup.backupPreferences else emptyList(),
+                        backupSourcePreferences = if (chosen.sourceSettings) backup.backupSourcePreferences else emptyList(),
+                    ),
+                )
+                val allowSensitive = when {
+                    sensitive.isEmpty() -> false
+                    else -> when (sensitivePrompt.confirm(sensitive.size)) {
+                        true -> true
+                        false -> false
+                        null -> {
+                            result = RestoreOutcome.CANCELLED
+                            return@launch
+                        }
+                    }
+                }
+                // A copy of the library as it is, so the restore can be undone; the user
+                // decides when it cannot be saved
+                _status.value = localized(DMR.strings.saving_safety_backup)
+                if (!snapshot.guard(SnapshotReason.RESTORE, snapshotPrompt)) {
+                    result = RestoreOutcome.CANCELLED
+                    return@launch
+                }
+                _status.value = localized(DMR.strings.restoring, file.name)
+                // The gate holds the background jobs off while the library is half-restored
+                RestoreGate.whileRestoring {
+                    val errors = desktopBackups.restore(backup, chosen, allowSensitive = allowSensitive) { _, progress, total ->
+                        _status.value = localized(DMR.strings.restoring_of, file.name, progress, total)
+                    }
+                    result = RestoreOutcome.OK
+                    Toasts.show(restoredMessage(backup.backupManga.size, errors.size))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toasts.error(localized(DMR.strings.restore_failed), e)
+            } catch (e: Throwable) {
+                // A fatal error goes on to the crash report, after the user is told the restore failed
+                Toasts.error(localized(DMR.strings.restore_failed), e)
+                throw e
             } finally {
+                _status.value = null
                 outcome.complete(result)
             }
         }
