@@ -11,8 +11,14 @@ import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceScreen
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.domain.source.service.SourcePreferences
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -23,11 +29,14 @@ import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.ui.settings.flattenPreferences
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import tachiyomi.core.common.preference.Preference as StorePreference
 
 /**
  * The androidx.preference values, SharedPreferences and Toast as extensions use them: values read
@@ -566,5 +575,129 @@ class PreferenceCompatTest {
             summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { "Provided" }
         }
         provided.summary shouldBe "Provided"
+    }
+}
+
+/**
+ * What a PreferenceStore on the Android compatibility layer's SharedPreferences does: typed
+ * defaults, set and delete, the change flow, and sharing the file with plain SharedPreferences.
+ */
+class PreferenceStoreContractTest {
+
+    private enum class Mode { A, B, C }
+
+    @TempDir
+    lateinit var root: File
+
+    private val property = "$CONFIG_PREFIX.server.rootDir"
+    private var previousRoot: String? = null
+
+    @BeforeEach
+    fun setRoot() {
+        previousRoot = System.getProperty(property)
+        System.setProperty(property, root.absolutePath)
+    }
+
+    @AfterEach
+    fun restoreRoot() {
+        previousRoot?.let { System.setProperty(property, it) } ?: System.clearProperty(property)
+    }
+
+    private fun prefs() = JavaSharedPreferences("store_contract_${System.nanoTime()}")
+
+    private fun <T> StorePreference<T>.roundTrip(default: T, value: T) {
+        get() shouldBe default
+        isSet() shouldBe false
+        set(value)
+        get() shouldBe value
+        isSet() shouldBe true
+        delete()
+        get() shouldBe default
+        isSet() shouldBe false
+    }
+
+    @Test
+    fun `every typed preference reads its default, then the value set, and forgets it on delete`() {
+        val store = DesktopPreferenceStore(prefs())
+
+        store.getString("s", "d").roundTrip("d", "x")
+        store.getLong("l", 1L).roundTrip(1L, 99L)
+        store.getInt("i", 2).roundTrip(2, 7)
+        store.getFloat("f", 0.5f).roundTrip(0.5f, 1.5f)
+        store.getBoolean("b", false).roundTrip(false, true)
+        store.getStringSet("set", setOf("a")).roundTrip(setOf("a"), setOf("x", "y"))
+        store.getObjectFromString("os", Mode.A, { it.name }, { Mode.valueOf(it) }).roundTrip(Mode.A, Mode.C)
+        store.getObjectFromInt("oi", Mode.A, { it.ordinal }, { Mode.entries[it] }).roundTrip(Mode.A, Mode.B)
+    }
+
+    @Test
+    fun `changes reach the preference flow and getAll lists stored keys`() = runTest {
+        val store = DesktopPreferenceStore(prefs())
+        val number = store.getInt("n", 0)
+
+        val seen = mutableListOf<Int>()
+        // Unconfined: collection starts (current value, listener registered) before set() runs
+        val job = launch(kotlinx.coroutines.Dispatchers.Unconfined) {
+            seen += number.changes().take(2).toList()
+        }
+        number.set(5)
+        job.join()
+
+        seen shouldBe listOf(0, 5)
+        store.getAll()["n"] shouldBe 5
+    }
+
+    @Test
+    fun `a value written through SharedPreferences is seen by the store`() {
+        val prefs = prefs()
+        val store = DesktopPreferenceStore(prefs)
+
+        prefs.edit().putString("k", "v").commit()
+
+        store.getString("k", "").get() shouldBe "v"
+    }
+}
+
+/** The source settings have one declaration each, and the default languages include the system language. */
+class SourcePreferencesDefaultsTest {
+
+    @TempDir
+    lateinit var root: File
+
+    private fun store(): DesktopPreferenceStore {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        return DesktopPreferenceStore(JavaSharedPreferences("source_defaults_test"))
+    }
+
+    private fun withLocale(locale: Locale, block: () -> Unit) {
+        val saved = Locale.getDefault()
+        Locale.setDefault(locale)
+        try {
+            block()
+        } finally {
+            Locale.setDefault(saved)
+        }
+    }
+
+    @Test
+    fun `the default languages include the system language`() = withLocale(Locale.FRENCH) {
+        val languages = SourcePreferences(store()).enabledLanguages().get()
+        languages shouldContain "fr"
+        languages shouldContain "all"
+        languages shouldContain "en"
+    }
+
+    @Test
+    fun `both preference classes agree on every shared key`() = withLocale(Locale.FRENCH) {
+        val store = store()
+        val source = SourcePreferences(store)
+        val desktop = DesktopPreferences(store)
+
+        desktop.enabledLanguages().key() shouldBe source.enabledLanguages().key()
+        desktop.enabledLanguages().defaultValue() shouldBe source.enabledLanguages().defaultValue()
+        desktop.showNsfwSource().key() shouldBe source.showNsfwSource().key()
+        desktop.showNsfwSource().defaultValue() shouldBe source.showNsfwSource().defaultValue()
+        desktop.pinnedSources().key() shouldBe source.pinnedSources().key()
+        desktop.pinnedSources().defaultValue() shouldBe source.pinnedSources().defaultValue()
     }
 }
