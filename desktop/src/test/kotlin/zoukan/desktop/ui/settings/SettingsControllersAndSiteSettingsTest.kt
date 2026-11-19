@@ -1,5 +1,14 @@
 package zoukan.desktop.ui.settings
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.runDesktopComposeUiTest
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.network.NetworkPreferences
@@ -17,7 +26,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.sy.SYMR
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.browser.blocking.ContentBlockerPreferences
 import zoukan.desktop.compat.localized
@@ -343,5 +355,127 @@ class SettingsControllersTest {
         // Concurrent guard when already refreshing
         progressFlow.value = localized(DMR.strings.refreshing_covers)
         controller.refreshLibraryCovers() shouldBe null
+    }
+}
+
+@OptIn(ExperimentalTestApi::class)
+class EhCookieFieldsTest {
+    @Test
+    fun `the pass hash cookie field is masked`() = runDesktopComposeUiTest {
+        setContent {
+            EhCookieFields("123", {}, "abcdef123", {}, "", {})
+        }
+
+        // A masked field is marked as a password; its semantics text is the typed value, so the
+        // mark is what the test can check
+        onNode(hasSetTextAction() and hasText("ipb_pass_hash"))
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
+    }
+}
+
+/**
+ * The E-Hentai language and front-page category settings keep Android's format (backups carry
+ * them between the apps), and a short or broken value no longer breaks the dialogs.
+ */
+class EhSettingsFormatTest {
+    private val defaults = ExhPreferences(InMemoryPreferenceStore())
+
+    @Test
+    fun `Android's defaults read as all off and write back unchanged`() {
+        val languages = defaults.exhSettingsLanguages().get()
+        EhSettingsFormat.parseLanguages(languages).flatten().any { it } shouldBe false
+        EhSettingsFormat.formatLanguages(EhSettingsFormat.parseLanguages(languages)) shouldBe languages
+
+        val categories = defaults.exhEnabledCategories().get()
+        EhSettingsFormat.parseShownCategories(categories) shouldBe List(10) { true }
+        EhSettingsFormat.formatShownCategories(EhSettingsFormat.parseShownCategories(categories)) shouldBe categories
+    }
+
+    @Test
+    fun `a language filter is written as Android's original-translated-rewrite lines`() {
+        val rows = EhSettingsFormat.parseLanguages(defaults.exhSettingsLanguages().get()).map { it.toMutableList() }
+        // English translated, Chinese rewrite
+        rows[1][1] = true
+        rows[2][2] = true
+        val lines = EhSettingsFormat.formatLanguages(rows).split("\n")
+        lines.size shouldBe 17
+        lines[1] shouldBe "false*true*false"
+        lines[2] shouldBe "false*false*true"
+        lines.filterIndexed { i, _ -> i != 1 && i != 2 }.all { it == "false*false*false" } shouldBe true
+    }
+
+    @Test
+    fun `Japanese has no original filter, as on Android`() {
+        val rows = EhSettingsFormat.parseLanguages("true*true*false")
+        rows[0] shouldBe listOf(false, true, false)
+        EhSettingsFormat.formatLanguages(listOf(listOf(true, false, true))).lines().first() shouldBe "false*false*true"
+    }
+
+    @Test
+    fun `a short or broken languages value reads as off and is written back whole`() {
+        val rows = EhSettingsFormat.parseLanguages("false*true\nnonsense")
+        rows.size shouldBe 17
+        rows.all { it.size == 3 } shouldBe true
+        rows[0] shouldBe listOf(false, true, false)
+        rows[1] shouldBe listOf(false, false, false)
+        EhSettingsFormat.formatLanguages(rows).lines().size shouldBe 17
+        EhSettingsFormat.parseLanguages("").size shouldBe 17
+    }
+
+    @Test
+    fun `front page categories store whether each is hidden`() {
+        val shown = MutableList(10) { true }
+        // Doujinshi and Misc hidden
+        shown[0] = false
+        shown[9] = false
+        EhSettingsFormat.formatShownCategories(shown) shouldBe "true,false,false,false,false,false,false,false,false,true"
+        EhSettingsFormat.parseShownCategories("true,false") shouldBe listOf(false) + List(9) { true }
+        EhSettingsFormat.formatShownCategories(EhSettingsFormat.parseShownCategories("true,false")).split(",").size shouldBe 10
+    }
+}
+
+@OptIn(ExperimentalTestApi::class)
+class MangaDexSettingsTest {
+    private val rowTitle get() = localized(SYMR.strings.mangadex_push_favorites_to_mangadex)
+
+    @Test
+    fun `following the library on MangaDex asks first`() = runDesktopComposeUiTest {
+        var followed = 0
+        setContent { FollowLibraryRow(enabled = true, count = { 3 }) { followed++ } }
+
+        onNodeWithText(rowTitle).performClick()
+        waitForIdle()
+
+        followed shouldBe 0
+        onNodeWithText(localized(DMR.strings.follow_library_on_mangadex_warning, 3), substring = true).assertExists()
+
+        onNodeWithText(localized(DMR.strings.follow_on_mangadex)).performClick()
+        waitForIdle()
+        followed shouldBe 1
+    }
+
+    @Test
+    fun `cancelling the MangaDex follow changes nothing`() = runDesktopComposeUiTest {
+        var followed = 0
+        setContent { FollowLibraryRow(enabled = true, count = { 3 }) { followed++ } }
+
+        onNodeWithText(rowTitle).performClick()
+        waitForIdle()
+        onNodeWithText(localized(MR.strings.action_cancel)).performClick()
+        waitForIdle()
+
+        followed shouldBe 0
+        onNodeWithText(localized(DMR.strings.follow_on_mangadex)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `cancelling the sync follows dialog confirms nothing`() = runDesktopComposeUiTest {
+        var confirmed: Set<String>? = null
+        setContent { SyncFollowsDialog(onDismiss = {}, onConfirm = { confirmed = it }) }
+
+        onNodeWithText(localized(SYMR.strings.mangadex_sync_follows_to_library)).assertExists()
+        onNodeWithText(localized(MR.strings.action_cancel)).performClick()
+        waitForIdle()
+        confirmed shouldBe null
     }
 }
