@@ -23,9 +23,5 @@ internal fun sourceErrorText(e: Throwable): String = when {
     else -> localized(DMR.strings.source_request_failed)
 }
 
-/**
- * A page that cannot be decoded, with a [message] already worded for the user. Other
- * [IllegalArgumentException]s (a failed `require`, a malformed URL) carry developer text and are
- * not shown.
- */
-internal class UnreadableImageException(override val message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
+/** A page that cannot be decoded, with a message already worded for the user (in the runtime's image package, which the downloads use too). */
+internal typealias UnreadableImageException = zoukan.desktop.image.UnreadableImageException

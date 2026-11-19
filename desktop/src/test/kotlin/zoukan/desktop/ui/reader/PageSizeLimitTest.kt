@@ -9,6 +9,7 @@ import okio.Buffer
 import okio.BufferedSource
 import org.junit.jupiter.api.Test
 import zoukan.desktop.compat.localized
+import zoukan.desktop.image.PageSizeLimits.readPageBody
 import zoukan.desktop.ui.common.UnreadableImageException
 import zoukan.i18n.desktop.DMR
 import java.io.ByteArrayOutputStream

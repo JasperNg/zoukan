@@ -5,8 +5,6 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import org.jetbrains.skia.Bitmap
-import org.jetbrains.skia.Codec
-import org.jetbrains.skia.Data
 import org.jetbrains.skia.IRect
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
@@ -15,7 +13,8 @@ import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageFormats
 import xyz.nulldev.androidcompat.graphics.byteArrayImageInputStream
 import zoukan.desktop.compat.localized
-import zoukan.desktop.ui.common.UnreadableImageException
+import zoukan.desktop.image.PageSizeLimits
+import zoukan.desktop.image.UnreadableImageException
 import zoukan.i18n.desktop.DMR
 import javax.imageio.ImageIO
 
@@ -149,43 +148,14 @@ class PageImage(
         }
 
         // ZOUKAN -->
-        /**
-         * The most pixels a page may declare on Skia's path (JPEG, PNG, WebP, GIF, BMP): WebP's
-         * largest, 16384 by 16384, so every page Skia showed before still shows. Skia decodes the
-         * page whole, in native memory outside the Java heap, and only then scales it down to the
-         * window, so the declared size is what is allocated. Android shows such pages through its
-         * subsampling view; a header that declares far more (a JPEG of 60000 by 60000) is no page,
-         * and allocating it would end the session.
-         */
-        internal const val MAX_DECODED_PIXELS = 16_384L * 16_384
+        // The size limits are the downloads' too: see [PageSizeLimits]
+        internal const val MAX_DECODED_PIXELS = PageSizeLimits.MAX_DECODED_PIXELS
+        internal const val MAX_PAGE_SIDE = PageSizeLimits.MAX_PAGE_SIDE
 
-        /**
-         * The longest side a page may declare on ImageIO's path: JPEG's largest, as the Android
-         * layer's ImageIoDecoding.MAX_SIDE. Skia's path has no side limit of its own (a PNG strip of
-         * 720 by 88,000 shows): there only [MAX_DECODED_PIXELS] applies.
-         */
-        internal const val MAX_PAGE_SIDE = 65_535
-
-        /**
-         * Bytes of Java heap a pixel takes on ImageIO's path at its peak: the decoded image (up to
-         * 4 bytes a pixel) and its copy into a Skia bitmap (4 more).
-         */
-        private const val IMAGE_IO_BYTES_PER_PIXEL = 8L
-
-        /**
-         * The most pixels a page may declare on ImageIO's path (TIFF, AVIF, HEIF...), which decodes
-         * on the Java heap: what fits in half of [maxHeap] beside the [heldBytes] the read holds,
-         * and never more than [MAX_DECODED_PIXELS]. The reader decodes several pages at once, but
-         * ImageIO's path one at a time ([oneImageIoDecodeAtATime]), so the half is this decode's own.
-         */
         internal fun imageIoPixelLimit(maxHeap: Long = Runtime.getRuntime().maxMemory(), heldBytes: Long = 0): Long =
-            minOf(MAX_DECODED_PIXELS, ((maxHeap / 2 - heldBytes) / IMAGE_IO_BYTES_PER_PIXEL).coerceAtLeast(0))
+            PageSizeLimits.imageIoPixelLimit(maxHeap, heldBytes)
 
-        /**
-         * The heap a read on ImageIO's path holds besides its pixels: the page's bytes, read in
-         * place (no copy), and as much again for what a reader buffers or unpacks on the way.
-         */
-        private fun imageIoHeldBytes(bytes: ByteArray): Long = 2L * bytes.size
+        private fun imageIoHeldBytes(bytes: ByteArray): Long = PageSizeLimits.imageIoHeldBytes(bytes)
 
         private val imageIoDecodes = java.util.concurrent.locks.ReentrantLock()
 
@@ -200,56 +170,16 @@ class PageImage(
         }
 
         internal fun isTooLarge(width: Int, height: Int, maxPixels: Long, maxSide: Int = MAX_PAGE_SIDE): Boolean =
-            width > maxSide || height > maxSide || width.toLong() * height > maxPixels
+            PageSizeLimits.isTooLarge(width, height, maxPixels, maxSide)
 
-        /**
-         * Fails with a page error when [bytes] declare a page too large for the decoder that will
-         * read it ([MAX_DECODED_PIXELS] for Skia, [imageIoPixelLimit] and [MAX_PAGE_SIDE] for ImageIO), read from the
-         * image's header before anything that size is allocated, with [tooLarge] as the message
-         * (other images use it too: `checkImageSize`). Returns the declared size, null when no
-         * reader knows it.
-         */
+        /** [PageSizeLimits.checkDeclaredSize], worded [tooLarge] (the reader's words by default). */
         internal fun checkDeclaredSize(
             bytes: ByteArray,
             tooLarge: () -> String = { localized(DMR.strings.the_page_is_too_large_to_show) },
-        ): Pair<Int, Int>? {
-            skiaSize(bytes)?.let { (width, height) ->
-                if (isTooLarge(width, height, MAX_DECODED_PIXELS, maxSide = Int.MAX_VALUE)) throw UnreadableImageException(tooLarge())
-                return width to height
-            }
-            val (width, height) = imageIoSize(bytes) ?: return null
-            if (isTooLarge(width, height, imageIoPixelLimit(heldBytes = imageIoHeldBytes(bytes)))) throw UnreadableImageException(tooLarge())
-            return width to height
-        }
+        ): Pair<Int, Int>? = PageSizeLimits.checkDeclaredSize(bytes, tooLarge)
 
         /** The width and height the image in [bytes] declares, without decoding it; null when no reader knows it. */
-        internal fun declaredSize(bytes: ByteArray): Pair<Int, Int>? = skiaSize(bytes) ?: imageIoSize(bytes)
-
-        /** The size Skia's codec reads from the header; null when Skia does not read the type. */
-        private fun skiaSize(bytes: ByteArray): Pair<Int, Int>? = try {
-            Data.makeFromBytes(bytes).use { data -> Codec.makeFromData(data).use { it.width to it.height } }
-        } catch (_: RuntimeException) {
-            // Not a type Skia reads (it fails with an unchecked exception)
-            null
-        }
-
-        /** The size ImageIO's readers read from the header; null when none knows the type. */
-        private fun imageIoSize(bytes: ByteArray): Pair<Int, Int>? = try {
-            // Over the bytes themselves: ImageIO.createImageInputStream may spill the page to a temporary file
-            byteArrayImageInputStream(bytes).use { input ->
-                val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
-                try {
-                    reader.input = input
-                    reader.getWidth(0) to reader.getHeight(0)
-                } finally {
-                    reader.dispose()
-                }
-            }
-        } catch (_: java.io.IOException) {
-            null
-        } catch (_: RuntimeException) {
-            null
-        }
+        internal fun declaredSize(bytes: ByteArray): Pair<Int, Int>? = PageSizeLimits.declaredSize(bytes)
 
         /** [source] scaled to [width] pixels wide, keeping its aspect */
         private fun scaledTo(source: Bitmap, width: Int): Bitmap {
