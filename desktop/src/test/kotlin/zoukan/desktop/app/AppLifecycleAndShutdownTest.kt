@@ -1,39 +1,198 @@
 package zoukan.desktop.app
 
+import android.app.Application
+import eu.kanade.domain.sync.SyncPreferences
+import eu.kanade.tachiyomi.data.sync.SyncManager
+import eu.kanade.tachiyomi.data.sync.models.SyncTriggerOptions
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldNotBeSameInstanceAs
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.data.DatabaseHandler
+import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
+import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
+import xyz.nulldev.ts.config.CONFIG_PREFIX
+import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.download.DownloadManager
+import zoukan.desktop.library.BackgroundJobs
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.network.PersistentCookieStore
+import zoukan.desktop.ui.reader.ProgressWriter
 import java.io.File
+import java.io.IOException
 import java.net.HttpCookie
 import java.net.URI
+import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+
+/**
+ * The window's start, away and back events (AppLifecycle) with the real SyncManager: sync on start
+ * and on resume, as Android's App.onCreate and App.onStart, and the app lock's background and
+ * foreground. A sync that starts reads the database first, so the handler's calls count the syncs.
+ */
+class AppLifecycleTest {
+    // Not @TempDir: the preferences file is written in the background and may outlive the test
+    private val root = Files.createTempDirectory("zoukan-lifecycle").toFile()
+    private val preferences by lazy {
+        System.setProperty("$CONFIG_PREFIX.server.rootDir", root.absolutePath)
+        SyncPreferences(DesktopPreferenceStore(JavaSharedPreferences("lifecycle_test_${System.nanoTime()}")))
+    }
+    private val handler = mockk<DatabaseHandler>()
+    private val sync by lazy {
+        SyncManager(
+            context = mockk<Application>(relaxed = true),
+            handler = handler,
+            syncPreferences = preferences,
+            getCategories = mockk(),
+            dirs = ZoukanDirs(root),
+        )
+    }
+    private val lockEvents = mutableListOf<String>()
+    private val lifecycle by lazy {
+        AppLifecycle(sync::syncOn, onBackground = { lockEvents += "background" }, onForeground = { lockEvents += "foreground" })
+    }
+
+    private fun setUp(service: SyncManager.SyncService, triggers: SyncTriggerOptions) {
+        // A server the sync may reach: an empty address is refused before the database is read
+        preferences.webDavUrl().set("https://dav.example.com")
+        preferences.syncService().set(service.value)
+        preferences.setSyncTriggerOptions(triggers)
+    }
+
+    /** The coroutines on AppScope (where SyncManager.syncOn starts a sync) that this test has seen already. */
+    private val seen = AppScope.coroutineContext.job.children.toMutableSet()
+
+    /**
+     * Waits until every coroutine started on AppScope since the last check has ended. syncOn
+     * decides and launches before it returns, so a sync that should not start has by then either
+     * read the database or not started at all.
+     */
+    private fun awaitStartedSyncs() {
+        val started = AppScope.coroutineContext.job.children.filter { it !in seen }.toList()
+        seen += started
+        runBlocking { withTimeout(10_000) { started.joinAll() } }
+    }
+
+    private fun syncsStarted(count: Int) {
+        if (count == 0) {
+            awaitStartedSyncs()
+            coVerify(exactly = 0) { handler.await<Any>(any(), any()) }
+        } else {
+            coVerify(timeout = 10_000, exactly = count) { handler.await<Any>(any(), any()) }
+            // A sync that is still running is not waited for by a later check
+            seen += AppScope.coroutineContext.job.children
+        }
+    }
+
+    @Test
+    fun `the window opening syncs only with a service set up and sync on start on`() {
+        coEvery { handler.await<Any>(any(), any()) } throws IOException("offline")
+        // No service: nothing, though the trigger is on
+        setUp(SyncManager.SyncService.NONE, SyncTriggerOptions(syncOnAppStart = true))
+        lifecycle.onStart()
+        // A service set up, but only sync on resume is on
+        setUp(SyncManager.SyncService.WEB_DAV, SyncTriggerOptions(syncOnAppResume = true))
+        lifecycle.onStart()
+        syncsStarted(0)
+
+        setUp(SyncManager.SyncService.WEB_DAV, SyncTriggerOptions(syncOnAppStart = true))
+        lifecycle.onStart()
+        syncsStarted(1)
+    }
+
+    @Test
+    fun `only a window that was hidden syncs when it is shown, and the lock follows every away and back`() {
+        coEvery { handler.await<Any>(any(), any()) } throws IOException("offline")
+        setUp(SyncManager.SyncService.WEB_DAV, SyncTriggerOptions(syncOnAppResume = true))
+
+        // The window opens shown and in front: no resume
+        lifecycle.onAwayChanged(false)
+        lifecycle.onHiddenChanged(false)
+        // Another app in front and back: the lock hears it, the sync does not
+        lifecycle.onAwayChanged(true)
+        lifecycle.onAwayChanged(false)
+        syncsStarted(0)
+        lockEvents shouldBe listOf("foreground", "background", "foreground")
+
+        // Minimized (or in the tray), then shown again: a resume
+        lifecycle.onAwayChanged(true)
+        lifecycle.onHiddenChanged(true)
+        lifecycle.onHiddenChanged(false)
+        lifecycle.onAwayChanged(false)
+        syncsStarted(1)
+        lockEvents shouldBe listOf("foreground", "background", "foreground", "background", "foreground")
+    }
+
+    @Test
+    fun `a resume with sync on resume off, or no service, syncs nothing`() {
+        coEvery { handler.await<Any>(any(), any()) } throws IOException("offline")
+        setUp(SyncManager.SyncService.WEB_DAV, SyncTriggerOptions(syncOnAppStart = true))
+        lifecycle.onHiddenChanged(true)
+        lifecycle.onHiddenChanged(false)
+        setUp(SyncManager.SyncService.NONE, SyncTriggerOptions(syncOnAppResume = true))
+        lifecycle.onHiddenChanged(true)
+        lifecycle.onHiddenChanged(false)
+        syncsStarted(0)
+    }
+
+    @Test
+    fun `a start or resume while a sync runs starts no second one, as Android's SyncDataJob startNow`() {
+        val release = CompletableDeferred<Unit>()
+        coEvery { handler.await<Any>(any(), any()) } coAnswers {
+            release.await()
+            throw IOException("offline")
+        }
+        setUp(SyncManager.SyncService.WEB_DAV, SyncTriggerOptions(syncOnAppStart = true, syncOnAppResume = true))
+        lifecycle.onStart()
+        syncsStarted(1)
+        // Hidden and shown again while the first sync waits on the server
+        lifecycle.onHiddenChanged(true)
+        lifecycle.onHiddenChanged(false)
+        lifecycle.onStart()
+        // The start and the resume each launched a sync that found the first one running
+        awaitStartedSyncs()
+        syncsStarted(1)
+        release.complete(Unit)
+        runBlocking { withTimeoutOrNull(10_000) { sync.running.first { !it } } }
+        sync.running.value shouldBe false
+        syncsStarted(1)
+    }
+}
 
 class ZoukanLifecycleTest {
 
@@ -419,5 +578,40 @@ class ZoukanLifecycleTest {
         withTimeout(10_000) { updater.join() }
         updater.isRunning shouldBe false
         updater.progress.value shouldBe null
+    }
+}
+
+class ShutdownOrderTest {
+
+    @Test
+    fun `quitting stops the background jobs and waits for a slow progress write`() = runBlocking<Unit> {
+        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val written = AtomicBoolean(false)
+        val writer = ProgressWriter(appScope) {
+            delay(300)
+            written.set(true)
+        }
+        writer.submit(ChapterUpdate(id = 1, lastPageRead = 5))
+        // The loop waits for the extensions, as before they load
+        val jobs = BackgroundJobs(
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk { every { isInitialized } returns MutableStateFlow(false) },
+        )
+        jobs.start(appScope)
+        jobs.isRunning shouldBe true
+        val updater = mockk<LibraryUpdater>(relaxed = true)
+        val downloads = mockk<DownloadManager>(relaxed = true)
+
+        AppShutdown.run(jobs, updater, downloads, appScope, databaseIdle = {})
+
+        written.get() shouldBe true
+        jobs.isRunning shouldBe false
+        verify {
+            updater.cancel()
+            downloads.pause()
+        }
+        appScope.cancel()
     }
 }

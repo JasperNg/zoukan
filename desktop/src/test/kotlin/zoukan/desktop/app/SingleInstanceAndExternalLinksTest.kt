@@ -12,6 +12,7 @@ import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.system.exitProcess
 
 class SingleInstanceTest {
     @TempDir
@@ -156,4 +157,44 @@ class SingleInstanceTest {
     /** As runZoukanApp does: acquires the lock and keeps only a weak reference to the instance. */
     private fun acquireAndForget(root: File): java.lang.ref.WeakReference<SingleInstance> =
         java.lang.ref.WeakReference(SingleInstance.acquire(root) {}.shouldBeInstanceOf<SingleInstance.Result.Acquired>().instance)
+}
+
+/**
+ * Run in a child JVM by [SingleInstanceTest]: takes the lock on the folder given as the argument
+ * like a running Zoukan does, prints "locked", and holds it until its standard input closes.
+ */
+object SingleInstanceLockHolder {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val result = SingleInstance.acquire(File(args[0])) {}
+        if (result !is SingleInstance.Result.Acquired) {
+            println("held")
+            exitProcess(1)
+        }
+        println("locked")
+        System.out.flush()
+        // Blocks until the parent closes our input (or destroys this process)
+        runCatching { while (System.`in`.read() != -1) Unit }
+        result.instance.close()
+    }
+}
+
+class ExternalLinksTest {
+    @Test
+    fun `only web addresses are opened`() {
+        ExternalLinks.isWebUrl("https://mangadex.org/title/1") shouldBe true
+        ExternalLinks.isWebUrl(" HTTP://example.org ") shouldBe true
+        listOf(
+            "file:///C:/Windows/System32/calc.exe",
+            "file://server/share/run.bat",
+            "C:\\Windows\\System32\\calc.exe",
+            "ms-msdt:/id PCWDiagnostic",
+            "search-ms:query=x",
+            "javascript:alert(1)",
+            "komikku://anilist-auth",
+            "https:///no-host",
+            "not a url",
+            "",
+        ).forEach { ExternalLinks.isWebUrl(it) shouldBe false }
+    }
 }

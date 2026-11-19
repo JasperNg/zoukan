@@ -4,11 +4,13 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * The JVM's own crash file keeps environment values, so it goes once its redacted copy is saved,
@@ -286,5 +288,131 @@ class JvmCrashFileCleanupTest {
         // Process ids no live process has (well above any OS's limit)
         const val PID = 2_000_000_101L
         const val ZOUKAN_COMMAND = "-Xmx2g --add-opens=java.desktop/sun.awt=ALL-UNNAMED zoukan.desktop.MainKt"
+    }
+}
+
+/** Zoukan's reports older than 30 days are deleted; newer ones and anyone else's files are kept. */
+class ReportPruneTest {
+
+    @TempDir
+    lateinit var root: File
+
+    private val now = System.currentTimeMillis()
+
+    private fun File.file(name: String, ageDays: Long): File = resolve(name).apply {
+        parentFile.mkdirs()
+        writeText(name)
+        setLastModified(now - TimeUnit.DAYS.toMillis(ageDays))
+    }
+
+    @Test
+    fun `old reports are deleted, newer ones and other files are kept`() {
+        val dirs = ZoukanDirs(root, hidesFromSpotlight = false)
+        val crashes = dirs.crashes
+        val reports = dirs.reports
+        val oldCrash = crashes.file("crash-20260101-120000-000.txt", 40)
+        val oldError = crashes.file("error-20260101-120000-001.txt", 31)
+        val oldUnclean = crashes.file("unclean-exit-20260101-120000-1234.txt", 45)
+        val oldJvm = crashes.file("jvm-crash-hs_err_pid1234.log", 60)
+        val newCrash = crashes.file("crash-20261110-120000-000.txt", 5)
+        val newError = crashes.file("error-20261116-120000-000.txt", 29)
+        val foreignCrash = crashes.file("notes.txt", 90)
+        val foreignLike = crashes.file("crash-mine.txt", 90)
+        val oldUpdateErrors = reports.file("library-update-errors.txt", 35)
+        val oldHarness = reports.file("extensions-store-windows.md", 35)
+        val newHarness = reports.file("extensions-wiring-store-macos.md", 2)
+        val foreignReport = reports.file("my-report.md", 90)
+
+        CrashReporter.pruneOldReports(dirs, now)
+
+        listOf(oldCrash, oldError, oldUnclean, oldJvm, oldUpdateErrors, oldHarness).forEach { it.exists() shouldBe false }
+        listOf(newCrash, newError, foreignCrash, foreignLike, newHarness, foreignReport).forEach { it.exists() shouldBe true }
+    }
+
+    @Test
+    fun `the count limit keeps the newest 30 of each kind and leaves other files alone`() {
+        val dir = File(root, "crashes")
+        val errors = (0 until 35).map { dir.file("error-20261117-1200${"%02d".format(it)}-000.txt", 0).apply { setLastModified(now - it * 1000L) } }
+        val crashes = (0 until 3).map { dir.file("crash-20261117-1300${"%02d".format(it)}-000.txt", 1) }
+        val foreign = dir.file("readme.txt", 1)
+
+        CrashReporter.prune(dir, now)
+
+        errors.take(30).forEach { it.exists() shouldBe true }
+        errors.drop(30).forEach { it.exists() shouldBe false }
+        crashes.forEach { it.exists() shouldBe true }
+        foreign.exists() shouldBe true
+    }
+
+    @Test
+    fun `missing folders are not an error`() {
+        CrashReporter.pruneOldReports(ZoukanDirs(File(root, "absent"), hidesFromSpotlight = false), now)
+    }
+
+    @Test
+    fun `pruning changes nothing outside the data folder`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false)
+            val old = dirs.crashes.file("crash-20260101-120000-000.txt", 40)
+            dirs.reports.file("library-update-errors.txt", 35)
+            // Files named like old reports in the user's folder and beside another program's crash file
+            sandbox.userFolder.file("library-update-errors.txt", 35)
+            sandbox.otherProgramFolder.file("crash-20260101-120000-000.txt", 40)
+            sandbox.record()
+
+            CrashReporter.pruneOldReports(dirs, now)
+
+            old.exists() shouldBe false
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `pruning never deletes through a reports folder that is a link to the user's files`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false)
+            // The user's folder holds a file named like an old report; the reports folder links to it
+            sandbox.userFolder.file("library-update-errors.txt", 35)
+            assumeTrue(sandbox.link(dirs.reports, sandbox.userFolder) != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            CrashReporter.pruneOldReports(dirs, now)
+
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `pruning never deletes through a crashes folder that is a link to the user's files`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false)
+            // Old files named like crash reports, and more than the count limit of new ones
+            sandbox.userFolder.file("crash-20260101-120000-000.txt", 40)
+            (0 until 35).forEach { sandbox.userFolder.file("error-20261117-1200${"%02d".format(it)}-000.txt", 0) }
+            assumeTrue(sandbox.link(dirs.crashes, sandbox.userFolder) != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            CrashReporter.pruneOldReports(dirs, now)
+            CrashReporter.prune(dirs.crashes, now)
+
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
+
+    @Test
+    fun `a link inside the reports folder is not followed or deleted`() {
+        FileSystemSandbox.create(root).use { sandbox ->
+            val dirs = ZoukanDirs(sandbox.dataFolder, hidesFromSpotlight = false)
+            val target = sandbox.userFolder.file("my-errors.txt", 35)
+            dirs.reports.mkdirs()
+            val link = sandbox.link(File(dirs.reports, "library-update-errors.txt"), target)
+            assumeTrue(link != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            CrashReporter.pruneOldReports(dirs, now)
+
+            target.exists() shouldBe true
+            sandbox.assertNothingOutsideAppChanged()
+        }
     }
 }
