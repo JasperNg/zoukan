@@ -16,6 +16,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.track.interactor.AddTracks
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -33,7 +34,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.data.AndroidDatabaseHandler
@@ -54,6 +54,7 @@ import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.history.service.HistoryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.MangaUpdate
@@ -68,8 +69,8 @@ import zoukan.desktop.db.DatabaseThread
 import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.db.DesktopSqliteDriver
 import zoukan.desktop.library.AddToLibrary
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.io.File
@@ -109,7 +110,7 @@ class HistoryBehaviorTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         Images.init(File(temp, "covers"))
-        val store = InMemoryPreferenceStore()
+        val store = TestPreferenceStore()
         historyPrefs = HistoryPreferences(store)
         val libraryPrefs = LibraryPreferences(store)
 
@@ -135,6 +136,7 @@ class HistoryBehaviorTest {
         val setCategories = SetMangaCategories(mangaRepo)
 
         Injekt.addSingleton<PreferenceStore>(store)
+        Injekt.addSingleton(UiPreferences(store))
         Injekt.addSingleton(historyPrefs)
         Injekt.addSingleton(libraryPrefs)
         Injekt.addSingleton(getHistory)
@@ -149,6 +151,7 @@ class HistoryBehaviorTest {
         )
         Injekt.addSingleton(GetChapter(chapterRepo))
         Injekt.addSingleton(getManga)
+        Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
         Injekt.addSingleton<MangaRepository>(mangaRepo)
         Injekt.addSingleton(getCategories)
         Injekt.addSingleton(
@@ -219,48 +222,48 @@ class HistoryBehaviorTest {
         try {
             runDesktopComposeUiTest {
                 setContent { Navigator(HostScreen(model)) }
-                Await.until("two history rows") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
 
                 // 1. Search narrows list and shows empty message
                 onAllNodes(hasSetTextAction()).onFirst().performTextReplacement("Second")
-                Await.until("narrowed to 1 row") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 1 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 1 }
                 onNodeWithText("Second Title").assertExists()
                 onNodeWithText("Formats Title").assertDoesNotExist()
 
                 onAllNodes(hasSetTextAction()).onFirst().performTextReplacement("zzz-nothing")
-                Await.until("empty search message") {
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithText(localized(DMR.strings.nothing_matches, "zzz-nothing")).fetchSemanticsNodes().isNotEmpty()
                 }
                 onAllNodesWithTag("history-item").fetchSemanticsNodes() shouldHaveSize 0
                 onAllNodes(hasSetTextAction()).onFirst().performTextReplacement("")
-                Await.until("both rows back") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
 
                 // 2. Remove single chapter (f2) leaves Formats Title with f1
                 onAllNodes(hasContentDescription(removeDesc)).onFirst().performClick()
                 onNodeWithText(removeText).performClick()
-                Await.until("f2 removed, f1 remains") { rows().firstOrNull { it.mangaId == formatsId }?.chapterId == f1 }
+                waitUntil(timeoutMillis = 10_000) { rows().firstOrNull { it.mangaId == formatsId }?.chapterId == f1 }
                 onAllNodesWithTag("history-item").fetchSemanticsNodes() shouldHaveSize 2
 
                 // 3. Remove whole entry removes Formats Title completely
                 onAllNodes(hasContentDescription(removeDesc)).onFirst().performClick()
                 onNodeWithText(localized(DMR.strings.remove_every_chapter_of_this_entry)).performClick()
                 onNodeWithText(removeText).performClick()
-                Await.until("Formats Title removed") { rows().none { it.mangaId == formatsId } }
+                waitUntil(timeoutMillis = 10_000) { rows().none { it.mangaId == formatsId } }
                 onAllNodesWithTag("history-item").fetchSemanticsNodes() shouldHaveSize 1
 
                 // 4. Filters dialog: non-library leaves none, inverted keeps Second, unfinished chapters + panorama
                 runBlocking { upsertHistory.await(HistoryUpdate(f1, Date(), 60_000L)) }
-                Await.until("two rows again") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
                 onNodeWithContentDescription(localized(MR.strings.action_filter)).performClick()
                 onNodeWithText(localized(DMR.strings.not_in_library)).performClick()
                 onNodeWithText(localized(MR.strings.action_close)).performClick()
-                Await.until("no history matches filter") {
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithText(localized(DMR.strings.no_history_matches_the_filters)).fetchSemanticsNodes().isNotEmpty()
                 }
                 onNodeWithContentDescription(localized(DMR.strings.filter_filtered)).performClick()
                 onNodeWithText(localized(DMR.strings.not_in_library)).performClick()
                 onNodeWithText(localized(MR.strings.action_close)).performClick()
-                Await.until("both rows back with in-library") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
 
                 onNodeWithContentDescription(localized(DMR.strings.filter_filtered)).performClick()
                 onNodeWithText(localized(MR.strings.in_library)).performClick()
@@ -270,40 +273,42 @@ class HistoryBehaviorTest {
                 historyPrefs.usePanoramaCover().get() shouldBe !beforePanorama
                 historyPrefs.filterUnfinishedChapter().get() shouldBe TriState.ENABLED_IS
                 onNodeWithText(localized(MR.strings.action_close)).performClick()
-                Await.until("only unfinished chapter row shown") {
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 1 &&
                         onAllNodesWithText("Second Title").fetchSemanticsNodes().isNotEmpty()
                 }
                 // Reset filters for selection test
                 historyPrefs.filterUnfinishedChapter().set(TriState.DISABLED)
-                Await.until("both rows back") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 2 }
 
                 // 5. Select all and remove
                 onNodeWithContentDescription(localized(DMR.strings.select)).performClick()
                 onNodeWithContentDescription(localized(MR.strings.action_select_all)).performClick()
-                onNodeWithText(localized(DMR.strings.selected, 2)).assertExists()
-                onNodeWithContentDescription(removeDesc).performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(localized(DMR.strings.selected, 2)).fetchSemanticsNodes().isNotEmpty() }
+                onAllNodes(hasContentDescription(removeDesc)).onFirst().performClick()
                 onNodeWithText(removeText).performClick()
-                Await.until("all removed") { rows().isEmpty() }
-                onNodeWithText(localized(DMR.strings.nothing_read_yet)).assertExists()
+                waitUntil(timeoutMillis = 10_000) {
+                    rows().isEmpty() &&
+                        onAllNodesWithText(localized(DMR.strings.nothing_read_yet)).fetchSemanticsNodes().isNotEmpty()
+                }
 
                 // 6. Clear all history
                 runBlocking { upsertHistory.await(HistoryUpdate(s1, Date(), 60_000L)) }
-                Await.until("one row seeded") { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 1 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("history-item").fetchSemanticsNodes().size == 1 }
                 onNodeWithContentDescription(localized(MR.strings.pref_clear_history)).performClick()
                 onNodeWithText(localized(DMR.strings.clear)).performClick()
-                Await.until("history cleared") { rows().isEmpty() }
+                waitUntil(timeoutMillis = 10_000) { rows().isEmpty() }
 
                 // 7. Non-library entry: Add to library button adds it
                 runBlocking {
                     MangaRepositoryImpl(handler).update(MangaUpdate(id = secondId, favorite = false))
                     upsertHistory.await(HistoryUpdate(s1, Date(), 60_000L))
                 }
-                Await.until("non-library row shown") {
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodes(hasContentDescription(localized(MR.strings.add_to_library))).fetchSemanticsNodes().isNotEmpty()
                 }
                 onNodeWithContentDescription(localized(MR.strings.add_to_library)).performClick()
-                Await.until("entry added to library") { runBlocking { getManga.await(secondId) }?.favorite == true }
+                waitUntil(timeoutMillis = 10_000) { runBlocking { getManga.await(secondId) }?.favorite == true }
             }
         } finally {
             model.onDispose()

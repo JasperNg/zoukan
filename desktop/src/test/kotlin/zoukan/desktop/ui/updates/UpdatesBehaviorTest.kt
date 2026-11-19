@@ -3,6 +3,7 @@ package zoukan.desktop.ui.updates
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -26,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
@@ -37,6 +38,7 @@ import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.updates.interactor.GetUpdates
@@ -51,8 +53,8 @@ import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.db.DesktopSqliteDriver
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.io.File
@@ -83,7 +85,7 @@ class UpdatesBehaviorTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         Images.init(File(temp, "covers"))
-        val store = InMemoryPreferenceStore()
+        val store = TestPreferenceStore()
         driver = DesktopSqliteDriver.withSchema(
             url = "jdbc:sqlite:${File(temp, "updates.db").absolutePath}",
             properties = DesktopDatabase.properties(ByteArray(32) { it.toByte() }),
@@ -107,6 +109,7 @@ class UpdatesBehaviorTest {
         }
 
         Injekt.addSingleton<PreferenceStore>(store)
+        Injekt.addSingleton(UiPreferences(store))
         Injekt.addSingleton(DesktopPreferences(store))
         Injekt.addSingleton(LibraryPreferences(store))
         Injekt.addSingleton(UpdatesPreferences(store))
@@ -116,6 +119,7 @@ class UpdatesBehaviorTest {
         Injekt.addSingleton(UpdateChapter(chapterRepo))
         Injekt.addSingleton(GetFavorites(mangaRepo))
         Injekt.addSingleton(GetManga(mangaRepo))
+        Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
         Injekt.addSingleton(GetChapter(chapterRepo))
     }
 
@@ -183,38 +187,42 @@ class UpdatesBehaviorTest {
         try {
             runDesktopComposeUiTest {
                 setContent { cafe.adriel.voyager.navigator.Navigator(BlankScreen(model)) }
-                Await.until("two leader rows") { onAllNodesWithTag("updates-leader").fetchSemanticsNodes().size == 2 }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-leader").fetchSemanticsNodes().size == 2 }
                 onAllNodesWithTag("updates-item").fetchSemanticsNodes().size shouldBe 0
 
-                // Expand first group -> reveals Alpha's 2 extra chapters, collapse hides them
+                // Expand first group -> reveals Alpha's 2 extra chapters
                 onAllNodes(hasContentDescription(localized(DMR.strings.expand))).onFirst().performClick()
-                Await.until("expanded rows shown") { onAllNodesWithTag("updates-item").fetchSemanticsNodes().size == 2 }
-                onAllNodes(hasContentDescription(localized(DMR.strings.collapse))).onFirst().performClick()
-                Await.until("rows collapsed") { onAllNodesWithTag("updates-item").fetchSemanticsNodes().isEmpty() }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-item").fetchSemanticsNodes().size == 2 }
 
                 // Row Mark as read marks only that chapter, then Mark as unread reverts it
                 onAllNodes(hasContentDescription(localized(MR.strings.action_mark_as_read))).onFirst().performClick()
-                Await.until("one chapter marked read") {
-                    runBlocking { mangaIds.flatMap { getChapters.await(it) } }.count { it.read } == 1
+                waitUntil(timeoutMillis = 10_000) {
+                    runBlocking { mangaIds.flatMap { getChapters.await(it) } }.count { it.read } == 1 &&
+                        onAllNodes(hasContentDescription(localized(MR.strings.action_mark_as_unread))).fetchSemanticsNodes().isNotEmpty()
                 }
                 onAllNodes(hasContentDescription(localized(MR.strings.action_mark_as_unread))).onFirst().performClick()
-                Await.until("chapter unmarked") {
+                waitUntil(timeoutMillis = 10_000) {
                     runBlocking { mangaIds.flatMap { getChapters.await(it) } }.none { it.read }
                 }
+
+                // Collapse hides Alpha's extra chapters again
+                onAllNodes(hasContentDescription(localized(DMR.strings.collapse))).onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-item").fetchSemanticsNodes().isEmpty() }
 
                 // Right-click folded Alpha leader -> Select selects all 3 chapters of Alpha
                 onAllNodesWithTag("updates-leader").onFirst().performMouseInput { rightClick() }
                 onNodeWithText(localized(DMR.strings.select)).performClick()
-                waitForIdle()
-                onNodeWithText(localized(DMR.strings.selected, 3)).assertExists()
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(localized(DMR.strings.selected, 3)).fetchSemanticsNodes().isNotEmpty() }
 
                 // Select all selects all 5 chapters; Bookmark bookmarks them all and ends selection
                 onNodeWithContentDescription(localized(MR.strings.action_select_all)).performClick()
-                onNodeWithText(localized(DMR.strings.selected, 5)).assertExists()
-                onNodeWithContentDescription(localized(MR.strings.action_bookmark)).performClick()
-                Await.until("all chapters bookmarked") {
-                    runBlocking { mangaIds.flatMap { getChapters.await(it) } }.all { it.bookmark }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(localized(DMR.strings.selected, 5)).fetchSemanticsNodes().isNotEmpty() }
+                onNodeWithContentDescription(localized(DMR.strings.bookmark)).performClick()
+                waitUntil(timeoutMillis = 10_000) {
+                    runBlocking { mangaIds.flatMap { getChapters.await(it) } }.all { it.bookmark } &&
+                        !model.state.value.selecting
                 }
+                waitForIdle()
                 model.state.value.selecting shouldBe false
             }
         } finally {

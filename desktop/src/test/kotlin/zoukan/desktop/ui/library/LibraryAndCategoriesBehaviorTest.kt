@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
@@ -53,6 +52,7 @@ import tachiyomi.domain.libraryUpdateError.interactor.GetLibraryUpdateErrorWithR
 import tachiyomi.domain.libraryUpdateError.interactor.InsertLibraryUpdateErrors
 import tachiyomi.domain.libraryUpdateErrorMessage.interactor.GetLibraryUpdateErrorMessages
 import tachiyomi.domain.libraryUpdateErrorMessage.interactor.InsertLibraryUpdateErrorMessages
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
@@ -65,8 +65,8 @@ import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.db.DesktopSqliteDriver
 import zoukan.desktop.library.LibraryUpdateErrors
 import zoukan.desktop.library.LibraryUpdater
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
@@ -92,26 +92,42 @@ class LibraryAndCategoriesBehaviorTest {
     private val dbThread = DatabaseThread()
     private lateinit var driver: app.cash.sqldelight.db.SqlDriver
     private lateinit var handler: AndroidDatabaseHandler
-    private lateinit var store: InMemoryPreferenceStore
+    private lateinit var store: TestPreferenceStore
     private lateinit var libraryPrefs: LibraryPreferences
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         Images.init(File(temp, "covers"))
-        store = InMemoryPreferenceStore()
+        store = TestPreferenceStore()
         libraryPrefs = LibraryPreferences(store)
         driver = DesktopSqliteDriver.withSchema(
             url = "jdbc:sqlite:${File(temp, "library_behavior.db").absolutePath}",
             properties = DesktopDatabase.properties(ByteArray(32) { it.toByte() }),
             databaseThread = dbThread,
             schema = Database.Schema,
-        )
+        ).also {
+            it.execute(null, "DROP TRIGGER IF EXISTS system_category_delete_trigger", 0)
+            it.execute(
+                null,
+                """
+                CREATE TRIGGER system_category_delete_trigger BEFORE DELETE
+                ON categories
+                BEGIN SELECT CASE
+                    WHEN old._id <= 0 THEN
+                        RAISE(ABORT, 'System category can''t be deleted')
+                    END;
+                END
+                """.trimIndent(),
+                0,
+            )
+        }
         val dbDispatcher = dbThread.executor.asCoroutineDispatcher()
         handler = AndroidDatabaseHandler(DesktopDatabase.createDatabase(driver), driver, dbDispatcher, dbDispatcher)
 
         Injekt.addSingleton<PreferenceStore>(store)
         Injekt.addSingleton(libraryPrefs)
+        Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
         Injekt.addSingleton(mockk<SourceManager>(relaxed = true))
     }
 
@@ -150,7 +166,7 @@ class LibraryAndCategoriesBehaviorTest {
                 onNodeWithTag("category-add").performClick()
                 onNodeWithTag("category-name").performTextInput(name)
                 onNodeWithTag("category-confirm").performClick()
-                Await.until("$name added") { userCategories().any { it.name == name } }
+                waitUntil(timeoutMillis = 10_000) { userCategories().any { it.name == name } }
             }
 
             // Rename Later -> Plan to read
@@ -158,21 +174,24 @@ class LibraryAndCategoriesBehaviorTest {
             onNodeWithTag("category-name").performTextClearance()
             onNodeWithTag("category-name").performTextInput("Plan to read")
             onNodeWithTag("category-confirm").performClick()
-            Await.until("renamed") { userCategories().map { it.name } == listOf("Reading", "Plan to read") }
+            waitUntil(timeoutMillis = 10_000) { userCategories().map { it.name } == listOf("Reading", "Plan to read") }
 
             // Reorder via interactor / Hide Reading
             runBlocking { ReorderCategory(categoryRepo).await(userCategories().last(), 0) }
-            Await.until("reordered") { userCategories().map { it.name } == listOf("Plan to read", "Reading") }
+            waitUntil(timeoutMillis = 10_000) { userCategories().map { it.name } == listOf("Plan to read", "Reading") }
             onAllNodes(androidx.compose.ui.test.hasContentDescription(localized(KMR.strings.action_hide)))[1].performClick()
-            Await.until("Reading hidden") { userCategories().first { it.name == "Reading" }.hidden }
+            waitUntil(timeoutMillis = 10_000) { userCategories().first { it.name == "Reading" }.hidden }
 
             // Set default category to Plan to read, then delete it and verify default resets to -1
+            waitForIdle()
             val plan = userCategories().first { it.name == "Plan to read" }
             libraryPrefs.defaultCategory().set(plan.id.toInt())
             onAllNodes(androidx.compose.ui.test.hasContentDescription(localized(MR.strings.action_delete)))[0].performClick()
+            waitForIdle()
             onNodeWithTag("category-confirm").performClick()
-            Await.until("Plan to read deleted") { userCategories().map { it.name } == listOf("Reading") }
-            Await.until("default reset") { libraryPrefs.defaultCategory().get() == -1 }
+            waitForIdle()
+            waitUntil(timeoutMillis = 10_000) { userCategories().map { it.name } == listOf("Reading") }
+            waitUntil(timeoutMillis = 10_000) { libraryPrefs.defaultCategory().get() == -1 }
             runBlocking { setMangaCategories.await(0L, emptyList()) }
         }
     }
@@ -190,6 +209,7 @@ class LibraryAndCategoriesBehaviorTest {
             insertErrors = InsertLibraryUpdateErrors(errRepo),
             insertMessages = InsertLibraryUpdateErrorMessages(msgRepo),
         )
+        Injekt.addSingleton(mockk<SourceManager>(relaxed = true))
         val charlieId = runBlocking {
             handler.awaitOneExecutable(true) {
                 mangasQueries.insert(
@@ -256,7 +276,7 @@ class LibraryAndCategoriesBehaviorTest {
 
         runDesktopComposeUiTest {
             setContent { Navigator(UpdateErrorsScreen) }
-            Await.until("error row displayed") { onAllNodesWithTag("update-error").fetchSemanticsNodes().size == 1 }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("update-error").fetchSemanticsNodes().size == 1 }
             onNodeWithText("Charlie").assertExists()
 
             // Right-click selects error row, clear selection unselects
@@ -268,7 +288,7 @@ class LibraryAndCategoriesBehaviorTest {
 
             // Retry updates Charlie and clears error list
             onNodeWithContentDescription(localized(MR.strings.action_retry)).performClick()
-            Await.until("errors cleared") { onAllNodesWithTag("update-error").fetchSemanticsNodes().isEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("update-error").fetchSemanticsNodes().isEmpty() }
             onNodeWithText(localized(KMR.strings.info_empty_library_update_errors)).assertExists()
             runBlocking { getErrors.subscribeAll().first() } shouldContainExactly emptyList()
         }

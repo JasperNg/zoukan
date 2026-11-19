@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
@@ -27,6 +28,9 @@ import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
+import exh.favorites.FavoritesSyncHelper
+import exh.favorites.FavoritesSyncStatus
+import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -47,7 +51,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
@@ -76,6 +79,7 @@ import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.db.DesktopSqliteDriver
 import zoukan.desktop.e2e.FixtureReleases
 import zoukan.desktop.e2e.FixtureServer
+import zoukan.desktop.exh.EhGalleryUpdater
 import zoukan.desktop.exh.EhLogin
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.security.AppLock
@@ -83,6 +87,7 @@ import zoukan.desktop.security.Incognito
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.fakes.MemorySecretStore
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.onboarding.Onboarding
 import zoukan.desktop.ui.reader.ReaderNavigation
@@ -93,6 +98,8 @@ import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
 import java.awt.Window
 import java.io.File
+import java.net.CookieHandler
+import java.net.CookieManager
 import java.net.URI
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
@@ -114,7 +121,7 @@ class SettingsScreensBehaviorTest {
     @TempDir
     lateinit var temp: File
 
-    private lateinit var store: InMemoryPreferenceStore
+    private lateinit var store: TestPreferenceStore
     private lateinit var desktopPrefs: DesktopPreferences
     private lateinit var uiPrefs: UiPreferences
     private lateinit var libraryPrefs: LibraryPreferences
@@ -129,7 +136,7 @@ class SettingsScreensBehaviorTest {
 
     @BeforeEach
     fun setUp() {
-        store = InMemoryPreferenceStore()
+        store = TestPreferenceStore()
         desktopPrefs = DesktopPreferences(store)
         uiPrefs = UiPreferences(store)
         libraryPrefs = LibraryPreferences(store)
@@ -223,7 +230,7 @@ class SettingsScreensBehaviorTest {
                     readerSettings(desktopPrefs)
                 }
             }
-            val list = onNodeWithTag("reader-settings")
+            val list = onNode(hasScrollAction())
 
             fun choose(row: String, option: String) {
                 list.performScrollToNode(hasText(row))
@@ -274,13 +281,14 @@ class SettingsScreensBehaviorTest {
 
         runDesktopComposeUiTest {
             setContent { LazyColumn(Modifier.testTag("security-settings")) { securitySettings() } }
-            val list = onNodeWithTag("security-settings")
-            list.performScrollToNode(hasText(localized(MR.strings.pref_incognito_mode)))
+            val list = onNode(hasScrollAction())
+            val incognitoSwitch = hasText(localized(MR.strings.pref_incognito_mode)) and isToggleable()
+            list.performScrollToNode(incognitoSwitch)
             incognito.mode().get() shouldBe false
-            onNodeWithText(localized(MR.strings.pref_incognito_mode)).performClick()
+            onNode(incognitoSwitch).performClick()
             waitForIdle()
             incognito.mode().get() shouldBe true
-            onNodeWithText(localized(MR.strings.pref_incognito_mode)).performClick()
+            onNode(incognitoSwitch).performClick()
             waitForIdle()
             incognito.mode().get() shouldBe false
         }
@@ -289,13 +297,19 @@ class SettingsScreensBehaviorTest {
     @Test
     fun `e-hentai language filtering and front page categories keep Android format`() {
         Injekt.addSingleton(mockk<EhLogin>(relaxed = true))
+        Injekt.addSingleton(mockk<EhGalleryUpdater>(relaxed = true))
+        Injekt.addSingleton(
+            mockk<FavoritesSyncHelper>(relaxed = true) {
+                every { status } returns MutableStateFlow(FavoritesSyncStatus.Idle)
+            },
+        )
         exhPrefs.isHentaiEnabled().set(true)
         exhPrefs.enableExhentai().set(true)
         val defaultLanguages = exhPrefs.exhSettingsLanguages().get()
 
         runDesktopComposeUiTest {
             setContent { LazyColumn(Modifier.testTag("eh-settings")) { ehSettings() } }
-            val list = onNodeWithTag("eh-settings")
+            val list = onNode(hasScrollAction())
 
             list.performScrollToNode(hasText(localized(DMR.strings.language_filtering)))
             onNodeWithText(localized(DMR.strings.language_filtering)).performClick()
@@ -344,9 +358,12 @@ class SettingsScreensBehaviorTest {
 
     @Test
     fun `advanced user agent validates, sends header over NetworkHelper, resets, and onboarding reopens`() {
+        val previousCookies = CookieHandler.getDefault()
+        CookieHandler.setDefault(CookieManager())
         val context = mockk<Context> { every { cacheDir } returns temp }
         val networkHelper = NetworkHelper(context, networkPrefs)
         Injekt.addSingleton(networkHelper)
+        Injekt.addSingleton(DelegateSourcePreferences(store))
         Injekt.addSingleton(mockk<DatabaseHandler>(relaxed = true))
         Injekt.addSingleton(mockk<zoukan.desktop.download.DownloadManager>(relaxed = true))
         Injekt.addSingleton(mockk<zoukan.extension.ExtensionTrust>(relaxed = true))
@@ -370,7 +387,7 @@ class SettingsScreensBehaviorTest {
                         LazyColumn(Modifier.testTag("advanced-settings")) { advancedSettings() }
                     }
                 }
-                val list = onNodeWithTag("advanced-settings")
+                val list = onNode(hasScrollAction())
 
                 fun editUa(value: String) {
                     list.performScrollToKey("advanced-user-agent")
@@ -417,6 +434,7 @@ class SettingsScreensBehaviorTest {
         } finally {
             collector.cancel()
             server.close()
+            CookieHandler.setDefault(previousCookies)
         }
     }
 

@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
@@ -31,7 +32,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
@@ -65,7 +65,10 @@ import zoukan.desktop.e2e.FixtureServer
 import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import java.io.File
+import java.net.CookieHandler
+import java.net.CookieManager
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
@@ -95,9 +98,12 @@ class KomgaTrackingContractTest {
     private lateinit var getTracks: GetTracks
     private lateinit var addToLibrary: AddToLibrary
     private lateinit var trackChapters: TrackChapters
+    private var previousCookies: CookieHandler? = null
 
     @BeforeEach
     fun setUp() {
+        previousCookies = CookieHandler.getDefault()
+        CookieHandler.setDefault(CookieManager())
         Dispatchers.setMain(mainDispatcher)
         komga.series(SERIES_ID, "Komga Title", books = 4)
         source = Komga(server.baseUrl, OkHttpClient())
@@ -111,13 +117,14 @@ class KomgaTrackingContractTest {
         val dbDispatcher = executor.asCoroutineDispatcher()
         handler = AndroidDatabaseHandler(db, driver, queryDispatcher = dbDispatcher, transactionDispatcher = dbDispatcher)
 
-        val store = InMemoryPreferenceStore()
+        val store = TestPreferenceStore()
         val networkPreferences = NetworkPreferences(store)
         val context = mockk<Context> { every { cacheDir } returns temp }
         val networkHelper = NetworkHelper(context, networkPreferences)
         trackPreferences = TrackPreferences(store)
 
         Injekt.addSingleton<PreferenceStore>(store)
+        Injekt.addSingleton(Json { ignoreUnknownKeys = true })
         Injekt.addSingleton<Application>(mockk(relaxed = true))
         Injekt.addSingleton(networkPreferences)
         Injekt.addSingleton(networkHelper)
@@ -183,6 +190,7 @@ class KomgaTrackingContractTest {
 
     @AfterEach
     fun tearDown() {
+        CookieHandler.setDefault(previousCookies)
         Dispatchers.resetMain()
         mainDispatcher.close()
         komga.close()

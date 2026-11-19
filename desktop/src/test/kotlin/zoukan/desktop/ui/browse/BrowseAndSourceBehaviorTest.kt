@@ -38,7 +38,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
@@ -59,6 +58,7 @@ import tachiyomi.domain.source.interactor.GetSavedSearchBySourceIdFeed
 import tachiyomi.domain.source.interactor.GetSavedSearchGlobalFeed
 import tachiyomi.domain.source.interactor.InsertFeedSavedSearch
 import tachiyomi.domain.source.interactor.InsertSavedSearch
+import tachiyomi.domain.source.interactor.ReorderFeed
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
@@ -73,6 +73,7 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.extension.DesktopExtensionManager
@@ -96,7 +97,7 @@ class BrowseAndSourceBehaviorTest {
     lateinit var temp: File
 
     private val mainDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private lateinit var store: InMemoryPreferenceStore
+    private lateinit var store: TestPreferenceStore
     private lateinit var desktopPrefs: DesktopPreferences
     private lateinit var sourcePrefs: SourcePreferences
     private lateinit var uiPrefs: UiPreferences
@@ -106,7 +107,7 @@ class BrowseAndSourceBehaviorTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         Images.init(File(temp, "covers"))
-        store = InMemoryPreferenceStore()
+        store = TestPreferenceStore()
         desktopPrefs = DesktopPreferences(store)
         sourcePrefs = SourcePreferences(store)
         uiPrefs = UiPreferences(store)
@@ -396,6 +397,7 @@ class BrowseAndSourceBehaviorTest {
         val savedRepo = SavedSearchRepositoryImpl(handler)
         val getFeeds = GetFeedSavedSearchGlobal(feedRepo)
         val insertFeed = InsertFeedSavedSearch(feedRepo)
+        Injekt.addSingleton(ReorderFeed(feedRepo))
         try {
             runBlocking {
                 insertFeed.await(FeedSavedSearch(id = -1, source = 4242L, savedSearch = null, global = true, feedOrder = 0))
@@ -418,6 +420,7 @@ class BrowseAndSourceBehaviorTest {
                 networkToLocalManga = mockk(relaxed = true),
             )
             try {
+                model.start()
                 Await.until("two feeds loaded") { model.state.value.rows?.size == 2 }
                 val first = model.state.value.rows!!.first()
                 model.move(first, 1)

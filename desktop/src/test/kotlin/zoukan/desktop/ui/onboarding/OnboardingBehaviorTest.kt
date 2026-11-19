@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
@@ -38,6 +37,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
@@ -58,7 +58,7 @@ class OnboardingBehaviorTest {
     lateinit var temp: File
 
     private val mainDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private lateinit var store: InMemoryPreferenceStore
+    private lateinit var store: TestPreferenceStore
     private lateinit var desktopPrefs: DesktopPreferences
     private lateinit var uiPrefs: UiPreferences
     private lateinit var storage: ZoukanStorage
@@ -66,7 +66,7 @@ class OnboardingBehaviorTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        store = InMemoryPreferenceStore()
+        store = TestPreferenceStore()
         desktopPrefs = DesktopPreferences(store)
         uiPrefs = UiPreferences(store)
         val dirs = ZoukanDirs(temp)

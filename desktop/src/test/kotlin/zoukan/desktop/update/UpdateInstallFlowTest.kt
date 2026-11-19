@@ -20,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -39,6 +38,7 @@ import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.fakes.MemorySecretStore
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.settings.aboutSettings
 import zoukan.i18n.desktop.DMR
@@ -71,7 +71,7 @@ class UpdateInstallFlowTest {
     fun setUp() {
         dirs = ZoukanDirs(dir)
         Injekt.addSingleton(dirs)
-        Injekt.addSingleton<PreferenceStore>(InMemoryPreferenceStore())
+        Injekt.addSingleton<PreferenceStore>(TestPreferenceStore())
         Injekt.addSingleton<SecretStore>(MemorySecretStore())
     }
 

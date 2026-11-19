@@ -1,6 +1,7 @@
 package zoukan.desktop.ui.common
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -11,6 +12,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import exh.search.SearchEngine
 import exh.source.ExhPreferences
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -26,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
@@ -54,14 +55,17 @@ import zoukan.desktop.domain.ChaptersByEntry
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.storage.ZoukanStorage
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
-import zoukan.desktop.ui.HomeScreen
+import zoukan.desktop.testkit.TestPreferenceStore
+import zoukan.desktop.ui.HomeController
 import zoukan.desktop.ui.HomeTab
+import zoukan.desktop.ui.HomeTabState
+import zoukan.desktop.ui.LocalHomeController
 import zoukan.desktop.ui.downloads.DownloadsScreen
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.LibraryScreenModel
+import zoukan.desktop.ui.library.LibrarySearch
 import zoukan.desktop.ui.library.LibraryTab
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
@@ -82,13 +86,13 @@ class EmptyStatesBehaviorTest {
     lateinit var temp: File
 
     private val mainDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private lateinit var store: InMemoryPreferenceStore
+    private lateinit var store: TestPreferenceStore
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         Images.init(File(temp, "covers"))
-        store = InMemoryPreferenceStore()
+        store = TestPreferenceStore()
         Injekt.addSingleton<PreferenceStore>(store)
         Injekt.addSingleton(DesktopPreferences(store))
         Injekt.addSingleton(LibraryPreferences(store))
@@ -130,6 +134,9 @@ class EmptyStatesBehaviorTest {
         }
         Injekt.addSingleton(downloadManager)
         Injekt.addSingleton(libraryUpdater)
+        val searchEngine = mockk<SearchEngine>(relaxed = true)
+        Injekt.addSingleton(searchEngine)
+        Injekt.addSingleton(sourceManager)
 
         val model = LibraryScreenModel(
             getLibraryManga = mockk { every { subscribe() } returns libraryFlow },
@@ -149,20 +156,31 @@ class EmptyStatesBehaviorTest {
             mangaRepository = mockk<MangaRepository>(relaxed = true),
             setCustomMangaInfo = mockk<SetCustomMangaInfo>(relaxed = true),
             sourcePreferences = SourcePreferences(store),
+            librarySearch = LibrarySearch(
+                searchEngine = searchEngine,
+                sourceManager = sourceManager,
+                trackerManager = trackerManager,
+                getIdsOfFavoriteMangaWithMetadata = mockk(relaxed = true),
+                getSearchTags = mockk(relaxed = true),
+                getSearchTitles = mockk(relaxed = true),
+            ),
             extensionManager = extensionManager,
             chaptersByEntry = mockk<ChaptersByEntry>(relaxed = true),
         )
-        val beforeTab = HomeScreen.selectedTab
+        val controller = HomeController(HomeTabState(HomeTab.Library))
         try {
-            HomeScreen.selectTab(HomeTab.Library)
             runDesktopComposeUiTest {
-                setContent { Navigator(LibraryHost(model)) }
-                Await.until("empty library message") {
+                setContent {
+                    CompositionLocalProvider(LocalHomeController provides controller) {
+                        Navigator(LibraryHost(model))
+                    }
+                }
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithText(localized(DMR.strings.your_library_is_empty_find_something)).fetchSemanticsNodes().isNotEmpty()
                 }
                 onNodeWithText(localized(MR.strings.browse)).performClick()
                 waitForIdle()
-                HomeScreen.selectedTab shouldBe HomeTab.Browse
+                controller.tabs.selected shouldBe HomeTab.Browse
 
                 // Adding an entry replaces the empty message
                 libraryFlow.value = listOf(
@@ -179,12 +197,11 @@ class EmptyStatesBehaviorTest {
                         lastRead = 0,
                     ),
                 )
-                Await.until("empty message gone") {
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithText(localized(DMR.strings.your_library_is_empty_find_something)).fetchSemanticsNodes().isEmpty()
                 }
             }
         } finally {
-            HomeScreen.selectTab(beforeTab ?: HomeTab.Library)
             model.onDispose()
         }
     }
@@ -210,7 +227,7 @@ class EmptyStatesBehaviorTest {
         try {
             runDesktopComposeUiTest {
                 setContent { Navigator(HistoryHost(historyModel)) }
-                Await.until("history empty message") {
+                waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithText(localized(DMR.strings.nothing_read_yet)).fetchSemanticsNodes().isNotEmpty()
                 }
             }

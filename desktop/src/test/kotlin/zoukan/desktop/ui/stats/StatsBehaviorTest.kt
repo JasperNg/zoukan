@@ -23,7 +23,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.history.interactor.GetTotalReadDuration
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -39,6 +38,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.Executors
 
@@ -92,7 +92,7 @@ class StatsBehaviorTest {
         Injekt.addSingleton(mockk<GetTotalReadDuration> { coEvery { await() } returns 90 * 60 * 1000L })
         Injekt.addSingleton(mockk<GetTracks> { coEvery { await(any<List<Long>>()) } returns emptyMap() })
         Injekt.addSingleton(mockk<TrackerManager> { every { loggedInTrackers() } returns emptyList() })
-        Injekt.addSingleton(LibraryPreferences(InMemoryPreferenceStore()))
+        Injekt.addSingleton(LibraryPreferences(TestPreferenceStore()))
         Injekt.addSingleton(mockk<DownloadManager> { every { downloadCounts(any()) } returns emptyMap() })
 
         fun stat(value: String, label: String): SemanticsMatcher = hasAnyChild(hasText(value)) and hasAnyChild(hasText(label))

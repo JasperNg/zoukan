@@ -33,6 +33,7 @@ import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.visibleCalendarDay
 import java.io.File
@@ -86,7 +87,7 @@ class UpcomingBehaviorTest {
         val charlie = entry(3L, "Charlie", 3L, SManga.PUBLISHING_FINISHED)
         val delta = entry(4L, "Delta", 2L, SManga.COMPLETED)
 
-        val libraryPrefs = LibraryPreferences(tachiyomi.core.common.preference.InMemoryPreferenceStore())
+        val libraryPrefs = LibraryPreferences(TestPreferenceStore())
         libraryPrefs.autoUpdateMangaRestrictions().set(setOf(LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD))
         val getUpcoming = mockk<GetUpcomingManga> {
             coEvery { subscribe() } returns flowOf(listOf(alpha, bravo, charlie))

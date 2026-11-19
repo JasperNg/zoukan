@@ -58,7 +58,6 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.backup.NoStubSources
 import zoukan.desktop.backup.SafetySnapshot
 import zoukan.desktop.db.DesktopDatabase
-import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureServer
 import zoukan.desktop.e2e.FixtureSyncServer
 import zoukan.desktop.testing.FreshInjekt
@@ -141,7 +140,7 @@ class SyncYomiContractTest {
         Injekt.addSingleton<StubSourceRepository>(NoStubSources)
         val client = OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).build()
         Injekt.addSingleton<NetworkHelper>(mockk { every { plainClient } returns client })
-        Injekt.addSingleton(ProtoBuf)
+        Injekt.addSingleton<ProtoBuf>(ProtoBuf)
 
         preferences.syncService().set(SyncManager.SyncService.SYNCYOMI.value)
         preferences.clientHost().set(sync.clientHost)
@@ -187,7 +186,11 @@ class SyncYomiContractTest {
 
         // 2. Another device adds a second title and marks chapter 2 read; sync merges both
         val existingManga = uploaded.backupManga.single().apply {
-            chapters.first { it.chapterNumber.toInt() == 2 }.read = true
+            version += 10
+            chapters.first { it.chapterNumber.toInt() == 2 }.apply {
+                read = true
+                version += 10
+            }
         }
         val remote = uploaded.copy(
             backupManga = listOf(
@@ -219,16 +222,12 @@ class SyncYomiContractTest {
         preferences.clientAPIKey().set(sync.apiKey)
         preferences.lastSyncTimestamp().set(beforeBadKey - 1_000L)
         val beforeConflict = preferences.lastSyncTimestamp().get()
-        // Seed a different ETag so server returns 412 or fail PUT once with 412
-        server.fail("/api/sync/content", FixtureFailure.Status(412, "ETag mismatch"), times = 1)
-        // Force a PUT by clearing ETag and seeding remote
+        // Force a PUT by clearing ETag, let GET succeed, and fail only PUT once via extraRoutes.
         preferences.lastSyncEtag().set("")
-        // First request hits GET (fail times = 1 would consume on GET if scoped to path).
-        // Seed a remote change, let GET succeed, and fail only PUT via extraRoutes.
-        server.clearFailures()
         var conflictRoute: (com.sun.net.httpserver.HttpExchange, List<String>) -> Boolean = { _, _ -> false }
         conflictRoute = { exchange, parts ->
             if (exchange.requestMethod == "PUT" && parts == listOf("api", "sync", "content")) {
+                exchange.requestBody.use { it.readAllBytes() }
                 server.extraRoutes -= conflictRoute
                 val body = "ETag mismatch".toByteArray()
                 exchange.sendResponseHeaders(412, body.size.toLong())

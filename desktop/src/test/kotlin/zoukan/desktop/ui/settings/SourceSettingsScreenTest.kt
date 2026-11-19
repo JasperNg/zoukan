@@ -39,6 +39,7 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import xyz.nulldev.androidcompat.ToastSink
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
@@ -64,15 +65,19 @@ class SourceSettingsScreenTest {
 
     private val property = "$CONFIG_PREFIX.server.rootDir"
     private var previousRoot: String? = null
+    private var previousSink: java.util.function.Consumer<String>? = null
 
     @BeforeEach
     fun setUp() {
         previousRoot = System.getProperty(property)
         System.setProperty(property, root.absolutePath)
+        previousSink = ToastSink.get()
+        ToastSink.set(Toasts::show)
     }
 
     @AfterEach
     fun tearDown() {
+        ToastSink.set(previousSink)
         JavaSharedPreferences.awaitPendingSaves()
         if (previousRoot == null) System.clearProperty(property) else System.setProperty(property, previousRoot)
     }
@@ -216,7 +221,7 @@ class SourceSettingsScreenTest {
                 // ListPreference listener using setValueIndex + returning false + Toast
                 onNodeWithText("Quality").performClick()
                 onNodeWithText("Auto").performClick()
-                Await.until("auto toast") { toasts.any { "Auto chose High (was low)" in it } }
+                Await.until("auto toast") { toasts.any { "Auto chose High (was high)" in it } }
                 waitForIdle()
                 prefs.getString("quality", null) shouldBe "high"
                 onNodeWithText("High").assertExists()
