@@ -107,7 +107,7 @@ class LibraryAddController(
     suspend fun startBulkAdd(
         items: List<Manga>,
         findDuplicates: suspend (List<Manga>) -> List<Manga>,
-        planCategories: suspend () -> AddToLibrary.Plan = { addToLibrary().plan() },
+        planCategories: (suspend () -> AddToLibrary.Plan)? = null,
         addBatch: suspend (List<Manga>, List<Long>) -> Int,
     ): BulkResult {
         val dupes = findDuplicates(items)
@@ -121,7 +121,7 @@ class LibraryAddController(
         selected: List<Manga>,
         duplicates: List<Manga>,
         skip: Boolean,
-        planCategories: suspend () -> AddToLibrary.Plan = { addToLibrary().plan() },
+        planCategories: (suspend () -> AddToLibrary.Plan)? = null,
         addBatch: suspend (List<Manga>, List<Long>) -> Int,
     ): BulkResult {
         val list = if (skip) selected.filterNot { m -> duplicates.any { it.id == m.id } } else selected
@@ -131,10 +131,10 @@ class LibraryAddController(
 
     suspend fun planOrAddBulk(
         items: List<Manga>,
-        planCategories: suspend () -> AddToLibrary.Plan = { addToLibrary().plan() },
+        planCategories: (suspend () -> AddToLibrary.Plan)? = null,
         addBatch: suspend (List<Manga>, List<Long>) -> Int,
     ): BulkResult {
-        val plan = planCategories()
+        val plan = planCategories?.invoke() ?: addToLibrary().plan()
         val ask = plan.ask
         return if (ask != null) {
             BulkResult.AskCategories(items, ask)
