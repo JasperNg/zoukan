@@ -96,6 +96,17 @@ internal object PageSizeLimits {
         return width to height
     }
 
+    /**
+     * [checkDeclaredSize] for the types Skia reads alone: the size Skia's codec reads from
+     * [bytes] (which may be only the start of the image), failing worded [tooLarge] past
+     * [MAX_DECODED_PIXELS]; null when Skia does not know the type or the header is not in [bytes].
+     */
+    fun checkSkiaSize(bytes: ByteArray, tooLarge: () -> String): Pair<Int, Int>? {
+        val (width, height) = skiaSize(bytes) ?: return null
+        if (isTooLarge(width, height, MAX_DECODED_PIXELS, maxSide = Int.MAX_VALUE)) throw UnreadableImageException(tooLarge())
+        return width to height
+    }
+
     /** The width and height the image in [bytes] declares, without decoding it; null when no reader knows it. */
     fun declaredSize(bytes: ByteArray): Pair<Int, Int>? = skiaSize(bytes) ?: imageIoSize(bytes)
 
