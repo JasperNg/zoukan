@@ -235,4 +235,27 @@ class SafetySnapshotTest {
         written.exists() shouldBe true
         older.exists() shouldBe true
     }
+
+    @Test
+    fun `a compare whose second file cannot be opened closes the first and keeps the new snapshot`() {
+        val bytes = ByteArray(1_000) { it.toByte() }
+        val (older, written) = twoSnapshots(bytes, bytes)
+        val opened = mutableListOf<java.io.InputStream>()
+        var closed = 0
+        val open = { file: File ->
+            if (file == written) throw IllegalStateException("The file went away")
+            object : java.io.FilterInputStream(file.inputStream()) {
+                override fun close() {
+                    closed++
+                    super.close()
+                }
+            }.also { opened += it }
+        }
+
+        SafetySnapshot.sameAsNewest(folder, SnapshotReason.SYNC, written, open = open) shouldBe null
+
+        written.exists() shouldBe true
+        older.exists() shouldBe true
+        closed shouldBe opened.size
+    }
 }

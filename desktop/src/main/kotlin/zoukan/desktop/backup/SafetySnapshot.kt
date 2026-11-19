@@ -192,7 +192,7 @@ class SafetySnapshot(
             // As streams through a fixed buffer, never whole: a large library's snapshots would
             // otherwise be held twice on the heap. A compare that fails keeps the new snapshot
             val same = try {
-                newest.length() == written.length() && sameBytes(open(newest), open(written), bufferSize)
+                newest.length() == written.length() && open(newest).use { a -> open(written).use { b -> sameBytes(a, b, bufferSize) } }
             } catch (e: Exception) {
                 logcat(LogPriority.WARN) { "Could not compare the safety backup with ${newest.name}: $e" }
                 false
@@ -201,20 +201,16 @@ class SafetySnapshot(
             return newest.takeIf { same && written.delete() }
         }
 
-        /** Whether [a] and [b] hold the same bytes, read [bufferSize] at a time; closes both. */
+        /** Whether [a] and [b] hold the same bytes, read [bufferSize] at a time. */
         private fun sameBytes(a: java.io.InputStream, b: java.io.InputStream, bufferSize: Int): Boolean {
-            a.use {
-                b.use {
-                    val bufA = ByteArray(bufferSize)
-                    val bufB = ByteArray(bufferSize)
-                    while (true) {
-                        val n = a.readNBytes(bufA, 0, bufferSize)
-                        val m = b.readNBytes(bufB, 0, bufferSize)
-                        if (n != m) return false
-                        if (n == 0) return true
-                        if (!java.util.Arrays.equals(bufA, 0, n, bufB, 0, m)) return false
-                    }
-                }
+            val bufA = ByteArray(bufferSize)
+            val bufB = ByteArray(bufferSize)
+            while (true) {
+                val n = a.readNBytes(bufA, 0, bufferSize)
+                val m = b.readNBytes(bufB, 0, bufferSize)
+                if (n != m) return false
+                if (n == 0) return true
+                if (!java.util.Arrays.equals(bufA, 0, n, bufB, 0, m)) return false
             }
         }
 
