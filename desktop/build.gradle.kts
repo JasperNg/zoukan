@@ -215,6 +215,13 @@ val syncAppSharedTests by tasks.registering(Sync::class) {
 sourceSets.test {
     kotlin.srcDir(syncAppSharedTests)
 }
+val testStandins by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output + configurations.testCompileClasspath.get()
+}
+sourceSets.test {
+    compileClasspath += testStandins.output
+    runtimeClasspath += testStandins.output
+}
 
 // The Android dispatcher is declared for Android targets only. Its MainDispatcherFactory outranks
 // Swing's and would make Dispatchers.Main the emulated Android main looper; the UI needs the AWT
@@ -626,11 +633,12 @@ val extensionWiringStoreTests = extensionWiringStores.map { store ->
         group = "verification"
         description = "Installs every extension of the $store store and checks it is wired up on the desktop"
         testClassesDirs = sourceSets.test.get().output.classesDirs
-        classpath = sourceSets.test.get().runtimeClasspath
+        classpath = sourceSets.test.get().runtimeClasspath.minus(testStandins.output)
         useJUnitPlatform()
         filter { includeTestsMatching("*ExtensionWiringTest") }
         systemProperty("zoukan.e2e", "true")
         systemProperty("zoukan.e2e.store", store)
+        systemProperty("zoukan.fileSecrets", "true")
         providers.gradleProperty("zoukan.e2e.package").orNull?.let { systemProperty("zoukan.e2e.package", it) }
         systemProperty("kotlinx.coroutines.fast.service.loader", "false")
         systemProperty("user.language", "en")

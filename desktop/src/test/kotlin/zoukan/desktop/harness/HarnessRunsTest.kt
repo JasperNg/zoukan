@@ -7,6 +7,7 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -140,6 +141,33 @@ class HarnessRunsTest {
             options = CompatibilityHarness.Options(storeUrl = url, packages = listOf("en.elsewhere"), offline = true),
         )
         harness.run().second.single().error shouldBe "not in store"
+    }
+
+    @Test
+    fun `extension wiring task excludes testStandins and enables file secrets`() {
+        val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
+        val build = File(root, "desktop/build.gradle.kts").readText()
+        val wiringBlock = build.substringAfter("val extensionWiringStoreTests =").substringBefore("extensionWiringStoreTests.zipWithNext")
+        build shouldContain "testStandins"
+        wiringBlock shouldContain "testStandins.output"
+        wiringBlock shouldContain """systemProperty("zoukan.fileSecrets", "true")"""
+
+        val wiringTest = File(root, "desktop/src/test/kotlin/zoukan/desktop/harness/ExtensionWiringTest.kt").readText()
+        val filePropIdx = wiringTest.indexOf("SecretStore.FILE_STORE_PROPERTY")
+        val startIdx = wiringTest.indexOf("ZoukanRuntime.start(")
+        (filePropIdx in 0 until startIdx) shouldBe true
+        val optionsBlock = wiringTest.substringAfter("ExtensionWiringCheck.Options(")
+        optionsBlock shouldNotContain "exclude"
+        optionsBlock shouldNotContain "all.mangadex"
+        optionsBlock shouldNotContain "all.komga"
+
+        for (rel in listOf(
+            "eu/kanade/tachiyomi/extension/all/mangadex/MangaDex.kt",
+            "eu/kanade/tachiyomi/extension/all/komga/Komga.kt",
+        )) {
+            File(root, "desktop/src/testStandins/kotlin/$rel").isFile shouldBe true
+            File(root, "desktop/src/test/kotlin/$rel").exists() shouldBe false
+        }
     }
 
     private fun storeWith(pkg: String): Pair<ExtensionStoreService, ExtensionStore> {

@@ -10,6 +10,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.secrets.SecretStore
 import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
 import java.io.File
@@ -42,6 +43,7 @@ class ExtensionWiringTest {
         val store = SampleStores.ALL.firstOrNull { it.id == storeId }
             ?: error("Unknown store \"$storeId\"; the stores are ${SampleStores.ALL.map { it.id }}")
         val dirs = ZoukanDirs(Files.createTempDirectory("zoukan-e2e-wiring").toFile())
+        System.setProperty(SecretStore.FILE_STORE_PROPERTY, "true")
         ZoukanRuntime.start(dirs, interactiveBrowser = false)
         Injekt.get<NetworkHelper>()
         val packages = System.getProperty("zoukan.e2e.package")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)
@@ -50,13 +52,10 @@ class ExtensionWiringTest {
             storeService = Injekt.get<ExtensionStoreService>(),
             installer = Injekt.get<DesktopExtensionInstaller>(),
             loader = Injekt.get<DesktopExtensionLoader>(),
-            // The screen smoke test puts stand-in MangaDex and Komga classes on the test class path,
-            // which the extension's class loader finds first; `harness --wiring` checks the real ones
             options = ExtensionWiringCheck.Options(
                 storeUrl = store.url,
                 storeId = store.id,
                 packages = packages.orEmpty(),
-                exclude = listOf("all.mangadex", "all.komga"),
                 minExtensions = store.minExtensions,
             ),
         )
