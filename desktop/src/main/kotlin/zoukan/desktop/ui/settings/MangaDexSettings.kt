@@ -200,7 +200,7 @@ internal fun FollowLibraryRow(enabled: Boolean, count: suspend () -> Int, onFoll
 
 /** Picks the follow statuses to add to the library; Reading and Re-reading are checked first, as on Android. */
 @Composable
-private fun SyncFollowsDialog(onDismiss: () -> Unit, onConfirm: (Set<String>) -> Unit) {
+internal fun SyncFollowsDialog(onDismiss: () -> Unit, onConfirm: (Set<String>) -> Unit) {
     val selection = remember { mutableStateListOf(*Array(followOptions.size) { it == 0 || it == 5 }) }
     AlertDialog(
         onDismissRequest = onDismiss,

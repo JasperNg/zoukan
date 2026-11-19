@@ -44,4 +44,15 @@ class MangaDexSettingsTest {
         followed shouldBe 0
         onNodeWithText(localized(DMR.strings.follow_on_mangadex)).assertDoesNotExist()
     }
+
+    @Test
+    fun `cancelling the sync follows dialog confirms nothing`() = runDesktopComposeUiTest {
+        var confirmed: Set<String>? = null
+        setContent { SyncFollowsDialog(onDismiss = {}, onConfirm = { confirmed = it }) }
+
+        onNodeWithText(localized(SYMR.strings.mangadex_sync_follows_to_library)).assertExists()
+        onNodeWithText(localized(MR.strings.action_cancel)).performClick()
+        waitForIdle()
+        confirmed shouldBe null
+    }
 }
