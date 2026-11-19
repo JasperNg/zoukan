@@ -3,13 +3,41 @@ package zoukan.desktop.ui
 import android.os.Looper
 import android.os.Message
 import android.os.SystemClock
+import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onFirst
 import cafe.adriel.voyager.core.model.ScreenModelStore
 import cafe.adriel.voyager.core.model.StateScreenModel
+import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import org.junit.jupiter.api.Test
+import zoukan.desktop.ui.settings.SettingsCategory
+import zoukan.desktop.ui.settings.openSettingsCategory
+import java.time.LocalDate
+import java.time.YearMonth
+import kotlin.coroutines.CoroutineContext
+
+/**
+ * The effect context for end-to-end UI tests. By default the Compose test runs effects on an
+ * UnconfinedTestDispatcher, so a collector (collectAsState, produceState) resumes on whichever
+ * thread emitted: a collector that emits on Dispatchers.Main (the Swing event thread, as in the
+ * app) writes its state on that thread, which then races the composition on the test thread, and
+ * about one run in ten on Windows the screen never recomposed for it. In the app, effects and
+ * composition share the Swing thread. A StandardTestDispatcher queues every resumption and runs it
+ * on the test thread between frames, as before.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+fun e2eEffectContext(): CoroutineContext = StandardTestDispatcher()
 
 /** What an end-to-end test prints when it times out, to see where a stalled step waits. */
 object E2EDiagnostics {
@@ -66,5 +94,53 @@ object E2EDiagnostics {
         job.isCompleted -> "completed"
         job.isActive -> "active (${job.children.count()} children)"
         else -> "new"
+    }
+}
+
+/**
+ * Opens [page] in Settings and returns the list of its settings. Settings shows the list of pages
+ * on the left and the open page on the right; both scroll, so the page is the scrolling list that
+ * does not list the pages.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.settingsPage(page: SettingsCategory): SemanticsNodeInteraction {
+    runOnUiThread { openSettingsCategory(page) }
+    waitForIdle()
+    val pageList = hasScrollAction() and !hasAnyDescendant(hasText(SettingsCategory.Appearance.subtitle))
+    waitUntil(timeoutMillis = 10_000) { onAllNodes(pageList).fetchSemanticsNodes().isNotEmpty() }
+    return onAllNodes(pageList).onFirst()
+}
+
+/**
+ * The day to click in the Upcoming calendar: the first seeded release day in the month the
+ * calendar opens on, or today when every release falls in the next month.
+ */
+internal fun visibleCalendarDay(today: LocalDate, releaseOffsets: List<Long>): LocalDate {
+    val month = YearMonth.from(today)
+    return releaseOffsets.sortedDescending()
+        .map { today.plusDays(it) }
+        .firstOrNull { YearMonth.from(it) == month }
+        ?: today
+}
+
+/**
+ * The Upcoming calendar opens on the current month and only tags that month's days, so the
+ * end-to-end test must click a release day inside it, also on the last days of a month.
+ */
+class UpcomingCalendarDayTest {
+
+    @Test
+    fun `a release three days ahead is clicked when it is in this month`() {
+        visibleCalendarDay(LocalDate.of(2026, 11, 10), listOf(1, 3)) shouldBe LocalDate.of(2026, 11, 13)
+    }
+
+    @Test
+    fun `on the 29th the release tomorrow is clicked, not one in the next month`() {
+        visibleCalendarDay(LocalDate.of(2026, 11, 29), listOf(1, 3)) shouldBe LocalDate.of(2026, 11, 30)
+    }
+
+    @Test
+    fun `on the last day of the month today is clicked`() {
+        visibleCalendarDay(LocalDate.of(2026, 12, 31), listOf(1, 3)) shouldBe LocalDate.of(2026, 12, 31)
     }
 }

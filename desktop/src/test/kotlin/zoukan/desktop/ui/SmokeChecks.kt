@@ -44,9 +44,18 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import mihon.domain.manga.model.toDomainManga
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -66,13 +75,16 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.ZoukanRuntime
+import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.DesktopPreferences
+import zoukan.desktop.app.Version
 import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.exh.BuiltInSources
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
+import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.security.AppLock
 import zoukan.desktop.storage.ZoukanStorage
@@ -138,11 +150,14 @@ import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.desktop.ui.track.TrackingDialog
 import zoukan.desktop.ui.whatsnew.DohNoticeDialog
 import zoukan.desktop.ui.whatsnew.UpdatedDialog
+import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.lang.reflect.Modifier
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
@@ -840,4 +855,109 @@ internal fun ComposeUiTest.clickDescription(description: String) {
     waitUntil(timeoutMillis = 10_000) { onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
     onAllNodes(matcher).onFirst().performClick()
     settle()
+}
+
+/** What the app's UI is made of, found from its compiled classes: the smoke test and the coverage matrix share it. */
+object UiInventory {
+    private const val UI_PACKAGE = "zoukan.desktop.ui."
+
+    /** The enums whose constants are matrix keys, by key prefix. */
+    private val ENUMS = listOf(
+        "tab" to "zoukan.desktop.ui.HomeTab",
+        "browse" to "zoukan.desktop.ui.browse.BrowsePage",
+        "settings" to "zoukan.desktop.ui.settings.SettingsCategory",
+    )
+
+    private val loader: ClassLoader get() = UiInventory::class.java.classLoader
+
+    /** Every concrete Voyager Screen class in the app (the scan moved from ScreenSmokeTest.screenClasses). */
+    @Suppress("UNCHECKED_CAST")
+    fun screenClasses(): List<Class<out Screen>> {
+        val root = File(HomeScreen::class.java.protectionDomain.codeSource.location.toURI())
+        return root.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".class") }
+            .map { it.relativeTo(root).path.removeSuffix(".class").replace(File.separatorChar, '.') }
+            .mapNotNull { runCatching { Class.forName(it, false, loader) }.getOrNull() }
+            .filter { Screen::class.java.isAssignableFrom(it) && !it.isInterface && !Modifier.isAbstract(it.modifiers) }
+            .filter { !it.isAnonymousClass && !it.isLocalClass }
+            .map { it as Class<out Screen> }
+            .sortedBy { it.name }
+            .toList()
+    }
+
+    /** The matrix key of a screen class: "screen:" + its name under zoukan.desktop.ui, e.g. screen:browse.SourceScreen. */
+    fun screenKey(type: Class<*>): String = "screen:" + type.name.removePrefix(UI_PACKAGE)
+
+    /** tab:<HomeTab>, browse:<BrowsePage>, settings:<SettingsCategory>, read without initialising the enums. */
+    fun enumKeys(): List<String> = ENUMS.flatMap { (prefix, name) ->
+        // HomeTab.entries would run the constructors, which load strings and icons
+        Class.forName(name, false, loader).declaredFields
+            .filter { it.isEnumConstant }
+            .map { "$prefix:${it.name}" }
+    }
+}
+
+/**
+ * The release notes the smoke checks show on What's new, in place of GitHub's. The screen reads
+ * the running version's release from GitHub, so the checks went online and their usability
+ * findings changed with what a published release said: notes that GitHub generated (a line per
+ * pull request with its link) failed the run, notes without links passed, and a version with no
+ * release showed an error instead; a slow answer left the screen loading when it was checked. A
+ * fixed release, answered at once, keeps the checks offline and the same on every machine and
+ * every day. Its body has a link in a paragraph, as Zoukan's notes do, so the link's
+ * rendering stays covered.
+ */
+internal object SmokeReleaseNotes {
+    const val NAME = "Zoukan smoke release"
+
+    const val BODY = "### Fixes\n\n- A fix.\n\nFull changes: [the compare page](https://example.invalid/compare)\n"
+
+    /** A checker whose client answers the release of [AppVersion.version] and nothing else, without the network. */
+    fun checker(secrets: SecretStore): UpdateChecker {
+        val tagPath = "/repos/${AppVersion.releaseRepo}/releases/tags/${AppVersion.TAG_PREFIX}${AppVersion.version}"
+        val release = """{"tag_name": "${AppVersion.TAG_PREFIX}${AppVersion.version}", "name": "$NAME", "body": ${quote(BODY)}, "html_url": ""}"""
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                // Any other request (the update check) fails as it would offline
+                if (request.url.encodedPath != tagPath) throw IOException("The smoke checks are offline")
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(release.toResponseBody("application/json".toMediaType()))
+                    .build()
+            }
+            .build()
+        return UpdateChecker(client, secrets)
+    }
+
+    private fun quote(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+}
+
+/** The smoke checks' What's new release: the same notes for every version, with no network. */
+class SmokeReleaseNotesTest {
+
+    @TempDir
+    lateinit var temp: File
+
+    private fun checker() = SmokeReleaseNotes.checker(FileSecretStore(File(temp, "secrets")))
+
+    @Test
+    fun `the running version's notes are the fixed release, whatever GitHub holds for it`() = runBlocking<Unit> {
+        val notes = checker().releaseNotes().getOrThrow()
+
+        notes.name shouldBe SmokeReleaseNotes.NAME
+        notes.body shouldBe SmokeReleaseNotes.BODY
+        // The link sits in a paragraph
+        notes.body shouldContain "\nFull changes: [the compare page](https://"
+    }
+
+    @Test
+    fun `any other release and the update check fail as offline`() = runBlocking<Unit> {
+        checker().releaseNotes(Version(AppVersion.version.parts + 1))
+            .exceptionOrNull().shouldBeInstanceOf<IOException>()
+        checker().check(includePrereleases = false).shouldBeInstanceOf<UpdateChecker.Result.Failed>()
+    }
 }
