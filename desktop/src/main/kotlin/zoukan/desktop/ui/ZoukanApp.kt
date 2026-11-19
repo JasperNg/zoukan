@@ -584,21 +584,6 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         }
         val tabs = home.tabs
         val tab = tabs.selected
-        val library = rememberScreenModel { LibraryScreenModel() }
-        // ZOUKAN -->
-        DisposableEffect(home, library) {
-            val unbind = home.bindLibrarySearch { query ->
-                tabs.select(HomeTab.Library)
-                library.search(query)
-            }
-            onDispose(unbind)
-        }
-        // ZOUKAN <--
-        val updates = rememberScreenModel { UpdatesScreenModel() }
-        val history = rememberScreenModel { HistoryScreenModel() }
-        val browse = rememberScreenModel { BrowseScreenModel() }
-        val feed = rememberScreenModel { zoukan.desktop.ui.browse.FeedScreenModel() }
-        val migrate = rememberScreenModel { zoukan.desktop.ui.browse.MigrateSourcesModel() }
         // ZOUKAN -->
         // Settings > Appearance > Navigation, and the new chapters badge, as on Android
         val ui = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
@@ -661,10 +646,26 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
-                    HomeTab.Library -> LibraryTab(library)
-                    HomeTab.Updates -> UpdatesTab(updates)
-                    HomeTab.History -> HistoryTab(history)
-                    HomeTab.Browse -> BrowseTab(browse, feed, migrate)
+                    HomeTab.Library -> {
+                        val library = rememberScreenModel { LibraryScreenModel() }
+                        // ZOUKAN -->
+                        DisposableEffect(home, library) {
+                            val unbind = home.bindLibrarySearch { query ->
+                                tabs.select(HomeTab.Library)
+                                library.search(query)
+                            }
+                            onDispose(unbind)
+                        }
+                        // ZOUKAN <--
+                        LibraryTab(library)
+                    }
+                    HomeTab.Updates -> UpdatesTab(rememberScreenModel { UpdatesScreenModel() })
+                    HomeTab.History -> HistoryTab(rememberScreenModel { HistoryScreenModel() })
+                    HomeTab.Browse -> BrowseTab(
+                        rememberScreenModel { BrowseScreenModel() },
+                        rememberScreenModel { zoukan.desktop.ui.browse.FeedScreenModel() },
+                        rememberScreenModel { zoukan.desktop.ui.browse.MigrateSourcesModel() },
+                    )
                     HomeTab.More -> MoreTab()
                 }
             }
