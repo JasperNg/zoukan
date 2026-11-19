@@ -1,5 +1,8 @@
 package zoukan.desktop.browser
 
+import eu.kanade.tachiyomi.network.interceptor.ChallengeFailures
+import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
+import eu.kanade.tachiyomi.network.interceptor.HostLocks
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
@@ -9,11 +12,207 @@ import xyz.nulldev.androidcompat.webkit.JsDialogLimiter
 import xyz.nulldev.androidcompat.webkit.KcefCancelledNavigation
 import xyz.nulldev.androidcompat.webkit.KcefNavigationPolicy
 import xyz.nulldev.androidcompat.webkit.KcefWebViewProvider.CallChunkAssembler
+import zoukan.desktop.testing.Await
+import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+
+/**
+ * Lifecycle, pop-up policy, lock visibility, and quit disposal for built-in browser windows
+ * (see [BrowserWindow.disposeAllForQuit]), without Chromium on the classpath.
+ */
+class BrowserWindowLifecycleTest {
+
+    // --- Pop-up decisions ---
+
+    @Test
+    fun `a pop-up to the same site loads in the window's own browser`() {
+        BrowserPopups.decide("https://accounts.example.com/signin", "https://www.example.com/page", offerCrossSite = true) shouldBe
+            BrowserPopups.Action.LoadHere("https://accounts.example.com/signin")
+        // Also in a check's window, which drops only other sites' pop-ups
+        BrowserPopups.decide("https://example.com/next", "https://example.com/", offerCrossSite = false) shouldBe
+            BrowserPopups.Action.LoadHere("https://example.com/next")
+    }
+
+    @Test
+    fun `a pop-up to another site is stopped and offered to the user`() {
+        BrowserPopups.decide("https://other.example.org/x", "https://www.example.com/", offerCrossSite = true) shouldBe
+            BrowserPopups.Action.Offer("https://other.example.org/x", "other.example.org")
+        // Unknown opener (the blank page before the first load): not the same site
+        BrowserPopups.decide("https://other.example.org/x", null, offerCrossSite = true) shouldBe
+            BrowserPopups.Action.Offer("https://other.example.org/x", "other.example.org")
+    }
+
+    @Test
+    fun `a pop-up to another site is dropped silently in a check's window or when it goes to a blocked host`() {
+        BrowserPopups.decide("https://other.example.org/", "https://example.com/", offerCrossSite = false) shouldBe BrowserPopups.Action.Drop
+        BrowserPopups.decide("https://ads.example.net/", "https://example.com/", offerCrossSite = true, isBlockedHost = { true }) shouldBe
+            BrowserPopups.Action.Drop
+    }
+
+    @Test
+    fun `a failing block check offers the pop-up instead of failing`() {
+        BrowserPopups.decide("https://ads.example.net/", "https://example.com/", offerCrossSite = true, isBlockedHost = { error("boom") }) shouldBe
+            BrowserPopups.Action.Offer("https://ads.example.net/", "ads.example.net")
+    }
+
+    @Test
+    fun `a pop-up to a non-web address is dropped`() {
+        listOf("file:///C:/Windows/win.ini", "javascript:alert(1)", "about:blank", "", null).forEach { url ->
+            BrowserPopups.decide(url, "https://example.com/", offerCrossSite = true) shouldBe BrowserPopups.Action.Drop
+        }
+    }
+
+    // --- Registry disposal and open failure ---
+
+    @Test
+    fun `a window refused before Chromium starts leaves the registry`() {
+        val before = BrowserWindow.registeredCount()
+        // Not a web address (and in a headless test run there is no display either): refused early
+        val window = BrowserWindow("file:///etc/hosts")
+        BrowserWindow.registeredCount() shouldBe before + 1
+
+        window.open() shouldBe false
+        BrowserWindow.registeredCount() shouldBe before
+        // Its await returns at once instead of waiting for a window that never came
+        window.await(timeoutMs = 5_000) shouldBe false
+    }
+
+    @Test
+    fun `disposeAll disposes every window once and a second call does nothing`() {
+        val registry = BrowserWindowRegistry()
+        val disposed = mutableListOf<String>()
+        registry.register { disposed += "a" }
+        registry.register { disposed += "b" }
+
+        registry.disposeAll()
+        disposed shouldBe listOf("a", "b")
+
+        // The quit paths run disposeAll more than once (at the quit, then before exitProcess)
+        registry.disposeAll()
+        disposed shouldBe listOf("a", "b")
+    }
+
+    @Test
+    fun `a window that opens while the others are disposed is kept for the next call`() {
+        val registry = BrowserWindowRegistry()
+        val disposed = mutableListOf<String>()
+        registry.register {
+            disposed += "a"
+            registry.register { disposed += "late" }
+        }
+
+        registry.disposeAll()
+        disposed shouldBe listOf("a")
+
+        registry.disposeAll()
+        disposed shouldBe listOf("a", "late")
+    }
+
+    @Test
+    fun `a window that closed by itself is not disposed again`() {
+        val registry = BrowserWindowRegistry()
+        var disposed = 0
+        val registration = registry.register { disposed++ }
+        registry.unregister(registration)
+
+        registry.disposeAll()
+        disposed shouldBe 0
+    }
+
+    @Test
+    fun `one window that cannot close does not stop the others`() {
+        val registry = BrowserWindowRegistry()
+        var disposed = false
+        registry.register { error("wedged") }
+        registry.register { disposed = true }
+
+        registry.disposeAll()
+        disposed shouldBe true
+    }
+
+    // --- Lock visibility and waiting ---
+
+    /** A browser window as the registry sees it: hidden while the app is locked, as BrowserWindow. */
+    private class FakeWindow(private val registry: BrowserWindowRegistry) {
+        var visible = !registry.locked
+        var changes = 0
+        val registration = registry.register(onLockChange = {
+            changes++
+            visible = !registry.locked
+        }) {}
+    }
+
+    @Test
+    fun `the windows hide while the app is locked and come back at the unlock`() {
+        val registry = BrowserWindowRegistry()
+        val a = FakeWindow(registry)
+        registry.register(onLockChange = { error("wedged") }) {}
+        val b = FakeWindow(registry)
+        a.visible shouldBe true
+
+        registry.setLocked(true)
+        a.visible shouldBe false
+        b.visible shouldBe false
+        // A window opening while locked opens hidden
+        FakeWindow(registry).visible shouldBe false
+
+        registry.setLocked(false)
+        a.visible shouldBe true
+        b.visible shouldBe true
+    }
+
+    @Test
+    fun `the same lock state twice tells nobody, and a closed window is not told`() {
+        val registry = BrowserWindowRegistry()
+        val open = FakeWindow(registry)
+        val closed = FakeWindow(registry)
+        registry.unregister(closed.registration)
+
+        registry.setLocked(false)
+        open.changes shouldBe 0
+        registry.setLocked(true)
+        registry.setLocked(true)
+        open.changes shouldBe 1
+        closed.changes shouldBe 0
+    }
+
+    @Test
+    fun `a challenge waits for the unlock`() {
+        val registry = BrowserWindowRegistry()
+        registry.awaitUnlocked(10) shouldBe true
+
+        registry.setLocked(true)
+        registry.awaitUnlocked(50) shouldBe false
+
+        val challenge = Thread.currentThread()
+        val unlocker = Thread {
+            // Unlocks only once the challenge waits, so the wait is what the unlock ends
+            Await.until("the challenge to wait for the unlock", state = { challenge.state }) {
+                challenge.state == Thread.State.TIMED_WAITING || challenge.state == Thread.State.WAITING
+            }
+            registry.setLocked(false)
+        }.apply { start() }
+        val started = System.nanoTime()
+        registry.awaitUnlocked(10_000) shouldBe true
+        // Woken by the unlock, not the timeout
+        (System.nanoTime() - started < 5_000_000_000L) shouldBe true
+        unlocker.join()
+    }
+
+    @Test
+    fun `a challenge solved some other way while locked stops waiting`() {
+        val registry = BrowserWindowRegistry()
+        registry.setLocked(true)
+        val started = System.nanoTime()
+        registry.awaitUnlocked(10_000) { true } shouldBe false
+        (System.nanoTime() - started < 5_000_000_000L) shouldBe true
+    }
+}
 
 /** What pages may do in the built-in browser and extensions' WebViews: navigations, dialogs, cookies, and JS call assembly. */
 class BrowserPageRulesTest {
@@ -313,5 +512,103 @@ class BrowserPageRulesTest {
         end.visited(1, 3)
         end.visited(2, 3)
         calls.get() shouldBe 1
+    }
+}
+
+/** Cloudflare challenge serialization, cooldowns, and browser clearance URL filtering. */
+class BrowserChallengeAndClearanceTest {
+    private val previous = DesktopBrowser.challengeSolver
+
+    @AfterEach
+    fun restore() {
+        DesktopBrowser.challengeSolver = previous
+    }
+
+    @Test
+    fun `parallel challenges for one host show one window`() {
+        val solved = AtomicBoolean(false)
+        val windows = AtomicInteger(0)
+        val concurrent = AtomicInteger(0)
+        val maxConcurrent = AtomicInteger(0)
+        val threads: MutableList<Thread> = Collections.synchronizedList(mutableListOf())
+        val asked = AtomicInteger(0)
+        DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { _, _, _ ->
+            windows.incrementAndGet()
+            maxConcurrent.accumulateAndGet(concurrent.incrementAndGet(), ::maxOf)
+            // The window stays open until every other challenge has arrived and waits for the host:
+            // a thread that asked and is parked can only be waiting for the host's lock
+            Await.until("the other challenges to wait for the host", timeoutMillis = 5_000) {
+                asked.get() == 8 && threads.filter { it !== Thread.currentThread() }.all { it.state == Thread.State.WAITING }
+            }
+            solved.set(true)
+            concurrent.decrementAndGet()
+            true
+        }
+        val pool = Executors.newFixedThreadPool(8) { task -> Thread(task).also { threads += it } }
+        val start = CountDownLatch(1)
+        val results = (1..8).map {
+            pool.submit<Boolean> {
+                start.await()
+                asked.incrementAndGet()
+                DesktopBrowser.solveChallenge("https://example.org/page$it", "UA") { solved.get() }
+            }
+        }
+        start.countDown()
+        results.map { it.get(10, TimeUnit.SECONDS) } shouldBe List(8) { true }
+        pool.shutdown()
+
+        windows.get() shouldBe 1
+        maxConcurrent.get() shouldBe 1
+    }
+
+    @Test
+    fun `different hosts are not serialized`() {
+        val locks = HostLocks()
+        val inA = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val thread = Thread {
+            locks.withLock("a.example") {
+                inA.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            }
+        }.apply { start() }
+        inA.await(5, TimeUnit.SECONDS) shouldBe true
+        // Another host gets its lock while a.example is held
+        locks.withLock("b.example") { "done" } shouldBe "done"
+        release.countDown()
+        thread.join(5_000)
+    }
+
+    @Test
+    fun `a challenge the user closed is not shown again within the cooldown`() {
+        val minute = TimeUnit.MINUTES.toNanos(1)
+        val failures = ChallengeFailures(cooldownNanos = 5 * minute)
+        failures.failed("example.org", now = 0)
+        // A request that starts after the failure, a minute later
+        failures.shouldFailFast("example.org", waitStarted = minute, now = minute) shouldBe true
+        // After the cooldown a new attempt is allowed again
+        failures.shouldFailFast("example.org", waitStarted = 6 * minute, now = 6 * minute) shouldBe false
+        // Another host is not affected
+        failures.shouldFailFast("other.org", waitStarted = minute, now = minute) shouldBe false
+    }
+
+    @Test
+    fun `pages without cookies are skipped`() {
+        for (url in listOf("about:blank", "data:text/html,hi", "chrome://version", "file:///tmp/a.html", "", "not a url")) {
+            clearanceUrlOrNull(url) shouldBe null
+        }
+    }
+
+    @Test
+    fun `http and https pages are kept`() {
+        clearanceUrlOrNull("https://example.com/a")?.host shouldBe "example.com"
+        clearanceUrlOrNull("http://example.com/")?.host shouldBe "example.com"
+    }
+
+    @Test
+    fun `about blank returns before touching the app's services`() {
+        // Injekt has nothing registered here: reaching it would log a WARN with a stack trace (it
+        // never throws), so this checks only that the call returns quietly
+        recordClearanceUserAgent("about:blank", null)
     }
 }
