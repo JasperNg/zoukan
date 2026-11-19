@@ -16,12 +16,14 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.service.ChapterRecognition
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
+import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzEncryption
 import zoukan.desktop.download.CbzReader
 import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.FileNames
 import zoukan.desktop.download.ImageType
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -215,7 +217,7 @@ class LocalSource(
      */
     fun writeCover(dir: File, bytes: ByteArray, encrypted: Boolean): File {
         val encryption = if (encrypted) {
-            val pw = password() ?: throw IllegalStateException("The entry's cover is encrypted. Set the download password in Settings.")
+            val pw = password() ?: throw IllegalStateException(localized(DMR.strings.the_cover_is_encrypted_set_the_download_password))
             CbzEncryption(pw, encryptionType())
         } else {
             null

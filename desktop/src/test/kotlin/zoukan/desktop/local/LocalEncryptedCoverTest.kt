@@ -105,7 +105,8 @@ class LocalEncryptedCoverTest {
         val entry = File(temp, "local/A").apply { mkdirs() }
         val archive = File(entry, "cover.cbi")
         CbzWriter(archive, encryption()).use { it.write("cover.jpg", png()) }
-        runCatching { LocalSource.readCoverArchive(archive) { null } }.isFailure shouldBe true
+        runCatching { LocalSource.readCoverArchive(archive) { null } }.exceptionOrNull()!!.message shouldBe
+            zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.is_password_protected_set_the_download_password, "cover.cbi")
         runCatching { LocalSource.readCoverArchive(archive) { "wrong".toCharArray() } }.isFailure shouldBe true
         // A cbi that is no archive at all
         val broken = File(entry, "broken.cbi").apply { writeBytes(png()) }

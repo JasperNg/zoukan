@@ -256,7 +256,10 @@ class EditMangaLocalCoverTest {
     @Test
     fun `an entry with encrypted chapters gets no plain cover without the password`() = runBlocking<Unit> {
         encryptedChapter()
-        assertThrows<IllegalStateException> { runBlocking { edit(withPassword = false).setCover(manga, image("png", 8)) } }
+        // What "Set as cover" in the reader does: the page's bytes, in memory
+        val error = assertThrows<IllegalStateException> { runBlocking { edit(withPassword = false).setCover(manga, image("png", 8)) } }
+        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.the_cover_is_encrypted_set_the_download_password)
         names() shouldContainExactly listOf("Chapter 1.cbz")
+        updates shouldBe emptyList()
     }
 }

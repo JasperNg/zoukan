@@ -721,6 +721,9 @@
     <string name="set_the_download_password">Set the download password</string>
     <string name="kept_in_use_the_same_password">Kept in %1$s. Use the same password as on Android to read the same archives.</string>
     <string name="encryption">Encryption</string>
+    <!-- An encrypted download or cover.cbi opened without the download password; %1$s is the file's name -->
+    <string name="is_password_protected_set_the_download_password">%1$s is password protected. Set the download password in Settings.</string>
+    <string name="the_cover_is_encrypted_set_the_download_password">The entry\'s cover is encrypted. Set the download password in Settings.</string>
     <string name="standard_zip_encryption">Standard zip encryption</string>
     <string name="backing_up">Backing up…</string>
     <string name="restoring">Restoring %1$s…</string>

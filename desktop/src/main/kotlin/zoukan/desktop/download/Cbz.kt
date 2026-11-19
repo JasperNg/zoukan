@@ -8,7 +8,9 @@ import net.lingala.zip4j.model.ZipParameters
 import net.lingala.zip4j.model.enums.AesKeyStrength
 import net.lingala.zip4j.model.enums.CompressionMethod
 import net.lingala.zip4j.model.enums.EncryptionMethod
+import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
+import zoukan.i18n.desktop.DMR
 import java.io.Closeable
 import java.io.File
 import java.io.InputStream
@@ -158,7 +160,7 @@ class CbzReader(val file: File, password: () -> CharArray? = { null }) : Closeab
         if (encrypted) {
             val pw = password() ?: run {
                 zip.close()
-                throw IllegalStateException("${file.name} is password protected. Set the download password in Settings.")
+                throw IllegalStateException(localized(DMR.strings.is_password_protected_set_the_download_password, file.name))
             }
             zip.setPassword(pw)
         }
