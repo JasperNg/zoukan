@@ -14,6 +14,38 @@ private val logger = KotlinLogging.logger {}
  * What extensions' hidden WebViews may load, set by the app at start. Android-compat knows no
  * block list; the app decides. Every answer fails open: a filter that throws blocks nothing.
  */
+/**
+ * Guards a callback that Chromium's native code calls through JCEF (a request filter, a handler of
+ * the browser windows): nothing is thrown back there, an [Error] included, as whether native code
+ * clears a pending Java exception is not something to rely on. An exception is logged; an [Error]
+ * (out of memory, a missing class) is logged and the first one is reported as not fatal
+ * ([KcefRequestFilter.reportOnce]). The logging and the report themselves cannot throw either.
+ */
+object NativeCallback {
+    /** [block]'s value, or [fallback] (what the callback does by default) when it fails. */
+    inline fun <T> guard(fallback: T, what: String, block: () -> T): T = try {
+        block()
+    } catch (e: Throwable) {
+        failed(e, what)
+        fallback
+    }
+
+    /** Logs [e] and reports an [Error] once; never throws, even out of memory. */
+    @PublishedApi
+    internal fun failed(e: Throwable, what: String) {
+        try {
+            if (e is Exception) {
+                logger.warn(e) { "$what failed; Chromium goes on as by default" }
+            } else {
+                logger.error(e) { "$what failed with an error; Chromium goes on as by default" }
+                KcefRequestFilter.reportOnce(e)
+            }
+        } catch (_: Throwable) {
+            // Out of memory while logging or reporting: nothing more can be done, and nothing is thrown
+        }
+    }
+}
+
 object KcefRequestFilter {
     /**
      * Returns true to cancel a request for a subresource or a frame inside a page. [pageUrl] is the
@@ -44,31 +76,22 @@ object KcefRequestFilter {
     /**
      * Whether [filter] cancels the request; false when there is none or it fails. Called from
      * Chromium's IO thread through JCEF's native glue (`onBeforeResourceLoad`), so nothing is
-     * thrown back: whether native code clears a pending Java exception is not something to rely
-     * on. An [Error] (out of memory, a missing class) is logged and given to [reportError]; any
-     * failure lets the request through, as the content blocker is a privacy feature, not a
+     * thrown back ([NativeCallback]): an [Error] (out of memory, a missing class) is logged and
+     * given to [reportError]; any failure lets the request through, as the content blocker is a privacy feature, not a
      * security boundary (THREAT-MODEL.md).
      */
-    fun shouldBlock(requestUrl: String?, pageUrl: String?): Boolean {
+    fun shouldBlock(requestUrl: String?, pageUrl: String?): Boolean = NativeCallback.guard(false, "The request filter") {
         if (requestUrl.isNullOrEmpty()) return false
         val current = filter ?: return false
-        return try {
-            current.shouldBlock(requestUrl, pageUrl)
-        } catch (e: Throwable) {
-            if (e is Exception) {
-                logger.warn(e) { "The request filter failed; the request goes ahead" }
-            } else {
-                logger.error(e) { "The request filter failed with an error; the request goes ahead" }
-                reportOnce(e)
-            }
-            false
-        }
+        current.shouldBlock(requestUrl, pageUrl)
     }
 
     /**
-     * Gives [error] to [reportError] when no error was reported since it was set, and never throws.
-     * For the content blocker's other callbacks from Chromium's native code too (the built-in
-     * browser's), which cannot rethrow an [Error] either and share the one report.
+     * Gives [error] to [reportError] when no error was reported since it was set. Throws no
+     * exception; an [Error] the report itself throws is caught by its caller, [NativeCallback].
+     * For every callback from Chromium's native code (the built-in browser's too), which cannot
+     * rethrow an [Error] either and share the one report. The hook runs on the calling thread
+     * (Chromium's): the app's hook hands the writing to a background thread.
      */
     fun reportOnce(error: Throwable) {
         try {

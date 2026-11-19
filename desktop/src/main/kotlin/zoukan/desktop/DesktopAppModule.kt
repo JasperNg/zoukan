@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import exh.pref.DelegateSourcePreferences
 import exh.source.ExhPreferences
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import logcat.LogPriority
@@ -170,9 +171,11 @@ class DesktopAppModule(
             xyz.nulldev.androidcompat.webkit.KcefRequestFilter.Filter { requestUrl, pageUrl ->
                 zoukan.desktop.browser.blocking.ContentBlocker.shouldBlockInExtension(requestUrl, pageUrl)
             }
-        // An Error in that filter cannot be thrown back into Chromium's native code: it is reported
+        // An Error in that filter cannot be thrown back into Chromium's native code: it is reported,
+        // written on a background thread so Chromium's IO thread is not held up by the disk
         xyz.nulldev.androidcompat.webkit.KcefRequestFilter.reportError = { e ->
-            zoukan.desktop.app.CrashReporter.write(Thread.currentThread(), e, fatal = false)
+            val thread = Thread.currentThread()
+            zoukan.desktop.app.AppScope.launch { zoukan.desktop.app.CrashReporter.write(thread, e, fatal = false) }
         }
     }
 
