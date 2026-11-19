@@ -31,8 +31,8 @@ class OwnPageDecisionTest {
         override fun fileKey(): Any? = null
     }
 
-    private fun decide(kind: Kind, resolvesToItself: Boolean) =
-        ChapterDownloader.isOwnPage(page, { attrs(kind) }, { resolvesToItself })
+    private fun decide(kind: Kind, resolvesToItself: Boolean, windows: Boolean = true) =
+        ChapterDownloader.isOwnPage(page, { attrs(kind) }, { resolvesToItself }, windows)
 
     @Test
     fun `a file tagged with a reparse point that resolves to itself is a page`() {
@@ -42,6 +42,13 @@ class OwnPageDecisionTest {
     @Test
     fun `a reparse point that resolves elsewhere is not a page`() {
         decide(Kind.OTHER, resolvesToItself = false) shouldBe false
+    }
+
+    @Test
+    fun `elsewhere an other file is a pipe, a socket or a device, never a page`() {
+        // Reading a pipe would block the download for good, and a device would fill the heap
+        decide(Kind.OTHER, resolvesToItself = true, windows = false) shouldBe false
+        decide(Kind.REGULAR, resolvesToItself = true, windows = false) shouldBe true
     }
 
     @Test
@@ -61,7 +68,7 @@ class OwnPageDecisionTest {
 
     @Test
     fun `a file whose attributes or real path cannot be read is not a page`() {
-        ChapterDownloader.isOwnPage(page, { throw IOException("gone") }, { true }) shouldBe false
-        ChapterDownloader.isOwnPage(page, { attrs(Kind.OTHER) }, { throw IOException("gone") }) shouldBe false
+        ChapterDownloader.isOwnPage(page, { throw IOException("gone") }, { true }, windows = true) shouldBe false
+        ChapterDownloader.isOwnPage(page, { attrs(Kind.OTHER) }, { throw IOException("gone") }, windows = true) shouldBe false
     }
 }

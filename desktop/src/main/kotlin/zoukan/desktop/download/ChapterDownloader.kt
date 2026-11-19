@@ -184,6 +184,7 @@ class ChapterDownloader(
             file.toPath(),
             { Files.readAttributes(it, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS) },
             NoFollowDelete::resolvesToItself,
+            windows = System.getProperty("os.name").startsWith("Windows"),
         )
 
         /**
@@ -192,19 +193,21 @@ class ChapterDownloader(
          * file is. Windows reports any file with a reparse point as "other": a cloud-sync client
          * tags synced files with one even when they are kept on the device, and deduplicated and
          * compressed files have one too. Such a file is a page when its real path is where it is
-         * listed; a link resolves elsewhere. A path that cannot be read is not a page (it is
-         * downloaded again).
+         * listed; a link resolves elsewhere. Only on [windows]: elsewhere "other" is a pipe, a
+         * socket or a device, whose read would block the download or fill the heap. A path that
+         * cannot be read is not a page (it is downloaded again).
          */
         internal fun isOwnPage(
             path: Path,
             attributes: (Path) -> BasicFileAttributes,
             resolvesToItself: (Path) -> Boolean,
+            windows: Boolean,
         ): Boolean = try {
             val attrs = attributes(path)
             when {
                 attrs.isSymbolicLink || attrs.isDirectory -> false
                 attrs.isRegularFile -> true
-                attrs.isOther -> resolvesToItself(path)
+                attrs.isOther -> windows && resolvesToItself(path)
                 else -> false
             }
         } catch (e: java.io.IOException) {
