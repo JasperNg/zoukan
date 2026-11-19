@@ -4,7 +4,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import zoukan.desktop.runCommand
+import zoukan.desktop.runToolsCommand
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
@@ -22,7 +22,7 @@ class BackupCommandTest {
         val captured = ByteArrayOutputStream()
         System.setErr(PrintStream(captured, true))
         try {
-            return runCommand(arrayOf(*args)) to captured.toString()
+            return runToolsCommand(arrayOf(*args)) to captured.toString()
         } finally {
             System.setErr(original)
         }

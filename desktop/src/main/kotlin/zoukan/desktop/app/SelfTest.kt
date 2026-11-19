@@ -12,7 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tachiyomi.data.Database
+import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -123,8 +123,8 @@ object SelfTest {
             "profile $profile"
         }
         check("Encrypted database") {
-            val db = Injekt.get<Database>()
-            val stores = runBlocking { db.extension_storeQueries.getAll().executeAsList() }
+            val handler = Injekt.get<DatabaseHandler>()
+            val stores = runBlocking { handler.awaitList { extension_storeQueries.getAll() } }
             val header = dirs.database.inputStream().use { it.readNBytes(16) }.toString(Charsets.ISO_8859_1)
             require(!header.startsWith("SQLite format 3")) { "the database file is not encrypted" }
             "opened ${dirs.database.name}, ${stores.size} extension stores, file encrypted"

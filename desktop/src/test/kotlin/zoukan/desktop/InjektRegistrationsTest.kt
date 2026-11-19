@@ -67,7 +67,7 @@ class InjektRegistrationsTest {
     fun `every lookup names its type so the scan sees it`() {
         val repo = File(System.getProperty("user.dir")).absoluteFile.parentFile
         val byClass = Regex("""getInstance(OrNull)?\s*(<[^>]*>)?\s*\(\s*[\w.]+(::class\.java|\.class)\s*\)""")
-        val found = listOf("desktop/src/main", "extension-jvm/src/main", "android-compat/src/main")
+        val found = listOf("desktop/src/main", "desktop/src/tools", "extension-jvm/src/main", "android-compat/src/main")
             .map { File(repo, it) }.filter { it.isDirectory }
             .flatMap { dir ->
                 dir.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "java") }.toList()

@@ -19,12 +19,12 @@ upstream Komikku.
 ```bash
 ./gradlew :desktop:run                                     # open the app
 ./gradlew :desktop:run --args="status"                     # open the encrypted database, list installed extensions
-./gradlew :desktop:run --args="harness --store <store URL>"  # test a sample of a store's extensions against their sites
-./gradlew :desktop:run --args="harness --store <store URL> --all --skip-nsfw"  # test every extension in a store
+./gradlew :desktop:runTools --args="harness --store <store URL>"  # test a sample of a store's extensions against their sites
+./gradlew :desktop:runTools --args="harness --store <store URL> --all --skip-nsfw"  # test every extension in a store
 ./gradlew :desktop:run --args="browser https://example.org"
 ./gradlew :desktop:run --args="backup restore <file.tachibk>"     # restore a Komikku, Mihon or SY backup
 ./gradlew :desktop:run --args="backup create [file] [--private]" # back up (default: <data>/backups)
-./gradlew :desktop:run --args="backup check <file.tachibk>"       # round trip in a throwaway profile
+./gradlew :desktop:runTools --args="backup check <file.tachibk>"       # round trip in a throwaway profile
 ./gradlew :desktop:run --args="library update --download 1 --report update.md"  # update the library, download each entry's newest chapter
 ./gradlew :desktop:run --args="selftest --ui"             # check this machine, in a throwaway profile
 ./gradlew :desktop:run --args="help"

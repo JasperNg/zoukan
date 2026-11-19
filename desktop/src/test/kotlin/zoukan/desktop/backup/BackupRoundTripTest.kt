@@ -53,7 +53,7 @@ class BackupRoundTripTest {
         val process = ProcessBuilder(
             listOf(java, "-Djava.awt.headless=true") + TestHome.childJvmArguments() + listOf(
                 "@${argFile.absolutePath}",
-                "zoukan.desktop.MainKt",
+                "zoukan.desktop.ToolsMainKt",
                 "backup",
                 "check",
                 file.absolutePath,

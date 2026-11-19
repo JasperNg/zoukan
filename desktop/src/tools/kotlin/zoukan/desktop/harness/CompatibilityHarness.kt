@@ -13,6 +13,7 @@ import mihon.domain.extension.model.ExtensionStore
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.describeError
 import zoukan.desktop.ui.reader.PageImage
 import zoukan.extension.DesktopExtensionInstaller
 import zoukan.extension.DesktopExtensionLoader
@@ -377,10 +378,6 @@ class CompatibilityHarness(
             "The store $url lists $size extensions, expected at least $min: has it moved, or is its index a stub?"
         }
 
-        fun describe(e: Throwable): String {
-            val root = generateSequence(e) { it.cause }.last()
-            val msg = (root.message ?: "").lines().first().take(160)
-            return root.javaClass.simpleName + if (msg.isNotEmpty()) ": $msg" else ""
-        }
+        fun describe(e: Throwable): String = describeError(e)
     }
 }

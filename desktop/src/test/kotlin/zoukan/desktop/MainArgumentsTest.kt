@@ -14,17 +14,21 @@ class MainArgumentsTest {
     @TempDir
     lateinit var temp: File
 
-    private fun run(vararg args: String): Pair<Int, String> {
+    private fun runWith(runner: (Array<String>) -> Int, vararg args: String): Pair<Int, String> {
         val original = System.err
         val captured = ByteArrayOutputStream()
         System.setErr(PrintStream(captured, true))
         try {
-            val code = runCommand(arrayOf(*args))
+            val code = runner(arrayOf(*args))
             return code to captured.toString()
         } finally {
             System.setErr(original)
         }
     }
+
+    private fun run(vararg args: String): Pair<Int, String> = runWith(::runCommand, *args)
+
+    private fun runTools(vararg args: String): Pair<Int, String> = runWith(::runToolsCommand, *args)
 
     @Test
     fun `selftest report without a file prints usage and exits 2`() {
@@ -49,17 +53,34 @@ class MainArgumentsTest {
 
     @Test
     fun `harness store without an address prints usage and exits 2`() {
-        val (code, err) = run("harness", "--store")
+        val (code, err) = runTools("harness", "--store")
         code shouldBe 2
+        err shouldContain "--store needs a value"
         err shouldContain "Usage:"
     }
 
     @Test
+    fun `developer tool commands are rejected by Main and handled by ToolsMain`() {
+        val (harnessCode, harnessErr) = run("harness")
+        harnessCode shouldBe 2
+        harnessErr shouldContain "Unknown command harness"
+
+        for (sub in listOf("check", "compare", "synthetic")) {
+            val (code, err) = run("backup", sub)
+            code shouldBe 2
+            err shouldContain "Usage: zoukan backup create|restore"
+        }
+    }
+
+    @Test
     fun `a command that throws returns 1 so the shutdown path runs`() {
+        val (mainCode, _) = run("convert", File(temp, "missing.apk").path, File(temp, "out.jar").path)
+        mainCode shouldBe 1
+
         val a = File(temp, "missing-a.tachibk").path
         val b = File(temp, "missing-b.tachibk").path
-        val (code, _) = run("backup", "compare", a, b)
-        code shouldBe 1
+        val (toolsCode, _) = runTools("backup", "compare", a, b)
+        toolsCode shouldBe 1
     }
 
     @Test
@@ -68,6 +89,10 @@ class MainArgumentsTest {
         try {
             javax.imageio.ImageIO.setUseCache(true)
             run("version")
+            javax.imageio.ImageIO.getUseCache() shouldBe false
+
+            javax.imageio.ImageIO.setUseCache(true)
+            runTools("help")
             javax.imageio.ImageIO.getUseCache() shouldBe false
         } finally {
             javax.imageio.ImageIO.setUseCache(useCache)

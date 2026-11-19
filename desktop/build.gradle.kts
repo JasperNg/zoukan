@@ -4,7 +4,7 @@
 // networking, the extension runtime, the built-in browser) and the command-line tools.
 //
 //   ./gradlew :desktop:run                              # the app
-//   ./gradlew :desktop:run --args="harness --store <url>"
+//   ./gradlew :desktop:runTools --args="harness --store <url>"
 //   ./gradlew :desktop:run --args="browser https://example.org"
 //   ./gradlew :desktop:packageMsi                       # Windows installer (Phase 7, see RELEASING.md)
 //   ./gradlew :desktop:packageDmg                       # macOS disk image (notarizeDmg to notarize)
@@ -215,17 +215,27 @@ sourceSets.test {
 val testStandins by sourceSets.creating {
     compileClasspath += sourceSets.main.get().output + configurations.testCompileClasspath.get()
 }
+val tools by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output + sourceSets.main.get().runtimeClasspath
+    runtimeClasspath += sourceSets.main.get().output + sourceSets.main.get().runtimeClasspath
+}
+kotlin {
+    target.compilations.getByName("tools").associateWith(target.compilations.getByName("main"))
+    target.compilations.getByName("test").associateWith(target.compilations.getByName("tools"))
+}
 sourceSets.test {
-    compileClasspath += testStandins.output
-    runtimeClasspath += testStandins.output
+    compileClasspath += testStandins.output + tools.output + tools.runtimeClasspath
+    runtimeClasspath += testStandins.output + tools.output + tools.runtimeClasspath
 }
 
 // The Android dispatcher is declared for Android targets only. Its MainDispatcherFactory outranks
 // Swing's and would make Dispatchers.Main the emulated Android main looper; the UI needs the AWT
 // event thread (see also Main.kt). This exclude guards against a new dependency bringing it back,
-// for the app and for every test task (they all use the test runtime classpath). AndroidCompat
+// for the app, tools, and every test task (they all use the test runtime classpath). AndroidCompat
 // keeps its own HandlerDispatcher for Handler.asCoroutineDispatcher().
-configurations.matching { it.name == "runtimeClasspath" || it.name == "testRuntimeClasspath" }.configureEach {
+configurations.matching {
+    it.name == "runtimeClasspath" || it.name == "testRuntimeClasspath" || it.name == "toolsRuntimeClasspath"
+}.configureEach {
     exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-android")
 }
 
@@ -280,7 +290,7 @@ dependencies {
     // The bulk migration's smart search, as the Android app
     implementation(libs.stringSimilarity)
     // The extension wiring check reads extension bytecode
-    implementation(zoukanlibs.asm)
+    "toolsImplementation"(zoukanlibs.asm)
 
     // UI
     implementation(composeDesktopRuntime)
@@ -344,6 +354,19 @@ tasks.named<JavaExec>("run") {
     workingDir = rootDir
     standardInput = System.`in`
     // Pass -Pzoukan.cefDebug=true or -Pzoukan.cefArgs="..." through to the app
+    listOf("zoukan.cefDebug", "zoukan.cefArgs", "zoukan.dataDir").forEach { key ->
+        providers.gradleProperty(key).orNull?.let { systemProperty(key, it) }
+    }
+}
+
+val runTools by tasks.registering(JavaExec::class) {
+    group = "application"
+    description = "Runs the desktop developer tools (harness, backup check/compare/synthetic)"
+    classpath = tools.runtimeClasspath
+    mainClass.set("zoukan.desktop.ToolsMainKt")
+    jvmArgs = jvmFlags
+    workingDir = rootDir
+    standardInput = System.`in`
     listOf("zoukan.cefDebug", "zoukan.cefArgs", "zoukan.dataDir").forEach { key ->
         providers.gradleProperty(key).orNull?.let { systemProperty(key, it) }
     }

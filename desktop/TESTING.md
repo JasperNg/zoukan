@@ -451,8 +451,8 @@ index is a stub.
 ./gradlew :desktop:extensionWiringTest -Pzoukan.e2e.stores=keiyoushi -Pzoukan.e2e.package=en.mangapill,all.webtoons
 ```
 
-The live harness (`./gradlew :desktop:run --args="harness --store <url>"`) is part of the app, so
-it names no store: `--store` takes a store's index URL and is required (repeatable). It tests
+The live harness (`./gradlew :desktop:runTools --args="harness --store <url>"`) lives in `tools`
+rather than the shipped app, and names no store: `--store` takes a store's index URL and is required (repeatable). It tests
 `CompatibilityHarness.DEFAULT_PACKAGES` unless `--packages` or `--all` says otherwise, and has no
 minimum-size check (`SampleStores` in the tests holds the stores' URLs and minimum sizes).
 Each store writes its own report, `extensions-<store>-<platform>.md` in the harness profile, where
@@ -468,7 +468,7 @@ harness profile's setting. The run prints the server it uses. Use it when the lo
 redirects a site, or to check a provider:
 
 ```bash
-./gradlew :desktop:run --args="harness --doh quad9 --store https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json --packages en.comix"
+./gradlew :desktop:runTools --args="harness --doh quad9 --store https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json --packages en.comix"
 ```
 
 The "First image" column gives the first page's type, size and size in pixels (`ok image/webp

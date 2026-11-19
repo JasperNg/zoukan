@@ -1,29 +1,14 @@
 package zoukan.desktop
 
 import android.app.Application
-import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.restore.BackupContentRestorer
 import eu.kanade.tachiyomi.network.NetworkHelper
-import eu.kanade.tachiyomi.network.NetworkPreferences
-import eu.kanade.tachiyomi.network.PREF_DOH_360
-import eu.kanade.tachiyomi.network.PREF_DOH_ADGUARD
-import eu.kanade.tachiyomi.network.PREF_DOH_ALIDNS
-import eu.kanade.tachiyomi.network.PREF_DOH_CLOUDFLARE
-import eu.kanade.tachiyomi.network.PREF_DOH_CONTROLD
-import eu.kanade.tachiyomi.network.PREF_DOH_DNSPOD
-import eu.kanade.tachiyomi.network.PREF_DOH_GOOGLE
-import eu.kanade.tachiyomi.network.PREF_DOH_MULLVAD
-import eu.kanade.tachiyomi.network.PREF_DOH_NJALLA
-import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
-import eu.kanade.tachiyomi.network.dohProviderUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
-import mihon.data.extension.service.ExtensionStoreService
-import okio.sink
 import org.slf4j.LoggerFactory
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.data.Database
+import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -34,27 +19,17 @@ import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.SelfTest
 import zoukan.desktop.app.SingleInstance
-import zoukan.desktop.backup.BackupCheck
-import zoukan.desktop.backup.BackupComparison
 import zoukan.desktop.backup.DesktopBackups
-import zoukan.desktop.backup.NoStubSources
 import zoukan.desktop.backup.RestoreGate
-import zoukan.desktop.backup.SyntheticBackup
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.db.DesktopDatabase
-import zoukan.desktop.harness.CompatibilityHarness
-import zoukan.desktop.harness.ExtensionWiringCheck
 import zoukan.desktop.library.LibraryCommand
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.ui.runZoukanApp
 import zoukan.extension.ApkConverter
-import zoukan.extension.DesktopExtensionInstaller
-import zoukan.extension.DesktopExtensionLoader
 import zoukan.extension.DesktopExtensionManager
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import kotlin.system.exitProcess
 
 private const val USAGE = """Zoukan desktop
@@ -69,32 +44,10 @@ Commands:
       --ui                  Also open the main window for a few seconds
       --network             Also check that GitHub (the update check) can be reached
   status                  Start the runtime, open the encrypted database, load installed extensions
-  harness [options]       Run the extension compatibility harness and write a report
-      --store <url>         Extension store index URL (required), repeatable: each store gets its
-                            own report
-      --packages <a,b,...>  Extensions to test, for example en.mangapill,all.mangadex; over several
-                            stores, each store tests those it lists
-      --all                 Test every extension in the store
-      --lang <code>         Source language to test in multi-language extensions (default: en)
-      --offline             Install and load only, no calls to manga sites
-      --apk                 Install from APKs with dex2jar even when the store has jars
-      --skip-nsfw           With --all, skip NSFW extensions
-      --interactive         Open a browser window for Cloudflare challenges the hidden browser cannot solve
-      --doh <name|off>      DNS over HTTPS for the run: cloudflare, google, adguard, quad9, alidns, dnspod,
-                            360, mullvad, controld, njalla, or off (default: the harness profile's setting)
-      --wiring            Check every extension (or --packages) is wired up, without calling manga sites:
-                            missing Android or app APIs, Injekt lookups, sources, client and headers, settings
   backup create [file]    Back up the library and settings (default: <data>/backups/zoukan_<date>.tachibk)
       --private             Include private settings (tracker logins and the like)
   backup restore <file>   Restore a .tachibk backup from Komikku, Mihon, TachiyomiSY or Zoukan
       --private             Restore security settings and logins from the backup too
-  backup check <file>     Restore a backup into an empty profile, back it up again, and compare the two
-      --report <file.md>    Also write the result as a Markdown report
-      --keep                Keep the throwaway profile
-  backup compare <a> <b>  Compare two backups field by field (what b lost or changed from a)
-  backup synthetic <file> Write a backup with every field set, for testing
-      --legacy              Use older forms of some fields
-      --force               Replace <file> if it exists
   library update [options] Check the library for new chapters, as the app's library update does
       --all-entries         Ignore the skip rules (unread, not started, completed, release period)
       --download <n>        Then download the newest <n> chapters of every updated entry
@@ -107,16 +60,17 @@ Only one Zoukan can use a data folder at a time: the commands that start the run
 
 Data folder: -Dzoukan.dataDir=<path> or ZOUKAN_DATA_DIR overrides the default.
 
-Exit codes: 0 success, 1 the command failed, 2 bad usage. harness exits 1 when an extension fails to
-install or load or a store cannot be read, and with --wiring also when an app API is missing.
+Exit codes: 0 success, 1 the command failed, 2 bad usage.
 """
 
-fun main(args: Array<String>) {
+fun main(args: Array<String>) = runCliMain(args, ::runCommand)
+
+internal fun runCliMain(args: Array<String>, run: (Array<String>) -> Int) {
     // kotlinx-coroutines picks the Android main dispatcher whenever android.os.Build exists, which
     // AndroidCompat provides; the service loader instead finds Swing's, so Dispatchers.Main is the
     // AWT event thread the UI runs on. Set before anything touches Dispatchers.Main.
     System.setProperty("kotlinx.coroutines.fast.service.loader", "false")
-    val code = runCommand(args)
+    val code = run(args)
     // Chromium crashes when it shuts down (at exit) with a browser still open: the quit paths
     // have disposed the built-in browser windows, and this catches anything left over (a CLI
     // command's window). disposePending then does the same for the extension WebView browsers.
@@ -133,39 +87,57 @@ fun main(args: Array<String>) {
     exitProcess(code)
 }
 
-private class UsageError(message: String) : Exception(message)
+internal class CliUsageError(message: String) : Exception(message)
 
-private fun Iterator<String>.value(option: String): String =
-    if (hasNext()) next() else throw UsageError("$option needs a value")
+internal fun Iterator<String>.optionValue(option: String): String =
+    if (hasNext()) next() else throw CliUsageError("$option needs a value")
 
 private fun Iterator<String>.intValue(option: String): Int =
-    value(option).toIntOrNull() ?: throw UsageError("$option needs a number")
+    optionValue(option).toIntOrNull() ?: throw CliUsageError("$option needs a number")
 
-/**
- * Runs one command line and returns its exit code: 0 success, 1 the command failed, 2 bad usage.
- * It does not throw for a failing command, so [main] always reaches its shutdown path.
- */
-internal fun runCommand(args: Array<String>): Int {
+internal fun describeError(e: Throwable): String {
+    val root = generateSequence(e) { it.cause }.last()
+    val msg = (root.message ?: "").lines().first().take(160)
+    return root.javaClass.simpleName + if (msg.isNotEmpty()) ": $msg" else ""
+}
+
+internal fun runCliCommand(
+    args: Array<String>,
+    usage: String,
+    loggerName: String,
+    defaultCommand: String? = null,
+    dispatch: (command: String, rest: List<String>) -> Int,
+): Int {
     // ImageIO's streams over an InputStream or OutputStream otherwise copy the image to a temporary
     // file in the system's temporary folder (a decrypted page or cover); off, they cache in memory.
     // The app's own reads already use memory-cached streams (MemoryImageIo); this covers the rest.
     // Images read from or written to a File are opened directly either way
     javax.imageio.ImageIO.setUseCache(false)
-    val command = args.firstOrNull() ?: "ui"
+    val command = args.firstOrNull() ?: defaultCommand ?: run {
+        System.err.println(usage)
+        return 2
+    }
     val rest = args.drop(1)
     return try {
         dispatch(command, rest)
-    } catch (e: UsageError) {
-        System.err.println("${e.message}\n\n$USAGE")
+    } catch (e: CliUsageError) {
+        System.err.println("${e.message}\n\n$usage")
         2
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        System.err.println("zoukan $command failed: ${CompatibilityHarness.describe(e)}")
-        LoggerFactory.getLogger("zoukan.cli").error("zoukan {} failed", command, e)
+        System.err.println("zoukan $command failed: ${describeError(e)}")
+        LoggerFactory.getLogger(loggerName).error("zoukan {} failed", command, e)
         1
     }
 }
+
+/**
+ * Runs one command line and returns its exit code: 0 success, 1 the command failed, 2 bad usage.
+ * It does not throw for a failing command, so [main] always reaches its shutdown path.
+ */
+internal fun runCommand(args: Array<String>): Int =
+    runCliCommand(args, USAGE, loggerName = "zoukan.cli", defaultCommand = "ui", dispatch = ::dispatch)
 
 private fun dispatch(command: String, rest: List<String>): Int {
     return when (command) {
@@ -188,7 +160,6 @@ private fun dispatch(command: String, rest: List<String>): Int {
         }
         "selftest" -> selftest(rest)
         "status" -> status()
-        "harness" -> harness(rest)
         "backup" -> backup(rest)
         "library" -> library(rest)
         "browser" -> browser(rest)
@@ -209,7 +180,7 @@ private fun selftest(args: List<String>): Int {
     val it = args.iterator()
     while (it.hasNext()) {
         when (val arg = it.next()) {
-            "--report" -> options = options.copy(report = File(it.value("--report")))
+            "--report" -> options = options.copy(report = File(it.optionValue("--report")))
             "--ui" -> options = options.copy(ui = true)
             "--network" -> options = options.copy(network = true)
             "--keep" -> options = options.copy(keep = true)
@@ -239,8 +210,8 @@ private fun status(): Int {
         val dirs = ZoukanRuntime.dirs
         println("Data folder: ${dirs.root}")
         println("Secret store: ${Injekt.get<SecretStore>().name}")
-        val db = Injekt.get<Database>()
-        val stores = runBlocking { db.extension_storeQueries.getAll().executeAsList() }
+        val handler = Injekt.get<DatabaseHandler>()
+        val stores = runBlocking { handler.awaitList { extension_storeQueries.getAll() } }
         println("Encrypted database: open, key \"${DesktopDatabase.KEY_NAME}\" in the secret store, ${stores.size} extension stores")
         val manager = Injekt.get<DesktopExtensionManager>()
         runBlocking { manager.init() }
@@ -251,175 +222,6 @@ private fun status(): Int {
         lock.close()
     }
 }
-
-private fun harness(args: List<String>): Int {
-    var options = CompatibilityHarness.Options()
-    val stores = mutableListOf<String>()
-    var wiring = false
-    var doh: Int? = null
-    val it = args.iterator()
-    while (it.hasNext()) {
-        when (val arg = it.next()) {
-            "--doh" -> doh = harnessDohProvider(it.value("--doh")) ?: run {
-                System.err.println("Unknown DNS over HTTPS provider for --doh\n\n$USAGE")
-                return 2
-            }
-            "--store" -> stores += it.value("--store")
-            "--packages" -> options = options.copy(packages = it.value("--packages").split(',').map(String::trim).filter(String::isNotEmpty))
-            "--all" -> options = options.copy(all = true)
-            "--lang" -> options = options.copy(lang = it.value("--lang"))
-            "--offline" -> options = options.copy(offline = true)
-            "--apk" -> options = options.copy(forceApk = true)
-            "--skip-nsfw" -> options = options.copy(skipNsfw = true)
-            "--interactive" -> options = options.copy(interactive = true)
-            "--wiring" -> wiring = true
-            else -> {
-                System.err.println("Unknown option $arg\n\n$USAGE")
-                return 2
-            }
-        }
-    }
-    val runs = try {
-        harnessRuns(options, stores)
-    } catch (e: IllegalArgumentException) {
-        System.err.println("${e.message}\n\n$USAGE")
-        return 2
-    }
-    // A separate profile, so the harness never touches the user's library or trusted extensions
-    val dirs = harnessDirs()
-    val lock = lockHarness(dirs) ?: return 1
-    try {
-        return runHarness(dirs, runs, wiring, doh)
-    } finally {
-        lock.close()
-    }
-}
-
-/** The provider number for a `--doh` name (the settings' providers, or `off`); null for an unknown name. */
-internal fun harnessDohProvider(name: String): Int? = when (name.trim().lowercase()) {
-    "off", "none" -> -1
-    "cloudflare" -> PREF_DOH_CLOUDFLARE
-    "google" -> PREF_DOH_GOOGLE
-    "adguard" -> PREF_DOH_ADGUARD
-    "quad9" -> PREF_DOH_QUAD9
-    "alidns" -> PREF_DOH_ALIDNS
-    "dnspod" -> PREF_DOH_DNSPOD
-    "360" -> PREF_DOH_360
-    "mullvad" -> PREF_DOH_MULLVAD
-    "controld" -> PREF_DOH_CONTROLD
-    "njalla" -> PREF_DOH_NJALLA
-    else -> null
-}
-
-/**
- * One harness run per `--store` URL. The app names no store, so at least one URL is required. Each
- * run's report and trace files are named by [CompatibilityHarness.storeId] of its URL, made unique
- * (`owner`, `owner-2`, ...) so two stores of one owner or host never overwrite each other's files.
- * Over several stores each store tests only the `--packages` it lists, so a package of one store is
- * not a failure of another.
- */
-internal fun harnessRuns(options: CompatibilityHarness.Options, stores: List<String>): List<CompatibilityHarness.Options> {
-    val urls = stores.distinct()
-    require(urls.isNotEmpty()) { "Give the store to test: --store <url>" }
-    urls.firstOrNull { "://" !in it }?.let { throw IllegalArgumentException("Unknown store \"$it\": give its URL") }
-    val used = mutableSetOf<String>()
-    return urls.map { url ->
-        val base = CompatibilityHarness.storeId(url)
-        var id = base
-        var n = 1
-        while (!used.add(id)) id = "$base-${++n}"
-        options.copy(storeUrl = url, storeId = id, skipMissing = urls.size > 1)
-    }
-}
-
-/** The harness profile: outside the user's data folder, so its jars and browser profile do not roam. */
-internal fun harnessDirs(): ZoukanDirs = ZoukanDirs.harness()
-
-/** Takes the harness profile's lock; null (after saying so) when another harness run holds it. */
-internal fun lockHarness(dirs: ZoukanDirs): AutoCloseable? =
-    SingleInstance.acquireForCommand(dirs.root, "harness") ?: run {
-        System.err.println("Another harness run is using ${dirs.root}; wait for it to finish.")
-        null
-    }
-
-private fun runHarness(dirs: ZoukanDirs, runs: List<CompatibilityHarness.Options>, wiring: Boolean, doh: Int?): Int {
-    ZoukanRuntime.start(dirs, interactiveBrowser = runs.any { it.interactive })
-    // Before NetworkHelper and the browser read it. The harness has its own profile, so this never
-    // changes the user's setting
-    val dohPreference = Injekt.get<NetworkPreferences>().dohProvider()
-    doh?.let(dohPreference::set)
-    println("DNS over HTTPS: ${dohProviderUrl(dohPreference.get()) ?: "off (system DNS)"}")
-    // NetworkHelper first, so the cookie store and Chromium hooks are in place
-    Injekt.get<NetworkHelper>()
-    // Every store runs, and each writes its own report, even when an earlier one failed
-    val results = runs.map { options ->
-        println("Store ${options.storeId}: ${options.storeUrl}")
-        runCatching { runHarnessOn(dirs, options, wiring) }
-            .onFailure { System.err.println("Store ${options.storeId} failed: ${CompatibilityHarness.describe(it)}") }
-    }
-    // Over several stores, a package that none of them lists is still a mistake
-    val requested = runs.first().packages
-    if (runs.size > 1 && requested.isNotEmpty()) {
-        val found = results.flatMap { it.getOrNull()?.second.orEmpty() }.toSet()
-        val missing = requested.map { it.removePrefix("eu.kanade.tachiyomi.extension.") }.filter { it !in found }
-        if (missing.isNotEmpty()) {
-            System.err.println("Not in any store: ${missing.joinToString()}")
-            return 1
-        }
-    }
-    return results.maxOf { result -> result.fold(onSuccess = { it.first }, onFailure = { 1 }) }
-}
-
-/** Runs one store; returns the exit code and the packages it tested. */
-private fun runHarnessOn(dirs: ZoukanDirs, options: CompatibilityHarness.Options, wiring: Boolean): Pair<Int, List<String>> {
-    if (wiring) {
-        val check = ExtensionWiringCheck(
-            dirs = dirs,
-            storeService = Injekt.get<ExtensionStoreService>(),
-            installer = Injekt.get<DesktopExtensionInstaller>(),
-            loader = Injekt.get<DesktopExtensionLoader>(),
-            options = ExtensionWiringCheck.Options(
-                storeUrl = options.storeUrl,
-                storeId = options.storeId,
-                packages = options.packages,
-                skipNsfw = options.skipNsfw,
-                minExtensions = options.minExtensions,
-            ),
-        )
-        val (report, rows) = check.run()
-        report.save(check.reportFile())
-        println("\nReport saved to ${check.reportFile()}")
-        return wiringExitCode(rows) to rows.map { it.pkg }
-    }
-    val harness = CompatibilityHarness(
-        dirs = dirs,
-        storeService = Injekt.get<ExtensionStoreService>(),
-        installer = Injekt.get<DesktopExtensionInstaller>(),
-        loader = Injekt.get<DesktopExtensionLoader>(),
-        options = options,
-    )
-    val (report, rows) = harness.run()
-    val name = buildString {
-        append("extensions-").append(options.storeId)
-        if (options.forceApk) append("-apk")
-        append("-").append(Platform.id)
-    }
-    val file = File(dirs.reports, "$name.md")
-    report.save(file)
-    println("\nReport saved to $file")
-    return harnessExitCode(rows) to rows.map { it.pkg }
-}
-
-/** 1 when an extension failed to load or an app API it needs is missing; 0 for a clean run. */
-internal fun wiringExitCode(rows: List<ExtensionWiringCheck.Row>): Int =
-    if (ExtensionWiringCheck.appGaps(rows).isNotEmpty() || rows.any { !it.loaded }) 1 else 0
-
-/**
- * 1 when an extension failed to install or load, or is not in the store. The live-site steps
- * (popular, details, pages) stay in the report only: they depend on the sites, not on the app.
- */
-internal fun harnessExitCode(rows: List<CompatibilityHarness.Row>): Int =
-    if (rows.any { !it.install.startsWith("ok") }) 1 else 0
 
 private fun browser(args: List<String>): Int {
     val url = args.firstOrNull() ?: run {
@@ -447,9 +249,8 @@ private fun browser(args: List<String>): Int {
 private fun backup(args: List<String>): Int {
     val sub = args.firstOrNull()
     val rest = args.drop(1)
-    if (rest.lastOrNull() == "--report") throw UsageError("--report needs a value")
     val flags = rest.filter { it.startsWith("--") }.toSet()
-    val positional = rest.filterIndexed { i, a -> !a.startsWith("--") && rest.getOrNull(i - 1) != "--report" }
+    val positional = rest.filterNot { it.startsWith("--") }
     return when (sub) {
         "create" -> {
             val lock = lockForDataFolder("backup create") ?: return 1
@@ -508,54 +309,7 @@ private fun backup(args: List<String>): Int {
                 lock.close()
             }
         }
-        "check" -> {
-            val file = positional.firstOrNull()?.let(::File) ?: return usage("backup check <file>")
-            val result = BackupCheck.run(file, keepProfile = "--keep" in flags)
-            val markdown = BackupCheck.markdown(result)
-            println(markdown)
-            rest.indexOf("--report").takeIf { it >= 0 }?.let { rest.getOrNull(it + 1) }?.let { path ->
-                File(path).apply { absoluteFile.parentFile?.mkdirs() }.writeText(markdown)
-                println("Report saved to $path")
-            }
-            if (result.passed) 0 else 1
-        }
-        "compare" -> {
-            if (positional.size != 2) return usage("backup compare <a> <b>")
-            val backups = DesktopBackups(File("."), stubSourceRepository = NoStubSources)
-            val report = BackupComparison(backups.read(File(positional[0])), backups.read(File(positional[1]))).compare()
-            println("Compared ${report.compared}")
-            report.differences.forEach { println("- $it") }
-            println(if (report.passed) "No differences" else "${report.differences.size} differences")
-            if (report.passed) 0 else 1
-        }
-        "synthetic" -> {
-            val file = positional.firstOrNull()?.let(::File) ?: return usage("backup synthetic <file>")
-            if (file.exists() && "--force" !in flags) {
-                System.err.println("$file exists; pass --force to replace it")
-                return 1
-            }
-            val parent = file.absoluteFile.parentFile
-            parent?.mkdirs()
-            // Through a temporary file of its own: a failed write leaves the target alone, and no
-            // other file of the folder is written or deleted
-            val temp = Files.createTempFile(parent?.toPath(), "${file.name}.", ".tmp")
-            try {
-                temp.toFile().sink().use { BackupCodec.write(SyntheticBackup.create(legacy = "--legacy" in flags), it) }
-                // Without --force, a file that appeared since the check above is not replaced either
-                val options = if ("--force" in flags) arrayOf(StandardCopyOption.REPLACE_EXISTING) else emptyArray()
-                try {
-                    Files.move(temp, file.toPath(), *options)
-                } catch (_: java.nio.file.FileAlreadyExistsException) {
-                    System.err.println("$file exists; pass --force to replace it")
-                    return 1
-                }
-            } finally {
-                Files.deleteIfExists(temp)
-            }
-            println("Wrote $file (${file.length()} bytes)")
-            0
-        }
-        else -> usage("backup create|restore|check|synthetic ...")
+        else -> usage("backup create|restore ...")
     }
 }
 
@@ -567,7 +321,7 @@ private fun library(args: List<String>): Int {
         when (val arg = it.next()) {
             "--all-entries" -> options = options.copy(ignoreRestrictions = true)
             "--download" -> options = options.copy(download = it.intValue("--download"))
-            "--report" -> options = options.copy(report = File(it.value("--report")))
+            "--report" -> options = options.copy(report = File(it.optionValue("--report")))
             else -> {
                 System.err.println("Unknown option $arg\n\n$USAGE")
                 return 2

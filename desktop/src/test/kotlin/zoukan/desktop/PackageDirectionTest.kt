@@ -10,7 +10,7 @@ import java.io.File
 
 /**
  * Runtime code does not depend on the UI package: only the entry points that start the UI
- * (main, the release self-test, the compatibility harness) may reach into it.
+ * (main, the release self-test) may reach into it.
  */
 class PackageDirectionTest {
     @Test
@@ -38,6 +38,6 @@ class PackageDirectionTest {
 
     private companion object {
         /** Entry points that start or drive the UI. */
-        val ALLOWED = listOf("zoukan/desktop/MainKt", "zoukan/desktop/app/SelfTest", "zoukan/desktop/harness/")
+        val ALLOWED = listOf("zoukan/desktop/MainKt", "zoukan/desktop/app/SelfTest")
     }
 }
