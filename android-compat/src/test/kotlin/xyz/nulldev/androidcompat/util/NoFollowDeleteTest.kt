@@ -68,8 +68,11 @@ class NoFollowDeleteTest {
             depth++
         }
         assumeTrue(depth >= 300, "the file system does not allow a deep enough tree")
-        // A few levels up, where a file name still fits in the longest path
-        File(generateSequence(dir) { it.parentFile }.drop(4).first(), "page.png").writeBytes(byteArrayOf(1))
+        // A few levels up, where a file name still fits in the longest path: each level is 2
+        // characters ("/d") and "/page.png" is 9, so 8 levels leave room whatever the length of the
+        // temporary folder's random name (4 levels made the path one character too long when the
+        // deepest folder filled the longest path exactly)
+        File(generateSequence(dir) { it.parentFile }.drop(8).first(), "page.png").writeBytes(byteArrayOf(1))
 
         // A small stack, as a deeper tree on a normal stack: one call per level would overflow it
         var failure: Throwable? = null
