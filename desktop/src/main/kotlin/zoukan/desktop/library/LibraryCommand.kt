@@ -1,7 +1,6 @@
 package zoukan.desktop.library
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -11,6 +10,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.ZoukanLifecycle
 import zoukan.desktop.download.Download
 import zoukan.desktop.download.DownloadManager
 import zoukan.extension.DesktopExtensionManager
@@ -41,7 +41,8 @@ object LibraryCommand {
 
         val started = System.nanoTime()
         println("Updating the library...")
-        val progress = CoroutineScope(Dispatchers.IO).launch {
+        val progressScope = ZoukanLifecycle.newServiceScope(name = "library-command-progress")
+        val progress = progressScope.launch {
             var last = -1
             updater.progress.collect { p ->
                 if (p != null && p.total > 0 && p.done != last) {
@@ -50,8 +51,12 @@ object LibraryCommand {
                 }
             }
         }
-        val result = updater.run(ignoreRestrictions = options.ignoreRestrictions)
-        progress.cancel()
+        val result = try {
+            updater.run(ignoreRestrictions = options.ignoreRestrictions)
+        } finally {
+            progress.cancel()
+            progressScope.cancel()
+        }
         val updateTime = Duration.ofNanos(System.nanoTime() - started)
         println("Updated ${result.updated} entries in ${updateTime.toSeconds()} s: ${result.newChapters} new chapters, ${result.failures.size} failed, ${result.skipped.size} skipped")
         result.failures.forEach { println("  FAILED ${it.manga.title}: ${it.message}") }

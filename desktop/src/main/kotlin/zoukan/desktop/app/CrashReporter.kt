@@ -53,6 +53,9 @@ object CrashReporter {
     @Volatile
     private var dirs: ZoukanDirs? = null
 
+    @Volatile
+    private var cleanExitHook: AutoCloseable? = null
+
     val logDir: File? get() = dirs?.logs
     val crashDir: File? get() = dirs?.crashes
 
@@ -77,7 +80,8 @@ object CrashReporter {
         }
         val marker = dirs.marker()
         marker.writeText(ProcessHandle.current().pid().toString())
-        Runtime.getRuntime().addShutdownHook(Thread({ marker.delete() }, "zoukan-clean-exit"))
+        cleanExitHook?.close()
+        cleanExitHook = ZoukanLifecycle.registerShutdownHook("zoukan-clean-exit") { marker.delete() }
         Thread.setDefaultUncaughtExceptionHandler { thread, e ->
             // Uncaught exceptions (for example on the AWT thread under Chromium) go to the log
             // with their stack trace, not only a bare "Exception in thread" line

@@ -7,6 +7,7 @@ import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import xyz.nulldev.androidcompat.webkit.CookieExpirySource
 import xyz.nulldev.androidcompat.webkit.cookiesByUri
+import zoukan.desktop.app.ZoukanLifecycle
 import java.io.File
 import java.net.CookieManager
 import java.net.CookieStore
@@ -54,11 +55,11 @@ class PersistentCookieStore(
     /** Set by [close]: nothing is written after it, so the file's folder can be deleted. */
     private var closed = false
 
-    private val shutdownSave = Thread({ save() }, "cookie-store-flush")
+    private val shutdownHook: AutoCloseable
 
     init {
         load()
-        Runtime.getRuntime().addShutdownHook(shutdownSave)
+        shutdownHook = ZoukanLifecycle.registerShutdownHook("cookie-store-flush") { save() }
     }
 
     /**
@@ -73,8 +74,7 @@ class PersistentCookieStore(
         pendingSave = null
         save()
         closed = true
-        // Fails only once shutdown has begun, when the hook is already running or done
-        runCatching { Runtime.getRuntime().removeShutdownHook(shutdownSave) }
+        shutdownHook.close()
         saver.shutdown()
     }
 

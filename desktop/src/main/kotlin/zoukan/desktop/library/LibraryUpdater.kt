@@ -10,10 +10,7 @@ import exh.source.LIBRARY_UPDATE_EXCLUDED_SOURCES
 import exh.source.MERGED_SOURCE_ID
 import exh.source.mangaDexSourceIds
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -48,6 +45,7 @@ import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.Platform
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.app.ZoukanLifecycle
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
@@ -104,7 +102,7 @@ class LibraryUpdater(
         val stoppedForRestore: Boolean = false,
     )
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = ZoukanLifecycle.newServiceScope(name = "library-updater")
 
     /** Written by [start] inside its lock; read through the same lock, so a cancel never misses a start. */
     @Volatile

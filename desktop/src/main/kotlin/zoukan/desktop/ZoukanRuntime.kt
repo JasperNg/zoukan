@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
 import eu.kanade.tachiyomi.network.migrateRemovedDohProvider
 import exh.log.EHLogLevel
+import kotlinx.coroutines.Dispatchers
 import logcat.LogPriority
 import logcat.LogcatLogger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -29,6 +30,7 @@ import zoukan.desktop.app.CrashReporter
 import zoukan.desktop.app.IncognitoLog
 import zoukan.desktop.app.ServiceScope
 import zoukan.desktop.app.Toasts
+import zoukan.desktop.app.ZoukanLifecycle
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.local.Archives
@@ -182,11 +184,17 @@ object ZoukanRuntime {
             // The browser windows hide while the app is locked, and a challenge waits for the unlock
             BrowserWindow.followAppLock(
                 Injekt.get<zoukan.desktop.security.AppLock>().locked,
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+                ZoukanLifecycle.newServiceScope(
+                    name = "browser-app-lock",
+                    context = Dispatchers.Default,
+                ),
             )
             // ZOUKAN <--
         }
     }
+
+    /** Cancels lifecycle-managed scopes and runs registered shutdown hooks. */
+    fun shutdown() = ZoukanLifecycle.shutdown()
 
     /**
      * Extensions' WebViews and http.agent (which extensions and the JDK's HttpURLConnection send)
