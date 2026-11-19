@@ -22,7 +22,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
-import zoukan.desktop.library.AddToLibrary
+import zoukan.desktop.ui.common.LibraryAddController
+import zoukan.desktop.ui.common.LibraryAddController.SinglePrompt
 import zoukan.desktop.ui.manga.CategoryDialog
 import zoukan.desktop.ui.manga.DuplicateDialog
 import zoukan.desktop.ui.manga.MangaScreen
@@ -34,48 +35,72 @@ import zoukan.i18n.desktop.DMR
  * or adds the entry after the duplicate check and the category choice, fetching its details and
  * chapters when Settings > Library asks for it.
  */
-class QuickLibraryToggle internal constructor(private val scope: CoroutineScope) {
-    private val addToLibrary = Injekt.get<AddToLibrary>()
+class QuickLibraryToggle internal constructor(
+    private val scope: CoroutineScope,
+    private val controller: LibraryAddController = LibraryAddController(),
+    private val getManga: () -> GetManga = { Injekt.get() },
+) {
+    private var prompt by mutableStateOf<SinglePrompt?>(null)
 
-    internal var removing by mutableStateOf<Manga?>(null)
-    internal var duplicates by mutableStateOf<Pair<Manga, List<MangaWithChapterCount>>?>(null)
-    internal var categories by mutableStateOf<Pair<Manga, List<Category>>?>(null)
-    internal var migrating by mutableStateOf<Pair<Manga, Manga>?>(null)
+    internal var removing: Manga?
+        get() = (prompt as? SinglePrompt.ConfirmRemove)?.manga
+        set(value) {
+            prompt = value?.let(SinglePrompt::ConfirmRemove)
+        }
+
+    internal var duplicates: Pair<Manga, List<MangaWithChapterCount>>?
+        get() = (prompt as? SinglePrompt.Duplicates)?.let { it.target to it.matches }
+        set(value) {
+            prompt = value?.let { (manga, found) -> SinglePrompt.Duplicates(manga, found) }
+        }
+
+    internal var categories: Pair<Manga, List<Category>>?
+        get() = (prompt as? SinglePrompt.Categories)?.let { it.target to it.choices }
+        set(value) {
+            prompt = value?.let { (manga, choices) -> SinglePrompt.Categories(manga, choices) }
+        }
+
+    internal var migrating: Pair<Manga, Manga>?
+        get() = (prompt as? SinglePrompt.Migrate)?.let { it.from to it.to }
+        set(value) {
+            prompt = value?.let { (from, to) -> SinglePrompt.Migrate(from, to) }
+        }
 
     fun toggle(item: Manga) {
         scope.launch {
-            val manga = Injekt.get<GetManga>().await(item.id) ?: return@launch
-            if (manga.favorite) {
-                removing = manga
-                return@launch
-            }
-            val found = addToLibrary.duplicates(manga)
-            if (found.isNotEmpty()) duplicates = manga to found else addAnyway(manga)
+            val manga = getManga().await(item.id) ?: return@launch
+            zoukan.desktop.app.runCatchingCancellable {
+                applySingleResult(controller.toggleSingle(manga, confirmRemove = true, fetchOnAdd = true))
+            }.onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
         }
     }
 
     internal fun addAnyway(manga: Manga) {
         duplicates = null
         scope.launch {
-            val plan = addToLibrary.plan()
-            if (plan.ask != null) categories = manga to plan.ask else add(manga, plan.categoryIds)
+            zoukan.desktop.app.runCatchingCancellable {
+                applySingleResult(controller.planOrAddSingle(manga, fetchOnAdd = true))
+            }.onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
         }
     }
 
     internal fun add(manga: Manga, categoryIds: List<Long>) {
         categories = null
         scope.launch {
-            zoukan.desktop.app.runCatchingCancellable { addToLibrary.add(manga, categoryIds, fetchOnAdd = true) }
-                .onSuccess { Toasts.show(localized(MR.strings.manga_added_library)) }
-                .onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
+            zoukan.desktop.app.runCatchingCancellable {
+                controller.addSingle(manga, categoryIds, fetchOnAdd = true)
+            }.onFailure { Toasts.error(localized(DMR.strings.could_not_add_to_library), it) }
         }
     }
 
     internal fun remove(manga: Manga) {
         removing = null
-        scope.launch {
-            addToLibrary.remove(manga)
-            Toasts.show(localized(MR.strings.manga_removed_library))
+        scope.launch { controller.removeSingle(manga) }
+    }
+
+    private fun applySingleResult(result: LibraryAddController.SingleResult) {
+        if (result is LibraryAddController.SingleResult.Prompt) {
+            prompt = result.prompt
         }
     }
 }

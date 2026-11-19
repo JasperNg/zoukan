@@ -90,6 +90,7 @@ import zoukan.desktop.ui.common.Cover
 import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.ListSelection
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.RATIO_SWITCH_TO_PANORAMA
 import zoukan.desktop.ui.common.RowCheckbox
@@ -139,17 +140,11 @@ internal fun TriState.toBooleanOrNull(): Boolean? = when (this) {
  * selects the rows between the last selected one and the clicked one.
  */
 internal object HistorySelection {
-    fun toggle(selected: Set<Long>, id: Long): Set<Long> = if (id in selected) selected - id else selected + id
+    fun toggle(selected: Set<Long>, id: Long): Set<Long> = ListSelection(selected).toggle(id).ids
 
-    fun range(ids: List<Long>, selected: Set<Long>, id: Long): Set<Long> {
-        val to = ids.indexOf(id)
-        if (to < 0) return selected
-        val from = ids.indexOfLast { it in selected }.takeIf { it >= 0 } ?: to
-        val range = if (from <= to) from..to else to..from
-        return selected + range.map { ids[it] }
-    }
+    fun range(ids: List<Long>, selected: Set<Long>, id: Long): Set<Long> = ListSelection(selected).selectRange(ids, id).ids
 
-    fun invert(ids: List<Long>, selected: Set<Long>): Set<Long> = ids.filterTo(LinkedHashSet()) { it !in selected }
+    fun invert(ids: List<Long>, selected: Set<Long>): Set<Long> = ListSelection(selected).invert(ids).ids
 }
 
 class HistoryScreenModel(
@@ -169,14 +164,13 @@ class HistoryScreenModel(
         val chapterNames: Map<Long, String> = emptyMap(),
         // ZOUKAN -->
         /** Chapter ids picked for removal, as Komikku's History selection */
-        val selected: Set<Long> = emptySet(),
-        /** Komikku's selection mode, which the select button turns on before anything is picked */
-        val selectionMode: Boolean = false,
+        val selection: ListSelection<Long> = ListSelection(),
         // ZOUKAN <--
     ) {
-        val selecting: Boolean get() = selectionMode || selected.isNotEmpty()
+        val selected: Set<Long> get() = selection.ids
+        val selecting: Boolean get() = selection.selecting
         // Built once per state, not on every recomposition
-        val selectedItems: List<HistoryWithRelations> by lazy { items.filter { it.chapterId in selected } }
+        val selectedItems: List<HistoryWithRelations> by lazy { items.filter { it.chapterId in selection } }
 
         /** The rows by the day they were read (null: unknown), in list order. */
         val groups: List<Pair<java.time.LocalDate?, List<HistoryWithRelations>>> by lazy {
@@ -209,7 +203,7 @@ class HistoryScreenModel(
                             items = items,
                             filters = f,
                             // Rows that left the list leave the selection too
-                            selected = it.selected.filterTo(HashSet()) { id -> id in ids },
+                            selection = it.selection.retain(ids),
                         )
                     }
                     // Off the collecting coroutine, so the next search is not held up by these lookups
@@ -265,23 +259,25 @@ class HistoryScreenModel(
     }
 
     // ZOUKAN -->
-    fun startSelection() = mutableState.update { it.copy(selectionMode = true) }
+    fun startSelection() = mutableState.update { it.copy(selection = it.selection.start()) }
 
     fun toggleSelection(item: HistoryWithRelations) = mutableState.update {
-        it.copy(selected = HistorySelection.toggle(it.selected, item.chapterId))
+        it.copy(selection = it.selection.toggle(item.chapterId))
     }
 
     fun selectRange(item: HistoryWithRelations) = mutableState.update { s ->
-        s.copy(selected = HistorySelection.range(s.items.map { it.chapterId }, s.selected, item.chapterId))
+        s.copy(selection = s.selection.selectRange(s.items.map { it.chapterId }, item.chapterId))
     }
 
-    fun selectAll() = mutableState.update { s -> s.copy(selected = s.items.mapTo(HashSet()) { it.chapterId }) }
+    fun selectAll() = mutableState.update { s ->
+        s.copy(selection = s.selection.selectAll(s.items.map { it.chapterId }))
+    }
 
     fun invertSelection() = mutableState.update { s ->
-        s.copy(selected = HistorySelection.invert(s.items.map { it.chapterId }, s.selected))
+        s.copy(selection = s.selection.invert(s.items.map { it.chapterId }))
     }
 
-    fun clearSelection() = mutableState.update { it.copy(selected = emptySet(), selectionMode = false) }
+    fun clearSelection() = mutableState.update { it.copy(selection = it.selection.clear()) }
     // ZOUKAN <--
 }
 

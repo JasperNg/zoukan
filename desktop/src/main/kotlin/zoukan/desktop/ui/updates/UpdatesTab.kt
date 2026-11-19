@@ -109,6 +109,7 @@ import zoukan.desktop.ui.common.CoverImage
 import zoukan.desktop.ui.common.Dates
 import zoukan.desktop.ui.common.EmptyScreen
 import zoukan.desktop.ui.common.LazyColumn
+import zoukan.desktop.ui.common.ListSelection
 import zoukan.desktop.ui.common.LoadingScreen
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.SelectionBar
@@ -214,14 +215,8 @@ class UpdatesScreenModel(
          * Shift-click: this state with every chapter between the last selected one and [item]
          * selected; unchanged when [item] is no longer listed.
          */
-        fun withRangeTo(item: UpdatesWithRelations): State {
-            val ids = displayOrder.map { it.chapterId }
-            val to = ids.indexOf(item.chapterId)
-            if (to < 0) return this
-            val from = ids.indexOfLast { it in selected }.takeIf { it >= 0 } ?: to
-            val range = if (from <= to) from..to else to..from
-            return copy(selected = selected + range.map { ids[it] })
-        }
+        fun withRangeTo(item: UpdatesWithRelations): State =
+            copy(selected = ListSelection(selected).selectRange(displayOrder.map { it.chapterId }, item.chapterId).ids)
 
         /** The chapters a row stands for: a folded group's leader stands for the entry's chapters of that day. */
         fun groupOf(item: UpdatesWithRelations): List<UpdatesWithRelations> {
@@ -290,7 +285,7 @@ class UpdatesScreenModel(
                             items = items,
                             filters = f,
                             // Chapters that left the list leave the selection too
-                            selected = it.selected.filterTo(HashSet()) { id -> id in ids },
+                            selected = ListSelection(it.selected).retain(ids).ids,
                         )
                     }
                     val downloaded = withContext(Dispatchers.IO) { downloadedIds(items) }
@@ -382,9 +377,8 @@ class UpdatesScreenModel(
      * other chapters of that day with it.
      */
     fun toggleSelection(item: UpdatesWithRelations) = mutableState.update { state ->
-        val select = item.chapterId !in state.selected
         val ids = state.groupOf(item).map { it.chapterId }
-        state.copy(selected = if (select) state.selected + ids else state.selected - ids.toSet())
+        state.copy(selected = ListSelection(state.selected).toggleGroup(ids, item.chapterId).ids)
     }
 
     // KMK -->
@@ -399,13 +393,15 @@ class UpdatesScreenModel(
      */
     fun selectRange(item: UpdatesWithRelations) = mutableState.update { it.withRangeTo(item) }
 
-    fun selectAll() = mutableState.update { s -> s.copy(selected = s.items.mapTo(HashSet()) { it.chapterId }) }
-
-    fun invertSelection() = mutableState.update { s ->
-        s.copy(selected = s.items.map { it.chapterId }.filterTo(HashSet()) { it !in s.selected })
+    fun selectAll() = mutableState.update { s ->
+        s.copy(selected = ListSelection(s.selected).selectAll(s.items.map { it.chapterId }).ids)
     }
 
-    fun clearSelection() = mutableState.update { it.copy(selected = emptySet()) }
+    fun invertSelection() = mutableState.update { s ->
+        s.copy(selected = ListSelection(s.selected).invert(s.items.map { it.chapterId }).ids)
+    }
+
+    fun clearSelection() = mutableState.update { it.copy(selected = ListSelection(it.selected).clear().ids) }
     // ZOUKAN <--
 
     fun refresh() {

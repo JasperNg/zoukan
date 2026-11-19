@@ -51,6 +51,7 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.ui.common.Corners
+import zoukan.desktop.ui.common.LibraryAddController
 import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.SelectionBar
 import zoukan.desktop.ui.common.TooltipIconButton
@@ -66,6 +67,7 @@ import zoukan.i18n.desktop.DMR
 @Stable
 class BulkFavorite internal constructor(
     private val adder: () -> BulkLibraryAdd,
+    private val controller: LibraryAddController = LibraryAddController(),
 ) {
     constructor() : this({ BulkLibraryAdd(Injekt.get(), Injekt.get(), Injekt.get(), Injekt.get()) })
 
@@ -122,12 +124,13 @@ class BulkFavorite internal constructor(
         running = true
         AppScope.launch {
             try {
-                val dupes = withContext(Dispatchers.IO) { adder().duplicates(selection.toList()) }
-                if (dupes.isNotEmpty()) {
-                    duplicates = dupes
-                } else {
-                    chooseCategories(selection.toList())
-                }
+                val result = controller.startBulkAdd(
+                    items = selection.toList(),
+                    findDuplicates = { items -> withContext(Dispatchers.IO) { adder().duplicates(items) } },
+                    planCategories = { withContext(Dispatchers.IO) { adder().plan() } },
+                    addBatch = ::addBatch,
+                )
+                applyBulkResult(result)
             } finally {
                 running = false
             }
@@ -138,15 +141,22 @@ class BulkFavorite internal constructor(
     fun resolveDuplicates(skip: Boolean) {
         val dupes = duplicates.orEmpty()
         duplicates = null
-        val list = if (skip) selection.filterNot { m -> dupes.any { it.id == m.id } } else selection.toList()
-        if (list.isEmpty()) {
+        val selected = selection.toList()
+        if (skip && selected.none { m -> dupes.none { it.id == m.id } }) {
             clear()
             return
         }
         running = true
         AppScope.launch {
             try {
-                chooseCategories(list)
+                val result = controller.resolveBulkDuplicates(
+                    selected = selected,
+                    duplicates = dupes,
+                    skip = skip,
+                    planCategories = { withContext(Dispatchers.IO) { adder().plan() } },
+                    addBatch = ::addBatch,
+                )
+                applyBulkResult(result)
             } finally {
                 running = false
             }
@@ -155,18 +165,6 @@ class BulkFavorite internal constructor(
 
     private var pending: List<Manga> = emptyList()
 
-    private suspend fun chooseCategories(list: List<Manga>) {
-        // Settings > Library > Default category, as on Android: a category, the default one, or ask
-        val plan = withContext(Dispatchers.IO) { adder().plan() }
-        val ask = plan.ask
-        if (ask == null) {
-            add(list, plan.categoryIds)
-        } else {
-            pending = list
-            categoryChoice = ask
-        }
-    }
-
     fun confirmCategories(ids: List<Long>) {
         categoryChoice = null
         val list = pending
@@ -174,7 +172,8 @@ class BulkFavorite internal constructor(
         running = true
         AppScope.launch {
             try {
-                add(list, ids)
+                val added = addBatch(list, ids)
+                controller.showBulkAddedToast(added)
             } finally {
                 running = false
             }
@@ -186,10 +185,22 @@ class BulkFavorite internal constructor(
         pending = emptyList()
     }
 
-    private suspend fun add(list: List<Manga>, categoryIds: List<Long>) {
+    private suspend fun addBatch(list: List<Manga>, categoryIds: List<Long>): Int {
         val added = withContext(Dispatchers.IO) { adder().add(list, categoryIds) }
         withContext(Dispatchers.Main) { clear() }
-        Toasts.show(if (added == 1) localized(DMR.strings.added_1_entry_to_the_library) else localized(DMR.strings.added_entries_to_the_library, added))
+        return added
+    }
+
+    private fun applyBulkResult(result: LibraryAddController.BulkResult) {
+        when (result) {
+            is LibraryAddController.BulkResult.AskDuplicates -> duplicates = result.duplicates
+            is LibraryAddController.BulkResult.AskCategories -> {
+                pending = result.pending
+                categoryChoice = result.categories
+            }
+            is LibraryAddController.BulkResult.Added -> controller.showBulkAddedToast(result.count)
+            LibraryAddController.BulkResult.EmptyAfterSkip -> clear()
+        }
     }
 }
 
