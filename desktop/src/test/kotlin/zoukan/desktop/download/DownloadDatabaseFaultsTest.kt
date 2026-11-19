@@ -395,6 +395,45 @@ class DownloadDatabaseFaultsTest {
     }
 
     @Test
+    fun `a download cancelled while the saved queue is read from the database is not restored`() = runBlocking<Unit> {
+        addChapter(2)
+        queueFile.writeText(saved(1L to 1L, 1L to 2L))
+        val reached = java.util.concurrent.CountDownLatch(1)
+        val go = java.util.concurrent.CountDownLatch(1)
+        // Chapter 1 is read; the read of chapter 2 waits for the cancel, then fails
+        driver.failOn(FailingSqlDriver.selectFrom("chapters"), nth = 2, error = {
+            reached.countDown()
+            go.await()
+            java.sql.SQLException("[SQLITE_BUSY] database is locked (injected)")
+        })
+
+        val restore = launch(Dispatchers.IO) { manager.restore(start = false) }
+        reached.await()
+        manager.cancel(setOf(1L, 2L))
+        go.countDown()
+        restore.join()
+        manager.awaitBackgroundWork()
+
+        manager.queue.value.shouldBeEmpty()
+        savedChapterIds().shouldBeEmpty()
+        manager.start()
+        manager.awaitBackgroundWork()
+        manager.queue.value.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a restore whose database read fails does not read the held queue again at once`() = runBlocking<Unit> {
+        queueFile.writeText(saved(1L to 1L))
+        driver.failOn(FailingSqlDriver.selectFrom("mangas"), times = Int.MAX_VALUE)
+
+        manager.restore(start = true)
+        manager.awaitBackgroundWork()
+
+        driver.failures shouldBe 1
+        savedChapterIds() shouldBe listOf(1L)
+    }
+
+    @Test
     fun `a held queue is restored in the same run when the queue is started after the database reads again`() = runBlocking<Unit> {
         addChapter(2)
         queueFile.writeText(saved(1L to 1L, 1L to 2L))

@@ -1393,13 +1393,17 @@ class DownloadManager(
         restoreBegun = true
         if (saved.isEmpty()) return
         val (downloads, unread) = readSaved(saved)
-        _queue.update { q ->
-            val queued = q.mapTo(HashSet()) { it.chapter.id }
-            q + downloads.distinctBy { it.chapter.id }.filterNot { d -> d.chapter.id in queued }
+        synchronized(lock) {
+            // Still held: not cancelled (cancel() takes it out of [held]) while the database was read
+            val stillHeld = held.mapTo(HashSet()) { it.chapterId }
+            _queue.update { q ->
+                val queued = q.mapTo(HashSet()) { it.chapter.id }
+                q + downloads.distinctBy { it.chapter.id }.filter { d -> d.chapter.id in stillHeld && d.chapter.id !in queued }
+            }
+            // After the queue has them, so a save in between writes each download at least once
+            held = unread.filter { it.chapterId in stillHeld }
+            heldUnread = held.isNotEmpty()
         }
-        // After the queue has them, so a save in between writes each download at least once
-        held = unread
-        heldUnread = unread.isNotEmpty()
         if (unread.isNotEmpty()) {
             Notifications.post(
                 localized(DMR.strings.download_queue_restore_failed),
@@ -1407,7 +1411,9 @@ class DownloadManager(
                 Notifications.Kind.WARNING,
             )
         }
-        if (start) start()
+        // Not start(): it would read the held downloads again at once, with the database that has
+        // just failed. They are read again when the queue next starts
+        if (start) synchronized(lock) { startLocked() }
     }
 
     /**
