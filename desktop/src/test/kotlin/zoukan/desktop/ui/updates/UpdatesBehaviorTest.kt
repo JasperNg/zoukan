@@ -61,6 +61,7 @@ import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
@@ -192,7 +193,7 @@ class UpdatesBehaviorTest {
         val mangaIds = seedUpdates()
         val model = UpdatesScreenModel()
         try {
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent { cafe.adriel.voyager.navigator.Navigator(BlankScreen(model)) }
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("updates-leader").fetchSemanticsNodes().size == 2 }
                 onAllNodesWithTag("updates-item").fetchSemanticsNodes().size shouldBe 0

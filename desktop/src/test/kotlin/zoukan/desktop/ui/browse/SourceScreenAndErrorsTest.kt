@@ -50,6 +50,7 @@ import zoukan.desktop.testing.UncaughtCoroutineErrors
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.EntrySearch
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
@@ -178,7 +179,7 @@ class SourceScreenInitialSearchTest {
     }
 
     @Test
-    fun `EntrySearch replaces SourceScreen and pushes from SourceFeedScreen with explicit parameters`() = runDesktopComposeUiTest {
+    fun `EntrySearch replaces SourceScreen and pushes from SourceFeedScreen with explicit parameters`() = runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
         var navigator: Navigator? = null
         val httpSource: HttpSource = mockk(relaxed = true) { every { id } returns 99L }
 

@@ -75,6 +75,7 @@ import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
@@ -173,7 +174,7 @@ class LibraryAndCategoriesBehaviorTest {
 
             fun userCategories() = runBlocking { getCategories.await() }.filterNot { it.isSystemCategory }
 
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent { Navigator(CategoryScreen) }
                 waitForIdle()
 
@@ -290,7 +291,7 @@ class LibraryAndCategoriesBehaviorTest {
             Injekt.addSingleton(updater)
             Injekt.addSingleton(GetManga(mangaRepo))
 
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent { Navigator(UpdateErrorsScreen) }
                 waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("update-error").fetchSemanticsNodes().size == 1 }
                 onNodeWithText("Charlie").assertExists()

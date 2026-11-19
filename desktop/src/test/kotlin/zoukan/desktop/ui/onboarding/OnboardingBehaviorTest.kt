@@ -35,9 +35,9 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
@@ -96,7 +96,7 @@ class OnboardingBehaviorTest {
         val chosen = File(temp, "chosen-storage")
         var completed = 0
 
-        runDesktopComposeUiTest {
+        runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
             setContent {
                 OnboardingScreen(
                     onComplete = { completed++ },
@@ -142,9 +142,9 @@ class OnboardingBehaviorTest {
         desktopPrefs.shownOnboardingFlow().get() shouldBe false
         Injekt.addSingleton(mockk<GetFavorites> { coEvery { await() } returns listOf(Manga.create().copy(id = 1L, favorite = true)) })
 
-        runDesktopComposeUiTest {
+        runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
             setContent { FirstRun(desktopPrefs, navigator = { null }) }
-            Await.until("shownOnboardingFlow marked done") { desktopPrefs.shownOnboardingFlow().get() }
+            waitUntil(timeoutMillis = 10_000) { desktopPrefs.shownOnboardingFlow().get() }
             waitForIdle()
             onAllNodesWithTag("onboarding").fetchSemanticsNodes() shouldBe emptyList()
         }

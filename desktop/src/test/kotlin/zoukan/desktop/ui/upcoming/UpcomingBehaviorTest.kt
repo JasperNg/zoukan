@@ -9,7 +9,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.source.model.SManga
-import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -31,10 +30,10 @@ import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.visibleCalendarDay
 import java.io.File
 import java.time.LocalDate
@@ -96,9 +95,9 @@ class UpcomingBehaviorTest {
         Injekt.addSingleton(libraryPrefs)
         Injekt.addSingleton(getUpcoming)
 
-        runDesktopComposeUiTest {
+        runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
             setContent { Navigator(UpcomingScreen) }
-            Await.until("three upcoming items") { onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().size == 3 }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().size == 3 }
             onNodeWithText("Delta").assertDoesNotExist()
 
             // Click a visible calendar day, then step forward and back a month
@@ -114,12 +113,12 @@ class UpcomingBehaviorTest {
             // Toggle Smart update ("To be updated"): shows all 4 including completed Delta
             onNodeWithContentDescription(localized(MR.strings.pref_library_update_smart_update)).performClick()
             onNodeWithText(localized(KMR.strings.label_to_be_updated)).assertExists()
-            Await.until("four updating items") { onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().size == 4 }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().size == 4 }
             onNodeWithText("Delta").assertExists()
 
             onNodeWithContentDescription(localized(MR.strings.pref_library_update_smart_update)).performClick()
             onNodeWithText(localized(MR.strings.label_upcoming)).assertExists()
-            onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().size shouldBe 3
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("upcoming-item").fetchSemanticsNodes().size == 3 }
         }
     }
 }

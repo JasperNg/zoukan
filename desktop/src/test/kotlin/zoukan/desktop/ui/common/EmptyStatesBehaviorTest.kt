@@ -47,6 +47,7 @@ import tachiyomi.domain.history.interactor.RemoveHistory
 import tachiyomi.domain.history.service.HistoryPreferences
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
@@ -69,6 +70,7 @@ import zoukan.desktop.ui.HomeTab
 import zoukan.desktop.ui.HomeTabState
 import zoukan.desktop.ui.LocalHomeController
 import zoukan.desktop.ui.downloads.DownloadsScreen
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.history.HistoryScreenModel
 import zoukan.desktop.ui.history.HistoryTab
 import zoukan.desktop.ui.library.LibraryScreenModel
@@ -109,6 +111,7 @@ class EmptyStatesBehaviorTest {
         Injekt.addSingleton(HistoryPreferences(store))
         Injekt.addSingleton(ZoukanDirs(temp))
         Injekt.addSingleton(ZoukanStorage(ZoukanDirs(temp), store))
+        Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
     }
 
     @AfterEach
@@ -187,7 +190,7 @@ class EmptyStatesBehaviorTest {
         )
         val controller = HomeController(HomeTabState(HomeTab.Library))
         try {
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent {
                     CompositionLocalProvider(LocalHomeController provides controller) {
                         Navigator(LibraryHost(model))
@@ -243,13 +246,13 @@ class EmptyStatesBehaviorTest {
             preferences = HistoryPreferences(store),
         )
         try {
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent { Navigator(HistoryHost(historyModel)) }
                 waitUntil(timeoutMillis = 10_000) {
                     onAllNodesWithText(localized(DMR.strings.nothing_read_yet)).fetchSemanticsNodes().isNotEmpty()
                 }
             }
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent { Navigator(DownloadsScreen) }
                 waitForIdle()
                 onNodeWithText(localized(DMR.strings.no_downloads_queued_download_chapters_from)).assertExists()

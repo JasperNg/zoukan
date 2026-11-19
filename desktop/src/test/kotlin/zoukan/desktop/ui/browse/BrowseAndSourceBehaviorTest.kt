@@ -1,6 +1,7 @@
 package zoukan.desktop.ui.browse
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -81,6 +82,7 @@ import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
@@ -386,11 +388,11 @@ class BrowseAndSourceBehaviorTest {
 
             // UI filter chip hides empty source when globalSearchFilterState is enabled
             sourcePrefs.globalSearchFilterState().set(false)
-            runDesktopComposeUiTest {
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
                 setContent {
                     cafe.adriel.voyager.navigator.Navigator(GlobalSearchScreen("Alpha", SearchPurpose.Browse))
                 }
-                Await.until("Matching Source visible") { true }
+                waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("global-search-has-results").fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("global-search-has-results").performClick()
                 waitForIdle()
                 sourcePrefs.globalSearchFilterState().get() shouldBe true
@@ -460,7 +462,7 @@ class BrowseAndSourceBehaviorTest {
     fun `missing extension details screen shows not installed message`() {
         Injekt.addSingleton(mockk<SourceManager>(relaxed = true))
         Injekt.addSingleton(Incognito(store, sourcePrefs, Injekt.getInstance(DesktopExtensionManager::class.java), exhPrefs))
-        runDesktopComposeUiTest {
+        runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
             setContent { Navigator(ExtensionDetailsScreen("eu.kanade.tachiyomi.extension.en.missing")) }
             waitForIdle()
             onNodeWithText("This extension is not installed.").assertExists()

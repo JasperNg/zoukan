@@ -36,9 +36,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager
-import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
+import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
 import java.util.concurrent.Executors
 
@@ -97,9 +97,9 @@ class StatsBehaviorTest {
 
         fun stat(value: String, label: String): SemanticsMatcher = hasAnyChild(hasText(value)) and hasAnyChild(hasText(label))
 
-        runDesktopComposeUiTest {
+        runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
             setContent { Navigator(StatsScreen) }
-            Await.until("stats loaded") {
+            waitUntil(timeoutMillis = 10_000) {
                 onAllNodes(stat("2", localized(MR.strings.in_library)), useUnmergedTree = true).fetchSemanticsNodes().size == 1
             }
             onAllNodes(stat("6", localized(MR.strings.label_total_chapters)), useUnmergedTree = true).fetchSemanticsNodes() shouldHaveSize 1
@@ -110,7 +110,7 @@ class StatsBehaviorTest {
             // Include all read entries
             onNodeWithContentDescription(localized(MR.strings.label_more)).performClick()
             onNodeWithTag("stats-all-read").performClick()
-            Await.until("all read entries included") {
+            waitUntil(timeoutMillis = 10_000) {
                 onAllNodes(stat("3", localized(MR.strings.in_library)), useUnmergedTree = true).fetchSemanticsNodes().size == 1
             }
             onAllNodes(stat("5", localized(MR.strings.label_read_chapters)), useUnmergedTree = true).fetchSemanticsNodes() shouldHaveSize 1
@@ -120,7 +120,7 @@ class StatsBehaviorTest {
             onNodeWithContentDescription(localized(MR.strings.label_more)).performClick()
             onAllNodesWithText(localized(SYMR.strings.ignore_non_library_entries)).fetchSemanticsNodes() shouldHaveSize 1
             onNodeWithTag("stats-all-read").performClick()
-            Await.until("library only restored") {
+            waitUntil(timeoutMillis = 10_000) {
                 onAllNodes(stat("2", localized(MR.strings.in_library)), useUnmergedTree = true).fetchSemanticsNodes().size == 1
             }
             onAllNodes(stat("2", localized(MR.strings.label_read_chapters)), useUnmergedTree = true).fetchSemanticsNodes() shouldHaveSize 1
