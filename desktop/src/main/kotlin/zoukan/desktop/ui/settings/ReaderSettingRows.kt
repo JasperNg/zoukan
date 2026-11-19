@@ -21,8 +21,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -346,9 +350,9 @@ object ReaderSettingRows {
 
     /** Declarative search entries for all reader settings beyond the top five in [SettingsTab]. */
     internal fun searchEntries(): List<SettingsSearchEntry> {
-        val rows = settings(DesktopPreferences(InMemoryPreferenceStore()))
+        val rows = settings(DesktopPreferences(DefaultPreferenceStore))
         var group: String? = null
-        return rows.map { row ->
+        return rows.mapNotNull { row ->
             when (row) {
                 is ReaderSettingRow.Group -> {
                     group = row.title
@@ -381,7 +385,54 @@ object ReaderSettingRows {
                     itemKey = "reader-${row.preference.key()}",
                 )
             }
-        }.filterNotNull()
+        }
+    }
+
+    /**
+     * Read-only default [PreferenceStore] used only to enumerate [ReaderSettingRows.settings] keys
+     * and labels for the search catalog without touching real preferences or `InMemoryPreferenceStore`'s
+     * unimplemented `getStringSet`.
+     */
+    private object DefaultPreferenceStore : PreferenceStore {
+        private class DefaultPreference<T>(
+            private val key: String,
+            private val default: T,
+        ) : Preference<T> {
+            private val state by lazy { MutableStateFlow(default) }
+            override fun key(): String = key
+            override fun get(): T = default
+            override fun set(value: T) = Unit
+            override fun isSet(): Boolean = false
+            override fun delete() = Unit
+            override fun defaultValue(): T = default
+            override fun changes(): Flow<T> = state
+            override fun stateIn(scope: CoroutineScope): StateFlow<T> = state
+        }
+
+        private fun <T> pref(key: String, defaultValue: T): Preference<T> =
+            DefaultPreference(key, defaultValue)
+
+        override fun getString(key: String, defaultValue: String): Preference<String> = pref(key, defaultValue)
+        override fun getLong(key: String, defaultValue: Long): Preference<Long> = pref(key, defaultValue)
+        override fun getInt(key: String, defaultValue: Int): Preference<Int> = pref(key, defaultValue)
+        override fun getFloat(key: String, defaultValue: Float): Preference<Float> = pref(key, defaultValue)
+        override fun getBoolean(key: String, defaultValue: Boolean): Preference<Boolean> = pref(key, defaultValue)
+        override fun getStringSet(key: String, defaultValue: Set<String>): Preference<Set<String>> = pref(key, defaultValue)
+        override fun <T> getObjectFromString(
+            key: String,
+            defaultValue: T,
+            serializer: (T) -> String,
+            deserializer: (String) -> T,
+        ): Preference<T> = pref(key, defaultValue)
+
+        override fun <T> getObjectFromInt(
+            key: String,
+            defaultValue: T,
+            serializer: (T) -> Int,
+            deserializer: (Int) -> T,
+        ): Preference<T> = pref(key, defaultValue)
+
+        override fun getAll(): Map<String, *> = emptyMap<String, Any?>()
     }
 }
 
