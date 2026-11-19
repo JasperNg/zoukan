@@ -37,6 +37,7 @@ import org.jetbrains.skia.Surface
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
+import xyz.nulldev.androidcompat.util.PortableFileNames
 import zoukan.desktop.compat.localized
 import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.ui.common.Corners
@@ -240,19 +241,16 @@ object PageImages {
         }
     }
 
-    /** A file name with the characters Windows and macOS refuse replaced, no longer than [maxBytes] in UTF-8. */
+    /**
+     * A file name valid on Windows, macOS and Linux, no longer than [maxBytes] in UTF-8: the
+     * characters Windows and macOS refuse and half surrogate pairs replaced, never cut inside a
+     * character, and a Windows device name given `_` ([PortableFileNames.portable]).
+     */
     fun validFilename(name: String, maxBytes: Int = MAX_NAME): String {
-        val cleaned = name.map { c -> if (c < ' ' || c in "\\/:*?\"<>|") '_' else c }.joinToString("")
-            .trim().trimEnd('.').ifBlank { "image" }
-        val out = StringBuilder()
-        var size = 0
-        for (c in cleaned) {
-            val bytes = c.toString().toByteArray(Charsets.UTF_8).size
-            if (size + bytes > maxBytes) break
-            out.append(c)
-            size += bytes
-        }
-        return out.toString().trim().trimEnd('.').ifBlank { "image" }
+        val trimmed = name.trim()
+        val portable = PortableFileNames.portable(trimmed, maxBytes)
+        // Nothing left of the name
+        return if (portable == PortableFileNames.INVALID && trimmed != portable) "image" else portable
     }
 
     private fun decode(bytes: ByteArray): Image = try {

@@ -12,12 +12,23 @@ object SafePath {
     private const val MAX_FILENAME_CHARS = 240
     private const val MAX_FILENAME_UTF8_BYTES = 240
 
+    // ZOUKAN -->
+
     /**
      * Mutate the given filename to make it valid for a FAT filesystem,
      * replacing any invalid characters with "_". This method doesn't allow hidden files (starting
      * with a dot), but you can manually add it later.
+     *
+     * The name is one valid name on Windows, macOS and Linux ([PortableFileNames.portable]): a
+     * Windows device name gets `_` after its base name, and half a surrogate pair is `_`. Older
+     * versions wrote [legacyValidFilename]; a file of that name is still read (see
+     * JavaSharedPreferences.fileFor).
      */
-    fun buildValidFilename(origName: String): String {
+    fun buildValidFilename(origName: String): String = PortableFileNames.portable(origName, MAX_FILENAME_UTF8_BYTES)
+
+    /** The name older versions gave [origName], kept so a file they wrote is still found. */
+    fun legacyValidFilename(origName: String): String {
+        // ZOUKAN <--
         val name = origName.trim('.', ' ')
         if (name.isEmpty()) {
             return "(invalid)"

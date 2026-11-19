@@ -32,7 +32,6 @@ import xyz.nulldev.ts.config.ApplicationRootDir
 import java.util.Properties
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.io.path.Path
 import kotlin.io.path.copyTo
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.deleteIfExists
@@ -120,14 +119,28 @@ class JavaSharedPreferences(
 
         private const val ENTRY_START = "<entry key=\""
 
-        /** The file the preferences named [key] are kept in (Context.getSharedPreferencesPath). */
+        /**
+         * The file the preferences named [key] are kept in (Context.getSharedPreferencesPath).
+         * ZOUKAN: a name valid on every OS ([SafePath.buildValidFilename]); when only a file of the
+         * name an older version gave exists ([SafePath.legacyValidFilename]), that one, so no
+         * settings are lost and nothing is renamed.
+         */
         @JvmStatic
-        fun fileFor(key: String): java.io.File =
-            Path(
-                ApplicationRootDir,
-                "settings",
-                "${SafePath.buildValidFilename(key)}.xml",
-            ).toFile()
+        fun fileFor(key: String): java.io.File {
+            val folder = java.io.File(ApplicationRootDir, "settings")
+            val file = java.io.File(folder, "${SafePath.buildValidFilename(key)}.xml")
+            val legacyName = "${SafePath.legacyValidFilename(key)}.xml"
+            if (legacyName == file.name || file.exists()) return file
+            // A name java.nio cannot spell here (half a surrogate pair on macOS and Linux) made the
+            // older versions fail before they wrote anything: only where it can be spelled is there
+            // an old file to find
+            val legacy = try {
+                folder.toPath().resolve(legacyName)
+            } catch (e: java.nio.file.InvalidPathException) {
+                null
+            }
+            return if (legacy != null && java.nio.file.Files.isRegularFile(legacy, java.nio.file.LinkOption.NOFOLLOW_LINKS)) legacy.toFile() else file
+        }
 
         /** True for bytes that are not blank and do not start with the XML header (after a byte order mark and spaces). */
         private fun ByteArray.isNotBlankNonXml(): Boolean {
