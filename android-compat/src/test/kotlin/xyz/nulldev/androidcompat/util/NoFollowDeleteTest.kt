@@ -108,6 +108,27 @@ class NoFollowDeleteTest {
         kept.readText() shouldBe "kept"
     }
 
+    @Test
+    fun `a link, a folder and a path that cannot be checked are told apart`() {
+        val folder = File(temp, "folder").apply { mkdirs() }
+        NoFollowDelete.linkState(folder.toPath()) shouldBe NoFollowDelete.LinkState.NOT_A_LINK
+        NoFollowDelete.isLink(folder.toPath()) shouldBe false
+
+        // Its attributes cannot be read: not known to be a link, and still never followed
+        val unreadable = File(temp, "absent").toPath()
+        NoFollowDelete.linkState(unreadable) shouldBe NoFollowDelete.LinkState.UNKNOWN
+        NoFollowDelete.isLink(unreadable) shouldBe true
+
+        val link = try {
+            java.nio.file.Files.createSymbolicLink(File(temp, "link").toPath(), folder.toPath())
+        } catch (e: Exception) {
+            null
+        }
+        assumeTrue(link != null, "symbolic links cannot be made here")
+        NoFollowDelete.linkState(link!!) shouldBe NoFollowDelete.LinkState.LINK
+        NoFollowDelete.isLink(link) shouldBe true
+    }
+
     private fun run(vararg command: String): Int = ProcessBuilder(*command).redirectErrorStream(true).start().let {
         it.inputStream.readAllBytes()
         it.waitFor()

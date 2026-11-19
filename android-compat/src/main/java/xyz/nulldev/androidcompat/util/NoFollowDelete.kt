@@ -65,10 +65,19 @@ object NoFollowDelete {
      * and a junction as a folder too; but a cloud-sync placeholder folder or a deduplicated one is a
      * reparse point whose real path is where it is listed, and is the folder itself. A file that is
      * a reparse point is still treated as a link: it is removed as itself, which is harmless.
+     *
+     * A path that cannot be checked ([LinkState.UNKNOWN]) counts as a link too, so nothing behind it
+     * is touched.
      */
-    fun isLink(path: Path): Boolean = try {
+    fun isLink(path: Path): Boolean = linkState(path) != LinkState.NOT_A_LINK
+
+    /** What [isLink] found: a link, not a link, or a path whose attributes or real location could not be read. */
+    enum class LinkState { NOT_A_LINK, LINK, UNKNOWN }
+
+    /** [isLink], telling a link apart from a path that could not be checked, for an accurate message. */
+    fun linkState(path: Path): LinkState = try {
         val attrs = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-        when {
+        val link = when {
             attrs.isSymbolicLink -> true
             !attrs.isDirectory -> attrs.isOther
             else -> {
@@ -76,9 +85,9 @@ object NoFollowDelete {
                 parent != null && !samePath(path.toRealPath(), parent.toRealPath().resolve(path.fileName.toString()))
             }
         }
+        if (link) LinkState.LINK else LinkState.NOT_A_LINK
     } catch (e: IOException) {
-        // Unreadable: treated as a link, so nothing behind it is touched
-        true
+        LinkState.UNKNOWN
     }
 
     /**

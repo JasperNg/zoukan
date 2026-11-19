@@ -151,6 +151,21 @@ class BrowserProfileCleanupTest {
     }
 
     @Test
+    fun `clearing all browser data of a profile folder that cannot be checked says so, not that it is a link`(@TempDir temp: File) {
+        val profile = File(temp, "browser-profile").apply { mkdirs() }
+        val cookies = File(profile, "Cookies").apply { writeText("x") }
+
+        // The folder is there, but where it really is cannot be read (a permission, a disk error)
+        val error = io.kotest.assertions.throwables.shouldThrow<java.io.IOException> {
+            BrowserProfileCleanup.clearAll(profile) { xyz.nulldev.androidcompat.util.NoFollowDelete.LinkState.UNKNOWN }
+        }
+        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.could_not_be_checked_and_was_not_cleared, profile.name)
+
+        // Nothing in it was touched
+        cookies.readText() shouldBe "x"
+    }
+
+    @Test
     fun `clearing all browser data of a missing profile is not an error`(@TempDir temp: File) {
         BrowserProfileCleanup.clearAll(File(temp, "absent"))
         File(temp, "absent").exists() shouldBe false

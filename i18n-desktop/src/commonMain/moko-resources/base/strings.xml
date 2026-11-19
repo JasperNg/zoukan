@@ -349,6 +349,7 @@
     <string name="download_folders_not_renamed">Title not changed</string>
     <string name="download_folders_not_renamed_text">%1$s keeps its title instead of %2$s: its downloads are in %3$d folders, and only one could follow the new title. Move the chapters into one folder to let the title change.</string>
     <string name="is_a_link_and_was_not_cleared">%1$s is a link to another folder, so nothing in it was deleted</string>
+    <string name="could_not_be_checked_and_was_not_cleared">%1$s could not be checked, so nothing in it was deleted</string>
     <string name="an_html_page_not_an_image">an HTML page, not an image</string>
     <string name="bytes">%1$s bytes</string>
     <string name="page_could_not_load">Page %1$s could not load</string>

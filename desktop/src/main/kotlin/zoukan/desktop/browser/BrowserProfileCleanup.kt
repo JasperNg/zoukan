@@ -2,6 +2,7 @@ package zoukan.desktop.browser
 
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.SafeDelete
 import zoukan.i18n.desktop.DMR
@@ -82,14 +83,18 @@ internal object BrowserProfileCleanup {
     /**
      * Android's "Clear WebView data": deletes everything in [browserCache], cookies and site data
      * too. A link (or a Windows junction) in it is removed as itself, never what it points to. A
-     * [browserCache] that is itself a link is left alone, and that fails with an IOException saying
-     * so: the user asked for the data to go, and must not be told it went. A file Chromium still
-     * holds stays until the next time.
+     * [browserCache] that is itself a link, or that could not be checked, is left alone, and that
+     * fails with an IOException saying which: the user asked for the data to go, and must not be
+     * told it went. A file Chromium still holds stays until the next time.
      */
-    fun clearAll(browserCache: File) {
+    fun clearAll(browserCache: File, linkState: (Path) -> NoFollowDelete.LinkState = NoFollowDelete::linkState) {
         val root = browserCache.toPath()
         if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return
-        if (SafeDelete.isLink(root)) throw IOException(localized(DMR.strings.is_a_link_and_was_not_cleared, browserCache.name))
+        when (linkState(root)) {
+            NoFollowDelete.LinkState.NOT_A_LINK -> Unit
+            NoFollowDelete.LinkState.LINK -> throw IOException(localized(DMR.strings.is_a_link_and_was_not_cleared, browserCache.name))
+            NoFollowDelete.LinkState.UNKNOWN -> throw IOException(localized(DMR.strings.could_not_be_checked_and_was_not_cleared, browserCache.name))
+        }
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return
         val entries = runCatching { Files.list(root).use { it.toList() } }.getOrDefault(emptyList())
         entries.forEach { SafeDelete.deleteTreeNoFollow(it) }
