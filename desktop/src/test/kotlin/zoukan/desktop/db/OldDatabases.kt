@@ -119,8 +119,8 @@ internal object OldDatabases {
         require(version in 1..NEWEST) { "No schema for version $version" }
         require(fromVersion1 || version >= SNAPSHOT_VERSION) { "The snapshot is at $SNAPSHOT_VERSION, after $version" }
         check(!file.exists()) { "$file exists" }
-        // The driver has foreign keys on, as the app's own has while it migrates
-        JdbcSqliteDriver(url(file), DesktopDatabase.properties(key)).use { driver ->
+        // Foreign keys off, as the app (and Android's driver) migrates
+        JdbcSqliteDriver(url(file), migrationProperties(key)).use { driver ->
             object : TransacterImpl(driver) {}.transaction {
                 if (fromVersion1) createFromVersion1(file, driver, version, migrate) else createFromSnapshot(file, driver, version, migrate)
                 driver.execute(null, "PRAGMA user_version = $version", 0)
@@ -134,13 +134,16 @@ internal object OldDatabases {
      */
     fun migrate(file: File, key: ByteArray, from: Long, to: Long) {
         require(from in MERGED_SOURCE_COLUMN_VERSION..to)
-        JdbcSqliteDriver(url(file), DesktopDatabase.properties(key)).use { driver ->
+        JdbcSqliteDriver(url(file), migrationProperties(key)).use { driver ->
             object : TransacterImpl(driver) {}.transaction {
                 migratePastTrigger(file, driver, from, to) { d, a, b -> Database.Schema.migrate(d, a, b) }
                 driver.execute(null, "PRAGMA user_version = $to", 0)
             }
         }
     }
+
+    /** The app's connection settings with foreign keys off, as it migrates. */
+    private fun migrationProperties(key: ByteArray) = DesktopDatabase.properties(key).apply { setProperty("foreign_keys", "false") }
 
     private fun createFromSnapshot(file: File, driver: SqlDriver, version: Long, migrate: (SqlDriver, Long, Long) -> Unit) {
         val (statements, rows) = readSnapshot(file.parentFile)

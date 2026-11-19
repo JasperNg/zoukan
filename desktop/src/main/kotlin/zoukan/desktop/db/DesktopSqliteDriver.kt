@@ -5,12 +5,15 @@ import app.cash.sqldelight.TransacterImpl
 import app.cash.sqldelight.db.AfterVersion
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
+import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
 import app.cash.sqldelight.db.SqlSchema
 import app.cash.sqldelight.driver.jdbc.ConnectionManager.Transaction
 import app.cash.sqldelight.driver.jdbc.JdbcCursor
 import app.cash.sqldelight.driver.jdbc.JdbcDriver
 import app.cash.sqldelight.driver.jdbc.JdbcPreparedStatement
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.PreparedStatement
@@ -293,6 +296,14 @@ class DesktopSqliteDriver(
         /**
          * Like SQLDelight's `JdbcSqliteDriver(url, properties, schema)`: creates [schema] in a new
          * database, or migrates an older one, by `PRAGMA user_version`.
+         *
+         * ZOUKAN: created or migrated with foreign keys off, on a connection of its own, and the
+         * returned driver has them on ([properties]), as Android's driver does (AndroidxSqliteDriver
+         * with foreign keys on) and as SQLite's procedure for schema changes says: a migration that
+         * rebuilds a table must not cascade-delete its children. Afterwards `PRAGMA foreign_key_check`
+         * runs as on Android; a row whose parent is gone is logged, not refused (Android refuses to
+         * open the database then: see PARITY.md). [beforeMigration] runs in the same transaction
+         * before an existing database is migrated.
          */
         fun withSchema(
             url: String,
@@ -301,21 +312,49 @@ class DesktopSqliteDriver(
             schema: SqlSchema<QueryResult.Value<Unit>>,
             idleCloseMs: Long = 1_000,
             vararg callbacks: AfterVersion,
+            beforeMigration: (SqlDriver) -> Unit = {},
         ): DesktopSqliteDriver {
-            val driver = DesktopSqliteDriver(url, properties, databaseThread, idleCloseMs)
-            object : TransacterImpl(driver) {}.transaction {
-                val version = driver.executeQuery(null, "PRAGMA user_version", { cursor ->
+            val withoutForeignKeys = Properties().apply {
+                putAll(properties)
+                setProperty("foreign_keys", "false")
+            }
+            // No database thread: its one connection is opened for the transaction and closed after
+            val migrating = DesktopSqliteDriver(url, withoutForeignKeys, null, idleCloseMs)
+            object : TransacterImpl(migrating) {}.transaction {
+                val version = migrating.executeQuery(null, "PRAGMA user_version", { cursor ->
                     QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else null)
                 }, 0).value ?: 0L
                 if (version == 0L) {
-                    schema.create(driver)
-                    driver.execute(null, "PRAGMA user_version = ${schema.version}", 0)
+                    schema.create(migrating)
+                    migrating.execute(null, "PRAGMA user_version = ${schema.version}", 0)
                 } else if (version < schema.version) {
-                    schema.migrate(driver, version, schema.version, *callbacks)
-                    driver.execute(null, "PRAGMA user_version = ${schema.version}", 0)
+                    beforeMigration(migrating)
+                    schema.migrate(migrating, version, schema.version, *callbacks)
+                    logForeignKeyViolations(migrating)
+                    migrating.execute(null, "PRAGMA user_version = ${schema.version}", 0)
                 }
             }
-            return driver
+            return DesktopSqliteDriver(url, properties, databaseThread, idleCloseMs)
+        }
+
+        /** Logs the rows `PRAGMA foreign_key_check` finds (a parent that is gone); never throws. */
+        private fun logForeignKeyViolations(driver: SqlDriver) {
+            val violations = try {
+                driver.executeQuery(null, "PRAGMA foreign_key_check", { cursor ->
+                    val tables = mutableMapOf<String, Int>()
+                    while (cursor.next().value) {
+                        val table = cursor.getString(0).orEmpty()
+                        tables[table] = (tables[table] ?: 0) + 1
+                    }
+                    QueryResult.Value(tables)
+                }, 0).value
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Could not check the foreign keys after the migration" }
+                return
+            }
+            if (violations.isNotEmpty()) {
+                logcat(LogPriority.WARN) { "Rows whose parent is gone after the migration, kept as they were: $violations" }
+            }
         }
     }
 }

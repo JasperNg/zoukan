@@ -65,8 +65,8 @@ class DatabaseMigrationTest {
 
     /**
      * An old database at [version] seeded with [MigrationSeed.rows]; returns the rows as inserted.
-     * Up to version 14 without the orphans: with foreign keys on, as the desktop migrates, `13.sqm`
-     * and `14.sqm` cannot copy them (pinned by the failure tests).
+     * Up to version 14 without the orphans, which [MigrationSeed.expected] does not follow through
+     * `13.sqm` and `14.sqm` (the orphan cases of the failure tests do).
      */
     private fun oldDatabase(file: File, key: ByteArray, version: Long): List<SeedRow> {
         OldDatabases.create(file, key, version)
@@ -220,7 +220,7 @@ class DatabaseMigrationTest {
     /**
      * A database from before 27 cannot be opened by the start-up path (pinned below: the trigger),
      * so it is migrated to 27 as [OldDatabases.migrate] does, with the generated migrations and
-     * foreign keys on, then opened. The rows `1.sqm` to `26.sqm` change are checked from [version].
+     * foreign keys off, then opened. The rows `1.sqm` to `26.sqm` change are checked from [version].
      */
     @ParameterizedTest(name = "version {0}")
     @ValueSource(longs = [4, 14])
@@ -284,8 +284,8 @@ class DatabaseMigrationTest {
      * Migrations the desktop's start-up path cannot run, so a database from before 27 is never
      * migrated (none exists in the field; see the class comment). Inherited from upstream: `13.sqm`
      * reads `merged.manga_source`, which `3.sqm` named `COL_MANGA_SOURCE`, so nothing from before 4
-     * migrates; with foreign keys on (the desktop migrates with them on), `13.sqm` and `14.sqm`
-     * cannot copy a row whose parent is gone. On the desktop only: `26.sqm` renames a table, which
+     * migrates. A row whose parent is gone no longer stops `13.sqm` or `14.sqm`: the desktop
+     * migrates with foreign keys off, as Android's driver does. On the desktop only: `26.sqm` renames a table, which
      * makes SQLite check every trigger, and `20.sqm`'s trigger has a double-quoted string this
      * build's SQLite rejects ([OldDatabases.TRIGGER_VERSION]; the start-up path rewrites the
      * trigger only after migrating). Each time the open fails, nothing is changed, and the copy made
@@ -313,7 +313,7 @@ class DatabaseMigrationTest {
 
         messages(e) shouldContain when {
             version <= 3 -> "no such column: manga_source"
-            case.startsWith("orphan") -> "FOREIGN KEY constraint failed"
+            // The orphans go through 13.sqm and 14.sqm with foreign keys off, as on Android
             else -> "error in trigger system_category_delete_trigger"
         }
         OldDatabases.userVersion(file, key) shouldBe version
