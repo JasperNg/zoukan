@@ -150,6 +150,8 @@ fun runZoukanApp() {
     // The app lock engages before anything runs in the background: a Cloudflare challenge that the
     // library update or the extension loading meets must not open a browser window over a locked app
     Injekt.get<zoukan.desktop.security.AppLock>().onStart()
+    // Each lock forgets the download password kept for covers and the decoded images in memory
+    Images.followAppLock(Injekt.get<zoukan.desktop.security.AppLock>().locked, ServiceScope)
     zoukan.desktop.security.AppActivity.install()
     // ZOUKAN <--
     startUi(ZoukanRuntime.dirs)

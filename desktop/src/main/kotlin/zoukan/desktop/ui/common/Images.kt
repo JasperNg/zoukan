@@ -21,7 +21,12 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import okio.Buffer
@@ -91,7 +96,7 @@ object Images {
     @Volatile
     private var incognito: (sourceId: Long?) -> Boolean = ::incognitoFromSettings
 
-    val loader: ImageLoader by lazy {
+    private val loaderDelegate = lazy {
         ImageLoader.Builder(PlatformContext.INSTANCE)
             // ZOUKAN -->
             // Coil would otherwise find coil-network-okhttp itself and fetch addresses (extension
@@ -127,6 +132,7 @@ object Images {
             .crossfade(true)
             .build()
     }
+    val loader: ImageLoader by loaderDelegate
 
     /**
      * [codec] encrypts what is cached on disk; without one, nothing is. While [incognito] is on for a
@@ -163,6 +169,34 @@ object Images {
     private fun coverPasswordFromSecretStore(): CharArray? = sessionCoverPassword.get()
 
     private val sessionCoverPassword = CoverPasswordCache { Injekt.get<CbzPassword>() }
+
+    // ZOUKAN -->
+    /**
+     * Each time the app locks, forgets what the lock hides: the download password kept for encrypted
+     * covers and every decoded image in memory (decrypted covers and page previews of encrypted
+     * chapters cannot be told apart from the others there). They are read again after the unlock.
+     * A failure is logged and the next lock tries again. Call once at start.
+     */
+    fun followAppLock(locked: StateFlow<Boolean>, scope: CoroutineScope, forget: () -> Unit = ::forgetDecrypted) {
+        locked.filter { it }.onEach {
+            try {
+                forget()
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Could not forget the decrypted images on lock" }
+            }
+        }.launchIn(scope)
+    }
+
+    /** Forgets the cover password and empties the image memory cache, if the loader was made. */
+    private fun forgetDecrypted() {
+        forgetDecrypted(if (loaderDelegate.isInitialized()) loader.memoryCache else null, sessionCoverPassword)
+    }
+
+    internal fun forgetDecrypted(memory: MemoryCache?, passwords: CoverPasswordCache) {
+        passwords.clear()
+        memory?.clear()
+    }
+    // ZOUKAN <--
 
     /** The names of the source covers kept in the covers folder: [hash] of the source and address. */
     private val CACHED_COVER_NAME = Regex("[0-9a-f]{64}")
@@ -383,6 +417,13 @@ internal class CoverPasswordCache(private val now: () -> Long = System::currentT
         val read = store.get()
         last = Read(version, read?.copyOf(), time)
         return read
+    }
+
+    /** Forgets (and wipes) the kept password, so the next [get] reads the store again: on lock. */
+    @Synchronized
+    fun clear() {
+        last?.password?.fill('\u0000')
+        last = null
     }
 
     private companion object {
