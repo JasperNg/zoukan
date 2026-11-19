@@ -6,6 +6,7 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.backup.BackupCodec
 import eu.kanade.tachiyomi.data.backup.models.Backup
+import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
@@ -565,6 +566,48 @@ class SyncDatabaseFaultsTest {
         driver.failOn(FailingSqlDriver.insertInto("chapters"))
         manager.syncData()
         safety.listFiles()!!.count { it.name.startsWith("safety_sync_") } shouldBe 2
+    }
+
+    /** The names of the user's categories, from the database. */
+    private fun categories(): List<String> = driver.executeQuery(
+        null,
+        "SELECT name FROM categories WHERE _id > 0 ORDER BY name",
+        { cursor ->
+            val rows = mutableListOf<String>()
+            while (cursor.next().value) rows += cursor.getString(0)!!
+            QueryResult.Value(rows)
+        },
+        0,
+    ).value
+
+    @Test
+    fun `a category that failed to restore is restored by the next sync, although every entry arrived`() = runBlocking<Unit> {
+        // The other device has a category; its entry is in none, so the entry restores without it
+        sync.seed(BackupCodec.encode(remote.copy(backupCategories = listOf(BackupCategory("From the other device", order = 1)))))
+        preferences.lastSyncTimestamp().set(1L)
+        driver.failOn(FailingSqlDriver.insertInto("categories"))
+
+        manager().syncData()
+
+        messages.awaitError { it.text.contains("Categories") }
+        library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+        categories() shouldBe emptyList()
+        preferences.lastSyncEtag().get() shouldBe ""
+
+        // Healed: no entry is left to restore, but the category still is
+        driver.heal()
+        manager().syncData()
+
+        categories() shouldBe listOf("From the other device")
+        preferences.lastSyncEtag().get() shouldBe sync.etag
+        restorePending.get() shouldBe false
+
+        // Done: the next sync is "not modified" and restores nothing again
+        val snapshotsBefore = snapshots.size
+        sync.calls.clear()
+        manager().syncData()
+        sync.calls.first { it.method == "GET" }.status shouldBe 304
+        snapshots.size shouldBe snapshotsBefore
     }
 
     @Test

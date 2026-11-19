@@ -76,6 +76,14 @@ class SyncManager(
      */
     private fun restorePending() =
         Injekt.get<PreferenceStore>().getBoolean(Preference.appStateKey("zoukan_sync_restore_pending"), false)
+
+    /**
+     * Set when the last restore of the server's library ended with errors, until one ends without.
+     * The next sync restores only the entries that differ here, so a failed section (categories,
+     * settings, saved searches, feeds) whose entries all arrived would otherwise never be retried.
+     */
+    private fun sectionsPending() =
+        Injekt.get<PreferenceStore>().getBoolean(Preference.appStateKey("zoukan_sync_sections_pending"), false)
     // ZOUKAN <--
 
     private val _running = MutableStateFlow(false)
@@ -293,10 +301,12 @@ class SyncManager(
 
         val (favorites, nonFavorites) = splitFavorites(remoteBackup)
         // ZOUKAN -->
-        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites)) return false
+        // The sections a restore with errors left behind are restored again, with no entry to restore
+        val retrySections = favorites.isEmpty() && sectionsPending().get()
+        if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites, alwaysSnapshot = retrySections)) return false
         // ZOUKAN <--
 
-        if (favorites.isEmpty()) {
+        if (favorites.isEmpty() /* ZOUKAN --> */ && !retrySections /* ZOUKAN <-- */) {
             // ZOUKAN -->
             keepEtag(etag)
             // ZOUKAN <--
@@ -346,6 +356,7 @@ class SyncManager(
         // ZOUKAN <--
         // ZOUKAN -->
         if (errors.isEmpty()) keepEtag(etag) else syncPreferences.lastSyncEtag().delete()
+        if (errors.isEmpty()) sectionsPending().delete() else sectionsPending().set(true)
         // ZOUKAN <--
         syncPreferences.lastSyncTimestamp().set(Date().time)
         if (errors.isEmpty()) {
@@ -411,13 +422,18 @@ class SyncManager(
      * one the library is left as it is, the sync tries again later and the notification says why.
      *
      * The snapshot is taken when [favorites] will be restored or any local entry's favorite state
-     * changes, even when the remote has no favorites at all.
+     * changes, even when the remote has no favorites at all, and with [alwaysSnapshot] (the remote's
+     * other sections will be restored).
      *
      * @return false when the snapshot failed and nothing was written
      */
-    internal suspend fun snapshotThenUpdateNonFavorites(favorites: List<BackupManga>, nonFavorites: List<BackupManga>): Boolean {
+    internal suspend fun snapshotThenUpdateNonFavorites(
+        favorites: List<BackupManga>,
+        nonFavorites: List<BackupManga>,
+        alwaysSnapshot: Boolean = false,
+    ): Boolean {
         val changes = nonFavoriteChanges(nonFavorites)
-        if (favorites.isNotEmpty() || changes.isNotEmpty()) {
+        if (favorites.isNotEmpty() || changes.isNotEmpty() || alwaysSnapshot) {
             safetySnapshot.take(SnapshotReason.SYNC).onFailure { e ->
                 notifier.showSyncError(localized(DMR.strings.sync_skipped_no_safety_backup, SafetySnapshot.errorText(e)))
                 return false
