@@ -192,6 +192,8 @@ class EhGalleryUpdater(
         try {
             val result = updateMangaFromRemote(source = source, manga = manga, fetchDetails = true, fetchChapters = true).getOrThrow()
             return result.newChapters to getChaptersByMangaId.await(manga.id)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (t: Throwable) {
             t.rethrowIfVmFailure()
             if (t is EHentai.GalleryNotFoundException) {
