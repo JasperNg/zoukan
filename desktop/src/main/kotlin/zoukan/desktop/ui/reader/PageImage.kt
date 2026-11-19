@@ -149,7 +149,11 @@ class PageImage(
          */
         internal const val MAX_DECODED_PIXELS = 16_384L * 16_384
 
-        /** The longest side a page may declare: JPEG's largest, as the Android layer's ImageIoDecoding.MAX_SIDE. */
+        /**
+         * The longest side a page may declare on ImageIO's path: JPEG's largest, as the Android
+         * layer's ImageIoDecoding.MAX_SIDE. Skia's path has no side limit of its own (a PNG strip of
+         * 720 by 88,000 shows): there only [MAX_DECODED_PIXELS] applies.
+         */
         internal const val MAX_PAGE_SIDE = 65_535
 
         /**
@@ -165,18 +169,18 @@ class PageImage(
         internal fun imageIoPixelLimit(maxHeap: Long = Runtime.getRuntime().maxMemory()): Long =
             minOf(MAX_DECODED_PIXELS, maxHeap / 2 / IMAGE_IO_BYTES_PER_PIXEL)
 
-        internal fun isTooLarge(width: Int, height: Int, maxPixels: Long): Boolean =
-            width > MAX_PAGE_SIDE || height > MAX_PAGE_SIDE || width.toLong() * height > maxPixels
+        internal fun isTooLarge(width: Int, height: Int, maxPixels: Long, maxSide: Int = MAX_PAGE_SIDE): Boolean =
+            width > maxSide || height > maxSide || width.toLong() * height > maxPixels
 
         /**
          * Fails with a page error when [bytes] declare a page too large for the decoder that will
-         * read it ([MAX_DECODED_PIXELS] for Skia, [imageIoPixelLimit] for ImageIO), read from the
+         * read it ([MAX_DECODED_PIXELS] for Skia, [imageIoPixelLimit] and [MAX_PAGE_SIDE] for ImageIO), read from the
          * image's header before anything that size is allocated. Returns the declared size, null
          * when no reader knows it.
          */
         internal fun checkDeclaredSize(bytes: ByteArray): Pair<Int, Int>? {
             skiaSize(bytes)?.let { (width, height) ->
-                if (isTooLarge(width, height, MAX_DECODED_PIXELS)) throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
+                if (isTooLarge(width, height, MAX_DECODED_PIXELS, maxSide = Int.MAX_VALUE)) throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show))
                 return width to height
             }
             val (width, height) = imageIoSize(bytes) ?: return null

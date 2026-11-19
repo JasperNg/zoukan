@@ -56,8 +56,8 @@ class PageSizeLimitTest {
 
     @Test
     fun `a page that declares more pixels than the reader can hold is a page error`() {
-        // Both sizes ImageIO would read (a 1-bit page becomes 4 bytes a pixel once decoded) and one it refuses itself
-        listOf(20_000 to 20_000, 1_000 to 100_000, 100_000 to 100_000).forEach { (w, h) ->
+        // More pixels than Skia's bound, square and as a strip (no side limit applies on Skia's path)
+        listOf(20_000 to 20_000, 1_000 to 300_000, 100_000 to 100_000).forEach { (w, h) ->
             val error = shouldThrow<UnreadableImageException> { PageImage.decode(png(w, h)) }
             error.message shouldBe localized(DMR.strings.the_page_is_too_large_to_show)
         }
@@ -95,6 +95,14 @@ class PageSizeLimitTest {
             PageImage.declaredSize(page) shouldBe (w to h)
             PageImage.checkDeclaredSize(page)
         }
+    }
+
+    // Skia has no side limit of its own for PNG: a tall strip within the pixel bound showed before
+    @Test
+    fun `a PNG strip taller than 65,535 pixels within the pixel bound is not refused`() {
+        val page = png(720, 88_000)
+        PageImage.declaredSize(page) shouldBe (720 to 88_000)
+        PageImage.checkDeclaredSize(page)
     }
 
     @Test
