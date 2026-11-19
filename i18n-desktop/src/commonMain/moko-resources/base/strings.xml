@@ -989,4 +989,7 @@
     <string name="doh_notice_title">DNS over HTTPS is now on</string>
     <string name="doh_notice_text">Zoukan now looks up site addresses with DNS over HTTPS, using Quad9. You can change this in Settings &gt; Advanced.</string>
     <string name="doh_notice_open_settings">Open settings</string>
+    <!-- Tray notification when background work stopped because the app ran out of memory -->
+    <string name="background_work_stopped">Background work stopped</string>
+    <string name="background_work_stopped_text">Zoukan ran out of memory. Automatic backups, sync and library updates are paused until you restart Zoukan.</string>
 </resources>

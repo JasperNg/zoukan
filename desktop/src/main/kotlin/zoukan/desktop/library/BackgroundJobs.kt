@@ -16,7 +16,10 @@ import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.backup.AutoBackup
 import zoukan.desktop.backup.RestoreGate
+import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackChapters
+import zoukan.desktop.tray.Notifications
+import zoukan.i18n.desktop.DMR
 
 /**
  * Background work while the app runs, in place of Android's WorkManager: the scheduled library
@@ -29,6 +32,8 @@ class BackgroundJobs(
     private val libraryUpdater: LibraryUpdater,
     private val autoBackup: AutoBackup,
     private val sourceManager: SourceManager,
+    /** Tells the user that background work stopped until a restart (the VM ran out of memory). */
+    private val onStopped: () -> Unit = ::tellBackgroundWorkStopped,
 ) {
     /** The loop; guarded by `this`, as start and stop may come from different threads. */
     private var job: Job? = null
@@ -49,7 +54,16 @@ class BackgroundJobs(
                 } catch (e: Throwable) {
                     // The VM's own failures (out of memory) end the loop and reach the scope's crash
                     // report; anything else, an outdated extension's LinkageError or runaway
-                    // recursion included, waits for the next check
+                    // recursion included, waits for the next check. The loop is not restarted: what
+                    // ran out of memory once would likely do it again, half-done. The user is told
+                    // once that automatic backups, sync and updates stopped until a restart
+                    if (e is VirtualMachineError && e !is StackOverflowError) {
+                        try {
+                            onStopped()
+                        } catch (notTold: Exception) {
+                            e.addSuppressed(notTold)
+                        }
+                    }
                     e.rethrowIfVmFailure()
                     logcat(LogPriority.ERROR, e) { "Background work failed" }
                 }
@@ -118,6 +132,15 @@ class BackgroundJobs(
     }
 
     companion object {
+        /** The tray notification that background work stopped; never throws past what it could not post. */
+        private fun tellBackgroundWorkStopped() {
+            Notifications.post(
+                localized(DMR.strings.background_work_stopped),
+                localized(DMR.strings.background_work_stopped_text),
+                Notifications.Kind.ERROR,
+            )
+        }
+
         private const val START_DELAY = 20_000L
         private const val CHECK_EVERY = 60_000L
         private const val TRACKING_RETRY_EVERY = 15 * 60_000L

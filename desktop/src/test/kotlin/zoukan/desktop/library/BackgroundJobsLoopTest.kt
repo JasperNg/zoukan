@@ -27,6 +27,7 @@ class BackgroundJobsLoopTest {
         SupervisorJob() + StandardTestDispatcher(scheduler) + CoroutineExceptionHandler { _, e -> uncaught.set(e) },
     )
     private val ticks = AtomicInteger()
+    private val stoppedMessages = AtomicInteger()
 
     /** Jobs whose every check fails with [failure] at its first step (is the library update due?). */
     private fun jobs(failure: () -> Throwable): BackgroundJobs {
@@ -41,6 +42,7 @@ class BackgroundJobsLoopTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk { every { isInitialized } returns MutableStateFlow(true) },
+            onStopped = { stoppedMessages.incrementAndGet() },
         )
     }
 
@@ -99,6 +101,45 @@ class BackgroundJobsLoopTest {
         ticks.get() shouldBe 1
         jobs.isRunning shouldBe false
         uncaught.get().shouldBeInstanceOf<OutOfMemoryError>()
+        scope.cancel()
+    }
+
+    @Test
+    fun `an OutOfMemoryError tells the user once that background work stopped`() {
+        val jobs = jobs { OutOfMemoryError("Java heap space") }
+        jobs.start(scope)
+
+        runChecks(3)
+
+        stoppedMessages.get() shouldBe 1
+        uncaught.get().shouldBeInstanceOf<OutOfMemoryError>()
+        scope.cancel()
+    }
+
+    @Test
+    fun `a message that cannot be posted still lets the OutOfMemoryError reach the handler`() {
+        val preferences = mockk<LibraryPreferences> { every { autoUpdateInterval() } throws OutOfMemoryError("Java heap space") }
+        val jobs = BackgroundJobs(
+            preferences,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk { every { isInitialized } returns MutableStateFlow(true) },
+            onStopped = { throw IllegalStateException("no strings") },
+        )
+        jobs.start(scope)
+
+        runChecks(1)
+
+        uncaught.get().shouldBeInstanceOf<OutOfMemoryError>()
+        scope.cancel()
+    }
+
+    @Test
+    fun `ordinary failures and runaway recursion tell the user nothing`() {
+        val jobs = jobs { StackOverflowError() }
+        jobs.start(scope)
+        runChecks(3)
+        stoppedMessages.get() shouldBe 0
         scope.cancel()
     }
 
