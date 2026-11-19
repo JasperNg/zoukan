@@ -2,7 +2,7 @@ package zoukan.desktop.e2e
 
 import com.sun.net.httpserver.HttpExchange
 import java.util.Base64
-import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The two sync services the app talks to, on the [FixtureServer], for the sync journeys. Both serve
@@ -62,10 +62,10 @@ class FixtureSyncServer(
     private val collections = mutableSetOf("")
 
     /** Every request the sync routes answered, in order. */
-    val calls: MutableList<Call> = Collections.synchronizedList(mutableListOf())
+    val calls: MutableList<Call> = CopyOnWriteArrayList()
 
     /** The JSON bodies of the SyncYomi events (`POST /api/sync/event`), in order. */
-    val events: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    val events: MutableList<String> = CopyOnWriteArrayList()
 
     val webDavUrl: String get() = "${server.baseUrl}/dav"
     val clientHost: String get() = server.baseUrl
@@ -89,13 +89,12 @@ class FixtureSyncServer(
 
     private val davRoute: (HttpExchange, List<String>) -> Boolean = route@{ exchange, parts ->
         if (parts.firstOrNull() != "dav") return@route false
-        val status = if (!basicAuthOk(exchange)) {
+        if (!basicAuthOk(exchange)) {
             exchange.responseHeaders.add("WWW-Authenticate", "Basic realm=\"fixture\"")
-            respond(exchange, 401, "text/plain", "Unauthorized".toByteArray())
+            answer(exchange, 401, "text/plain", "Unauthorized".toByteArray())
         } else {
             dav(exchange, parts.drop(1).filter { it.isNotEmpty() })
         }
-        record(exchange, status)
         true
     }
 
@@ -103,12 +102,12 @@ class FixtureSyncServer(
         if (parts.size != 3 || parts[0] != "api" || parts[1] != "sync" || parts[2] !in setOf("content", "event")) {
             return@route false
         }
-        val status = when {
+        when {
             exchange.requestHeaders.getFirst("X-API-Token") != apiKey ->
-                respond(exchange, 401, "text/plain", "Invalid API token".toByteArray())
+                answer(exchange, 401, "text/plain", "Invalid API token".toByteArray())
             parts[2] == "event" -> if (exchange.requestMethod == "POST") {
                 events += exchange.requestBody.readAllBytes().decodeToString()
-                respond(exchange, 200, "application/json", "{}".toByteArray())
+                answer(exchange, 200, "application/json", "{}".toByteArray())
             } else {
                 notAllowed(exchange, "POST")
             }
@@ -118,7 +117,6 @@ class FixtureSyncServer(
                 else -> notAllowed(exchange, "GET, PUT")
             }
         }
-        record(exchange, status)
         true
     }
 
@@ -134,18 +132,18 @@ class FixtureSyncServer(
             "MKCOL" -> synchronized(lock) {
                 when {
                     path in collections -> notAllowed(exchange, "GET, PUT")
-                    path.substringBeforeLast('/', "") !in collections -> respond(exchange, 409, "text/plain", "No parent collection".toByteArray())
+                    path.substringBeforeLast('/', "") !in collections -> answer(exchange, 409, "text/plain", "No parent collection".toByteArray())
                     else -> {
                         collections += path
-                        respond(exchange, 201)
+                        answer(exchange, 201)
                     }
                 }
             }
-            "GET" -> if (path == file) get(exchange) else respond(exchange, 404, "text/plain", "Not found".toByteArray())
+            "GET" -> if (path == file) get(exchange) else answer(exchange, 404, "text/plain", "Not found".toByteArray())
             "PUT" -> when {
-                path != file -> respond(exchange, 403, "text/plain", "Only $file is writable".toByteArray())
+                path != file -> answer(exchange, 403, "text/plain", "Only $file is writable".toByteArray())
                 synchronized(lock) { file.substringBeforeLast('/', "") !in collections } ->
-                    respond(exchange, 409, "text/plain", "No parent collection".toByteArray())
+                    answer(exchange, 409, "text/plain", "No parent collection".toByteArray())
                 else -> put(exchange, createdStatus = 201, replacedStatus = 204)
             }
             else -> notAllowed(exchange, "MKCOL, GET, PUT")
@@ -155,12 +153,12 @@ class FixtureSyncServer(
     /** The GET both services share: 404, 304 or 200 with the bytes, each 2xx and 304 with the ETag. */
     private fun get(exchange: HttpExchange): Int {
         val (bytes, tag) = synchronized(lock) { backup to currentEtag() }
-        if (bytes == null || tag == null) return respond(exchange, 404, "text/plain", "No backup".toByteArray())
+        if (bytes == null || tag == null) return answer(exchange, 404, "text/plain", "No backup".toByteArray())
         val etagHeader = mapOf("ETag" to quoted(tag))
         if (matches(exchange.requestHeaders.getFirst("If-None-Match"), tag)) {
-            return respond(exchange, 304, headers = etagHeader)
+            return answer(exchange, 304, headers = etagHeader)
         }
-        return respond(exchange, 200, "application/octet-stream", bytes, etagHeader)
+        return answer(exchange, 200, "application/octet-stream", bytes, etagHeader)
     }
 
     /** The PUT both services share: 412 on a stale `If-Match`, else stored under a new ETag. */
@@ -177,9 +175,9 @@ class FixtureSyncServer(
                 (if (created) createdStatus else replacedStatus) to currentEtag()!!
             }
         }
-        result ?: return respond(exchange, 412, "text/plain", "ETag mismatch".toByteArray())
+        result ?: return answer(exchange, 412, "text/plain", "ETag mismatch".toByteArray())
         val (status, tag) = result
-        return respond(exchange, status, headers = mapOf("ETag" to quoted(tag)))
+        return answer(exchange, status, headers = mapOf("ETag" to quoted(tag)))
     }
 
     private fun store(bytes: ByteArray) {
@@ -199,7 +197,19 @@ class FixtureSyncServer(
 
     private fun notAllowed(exchange: HttpExchange, allow: String): Int {
         exchange.responseHeaders.add("Allow", allow)
-        return respond(exchange, 405, "text/plain", "Method not allowed".toByteArray())
+        return answer(exchange, 405, "text/plain", "Method not allowed".toByteArray())
+    }
+
+    /** Records the call before [respond] flushes the HTTP response so callers never observe the response first. */
+    private fun answer(
+        exchange: HttpExchange,
+        code: Int,
+        type: String? = null,
+        bytes: ByteArray = ByteArray(0),
+        headers: Map<String, String> = emptyMap(),
+    ): Int {
+        record(exchange, code)
+        return respond(exchange, code, type, bytes, headers)
     }
 
     private fun record(exchange: HttpExchange, status: Int) {

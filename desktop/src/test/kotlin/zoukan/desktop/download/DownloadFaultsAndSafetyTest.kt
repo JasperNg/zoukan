@@ -273,7 +273,9 @@ class DownloadFaultsTest {
         val download = manager.failing(chapter)
 
         download.error shouldBe localized(DMR.strings.the_page_is_too_large_to_show)
-        server.imageRequests(pages[0]) shouldBe 1
+        // ChapterDownloader races page coroutines for the single permit, so any page may hit the
+        // size limit first and cancel the rest; total requests across all pages must be 1 (no retry, no second page).
+        pages.sumOf { server.imageRequests(it) } shouldBe 1
         nothingHalfWritten(chapter.name)
     }
 
