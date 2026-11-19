@@ -133,7 +133,13 @@ class DownloadManager(
      */
     private val lock = Any()
     private var job: Job? = null
-    private var stopping: Job? = null
+    private val stopping = LinkedHashSet<Job>()
+
+    private suspend fun awaitStopping() {
+        synchronized(lock) { stopping.toList() }.forEach { it.join() }
+    }
+
+    internal fun stoppingCount(): Int = synchronized(lock) { stopping.size }
 
     /**
      * One lock per entry, shared by the clean-up and the download writer, so clean-up never deletes the
@@ -469,7 +475,7 @@ class DownloadManager(
         cancel(chapters.map { it.id }.toSet())
         // A cancelled download may still be writing its last file; delete after it stopped, or the
         // chapter would come back
-        synchronized(lock) { stopping }?.join()
+        awaitStopping()
         val others = coOwnerChapters(manga, chapters)
         entryLock(manga.id).withLock { deleteChapterFiles(manga, chapters, others) }
     }
@@ -540,7 +546,7 @@ class DownloadManager(
     suspend fun deleteManga(manga: Manga, chapters: List<Chapter>) = withContext(Dispatchers.IO) {
         paths.requireStorage()
         cancelSeries(manga.id)
-        synchronized(lock) { stopping }?.join()
+        awaitStopping()
         val others = coOwnerChapters(manga, chapters)
         entryLock(manga.id).withLock { deleteChapterFiles(manga, chapters, others) }
         SafeDelete.deleteIfEmpty(root, paths.sourceDir(manga.source), minDepth = 1)
@@ -957,11 +963,11 @@ class DownloadManager(
         if (_queue.value.none { it.state.value == Download.State.QUEUED }) return
         // A paused run may still be finishing a file; the new one waits, so the two never write
         // the same chapter
-        val previous = stopping
+        val previous = stopping.toList()
         val newJob = scope.launch(start = CoroutineStart.LAZY) {
             val self = coroutineContext.job
             try {
-                previous?.join()
+                previous.forEach { it.join() }
                 run(self)
             } finally {
                 synchronized(lock) {
@@ -981,9 +987,10 @@ class DownloadManager(
         synchronized(lock) {
             val current = job ?: return
             job = null
-            stopping = current
+            stopping.add(current)
             _running.value = false
             current.cancel()
+            current.invokeOnCompletion { synchronized(lock) { stopping.remove(current) } }
             _queue.value.filter { it.state.value == Download.State.DOWNLOADING }.forEach { it.state.value = Download.State.QUEUED }
         }
     }
@@ -1010,11 +1017,11 @@ class DownloadManager(
             restart = job != null && removed.any { it.state.value == Download.State.DOWNLOADING }
             if (restart) pause()
             _queue.update { q -> q.filterNot { it.chapter.id in chapterIds } }
-            stopping
+            stopping.toList()
         }
         scope.launch {
             // After the cancelled download let go of its files
-            stopped?.join()
+            stopped.forEach { it.join() }
             if (!paths.isStorageAvailable) return@launch
             removed.groupBy { it.manga.id }.forEach { (id, downloads) ->
                 // Under the entry's lock, re-reading the queue: a chapter queued again since keeps its

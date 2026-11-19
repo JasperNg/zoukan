@@ -1,6 +1,7 @@
 package zoukan.desktop.download
 
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -8,6 +9,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.Headers
@@ -25,6 +27,8 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.storage.ZoukanStorage
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** A clean-up that runs while the library update or the user queues a chapter must leave that download's files alone. */
 class DownloadCleanupRaceTest {
@@ -128,5 +132,215 @@ class DownloadCleanupRaceTest {
         // Finished chapters are never touched by a clean-up with both options off
         File(downloads, "One/Chapter 1.cbz").readBytes() shouldBe finishedOne
         File(downloads, "Two/Chapter 2.cbz").readBytes() shouldBe finished
+    }
+
+    private fun raceManager(
+        coOwners: suspend (Manga) -> List<Pair<Manga, List<Chapter>>>,
+        newDownloader: (
+            pageList: suspend () -> List<Page>,
+            imageUrl: suspend (Page) -> String,
+            image: suspend (Page) -> ByteArray,
+            parallelPages: Int,
+        ) -> ChapterDownloader,
+    ): DownloadManager {
+        val sourceManager = mockk<SourceManager> {
+            every { get(sourceA.id) } returns sourceA
+            every { getOrStub(sourceA.id) } returns sourceA
+            every { getOnlineSources() } returns listOf(sourceA)
+        }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
+        val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
+        val downloadPreferences = mockk<DownloadPreferences> {
+            every { includeChapterUrlHash() } returns pref(false)
+            every { saveChaptersAsCBZ() } returns pref(true)
+            every { parallelSourceLimit() } returns pref(5)
+            every { parallelPageLimit() } returns pref(5)
+            every { splitTallImages() } returns pref(false)
+            every { downloadCacheRenewInterval() } returns pref(-1)
+        }
+        val securityPreferences = mockk<SecurityPreferences> {
+            every { passwordProtectDownloads() } returns pref(false)
+            every { encryptionType() } returns pref(SecurityPreferences.EncryptionType.AES_256)
+        }
+        val password = CbzPassword(FileSecretStore(File(temp, "secrets")), securityPreferences)
+        val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
+        return DownloadManager(
+            ZoukanDirs(temp),
+            paths,
+            sourceManager,
+            downloadPreferences,
+            password,
+            mockk(),
+            mockk(),
+            mockk(relaxed = true),
+            coOwners = coOwners,
+            newDownloader = newDownloader,
+        ).also { managers += it }
+    }
+
+    private val pngHeader = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+
+    @Test
+    fun `delete waits for an earlier paused download even after a second pause overwrote stopping`() = runBlocking<Unit> {
+        val one = manga(1, sourceA.id, "One")
+        val ch1 = chapter(1, 1, 1.0)
+        val writeEntered = CompletableDeferred<Unit>()
+        val writeLatch = CountDownLatch(1)
+        val coOwnersEntered = CompletableDeferred<Unit>()
+
+        val manager = raceManager(
+            coOwners = {
+                coOwnersEntered.complete(Unit)
+                emptyList()
+            },
+            newDownloader = { _, _, _, parallelPages ->
+                ChapterDownloader(
+                    pageList = { listOf(Page(0, imageUrl = "http://127.0.0.1:9/0.png")) },
+                    imageUrl = { it.imageUrl!! },
+                    image = { pngHeader },
+                    parallelPages = parallelPages,
+                    writeEntry = { writer, name, bytes ->
+                        writeEntered.complete(Unit)
+                        writeLatch.await(15, TimeUnit.SECONDS)
+                        writer.write(name, bytes)
+                    },
+                )
+            },
+        )
+
+        try {
+            manager.enqueue(one, listOf(ch1), start = true)
+            withTimeout(10_000) { writeEntered.await() }
+
+            // job1 is paused while blocked in writeEntry; start() launches job2 waiting on job1;
+            // pause() cancels job2 while job1 is still blocked
+            manager.pause()
+            manager.start()
+            manager.pause()
+
+            val deleting = async(Dispatchers.IO) { manager.delete(one, listOf(ch1)) }
+            delay(150)
+            coOwnersEntered.isCompleted shouldBe false
+            deleting.isCompleted shouldBe false
+
+            writeLatch.countDown()
+            withTimeout(10_000) { deleting.await() }
+            coOwnersEntered.isCompleted shouldBe true
+            withTimeout(10_000) { manager.awaitBackgroundWork() }
+            manager.stoppingCount() shouldBe 0
+        } finally {
+            writeLatch.countDown()
+        }
+    }
+
+    @Test
+    fun `deleteManga waits for an earlier paused download even after a second pause overwrote stopping`() = runBlocking<Unit> {
+        val one = manga(1, sourceA.id, "One")
+        val ch1 = chapter(1, 1, 1.0)
+        val writeEntered = CompletableDeferred<Unit>()
+        val writeLatch = CountDownLatch(1)
+        val coOwnersEntered = CompletableDeferred<Unit>()
+
+        val manager = raceManager(
+            coOwners = {
+                coOwnersEntered.complete(Unit)
+                emptyList()
+            },
+            newDownloader = { _, _, _, parallelPages ->
+                ChapterDownloader(
+                    pageList = { listOf(Page(0, imageUrl = "http://127.0.0.1:9/0.png")) },
+                    imageUrl = { it.imageUrl!! },
+                    image = { pngHeader },
+                    parallelPages = parallelPages,
+                    writeEntry = { writer, name, bytes ->
+                        writeEntered.complete(Unit)
+                        writeLatch.await(15, TimeUnit.SECONDS)
+                        writer.write(name, bytes)
+                    },
+                )
+            },
+        )
+
+        try {
+            manager.enqueue(one, listOf(ch1), start = true)
+            withTimeout(10_000) { writeEntered.await() }
+
+            manager.pause()
+            manager.start()
+            manager.pause()
+
+            val deleting = async(Dispatchers.IO) { manager.deleteManga(one, listOf(ch1)) }
+            delay(150)
+            coOwnersEntered.isCompleted shouldBe false
+            deleting.isCompleted shouldBe false
+
+            writeLatch.countDown()
+            withTimeout(10_000) { deleting.await() }
+            coOwnersEntered.isCompleted shouldBe true
+            withTimeout(10_000) { manager.awaitBackgroundWork() }
+            manager.stoppingCount() shouldBe 0
+        } finally {
+            writeLatch.countDown()
+        }
+    }
+
+    @Test
+    fun `start waits for all earlier paused downloads after a second pause`() = runBlocking<Unit> {
+        val one = manga(1, sourceA.id, "One")
+        val two = manga(2, sourceA.id, "Two")
+        val ch1 = chapter(1, 1, 1.0)
+        val ch2 = chapter(2, 2, 1.0)
+        val writeEntered = CompletableDeferred<Unit>()
+        val writeLatch = CountDownLatch(1)
+        val secondStarted = CompletableDeferred<Unit>()
+        var downloadCount = 0
+
+        val manager = raceManager(
+            coOwners = { emptyList() },
+            newDownloader = { _, _, _, parallelPages ->
+                val index = ++downloadCount
+                ChapterDownloader(
+                    pageList = {
+                        if (index > 1) secondStarted.complete(Unit)
+                        listOf(Page(0, imageUrl = "http://127.0.0.1:9/0.png"))
+                    },
+                    imageUrl = { it.imageUrl!! },
+                    image = { pngHeader },
+                    parallelPages = parallelPages,
+                    writeEntry = { writer, name, bytes ->
+                        if (index == 1) {
+                            writeEntered.complete(Unit)
+                            writeLatch.await(15, TimeUnit.SECONDS)
+                        }
+                        writer.write(name, bytes)
+                    },
+                )
+            },
+        )
+
+        try {
+            manager.enqueue(one, listOf(ch1), start = true)
+            withTimeout(10_000) { writeEntered.await() }
+
+            manager.pause()
+            manager.cancel(setOf(ch1.id))
+            manager.enqueue(two, listOf(ch2), start = true)
+            manager.pause()
+            manager.start()
+
+            delay(150)
+            secondStarted.isCompleted shouldBe false
+
+            writeLatch.countDown()
+            withTimeout(10_000) { secondStarted.await() }
+            withTimeout(10_000) { manager.awaitIdle() }
+            withTimeout(10_000) { manager.awaitBackgroundWork() }
+            manager.stoppingCount() shouldBe 0
+        } finally {
+            writeLatch.countDown()
+        }
     }
 }
