@@ -6,9 +6,9 @@ import logcat.LogPriority
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
-import xyz.nulldev.androidcompat.webkit.KcefRequestFilter
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import xyz.nulldev.androidcompat.webkit.KcefRequestFilter
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.app.AppScope
 import java.io.File

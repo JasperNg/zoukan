@@ -4,8 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.isVmFailure
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import java.io.File
 

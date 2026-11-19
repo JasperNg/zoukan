@@ -146,14 +146,6 @@ object DesktopDatabase {
         Files.move(tmp.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 
-    /**
-     * The schema's trigger that keeps the system category raises its error with a double-quoted
-     * string. SQLCipher here is built without double-quoted string literals, so every category
-     * delete failed with "no such column". Recreate it with a single-quoted string; the trigger
-     * text is stored in the file, so this also fixes databases made on Android. Run after opening,
-     * and while migrating an older database: before the migrations when it has the trigger, and
-     * right after `20.sqm` makes it, so `26.sqm`'s table rename (which checks every trigger) passes.
-     */
     /** The migration (`20.sqm`) that makes the system category's trigger. */
     private const val TRIGGER_MIGRATION = 20L
 
@@ -164,6 +156,14 @@ object DesktopDatabase {
         0,
     ).value
 
+    /**
+     * The schema's trigger that keeps the system category raises its error with a double-quoted
+     * string. SQLCipher here is built without double-quoted string literals, so every category
+     * delete failed with "no such column". Recreate it with a single-quoted string; the trigger
+     * text is stored in the file, so this also fixes databases made on Android. Run after opening,
+     * and while migrating an older database: before the migrations when it has the trigger, and
+     * right after `20.sqm` makes it, so `26.sqm`'s table rename (which checks every trigger) passes.
+     */
     private fun fixTriggers(driver: SqlDriver) {
         driver.execute(null, "DROP TRIGGER IF EXISTS system_category_delete_trigger", 0)
         driver.execute(

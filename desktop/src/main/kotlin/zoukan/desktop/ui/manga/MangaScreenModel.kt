@@ -38,8 +38,8 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.isVmFailure
+import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.Toasts

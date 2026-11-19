@@ -213,7 +213,6 @@ class SyncManager(
             }
         }
 
-
         // ZOUKAN -->
         val etagBefore = syncPreferences.lastSyncEtag().get()
         restorePending().set(true)

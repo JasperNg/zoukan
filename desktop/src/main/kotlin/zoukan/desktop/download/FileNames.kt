@@ -1,9 +1,9 @@
 package zoukan.desktop.download
 
+import xyz.nulldev.androidcompat.util.PortableFileNames
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
-import xyz.nulldev.androidcompat.util.PortableFileNames
 
 /**
  * File names as the Android app builds them (DiskUtil in core/common androidMain), so a downloads

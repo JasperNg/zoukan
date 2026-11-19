@@ -1010,7 +1010,6 @@ internal object PageWindow {
     }
 }
 
-
 internal object ReaderCleanup {
     /**
      * Closes the reader's [file] (null when it read online), then deletes the read [deletes]. Both

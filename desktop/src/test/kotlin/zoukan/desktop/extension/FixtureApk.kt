@@ -108,7 +108,13 @@ private object BinaryManifest {
         val body = ByteArrayOutputStream()
         body.write(stringPool(strings.toList()))
         body.write(chunk(0x0180, 8) { withIds.forEach { (_, id) -> putInt(id) } })
-        body.write(chunk(0x0100, 16, 24) { line(); putInt(index.getValue("android")); putInt(index.getValue(ANDROID)) })
+        body.write(
+            chunk(0x0100, 16, 24) {
+                line()
+                putInt(index.getValue("android"))
+                putInt(index.getValue(ANDROID))
+            },
+        )
         fun write(e: El) {
             body.write(
                 chunk(0x0102, 16, 36 + 20 * e.attrs.size) {
@@ -135,10 +141,22 @@ private object BinaryManifest {
                 },
             )
             e.children.forEach(::write)
-            body.write(chunk(0x0103, 16, 24) { line(); putInt(-1); putInt(index.getValue(e.name)) })
+            body.write(
+                chunk(0x0103, 16, 24) {
+                    line()
+                    putInt(-1)
+                    putInt(index.getValue(e.name))
+                },
+            )
         }
         write(root)
-        body.write(chunk(0x0101, 16, 24) { line(); putInt(index.getValue("android")); putInt(index.getValue(ANDROID)) })
+        body.write(
+            chunk(0x0101, 16, 24) {
+                line()
+                putInt(index.getValue("android"))
+                putInt(index.getValue(ANDROID))
+            },
+        )
         val content = body.toByteArray()
         // The file's own chunk header holds every other chunk
         return chunk(0x0003, 8) { put(content) }

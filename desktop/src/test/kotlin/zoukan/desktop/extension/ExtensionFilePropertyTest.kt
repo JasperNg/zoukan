@@ -220,4 +220,3 @@ class ExtensionFilePropertyTest {
         const val STORE_HOST = "store.fixture.test"
     }
 }
-
