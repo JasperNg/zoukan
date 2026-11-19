@@ -45,7 +45,7 @@ jobs:
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Compare with the base branch
@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-zoukan
         with:
           # Only master writes the shared cache, so PR runs cannot poison it
@@ -93,14 +93,14 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       # distTar/distZip are built by assemble but nobody uses them in CI
       - name: Build and unit tests
         run: xvfb-run -a ./gradlew :desktop:assemble :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest -x distTar -x distZip --continue
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-unit
@@ -137,7 +137,7 @@ jobs:
     # The Linux job runs the same tier and the build in about 7 minutes; these runners are slower
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
@@ -147,7 +147,7 @@ jobs:
           # The runner is thrown away after the job, so the Keychain tests may turn its prompts off
           ZOUKAN_KEYCHAIN_TESTS: 'true'
         run: ./gradlew :desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest :data:desktopTest :core:common:desktopTest :source-api:desktopTest --continue
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-files-${{ matrix.os }}
@@ -170,12 +170,12 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
       - run: xvfb-run -a ./gradlew :desktop:wiringTest
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-wiring
@@ -196,7 +196,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
@@ -209,7 +209,7 @@ jobs:
       - run: ./gradlew :app:compileDebugKotlin :data:compileDebugKotlinAndroid :domain:compileDebugKotlinAndroid :core:common:compileDebugKotlinAndroid :source-api:compileDebugKotlinAndroid
       # The only Android unit tests: the app's (src/test) and domain's (src/androidUnitTest)
       - run: ./gradlew :app:testDebugUnitTest :domain:testDebugUnitTest --continue
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: reports-android-unit
@@ -226,7 +226,7 @@ jobs:
     runs-on: windows-2025-vs2026
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-zoukan
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/master' }}
@@ -236,7 +236,7 @@ jobs:
         run: ./gradlew :desktop:journeyTest --continue
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: journeys-windows
           retention-days: 14

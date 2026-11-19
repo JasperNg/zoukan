@@ -52,7 +52,7 @@ jobs:
       version: ${{ steps.pick.outputs.version }}
       release: ${{ steps.pick.outputs.release }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -93,7 +93,7 @@ jobs:
     runs-on: windows-2025-vs2026
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The installer bundles a runtime made with jlink from this JDK, so it must be a full JDK 21
       # with jmods: JetBrains Runtime, the plan's choice
@@ -108,13 +108,13 @@ jobs:
           # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
           echo "9d244c480cc3b5b77c06753ad8f32e2f40ded94ee02fc3ff6c2bee06fac3d5f1cc42cb1f7b7fa8f8a6e0b14a7dafa2451cd2781d6d5f1c2f598c511f53e2ffe9  jbrsdk-21.0.11-windows-x64-b1163.125.zip" | sha512sum -c -
 
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: jdkfile
-          jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-windows-x64-b1163.125.zip
+          jdk-file: ${{ runner.temp }}/jbrsdk-21.0.11-windows-x64-b1163.125.zip
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Build the MSI
         shell: pwsh
@@ -133,14 +133,14 @@ jobs:
           & desktop\packaging\check\install-check-windows.ps1 -SkipBuild
           if ($LASTEXITCODE -ne 0) { Write-Error "The installed app's check failed"; exit 1 }
 
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: install-check-windows
           path: desktop/build/reports/install/
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: zoukan-windows-x64
           path: desktop/build/packaging/installers/*.msi
@@ -153,7 +153,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # setup-java's jetbrains distribution looks the release up through the GitHub API without a
       # token, which the shared hosted-runner IPs often hit the rate limit on. Download a pinned
@@ -166,13 +166,13 @@ jobs:
           # Pinned SHA-512 of this exact JetBrains Runtime build; change it together with the URL.
           echo "4b2769d097547b70df3cd8ff49d137579acb7fea874419052ec3450565665dc3262caa9a7a9f7e9ca611fd02650eb002845b3cd029cebc300eb00dd00ef45c43  jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz" | shasum -a 512 -c -
 
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: jdkfile
-          jdkFile: ${{ runner.temp }}/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz
+          jdk-file: ${{ runner.temp }}/jbrsdk-21.0.11-osx-aarch64-b1163.125.tar.gz
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Build the DMG
         run: ./gradlew :desktop:packageDmg "-Pzoukan.version=${{ needs.version.outputs.version }}"
@@ -185,14 +185,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: desktop/packaging/check/install-check-macos.sh --skip-build
 
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: install-check-macos
           path: desktop/build/reports/install/
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: zoukan-macos-arm64
           path: desktop/build/packaging/installers/*.dmg
@@ -207,12 +207,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: installers
           merge-multiple: true
