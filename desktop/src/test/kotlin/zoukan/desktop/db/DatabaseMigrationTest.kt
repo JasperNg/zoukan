@@ -24,12 +24,12 @@ import java.io.File
  *
  * The databases are built by [OldDatabases] from the version-1 schema in the test resources (proven
  * against the `28.db` snapshot by the cross-check below) or from that snapshot, and seeded with
- * [MigrationSeed]'s rows. The start-up path migrates the oldest version it can (27), the
- * snapshot's (28), one in the middle (38) and the one before the newest (47). It cannot migrate
- * anything older (pinned below: 1 to 3 fail at `13.sqm`, 4 to 26 at `26.sqm` on the system
- * category's trigger), so 4 (the oldest the migrations themselves can take) and 14 (the one
- * before `14.sqm` rebuilds history) are migrated to 27 the way [OldDatabases] builds databases,
- * then opened. Every version from 1 is built and seeded.
+ * [MigrationSeed]'s rows. The start-up path migrates 27 (the first after the trigger's versions), the
+ * snapshot's (28), one in the middle (38) and the one before the newest (47), and older ones
+ * through the system category's trigger: 4 (the oldest the migrations themselves can take), 14
+ * (the one before `14.sqm` rebuilds history), 20 (before `20.sqm` makes the trigger), 21 and 26
+ * (the trigger there, and `26.sqm` renaming a table, which makes SQLite check every trigger).
+ * Versions 1 to 3 fail at `13.sqm` (pinned below). Every version from 1 is built and seeded.
  *
  * Which versions can occur: the desktop never opens an Android database (data arrives in
  * `.tachibk` backups), and its first release already had the newest schema, 48, so no desktop
@@ -205,7 +205,7 @@ class DatabaseMigrationTest {
     }
 
     @ParameterizedTest(name = "version {0}")
-    @ValueSource(longs = [27, 28, 38, 47])
+    @ValueSource(longs = [4, 14, 20, 21, 26, 27, 28, 38, 47])
     fun `an old database keeps every row and gets the newest schema`(version: Long) {
         val key = OldDatabases.key(version.toInt())
         val file = file()
@@ -218,22 +218,32 @@ class DatabaseMigrationTest {
     }
 
     /**
-     * A database from before 27 cannot be opened by the start-up path (pinned below: the trigger),
-     * so it is migrated to 27 as [OldDatabases.migrate] does, with the generated migrations and
-     * foreign keys off, then opened. The rows `1.sqm` to `26.sqm` change are checked from [version].
+     * A row whose parent is gone, at 13 (a chapter) or 14 (a reading history entry), goes through
+     * `13.sqm` and `14.sqm` (the desktop migrates with foreign keys off, as Android's driver does);
+     * `47.sqm` then removes it with its foreign key's own action. Every other row is kept.
      */
-    @ParameterizedTest(name = "version {0}")
-    @ValueSource(longs = [4, 14])
-    fun `a database from before the trigger fix keeps every row and gets the newest schema`(version: Long) {
-        val key = OldDatabases.key(version.toInt())
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = ["orphan chapter at 13", "orphan history at 14"])
+    fun `an old row whose parent is gone does not stop the migration`(case: String) {
+        val version = case.substringAfterLast(' ').toLong()
+        val key = OldDatabases.key(60 + version.toInt())
         val file = file()
         val seeded = oldDatabase(file, key, version)
-        OldDatabases.userVersion(file, key) shouldBe version
-        seedDifferences(file, key, seeded).shouldBeEmpty()
+        OldDatabases.connect(file, key).use { c ->
+            c.createStatement().use {
+                when (case) {
+                    "orphan chapter at 13" -> it.execute("INSERT INTO chapters SELECT 98, 999, url, name, scanlator, read, bookmark, last_page_read, chapter_number, source_order, date_fetch, date_upload FROM chapters WHERE _id = 10")
+                    "orphan history at 14" -> it.execute("INSERT INTO history VALUES (5, 9999, 1, 1)")
+                }
+            }
+        }
 
-        OldDatabases.migrate(file, key, version, 27)
+        open(file, key) { }
 
-        openAndCheck(file, key, version, seeded, copiedAt = 27)
+        OldDatabases.userVersion(file, key) shouldBe OldDatabases.NEWEST
+        // Every seeded row as expected, and the orphan gone from its table (an unexpected row otherwise)
+        rowDifferences(file, key, version, seeded).shouldBeEmpty()
+        schemaDifferences(file, key, version).shouldBeEmpty()
     }
 
     /**
@@ -281,41 +291,23 @@ class DatabaseMigrationTest {
     }
 
     /**
-     * Migrations the desktop's start-up path cannot run, so a database from before 27 is never
-     * migrated (none exists in the field; see the class comment). Inherited from upstream: `13.sqm`
-     * reads `merged.manga_source`, which `3.sqm` named `COL_MANGA_SOURCE`, so nothing from before 4
-     * migrates. A row whose parent is gone no longer stops `13.sqm` or `14.sqm`: the desktop
-     * migrates with foreign keys off, as Android's driver does. On the desktop only: `26.sqm` renames a table, which
-     * makes SQLite check every trigger, and `20.sqm`'s trigger has a double-quoted string this
-     * build's SQLite rejects ([OldDatabases.TRIGGER_VERSION]; the start-up path rewrites the
-     * trigger only after migrating). Each time the open fails, nothing is changed, and the copy made
-     * before the migration is kept.
+     * Migrations nobody can run, inherited from upstream: `13.sqm` reads `merged.manga_source`,
+     * which `3.sqm` named `COL_MANGA_SOURCE`, so nothing from before 4 migrates (none exists in the
+     * field; see the class comment). The open fails, nothing is changed, and the copy made before
+     * the migration is kept.
      */
-    @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = ["version 1", "version 3", "orphan chapter at 13", "orphan history at 14", "version 4", "version 14", "version 21", "version 26"])
-    fun `a migration that fails leaves the old database as it was`(case: String) {
-        val version = case.substringAfterLast(' ').toLong()
+    @ParameterizedTest(name = "version {0}")
+    @ValueSource(longs = [1, 3])
+    fun `a migration that fails leaves the old database as it was`(version: Long) {
         val key = OldDatabases.key(40 + version.toInt())
         val file = file()
         oldDatabase(file, key, version)
-        OldDatabases.connect(file, key).use { c ->
-            c.createStatement().use {
-                when (case) {
-                    "orphan chapter at 13" -> it.execute("INSERT INTO chapters SELECT 98, 999, url, name, scanlator, read, bookmark, last_page_read, chapter_number, source_order, date_fetch, date_upload FROM chapters WHERE _id = 10")
-                    "orphan history at 14" -> it.execute("INSERT INTO history VALUES (5, 9999, 1, 1)")
-                }
-            }
-        }
         val before = allRows(file, key)
         val schemaBefore = OldDatabases.connect(file, key).use { SchemaCompare.schema(it) }
 
         val e = shouldThrowAny { open(file, key) { } }
 
-        messages(e) shouldContain when {
-            version <= 3 -> "no such column: manga_source"
-            // The orphans go through 13.sqm and 14.sqm with foreign keys off, as on Android
-            else -> "error in trigger system_category_delete_trigger"
-        }
+        messages(e) shouldContain "no such column: manga_source"
         OldDatabases.userVersion(file, key) shouldBe version
         allRows(file, key) shouldBe before
         OldDatabases.connect(file, key).use { SchemaCompare.schema(it) } shouldBe schemaBefore
@@ -411,8 +403,8 @@ class DatabaseMigrationTest {
 
     @Test
     fun `two favourites of the same gallery stop 26 sqm`() {
-        // Inherited from upstream (reached on the desktop only past the trigger, as above): 26.sqm keys
-        // favourites by gid and token, and the copy fails on a duplicate; nothing is changed
+        // Inherited from upstream: 26.sqm keys favourites by gid and token, and the copy fails on
+        // a duplicate; nothing is changed
         val key = OldDatabases.key(26)
         val file = file()
         oldDatabase(file, key, 26)

@@ -1,5 +1,6 @@
 package zoukan.desktop.db
 
+import app.cash.sqldelight.db.AfterVersion
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
@@ -83,6 +84,10 @@ object DesktopDatabase {
             properties = properties,
             databaseThread = databaseThread,
             schema = Database.Schema,
+            // The trigger is fixed before the migrations that reach it too: 26.sqm renames a table,
+            // which makes SQLite check every trigger. One older database gets it from 20.sqm
+            callbacks = *arrayOf(AfterVersion(TRIGGER_MIGRATION, ::fixTriggers)),
+            beforeMigration = { driver -> if (hasSystemCategoryTrigger(driver)) fixTriggers(driver) },
         ).also(::fixTriggers)
     }
 
@@ -145,8 +150,20 @@ object DesktopDatabase {
      * The schema's trigger that keeps the system category raises its error with a double-quoted
      * string. SQLCipher here is built without double-quoted string literals, so every category
      * delete failed with "no such column". Recreate it with a single-quoted string; the trigger
-     * text is stored in the file, so this also fixes databases made on Android.
+     * text is stored in the file, so this also fixes databases made on Android. Run after opening,
+     * and while migrating an older database: before the migrations when it has the trigger, and
+     * right after `20.sqm` makes it, so `26.sqm`'s table rename (which checks every trigger) passes.
      */
+    /** The migration (`20.sqm`) that makes the system category's trigger. */
+    private const val TRIGGER_MIGRATION = 20L
+
+    private fun hasSystemCategoryTrigger(driver: SqlDriver): Boolean = driver.executeQuery(
+        null,
+        "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND name = 'system_category_delete_trigger'",
+        { cursor -> QueryResult.Value(cursor.next().value && (cursor.getLong(0) ?: 0L) > 0) },
+        0,
+    ).value
+
     private fun fixTriggers(driver: SqlDriver) {
         driver.execute(null, "DROP TRIGGER IF EXISTS system_category_delete_trigger", 0)
         driver.execute(

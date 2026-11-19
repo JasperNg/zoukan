@@ -46,9 +46,9 @@ internal object OldDatabases {
     /**
      * The first version with the system category's trigger. `20.sqm` raises its error with a
      * double-quoted string, which this build's SQLite (built without double-quoted string
-     * literals) rejects when an `ALTER TABLE … RENAME` checks the schema, so the desktop's start-up
-     * path cannot run `26.sqm` on a database from before 27 (pinned by `DatabaseMigrationTest`).
-     * The trigger is rewritten only after the migrations.
+     * literals) rejects when an `ALTER TABLE … RENAME` checks the schema (`26.sqm`). The desktop's
+     * start-up path rewrites it single-quoted before migrating and right after `20.sqm`, as the
+     * builder here does.
      */
     const val TRIGGER_VERSION = 21L
 
@@ -129,8 +129,8 @@ internal object OldDatabases {
     }
 
     /**
-     * Migrates [file] (with rows) from [from] to [to] as [create] does below 28, getting past the
-     * trigger (see [TRIGGER_VERSION]) the desktop's own start-up path cannot.
+     * Migrates [file] (with rows) from [from] to [to] as [create] does below 28, past the trigger
+     * (see [TRIGGER_VERSION]), without the start-up path's checks and copy.
      */
     fun migrate(file: File, key: ByteArray, from: Long, to: Long) {
         require(from in MERGED_SOURCE_COLUMN_VERSION..to)

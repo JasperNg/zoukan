@@ -295,20 +295,21 @@ feed's); the app's own timeouts are 10 to 30 s.
   its pre-SQLDelight code used at database version 1, from its public history; `1.sqm` to
   `13.sqm` repeat that code's upgrades), and a test proves it: running `1.sqm` to `27.sqm` on it
   gives `28.db`'s schema and rows exactly, apart from what `14.sqm` leaves behind (below).
-  Versions opened through the start-up path: 27, 28, 38 and the one before the newest; 4 and 14
-  are first migrated to 27 by `OldDatabases`, since the start-up path cannot take them (below).
+  Versions opened through the start-up path: 4, 14, 20, 21, 26, 27, 28, 38 and the one before
+  the newest, and 13 and 14 with a row whose parent is gone.
   Every version from 1 is built and seeded. `MigrationSeed` holds the known rows and what each
   migration does to them. A new migration that adds a table or a column fails these tests until
   `MigrationSeed` has rows for the table, or says what old rows get in the column.
   Only the newest version occurs in the field: the desktop's first release already had it, and data
   from Android arrives in backups, not database files. The older versions are tested for
   completeness, since the migrations are shared with the Android app. Pinned as they are: a
-  database from before 4 fails at `13.sqm` (`3.sqm` names a column `COL_MANGA_SOURCE`); before
-  15, a row whose parent is gone fails `13.sqm` or `14.sqm` (the desktop migrates with foreign
-  keys on); before 27, the start-up path fails at `26.sqm`, whose table rename makes SQLite check
-  `20.sqm`'s trigger and its double-quoted string (the trigger is rewritten only after migrating),
-  and past that, two favourites with the same gallery fail `26.sqm`. Each failure leaves the
-  database and the copy made before the migration as they were. A database that went through
+  database from before 4 fails at `13.sqm` (`3.sqm` names a column `COL_MANGA_SOURCE`), and two
+  favourites with the same gallery fail `26.sqm`. Each failure leaves the database and the copy
+  made before the migration as they were. The start-up path migrates with foreign keys off, as
+  Android's driver does, so a row whose parent is gone passes `13.sqm` and `14.sqm`
+  (`MigrationForeignKeysTest` checks a table rebuild keeps its children), and it rewrites
+  `20.sqm`'s trigger, whose double-quoted string this SQLite rejects, before migrating and right
+  after `20.sqm`, so `26.sqm`'s table rename (which checks every trigger) passes. A database that went through
   `14.sqm` keeps `history.last_read` NOT NULL and a stale `history_temp` table, unlike a new
   install.
 - `AndroidStorageFolderTest` (in `zoukan.desktop.storage`) writes a storage folder as the Android
