@@ -50,6 +50,57 @@ class TallImageSplitterTest {
         temp.list()!!.toList() shouldBe listOf("001.png")
     }
 
+    /**
+     * A grey 1-bit PNG of [width] by [height] pixels, written row by row so the test never holds
+     * the whole image.
+     */
+    private fun stripPng(width: Int, height: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val data = java.io.DataOutputStream(out)
+        fun chunk(type: String, body: ByteArray) {
+            data.writeInt(body.size)
+            val typed = type.toByteArray() + body
+            data.write(typed)
+            data.writeInt(java.util.zip.CRC32().apply { update(typed) }.value.toInt())
+        }
+        data.write(byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 13, 10, 26, 10))
+        chunk(
+            "IHDR",
+            ByteArrayOutputStream().also { b ->
+                java.io.DataOutputStream(b).apply {
+                    writeInt(width)
+                    writeInt(height)
+                    write(byteArrayOf(1, 0, 0, 0, 0))
+                }
+            }.toByteArray(),
+        )
+        val compressed = ByteArrayOutputStream()
+        java.util.zip.DeflaterOutputStream(compressed).use { z ->
+            val row = ByteArray(1 + (width + 7) / 8)
+            repeat(height) { z.write(row) }
+        }
+        chunk("IDAT", compressed.toByteArray())
+        chunk("IEND", ByteArray(0))
+        return out.toByteArray()
+    }
+
+    @Test
+    fun `a strip taller than 65,535 pixels is still split, as ImageIO reads it by region`() {
+        // The 65,535 side limit is the reader's ImageIO display path; the splitter reads a part at a time
+        val image = File(temp, "001.png").apply { writeBytes(stripPng(100, 90_000)) }
+        val parts = TallImageSplitter.splitIfTall(image, "001", partHeight = 15_000, maxPixels = 100L * 90_000)
+        parts.size shouldBe 6
+        parts.sumOf {
+            ImageIO.createImageInputStream(it).use { input ->
+                ImageIO.getImageReaders(input).next().run {
+                    setInput(input)
+                    getHeight(0)
+                }
+            }
+        } shouldBe 90_000
+        image.exists() shouldBe false
+    }
+
     @Test
     fun `downloads split tall pages and resume without fetching them again`() = runBlocking<Unit> {
         // Taller than twice any screen, so it splits at the default part height

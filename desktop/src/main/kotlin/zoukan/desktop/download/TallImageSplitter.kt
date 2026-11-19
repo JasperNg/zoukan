@@ -56,7 +56,10 @@ object TallImageSplitter {
      * Splits [image] (named `<base>.<ext>`) in its folder when it is tall. Animated images and
      * formats ImageIO cannot read are kept as they are, and so is an image that declares more than
      * [maxPixels]: ImageIO decodes on the Java heap, and some formats (a progressive JPEG) whole,
-     * so it is bounded as the reader bounds ImageIO ([PageSizeLimits.imageIoPixelLimit]).
+     * so it is bounded as the reader bounds ImageIO ([PageSizeLimits.imageIoPixelLimit]). The
+     * reader's side limit ([PageSizeLimits.MAX_PAGE_SIDE]) does not apply: it is the reader's
+     * ImageIO display path's, and ImageIO's readers have none of their own (a PNG strip of 720 by
+     * 90,000 is split; a JPEG cannot be larger than that limit anyway).
      *
      * @return the files that now hold the page
      */
@@ -77,7 +80,7 @@ object TallImageSplitter {
                     val width = reader.getWidth(0)
                     val height = reader.getHeight(0)
                     if (width <= 0 || height / width <= 3) return listOf(image)
-                    if (PageSizeLimits.isTooLarge(width, height, maxPixels)) {
+                    if (PageSizeLimits.isTooLarge(width, height, maxPixels, maxSide = Int.MAX_VALUE)) {
                         logcat(LogPriority.WARN) { "Not splitting ${image.name}: it is too large to decode" }
                         return listOf(image)
                     }

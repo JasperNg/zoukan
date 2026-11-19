@@ -11,7 +11,6 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.util.NoFollowDelete
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
-import zoukan.desktop.image.PageSizeLimits
 import zoukan.desktop.image.PageTooLargeException
 import java.io.File
 import java.io.OutputStream
@@ -93,9 +92,6 @@ class ChapterDownloader(
                             // An HTML or JSON body (an error or login page sent with status 200) is no page: retried, then failed
                             val bytes = retry(3) { image(page).also { checkImage(it, page.number) } }
                             if (bytes.isEmpty()) error("Page ${page.number} is empty")
-                            // A page the reader refuses as too large is not saved as if it were fine;
-                            // nor is it fetched again, as it comes back the same
-                            PageSizeLimits.checkDeclaredSize(bytes)
                             // Formats the sniffer does not know (BMP, say) are kept, as Android keeps them
                             val ext = ImageType.fromBytes(bytes)?.extension ?: "jpg"
                             val part = File(tmp, "$base.tmp")

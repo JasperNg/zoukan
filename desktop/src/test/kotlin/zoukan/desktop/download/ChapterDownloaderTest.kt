@@ -272,7 +272,10 @@ class ChapterDownloaderTest {
     }
 
     @Test
-    fun `a page that declares more pixels than the reader shows fails the chapter, fetched once, and is not saved`() = runBlocking<Unit> {
+    fun `a page that declares more pixels than the reader shows is saved whole and the chapter completes`() = runBlocking<Unit> {
+        // As on Android: the reader refuses that one page when it is shown ("too large to show"),
+        // and the rest of the chapter is readable offline. Whether a chapter downloads never
+        // depends on the machine's heap
         val fetches = AtomicInteger()
         val huge = declaredPng(60_000, 60_000)
         val downloader = ChapterDownloader(
@@ -289,12 +292,13 @@ class ChapterDownloaderTest {
             parallelPages = 1,
         )
 
-        val error = shouldThrow<Exception> { downloader.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> } }
+        val file = downloader.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> }
 
-        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.the_page_is_too_large_to_show)
-        // Refused as it is, not fetched again: a retry gets the same page
         fetches.get() shouldBe 1
-        File(temp, "Chapter 1.cbz").exists() shouldBe false
-        File(temp, "Chapter 1_tmp").list().orEmpty().none { it.startsWith("004") } shouldBe true
+        file shouldBe File(temp, "Chapter 1.cbz")
+        LocalFormat.open(file).use { format ->
+            format.pageCount shouldBe 12
+            format.page(3).contentEquals(huge) shouldBe true
+        }
     }
 }
