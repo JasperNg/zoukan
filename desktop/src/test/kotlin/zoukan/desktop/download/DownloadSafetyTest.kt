@@ -152,6 +152,7 @@ class DownloadSafetyTest {
         shouldThrow<CbzPasswordMissingException> { CbzPassword(MapStore(failing = false), security(protect = true)).encryption() }
         val empty = MapStore(failing = false).apply { values[CbzPassword.KEY] = "" }
         shouldThrow<CbzPasswordMissingException> { CbzPassword(empty, security(protect = true)).encryptDownloads() }
+            .message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.no_download_password_chapter_not_saved)
     }
 
     @Test

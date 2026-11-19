@@ -101,11 +101,7 @@ class CbzPasswordUnavailableException(cause: Throwable) :
  * "Password protect downloads" is on but no download password is set (Android disables the switch
  * then; a backup or a removed password can still leave it on).
  */
-class CbzPasswordMissingException :
-    IllegalStateException(
-        "Password protect downloads is on, but no download password is set, so the chapter was not saved. " +
-            "Set the download password in Settings > Downloads, or turn password protection off, and retry.",
-    )
+class CbzPasswordMissingException : IllegalStateException(localized(DMR.strings.no_download_password_chapter_not_saved))
 
 class CbzEncryption(val password: CharArray, val type: SecurityPreferences.EncryptionType)
 

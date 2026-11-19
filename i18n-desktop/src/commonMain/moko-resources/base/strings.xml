@@ -726,6 +726,8 @@
     <!-- An encrypted download or cover.cbi opened without the download password; %1$s is the file's name -->
     <string name="is_password_protected_set_the_download_password">%1$s is password protected. Set the download password in Settings.</string>
     <string name="the_cover_is_encrypted_set_the_download_password">The entry\'s cover is encrypted. Set the download password in Settings.</string>
+    <!-- A download with "Password-protect downloads" on and no download password set -->
+    <string name="no_download_password_chapter_not_saved">Password-protect downloads is on, but no download password is set, so the chapter was not saved. Set the download password in Settings &gt; Downloads, or turn password protection off, and retry.</string>
     <string name="standard_zip_encryption">Standard zip encryption</string>
     <string name="backing_up">Backing up…</string>
     <string name="restoring">Restoring %1$s…</string>
