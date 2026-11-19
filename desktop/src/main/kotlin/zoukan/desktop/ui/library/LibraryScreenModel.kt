@@ -16,6 +16,7 @@ import exh.source.nHentaiSourceIds
 import exh.util.isLewd
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -618,50 +620,55 @@ class LibraryScreenModel(
         // KMK <--
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun baseSettingsFlow(): Flow<Settings> {
         val p = preferences
-        val trackerIds = trackerManager.loggedInTrackers().map { it.id }
-        val flows: List<Flow<Any>> = listOf(
-            p.displayMode().changes(), p.landscapeColumns().changes(), p.sortingMode().changes(),
-            p.randomSortSeed().changes(), p.categorizedDisplaySettings().changes(),
-            p.filterDownloaded().changes(), p.filterUnread().changes(), p.filterStarted().changes(),
-            p.filterBookmarked().changes(), p.filterCompleted().changes(),
-            p.unreadBadge().changes(), p.downloadBadge().changes(), p.localBadge().changes(),
-            p.languageBadge().changes(), p.sourceBadge().changes(), p.showContinueReadingButton().changes(),
-            p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
-            // ZOUKAN -->
-            // More > Downloaded only shows only downloaded entries, as Android's library
-            desktopPreferences.value.downloadedOnly().changes(),
-            p.groupLibraryBy().changes(),
-            // ZOUKAN <--
-            p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
-        ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
-        return combine(flows) { v ->
-            Settings(
-                display = v[0] as LibraryDisplayMode,
-                columns = v[1] as Int,
-                sort = v[2] as LibrarySort,
-                randomSeed = v[3] as Int,
-                categorized = v[4] as Boolean,
-                downloaded = if (v[18] as Boolean) TriState.ENABLED_IS else v[5] as TriState,
-                unread = v[6] as TriState,
-                started = v[7] as TriState,
-                bookmarked = v[8] as TriState,
-                completed = v[9] as TriState,
-                unreadBadge = v[10] as Boolean,
-                downloadBadge = v[11] as Boolean,
-                localBadge = v[12] as Boolean,
-                languageBadge = v[13] as Boolean,
-                sourceBadge = v[14] as Boolean,
-                continueReading = v[15] as Boolean,
-                categoryTabs = v[16] as Boolean,
-                itemCounts = v[17] as Boolean,
-                group = v[19] as Int,
-                sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[20] as Set<*>).filterIsInstance<String>().toSet()),
-                showEmptyCategoriesSearch = v[21] as Boolean,
-                tracking = trackerIds.mapIndexed { i, id -> id to v[22 + i] as TriState }.toMap(),
-            )
-        }
+        return trackerManager.loggedInTrackersFlow()
+            .map { trackers -> trackers.map { it.id } }
+            .distinctUntilChanged()
+            .flatMapLatest { trackerIds ->
+                val flows: List<Flow<Any>> = listOf(
+                    p.displayMode().changes(), p.landscapeColumns().changes(), p.sortingMode().changes(),
+                    p.randomSortSeed().changes(), p.categorizedDisplaySettings().changes(),
+                    p.filterDownloaded().changes(), p.filterUnread().changes(), p.filterStarted().changes(),
+                    p.filterBookmarked().changes(), p.filterCompleted().changes(),
+                    p.unreadBadge().changes(), p.downloadBadge().changes(), p.localBadge().changes(),
+                    p.languageBadge().changes(), p.sourceBadge().changes(), p.showContinueReadingButton().changes(),
+                    p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
+                    // ZOUKAN -->
+                    // More > Downloaded only shows only downloaded entries, as Android's library
+                    desktopPreferences.value.downloadedOnly().changes(),
+                    p.groupLibraryBy().changes(),
+                    // ZOUKAN <--
+                    p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
+                ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
+                combine(flows) { v ->
+                    Settings(
+                        display = v[0] as LibraryDisplayMode,
+                        columns = v[1] as Int,
+                        sort = v[2] as LibrarySort,
+                        randomSeed = v[3] as Int,
+                        categorized = v[4] as Boolean,
+                        downloaded = if (v[18] as Boolean) TriState.ENABLED_IS else v[5] as TriState,
+                        unread = v[6] as TriState,
+                        started = v[7] as TriState,
+                        bookmarked = v[8] as TriState,
+                        completed = v[9] as TriState,
+                        unreadBadge = v[10] as Boolean,
+                        downloadBadge = v[11] as Boolean,
+                        localBadge = v[12] as Boolean,
+                        languageBadge = v[13] as Boolean,
+                        sourceBadge = v[14] as Boolean,
+                        continueReading = v[15] as Boolean,
+                        categoryTabs = v[16] as Boolean,
+                        itemCounts = v[17] as Boolean,
+                        group = v[19] as Int,
+                        sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[20] as Set<*>).filterIsInstance<String>().toSet()),
+                        showEmptyCategoriesSearch = v[21] as Boolean,
+                        tracking = trackerIds.mapIndexed { i, id -> id to v[22 + i] as TriState }.toMap(),
+                    )
+                }
+            }
     }
 
     fun search(query: String) = mutableState.update { it.copy(query = query) }
