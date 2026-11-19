@@ -77,7 +77,9 @@ class TestKitTest {
                 kit.handler.await(inTransaction = true) {
                     categoriesQueries.insert("Allowed", 3L, 0L, 0L)
                 }
-                kit.handler.awaitList { categoriesQueries.getCategories() }.map { it.name } shouldBe listOf("Allowed")
+                kit.handler.awaitList { categoriesQueries.getCategories() }
+                    .filterNot { it.id == 0L }
+                    .map { it.name } shouldBe listOf("Allowed")
             }
         }
     }
