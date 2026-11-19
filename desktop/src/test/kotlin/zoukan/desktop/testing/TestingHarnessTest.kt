@@ -50,15 +50,9 @@ class FreshInjektTest {
             "desktop/src/test/kotlin/zoukan/desktop/compat/ContextStubsTest.kt",
             "desktop/src/test/kotlin/zoukan/desktop/network/DohClientsTest.kt",
             "desktop/src/test/kotlin/zoukan/desktop/sync/SyncManagerTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/AnilistApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/MangaDexFollowApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/KavitaApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/SuwayomiApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/BangumiApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/ShikimoriApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/MyAnimeListApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/MangaUpdatesApiTest.kt",
-            "desktop/src/test/kotlin/zoukan/desktop/track/KitsuApiTest.kt",
+            "desktop/src/test/kotlin/zoukan/desktop/track/OAuthTrackerApisTest.kt",
+            "desktop/src/test/kotlin/zoukan/desktop/track/CommunityAndFollowTrackerApisTest.kt",
+            "desktop/src/test/kotlin/zoukan/desktop/track/SelfHostedTrackersAndContractTest.kt",
         )
         for (path in injektMutators) {
             val text = File(root, path).readText()
