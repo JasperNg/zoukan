@@ -3,6 +3,7 @@ package zoukan.desktop.download
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
+import xyz.nulldev.androidcompat.util.PortableFileNames
 
 /**
  * File names as the Android app builds them (DiskUtil in core/common androidMain), so a downloads
@@ -51,31 +52,13 @@ object FileNames {
     }
 
     /**
-     * Android's name with what makes it invalid somewhere taken out: half a surrogate pair becomes
-     * `_` (before the cut, so the cut cannot turn it into `?`), a dot or space left at the end by
-     * the cut goes, and a Windows device name gets `_` after its base name (`NUL` is `NUL_`,
-     * `CON.txt` is `CON_.txt`). Equal to [androidValidFilename] whenever that is valid.
+     * Android's name with what makes it invalid somewhere taken out ([PortableFileNames.portable]):
+     * half a surrogate pair becomes `_`, a dot or space left at the end by the cut goes, and a
+     * Windows device name gets `_` after its base name. Equal to [androidValidFilename] whenever
+     * that is valid.
      */
-    internal fun portableFilename(origName: String, maxBytes: Int, disallowNonAscii: Boolean): String {
-        val name = origName.trim('.', ' ')
-        if (name.isEmpty()) return "(invalid)"
-        val sb = StringBuilder(name.length)
-        name.forEachIndexed { i, c ->
-            if (disallowNonAscii && c >= 0x80.toChar()) {
-                sb.append(c.toString().toByteArray(Charsets.UTF_8).toHexString(HexFormat { upperCase = false }))
-            } else if (isValidFatFilenameChar(c) && !isLoneSurrogate(name, i)) {
-                sb.append(c)
-            } else {
-                sb.append('_')
-            }
-        }
-        var out = truncateToLength(sb.toString(), maxBytes).trimEnd('.', ' ')
-        if (isWindowsDeviceName(out)) {
-            val baseEnd = out.indexOf('.').takeIf { it >= 0 } ?: out.length
-            out = truncateToLength(out.substring(0, baseEnd) + "_" + out.substring(baseEnd), maxBytes).trimEnd('.', ' ')
-        }
-        return out.takeIf { it.isNotEmpty() && !isWindowsDeviceName(it) } ?: "(invalid)"
-    }
+    internal fun portableFilename(origName: String, maxBytes: Int, disallowNonAscii: Boolean): String =
+        PortableFileNames.portable(origName, maxBytes, disallowNonAscii)
 
     /**
      * Whether [name] is one file name that works on Windows, macOS and Linux: no reserved or control
@@ -98,26 +81,9 @@ object FileNames {
         return listOf(name, questionMarks)
     }
 
-    /** CON, PRN, AUX, NUL, COM0-9, LPT0-9 (and the superscript 1-3), with or without an extension. */
-    private val windowsDeviceNames: Set<String> = buildSet {
-        addAll(listOf("CON", "PRN", "AUX", "NUL"))
-        for (d in listOf("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\u00b9", "\u00b2", "\u00b3")) {
-            add("COM$d")
-            add("LPT$d")
-        }
-    }
+    internal fun isWindowsDeviceName(name: String): Boolean = PortableFileNames.isWindowsDeviceName(name)
 
-    internal fun isWindowsDeviceName(name: String): Boolean =
-        name.substringBefore('.').trimEnd(' ').uppercase(java.util.Locale.ROOT) in windowsDeviceNames
-
-    private fun isLoneSurrogate(s: String, i: Int): Boolean {
-        val c = s[i]
-        return when {
-            c.isHighSurrogate() -> i + 1 >= s.length || !s[i + 1].isLowSurrogate()
-            c.isLowSurrogate() -> i == 0 || !s[i - 1].isHighSurrogate()
-            else -> false
-        }
-    }
+    private fun isLoneSurrogate(s: String, i: Int): Boolean = PortableFileNames.isLoneSurrogate(s, i)
 
     /** Truncates to [maxBytes] of UTF-8 without cutting a character in half. */
     fun truncateToLength(s: String, maxBytes: Int): String {
