@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.network.NetworkHelper
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -59,6 +61,7 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.ZoukanDirs
+import zoukan.desktop.backup.DesktopBackups
 import zoukan.desktop.backup.NoStubSources
 import zoukan.desktop.backup.RestoreGate
 import zoukan.desktop.backup.SafetySnapshot
@@ -304,6 +307,28 @@ class SyncDatabaseFaultsTest {
         library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
         remoteUrls() shouldBe setOf("/local", "/remote")
         preferences.lastSyncEtag().get() shouldBe sync.etag
+    }
+
+    @Test
+    fun `this computer's sync ETag is in neither the library it uploads nor a backup it makes`() = runBlocking<Unit> {
+        // Another device (or Android, restoring a desktop backup) would take it for its own server state
+        preferences.lastSyncTimestamp().set(1L)
+        preferences.lastSyncEtag().set("an older one")
+        store.getString("app_theme", "").set("MONET")
+
+        manager().syncData()
+
+        val uploaded = BackupCodec.decode(sync.remoteBackup!!).backupPreferences.map { it.key }
+        uploaded shouldContain "app_theme"
+        uploaded shouldNotContain "sync_etag"
+
+        preferences.lastSyncEtag().set("an older one")
+        val file = File(temp, "backup.tachibk")
+        val backups = DesktopBackups(ZoukanDirs(temp).android)
+        backups.create(file)
+        val backedUp = backups.read(file).backupPreferences.map { it.key }
+        backedUp shouldContain "app_theme"
+        backedUp shouldNotContain "sync_etag"
     }
 
     @Test

@@ -20,6 +20,7 @@ import okio.Sink
 import okio.sink
 import okio.source
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.service.SourceManager
@@ -61,9 +62,17 @@ class DesktopBackups(
     private val move: (temp: File, file: File, replaceExisting: Boolean) -> Unit = { temp, file, replace -> moveIntoPlace(temp, file, replace) },
 ) {
 
+    /**
+     * Builds backups, and the library a sync uploads. The app's settings are read without this
+     * computer's [NEVER_RESTORED] state, so a backup or an upload made here never carries it to
+     * another device (Android restores `sync_etag` as a setting).
+     */
     fun contentCreator(): BackupContentCreator = BackupContentCreator(
         mangaBackupCreator = MangaBackupCreator(requireMetadataSource = false),
-        preferenceBackupCreator = PreferenceBackupCreator(extraSourcePreferenceKeys = ::storedSourcePreferenceKeys),
+        preferenceBackupCreator = PreferenceBackupCreator(
+            preferenceStore = withoutDeviceState(Injekt.get()),
+            extraSourcePreferenceKeys = ::storedSourcePreferenceKeys,
+        ),
     )
 
     /** Builds a backup and writes it to [file], gzipped, as the Android app does. */
@@ -227,11 +236,17 @@ class DesktopBackups(
 
         private const val LOCK_KEY = "use_biometric_lock"
 
+        /** [store] whose [PreferenceStore.getAll], which backups are built from, leaves out the [NEVER_RESTORED] keys. */
+        internal fun withoutDeviceState(store: PreferenceStore): PreferenceStore = object : PreferenceStore by store {
+            override fun getAll(): Map<String, *> = store.getAll().filterKeys { it !in NEVER_RESTORED }
+        }
+
         /**
          * Settings that are this computer's state although Android keeps them as plain settings, so
-         * they are in backups and in synced settings. The sync ETag is the server version this
+         * Android's backups and synced settings carry them. The sync ETag is the server version this
          * computer has restored; another device's would make the next sync upload this computer's
-         * library over the server's (SyncManager.doSync).
+         * library over the server's (SyncManager.doSync). Never restored here, and never written
+         * into a backup or an upload made here ([contentCreator]).
          */
         private val NEVER_RESTORED = setOf("sync_etag")
 
