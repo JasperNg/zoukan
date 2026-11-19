@@ -30,6 +30,8 @@ object ExtensionSignatures {
      *
      * A file that is not a jar, is cut off, or has an entry that does not match its signed digest
      * is refused with an [ExtensionException] too, so its callers report it as an extension error.
+     * So is any other exception the JDK's zip and signature code throws on crafted bytes; an
+     * [Error] is not caught: reading a file runs no extension code, so it is the app's own failure.
      */
     fun verifyJar(jar: File): VerifiedJar = try {
         verifyJarOrThrow(jar)
@@ -39,6 +41,9 @@ object ExtensionSignatures {
     } catch (e: SecurityException) {
         // An entry whose bytes do not match the digest its signature lists
         throw ExtensionException(ExtensionException.Stage.SIGNATURE, "${jar.name} does not match its signature: ${e.message}", e)
+    } catch (e: RuntimeException) {
+        // Crafted bytes the zip or signature parser does not expect (an index or a length out of range)
+        throw ExtensionException(ExtensionException.Stage.SIGNATURE, "${jar.name} is damaged or not a jar: $e", e)
     }
 
     private fun verifyJarOrThrow(jar: File): VerifiedJar {
@@ -100,6 +105,10 @@ object ExtensionSignatures {
             throw ExtensionException(ExtensionException.Stage.SIGNATURE, "The APK is damaged or not an APK: ${e.message}", e)
         } catch (e: IOException) {
             throw ExtensionException(ExtensionException.Stage.SIGNATURE, "The APK could not be read: ${e.message}", e)
+        } catch (e: RuntimeException) {
+            // apksig on crafted bytes it does not expect (BufferUnderflowException, an index or a length
+            // out of range): the APK is damaged. An Error is not caught: no extension code runs here
+            throw ExtensionException(ExtensionException.Stage.SIGNATURE, "The APK is damaged or not an APK: $e", e)
         }
         return signersOf(result)
     }

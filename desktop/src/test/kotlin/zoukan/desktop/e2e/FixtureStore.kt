@@ -253,6 +253,8 @@ class FixtureStore(private val server: FixtureServer) : AutoCloseable {
             val bytes = MessageDigest.getInstance("MD5").digest("${name.lowercase()}/en/1".toByteArray())
             return (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
         }
-        private const val PASSWORD = "password"
+
+        /** The throwaway keystores' password, also for tests that sign their own fixtures with [Key]. */
+        const val PASSWORD = "password"
     }
 }

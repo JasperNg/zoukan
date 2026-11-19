@@ -309,6 +309,8 @@ dependencies {
     testImplementation(zoukanlibs.typesafe.config)
     // Property-based tests (zoukan.desktop.property), run as ordinary JUnit tests
     testImplementation(libs.kotest.property)
+    // ExtensionFilePropertyTest signs its own fixture APK (the app only verifies with it)
+    testImplementation(zoukanlibs.apksig)
 }
 
 val jvmFlags = listOf(

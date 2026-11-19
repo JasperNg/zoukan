@@ -74,10 +74,12 @@ data class ExtensionManifest(
         val SUPPORTED_LIB_VERSIONS = listOf(1.4, 1.6)
 
         /** Reads the text AndroidManifest.xml a store's jar (or a jar converted by Zoukan) carries. */
-        fun fromJar(jar: File): ExtensionManifest = ZipFile(jar).use { zip ->
-            val entry = zip.getEntry("AndroidManifest.xml")
-                ?: throw ExtensionException(ExtensionException.Stage.MANIFEST, "No AndroidManifest.xml in ${jar.name}")
-            parse(zip.getInputStream(entry).use { it.readAllBytes() }.decodeToString())
+        fun fromJar(jar: File): ExtensionManifest = reading(jar.name) {
+            ZipFile(jar).use { zip ->
+                val entry = zip.getEntry("AndroidManifest.xml")
+                    ?: throw ExtensionException(ExtensionException.Stage.MANIFEST, "No AndroidManifest.xml in ${jar.name}")
+                parse(zip.getInputStream(entry).use { it.readAllBytes() }.decodeToString())
+            }
         }
 
         /** Reads the text AndroidManifest.xml from a jar's [contents]; [jarName] is for messages. */
@@ -88,12 +90,28 @@ data class ExtensionManifest(
         }
 
         /** Decodes the binary AndroidManifest.xml of an APK. */
-        fun fromApk(apk: ByteArray): ExtensionManifest = ByteArrayApkFile(apk).use { parse(it.manifestXml) }
+        fun fromApk(apk: ByteArray): ExtensionManifest = parse(manifestXmlOfApk(apk))
 
         /** The text of an APK's manifest, to store in a converted jar. */
-        fun manifestXmlOfApk(apk: ByteArray): String = ByteArrayApkFile(apk).use { it.manifestXml }
+        fun manifestXmlOfApk(apk: ByteArray): String = reading("The APK") { ByteArrayApkFile(apk).use { it.manifestXml } }
 
-        fun parse(xml: String): ExtensionManifest {
+        /**
+         * Runs [block], which reads an untrusted extension file, and reports any exception it throws
+         * on damaged or crafted bytes (a zip, XML or binary-XML parser's) as an [ExtensionException],
+         * so its callers report it as an extension error. An [Error] is not caught: reading a file
+         * runs no extension code, so it is the app's own failure.
+         */
+        private inline fun <T> reading(name: String, block: () -> T): T = try {
+            block()
+        } catch (e: ExtensionException) {
+            throw e
+        } catch (e: Exception) {
+            throw ExtensionException(ExtensionException.Stage.MANIFEST, "$name has a damaged or unreadable manifest: $e", e)
+        }
+
+        fun parse(xml: String): ExtensionManifest = reading("The manifest") { parseOrThrow(xml) }
+
+        private fun parseOrThrow(xml: String): ExtensionManifest {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 // The manifest is untrusted input: no DTDs or external entities
                 setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)

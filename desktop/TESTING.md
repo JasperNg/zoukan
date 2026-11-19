@@ -496,7 +496,10 @@ equal the Android app's wherever Android's name is valid too (otherwise Android'
 names looked up); any backup survives a write and a read; any preference survives a save
 and a reload, plain and encrypted; and the parsers of outside data (`ComicInfo.xml`, an extension
 store's index, the update manifest, a backup file) give a result or the error their caller handles
-for any input, in bounded time. The Android name code they compare with is copied in
+for any input, in bounded time. `zoukan.desktop.extension.ExtensionFilePropertyTest` does the same
+for extension files: a damaged signed jar or APK gives one signer or an `ExtensionException` from
+every step that reads it (signature, manifest, conversion, install), and a refused file leaves
+nothing in the extensions folder. The Android name code they compare with is copied in
 `AndroidNameOracle.kt`; `AndroidNameOracleSourceTest` fails when the Android source changes.
 
 Each property runs a few hundred tries with a fixed seed, so a run is repeatable; together they
