@@ -333,10 +333,8 @@ class BrowseAndSourceBehaviorTest {
         val sourceManager = mockk<SourceManager>(relaxed = true) {
             every { getAll() } returns listOf(blocked, matching, empty)
         }
-        val mangaRepo = mockk<MangaRepositoryImpl>(relaxed = true)
-        val networkToLocal = mockk<NetworkToLocalManga> {
-            coEvery { invoke(any<List<Manga>>(), any<Boolean>()) } answers { firstArg<List<Manga>>() }
-        }
+        val networkToLocal = mockk<NetworkToLocalManga>()
+        coEvery { networkToLocal.invoke(any<List<Manga>>(), any<Boolean>()) } answers { firstArg<List<Manga>>() }
         Injekt.addSingleton(sourceManager)
         Injekt.addSingleton(networkToLocal)
 
