@@ -159,15 +159,10 @@ happen any more, never for a while:
   canary weak reference shows has happened.
 
 The sleeps that stay are where time itself is the subject: the wait helper's own polling, a fake's
-planned slowness (the fixture and test servers), and a live test by hand against real Chromium.
-`ThreadSleepScanTest` (in `zoukan.desktop.scan`) fails on `Thread.sleep` (and `TimeUnit.*.sleep`)
-in any test source set, and on a `delay` that pauses a `runBlocking` body, outside its short
-allow-list, in which every entry has a reason. It also sees the block of a test helper that takes a
-`suspend` lambda and runs it under `runBlocking` (such as `withStubbedSignatures { }`) as such a
-body. It reads the text, so it does not see a `delay` in a block that reaches `runBlocking` another
-way: a wrapper that does not take the block as a `suspend` lambda parameter of its own (a class, a
-stored lambda), or a library function's lambda inside a `runBlocking` body (`mockkObject(...) { }`),
-which reads as any other lambda.
+planned slowness (the fixture server), and a live test by hand against real Chromium.
+`ThreadSleepScanTest` (in `zoukan.desktop.scan`) fails on `Thread.sleep`, `TimeUnit.*.sleep` and
+`SystemClock.sleep` in any test source set outside its short allow-list, in which every entry has a
+reason.
 
 The scan tests' allow-lists (`zoukan.desktop.scan`) name each site: an entry gives the file, a
 part of the line and, where a file has more than one site, the function the site is in, and it must

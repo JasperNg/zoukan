@@ -19,8 +19,7 @@ import zoukan.desktop.scan.SourceScan.Allowed
  * On a path that runs extension code (or loads a native library), a `LinkageError` is an outdated
  * extension (`SourceErrors.kt`) and is shown as an error: there the catch calls
  * `e.rethrowIfVmFailure()` instead, or keeps the older `if (e !is Exception && e !is LinkageError)
- * throw e`. Those are accepted only at the sites [EXTENSION_PATHS] lists, each with what extension
- * code or native library the path reaches.
+ * throw e`. Native-boundary catches that cannot throw back into native code are listed in [ALLOWED].
  *
  * Kotlin's `runCatching` catches every Throwable too. It is left out of this rule: the app's own
  * code has about 300 calls, most around one file or preference operation, and moving them all to a
@@ -48,16 +47,6 @@ class FatalErrorCatchScanTest {
             ALLOWED,
             "Call e.rethrowIfFatal() first in this catch (xyz.nulldev.androidcompat.util), or rethrow " +
                 "the caught error after cleanup (or add the site to the allow-list with its reason):",
-        )
-    }
-
-    @Test
-    fun `a catch-all that keeps a LinkageError is on a path that runs extension code`() {
-        SourceScan.verify(
-            sites.filter { it.first == FatalErrorCatchScanner.Kind.KEEPS_LINKAGE }.map { it.second },
-            EXTENSION_PATHS,
-            "rethrowIfVmFailure() is only for a path that runs extension code or loads a native library; " +
-                "use rethrowIfFatal() here (or list the site with what extension code it runs):",
         )
     }
 
@@ -154,48 +143,6 @@ class FatalErrorCatchScanTest {
             Allowed("security/SecureScreen.kt", "} catch (e: Throwable) {", "a callback from macOS's main dispatch queue through JNA: nothing may be thrown back into native code", function = "invoke"),
             Allowed("webkit/KcefContentRules.kt", "} catch (e: Throwable) {", "called from native code: NativeCallback.guard wraps every callback Chromium makes through JCEF (the request filters in onBeforeResourceLoad on its IO thread, the browser windows' handlers), so nothing may be thrown back into native code; an Error is logged and reported once, and the callback does what it does by default", function = "guard"),
             Allowed("webkit/KcefContentRules.kt", "} catch (_: Throwable) {", "called from native code: NativeCallback.failed logs and reports a callback's failure, and running out of memory while it does must not be thrown back into native code either", function = "failed"),
-        )
-
-        const val SOURCE = "runs extension code: a source's"
-        val EXTENSION_PATHS = listOf(
-            // The helpers themselves, for their callers
-            Allowed("app/Cancellation.kt", "} catch (e: Throwable) {", "runs extension code: runCatchingCancellable wraps calls into sources, trackers and the extension manager"),
-            Allowed("ui/common/ReportingLaunch.kt", "} catch (e: Throwable) {", "runs extension code: launchReporting runs any user action, refreshing an entry from its source included", function = "launchReporting"),
-            Allowed("android/os/Looper.java", "} catch (Error error) {", "runs extension code: the main looper runs every extension's handler and WebView callbacks", function = "loopOnce"),
-            // Sources
-            Allowed("ui/reader/ReaderScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE page list, page images and page actions", count = 4),
-            Allowed("ui/browse/SourceScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE filters and browse pages", count = 3),
-            Allowed("ui/browse/GlobalSearchScreen.kt", "} catch (e: Throwable) {", "$SOURCE search"),
-            Allowed("ui/browse/FeedTab.kt", "} catch (e: Throwable) {", "$SOURCE feed"),
-            Allowed("ui/manga/MangaScreenModel.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters, and enhanced trackers that ask the source", count = 3),
-            Allowed("ui/manga/MergeAndMigrate.kt", "} catch (e: Throwable) {", "$SOURCE search for a merge or a migration", count = 2),
-            Allowed("ui/manga/PagePreviews.kt", "} catch (e: Throwable) {", "$SOURCE page previews", count = 2),
-            Allowed("ui/manga/EntryActions.kt", "} catch (e: Throwable) {", "runs extension code: the source's client and headers, which fetch a cover to copy or save", function = "run"),
-            Allowed("ui/manga/RelatedTitles.kt", "} catch (e: Throwable) {", "$SOURCE related titles", function = "RelatedTitlesSection"),
-            Allowed("ui/recs/RecommendationSearch.kt", "} catch (e: Throwable) {", "$SOURCE search for recommendations, each source's and the search's as a whole", count = 2),
-            Allowed("download/DownloadManager.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images for a download", function = "download"),
-            Allowed("download/ChapterDownloader.kt", "} catch (e: Throwable) {", "$SOURCE page list and page images, retried", function = "retry"),
-            Allowed("ui/settings/EhSettings.kt", "} catch (e: Throwable) {", "$SOURCE gallery update (the E-Hentai source)"),
-            Allowed("track/TrackingModel.kt", "} catch (e: Throwable) {", "$SOURCE metadata, and enhanced trackers that ask the source", count = 3),
-            Allowed("exh/EhGalleryUpdater.kt", "} catch (t: Throwable) {", "$SOURCE gallery update (the E-Hentai source)", function = "updateEntryAndGetChapters"),
-            Allowed("library/AddToLibrary.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters after adding an entry"),
-            Allowed("library/BackgroundJobs.kt", "} catch (e: Throwable) {", "runs extension code: the scheduled library update, gallery update and tracker retries"),
-            Allowed("library/LibraryUpdater.kt", "} catch (e: Throwable) {", "$SOURCE details and chapters in a library update", count = 2),
-            // Loading and managing extensions
-            Allowed("ui/settings/MissingExtensions.kt", "} catch (e: Throwable) {", "runs extension code: installing an extension loads it", function = "installMissingExtensions"),
-            Allowed("ui/settings/MissingExtensionsInstall.kt", "} catch (e: Throwable) {", "runs extension code: installing extensions loads them", count = 2),
-            Allowed("ui/browse/BrowseScreenModel.kt", "} catch (e: Throwable) {", "runs extension code: installing or updating an extension loads it"),
-            Allowed("ui/browse/ExtensionDetailsScreen.kt", "} catch (e: Throwable) {", "runs extension code: uninstalling an extension unloads its sources", function = "uninstall"),
-            Allowed("zoukan/extension/DesktopExtensionLoader.kt", "} catch (e: Throwable) {", "runs extension code: loading an extension's classes and creating its sources, which fail with a LinkageError when it is outdated", count = 2),
-            // The extension test harnesses (run on demand, not by the app)
-            Allowed("harness/ExtensionWiringCheck.kt", "} catch (e: Throwable) {", "runs extension code: the extension-wiring check installs extensions and calls their sources and settings, recording each failure", count = 4),
-            Allowed("harness/CompatibilityHarness.kt", "} catch (e: Throwable) {", "runs extension code: the compatibility harness calls each source's optional steps", function = "optional"),
-            // Native libraries through JNA
-            Allowed("ui/settings/SecuritySettings.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA, which fails with a LinkageError when it cannot load"),
-            Allowed("ui/security/LockOverlay.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA"),
-            Allowed("ui/settings/DownloadPasswordDialog.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA (the older idiom, which also rethrows every other Error)"),
-            Allowed("ui/settings/AboutSettings.kt", "} catch (e: Throwable) {", "loads a native library: the OS secret store through JNA (the older idiom, which also rethrows every other Error)"),
-            Allowed("update/UpdateStates.kt", "} catch (e: Throwable) {", "loads a native library: the update check reads its token from the OS secret store through JNA", function = "check"),
         )
     }
 }

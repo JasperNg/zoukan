@@ -41,7 +41,10 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 
 /** The download queue's states: pausing, resuming, queueing while it drains, reordering. */
@@ -53,16 +56,16 @@ class DownloadQueueStatesTest {
     private lateinit var server: HttpServer
     private val png = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB), "png", it) }.toByteArray()
 
-    /** How long the server takes per image */
+    /** Optional gate invoked on each page request so tests can pause deterministically mid-chapter. */
     @Volatile
-    private var pageDelayMs = 0L
+    private var pageGate: (() -> Unit)? = null
 
     @BeforeEach
     fun startServer() {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
             executor = Executors.newFixedThreadPool(8)
             createContext("/") { exchange ->
-                if (pageDelayMs > 0) Thread.sleep(pageDelayMs)
+                pageGate?.invoke()
                 exchange.sendResponseHeaders(200, png.size.toLong())
                 exchange.responseBody.use { it.write(png) }
             }
@@ -74,6 +77,7 @@ class DownloadQueueStatesTest {
 
     @AfterEach
     fun stopServer() {
+        pageGate = null
         // Queue saves run in the background; one still writing when the test ends made the
         // temp folder's clean-up fail (DirectoryNotEmptyException)
         runBlocking {
@@ -186,21 +190,50 @@ class DownloadQueueStatesTest {
         manager.queue.value.shouldBeEmpty()
     }
 
+    /**
+     * Enqueues [chapter] and holds the server response on the ([completedPages] + 1)-th page
+     * request until [block] finishes, so [block] runs deterministically mid-chapter while
+     * [Download.State.DOWNLOADING] is active.
+     */
+    private suspend fun withMidChapterGate(
+        manager: DownloadManager,
+        chapter: Chapter,
+        completedPages: Int = 2,
+        block: suspend (Download) -> Unit,
+    ): Download {
+        val reached = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val requests = AtomicInteger(0)
+        pageGate = {
+            if (requests.incrementAndGet() == completedPages + 1) {
+                reached.countDown()
+                release.await(10, TimeUnit.SECONDS)
+            }
+        }
+        return try {
+            manager.enqueue(manga, listOf(chapter))
+            val download = manager.queue.value.single()
+            withTimeout(10_000) { download.state.first { it == Download.State.DOWNLOADING } }
+            withTimeout(10_000) { download.progress.first { it.first >= completedPages } }
+            reached.await(10, TimeUnit.SECONDS) shouldBe true
+            block(download)
+            download
+        } finally {
+            pageGate = null
+            release.countDown()
+        }
+    }
+
     @Test
     fun `pausing and starting again keeps the queue running until it is done`() = runBlocking<Unit> {
-        pageDelayMs = 100
         val manager = manager()
         val chapter = chapter(1, 12)
-        manager.enqueue(manga, listOf(chapter))
-        val download = manager.queue.value.single()
-        withTimeout(10_000) { download.state.first { it == Download.State.DOWNLOADING } }
-        // Paused part way through the chapter
-        withTimeout(10_000) { download.progress.first { it.first >= 2 } }
-
-        manager.pause()
-        manager.running.value shouldBe false
-        manager.start()
-        manager.running.value shouldBe true
+        val download = withMidChapterGate(manager, chapter) {
+            manager.pause()
+            manager.running.value shouldBe false
+            manager.start()
+            manager.running.value shouldBe true
+        }
         // The paused run ending must not mark the new one as stopped. The new run starts on the
         // chapter only after the paused run has ended
         withTimeout(10_000) { download.state.first { it != Download.State.QUEUED } }
@@ -283,16 +316,11 @@ class DownloadQueueStatesTest {
 
     @Test
     fun `deleting a chapter while it downloads leaves nothing behind`() = runBlocking<Unit> {
-        pageDelayMs = 50
         val manager = manager()
         val chapter = chapter(1, 6)
-        manager.enqueue(manga, listOf(chapter))
-        val download = manager.queue.value.single()
-        withTimeout(10_000) { download.state.first { it == Download.State.DOWNLOADING } }
-        // Deleted part way through the chapter
-        withTimeout(10_000) { download.progress.first { it.first >= 2 } }
-
-        manager.delete(manga, listOf(chapter))
+        withMidChapterGate(manager, chapter) {
+            manager.delete(manga, listOf(chapter))
+        }
         withTimeout(10_000) { manager.awaitIdle() }
         // The clean-up of the cancelled chapter's files
         withTimeout(10_000) { manager.awaitBackgroundWork() }
