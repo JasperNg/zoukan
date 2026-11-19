@@ -24,6 +24,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.Navigator
@@ -54,13 +55,18 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import okhttp3.CacheControl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -204,10 +210,23 @@ class MangaMetadataAndPreviewsTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                models.forEach { it.onDispose() }
+                runBlocking {
+                    withTimeout(5_000) {
+                        models.forEach { model ->
+                            val job = model.screenModelScope.coroutineContext[Job]!!
+                            job.cancelChildren()
+                            job.children.toList().joinAll()
+                        }
+                        app.coroutineContext[Job]!!.cancelAndJoin()
+                    }
+                }
+                models.clear()
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         private fun sampleMetadata(mangaId: Long): EHentaiSearchMetadata = EHentaiSearchMetadata().apply {

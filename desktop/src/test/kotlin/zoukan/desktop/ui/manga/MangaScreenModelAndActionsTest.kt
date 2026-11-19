@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.track.interactor.RefreshTracks
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
@@ -34,12 +35,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
@@ -111,6 +115,26 @@ import javax.swing.SwingUtilities
 @OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
 class MangaScreenModelAndActionsTest {
 
+    private fun drainModelsAndScopes(
+        models: MutableList<MangaScreenModel>,
+        vararg scopes: CoroutineScope,
+    ) {
+        models.forEach { it.onDispose() }
+        runBlocking {
+            withTimeout(5_000) {
+                models.forEach { model ->
+                    val job = model.screenModelScope.coroutineContext[Job]!!
+                    job.cancelChildren()
+                    job.children.toList().joinAll()
+                }
+                scopes.forEach { scope ->
+                    scope.coroutineContext[Job]!!.cancelAndJoin()
+                }
+            }
+        }
+        models.clear()
+    }
+
     /**
      * Covers chapter multi-selection, read/unread/bookmark/mark-previous-read actions, unread &
      * bookmarked download menu queuing, deleting downloads confirmation dialog, and chapter settings
@@ -134,10 +158,12 @@ class MangaScreenModelAndActionsTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                drainModelsAndScopes(models, app)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         private val manga = Manga.create().copy(id = 77, source = 4242L, ogTitle = "Formats", initialized = true)
@@ -394,10 +420,12 @@ class MangaScreenModelAndActionsTest {
         @AfterEach
         fun tearDown() {
             systemTrash = originalTrash
-            models.forEach { it.onDispose() }
-            appScope.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                drainModelsAndScopes(models, appScope)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         @Test
@@ -693,10 +721,12 @@ class MangaScreenModelAndActionsTest {
         fun tearDown() {
             onRefreshStart = null
             systemTrash = originalTrash
-            models.forEach { it.onDispose() }
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                drainModelsAndScopes(models, app)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         private fun seedLocalFiles(folderName: String = "LocalManga"): Pair<File, List<File>> {
@@ -955,12 +985,13 @@ class MangaScreenModelAndActionsTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            collector.cancel()
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
-            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+            try {
+                drainModelsAndScopes(models, collector, app)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+                Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+            }
         }
 
         private fun newModel(): MangaScreenModel {
@@ -1059,11 +1090,14 @@ class MangaScreenModelAndActionsTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            Dispatchers.resetMain()
-            main.close()
-            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
-            UncaughtCoroutineErrors.drain()
+            try {
+                drainModelsAndScopes(models)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+                Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+                UncaughtCoroutineErrors.drain()
+            }
         }
 
         private fun newModel(

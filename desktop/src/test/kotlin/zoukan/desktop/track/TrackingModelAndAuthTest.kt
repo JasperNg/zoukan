@@ -198,9 +198,22 @@ class TrackerMetadataResolveTest {
 
     @AfterEach
     fun tearDown() {
-        models.forEach { it.onDispose() }
-        Dispatchers.resetMain()
-        main.close()
+        try {
+            models.forEach { it.onDispose() }
+            runBlocking {
+                withTimeout(5_000) {
+                    models.forEach { model ->
+                        val job = model.screenModelScope.coroutineContext.job
+                        job.cancelChildren()
+                        job.children.toList().joinAll()
+                    }
+                }
+            }
+            models.clear()
+        } finally {
+            Dispatchers.resetMain()
+            main.close()
+        }
     }
 
     private val found = TrackSearch.create(TrackerManager.ANILIST).apply { title = "Found" }

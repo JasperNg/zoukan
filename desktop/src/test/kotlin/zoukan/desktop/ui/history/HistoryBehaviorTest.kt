@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.track.interactor.AddTracks
@@ -23,11 +24,15 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -76,6 +81,7 @@ import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.Date
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Isolated Compose UI test for [HistoryTab] and [HistoryScreenModel] against SQLite:
@@ -174,6 +180,7 @@ class HistoryBehaviorTest {
         mainDispatcher.close()
         driver.close()
         dbThread.executor.shutdownNow()
+        dbThread.executor.awaitTermination(5, TimeUnit.SECONDS)
     }
 
     private fun seedData(): Triple<Long, Long, List<Long>> = runBlocking {
@@ -312,6 +319,13 @@ class HistoryBehaviorTest {
             }
         } finally {
             model.onDispose()
+            runBlocking {
+                withTimeout(5_000) {
+                    val job = model.screenModelScope.coroutineContext[Job]!!
+                    job.cancelChildren()
+                    job.children.toList().joinAll()
+                }
+            }
         }
     }
 }

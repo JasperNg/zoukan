@@ -25,6 +25,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.window.WindowState
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.source.model.Page
@@ -41,10 +42,13 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -332,10 +336,23 @@ class ReaderControlsAndOverlayTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                models.forEach { it.onDispose() }
+                runBlocking {
+                    withTimeout(5_000) {
+                        models.forEach { model ->
+                            val job = model.screenModelScope.coroutineContext[Job]!!
+                            job.cancelChildren()
+                            job.children.toList().joinAll()
+                        }
+                        app.coroutineContext[Job]!!.cancelAndJoin()
+                    }
+                }
+                models.clear()
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         @Test

@@ -5,6 +5,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.ScreenModel
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.source.interactor.GetExhSavedSearch
 import eu.kanade.domain.source.service.SourcePreferences
@@ -24,12 +26,16 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import mihon.domain.extension.interactor.AddExtensionStore
 import mihon.domain.extension.interactor.GetExtensionStores
 import mihon.domain.extension.interactor.RemoveExtensionStore
@@ -81,6 +87,7 @@ import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Isolated behavior coverage for Browse, Source, Global Search, Feed Order, and missing
@@ -135,6 +142,17 @@ class BrowseAndSourceBehaviorTest {
     fun tearDown() {
         Dispatchers.resetMain()
         mainDispatcher.close()
+    }
+
+    private fun disposeAndJoin(model: ScreenModel) {
+        model.onDispose()
+        runBlocking {
+            withTimeout(5_000) {
+                val job = model.screenModelScope.coroutineContext[Job]!!
+                job.cancelChildren()
+                job.children.toList().joinAll()
+            }
+        }
     }
 
     private class GenreFilter : Filter.Select<String>("Genre", arrayOf("Any", "Drama", "Comedy"))
@@ -223,7 +241,7 @@ class BrowseAndSourceBehaviorTest {
             model.state.value.sections.flatMap { it.second }.none { it.id == fake.id } shouldBe true
             model.state.value.sections.first { it.first == "Comics" }.second.map { it.id } shouldBe listOf(LocalSource.ID)
         } finally {
-            model.onDispose()
+            disposeAndJoin(model)
         }
     }
 
@@ -315,14 +333,15 @@ class BrowseAndSourceBehaviorTest {
                     reopened.deleteSavedSearch(saved.id)
                     Await.until("saved search deleted") { reopened.state.value.savedSearches.isEmpty() }
                 } finally {
-                    reopened.onDispose()
+                    disposeAndJoin(reopened)
                 }
             } finally {
-                model.onDispose()
+                disposeAndJoin(model)
             }
         } finally {
             driver.close()
             dbThread.executor.shutdownNow()
+            dbThread.executor.awaitTermination(5, TimeUnit.SECONDS)
         }
     }
 
@@ -378,7 +397,7 @@ class BrowseAndSourceBehaviorTest {
                 onNodeWithText("Empty Source").assertDoesNotExist()
             }
         } finally {
-            model.onDispose()
+            disposeAndJoin(model)
         }
     }
 
@@ -428,11 +447,12 @@ class BrowseAndSourceBehaviorTest {
                     runBlocking { getFeeds.await() }.map { it.source } == listOf(4243L, 4242L)
                 }
             } finally {
-                model.onDispose()
+                disposeAndJoin(model)
             }
         } finally {
             driver.close()
             dbThread.executor.shutdownNow()
+            dbThread.executor.awaitTermination(5, TimeUnit.SECONDS)
         }
     }
 

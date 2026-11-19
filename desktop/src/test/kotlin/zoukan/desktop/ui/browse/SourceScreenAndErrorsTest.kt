@@ -343,9 +343,19 @@ class SourceFiltersSnapshotTest {
     @AfterEach
     fun tearDown() {
         release.complete(Unit)
-        model.onDispose()
-        Dispatchers.resetMain()
-        main.close()
+        try {
+            model.onDispose()
+            runBlocking {
+                withTimeout(5_000) {
+                    val job = model.screenModelScope.coroutineContext[Job]!!
+                    job.children.forEach { it.cancel() }
+                    job.children.toList().forEach { it.join() }
+                }
+            }
+        } finally {
+            Dispatchers.resetMain()
+            main.close()
+        }
     }
 
     @Test

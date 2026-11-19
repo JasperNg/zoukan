@@ -11,17 +11,22 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -59,6 +64,7 @@ import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Isolated Compose UI test for [UpdatesTab] and [UpdatesScreenModel]:
@@ -129,6 +135,7 @@ class UpdatesBehaviorTest {
         mainDispatcher.close()
         driver.close()
         dbThread.executor.shutdownNow()
+        dbThread.executor.awaitTermination(5, TimeUnit.SECONDS)
     }
 
     private fun seedUpdates(): List<Long> = runBlocking {
@@ -227,6 +234,13 @@ class UpdatesBehaviorTest {
             }
         } finally {
             model.onDispose()
+            runBlocking {
+                withTimeout(5_000) {
+                    val job = model.screenModelScope.coroutineContext[Job]!!
+                    job.cancelChildren()
+                    job.children.toList().joinAll()
+                }
+            }
         }
     }
 

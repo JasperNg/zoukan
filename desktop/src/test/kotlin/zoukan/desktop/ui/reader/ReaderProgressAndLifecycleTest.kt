@@ -30,11 +30,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -129,6 +131,20 @@ class ReaderProgressAndLifecycleTest {
         }
     }
 
+    private fun drainScopeAndModels(app: CoroutineScope, models: MutableList<ReaderScreenModel>) {
+        runBlocking {
+            withTimeout(5_000) {
+                models.forEach { m ->
+                    val job = m.screenModelScope.coroutineContext[Job]!!
+                    job.cancelChildren()
+                    job.children.toList().joinAll()
+                }
+                app.coroutineContext[Job]!!.cancelAndJoin()
+            }
+        }
+        models.clear()
+    }
+
     private fun pngBytes(width: Int, height: Int): ByteArray = ByteArrayOutputStream().also {
         ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it)
     }.toByteArray()
@@ -216,6 +232,7 @@ class ReaderProgressAndLifecycleTest {
 
         private val main = Executors.newSingleThreadExecutor { Thread(it, "test-main") }.asCoroutineDispatcher()
         private val app = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val models = mutableListOf<ReaderScreenModel>()
 
         @TempDir
         lateinit var dir: File
@@ -227,9 +244,12 @@ class ReaderProgressAndLifecycleTest {
 
         @AfterEach
         fun tearDown() {
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                drainScopeAndModels(app, models)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         private val manga = Manga.create().copy(id = 7, source = 4242, initialized = true)
@@ -272,7 +292,7 @@ class ReaderProgressAndLifecycleTest {
                 syncManager = lazyOf(mockk(relaxed = true)),
                 trackChapters = lazyOf(mockk(relaxed = true)),
                 appScope = app,
-            )
+            ).also { models += it }
         }
 
         /**
@@ -452,22 +472,16 @@ class ReaderProgressAndLifecycleTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            // Its coroutines read Dispatchers.Main until they end, and resetting it meanwhile fails
-            runBlocking {
-                withTimeout(5_000) {
-                    models.forEach { m ->
-                        val job = m.screenModelScope.coroutineContext[Job]!!
-                        job.children.forEach { it.cancel() }
-                        job.children.toList().forEach { it.join() }
-                    }
-                }
+            try {
+                models.forEach { it.onDispose() }
+                // Its coroutines read Dispatchers.Main until they end, and resetting it meanwhile fails
+                drainScopeAndModels(app, models)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+                Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+                UncaughtCoroutineErrors.drain()
             }
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
-            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
-            UncaughtCoroutineErrors.drain()
         }
 
         private val manga = Manga.create().copy(id = 7, source = 4242, initialized = true)
@@ -496,7 +510,7 @@ class ReaderProgressAndLifecycleTest {
                 syncManager = lazyOf(mockk(relaxed = true)),
                 trackChapters = lazyOf(mockk(relaxed = true)),
                 appScope = app,
-            ).also { models += it }
+            ).also { models += it }.also { models += it }
         }
 
         @Test
@@ -576,6 +590,7 @@ class ReaderProgressAndLifecycleTest {
 
         private val main = Executors.newSingleThreadExecutor { Thread(it, "test-main") }.asCoroutineDispatcher()
         private val app = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val models = mutableListOf<ReaderScreenModel>()
         private val cipher = FileCipher(ByteArray(32) { 7 })
         private lateinit var appTemp: File
         private var previousCoverDir: File? = null
@@ -601,9 +616,12 @@ class ReaderProgressAndLifecycleTest {
             AppTempFiles.restoreRoot(previousTempRoot)
             previousCoverDir?.let { CustomCovers.coverDir = it }
             CustomCovers.codec = previousCodec
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                drainScopeAndModels(app, models)
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         private fun newEditManga(): EditManga {
@@ -681,7 +699,7 @@ class ReaderProgressAndLifecycleTest {
                         trackChapters = lazyOf(mockk(relaxed = true)),
                         editManga = lazyOf(newEditManga()),
                         appScope = app,
-                    )
+                    ).also { models += it }
                 }
             }
             try {

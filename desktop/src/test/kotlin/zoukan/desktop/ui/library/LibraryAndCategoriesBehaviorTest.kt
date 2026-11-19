@@ -78,6 +78,7 @@ import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Compose UI behavior tests for library, categories, delete-downloads confirmation, and update
@@ -151,6 +152,7 @@ class LibraryAndCategoriesBehaviorTest {
             mainDispatcher.close()
             driver.close()
             dbThread.executor.shutdownNow()
+            dbThread.executor.awaitTermination(5, TimeUnit.SECONDS)
         }
 
         @Test

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.source.service.SourcePreferences
@@ -25,9 +26,12 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -453,9 +457,22 @@ class ClearDatabaseSnapshotTest {
 
     @AfterEach
     fun tearDown() {
-        models.forEach { it.onDispose() }
-        Dispatchers.resetMain()
-        main.close()
+        try {
+            models.forEach { it.onDispose() }
+            runBlocking {
+                withTimeout(5_000) {
+                    models.forEach { model ->
+                        val job = model.screenModelScope.coroutineContext[Job]!!
+                        job.cancelChildren()
+                        job.children.toList().joinAll()
+                    }
+                }
+            }
+            models.clear()
+        } finally {
+            Dispatchers.resetMain()
+            main.close()
+        }
     }
 
     private val deleted = CountDownLatch(1)

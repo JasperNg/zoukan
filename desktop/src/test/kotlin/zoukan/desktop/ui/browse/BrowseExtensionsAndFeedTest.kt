@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences.MigrateSortingDirection
 import eu.kanade.domain.source.service.SourcePreferences.MigrateSortingMode
@@ -28,11 +29,15 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import mihon.domain.extension.model.ExtensionStore
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
@@ -368,9 +373,19 @@ class MigrateSourcesModelTest {
             model.search("")
             waitUntil { model.state.value.items?.size == 2 }
         } finally {
-            model.onDispose()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                model.onDispose()
+                runBlocking {
+                    withTimeout(5_000) {
+                        val job = model.screenModelScope.coroutineContext[Job]!!
+                        job.cancelChildren()
+                        job.children.toList().joinAll()
+                    }
+                }
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
     }
 }

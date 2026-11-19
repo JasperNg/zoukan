@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import io.kotest.matchers.comparables.shouldBeGreaterThan
@@ -26,10 +27,13 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -422,10 +426,23 @@ class PagedViewerTest {
 
         @AfterEach
         fun tearDown() {
-            models.forEach { it.onDispose() }
-            app.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                models.forEach { it.onDispose() }
+                runBlocking {
+                    withTimeout(5_000) {
+                        models.forEach { model ->
+                            val job = model.screenModelScope.coroutineContext[Job]!!
+                            job.cancelChildren()
+                            job.children.toList().joinAll()
+                        }
+                        app.coroutineContext[Job]!!.cancelAndJoin()
+                    }
+                }
+                models.clear()
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         private fun pngBytes(rgb: Int): ByteArray = ByteArrayOutputStream().also { out ->

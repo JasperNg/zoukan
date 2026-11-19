@@ -38,9 +38,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -50,6 +52,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -337,9 +340,16 @@ class CommonUiControlsAndSelectionTest {
 
         @AfterEach
         fun tearDown() {
-            toastCollectorScope.cancel()
-            Dispatchers.resetMain()
-            main.close()
+            try {
+                runBlocking {
+                    withTimeout(5_000) {
+                        toastCollectorScope.coroutineContext[Job]!!.cancelAndJoin()
+                    }
+                }
+            } finally {
+                Dispatchers.resetMain()
+                main.close()
+            }
         }
 
         @Test
@@ -474,7 +484,11 @@ class CommonUiControlsAndSelectionTest {
                 }
                 coVerify { addToLibrary.add(alpha, listOf(4L), fetchOnAdd = true) }
             } finally {
-                toggleScope.cancel()
+                runBlocking {
+                    withTimeout(5_000) {
+                        toggleScope.coroutineContext[Job]!!.cancelAndJoin()
+                    }
+                }
             }
 
             // BulkFavorite skip-duplicates flow when all selected entries are duplicates

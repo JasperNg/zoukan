@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import cafe.adriel.voyager.core.model.ScreenModel
+import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.domain.source.service.SourcePreferences
@@ -18,11 +20,16 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -108,6 +115,17 @@ class EmptyStatesBehaviorTest {
     fun tearDown() {
         Dispatchers.resetMain()
         mainDispatcher.close()
+    }
+
+    private fun disposeAndJoin(model: ScreenModel) {
+        model.onDispose()
+        runBlocking {
+            withTimeout(5_000) {
+                val job = model.screenModelScope.coroutineContext[Job]!!
+                job.cancelChildren()
+                job.children.toList().joinAll()
+            }
+        }
     }
 
     @Test
@@ -202,7 +220,7 @@ class EmptyStatesBehaviorTest {
                 }
             }
         } finally {
-            model.onDispose()
+            disposeAndJoin(model)
         }
     }
 
@@ -237,7 +255,7 @@ class EmptyStatesBehaviorTest {
                 onNodeWithText(localized(DMR.strings.no_downloads_queued_download_chapters_from)).assertExists()
             }
         } finally {
-            historyModel.onDispose()
+            disposeAndJoin(historyModel)
         }
     }
 

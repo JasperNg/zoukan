@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.interactor.RefreshTracks
 import eu.kanade.domain.track.interactor.SyncChapterProgressWithTrack
@@ -33,11 +34,16 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -91,6 +97,7 @@ import java.net.CookieManager
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Kavita, the self-hosted tracker: the plugin sign-in with the Kavita source's API key, then the
@@ -570,6 +577,7 @@ class KomgaTrackingContractTest {
         server.close()
         driver.close()
         executor.shutdownNow()
+        executor.awaitTermination(5, TimeUnit.SECONDS)
     }
 
     private fun insertKomgaManga(url: String = komga.seriesUrl(SERIES_ID)): Long = runBlocking {
@@ -659,7 +667,14 @@ class KomgaTrackingContractTest {
             Await.until("enhanced Komga track re-bound") { runBlocking { getTracks.await(mangaId) }.isNotEmpty() }
         } finally {
             model.onDispose()
-            collector.cancel()
+            runBlocking {
+                withTimeout(5_000) {
+                    val job = model.screenModelScope.coroutineContext[Job]!!
+                    job.cancelChildren()
+                    job.children.toList().joinAll()
+                    collector.cancelAndJoin()
+                }
+            }
         }
     }
 
