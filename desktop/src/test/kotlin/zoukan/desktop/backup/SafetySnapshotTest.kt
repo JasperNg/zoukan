@@ -195,4 +195,44 @@ class SafetySnapshotTest {
         storage.folderPreference.set(shared.absolutePath)
         safety.startsWith(storage.root.absoluteFile.normalize()) shouldBe false
     }
+
+    /** Two sync snapshots in [folder]: an older one and the one just written. */
+    private fun twoSnapshots(older: ByteArray, written: ByteArray): Pair<File, File> {
+        folder.mkdirs()
+        return File(folder, "safety_sync_2026-01-01_10-00-00.tachibk").apply { writeBytes(older) } to
+            File(folder, "safety_sync_2026-01-01_10-00-01.tachibk").apply { writeBytes(written) }
+    }
+
+    @Test
+    fun `snapshots are compared through a small buffer, so a difference in the last byte counts`() {
+        val bytes = ByteArray(10_000) { (it % 251).toByte() }
+        val (older, written) = twoSnapshots(bytes, bytes.copyOf().also { it[it.size - 1] = 7 })
+
+        SafetySnapshot.sameAsNewest(folder, SnapshotReason.SYNC, written, bufferSize = 16) shouldBe null
+        written.exists() shouldBe true
+
+        written.writeBytes(bytes)
+        SafetySnapshot.sameAsNewest(folder, SnapshotReason.SYNC, written, bufferSize = 16) shouldBe older
+        written.exists() shouldBe false
+    }
+
+    @Test
+    fun `a read that fails part way through the compare keeps the new snapshot`() {
+        val bytes = ByteArray(10_000) { (it % 251).toByte() }
+        val (older, written) = twoSnapshots(bytes, bytes)
+        val failing = { file: File ->
+            object : java.io.FilterInputStream(file.inputStream()) {
+                var read = 0
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    if (read > 4_000) throw IOException("The disk went away")
+                    return super.read(b, off, len).also { if (it > 0) read += it }
+                }
+            }
+        }
+
+        SafetySnapshot.sameAsNewest(folder, SnapshotReason.SYNC, written, bufferSize = 1024, open = failing) shouldBe null
+
+        written.exists() shouldBe true
+        older.exists() shouldBe true
+    }
 }

@@ -181,16 +181,41 @@ class SafetySnapshot(
          * before the first of them out. Equal bytes are an equal backup, so a library that changed in
          * any way the backup holds is always a new snapshot.
          */
-        internal fun sameAsNewest(folder: File, reason: SnapshotReason, written: File): File? {
+        internal fun sameAsNewest(
+            folder: File,
+            reason: SnapshotReason,
+            written: File,
+            bufferSize: Int = 64 * 1024,
+            open: (File) -> java.io.InputStream = { it.inputStream() },
+        ): File? {
             val newest = snapshots(folder, reason).firstOrNull { it.first != written }?.first ?: return null
+            // As streams through a fixed buffer, never whole: a large library's snapshots would
+            // otherwise be held twice on the heap. A compare that fails keeps the new snapshot
             val same = try {
-                newest.length() == written.length() && newest.readBytes().contentEquals(written.readBytes())
-            } catch (e: java.io.IOException) {
+                newest.length() == written.length() && sameBytes(open(newest), open(written), bufferSize)
+            } catch (e: Exception) {
                 logcat(LogPriority.WARN) { "Could not compare the safety backup with ${newest.name}: $e" }
                 false
             }
             // A copy that cannot be deleted stays, and the snapshots rotate as usual
             return newest.takeIf { same && written.delete() }
+        }
+
+        /** Whether [a] and [b] hold the same bytes, read [bufferSize] at a time; closes both. */
+        private fun sameBytes(a: java.io.InputStream, b: java.io.InputStream, bufferSize: Int): Boolean {
+            a.use {
+                b.use {
+                    val bufA = ByteArray(bufferSize)
+                    val bufB = ByteArray(bufferSize)
+                    while (true) {
+                        val n = a.readNBytes(bufA, 0, bufferSize)
+                        val m = b.readNBytes(bufB, 0, bufferSize)
+                        if (n != m) return false
+                        if (n == 0) return true
+                        if (!java.util.Arrays.equals(bufA, 0, n, bufB, 0, m)) return false
+                    }
+                }
+            }
         }
 
         /** [reason]'s snapshots in [folder], newest first, by the time in the name. */
