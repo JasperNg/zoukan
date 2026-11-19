@@ -369,8 +369,8 @@ public final class ImageDecoder implements AutoCloseable {
         }
         BufferedImage image;
         String mimeType;
-        // An in-memory cache: ImageIO.createImageInputStream may spill the page to a temp file
-        try (ImageInputStream in = new javax.imageio.stream.MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
+        // Over the bytes themselves, no copy: ImageIO.createImageInputStream may spill the page to a temp file
+        try (ImageInputStream in = xyz.nulldev.androidcompat.graphics.ByteArrayImageInput.byteArrayImageInputStream(bytes)) {
             Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
                 throw new DecodeException(DecodeException.SOURCE_MALFORMED_DATA, "Failed to create image decoder with message 'unimplemented'Input contained an error.", null, src);

@@ -10,7 +10,8 @@ import zoukan.desktop.scan.SourceScan.Allowed
  * file in the system's temporary folder while it is read or written (its file cache), so a
  * decrypted page or cover would land there in plain. Fails on these in the app's own code:
  *
- * - `ImageIO.read(...)` unless its argument is a `MemoryCacheImageInputStream(...)`;
+ * - `ImageIO.read(...)` unless its argument is a `MemoryCacheImageInputStream(...)` or a stream over
+ *   a byte array (`byteArrayImageInputStream(...)`, TwelveMonkeys' `ByteArrayImageInputStream(...)`);
  * - `ImageIO.write(...)` and `ImageIO.createImageInputStream(...)` / `createImageOutputStream(...)`.
  *
  * Read and write images held in memory with `MemoryImageIo` (desktop) or a
@@ -53,8 +54,12 @@ class ImageIoCacheScanTest {
             // ImageIO.read(stream) in a comment
             val e = "ImageIO.write(image) in a string"
             val f = javax.imageio.ImageIO.read(url)
+            val g = ImageIO.read(byteArrayImageInputStream(bytes))
+            val h = ImageIO.read(com.twelvemonkeys.imageio.stream.ByteArrayImageInputStream(bytes))
+            val i = ImageIO.read(ByteArrayImageInputStream(bytes))
+            val j = ImageIO.read(ByteArrayInputStreamWrapper(bytes))
             """.trimIndent(),
-        ) shouldBe listOf(1, 3, 4, 5, 10)
+        ) shouldBe listOf(1, 3, 4, 5, 10, 14)
     }
 
     private companion object {
@@ -64,7 +69,7 @@ class ImageIoCacheScanTest {
             Allowed(
                 "$MAIN/image/MemoryImageIo.kt",
                 "ImageIO.write(image, \"png\", stream)",
-                "the helper itself: writes to a MemoryCacheImageOutputStream",
+                "the helper itself: writes to a ByteArrayImageOutputStream, a stream into a byte array",
                 function = "png",
             ),
             Allowed(
@@ -89,7 +94,8 @@ class ImageIoCacheScanTest {
 internal object ImageIoCacheScanner {
     private val CALL = Regex(
         """\bImageIO\s*\.\s*(?:write|createImageInputStream|createImageOutputStream)\s*\(|""" +
-            """\bImageIO\s*\.\s*read\s*\((?!\s*(?:javax\s*\.\s*imageio\s*\.\s*stream\s*\.\s*)?MemoryCacheImageInputStream\s*\()""",
+            """\bImageIO\s*\.\s*read\s*\((?!\s*(?:(?:javax\s*\.\s*imageio\s*\.\s*stream\s*\.\s*)?MemoryCacheImageInputStream|""" +
+            """(?:[\w.]+\s*\.\s*)?(?:ByteArrayImageInputStream|byteArrayImageInputStream))\s*\()""",
     )
 
     fun lines(text: String): List<Int> {

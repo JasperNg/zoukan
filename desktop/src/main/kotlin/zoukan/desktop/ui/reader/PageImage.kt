@@ -13,12 +13,11 @@ import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.SamplingMode
 import tachiyomi.decoder.Format
 import tachiyomi.decoder.ImageFormats
+import xyz.nulldev.androidcompat.graphics.byteArrayImageInputStream
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.UnreadableImageException
 import zoukan.i18n.desktop.DMR
-import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
-import javax.imageio.stream.MemoryCacheImageInputStream
 
 /**
  * A decoded page. Tall pages (webtoon strips) are cut into slices no taller than [MAX_SLICE]
@@ -107,14 +106,14 @@ class PageImage(
             } catch (e: Exception) {
                 // Skia reads JPEG, PNG, WebP, GIF and BMP; ImageIO with TwelveMonkeys and the AVIF and
                 // HEIF reader covers a few more. Their pages go the same way, cropped as the others. Read
-                // through a cache in memory: ImageIO's default spills the page to a temporary file.
+                // over the page's bytes: ImageIO's default spills the page to a temporary file.
                 // ImageIO decodes on the Java heap, which holds less than Skia's native memory
                 // One page at a time, so the budget is the whole of half the heap, not half per decode
                 oneImageIoDecodeAtATime {
                     if (declared != null && isTooLarge(declared.first, declared.second, imageIoPixelLimit(heldBytes = imageIoHeldBytes(bytes)))) {
                         throw UnreadableImageException(localized(DMR.strings.the_page_is_too_large_to_show), e)
                     }
-                    val buffered = ImageIO.read(MemoryCacheImageInputStream(ByteArrayInputStream(bytes)))
+                    val buffered = ImageIO.read(byteArrayImageInputStream(bytes))
                         ?: throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, sniff(bytes)), e)
                     buffered.toComposeImageBitmap().asSkiaBitmap()
                 }
@@ -182,7 +181,10 @@ class PageImage(
         internal fun imageIoPixelLimit(maxHeap: Long = Runtime.getRuntime().maxMemory(), heldBytes: Long = 0): Long =
             minOf(MAX_DECODED_PIXELS, ((maxHeap / 2 - heldBytes) / IMAGE_IO_BYTES_PER_PIXEL).coerceAtLeast(0))
 
-        /** The heap a read on ImageIO's path holds besides its pixels: the page's bytes and the stream's copy of them. */
+        /**
+         * The heap a read on ImageIO's path holds besides its pixels: the page's bytes, read in
+         * place (no copy), and as much again for what a reader buffers or unpacks on the way.
+         */
         private fun imageIoHeldBytes(bytes: ByteArray): Long = 2L * bytes.size
 
         private val imageIoDecodes = java.util.concurrent.locks.ReentrantLock()
@@ -229,8 +231,8 @@ class PageImage(
 
         /** The size ImageIO's readers read from the header; null when none knows the type. */
         private fun imageIoSize(bytes: ByteArray): Pair<Int, Int>? = try {
-            // A cache in memory: ImageIO.createImageInputStream may spill the page to a temporary file
-            MemoryCacheImageInputStream(ByteArrayInputStream(bytes)).use { input ->
+            // Over the bytes themselves: ImageIO.createImageInputStream may spill the page to a temporary file
+            byteArrayImageInputStream(bytes).use { input ->
                 val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
                 try {
                     reader.input = input

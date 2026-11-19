@@ -31,4 +31,30 @@ class MemoryImageIoTest {
             ImageIO.setCacheDirectory(cacheDirectory)
         }
     }
+
+    @Test
+    fun `the PNG written into a byte array is the image, pixel for pixel`() {
+        val image = BufferedImage(300, 200, BufferedImage.TYPE_INT_RGB)
+        for (y in 0 until 200) for (x in 0 until 300) image.setRGB(x, y, (x * 7 + y * 13) and 0xFFFFFF)
+        val back = MemoryImageIo.read(MemoryImageIo.png(image))!!
+        (back.width to back.height) shouldBe (300 to 200)
+        (0 until 200 step 17).all { y -> (0 until 300 step 23).all { x -> back.getRGB(x, y) == image.getRGB(x, y) } } shouldBe true
+    }
+
+    @Test
+    fun `the byte array output stream seeks back, rewrites and grows`() {
+        val stream = ByteArrayImageOutputStream()
+        stream.write(ByteArray(100_000) { 1 })
+        stream.seek(10)
+        stream.writeInt(0x01020304)
+        stream.seek(stream.length())
+        stream.write(9)
+        stream.close()
+        val bytes = stream.toByteArray()
+        bytes.size shouldBe 100_001
+        bytes.copyOfRange(10, 14).toList() shouldBe listOf<Byte>(1, 2, 3, 4)
+        bytes[9] shouldBe 1.toByte()
+        bytes[14] shouldBe 1.toByte()
+        bytes[100_000] shouldBe 9.toByte()
+    }
 }
