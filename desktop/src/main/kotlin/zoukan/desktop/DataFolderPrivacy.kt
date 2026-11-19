@@ -4,8 +4,10 @@ import com.sun.jna.LastErrorException
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.NativeLong
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermission
@@ -85,15 +87,23 @@ internal object DataFolderPrivacy {
         note: (String) -> Unit,
         exclude: (File, (String) -> Unit) -> Boolean = { folder, onFailure -> BackupExclusion.exclude(folder, onFailure) },
     ): Boolean {
-        val isLink = try {
-            Files.isSymbolicLink(dir.toPath())
+        val path = dir.toPath()
+        val linkState = try {
+            if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) NoFollowDelete.linkState(path) else NoFollowDelete.LinkState.NOT_A_LINK
         } catch (e: Exception) {
             note("Could not check ${dir.path}, leaving it in Time Machine: $e")
             return false
         }
-        if (isLink) {
-            note("${dir.path} is a symbolic link, so it and the folder it points to are left in Time Machine")
-            return false
+        when (linkState) {
+            NoFollowDelete.LinkState.LINK -> {
+                note("${dir.path} is a symbolic link, so it and the folder it points to are left in Time Machine")
+                return false
+            }
+            NoFollowDelete.LinkState.UNKNOWN -> {
+                note("Could not check ${dir.path}, leaving it in Time Machine")
+                return false
+            }
+            NoFollowDelete.LinkState.NOT_A_LINK -> {}
         }
         runCatching { dir.mkdirs() }
         return try {
@@ -111,8 +121,8 @@ internal object DataFolderPrivacy {
     fun restrictToOwner(dir: File, note: (String) -> Unit) {
         try {
             val path = dir.toPath()
-            if (Files.isSymbolicLink(path)) return
-            if (!Files.isDirectory(path)) return
+            if (NoFollowDelete.isLink(path)) return
+            if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) return
             if ("posix" !in path.fileSystem.supportedFileAttributeViews()) return
             val ownerOnly = setOf(
                 PosixFilePermission.OWNER_READ,

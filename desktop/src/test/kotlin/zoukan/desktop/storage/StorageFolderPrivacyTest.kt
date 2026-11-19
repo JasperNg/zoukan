@@ -5,7 +5,6 @@ import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -13,12 +12,8 @@ import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import zoukan.desktop.BackupExclusion
 import zoukan.desktop.Platform
-import zoukan.desktop.SpotlightExclusion
-import zoukan.desktop.SpotlightExclusionHelper
-import zoukan.desktop.SpotlightNative
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.testing.FileSystemSandbox
-import zoukan.desktop.testing.TestHome
 import zoukan.desktop.track.MapPreferenceStore
 import java.io.File
 import java.nio.file.Files
@@ -28,14 +23,6 @@ class StorageFolderPrivacyTest {
     lateinit var temp: File
 
     private val notes = mutableListOf<String>()
-
-    /**
-     * The helper-failure tests below run a substituted command, which has its own stopped flag; only
-     * the real helper (the opt-in test that runs it) shares the run-wide one. Cleared after every test
-     * anyway, so no test leaves the real helper stopped for the tests after it.
-     */
-    @AfterEach
-    fun resetSpotlightRun() = SpotlightExclusion.resetForTests()
 
     /**
      * Records the marks the way the real ones would leave them; folders in [failing] fail, and the
@@ -63,22 +50,23 @@ class StorageFolderPrivacyTest {
     }
 
     private val timeMachine = FakeMark()
-    private val spotlight = FakeMark()
 
-    private fun storage(chosen: File, spotlight: Boolean = true, timeMachine: Boolean = true) = ZoukanStorage(
+    private fun storage(chosen: File, timeMachine: Boolean = true) = ZoukanStorage(
         ZoukanDirs(File(temp, "data").apply { mkdirs() }),
         MapPreferenceStore(),
     ).apply {
         folderPreference.set(chosen.path)
-        hideFromSpotlight.set(spotlight)
         excludeFromTimeMachine.set(timeMachine)
     }
 
     private fun privacy(storage: ZoukanStorage, enabled: Boolean = true) =
-        StorageFolderPrivacy(storage, notes::add, enabled, timeMachine, spotlight)
+        StorageFolderPrivacy(storage, notes::add, enabled, timeMachine)
 
-    /** The Zoukan folders of [root] as the marks see them: canonical (the temporary folder may be behind a link). */
-    private fun zoukanFolders(root: File) = listOf("downloads", "local", "autobackup").map { File(root.canonicalFile, it) }
+    /** The Zoukan folders of [root] as the marks see them: real path (the temporary folder may be behind a link). */
+    private fun zoukanFolders(root: File): List<File> {
+        val base = runCatching { root.toPath().toRealPath().toFile() }.getOrElse { root.canonicalFile }
+        return listOf("downloads", "local", "autobackup").map { File(base, it) }
+    }
 
     private fun paths(files: Iterable<File>) = files.map { it.path }.toSet()
 
@@ -91,13 +79,11 @@ class StorageFolderPrivacyTest {
     }
 
     @Test
-    fun `both settings are on by default and nothing here is in backups`() {
+    fun `setting is on by default and nothing here is in backups`() {
         val storage = ZoukanStorage(ZoukanDirs(File(temp, "data")), MapPreferenceStore())
-        storage.hideFromSpotlight.get() shouldBe true
         storage.excludeFromTimeMachine.get() shouldBe true
-        storage.spotlightMarked.get().shouldBeEmpty()
         storage.timeMachineMarked.get().shouldBeEmpty()
-        listOf(storage.hideFromSpotlight, storage.excludeFromTimeMachine, storage.spotlightMarked, storage.timeMachineMarked)
+        listOf(storage.excludeFromTimeMachine, storage.timeMachineMarked)
             .forEach { Preference.isAppState(it.key()) shouldBe true }
     }
 
@@ -108,7 +94,7 @@ class StorageFolderPrivacyTest {
     }
 
     @Test
-    fun `settings on mark the Zoukan folders, make the missing ones and record them`() {
+    fun `setting on marks the Zoukan folders, makes the missing ones and records them`() {
         val root = dir(temp, "chosen")
         File(root, "downloads/Source/Manga").mkdirs()
         File(root, "downloads/Source/Manga/Chapter.cbz").writeText("pages")
@@ -119,12 +105,9 @@ class StorageFolderPrivacyTest {
         privacy.refresh()
 
         timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(root)
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(root)
         storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(root))
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(root))
         zoukanFolders(root).forEach { it.isDirectory shouldBe true }
         privacy.timeMachineApplied.value shouldBe true
-        privacy.spotlightApplied.value shouldBe true
         // The downloads and the user's own files are untouched
         File(root, "downloads/Source/Manga/Chapter.cbz").readText() shouldBe "pages"
         File(root, "notes.txt").readText() shouldBe "the user's"
@@ -132,36 +115,30 @@ class StorageFolderPrivacyTest {
     }
 
     @Test
-    fun `the helper is not started again when nothing changed, Time Machine is set again`() {
+    fun `refresh sets Time Machine again without re-querying recorded folders`() {
         val root = dir(temp, "chosen")
         val privacy = privacy(storage(root))
         privacy.refresh()
         privacy.refresh()
 
-        spotlight.calls shouldBe listOf(zoukanFolders(root) to true)
         timeMachine.calls shouldBe listOf(zoukanFolders(root) to true, zoukanFolders(root) to true)
         // Only the first refresh asked which folders were already marked
-        spotlight.queries shouldBe listOf(zoukanFolders(root))
         timeMachine.queries shouldBe listOf(zoukanFolders(root))
     }
 
     @Test
-    fun `a folder the user had already excluded is not recorded and keeps its mark when a setting is turned off`() {
+    fun `a folder the user had already excluded is not recorded and keeps its mark when the setting is turned off`() {
         val root = dir(temp, "chosen")
         val usersOwn = dir(root, "downloads").canonicalFile
         timeMachine.marked += usersOwn
-        spotlight.marked += usersOwn
         val storage = storage(root)
         val privacy = privacy(storage)
 
         privacy.refresh()
 
         storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(root).drop(1))
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(root).drop(1))
         timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(root)
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(root)
         privacy.timeMachineApplied.value shouldBe true
-        privacy.spotlightApplied.value shouldBe true
 
         storage.excludeFromTimeMachine.set(false)
         privacy.refresh()
@@ -170,14 +147,6 @@ class StorageFolderPrivacyTest {
         storage.timeMachineMarked.get().shouldBeEmpty()
         timeMachine.touched shouldNotContain usersOwn
         privacy.timeMachineApplied.value shouldBe true
-
-        storage.hideFromSpotlight.set(false)
-        privacy.refresh()
-
-        spotlight.marked shouldBe setOf(usersOwn)
-        storage.spotlightMarked.get().shouldBeEmpty()
-        spotlight.touched shouldNotContain usersOwn
-        privacy.spotlightApplied.value shouldBe true
     }
 
     @Test
@@ -186,7 +155,6 @@ class StorageFolderPrivacyTest {
         val new = dir(temp, "new")
         val usersOwn = dir(old, "downloads").canonicalFile
         timeMachine.marked += usersOwn
-        spotlight.marked += usersOwn
         val storage = storage(old)
         val privacy = privacy(storage)
         privacy.refresh()
@@ -195,11 +163,8 @@ class StorageFolderPrivacyTest {
         privacy.refresh()
 
         timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(new) + usersOwn
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(new) + usersOwn
         storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(new))
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(new))
         timeMachine.touched shouldNotContain usersOwn
-        spotlight.touched shouldNotContain usersOwn
     }
 
     @Test
@@ -208,50 +173,39 @@ class StorageFolderPrivacyTest {
         val storage = storage(root)
         val privacy = privacy(storage)
         timeMachine.unreadable = true
-        spotlight.unreadable = true
 
         privacy.refresh()
 
         timeMachine.calls.shouldBeEmpty()
-        spotlight.calls.shouldBeEmpty()
         storage.timeMachineMarked.get().shouldBeEmpty()
-        storage.spotlightMarked.get().shouldBeEmpty()
         privacy.timeMachineApplied.value shouldBe false
-        privacy.spotlightApplied.value shouldBe false
         notes.any { "Could not read" in it } shouldBe true
 
         timeMachine.unreadable = false
-        spotlight.unreadable = false
         privacy.refresh()
 
         timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(root)
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(root)
         storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(root))
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(root))
         privacy.timeMachineApplied.value shouldBe true
-        privacy.spotlightApplied.value shouldBe true
     }
 
     @Test
-    fun `with both settings off and nothing recorded nothing is touched or made`() {
+    fun `with setting off and nothing recorded nothing is touched or made`() {
         val root = dir(temp, "chosen")
         dir(root, "downloads")
-        // The user's own exclusions, made outside Zoukan
+        // The user's own exclusion, made outside Zoukan
         timeMachine.marked += zoukanFolders(root)[0]
-        spotlight.marked += zoukanFolders(root)[0]
 
-        privacy(storage(root, spotlight = false, timeMachine = false)).refresh()
+        privacy(storage(root, timeMachine = false)).refresh()
 
         timeMachine.calls.shouldBeEmpty()
-        spotlight.calls.shouldBeEmpty()
         timeMachine.marked shouldBe setOf(zoukanFolders(root)[0])
-        spotlight.marked shouldBe setOf(zoukanFolders(root)[0])
         File(root, "local").exists() shouldBe false
         File(root, "autobackup").exists() shouldBe false
     }
 
     @Test
-    fun `turning a setting off takes off only the marks Zoukan recorded`() {
+    fun `turning the setting off takes off only the marks Zoukan recorded`() {
         val root = dir(temp, "chosen")
         val storage = storage(root)
         val privacy = privacy(storage)
@@ -259,7 +213,6 @@ class StorageFolderPrivacyTest {
         // Zoukan marked them all; then the user's own exclusion on a folder Zoukan does not record
         val usersOwn = dir(temp, "elsewhere").canonicalFile
         timeMachine.marked += usersOwn
-        spotlight.marked += usersOwn
         storage.timeMachineMarked.set(storage.timeMachineMarked.get() - zoukanFolders(root)[1].path)
         timeMachine.calls.clear()
 
@@ -271,9 +224,6 @@ class StorageFolderPrivacyTest {
         // local was not recorded, so it keeps its mark like the user's own folder
         timeMachine.marked shouldBe setOf(zoukanFolders(root)[1], usersOwn)
         storage.timeMachineMarked.get().shouldBeEmpty()
-        // Spotlight stays on and recorded, with no new helper run
-        spotlight.calls.size shouldBe 1
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(root) + usersOwn
         privacy.timeMachineApplied.value shouldBe true
     }
 
@@ -283,21 +233,21 @@ class StorageFolderPrivacyTest {
         val storage = storage(root)
         val privacy = privacy(storage)
         privacy.refresh()
-        spotlight.failing += zoukanFolders(root)[0]
+        timeMachine.failing += zoukanFolders(root)[0]
 
-        storage.hideFromSpotlight.set(false)
+        storage.excludeFromTimeMachine.set(false)
         privacy.refresh()
 
-        storage.spotlightMarked.get() shouldBe setOf(zoukanFolders(root)[0].path)
-        privacy.spotlightApplied.value shouldBe false
+        storage.timeMachineMarked.get() shouldBe setOf(zoukanFolders(root)[0].path)
+        privacy.timeMachineApplied.value shouldBe false
 
-        spotlight.failing.clear()
+        timeMachine.failing.clear()
         privacy.refresh()
 
-        spotlight.calls.last() shouldBe (listOf(zoukanFolders(root)[0]) to false)
-        storage.spotlightMarked.get().shouldBeEmpty()
-        spotlight.marked.shouldBeEmpty()
-        privacy.spotlightApplied.value shouldBe true
+        timeMachine.calls.last() shouldBe (listOf(zoukanFolders(root)[0]) to false)
+        storage.timeMachineMarked.get().shouldBeEmpty()
+        timeMachine.marked.shouldBeEmpty()
+        privacy.timeMachineApplied.value shouldBe true
     }
 
     @Test
@@ -305,18 +255,17 @@ class StorageFolderPrivacyTest {
         val root = dir(temp, "chosen")
         val storage = storage(root)
         val privacy = privacy(storage)
-        spotlight.failing += zoukanFolders(root)[2]
+        timeMachine.failing += zoukanFolders(root)[2]
         privacy.refresh()
 
-        privacy.spotlightApplied.value shouldBe false
+        privacy.timeMachineApplied.value shouldBe false
+        storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(root).take(2))
+
+        timeMachine.failing.clear()
+        privacy.refresh()
+
+        timeMachine.calls.last() shouldBe (zoukanFolders(root) to true)
         privacy.timeMachineApplied.value shouldBe true
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(root).take(2))
-
-        spotlight.failing.clear()
-        privacy.refresh()
-
-        spotlight.calls.last() shouldBe (listOf(zoukanFolders(root)[2]) to true)
-        privacy.spotlightApplied.value shouldBe true
     }
 
     @Test
@@ -327,18 +276,14 @@ class StorageFolderPrivacyTest {
         val privacy = privacy(storage)
         privacy.refresh()
         val usersOwn = dir(temp, "elsewhere").canonicalFile
-        spotlight.marked += usersOwn
         timeMachine.marked += usersOwn
 
         storage.folderPreference.set(new.path)
         privacy.refresh()
 
         timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(new) + usersOwn
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(new) + usersOwn
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(new))
         storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(new))
         timeMachine.touched shouldNotContain usersOwn
-        spotlight.touched shouldNotContain usersOwn
         // The old folder's downloads are still there
         zoukanFolders(old).forEach { it.isDirectory shouldBe true }
     }
@@ -356,10 +301,8 @@ class StorageFolderPrivacyTest {
 
         // The old folder lost its marks; nothing was made where the drive should be
         timeMachine.marked.shouldBeEmpty()
-        spotlight.marked.shouldBeEmpty()
-        storage.spotlightMarked.get().shouldBeEmpty()
+        storage.timeMachineMarked.get().shouldBeEmpty()
         File(temp, "unplugged").exists() shouldBe false
-        privacy.spotlightApplied.value shouldBe false
         privacy.timeMachineApplied.value shouldBe false
 
         // The drive is connected again
@@ -367,8 +310,6 @@ class StorageFolderPrivacyTest {
         privacy.refresh()
 
         timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(new)
-        spotlight.marked shouldContainExactlyInAnyOrder zoukanFolders(new)
-        privacy.spotlightApplied.value shouldBe true
         privacy.timeMachineApplied.value shouldBe true
     }
 
@@ -381,20 +322,16 @@ class StorageFolderPrivacyTest {
         val parked = File(temp, "parked")
         old.renameTo(parked)
 
-        storage.hideFromSpotlight.set(false)
         storage.excludeFromTimeMachine.set(false)
         privacy.refresh()
 
-        storage.spotlightMarked.get() shouldBe paths(zoukanFolders(old))
         storage.timeMachineMarked.get() shouldBe paths(zoukanFolders(old))
-        spotlight.calls.size shouldBe 1
+        timeMachine.calls.size shouldBe 1
 
         parked.renameTo(old)
         privacy.refresh()
 
-        storage.spotlightMarked.get().shouldBeEmpty()
         storage.timeMachineMarked.get().shouldBeEmpty()
-        spotlight.marked.shouldBeEmpty()
         timeMachine.marked.shouldBeEmpty()
     }
 
@@ -407,9 +344,24 @@ class StorageFolderPrivacyTest {
 
         File(temp, "unplugged").exists() shouldBe false
         timeMachine.calls.shouldBeEmpty()
-        spotlight.calls.shouldBeEmpty()
-        privacy.spotlightApplied.value shouldBe false
+        privacy.timeMachineApplied.value shouldBe false
         notes.size shouldBe 1
+    }
+
+    @Test
+    fun `an unwritable storage folder skips missing folders without throwing`() {
+        assumeTrue("posix" in temp.toPath().fileSystem.supportedFileAttributeViews())
+        val root = dir(temp, "readonly")
+        assumeTrue(root.setWritable(false))
+        try {
+            val privacy = privacy(storage(root))
+            privacy.refresh()
+
+            timeMachine.calls.shouldBeEmpty()
+            notes.size shouldBe 3
+        } finally {
+            root.setWritable(true)
+        }
     }
 
     @Test
@@ -421,9 +373,8 @@ class StorageFolderPrivacyTest {
 
         privacy(storage(root)).refresh()
 
-        val marked = timeMachine.marked + spotlight.marked
-        marked.none { it.name == "Downloads" } shouldBe true
-        marked.all { it.name in ZoukanStorage.ZOUKAN_FOLDER_NAMES } shouldBe true
+        timeMachine.marked.none { it.name == "Downloads" } shouldBe true
+        timeMachine.marked.all { it.name in ZoukanStorage.ZOUKAN_FOLDER_NAMES } shouldBe true
         // The other Zoukan folders are still marked
         timeMachine.marked shouldContainExactlyInAnyOrder (if (caseInsensitive) zoukanFolders(root).drop(1) else zoukanFolders(root))
         if (caseInsensitive) {
@@ -435,25 +386,44 @@ class StorageFolderPrivacyTest {
     }
 
     @Test
-    fun `a folder reached through a link is never marked`() {
+    fun `a folder reached through a link or dangling link is never created or marked`() {
         val root = dir(temp, "chosen")
         val target = dir(temp, "users-folder")
-        Files.createSymbolicLink(File(root, "local").toPath(), target.toPath())
+        val link = File(root, "local")
+        val linkCreated = runCatching { Files.createSymbolicLink(link.toPath(), target.toPath()) }.isSuccess
+        assumeTrue(linkCreated, "symbolic links cannot be made here")
+        val danglingTarget = File(temp, "missing-target")
+        Files.createSymbolicLink(File(root, "autobackup").toPath(), danglingTarget.toPath())
 
         privacy(storage(root)).refresh()
 
-        val touched = timeMachine.touched + spotlight.touched
-        touched shouldBe setOf(zoukanFolders(root)[0], zoukanFolders(root)[2])
-        touched shouldNotContain target.canonicalFile
-        Files.isSymbolicLink(File(root, "local").toPath()) shouldBe true
-        notes.single() shouldContain "local"
+        timeMachine.touched shouldBe setOf(zoukanFolders(root)[0])
+        timeMachine.touched shouldNotContain target.canonicalFile
+        Files.isSymbolicLink(link.toPath()) shouldBe true
+        Files.isSymbolicLink(File(root, "autobackup").toPath()) shouldBe true
+        danglingTarget.exists() shouldBe false
+        notes.size shouldBe 2
+        notes.any { "local" in it } shouldBe true
+        notes.any { "autobackup" in it } shouldBe true
+    }
+
+    @Test
+    fun `a regular file in a Zoukan folder's place is skipped with a note`() {
+        val root = dir(temp, "chosen")
+        File(root, "downloads").writeText("keep")
+
+        privacy(storage(root)).refresh()
+
+        timeMachine.marked shouldContainExactlyInAnyOrder zoukanFolders(root).drop(1)
+        File(root, "downloads").readText() shouldBe "keep"
+        notes.single() shouldContain "downloads"
     }
 
     @Test
     fun `a storage folder reached through a link is followed to the real one`() {
         val real = dir(temp, "real")
         val link = File(temp, "link")
-        Files.createSymbolicLink(link.toPath(), real.toPath())
+        assumeTrue(runCatching { Files.createSymbolicLink(link.toPath(), real.toPath()) }.isSuccess, "symbolic links cannot be made here")
 
         privacy(storage(link)).refresh()
 
@@ -461,9 +431,8 @@ class StorageFolderPrivacyTest {
         notes.shouldBeEmpty()
     }
 
-    /** The real Time Machine mark (an attribute on the folder, nothing system-wide) and the fake Spotlight one. */
     private fun realTimeMachine(storage: ZoukanStorage) =
-        StorageFolderPrivacy(storage, notes::add, enabled = true, timeMachine = StorageFolderPrivacy.FolderMark.TimeMachine, spotlight = spotlight)
+        StorageFolderPrivacy(storage, notes::add, enabled = true, timeMachine = StorageFolderPrivacy.FolderMark.TimeMachine)
 
     @Test
     fun `with the home folder as the storage folder only Zoukan's folders change, never the user's Downloads`() {
@@ -480,7 +449,6 @@ class StorageFolderPrivacyTest {
 
             privacy.refresh()
             storage.excludeFromTimeMachine.set(false)
-            storage.hideFromSpotlight.set(false)
             privacy.refresh()
 
             sandbox.assertNothingOutsideAppChanged()
@@ -515,8 +483,7 @@ class StorageFolderPrivacyTest {
 
         zoukanFolders(root).forEach { it.exists() shouldBe false }
         timeMachine.calls.shouldBeEmpty()
-        spotlight.calls.shouldBeEmpty()
-        privacy.spotlightApplied.value shouldBe true
+        privacy.timeMachineApplied.value shouldBe true
     }
 
     @Test
@@ -564,153 +531,6 @@ class StorageFolderPrivacyTest {
         val dir = File(temp, "downloads").apply { mkdirs() }
         BackupExclusion.exclude(dir, notes::add, enabled = false) shouldBe false
         BackupExclusion.include(dir, notes::add, enabled = false) shouldBe false
-        // No helper is started: its command would fail the test
-        val spotlight = SpotlightExclusion(command = { error("no helper elsewhere") }, enabled = false)
-        spotlight.set(listOf(dir), true, notes::add).shouldBeEmpty()
-        spotlight.excluded(listOf(dir), notes::add) shouldBe emptySet()
         notes.shouldBeEmpty()
-    }
-
-    @Test
-    fun `the native Spotlight calls add and remove a folder on macOS`() {
-        assumeRealSpotlight()
-        val dir = File(temp, "downloads").apply { mkdirs() }
-        File(dir, "Chapter.cbz").writeText("pages")
-        try {
-            SpotlightNative.set(dir, true, notes::add) shouldBe true
-            SpotlightNative.isExcluded(dir) shouldBe true
-            // Asked again: already in the list
-            SpotlightNative.set(dir, true, notes::add) shouldBe true
-            SpotlightNative.set(dir, false, notes::add) shouldBe true
-            SpotlightNative.isExcluded(dir) shouldBe false
-            // A folder that is not there is not added
-            SpotlightNative.set(File(temp, "missing"), true, notes::add) shouldBe false
-        } finally {
-            // Never leave a test folder in the user's Search Privacy list
-            SpotlightNative.set(dir, false) {}
-        }
-        File(dir, "Chapter.cbz").readText() shouldBe "pages"
-        notes.shouldBeEmpty()
-    }
-
-    @Test
-    fun `the helper process adds and removes folders in one run on macOS`() {
-        assumeRealSpotlight()
-        // In the test JVM's own home folder (under the build folder), never the real one
-        FileSystemSandbox.create(realSpotlightParent()).use { sandbox ->
-            val dirs = sandbox.storageZoukanFolders
-            // The real command: this test's own Java runtime and the helper's jars (or class folders)
-            val spotlight = SpotlightExclusion()
-            try {
-                spotlight.set(dirs, true, notes::add) shouldBe dirs.toSet()
-                spotlight.excluded(dirs, notes::add) shouldBe dirs.toSet()
-                spotlight.set(dirs, false, notes::add) shouldBe dirs.toSet()
-                spotlight.excluded(dirs, notes::add) shouldBe emptySet()
-                notes.shouldBeEmpty()
-                sandbox.assertNothingOutsideAppChanged()
-            } finally {
-                dirs.forEach { SpotlightNative.set(it, false) {} }
-            }
-        }
-    }
-
-    /** Where the real-Spotlight test makes its sandboxes: in the test JVM's home folder ([TestHome]). */
-    private fun realSpotlightParent() = File(TestHome.root(), HOME_TEST_PREFIX.trimEnd('-'))
-
-    /**
-     * The tests that change the real Spotlight Search Privacy list run only when asked:
-     * `ZOUKAN_TEST_REAL_SPOTLIGHT=true`, or `-Dzoukan.test.realSpotlight=true` on the test JVM.
-     * Sandboxes an earlier, interrupted run left behind are taken off the list and deleted first.
-     */
-    private fun assumeRealSpotlight() {
-        assumeTrue(Platform.current == Platform.MACOS)
-        assumeTrue(System.getProperty("zoukan.test.realSpotlight") == "true" || System.getenv("ZOUKAN_TEST_REAL_SPOTLIGHT") == "true")
-        realSpotlightParent().listFiles { f -> f.isDirectory && !Files.isSymbolicLink(f.toPath()) }?.forEach { left ->
-            left.walkTopDown().onEnter { !Files.isSymbolicLink(it.toPath()) }
-                .filter { it.isDirectory && it.name in ZoukanStorage.ZOUKAN_FOLDER_NAMES }
-                .forEach { SpotlightNative.set(it, false) {} }
-            FileSystemSandbox.deleteTree(left)
-        }
-    }
-
-    /** A helper command that runs [script] in /bin/sh. Exit 128 + n stands for signal n (a crash). */
-    private fun sh(script: String): (List<String>) -> List<String> = { listOf("/bin/sh", "-c", script) }
-
-    @Test
-    fun `a crashing helper is noted, never thrown`() {
-        assumeTrue(File("/bin/sh").canExecute())
-        val dir = File(temp, "downloads").apply { mkdirs() }
-        // SpotlightExclusion reads only the exit status and the error output; a real SIGSEGV would
-        // make macOS write a crash report into the user's DiagnosticReports on every run
-        SpotlightExclusion(sh("echo 'native crash' >&2; exit 139"), enabled = true).set(listOf(dir), true, notes::add).shouldBeEmpty()
-        notes.single() shouldContain "exit code 139"
-        notes.single() shouldContain "native crash"
-    }
-
-    @Test
-    fun `a helper that fails, prints nonsense or reports a failure is noted`() {
-        assumeTrue(File("/bin/sh").canExecute())
-        val dirs = listOf(File(temp, "downloads"), File(temp, "local")).onEach { it.mkdirs() }
-
-        SpotlightExclusion(sh("exit 3"), enabled = true).set(dirs, true, notes::add).shouldBeEmpty()
-        notes.last() shouldContain "exit code 3"
-
-        SpotlightExclusion(sh("echo hello; echo '7 ok'"), enabled = true).set(dirs, true, notes::add).shouldBeEmpty()
-        notes.last() shouldContain "did not change"
-
-        SpotlightExclusion(sh("echo '0 ok'; echo '1 failed'"), enabled = true).set(dirs, true, notes::add) shouldBe setOf(dirs[0])
-        notes.last() shouldContain dirs[1].path
-    }
-
-    @Test
-    fun `a check the helper could not answer for every folder is unknown, not none`() {
-        assumeTrue(File("/bin/sh").canExecute())
-        val dirs = listOf(File(temp, "downloads"), File(temp, "local")).onEach { it.mkdirs() }
-
-        SpotlightExclusion(sh("echo '0 ok'; echo '1 failed'"), enabled = true).excluded(dirs, notes::add) shouldBe setOf(dirs[0])
-        SpotlightExclusion(sh("echo '0 failed'; echo '1 failed'"), enabled = true).excluded(dirs, notes::add) shouldBe emptySet()
-        notes.shouldBeEmpty()
-
-        SpotlightExclusion(sh("echo '0 ok'; echo '1 unknown'"), enabled = true).excluded(dirs, notes::add) shouldBe null
-        notes.last() shouldContain dirs[1].path
-        SpotlightExclusion(sh("echo '0 ok'"), enabled = true).excluded(dirs, notes::add) shouldBe null
-        SpotlightExclusion(sh("exit 3"), enabled = true).excluded(dirs, notes::add) shouldBe null
-    }
-
-    @Test
-    fun `a helper that hangs is stopped at the timeout`() {
-        assumeTrue(File("/bin/sh").canExecute())
-        val dir = File(temp, "downloads").apply { mkdirs() }
-        val started = System.nanoTime()
-        SpotlightExclusion(sh("sleep 30"), timeoutMillis = 500, enabled = true).set(listOf(dir), false, notes::add).shouldBeEmpty()
-        (System.nanoTime() - started < 10_000_000_000L) shouldBe true
-        notes.single() shouldContain "did not finish"
-    }
-
-    @Test
-    fun `no Java launcher is noted`() {
-        val dir = File(temp, "downloads").apply { mkdirs() }
-        SpotlightExclusion(command = { null }, enabled = true).set(listOf(dir), true, notes::add).shouldBeEmpty()
-        notes.single() shouldContain "no Java launcher"
-    }
-
-    @Test
-    fun `the helper's output is read strictly`() {
-        SpotlightExclusion.parse("0 ok\n1 failed\n2 ok\nwarning: 3 ok here\n9 ok\n", 3) shouldBe setOf(0, 2)
-        SpotlightExclusion.parse("", 3).shouldBeEmpty()
-    }
-
-    @Test
-    fun `the helper refuses bad arguments`() {
-        assumeTrue(Platform.current == Platform.MACOS)
-        val argv = SpotlightExclusion.helperCommand(listOf("delete", "/"))!!
-        val process = ProcessBuilder(TestHome.javaCommand(argv)).redirectErrorStream(true).start()
-        process.inputStream.readBytes()
-        process.waitFor() shouldBe SpotlightExclusionHelper.USAGE
-    }
-
-    private companion object {
-        /** The folder, in the test JVM's home folder, of [assumeRealSpotlight]'s sandboxes. */
-        const val HOME_TEST_PREFIX = "zoukan-spotlight-test-"
     }
 }

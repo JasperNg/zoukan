@@ -390,42 +390,28 @@ Residual risk:
    `desktop/.../DataFolderPrivacy.kt`, `ZoukanDirs`.
 
    **Storage folder (macOS).** By default the storage folder's `downloads`, `local` and
-   `autobackup` folders are added to Spotlight's Search Privacy list and carry Time Machine's
-   exclusion, with a setting for each in Settings > Data and storage. Only those three folders are
-   marked, never the chosen folder itself: each must be a real directory directly in the storage
-   folder with exactly that name, case included, after links are resolved. A folder reached
-   through a link, or one whose name differs only in case (such as `~/Downloads` when the home
-   folder is the storage folder), is never marked or created. Zoukan records the canonical path of
-   every folder it marks, in app-state preferences that are never in backups. When a setting is
-   turned off or the storage folder changes, it removes marks only from those recorded paths, so
-   exclusions the user made outside Zoukan stay. A folder that already carries the exclusion when
-   Zoukan first sees it is treated as the user's: it is not recorded and stays excluded after the
-   setting is turned off (when Zoukan cannot read whether it does, it leaves the folder unmarked and
-   tries again at the next refresh). A recorded folder that cannot be reached, or whose removal
-   fails, keeps its record and is retried later. A storage folder that is unavailable is
-   marked at the next refresh (a settings or storage change, or the next start), not when it comes
-   back. When the last attempt to apply a setting failed, Settings shows an error line under its
-   switch, so a user in incognito mode, where nothing is logged, still learns of it.
+   `autobackup` folders carry Time Machine's exclusion, with a setting in Settings > Data and
+   storage. Only those three folders are marked, never the chosen folder itself: each must be a real
+   directory directly in the storage folder with exactly that name, case included, checked without
+   following links (`NoFollowDelete`). A folder reached through a link or junction, or one whose
+   name differs only in case (such as `~/Downloads` when the home folder is the storage folder), is
+   never marked or created. Zoukan records the canonical path of every folder it marks, in app-state
+   preferences that are never in backups. When the setting is turned off or the storage folder
+   changes, it removes marks only from those recorded paths, so exclusions the user made outside
+   Zoukan stay. A folder that already carries the exclusion when Zoukan first sees it is treated as
+   the user's: it is not recorded and stays excluded after the setting is turned off (when Zoukan
+   cannot read whether it does, it leaves the folder unmarked and tries again at the next refresh). A
+   recorded folder that cannot be reached, or whose removal fails, keeps its record and is retried
+   later. A storage folder that is unavailable is marked at the next refresh (a settings or storage
+   change, or the next start), not when it comes back. When the last attempt to apply the setting
+   failed, Settings shows an error line under its switch, so a user in incognito mode, where nothing
+   is logged, still learns of it.
 
-   The folders keep the Android app's names, and a `.metadata_never_index` file, a hidden flag or a
-   `.noindex` child do not stop current macOS from indexing a folder, so Spotlight's list is
-   changed through the call System Settings uses (`_MDSetExclusion`, not public API). That call is
-   made only in a short-lived helper process (`SpotlightExclusionHelper`), started only when an
-   entry is to be added or removed, with Zoukan's own bundled Java runtime (`bin/java`), a 32 MB
-   heap, headless, a class path of only Zoukan's, JNA's and Kotlin's jars, and Java option and
-   agent variables removed from its environment. It opens no data folder, log, preference, lock or
-   secret store; JNA may unpack its native library into its own cache folder
-   (`~/Library/Caches/JNA/temp`) and deletes it once loaded. The helper's JVM writes no core dump,
-   performance-data file or crash report (`-XX:-CreateCoredumpOnCrash`, `-XX:-UsePerfData`,
-   `-XX:ErrorFile=/dev/null`); if a crash report or compiler replay file is written to its working
-   folder anyway, Zoukan deletes that helper's files after it exits, by process id, regular files
-   only. The helper ends itself after 12 seconds, Zoukan stops it after 15 and kills a running
-   helper when it quits. A crash, a non-zero exit, a timeout or output that does not parse is
-   logged as a warning and never reaches Zoukan's process, and the helper is then not started
-   again until Zoukan restarts. The Time Machine attribute is set in Zoukan's process (public
-   `setxattr`/`removexattr`). Search Privacy entries are by path and stay after Zoukan is deleted.
-   Code: `desktop/.../storage/StorageFolderPrivacy.kt`, `SpotlightExclusion.kt`,
-   `SpotlightExclusionHelper.kt`, `SpotlightNative.kt`.
+   The storage folders keep the Android app's names (`.noindex` is used for the data folder's
+   disposable folders above, not the storage folder), and the Time Machine attribute is set in
+   Zoukan's process through public extended-attribute calls (`setxattr`/`removexattr` with
+   `XATTR_NOFOLLOW`). Code: `desktop/.../storage/StorageFolderPrivacy.kt`,
+   `desktop/.../DataFolderPrivacy.kt` (`BackupExclusion`).
 6. **The built-in browser's profile is not encrypted.** `<cache>/cache/browser` is shared by the
    browser windows, the challenge windows and extensions' WebViews, and sits outside `FileCipher`.
    After the clean-up at start and at quit (Web and embedded Chromium) it still holds what sites
@@ -466,7 +452,7 @@ Verified and trusted:
 
 | Control | Where |
 |---|---|
-| Every external process is launched as an argv array through `ProcessBuilder` — no shell string is ever built, so no manga title, folder name or URL can inject a command | `InstallerSignature.kt` (PowerShell, with file paths passed through the environment, not the command line), `Updates.kt` (`msiexec`, `open`), `Archives.kt` (`tar`), `PowerStatus.kt` (`pmset`), `ReaderEffects.kt` (`caffeinate`), `ReducedMotion.kt`, `SpotlightExclusion.kt` (Zoukan's own `bin/java` running `SpotlightExclusionHelper`, folder paths as separate arguments) |
+| Every external process is launched as an argv array through `ProcessBuilder` — no shell string is ever built, so no manga title, folder name or URL can inject a command | `InstallerSignature.kt` (PowerShell, with file paths passed through the environment, not the command line), `Updates.kt` (`msiexec`, `open`), `Archives.kt` (`tar`), `PowerStatus.kt` (`pmset`), `ReaderEffects.kt` (`caffeinate`), `ReducedMotion.kt` |
 | URL opening goes through `java.awt.Desktop.browse`, never a shell | `ExternalLinks.browse` |
 
 No shell out means the classic injection class — a chapter titled `foo"; rm -rf ~; "` — has no

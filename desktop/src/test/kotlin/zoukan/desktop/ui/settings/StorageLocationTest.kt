@@ -132,7 +132,7 @@ class StorageLocationTest {
 
     @Test
     fun `a privacy setting that could not be applied shows its error line only while it failed`() = runDesktopComposeUiTest {
-        val message = localized(DMR.strings.could_not_hide_storage_folder_from_spotlight)
+        val message = localized(DMR.strings.could_not_leave_storage_folder_out_of_time_machine)
         var failed by mutableStateOf(false)
         setContent { StoragePrivacyFailure(failed, message) }
         onNodeWithText(message).assertDoesNotExist()

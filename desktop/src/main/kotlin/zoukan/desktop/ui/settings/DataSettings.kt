@@ -95,21 +95,6 @@ fun LazyListScope.dataSettings() {
         )
     }
     if (Platform.current == Platform.MACOS) {
-        item(key = "data-storage-spotlight") {
-            val storage = remember { Injekt.get<ZoukanStorage>() }
-            SwitchPreference(
-                localized(DMR.strings.hide_storage_folder_from_spotlight),
-                storage.hideFromSpotlight,
-                localized(DMR.strings.hide_storage_folder_from_spotlight_summary),
-            )
-        }
-        item(key = "data-storage-spotlight-failed") {
-            val storage = remember { Injekt.get<ZoukanStorage>() }
-            val privacy = remember { Injekt.get<StorageFolderPrivacy>() }
-            val on by storage.hideFromSpotlight.collectAsState()
-            val applied by privacy.spotlightApplied.collectAsState()
-            StoragePrivacyFailure(on && !applied, localized(DMR.strings.could_not_hide_storage_folder_from_spotlight))
-        }
         item(key = "data-storage-time-machine") {
             val storage = remember { Injekt.get<ZoukanStorage>() }
             SwitchPreference(
@@ -420,8 +405,8 @@ private fun StorageUnavailableBanner() {
 
 /**
  * Under a macOS privacy switch: shown while its setting is on but the last attempt to apply it
- * failed (see StorageFolderPrivacy), for example when the Spotlight helper failed or the storage
- * folder cannot be reached. Comes from the attempt itself, not the log, so it shows in incognito too.
+ * failed (see StorageFolderPrivacy), for example when the storage folder cannot be reached. Comes
+ * from the attempt itself, not the log, so it shows in incognito too.
  */
 @Composable
 internal fun StoragePrivacyFailure(failed: Boolean, message: String) {

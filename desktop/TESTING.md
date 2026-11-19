@@ -126,9 +126,7 @@ through `zoukan.desktop.testing.TestHome`; `HomeFolderScanTest` fails on any oth
 
 A test that starts a JVM passes the same folders on: `TestHome.childJvmArguments()` (or
 `TestHome.javaCommand(argv)`) for `java` and the app's `MainKt`, `TestHome.jdkToolArguments()` for
-`keytool`, `jarsigner` and `jcmd`. A child JVM the app itself starts (the Spotlight helper, from
-`SpotlightExclusion`) gets no `-Duser.home`, so in a test it would still use the real home (JNA's
-native cache, for one); the tests that start it for real are opt-in (`ZOUKAN_TEST_REAL_SPOTLIGHT`).
+`keytool`, `jarsigner` and `jcmd`.
 
 A test of code that creates, deletes, marks or changes the permissions of files uses
 `zoukan.desktop.testing.FileSystemSandbox`: a temporary home with the app's data and storage
@@ -431,18 +429,6 @@ time, with `--tests`:
 
 ```bash
 ZOUKAN_LIVE=true ./gradlew :desktop:test --tests "*UpdateLiveTest" --rerun
-```
-
-Two tests in `StorageFolderPrivacyTest` change the real Spotlight Search Privacy list of the
-macOS account that runs them, and one of them makes its folders under `zoukan-spotlight-test` in
-the test home folder (`TestHome.root()`, under `desktop/build/test-home/<task>`), not the real home.
-They skip themselves unless the environment variable `ZOUKAN_TEST_REAL_SPOTLIGHT=true` is
-set (or `-Dzoukan.test.realSpotlight=true` on the test JVM). They take their entries off the list
-and remove their folders when they end, and first clear what an interrupted earlier run left. The
-other tests of the class use stand-ins and never touch the list.
-
-```bash
-ZOUKAN_TEST_REAL_SPOTLIGHT=true ./gradlew :desktop:test --tests "zoukan.desktop.storage.StorageFolderPrivacyTest" --rerun
 ```
 
 `extensionWiringTest` downloads every extension of two sample stores, so it runs in `nightly.yml`

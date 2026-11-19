@@ -23,31 +23,16 @@ class ZoukanStorage(
     val folderPreference: Preference<String> = store.getString(Preference.appStateKey("storage_dir"), "")
 
     /**
-     * Desktop only, macOS: keeps the storage folder's [zoukanFolders] out of Spotlight
-     * (StorageFolderPrivacy). On by default. An app-state key: it is about this computer's folder.
-     */
-    val hideFromSpotlight: Preference<Boolean> = store.getBoolean(Preference.appStateKey("zoukan_storage_hide_from_spotlight"), true)
-
-    /**
      * Desktop only, macOS: keeps the storage folder's [zoukanFolders] out of Time Machine
      * (StorageFolderPrivacy). On by default. An app-state key: it is about this computer's folder.
      */
     val excludeFromTimeMachine: Preference<Boolean> = store.getBoolean(Preference.appStateKey("zoukan_storage_exclude_from_time_machine"), true)
 
     /**
-     * Desktop only, macOS: the canonical paths of the folders Zoukan put in Spotlight's Search
-     * Privacy list (StorageFolderPrivacy). Only these are ever taken off the list again, so an
-     * entry the user made stays. An app-state key: paths are about this computer. Made on first
-     * use, so a store without string sets serves the rest of this class.
-     */
-    val spotlightMarked: Preference<Set<String>> by lazy {
-        store.getStringSet(Preference.appStateKey("zoukan_storage_spotlight_marked"), emptySet())
-    }
-
-    /**
      * Desktop only, macOS: the canonical paths of the folders Zoukan excluded from Time Machine
      * (StorageFolderPrivacy). Only these lose the exclusion again, so one the user set stays. An
-     * app-state key: paths are about this computer. Made on first use, as [spotlightMarked].
+     * app-state key: paths are about this computer. Made on first use, so a store without string sets
+     * serves the rest of this class.
      */
     val timeMachineMarked: Preference<Set<String>> by lazy {
         store.getStringSet(Preference.appStateKey("zoukan_storage_time_machine_marked"), emptySet())

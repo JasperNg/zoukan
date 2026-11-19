@@ -8,47 +8,42 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import tachiyomi.core.common.preference.Preference
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import zoukan.desktop.BackupExclusion
 import zoukan.desktop.Platform
-import zoukan.desktop.SpotlightExclusion
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
 
 /**
- * On macOS, keeps the storage folder's downloads, local source and automatic backups out of
- * Spotlight and Time Machine, each while its setting is on ([ZoukanStorage.hideFromSpotlight],
- * [ZoukanStorage.excludeFromTimeMachine], both on by default).
+ * On macOS, keeps the storage folder's downloads, local source and automatic backups out of Time
+ * Machine while [ZoukanStorage.excludeFromTimeMachine] is on (on by default).
  *
  * Which folders: only a real directory directly in the storage folder whose name is exactly one of
- * [ZoukanStorage.ZOUKAN_FOLDER_NAMES] (case included, after resolving links). Never the chosen
- * folder itself, never a folder reached through a link, and never a folder whose name only differs
- * in case: with the home folder as storage folder, `~/Downloads` is left alone. A folder that is not
- * there yet is made (as the Android app makes them), unless something else already answers to its
- * name.
+ * [ZoukanStorage.ZOUKAN_FOLDER_NAMES] (case included, checked without following links via
+ * [NoFollowDelete]). Never the chosen folder itself, never a folder reached through a link or
+ * junction, and never a folder whose name only differs in case: with the home folder as storage
+ * folder, `~/Downloads` is left alone. A folder that is not there yet is made (as the Android app
+ * makes them), unless something else already answers to its name.
  *
  * Only Zoukan's own marks are taken off: each mark Zoukan puts on is recorded
- * ([ZoukanStorage.spotlightMarked], [ZoukanStorage.timeMachineMarked]), and turning a setting off or
- * changing the storage folder removes the mark only from recorded folders. An exclusion the user made
- * (with `tmutil addexclusion` or in System Settings) stays: a folder that already carries the mark
- * when Zoukan first sees it is treated as the user's, is not recorded, and stays excluded after the
+ * ([ZoukanStorage.timeMachineMarked]), and turning the setting off or changing the storage folder
+ * removes the mark only from recorded folders. An exclusion the user made (with
+ * `tmutil addexclusion` or in System Settings) stays: a folder that already carries the mark when
+ * Zoukan first sees it is treated as the user's, is not recorded, and stays excluded after the
  * setting is turned off. When that cannot be read, the folder is neither marked nor recorded until
  * a later refresh can read it. A removal that fails, or a recorded folder that cannot be reached (a
  * drive that is not connected), keeps its record and is tried again at the next refresh.
  *
- * Only folder metadata changes: the Time Machine attribute on each folder (set in this process) and
- * its entry in Spotlight's Search Privacy list (changed by a short-lived helper process, see
- * [SpotlightExclusion], started only when a folder is not yet recorded or something is to change).
- * No file in them is touched. Every step is best-effort: a failure goes to [note] and is never
- * thrown. Other systems: nothing happens.
+ * Only folder metadata changes: the Time Machine attribute on each folder (set in this process with
+ * `XATTR_NOFOLLOW`). No file in them is touched. Every step is best-effort: a failure goes to
+ * [note] and is never thrown. Other systems: nothing happens.
  */
 internal class StorageFolderPrivacy(
     private val storage: ZoukanStorage,
     private val note: (String) -> Unit,
     private val enabled: Boolean = Platform.current == Platform.MACOS,
     private val timeMachine: FolderMark = FolderMark.TimeMachine,
-    private val spotlight: FolderMark = FolderMark.Spotlight,
 ) {
     /** A folder-level mark that can be put on, taken off and read. */
     interface FolderMark {
@@ -73,30 +68,9 @@ internal class StorageFolderPrivacy(
             override fun marked(dirs: List<File>, note: (String) -> Unit): Set<File>? =
                 dirs.filterTo(mutableSetOf()) { dir -> BackupExclusion.hasAttribute(dir, note) ?: return null }
         }
-
-        /** Spotlight's Search Privacy list, changed in one run of the helper process for all [dirs]. */
-        object Spotlight : FolderMark {
-            override fun set(dirs: List<File>, on: Boolean, note: (String) -> Unit): Set<File> =
-                SpotlightExclusion().set(dirs, on, note)
-
-            override fun marked(dirs: List<File>, note: (String) -> Unit): Set<File>? =
-                SpotlightExclusion().excluded(dirs, note)
-        }
     }
 
-    /** One kind of mark: how it is set, where it is recorded, and whether it is cheap to set again. */
-    private class Kind(
-        val name: String,
-        val mark: FolderMark,
-        val record: Preference<Set<String>>,
-        val wanted: Preference<Boolean>,
-        /** Set again on every refresh (cheap), instead of only on folders not yet recorded. */
-        val markAgain: Boolean,
-        val result: MutableStateFlow<Boolean>,
-    )
-
     private val timeMachineResult = MutableStateFlow(true)
-    private val spotlightResult = MutableStateFlow(true)
 
     /**
      * Whether the last refresh left Time Machine as its setting asks: on, every Zoukan folder of the
@@ -106,53 +80,35 @@ internal class StorageFolderPrivacy(
      */
     val timeMachineApplied: StateFlow<Boolean> = timeMachineResult.asStateFlow()
 
-    /** As [timeMachineApplied], for Spotlight's Search Privacy list. */
-    val spotlightApplied: StateFlow<Boolean> = spotlightResult.asStateFlow()
-
-    private val kinds by lazy {
-        listOf(
-            Kind("Time Machine", timeMachine, storage.timeMachineMarked, storage.excludeFromTimeMachine, markAgain = true, timeMachineResult),
-            Kind("Spotlight", spotlight, storage.spotlightMarked, storage.hideFromSpotlight, markAgain = false, spotlightResult),
-        )
-    }
-
     /**
-     * Follows the storage folder and both settings: applies them now and again after each change,
-     * off the UI thread.
+     * Follows the storage folder and Time Machine setting: applies it now and again after each
+     * change, off the UI thread.
      */
     fun start(scope: CoroutineScope): Job = scope.launch(Dispatchers.IO) {
         combine(
             storage.folderPreference.changes(),
-            storage.hideFromSpotlight.changes(),
             storage.excludeFromTimeMachine.changes(),
-        ) { _, _, _ -> }.collect { refresh() }
+        ) { _, _ -> }.collect { refresh() }
     }
 
     /**
-     * Applies both settings to the current storage folder, and takes Zoukan's marks off every
-     * recorded folder that no longer needs them (a setting turned off, a storage folder left).
+     * Applies the Time Machine setting to the current storage folder, and takes Zoukan's marks off
+     * every recorded folder that no longer needs them (the setting turned off, a storage folder left).
      */
     @Synchronized
     fun refresh() {
         if (!enabled) return
-        try {
-            val wanted = kinds.map { it.wanted.get() }
-            if (wanted.none { it } && kinds.all { it.record.get().isEmpty() }) {
-                kinds.forEach { it.result.value = true }
-                return
-            }
-            val folders = currentFolders(wanted.any { it })
-            kinds.forEachIndexed { i, kind ->
-                kind.result.value = try {
-                    update(kind, wanted[i], folders)
-                } catch (e: Exception) {
-                    note("Could not apply the storage folder's ${kind.name} setting: $e")
-                    false
-                }
+        timeMachineResult.value = try {
+            val wanted = storage.excludeFromTimeMachine.get()
+            if (!wanted && storage.timeMachineMarked.get().isEmpty()) {
+                true
+            } else {
+                val folders = currentFolders(wanted)
+                update(wanted, folders)
             }
         } catch (e: Exception) {
-            note("Could not apply the storage folder's Spotlight and Time Machine settings: $e")
-            kinds.forEach { it.result.value = false }
+            note("Could not apply the storage folder's Time Machine setting: $e")
+            false
         }
     }
 
@@ -167,7 +123,7 @@ internal class StorageFolderPrivacy(
             if (storage.isAvailable && root.isDirectory) {
                 zoukanFolders(root)
             } else {
-                note("The storage folder ${root.path} is not available; its Spotlight and Time Machine settings wait for it")
+                note("The storage folder ${root.path} is not available; its Time Machine setting waits for it")
                 null
             }
         } catch (e: Exception) {
@@ -176,57 +132,65 @@ internal class StorageFolderPrivacy(
         }
     }
 
-    /** Brings [kind] in line with its setting [on]; whether all of it succeeded. */
-    private fun update(kind: Kind, on: Boolean, folders: List<File>?): Boolean {
-        val recorded = kind.record.get()
+    /** Brings Time Machine marks in line with [on]; whether all of it succeeded. */
+    private fun update(on: Boolean, folders: List<File>?): Boolean {
+        val recorded = storage.timeMachineMarked.get()
         val keep: Set<String> = when {
             !on -> emptySet()
             folders != null -> folders.mapTo(mutableSetOf()) { it.path }
             // The storage folder cannot be reached: its own marks wait for it
             else -> recorded.filterTo(mutableSetOf()) { inStorageFolder(it) }
         }
-        val removed = takeOff(kind, recorded - keep)
+        val removed = takeOff(recorded - keep)
         if (!on) return removed
         if (folders == null) return false
-        val record = kind.record.get()
+        val record = storage.timeMachineMarked.get()
         // A folder that already carries the mark when Zoukan first sees it is the user's: never recorded
         val candidates = folders.filter { it.path !in record }
-        val already = if (candidates.isEmpty()) emptySet() else kind.mark.marked(candidates, note)
-        if (already == null) note("Could not read which Zoukan folders already have the ${kind.name} mark; they are tried again at the next refresh")
+        val already = if (candidates.isEmpty()) emptySet() else timeMachine.marked(candidates, note)
+        if (already == null) note("Could not read which Zoukan folders already have the Time Machine mark; they are tried again at the next refresh")
         val fresh = if (already == null) emptyList() else candidates.filter { it !in already }
-        val toMark = folders.filter { it in fresh || (kind.markAgain && it.path in record) }
-        val marked = if (toMark.isEmpty()) emptySet() else kind.mark.set(toMark, true, note)
+        val toMark = folders.filter { it in fresh || it.path in record }
+        val marked = if (toMark.isEmpty()) emptySet() else timeMachine.set(toMark, true, note)
         val newlyMarked = fresh.filter { it in marked }.map { it.path }
-        if (newlyMarked.isNotEmpty()) kind.record.set(record + newlyMarked)
+        if (newlyMarked.isNotEmpty()) storage.timeMachineMarked.set(record + newlyMarked)
         return removed && already != null && toMark.all { it in marked }
     }
 
     /**
-     * Takes [kind]'s mark off the recorded [paths] that can be reached, and drops those from the
-     * record. A path that cannot be reached, or whose folder is not the one recorded any more, keeps
-     * its record. Whether every attempted removal succeeded.
+     * Takes the Time Machine mark off the recorded [paths] that can be reached, and drops those from
+     * the record. A path that cannot be reached, or whose folder is not the one recorded any more,
+     * keeps its record. Whether every attempted removal succeeded.
      */
-    private fun takeOff(kind: Kind, paths: Set<String>): Boolean {
+    private fun takeOff(paths: Set<String>): Boolean {
         if (paths.isEmpty()) return true
         val reachable = paths.map(::File).filter { isRecordedFolder(it) }
         if (reachable.size < paths.size) {
             val waiting = paths - reachable.mapTo(mutableSetOf()) { it.path }
-            note("Zoukan's ${kind.name} mark stays on ${waiting.joinToString()} until it can be reached")
+            note("Zoukan's Time Machine mark stays on ${waiting.joinToString()} until it can be reached")
         }
         if (reachable.isEmpty()) return true
-        val cleared = kind.mark.set(reachable, false, note).mapTo(mutableSetOf()) { it.path }
-        if (cleared.isNotEmpty()) kind.record.set(kind.record.get() - cleared)
+        val cleared = timeMachine.set(reachable, false, note).mapTo(mutableSetOf()) { it.path }
+        if (cleared.isNotEmpty()) storage.timeMachineMarked.set(storage.timeMachineMarked.get() - cleared)
         return reachable.all { it.path in cleared }
     }
 
-    /** A recorded path still names that folder: a directory, reached without links. */
-    private fun isRecordedFolder(dir: File): Boolean =
-        runCatching { dir.isDirectory && dir.canonicalPath == dir.path }.getOrDefault(false)
+    /** A recorded path still names that folder: a real directory with exact case, reached without links. */
+    private fun isRecordedFolder(dir: File): Boolean = runCatching {
+        val path = dir.toPath()
+        Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) &&
+            !NoFollowDelete.isLink(path) &&
+            path.toRealPath().toFile().path == dir.path
+    }.getOrDefault(false)
 
     /** Whether the recorded [path] is a Zoukan folder of the current storage folder. */
     private fun inStorageFolder(path: String): Boolean {
         val root = storage.root.absoluteFile
-        val parents = setOfNotNull(root.normalize().path, runCatching { root.canonicalPath }.getOrNull())
+        val parents = setOfNotNull(
+            root.normalize().path,
+            runCatching { root.canonicalPath }.getOrNull(),
+            runCatching { root.toPath().toRealPath().toString() }.getOrNull(),
+        )
         val file = File(path)
         return file.name in ZoukanStorage.ZOUKAN_FOLDER_NAMES && file.parent in parents
     }
@@ -238,15 +202,20 @@ internal class StorageFolderPrivacy(
      * skipped with a note and never made or marked.
      */
     private fun zoukanFolders(root: File): List<File> {
-        val base = root.canonicalFile
+        val base = root.toPath().toRealPath().toFile()
         return ZoukanStorage.ZOUKAN_FOLDER_NAMES.mapNotNull { name ->
             val dir = File(base, name)
-            if (!Files.exists(dir.toPath(), LinkOption.NOFOLLOW_LINKS) && !dir.exists()) runCatching { dir.mkdir() }
-            val real = runCatching { dir.canonicalFile }.getOrNull()
-            if (real != null && dir.isDirectory && real.name == name && real.parentFile == base) {
+            val path = dir.toPath()
+            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS) && !dir.exists()) runCatching { dir.mkdir() }
+            val real = if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) && !NoFollowDelete.isLink(path)) {
+                runCatching { path.toRealPath().toFile() }.getOrNull()
+            } else {
+                null
+            }
+            if (real != null && real.name == name && real.parentFile == base) {
                 real
             } else {
-                note("${dir.path} is not Zoukan's own $name folder (missing, a link or named differently); its Spotlight and Time Machine settings are left alone")
+                note("${dir.path} is not Zoukan's own $name folder (missing, a link or named differently); its Time Machine setting is left alone")
                 null
             }
         }

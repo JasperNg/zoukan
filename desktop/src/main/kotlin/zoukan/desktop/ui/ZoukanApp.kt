@@ -162,10 +162,9 @@ fun runZoukanApp() {
         Injekt.get<eu.kanade.tachiyomi.core.security.SecurityPreferences>(),
         Injekt.get<zoukan.desktop.security.Incognito>().mode(),
     )
-    // The storage folder's downloads, local source and automatic backups stay out of Spotlight
-    // and Time Machine on macOS while their settings are on. Here, not in startUi: the tests'
-    // temporary folders must not end up in Spotlight's Search Privacy list
-    // (Settings > Data and storage reads the same instance to show when applying them failed)
+    // The storage folder's downloads, local source and automatic backups stay out of Time Machine
+    // on macOS while the setting is on. Here, not in startUi, so UI tests do not mark temp folders
+    // (Settings > Data and storage reads the same instance to show when applying it failed)
     Injekt.get<zoukan.desktop.storage.StorageFolderPrivacy>().start(ServiceScope)
 
     // Data and storage > "Clear chapter cache on app launch", as Android's MainActivity on launch

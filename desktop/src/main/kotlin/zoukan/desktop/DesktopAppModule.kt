@@ -75,8 +75,7 @@ class DesktopAppModule(
         addSingletonFactory { NetworkPreferences(get(), defaultDohProvider = PREF_DOH_QUAD9) }
         addSingletonFactory { SecurityPreferences(get()) }
         addSingletonFactory { ZoukanStorage(dirs, get()) }
-        // Made here so Settings can show whether it worked; started only by runZoukanApp, so the
-        // tests' temporary folders never reach Spotlight's Search Privacy list
+        // Made here so Settings can show whether it worked; started only by runZoukanApp
         addSingletonFactory {
             StorageFolderPrivacy(get(), note = { message -> logcat("StorageFolderPrivacy", LogPriority.WARN) { message } })
         }

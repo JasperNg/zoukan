@@ -925,11 +925,8 @@
     <string name="storage_change_warning">Downloads, local entries and automatic backups already in %1$s stay there; Zoukan does not move them. They show as not downloaded until you move them yourself or switch back.</string>
     <string name="storage_folder_has_downloads">This folder already has downloads. Clean up deletes those of entries not in this library.</string>
     <string name="open_the_old_folder">Open the old folder</string>
-    <string name="hide_storage_folder_from_spotlight">Hide the storage folder from Spotlight</string>
-    <string name="hide_storage_folder_from_spotlight_summary">Adds its downloads, local and automatic backup folders to System Settings &gt; Spotlight &gt; Search Privacy, so what they hold does not show in searches.</string>
     <string name="leave_storage_folder_out_of_time_machine">Leave the storage folder out of Time Machine</string>
     <string name="leave_storage_folder_out_of_time_machine_summary">Downloads, local entries and automatic backups are then not in Time Machine backups.</string>
-    <string name="could_not_hide_storage_folder_from_spotlight">Couldn\'t hide the storage folder from Spotlight. It is tried again when the app next starts.</string>
     <string name="could_not_leave_storage_folder_out_of_time_machine">Couldn\'t leave the storage folder out of Time Machine. It is tried again when the app next starts.</string>
     <string name="storage_folder_is_synced">This folder is synced to the cloud (iCloud Drive or another service). Downloads, local entries and automatic backups in it are uploaded, and macOS may keep only online copies to save space.</string>
     <string name="storage_folder_may_be_synced">This folder is in Desktop or Documents, which iCloud syncs when \"Desktop &amp; Documents Folders\" is on. Downloads, local entries and automatic backups in it may then be uploaded, and macOS may keep only online copies to save space.</string>
