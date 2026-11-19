@@ -727,6 +727,8 @@
     <string name="is_password_protected_set_the_download_password">%1$s is password protected. Set the download password in Settings.</string>
     <string name="the_cover_is_encrypted_set_the_download_password">The entry\'s cover is encrypted. Set the download password in Settings.</string>
     <!-- A download with "Password-protect downloads" on and no download password set -->
+    <!-- After could_not_use_the_secret_store, when a download needs the download password -->
+    <string name="download_password_unreadable_chapter_not_saved">The download password could not be read, so the chapter was not saved (Password-protect downloads is on). Unlock the secret store and retry.</string>
     <string name="no_download_password_chapter_not_saved">Password-protect downloads is on, but no download password is set, so the chapter was not saved. Set the download password in Settings &gt; Downloads, or turn password protection off, and retry.</string>
     <string name="standard_zip_encryption">Standard zip encryption</string>
     <string name="backing_up">Backing up…</string>

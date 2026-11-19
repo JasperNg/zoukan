@@ -89,11 +89,14 @@ class CbzPassword(
     }
 }
 
-/** The secret store could not be read while "Password protect downloads" is on. */
+/**
+ * The secret store could not be read while "Password protect downloads" is on. The message is the
+ * app's own words, shown with the failed download; the store's error (which can name a keychain or
+ * a path) is the [cause], for the log only.
+ */
 class CbzPasswordUnavailableException(cause: Throwable) :
     IllegalStateException(
-        "Could not read the download password from the system's secret store, so the chapter was not saved " +
-            "(password protect downloads is on). Unlock the secret store and retry. (${cause.message ?: cause::class.simpleName})",
+        localized(DMR.strings.could_not_use_the_secret_store) + ". " + localized(DMR.strings.download_password_unreadable_chapter_not_saved),
         cause,
     )
 

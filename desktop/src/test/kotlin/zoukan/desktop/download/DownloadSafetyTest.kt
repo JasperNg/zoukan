@@ -141,6 +141,16 @@ class DownloadSafetyTest {
     }
 
     @Test
+    fun `a secret store error says so in the app's words, and its own message stays out of the error shown`() {
+        val password = CbzPassword(MapStore(failing = true), security(protect = true))
+        val error = shouldThrow<CbzPasswordUnavailableException> { password.encryption() }
+        error.message shouldBe zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.could_not_use_the_secret_store) +
+            ". " + zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.download_password_unreadable_chapter_not_saved)
+        // Kept for the log
+        (error.cause != null) shouldBe true
+    }
+
+    @Test
     fun `no encryption when protection is off, and the password when it is on`() {
         CbzPassword(MapStore(failing = true), security(protect = false)).encryption() shouldBe null
         val store = MapStore(failing = false).apply { values[CbzPassword.KEY] = "pw" }
