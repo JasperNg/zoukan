@@ -30,7 +30,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.DeleteChapters
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -55,6 +54,7 @@ import zoukan.desktop.download.DownloadPaths
 import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.testing.Await
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.common.LibraryAddController
 import java.io.File
@@ -152,7 +152,7 @@ class MangaActionsTrimTest {
 
     @Test
     fun `MangaExternalActions handles auto-track modes, mangaUrl, and mergedEntries`() = runBlocking {
-        val store = InMemoryPreferenceStore()
+        val store = TestPreferenceStore()
         val trackPrefs = TrackPreferences(store)
         val trackerManager = mockk<TrackerManager> {
             every { loggedInTrackers() } returns listOf(mockk<BaseTracker>())
@@ -255,7 +255,7 @@ class MangaActionsTrimTest {
 
     @Test
     fun `trimmed MangaScreenModel primary constructor coordinates selection and library add flow`() {
-        val store = InMemoryPreferenceStore()
+        val store = TestPreferenceStore()
         val manga = Manga.create().copy(id = 77L, source = 10L, ogTitle = "Trimmed", favorite = false, initialized = true)
         val chapters = (1L..4L).map { id ->
             Chapter.create().copy(id = id, mangaId = manga.id, name = "Ch $id", url = "/$id", sourceOrder = 4L - id)
