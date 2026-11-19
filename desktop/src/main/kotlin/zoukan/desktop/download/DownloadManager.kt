@@ -144,6 +144,20 @@ class DownloadManager(
     internal val entryLocks = ConcurrentHashMap<Long, Mutex>()
     internal fun entryLock(id: Long) = entryLocks.getOrPut(id) { Mutex() }
 
+    /**
+     * One lock per entry held across a title change's rename of its download folders, the save of
+     * the new title and a move back ([withRenameLock]), so two refreshes of one entry never move
+     * its folders at once. It is a lock of its own, not [entryLock]: a refresh does not wait for a
+     * chapter that is downloading. Nothing takes another lock while waiting for it, and nothing
+     * under it takes an entry lock or another rename lock, so it cannot deadlock with them.
+     */
+    // Internal so a test can put in a lock that records who asks for it
+    internal val renameLocks = ConcurrentHashMap<Long, Mutex>()
+
+    /** Runs [block] holding entry [mangaId]'s rename lock (see [renameLocks]). */
+    suspend fun <T> withRenameLock(mangaId: Long, block: suspend () -> T): T =
+        renameLocks.getOrPut(mangaId) { Mutex() }.withLock { block() }
+
     /** What is in each entry's download folder, read once and checked again by its modified time */
     internal val index = DownloadIndex(clock = indexClock)
 

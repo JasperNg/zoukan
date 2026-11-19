@@ -12,6 +12,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.Headers
@@ -276,5 +277,58 @@ class RefreshMangaRenameTest {
             source.list()!!.sorted() shouldBe expected.sorted()
             updates.captured.title shouldBe "Café Two"
         }
+    }
+
+    @Test
+    fun `two refreshes at once never leave one of an entry's two folders under the old title`() = runBlocking<Unit> {
+        setUp()
+        val source = paths.mangaDir(old).parentFile
+        val ascii = { title: String -> zoukan.desktop.download.FileNames.buildValidFilename(title, disallowNonAscii = true) }
+        val oldTitle = manga("Café")
+        write(File(source, "Café"), "Chapter 1.cbz", Random(9).nextBytes(512))
+        write(File(source, ascii("Café")), "Chapter 2.cbz", Random(10).nextBytes(512))
+        val refresh = refreshManga()
+        val newTitle = mockk<Source>(relaxed = true) {
+            coEvery { getMangaUpdate(any(), any(), any(), any()) } returns
+                SMangaUpdate(SManga.create().apply { title = "Café Two" }, emptyList())
+        }
+        // The first refresh stops after its first folder moved
+        val firstMoved = java.util.concurrent.CountDownLatch(1)
+        val go = java.util.concurrent.CountDownLatch(1)
+        val moves = java.util.concurrent.atomic.AtomicInteger()
+        manager.moveFolder = { from, to ->
+            java.nio.file.Files.move(from, to)
+            if (moves.incrementAndGet() == 1) {
+                firstMoved.countDown()
+                go.await()
+            }
+        }
+        // The entry's rename lock says when a second refresh asks for it
+        val lock = kotlinx.coroutines.sync.Mutex()
+        val asks = java.util.concurrent.atomic.AtomicInteger()
+        val secondAsked = kotlinx.coroutines.CompletableDeferred<Unit>()
+        manager.renameLocks[1L] = object : kotlinx.coroutines.sync.Mutex by lock {
+            override suspend fun lock(owner: Any?) {
+                if (asks.incrementAndGet() == 2) secondAsked.complete(Unit)
+                lock.lock(owner)
+            }
+        }
+
+        val first = launch(kotlinx.coroutines.Dispatchers.IO) { refresh(oldTitle, fetchDetails = true, fetchChapters = false, source = newTitle) }
+        kotlinx.coroutines.runInterruptible(kotlinx.coroutines.Dispatchers.IO) { firstMoved.await() }
+        val second = launch(kotlinx.coroutines.Dispatchers.IO) { refresh(oldTitle, fetchDetails = true, fetchChapters = false, source = newTitle) }
+        // Either the second refresh waits for the first (it asks for the lock), or it runs to the end
+        withTimeout(10_000) {
+            kotlinx.coroutines.selects.select<Unit> {
+                second.onJoin {}
+                secondAsked.onAwait {}
+            }
+        }
+        go.countDown()
+        first.join()
+        second.join()
+
+        source.list()!!.sorted() shouldBe listOf("Café Two", ascii("Café Two")).sorted()
+        updates.captured.title shouldBe "Café Two"
     }
 }

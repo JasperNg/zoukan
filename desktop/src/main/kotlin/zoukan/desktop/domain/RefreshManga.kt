@@ -81,11 +81,19 @@ class RefreshManga(
         } catch (_: UninitializedPropertyAccessException) {
             ""
         }
-        var title = remoteTitle.takeIf {
+        val title = remoteTitle.takeIf {
             it.isNotEmpty() && (!local.favorite || libraryPreferences.updateMangaTitles().get())
         }
         // As Android's renameManga: the download folder follows the title, and a title whose folder
-        // cannot move stays as it is, so the entry keeps its downloads
+        // cannot move stays as it is, so the entry keeps its downloads. The rename, the save and a
+        // move back hold the entry's rename lock: two refreshes of the entry at once (a library
+        // update and the entry's screen) would each move some of its folders, and one would stay
+        // under the old title with its chapters out of view
+        return downloadManager.withRenameLock(local.id) { saveDetails(local, remote, title) }
+    }
+
+    private suspend fun saveDetails(local: Manga, remote: SManga, newTitle: String?): Boolean {
+        var title = newTitle
         // The folders the rename moved (several when the entry had several), to move them back
         var moved: List<DownloadManager.FolderMove>? = null
         if (title != null && title != local.ogTitle && local.source != LocalSource.ID) {
