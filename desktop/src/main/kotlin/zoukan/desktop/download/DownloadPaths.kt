@@ -95,21 +95,16 @@ class DownloadPaths(
             for (name in names) {
                 val folder = when {
                     name in onDisk -> File(dir, name)
-                    FileNames.isPortable(name) && File(dir, name).exists() -> File(dir, spellingOnDisk(dir, name, onDisk))
+                    // Only a listed folder: on Windows a computed name can also be another
+                    // folder's short name ("SOUSOU~1"), which exists but is not this entry's
+                    FileNames.isPortable(name) && File(dir, name).exists() ->
+                        spellingOnDisk(name, onDisk) { isSameFile(File(dir, it), File(dir, name)) }?.let { File(dir, it) } ?: continue
                     else -> continue
                 }
                 if (found.none { isSameFile(it, folder) }) found += folder
             }
         }
         return found
-    }
-
-    /** The listed name in [dir] that [name] opens, differing only in case or Unicode form; else [name]. */
-    private fun spellingOnDisk(dir: File, name: String, onDisk: Set<String>): String {
-        val key = Normalizer.normalize(name, Normalizer.Form.NFC)
-        return onDisk.firstOrNull {
-            Normalizer.normalize(it, Normalizer.Form.NFC).equals(key, ignoreCase = true) && isSameFile(File(dir, it), File(dir, name))
-        } ?: name
     }
 
     private fun isSameFile(a: File, b: File): Boolean = try {
@@ -213,6 +208,17 @@ class DownloadPaths(
         private fun chapterInput(name: String, scanlator: String?): String {
             val dirName = name.ifBlank { "Chapter" }
             return if (!scanlator.isNullOrBlank()) scanlator + "_" + dirName else dirName
+        }
+
+        /**
+         * The name in [onDisk] (a folder's listing) that [name] opens, differing from it only in
+         * letter case or Unicode form, and that [isSame] confirms is the same folder; null when none
+         * is. Never [name] itself when it is not listed: a name that opens a folder without being
+         * its spelling (a Windows short name) is another folder.
+         */
+        internal fun spellingOnDisk(name: String, onDisk: Set<String>, isSame: (String) -> Boolean): String? {
+            val key = Normalizer.normalize(name, Normalizer.Form.NFC)
+            return onDisk.firstOrNull { Normalizer.normalize(it, Normalizer.Form.NFC).equals(key, ignoreCase = true) && isSame(it) }
         }
 
         // Less 7 bytes for the hash and underscore, 4 bytes for .cbz

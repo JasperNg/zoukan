@@ -36,6 +36,20 @@ class DownloadPathsTest {
     }
 
     @Test
+    fun `a computed name that opens a folder no listed name matches is not taken for it`() {
+        // On Windows "SOUSOU~1" is the short name of another entry's folder: it exists and is the
+        // same file, but it is not that folder's spelling, and that folder is not this entry's
+        val listed = setOf("Sousou no Frieren")
+        DownloadPaths.spellingOnDisk("SOUSOU~1", listed) { true } shouldBe null
+        // The same when the file system cannot say whether the two are one
+        DownloadPaths.spellingOnDisk("Sousou No Frieren", listed) { false } shouldBe null
+        // A listed name that differs in letter case or Unicode form, and is the same folder, is its spelling
+        DownloadPaths.spellingOnDisk("Sousou No Frieren", listed) { it == "Sousou no Frieren" } shouldBe "Sousou no Frieren"
+        val nfd = java.text.Normalizer.normalize("Café", java.text.Normalizer.Form.NFD)
+        DownloadPaths.spellingOnDisk("Café", setOf(nfd)) { true } shouldBe nfd
+    }
+
+    @Test
     fun `natural order`() {
         listOf("10.jpg", "2.jpg", "001.jpg", "B.png", "a.png").sortedWith(FileNames.naturalOrder) shouldBe
             listOf("001.jpg", "2.jpg", "10.jpg", "a.png", "B.png")
