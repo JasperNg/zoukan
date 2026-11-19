@@ -129,6 +129,21 @@ class NoFollowDeleteTest {
         NoFollowDelete.isLink(link) shouldBe true
     }
 
+    @Test
+    fun `an ordinary folder reached by a name in another letter case is no link on a file system that ignores case`() {
+        val onDisk = File(temp, "Entry/Chapter 1").apply { mkdirs() }
+        val page = File(onDisk, "001.png").apply { writeBytes(byteArrayOf(1)) }
+        val asListed = File(temp, "Entry/CHAPTER 1")
+        assumeTrue(asListed.isDirectory, "the file system tells names apart by letter case")
+
+        NoFollowDelete.linkState(asListed.toPath()) shouldBe NoFollowDelete.LinkState.NOT_A_LINK
+        NoFollowDelete.isLink(asListed.toPath()) shouldBe false
+        // And so it is deleted as the folder it is
+        NoFollowDelete.deleteTree(asListed.toPath())
+        page.exists() shouldBe false
+        onDisk.exists() shouldBe false
+    }
+
     private fun run(vararg command: String): Int = ProcessBuilder(*command).redirectErrorStream(true).start().let {
         it.inputStream.readAllBytes()
         it.waitFor()
