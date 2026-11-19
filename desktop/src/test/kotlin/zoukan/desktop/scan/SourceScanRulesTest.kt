@@ -947,7 +947,7 @@ class ImageIoCacheScanTest {
             val f = javax.imageio.ImageIO.read(url)
             val g = ImageIO.read(byteArrayImageInputStream(bytes))
             val h = ImageIO.read(com.twelvemonkeys.imageio.stream.ByteArrayImageInputStream(bytes))
-            val i = ImageIO.read(ByteArrayInputStream(bytes))
+            val i = ImageIO.read(ByteArrayImageInputStream(bytes))
             val j = ImageIO.read(ByteArrayInputStreamWrapper(bytes))
             """.trimIndent(),
         ) shouldBe listOf(1, 3, 4, 5, 10, 14)
