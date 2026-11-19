@@ -86,10 +86,12 @@ class SyncManager(
         Injekt.get<PreferenceStore>().getBoolean(Preference.appStateKey("zoukan_sync_sections_pending"), false)
 
     /**
-     * How many syncs in a row retried [sectionsPending] and failed again. At [MAX_SECTION_RETRIES]
-     * the flag is cleared and the ETag kept, so a section that fails every time is not restored
-     * (with a safety snapshot and a full download and upload) at every sync; the next change on the
-     * server restores the library again.
+     * How many syncs in a row retried [sectionsPending] alone and failed again. At
+     * [MAX_SECTION_RETRIES] the sections are no longer retried alone (with a safety snapshot and a
+     * restore at every sync); the next entry that differs restores them with it. [sectionsPending]
+     * stays set all the same, and with it no ETag is kept: on "not modified" the services upload
+     * this computer's library over the server's, which lacks the section, so each sync merges the
+     * server's library instead and the server keeps it.
      */
     private fun sectionRetries() =
         Injekt.get<PreferenceStore>().getInt(Preference.appStateKey("zoukan_sync_section_retries"), 0)
@@ -272,13 +274,20 @@ class SyncManager(
         val (favorites, nonFavorites) = splitFavorites(remoteBackup)
         // ZOUKAN -->
         // The sections a restore with errors left behind are restored again, with no entry to restore
-        val retrySections = favorites.isEmpty() && sectionsPending().get()
+        // (at most MAX_SECTION_RETRIES syncs in a row: see sectionRetries)
+        val retrySections = favorites.isEmpty() && sectionsPending().get() && sectionRetries().get() < MAX_SECTION_RETRIES
         if (!snapshotThenUpdateNonFavorites(favorites, nonFavorites, alwaysSnapshot = retrySections)) return false
         // ZOUKAN <--
 
         if (favorites.isEmpty() /* ZOUKAN --> */ && !retrySections /* ZOUKAN <-- */) {
             // ZOUKAN -->
-            keepEtag(etag)
+            if (sectionsPending().get()) {
+                // Sections no longer retried alone are still missing here: no ETag (see sectionRetries)
+                syncPreferences.lastSyncEtag().delete()
+                restorePending().delete()
+            } else {
+                keepEtag(etag)
+            }
             // ZOUKAN <--
             syncPreferences.lastSyncTimestamp().set(Date().time)
             notifier.showSyncSuccess("Sync completed successfully")
@@ -328,22 +337,20 @@ class SyncManager(
         // A retry of the sections alone that failed again: the user was told at the first failure
         val retriedInVain = retrySections && errors.isNotEmpty()
         val retries = if (retriedInVain) sectionRetries().get() + 1 else 0
-        when {
-            errors.isEmpty() -> {
-                keepEtag(etag)
-                sectionsPending().delete()
+        if (errors.isEmpty()) {
+            keepEtag(etag)
+            sectionsPending().delete()
+            sectionRetries().delete()
+        } else {
+            syncPreferences.lastSyncEtag().delete()
+            sectionsPending().set(true)
+            if (retriedInVain) {
+                sectionRetries().set(retries)
+                if (retries >= MAX_SECTION_RETRIES) {
+                    logcat(LogPriority.WARN) { "Sync stops retrying the sections that failed to restore until an entry changes" }
+                }
+            } else {
                 sectionRetries().delete()
-            }
-            retries >= MAX_SECTION_RETRIES -> {
-                logcat(LogPriority.WARN) { "Sync stops retrying the sections that failed to restore until the server's library changes" }
-                keepEtag(etag)
-                sectionsPending().delete()
-                sectionRetries().delete()
-            }
-            else -> {
-                syncPreferences.lastSyncEtag().delete()
-                sectionsPending().set(true)
-                if (retriedInVain) sectionRetries().set(retries) else sectionRetries().delete()
             }
         }
         // ZOUKAN <--

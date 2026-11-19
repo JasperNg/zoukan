@@ -620,7 +620,7 @@ class SyncDatabaseFaultsTest {
     }
 
     @Test
-    fun `a section that fails to restore every time is retried a few times, told once, then left until the next change`() = runBlocking<Unit> {
+    fun `a section that fails to restore every time is retried a few times, told once, and never removed from the server`() = runBlocking<Unit> {
         sync.seed(BackupCodec.encode(remote.copy(backupCategories = listOf(BackupCategory("From the other device", order = 1)))))
         preferences.lastSyncTimestamp().set(1L)
         driver.failOn(FailingSqlDriver.insertInto("categories"), times = Int.MAX_VALUE)
@@ -637,9 +637,21 @@ class SyncDatabaseFaultsTest {
         manager().syncData()
 
         snapshots.size shouldBe 1 + SyncManager.MAX_SECTION_RETRIES
-        sync.calls.filter { it.method == "GET" }.map { it.status } shouldBe listOf(304, 304)
+        // No ETag is kept while this computer lacks the section: on "not modified" the service would
+        // upload this computer's library over the server's, without the category. Each sync merges
+        // the server's library instead, which keeps it there
+        sync.calls.filter { it.method == "GET" }.map { it.status } shouldBe listOf(200, 200)
+        BackupCodec.decode(sync.remoteBackup!!).backupCategories.map { it.name } shouldBe listOf("From the other device")
         messages.errors.count { it.text.contains("Categories") } shouldBe 1
         categories() shouldBe emptyList()
+
+        // Healed: the next change on the server restores the section with its entries
+        driver.heal()
+        val changed = BackupCodec.decode(sync.remoteBackup!!).also { b -> b.backupManga.first { it.url == "/remote" }.version += 1 }
+        sync.seed(BackupCodec.encode(changed))
+        manager().syncData()
+        categories() shouldBe listOf("From the other device")
+        restorePending.get() shouldBe false
     }
 
     /** A file on the server that is not a backup: every sync stops at it. */
