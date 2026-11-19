@@ -2,8 +2,10 @@ package zoukan.desktop.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -22,6 +24,87 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.i18n.desktop.DMR
+
+/**
+ * Per-window shortcut dispatcher holding the active screen's handlers; see [LocalShortcuts].
+ */
+@Stable
+class ShortcutController(
+    private val selectTab: (HomeTab) -> Unit = HomeScreen::selectTab,
+    private val openSettings: (Navigator) -> Unit = HomeScreen::openSettings,
+) {
+    /** The shown screen's own handlers for [Shortcuts.Action.Find], [Shortcuts.Action.SelectAll] and [Shortcuts.Action.Back]; the newest is asked first. */
+    private val screenHandlers = mutableListOf<(Shortcuts.Action) -> Boolean>()
+
+    fun addScreenHandler(handler: (Shortcuts.Action) -> Boolean) {
+        screenHandlers += handler
+    }
+
+    fun removeScreenHandler(handler: (Shortcuts.Action) -> Boolean) {
+        screenHandlers -= handler
+    }
+
+    private fun screenHandled(action: Shortcuts.Action): Boolean = screenHandlers.toList().asReversed().any { it(action) }
+
+    /** Handles [event] if it is a shortcut; returns whether it was. */
+    fun handle(event: KeyEvent, navigator: Navigator?): Boolean {
+        // Nothing works behind the app lock
+        if (Injekt.get<zoukan.desktop.security.AppLock>().locked.value) return false
+        if (event.type != KeyEventType.KeyDown) return false
+        val ctrl = event.isCtrlPressed || event.isMetaPressed
+        return perform(Shortcuts.actionFor(event.key, ctrl, event.isShiftPressed, event.isAltPressed), navigator, escape = event.key == Key.Escape)
+    }
+
+    /** The mouse's back button goes back one screen; not while the app lock covers the window. */
+    fun mouseBack(button: PointerButton?, locked: Boolean, navigator: Navigator?): Boolean =
+        button == PointerButton.Back && !locked && goBack(navigator)
+
+    /** Goes back one screen, as the mouse back button does; returns whether there was a screen to go back to. */
+    fun goBack(navigator: Navigator?): Boolean {
+        // The shown screen may keep the user here, as the migration list does while it holds search results
+        if (screenHandled(Shortcuts.Action.Leave)) return true
+        if (navigator != null && navigator.canPop) {
+            navigator.pop()
+            return true
+        }
+        return false
+    }
+
+    /** Does [action]; [escape] is whether the key was Escape. Returns whether it was used. */
+    internal fun perform(action: Shortcuts.Action?, navigator: Navigator?, escape: Boolean): Boolean {
+        return when (action) {
+            is Shortcuts.Action.OpenTab -> if (screenHandled(Shortcuts.Action.Leave)) {
+                true
+            } else {
+                navigator?.popUntilRoot()
+                selectTab(action.tab)
+                true
+            }
+            Shortcuts.Action.OpenSettings -> if (screenHandled(Shortcuts.Action.Leave)) {
+                true
+            } else {
+                navigator?.let(openSettings)
+                navigator != null
+            }
+            Shortcuts.Action.UpdateLibrary -> {
+                if (!Injekt.get<LibraryUpdater>().start()) {
+                    Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
+                } else {
+                    Toasts.show(localized(DMR.strings.updating_the_library))
+                }
+                true
+            }
+            Shortcuts.Action.Find, Shortcuts.Action.SelectAll -> screenHandled(action)
+            // Escape clears a screen's selection before it goes back; Alt + Left only goes back
+            Shortcuts.Action.Back -> if (escape && screenHandled(action)) true else goBack(navigator)
+            // Never produced by a key; screens are asked it through screenHandled
+            Shortcuts.Action.Leave -> false
+            null -> false
+        }
+    }
+}
+
+val LocalShortcuts = staticCompositionLocalOf<ShortcutController?> { null }
 
 /**
  * The app-wide keyboard shortcuts. They run only when the focused screen did not use the key, so
@@ -48,18 +131,16 @@ object Shortcuts {
         data object Leave : Action
     }
 
-    /** The shown screen's own handlers for [Action.Find], [Action.SelectAll] and [Action.Back]; the newest is asked first. */
-    private val screenHandlers = mutableListOf<(Action) -> Boolean>()
+    /** Fallback controller for compositions outside [ZoukanContent] (for example standalone tests). */
+    internal val defaultController = ShortcutController()
 
     fun addScreenHandler(handler: (Action) -> Boolean) {
-        screenHandlers += handler
+        defaultController.addScreenHandler(handler)
     }
 
     fun removeScreenHandler(handler: (Action) -> Boolean) {
-        screenHandlers -= handler
+        defaultController.removeScreenHandler(handler)
     }
-
-    private fun screenHandled(action: Action): Boolean = screenHandlers.toList().asReversed().any { it(action) }
 
     /** Shortcut list for the README and the help in Settings. */
     val list = listOf(
@@ -93,70 +174,28 @@ object Shortcuts {
     }
 
     /** Handles [event] if it is a shortcut; returns whether it was. */
-    fun handle(event: KeyEvent, navigator: Navigator?): Boolean {
-        // Nothing works behind the app lock
-        if (Injekt.get<zoukan.desktop.security.AppLock>().locked.value) return false
-        if (event.type != KeyEventType.KeyDown) return false
-        val ctrl = event.isCtrlPressed || event.isMetaPressed
-        return perform(actionFor(event.key, ctrl, event.isShiftPressed, event.isAltPressed), navigator, escape = event.key == Key.Escape)
-    }
+    fun handle(event: KeyEvent, navigator: Navigator?): Boolean = defaultController.handle(event, navigator)
 
     /** The mouse's back button goes back one screen; not while the app lock covers the window. */
     fun mouseBack(button: PointerButton?, locked: Boolean, navigator: Navigator?): Boolean =
-        button == PointerButton.Back && !locked && goBack(navigator)
+        defaultController.mouseBack(button, locked, navigator)
 
     /** Goes back one screen, as the mouse back button does; returns whether there was a screen to go back to. */
-    fun goBack(navigator: Navigator?): Boolean {
-        // The shown screen may keep the user here, as the migration list does while it holds search results
-        if (screenHandled(Action.Leave)) return true
-        if (navigator != null && navigator.canPop) {
-            navigator.pop()
-            return true
-        }
-        return false
-    }
+    fun goBack(navigator: Navigator?): Boolean = defaultController.goBack(navigator)
 
     /** Does [action]; [escape] is whether the key was Escape. Returns whether it was used. */
-    internal fun perform(action: Action?, navigator: Navigator?, escape: Boolean): Boolean {
-        return when (action) {
-            is Action.OpenTab -> if (screenHandled(Action.Leave)) {
-                true
-            } else {
-                navigator?.popUntilRoot()
-                HomeScreen.selectTab(action.tab)
-                true
-            }
-            Action.OpenSettings -> if (screenHandled(Action.Leave)) {
-                true
-            } else {
-                navigator?.let { HomeScreen.openSettings(it) }
-                navigator != null
-            }
-            Action.UpdateLibrary -> {
-                if (!Injekt.get<LibraryUpdater>().start()) {
-                    Toasts.show(localized(DMR.strings.a_library_update_is_already_running))
-                } else {
-                    Toasts.show(localized(DMR.strings.updating_the_library))
-                }
-                true
-            }
-            Action.Find, Action.SelectAll -> screenHandled(action)
-            // Escape clears a screen's selection before it goes back; Alt + Left only goes back
-            Action.Back -> if (escape && screenHandled(action)) true else goBack(navigator)
-            // Never produced by a key; screens are asked it through screenHandled
-            Action.Leave -> false
-            null -> false
-        }
-    }
+    internal fun perform(action: Action?, navigator: Navigator?, escape: Boolean): Boolean =
+        defaultController.perform(action, navigator, escape)
 }
 
 /** Lets the screen that shows this answer a shortcut; [handler] returns whether it used it. */
 @Composable
 fun OnShortcut(handler: (Shortcuts.Action) -> Boolean) {
+    val controller = LocalShortcuts.current ?: Shortcuts.defaultController
     val current by rememberUpdatedState(handler)
-    DisposableEffect(Unit) {
+    DisposableEffect(controller) {
         val registered: (Shortcuts.Action) -> Boolean = { current(it) }
-        Shortcuts.addScreenHandler(registered)
-        onDispose { Shortcuts.removeScreenHandler(registered) }
+        controller.addScreenHandler(registered)
+        onDispose { controller.removeScreenHandler(registered) }
     }
 }

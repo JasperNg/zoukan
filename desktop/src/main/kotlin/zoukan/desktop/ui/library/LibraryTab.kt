@@ -73,6 +73,7 @@ import zoukan.desktop.library.LibraryUpdater
 import zoukan.desktop.local.LocalSource
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.HomeTab
+import zoukan.desktop.ui.LocalHomeController
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
 import zoukan.desktop.ui.browse.GlobalSearchScreen
@@ -108,6 +109,7 @@ fun LibraryTab(model: LibraryScreenModel) {
     // Only whether an update runs, so each progress tick doesn't recompose the whole library
     val updating by rememberLibraryUpdateRunning()
     val navigator = LocalNavigator.currentOrThrow
+    val home = LocalHomeController.current
     val scope = rememberCoroutineScope()
     var settingsDialog by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
@@ -294,7 +296,7 @@ fun LibraryTab(model: LibraryScreenModel) {
             state.items.isEmpty() -> EmptyScreen(
                 localized(DMR.strings.your_library_is_empty_find_something),
                 actionLabel = localized(MR.strings.browse),
-                onAction = { HomeScreen.selectTab(HomeTab.Browse) },
+                onAction = { home?.selectTab(HomeTab.Browse) ?: HomeScreen.selectTab(HomeTab.Browse) },
             )
             // ZOUKAN -->
             visible.isEmpty() -> Column(Modifier.fillMaxSize()) {

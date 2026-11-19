@@ -147,11 +147,12 @@ data class MangaScreen(val mangaId: Long) : Screen {
         var dialog by remember { mutableStateOf<MangaDialog?>(null) }
         MangaDialogHost(dialog, manga, model, isLocal = state.isLocal, onShow = { dialog = it })
         val isMerged = manga.source == exh.source.MERGED_SOURCE_ID
-        val search = remember(navigator, state.source) {
+        val home = zoukan.desktop.ui.LocalHomeController.current
+        val search = remember(navigator, state.source, home) {
             EntryInfoSearch(
-                library = { EntrySearch.search(navigator, it, global = false, library = true) },
-                global = { EntrySearch.search(navigator, it, global = true) },
-                tag = { EntrySearch.searchGenre(navigator, it, state.source) },
+                library = { EntrySearch.search(navigator, it, global = false, library = true, home = home) },
+                global = { EntrySearch.search(navigator, it, global = true, home = home) },
+                tag = { EntrySearch.searchGenre(navigator, it, state.source, home = home) },
             )
         }
         val chapterCallbacks = remember(model, navigator) {
@@ -211,7 +212,7 @@ data class MangaScreen(val mangaId: Long) : Screen {
                                 state = state,
                                 model = model,
                                 onWebView = model::openInWebView.takeIf { state.source is eu.kanade.tachiyomi.source.online.HttpSource },
-                                onSearch = { query -> EntrySearch.search(navigator, query, global = false) },
+                                onSearch = { query -> EntrySearch.search(navigator, query, global = false, home = home) },
                                 onOpenMetadata = { navigator.push(MetadataViewScreen(manga.id, manga.source)) },
                                 modifier = Modifier.width(infoWidth).fillMaxHeight(),
                                 onCoverClick = { dialog = MangaDialog.Cover },

@@ -381,25 +381,36 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
     var rootHasFocus by remember { mutableStateOf(false) }
     LaunchedEffect(locked, rootHasFocus) { if (AppShell.rootTakesFocus(locked, rootHasFocus)) runCatching { rootFocus.requestFocus() } }
     // ZOUKAN <--
+    val snackbar = remember { SnackbarHostState() }
+    val messages = remember { AppMessages() }
+    val home = rememberSaveable(saver = HomeController.Saver) { HomeController() }
+    val shortcuts = remember(home) {
+        ShortcutController(
+            selectTab = home::selectTab,
+            openSettings = home::openSettings,
+        )
+    }
+    DisposableEffect(home) {
+        HomeScreen.register(home)
+        onDispose { HomeScreen.unregister(home) }
+    }
     ZoukanTheme(remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }) {
         Surface(
             Modifier.fillMaxSize().onPointerEvent(PointerEventType.Press) { event ->
                 // The mouse's back button
                 // ZOUKAN -->
                 // Not while the app lock covers the window
-                Shortcuts.mouseBack(event.button, appLock.locked.value, navigatorRef)
+                shortcuts.mouseBack(event.button, appLock.locked.value, navigatorRef)
                 // ZOUKAN <--
             }
                 // ZOUKAN -->
-                .onKeyEvent { Shortcuts.handle(it, navigatorRef) }
+                .onKeyEvent { shortcuts.handle(it, navigatorRef) }
                 .onFocusChanged { rootHasFocus = it.hasFocus }
                 .focusRequester(rootFocus)
                 .focusable(),
             // ZOUKAN <--
             color = MaterialTheme.colorScheme.background,
         ) {
-            val snackbar = remember { SnackbarHostState() }
-            val messages = remember { AppMessages() }
             LaunchedEffect(Unit) {
                 // ZOUKAN -->
                 // Messages wait for the unlock: the lock shows nothing of the app. A screen can hold
@@ -416,7 +427,11 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
             val held by messages.held.collectAsState()
             LaunchedEffect(held > 0) { if (held > 0) snackbar.currentSnackbarData?.dismiss() }
             // ZOUKAN <--
-            CompositionLocalProvider(LocalAppMessages provides messages) {
+            CompositionLocalProvider(
+                LocalAppMessages provides messages,
+                LocalHomeController provides home,
+                LocalShortcuts provides shortcuts,
+            ) {
                 Box(Modifier.fillMaxSize()) {
                     // ZOUKAN -->
                     // The downloaded-only and incognito bars above every screen, as Android's AppStateBanners
@@ -426,6 +441,10 @@ fun ZoukanContent(preferences: DesktopPreferences, firstRun: Boolean = false, on
                             Navigator(HomeScreen) { navigator ->
                                 navigatorRef = navigator
                                 onNavigator(navigator)
+                                DisposableEffect(navigator, home) {
+                                    HomeScreen.bindNavigator(navigator, home)
+                                    onDispose { HomeScreen.unbindNavigator(navigator, home) }
+                                }
                                 // While locked, the screens leave the composition, so none of their
                                 // controls, dialogs or menus can be clicked or reached with Tab (dialogs
                                 // are layers above the lock). The navigator stays: the back stack, the
@@ -471,49 +490,101 @@ enum class HomeTab(val label: String, val icon: ImageVector, val selectedIcon: I
 object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
     private fun readResolve(): Any = HomeScreen
 
+    private val activeControllers = mutableListOf<HomeController>()
+    private val navigatorControllers = java.util.WeakHashMap<Navigator, HomeController>()
     private var current: HomeTabState? = null
     private var pending: HomeTab? = null
 
     /** Lets other screens switch the tab, for example "Browse" from an empty library. Kept until the home screen shows. */
     fun selectTab(tab: HomeTab) {
-        current?.select(tab) ?: run { pending = tab }
+        val controller = activeControllers.lastOrNull()
+        if (controller != null) {
+            controller.selectTab(tab)
+        } else {
+            current?.select(tab) ?: run { pending = tab }
+        }
     }
 
     /** The tab the home screen shows; null before it shows. For the tests. */
-    internal val selectedTab: HomeTab? get() = current?.selected
+    internal val selectedTab: HomeTab?
+        get() = activeControllers.lastOrNull()?.tabs?.selected ?: current?.selected
 
-    /** For the home screen's own effect. */
+    internal fun register(controller: HomeController) {
+        if (controller !in activeControllers) activeControllers += controller
+        pending?.let { controller.selectTab(it) }
+        pending = null
+    }
+
+    internal fun unregister(controller: HomeController) {
+        activeControllers -= controller
+        if (activeControllers.isEmpty() && current == null) {
+            pending = null
+        }
+    }
+
+    internal fun bindNavigator(navigator: Navigator, controller: HomeController) {
+        navigatorControllers[navigator] = controller
+    }
+
+    internal fun unbindNavigator(navigator: Navigator, controller: HomeController) {
+        if (navigatorControllers[navigator] === controller) {
+            navigatorControllers.remove(navigator)
+        }
+    }
+
+    internal fun controllerFor(navigator: Navigator): HomeController? =
+        navigatorControllers[navigator] ?: activeControllers.lastOrNull()
+
+    /** For the home screen's own effect and tests. */
     internal fun register(state: HomeTabState) {
         current = state
         pending?.let { state.select(it) }
         pending = null
     }
 
-    /** For the home screen's own effect. */
+    /** For the home screen's own effect and tests. */
     internal fun unregister(state: HomeTabState) {
         if (current === state) current = null
+        if (activeControllers.isEmpty() && current == null) {
+            pending = null
+        }
     }
 
     // ZOUKAN -->
     /** Opens the library with [query] in its search, as Android's HomeScreen.search (Library search). */
-    var searchLibrary: (query: String) -> Unit = {}
+    fun searchLibrary(query: String) {
+        activeControllers.lastOrNull()?.searchLibrary(query)
+    }
     // ZOUKAN <--
 
     /** Opens Settings (More > Settings) from anywhere: Ctrl/Cmd + comma, and tests. */
     fun openSettings(navigator: Navigator) {
-        navigator.popUntilRoot()
-        selectTab(HomeTab.More)
-        navigator.push(SettingsScreen)
+        val controller = navigatorControllers[navigator] ?: activeControllers.lastOrNull()
+        if (controller != null) {
+            controller.openSettings(navigator)
+        } else {
+            navigator.popUntilRoot()
+            selectTab(HomeTab.More)
+            navigator.push(SettingsScreen)
+        }
     }
 
     @Composable
     override fun Content() {
-        val tabs = rememberSaveable(saver = HomeTabState.Saver) { HomeTabState() }
-        val tab = tabs.selected
-        DisposableEffect(tabs) {
-            HomeScreen.register(tabs)
-            onDispose { HomeScreen.unregister(tabs) }
+        val providedHome = LocalHomeController.current
+        val home = if (providedHome != null) {
+            providedHome
+        } else {
+            val fallbackTabs = rememberSaveable(saver = HomeTabState.Saver) { HomeTabState() }
+            val fallback = remember(fallbackTabs) { HomeController(fallbackTabs) }
+            DisposableEffect(fallback) {
+                register(fallback)
+                onDispose { unregister(fallback) }
+            }
+            fallback
         }
+        val tabs = home.tabs
+        val tab = tabs.selected
         // ZOUKAN -->
         // Discord Rich Presence shows the tab in use, as Android's tabs set it
         LaunchedEffect(tab) {
@@ -522,9 +593,12 @@ object HomeScreen : cafe.adriel.voyager.core.screen.Screen {
         // ZOUKAN <--
         val library = rememberScreenModel { LibraryScreenModel() }
         // ZOUKAN -->
-        searchLibrary = { query ->
-            tabs.select(HomeTab.Library)
-            library.search(query)
+        DisposableEffect(home, library) {
+            val unbind = home.bindLibrarySearch { query ->
+                tabs.select(HomeTab.Library)
+                library.search(query)
+            }
+            onDispose(unbind)
         }
         // ZOUKAN <--
         val updates = rememberScreenModel { UpdatesScreenModel() }

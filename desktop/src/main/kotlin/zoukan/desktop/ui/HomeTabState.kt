@@ -5,6 +5,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import cafe.adriel.voyager.navigator.Navigator
+import zoukan.desktop.ui.more.SettingsScreen
 
 /** The selected home tab and the tabs the rail shows. */
 @Stable
@@ -32,3 +35,49 @@ class HomeTabState(initial: HomeTab = HomeTab.Library) {
         )
     }
 }
+
+/** Per-window home tab navigation and library-search controller; see [LocalHomeController]. */
+@Stable
+class HomeController(val tabs: HomeTabState = HomeTabState()) {
+    private var librarySearchHandler: ((String) -> Unit)? = null
+    private var pendingLibrarySearch: String? = null
+
+    fun selectTab(tab: HomeTab) {
+        tabs.select(tab)
+    }
+
+    fun openSettings(navigator: Navigator) {
+        navigator.popUntilRoot()
+        selectTab(HomeTab.More)
+        navigator.push(SettingsScreen)
+    }
+
+    fun searchLibrary(query: String) {
+        tabs.select(HomeTab.Library)
+        librarySearchHandler?.invoke(query) ?: run {
+            pendingLibrarySearch = query
+        }
+    }
+
+    internal fun bindLibrarySearch(handler: (String) -> Unit): () -> Unit {
+        librarySearchHandler = handler
+        pendingLibrarySearch?.let { pending ->
+            pendingLibrarySearch = null
+            handler(pending)
+        }
+        return {
+            if (librarySearchHandler === handler) {
+                librarySearchHandler = null
+            }
+        }
+    }
+
+    companion object {
+        val Saver = Saver<HomeController, String>(
+            save = { it.tabs.selected.name },
+            restore = { HomeController(HomeTabState(HomeTab.valueOf(it))) },
+        )
+    }
+}
+
+val LocalHomeController = staticCompositionLocalOf<HomeController?> { null }

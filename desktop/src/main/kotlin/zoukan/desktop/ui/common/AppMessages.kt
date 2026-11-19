@@ -31,8 +31,41 @@ suspend fun showMessages(messages: Flow<String>, snackbar: SnackbarHostState, re
 /** Where the app's snackbar sits and whether it may show now; one per window, see [LocalAppMessages]. */
 @Stable
 class AppMessages {
+    private val insetReservations = LinkedHashMap<Any, Dp>()
+
     /** Raised by a screen whose action sits at the bottom, so the message shows above it */
     var bottomInset by mutableStateOf(0.dp)
+        private set
+
+    /**
+     * Reserves at least [height] of bottom inset until the returned release callback is invoked.
+     * Overlapping reservations keep [bottomInset] at the maximum active height even when disposed
+     * out of order.
+     */
+    fun reserveBottomInset(height: Dp): () -> Unit {
+        val token = Any()
+        synchronized(insetReservations) {
+            if (height > 0.dp) {
+                insetReservations[token] = height
+            }
+            recomputeBottomInsetLocked()
+        }
+        var released = false
+        return {
+            synchronized(insetReservations) {
+                if (!released) {
+                    released = true
+                    if (insetReservations.remove(token) != null) {
+                        recomputeBottomInsetLocked()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun recomputeBottomInsetLocked() {
+        bottomInset = insetReservations.values.maxOrNull() ?: 0.dp
+    }
 
     /** Above 0 while a screen (the reader) holds messages back */
     val held = MutableStateFlow(0)
@@ -45,8 +78,8 @@ val LocalAppMessages = staticCompositionLocalOf<AppMessages?> { null }
 fun ReserveSnackbarSpace(height: Dp) {
     val messages = LocalAppMessages.current ?: return
     DisposableEffect(messages, height) {
-        messages.bottomInset = height
-        onDispose { messages.bottomInset = 0.dp }
+        val release = messages.reserveBottomInset(height)
+        onDispose(release)
     }
 }
 

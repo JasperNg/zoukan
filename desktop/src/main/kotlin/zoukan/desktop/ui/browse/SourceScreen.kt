@@ -65,8 +65,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.isEhBasedSource
 import exh.source.isMdBasedSource
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.receiveAsFlow
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
@@ -91,18 +89,30 @@ data class SourceScreen(
     val latest: Boolean = false,
     val query: String? = null,
     // ZOUKAN -->
+    val genre: String? = null,
     val savedSearch: Long? = null,
     /** The MangaDex follows, as Android's MangaDexFollowsScreen */
     val follows: Boolean = false,
+    /** Incremented when an entry search replaces an open [SourceScreen] so Voyager creates a fresh screen model. */
+    val searchVersion: Int = 0,
     // ZOUKAN <--
 ) : Screen {
     // Ends with / because Voyager disposes every screen model whose key starts with a
     // disposed screen's key: without it, leaving manga-1 cancelled manga-12's work
-    override val key: ScreenKey = "source-$sourceId-$latest-$query-$savedSearch-$follows/"
+    override val key: ScreenKey = "source-$sourceId-$latest-$query-$genre-$savedSearch-$follows-$searchVersion/"
 
     @Composable
     override fun Content() {
-        val model = rememberScreenModel { SourceScreenModel(sourceId, latest, query, savedSearchId = savedSearch, follows = follows) }
+        val model = rememberScreenModel {
+            SourceScreenModel(
+                sourceId = sourceId,
+                latest = latest,
+                initialQuery = query,
+                initialGenre = genre,
+                savedSearchId = savedSearch,
+                follows = follows,
+            )
+        }
         val state by model.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         // ZOUKAN -->
@@ -113,21 +123,6 @@ data class SourceScreen(
         var searchText by rememberSaveable { mutableStateOf(query.orEmpty()) }
         var showFilters by rememberSaveable { mutableStateOf(false) }
         // ZOUKAN -->
-        // A search from an entry's title or tags, as Android's BrowseSourceScreen queryEvent
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            queryEvent.receiveAsFlow().collectLatest {
-                when (it) {
-                    is SearchType.Genre -> {
-                        searchText = ""
-                        model.searchGenre(it.txt)
-                    }
-                    is SearchType.Text -> {
-                        searchText = it.txt
-                        model.search(it.txt)
-                    }
-                }
-            }
-        }
         val bulk = remember { BulkFavorite() }
         val displayModePreference = remember { Injekt.get<eu.kanade.domain.source.service.SourcePreferences>().sourceDisplayMode() }
         val displayMode by displayModePreference.collectAsState()
@@ -289,22 +284,6 @@ data class SourceScreen(
             }
         }
     }
-
-    // ZOUKAN -->
-    sealed class SearchType(val txt: String) {
-        class Text(txt: String) : SearchType(txt)
-        class Genre(txt: String) : SearchType(txt)
-    }
-
-    companion object {
-        // Conflated: the search waits for the screen to show again after the entry page closed
-        private val queryEvent = kotlinx.coroutines.channels.Channel<SearchType>(kotlinx.coroutines.channels.Channel.CONFLATED)
-
-        fun search(query: String) = queryEvent.trySend(SearchType.Text(query))
-
-        fun searchGenre(name: String) = queryEvent.trySend(SearchType.Genre(name))
-    }
-    // ZOUKAN <--
 }
 
 @Composable

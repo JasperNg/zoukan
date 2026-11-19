@@ -45,6 +45,7 @@ class SourceScreenModel(
     latest: Boolean,
     initialQuery: String?,
     // ZOUKAN -->
+    initialGenre: String? = null,
     savedSearchId: Long? = null,
     /** The MangaDex follows instead of the source's listings, as Android's MangaDexFollowsScreen */
     follows: Boolean = false,
@@ -139,6 +140,8 @@ class SourceScreenModel(
                 val saved = getExhSavedSearch.awaitOne(savedSearchId, ::defaultFilters)
                 if (saved != null) applySavedSearch(saved) else setListing(Listing.Popular)
             }
+        } else if (!initialGenre.isNullOrBlank()) {
+            searchGenre(initialGenre)
         } else {
             // ZOUKAN <--
             val listing = when {

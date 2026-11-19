@@ -50,6 +50,7 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.ui.HomeScreen
+import zoukan.desktop.ui.LocalHomeController
 import zoukan.desktop.ui.LocalWindow
 import zoukan.desktop.ui.common.InfoScreen
 import zoukan.desktop.ui.common.collectAsState
@@ -96,11 +97,12 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
         }.getOrDefault(false)
         checked = true
     }
+    val home = LocalHomeController.current
     if (!checked) return
     if (!onboardingDone && !doneAtCheck) {
         OnboardingScreen(
             onComplete = { preferences.shownOnboardingFlow().set(true) },
-            onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
+            onOpenSettings = { navigator()?.let { nav -> home?.openSettings(nav) ?: HomeScreen.openSettings(nav) } },
             onOpenScreen = { navigator()?.push(it) },
         )
     } else if (updatedDialog) {
@@ -117,7 +119,7 @@ fun FirstRun(preferences: DesktopPreferences, navigator: () -> Navigator?) {
             onOpenSettings = {
                 dohNotice = false
                 zoukan.desktop.ui.settings.openSettingsCategory(zoukan.desktop.ui.settings.SettingsCategory.Advanced)
-                navigator()?.let(HomeScreen::openSettings)
+                navigator()?.let { nav -> home?.openSettings(nav) ?: HomeScreen.openSettings(nav) }
             },
         )
     }
@@ -268,10 +270,11 @@ object Onboarding {
 @Composable
 fun ReopenedOnboarding(navigator: () -> Navigator?) {
     val open by Onboarding.reopen.collectAsState()
+    val home = LocalHomeController.current
     if (open) {
         OnboardingScreen(
             onComplete = { Onboarding.reopen.value = false },
-            onOpenSettings = { navigator()?.let(HomeScreen::openSettings) },
+            onOpenSettings = { navigator()?.let { nav -> home?.openSettings(nav) ?: HomeScreen.openSettings(nav) } },
             onOpenScreen = { navigator()?.push(it) },
             onClose = { Onboarding.reopen.value = false },
         )

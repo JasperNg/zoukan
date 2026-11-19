@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import zoukan.desktop.ui.HomeController
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.browse.GlobalSearchScreen
 import zoukan.desktop.ui.browse.SourceFeedScreen
@@ -22,7 +23,13 @@ object EntrySearch {
      * Searches [query] globally, or in the browse screen or library the entry was opened from; with
      * [library], always in the library (Komikku's Library search).
      */
-    fun search(navigator: Navigator, query: String, global: Boolean, library: Boolean = false) {
+    fun search(
+        navigator: Navigator,
+        query: String,
+        global: Boolean,
+        library: Boolean = false,
+        home: HomeController? = null,
+    ) {
         if (global) {
             navigator.push(GlobalSearchScreen(query))
             return
@@ -36,8 +43,11 @@ object EntrySearch {
         }
 
         when (val previous = navigator.lastItem) {
-            is HomeScreen -> HomeScreen.searchLibrary(query)
-            is SourceScreen -> SourceScreen.search(query)
+            is HomeScreen -> (home ?: HomeScreen.controllerFor(navigator))?.searchLibrary(query)
+                ?: HomeScreen.searchLibrary(query)
+            is SourceScreen -> navigator.replace(
+                SourceScreen(previous.sourceId, query = query, searchVersion = previous.searchVersion + 1),
+            )
             is SourceFeedScreen -> navigator.push(SourceScreen(previous.sourceId, query = query))
         }
     }
@@ -46,7 +56,12 @@ object EntrySearch {
      * Searches by [genreName] in the source's browse screen the entry was opened from, turning on
      * the filter of that name, or else as [search] does.
      */
-    fun searchGenre(navigator: Navigator, genreName: String, source: Source?) {
+    fun searchGenre(
+        navigator: Navigator,
+        genreName: String,
+        source: Source?,
+        home: HomeController? = null,
+    ) {
         if (navigator.size < 2) return
 
         var idx = navigator.size - 2
@@ -54,17 +69,18 @@ object EntrySearch {
             val previous = navigator.items[idx--]
             if (previous is SourceScreen && source is HttpSource) {
                 navigator.popUntil { navigator.size == idx + 2 }
-                SourceScreen.searchGenre(genreName)
+                navigator.replace(
+                    SourceScreen(previous.sourceId, genre = genreName, searchVersion = previous.searchVersion + 1),
+                )
                 return
             }
             if (previous is SourceFeedScreen && source is HttpSource) {
                 navigator.popUntil { navigator.size == idx + 2 }
-                navigator.push(SourceScreen(previous.sourceId, query = ""))
-                SourceScreen.searchGenre(genreName)
+                navigator.push(SourceScreen(previous.sourceId, genre = genreName))
                 return
             }
         }
-        search(navigator, genreName, global = false)
+        search(navigator, genreName, global = false, home = home)
     }
 
     /**
