@@ -7,7 +7,6 @@ import org.cef.callback.CefBeforeDownloadCallback
 import org.cef.callback.CefDownloadItem
 import org.cef.callback.CefDownloadItemCallback
 import org.cef.handler.CefDownloadHandlerAdapter
-import xyz.nulldev.androidcompat.util.rethrowIfFatal
 
 private val logger = KotlinLogging.logger {}
 
@@ -28,15 +27,44 @@ object KcefRequestFilter {
     @Volatile
     var filter: Filter? = null
 
-    /** Whether [filter] cancels the request; false when there is none or it fails. */
+    /**
+     * Where an [Error] the filter threw is reported (the app's crash report, as not fatal), set by
+     * the app at start; the first one only, as the filter runs for every request a page makes. It
+     * cannot be rethrown: see [shouldBlock].
+     */
+    @Volatile
+    var reportError: ((Throwable) -> Unit)? = null
+        set(value) {
+            field = value
+            errorReported.set(false)
+        }
+
+    private val errorReported = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Whether [filter] cancels the request; false when there is none or it fails. Called from
+     * Chromium's IO thread through JCEF's native glue (`onBeforeResourceLoad`), so nothing is
+     * thrown back: whether native code clears a pending Java exception is not something to rely
+     * on. An [Error] (out of memory, a missing class) is logged and given to [reportError]; any
+     * failure lets the request through, as the content blocker is a privacy feature, not a
+     * security boundary (THREAT-MODEL.md).
+     */
     fun shouldBlock(requestUrl: String?, pageUrl: String?): Boolean {
         if (requestUrl.isNullOrEmpty()) return false
         val current = filter ?: return false
         return try {
             current.shouldBlock(requestUrl, pageUrl)
         } catch (e: Throwable) {
-            e.rethrowIfFatal()
-            logger.warn(e) { "The request filter failed; the request goes ahead" }
+            if (e is Exception) {
+                logger.warn(e) { "The request filter failed; the request goes ahead" }
+            } else {
+                logger.error(e) { "The request filter failed with an error; the request goes ahead" }
+                try {
+                    if (errorReported.compareAndSet(false, true)) reportError?.invoke(e)
+                } catch (notReported: Exception) {
+                    logger.warn(notReported) { "Could not report the request filter's error" }
+                }
+            }
             false
         }
     }

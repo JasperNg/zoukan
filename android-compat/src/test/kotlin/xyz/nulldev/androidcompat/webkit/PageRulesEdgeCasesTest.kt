@@ -3,7 +3,6 @@ package xyz.nulldev.androidcompat.webkit
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 /**
  * Edge cases of the page rules in KcefPageRules.kt and KcefContentRules.kt (Zoukan's own files).
@@ -13,6 +12,7 @@ class PageRulesEdgeCasesTest {
     @AfterEach
     fun resetFilter() {
         KcefRequestFilter.filter = null
+        KcefRequestFilter.reportError = null
     }
 
     @Test
@@ -77,8 +77,10 @@ class PageRulesEdgeCasesTest {
     }
 
     @Test
-    fun `the request filter is not asked about an empty address, and a JVM error is not swallowed`() {
+    fun `the request filter is not asked about an empty address, and nothing it throws reaches native code`() {
         var asked = 0
+        val reported = mutableListOf<Throwable>()
+        KcefRequestFilter.reportError = { reported += it }
         KcefRequestFilter.filter =
             KcefRequestFilter.Filter { _, _ ->
                 asked++
@@ -89,13 +91,26 @@ class PageRulesEdgeCasesTest {
         KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe true
         asked shouldBe 1
 
+        // Called from Chromium's IO thread through JCEF's native glue: an Error is not thrown back
+        // there. It fails open, as every failure of the blocker does (THREAT-MODEL.md), and is reported
         KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw StackOverflowError() }
-        assertThrows<StackOverflowError> { KcefRequestFilter.shouldBlock("https://ads.example/", null) }
-        // The filter is the app's own code: a missing class or method in it is fatal too
+        KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe false
         KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw NoClassDefFoundError("a class of the app") }
-        assertThrows<NoClassDefFoundError> { KcefRequestFilter.shouldBlock("https://ads.example/", null) }
-        // Any other failure fails open
+        KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe false
+        KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw OutOfMemoryError("Java heap space") }
+        KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe false
+        // Reported once: the filter runs for every request a page makes
+        reported.map { it::class } shouldBe listOf(StackOverflowError::class)
+
+        // A report that fails is not thrown back either
+        KcefRequestFilter.reportError = { throw IllegalStateException("no report folder") }
+        KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe false
+
+        // Any other failure fails open and is only logged
+        reported.clear()
+        KcefRequestFilter.reportError = { reported += it }
         KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw IllegalStateException("block list not loaded") }
         KcefRequestFilter.shouldBlock("https://ads.example/", null) shouldBe false
+        reported shouldBe emptyList()
     }
 }
