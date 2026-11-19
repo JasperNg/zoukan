@@ -104,6 +104,8 @@ class BrowseAndReadJourneyTest {
                         waitFor(hasText("In library"))
                     }
                 }
+                // Wait for reading progress and history writes on AppScope before querying the DB
+                awaitAppIdle()
             }
         }
 
