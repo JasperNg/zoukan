@@ -1,10 +1,12 @@
 package zoukan.desktop.backup
 
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionStore
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.IntPreferenceValue
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
+import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import io.mockk.coEvery
@@ -12,12 +14,18 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -26,12 +34,23 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
+import tachiyomi.data.AndroidDatabaseHandler
+import tachiyomi.data.Database
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import zoukan.desktop.compat.localized
+import zoukan.desktop.db.DesktopDatabase
 import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
+import zoukan.desktop.testing.UserMessages
+import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class BackupJobsTest {
     @JvmField
@@ -80,7 +99,7 @@ class BackupJobsTest {
 
     private fun snapshot(folder: File, fail: Boolean, order: MutableList<String>? = null) =
         SafetySnapshot(folder = { folder }, write = { file ->
-            if (fail) throw java.io.IOException("disk full")
+            if (fail) throw IOException("disk full")
             order?.add("snapshot")
             file.writeText("before")
         })
@@ -153,13 +172,13 @@ class BackupJobsTest {
         val backups = mockk<DesktopBackups>()
         every { backups.read(any()) } throws InternalError("test")
         val escaped = CompletableDeferred<Throwable>()
-        val failing = CoroutineScope(SupervisorJob() + Dispatchers.Default + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> escaped.complete(e) })
-        zoukan.desktop.testing.UserMessages().use { messages ->
+        val failing = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> escaped.complete(e) })
+        UserMessages().use { messages ->
             val jobs = BackupJobs(failing, { backups }) { true }
 
             jobs.restore(file, noStores)!!.await() shouldBe RestoreOutcome.FAILED
 
-            messages.awaitToast { it.startsWith(zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.restore_failed)) }
+            messages.awaitToast { it.startsWith(localized(DMR.strings.restore_failed)) }
             // The error still goes on to the crash report
             (escaped.await() is InternalError) shouldBe true
             jobs.status.value shouldBe null
@@ -274,14 +293,150 @@ class BackupJobsTest {
     fun `an exception from backups read resets status and completes with FAILED`() = runBlocking<Unit> {
         val backups = mockk<DesktopBackups>()
         every { backups.read(any()) } throws IOException("corrupt")
-        zoukan.desktop.testing.UserMessages().use { messages ->
+        UserMessages().use { messages ->
             val jobs = BackupJobs(scope, { backups }) { true }
 
             jobs.restore(file, noStores)!!.await() shouldBe RestoreOutcome.FAILED
 
-            messages.awaitToast { it.startsWith(zoukan.desktop.compat.localized(zoukan.i18n.desktop.DMR.strings.restore_failed)) }
+            messages.awaitToast { it.startsWith(localized(DMR.strings.restore_failed)) }
             jobs.status.value shouldBe null
             RestoreGate.isRestoring shouldBe false
+        }
+    }
+}
+
+/** Restores run alone, and the work that reads the library never overlaps one. */
+class RestoreGateTest {
+
+    @Test
+    fun `two restores never run at the same time`() = runBlocking<Unit> {
+        val running = AtomicInteger()
+        val most = AtomicInteger()
+        withTimeout(10_000) {
+            (1..4).map {
+                async(Dispatchers.Default) {
+                    RestoreGate.whileRestoring {
+                        most.accumulateAndGet(running.incrementAndGet(), ::maxOf)
+                        delay(50)
+                        // Still up while another restore waits its turn
+                        RestoreGate.isRestoring shouldBe true
+                        running.decrementAndGet()
+                    }
+                }
+            }.awaitAll()
+        }
+        most.get() shouldBe 1
+        RestoreGate.isRestoring shouldBe false
+    }
+
+    @Test
+    fun `background work does not start while a restore runs`() = runBlocking<Unit> {
+        RestoreGate.whileRestoring {
+            RestoreGate.unlessRestoring { "ran" } shouldBe null
+        }
+        RestoreGate.unlessRestoring { "ran" } shouldBe "ran"
+    }
+
+    @Test
+    fun `a restore waits for background work that already started`() = runBlocking<Unit> {
+        val inside = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val restored = CompletableDeferred<Unit>()
+        val worker = launch(Dispatchers.Default) {
+            RestoreGate.unlessRestoring {
+                inside.complete(Unit)
+                release.await()
+            }
+        }
+        withTimeout(10_000) { inside.await() }
+        val restore = launch(Dispatchers.Default) { RestoreGate.whileRestoring { restored.complete(Unit) } }
+        // The restore has taken every permit but the worker's and waits for that one
+        Await.untilSuspending("the restore to wait for the work under way") {
+            RestoreGate.restores.isLocked && RestoreGate.readers.availablePermits == 0
+        }
+        // Asked for, so no new work starts, but it waits for the work under way
+        RestoreGate.isRestoring shouldBe true
+        restored.isCompleted shouldBe false
+        RestoreGate.unlessRestoring { "ran" } shouldBe null
+
+        release.complete(Unit)
+        withTimeout(10_000) {
+            worker.join()
+            restore.join()
+        }
+        restored.isCompleted shouldBe true
+        RestoreGate.isRestoring shouldBe false
+    }
+}
+
+/**
+ * A backup restore runs its restorers side by side. Each must write through the database handler,
+ * whose single thread holds the one connection: a write from another thread uses that thread's own
+ * connection, and a restore transaction that already read then fails its next write with
+ * SQLITE_BUSY.
+ */
+class ConcurrentRestoreTest {
+
+    @TempDir
+    lateinit var temp: File
+
+    @Test
+    fun `restoring extension stores during another restore transaction does not fail it`() = runBlocking<Unit> {
+        val driver = JdbcSqliteDriver(
+            url = "jdbc:sqlite:${File(temp, "zoukan.db").absolutePath}",
+            properties = DesktopDatabase.properties(ByteArray(32) { it.toByte() }),
+            schema = Database.Schema,
+        )
+        val db = DesktopDatabase.createDatabase(driver)
+        // A single thread, as Executors.newSingleThreadExecutor, whose queue the test can see
+        val executor = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, LinkedBlockingQueue()) {
+            Thread(it, "zoukan-database").apply { isDaemon = true }
+        }
+        val dispatcher = executor.asCoroutineDispatcher()
+        val handler = AndroidDatabaseHandler(db, driver, queryDispatcher = dispatcher, transactionDispatcher = dispatcher)
+        try {
+            val read = CompletableFuture<Unit>()
+            val write = CompletableFuture<Unit>()
+            // Like SavedSearchRestorer: read in a transaction, then write
+            val transaction = async {
+                handler.await(true) {
+                    handler.awaitList { saved_searchQueries.selectAll() }
+                    read.complete(Unit)
+                    write.get(10, TimeUnit.SECONDS)
+                    saved_searchQueries.insert(1, "name", "query", null)
+                }
+            }
+            withTimeout(10_000) { read.await() }
+            val store = async {
+                ExtensionStoreRestorer(handler)(
+                    BackupExtensionStore(
+                        indexUrl = "https://example.org/repo.json",
+                        name = "Store",
+                        badgeLabel = null,
+                        signingKey = "key",
+                        contactWebsite = "https://example.org",
+                        contactDiscord = null,
+                        isLegacy = false,
+                        extensionListUrl = null,
+                    ),
+                )
+            }
+            // The store's write is either queued behind the transaction on the database thread, or
+            // (written directly from another thread) done inside the transaction
+            Await.untilSuspending("the store's write to be queued or done") {
+                executor.queue.isNotEmpty() || store.isCompleted
+            }
+            write.complete(Unit)
+
+            withTimeout(10_000) {
+                transaction.await()
+                store.await()
+            }
+            handler.awaitList { saved_searchQueries.selectAll() }.size shouldBe 1
+            handler.awaitList { extension_storeQueries.getAll() }.size shouldBe 1
+        } finally {
+            driver.close()
+            executor.shutdownNow()
         }
     }
 }
