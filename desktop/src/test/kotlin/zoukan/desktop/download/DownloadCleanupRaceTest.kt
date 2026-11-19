@@ -9,7 +9,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.Headers
@@ -26,6 +25,7 @@ import tachiyomi.domain.source.service.SourceManager
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.secrets.FileSecretStore
 import zoukan.desktop.storage.ZoukanStorage
+import zoukan.desktop.testing.Await
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -214,6 +214,7 @@ class DownloadCleanupRaceTest {
         try {
             manager.enqueue(one, listOf(ch1), start = true)
             withTimeout(10_000) { writeEntered.await() }
+            val job1 = manager.activeJob()!!
 
             // job1 is paused while blocked in writeEntry; start() launches job2 waiting on job1;
             // pause() cancels job2 while job1 is still blocked
@@ -222,7 +223,9 @@ class DownloadCleanupRaceTest {
             manager.pause()
 
             val deleting = async(Dispatchers.IO) { manager.delete(one, listOf(ch1)) }
-            delay(150)
+            Await.untilSuspending("delete to wait for the paused download") {
+                manager.isWaitingFor(deleting, job1) || coOwnersEntered.isCompleted || deleting.isCompleted
+            }
             coOwnersEntered.isCompleted shouldBe false
             deleting.isCompleted shouldBe false
 
@@ -267,13 +270,16 @@ class DownloadCleanupRaceTest {
         try {
             manager.enqueue(one, listOf(ch1), start = true)
             withTimeout(10_000) { writeEntered.await() }
+            val job1 = manager.activeJob()!!
 
             manager.pause()
             manager.start()
             manager.pause()
 
             val deleting = async(Dispatchers.IO) { manager.deleteManga(one, listOf(ch1)) }
-            delay(150)
+            Await.untilSuspending("deleteManga to wait for the paused download") {
+                manager.isWaitingFor(deleting, job1) || coOwnersEntered.isCompleted || deleting.isCompleted
+            }
             coOwnersEntered.isCompleted shouldBe false
             deleting.isCompleted shouldBe false
 
@@ -324,6 +330,7 @@ class DownloadCleanupRaceTest {
         try {
             manager.enqueue(one, listOf(ch1), start = true)
             withTimeout(10_000) { writeEntered.await() }
+            val job1 = manager.activeJob()!!
 
             manager.pause()
             manager.cancel(setOf(ch1.id))
@@ -331,7 +338,11 @@ class DownloadCleanupRaceTest {
             manager.pause()
             manager.start()
 
-            delay(150)
+            manager.activeJob()?.let { job3 ->
+                Await.untilSuspending("start to wait for the paused download") {
+                    manager.isWaitingFor(job3, job1) || secondStarted.isCompleted || job3.isCompleted
+                }
+            }
             secondStarted.isCompleted shouldBe false
 
             writeLatch.countDown()

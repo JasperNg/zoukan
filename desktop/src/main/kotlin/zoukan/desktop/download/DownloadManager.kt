@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -134,9 +135,25 @@ class DownloadManager(
     private val lock = Any()
     private var job: Job? = null
     private val stopping = LinkedHashSet<Job>()
+    private val stoppingWaiters = ConcurrentHashMap<Job, Job>()
 
-    private suspend fun awaitStopping() {
-        synchronized(lock) { stopping.toList() }.forEach { it.join() }
+    private suspend fun awaitStopping(jobs: List<Job> = synchronized(lock) { stopping.toList() }) {
+        val waiter = currentCoroutineContext().job
+        for (stoppingJob in jobs) {
+            stoppingWaiters[waiter] = stoppingJob
+            try {
+                stoppingJob.join()
+            } finally {
+                stoppingWaiters.remove(waiter, stoppingJob)
+            }
+        }
+    }
+
+    internal fun activeJob(): Job? = synchronized(lock) { job }
+
+    internal fun isWaitingFor(waiter: Job, stoppingJob: Job): Boolean {
+        fun contains(root: Job, target: Job): Boolean = root === target || root.children.any { contains(it, target) }
+        return stoppingWaiters.any { (waiting, target) -> target === stoppingJob && contains(waiter, waiting) }
     }
 
     internal fun stoppingCount(): Int = synchronized(lock) { stopping.size }
@@ -967,7 +984,7 @@ class DownloadManager(
         val newJob = scope.launch(start = CoroutineStart.LAZY) {
             val self = coroutineContext.job
             try {
-                previous.forEach { it.join() }
+                awaitStopping(previous)
                 run(self)
             } finally {
                 synchronized(lock) {
@@ -1021,7 +1038,7 @@ class DownloadManager(
         }
         scope.launch {
             // After the cancelled download let go of its files
-            stopped.forEach { it.join() }
+            awaitStopping(stopped)
             if (!paths.isStorageAvailable) return@launch
             removed.groupBy { it.manga.id }.forEach { (id, downloads) ->
                 // Under the entry's lock, re-reading the queue: a chapter queued again since keeps its
