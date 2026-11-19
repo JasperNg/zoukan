@@ -1,17 +1,160 @@
 package zoukan.desktop.download
 
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.runBlocking
+import net.lingala.zip4j.ZipFile
+import net.lingala.zip4j.model.ZipParameters
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.w3c.dom.Element
+import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalFormat
+import zoukan.i18n.desktop.DMR
 import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import java.util.Arrays
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.CRC32
+import java.util.zip.DeflaterOutputStream
 import javax.imageio.ImageIO
+import javax.xml.parsers.DocumentBuilderFactory
+
+/** One entry of a CBZ, ZIP or EPUB is read whole only up to the size a page may have. */
+class CbzReaderLimitTest {
+    @TempDir
+    lateinit var temp: File
+
+    /** An archive with a small page and a large, highly compressible one (the file stays small). */
+    private fun archive(): File = File(temp, "chapter.cbz").also { file ->
+        ZipFile(file).use { zip ->
+            zip.addStream(ByteArrayInputStream(ByteArray(1_000) { 1 }), ZipParameters().apply { fileNameInZip = "001.jpg" })
+            zip.addStream(ByteArrayInputStream(ByteArray(1_000_000)), ZipParameters().apply { fileNameInZip = "002.jpg" })
+        }
+    }
+
+    @Test
+    fun `an entry larger than the page cap fails that page with the reader's message, and the others read`() {
+        CbzReader(archive(), { null }, maxEntryBytes = 64 * 1024).use { reader ->
+            reader.read(reader.find("001.jpg")!!).size shouldBe 1_000
+            val error = shouldThrow<IOException> { reader.read(reader.find("002.jpg")!!) }
+            error.message shouldBe localized(DMR.strings.the_page_is_too_large_to_show)
+            // The reader goes on
+            reader.read(reader.find("001.jpg")!!).size shouldBe 1_000
+        }
+    }
+
+    @Test
+    fun `an entry at the cap reads whole`() {
+        CbzReader(archive(), { null }, maxEntryBytes = 1_000_000).use { reader ->
+            reader.read(reader.find("002.jpg")!!).size shouldBe 1_000_000
+        }
+    }
+
+    @Test
+    fun `a stream longer than its header says is cut off at the cap, never read whole`() {
+        val endless = object : InputStream() {
+            var served = 0L
+            override fun read(): Int = 0.also { served++ }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                Arrays.fill(b, off, off + len, 0)
+                served += len
+                return len
+            }
+        }
+        CbzReader.readBounded(endless, limit = 10_000) shouldBe null
+        (endless.served < 100_000) shouldBe true
+        CbzReader.readBounded(ByteArrayInputStream(ByteArray(10_000)), limit = 10_000)!!.size shouldBe 10_000
+    }
+}
+
+class ComicInfoXmlTest {
+
+    /** As the Android app writes it (xmlutil, core-metadata's ComicInfo) */
+    private val android = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <Title>Chapter 5</Title>
+          <Series>One Series</Series>
+          <Number>5</Number>
+          <Summary>About it</Summary>
+          <Writer>Writer A</Writer>
+          <Penciller>Artist B</Penciller>
+          <Translator>Group C</Translator>
+          <Genre>Action, Drama</Genre>
+          <ty:PublishingStatusTachiyomi xmlns:ty="http://www.w3.org/2001/XMLSchema">Completed</ty:PublishingStatusTachiyomi>
+          <ty:Categories xmlns:ty="http://www.w3.org/2001/XMLSchema">Reading</ty:Categories>
+          <mh:SourceMihon xmlns:mh="http://www.w3.org/2001/XMLSchema">MangaPill</mh:SourceMihon>
+        </ComicInfo>
+    """.trimIndent()
+
+    @Test
+    fun `reads the Android app's ComicInfo`() {
+        val info = ComicInfoXml.read(android.byteInputStream())
+        val manga = SManga.create().apply { title = "x" }
+        info.copyTo(manga)
+        manga.title shouldBe "One Series"
+        manga.author shouldBe "Writer A"
+        manga.artist shouldBe "Artist B"
+        manga.genre shouldBe "Action, Drama, Reading"
+        manga.status shouldBe SManga.COMPLETED
+        val chapter = SChapter.create().apply { name = "x" }
+        info.copyTo(chapter)
+        chapter.name shouldBe "Chapter 5"
+        chapter.chapter_number shouldBe 5f
+        chapter.scanlator shouldBe "Group C"
+    }
+
+    @Test
+    fun `writes what it reads`() {
+        val info = ComicInfoXml.read(android.byteInputStream())
+        val xml = info.write()
+        xml shouldContain "<ty:PublishingStatusTachiyomi"
+        xml shouldContain "xmlns:ty=\"http://www.w3.org/2001/XMLSchema\""
+        ComicInfoXml.read(xml.byteInputStream()).values shouldBe info.values
+    }
+
+    @Test
+    fun `a value with markup inside reads as the DOM's own text content`() {
+        // Nested elements, CDATA, comments, processing instructions, character and predefined
+        // entities, whitespace, an empty element and a second root child after a deep one
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <ComicInfo>
+              <Series>a<b>b<c>c<d/></c><!-- not text -->d</b><?pi not text?><![CDATA[<e>]]>&amp;&#x41;
+                f</Series>
+              <Title><x><y><z>deep</z></y></x>tail</Title>
+              <Writer/>
+              <Summary><p>one</p><p>two</p></Summary>
+            </ComicInfo>
+        """.trimIndent()
+        val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+        val doc = factory.newDocumentBuilder().parse(xml.byteInputStream())
+        val children = doc.documentElement.childNodes
+        val expected = (0 until children.length).mapNotNull { children.item(it) as? Element }
+            .associate { it.localName to it.textContent }
+
+        ComicInfoXml.read(xml.byteInputStream()).values shouldBe expected
+        expected["Series"] shouldBe "abcd<e>&A\n    f"
+    }
+
+    @Test
+    fun `a value nested deeper than the stack allows reads without a stack overflow`() {
+        val depth = 100_000
+        val xml = "<ComicInfo><Series>" + "<a>".repeat(depth) + "x" + "</a>".repeat(depth) + "</Series><Title>t</Title></ComicInfo>"
+        ComicInfoXml.read(xml.byteInputStream()).values shouldBe mapOf("Series" to "x", "Title" to "t")
+    }
+}
 
 class TallImageSplitterTest {
 
@@ -56,18 +199,18 @@ class TallImageSplitterTest {
      */
     private fun stripPng(width: Int, height: Int): ByteArray {
         val out = ByteArrayOutputStream()
-        val data = java.io.DataOutputStream(out)
+        val data = DataOutputStream(out)
         fun chunk(type: String, body: ByteArray) {
             data.writeInt(body.size)
             val typed = type.toByteArray() + body
             data.write(typed)
-            data.writeInt(java.util.zip.CRC32().apply { update(typed) }.value.toInt())
+            data.writeInt(CRC32().apply { update(typed) }.value.toInt())
         }
         data.write(byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 13, 10, 26, 10))
         chunk(
             "IHDR",
             ByteArrayOutputStream().also { b ->
-                java.io.DataOutputStream(b).apply {
+                DataOutputStream(b).apply {
                     writeInt(width)
                     writeInt(height)
                     write(byteArrayOf(1, 0, 0, 0, 0))
@@ -75,7 +218,7 @@ class TallImageSplitterTest {
             }.toByteArray(),
         )
         val compressed = ByteArrayOutputStream()
-        java.util.zip.DeflaterOutputStream(compressed).use { z ->
+        DeflaterOutputStream(compressed).use { z ->
             val row = ByteArray(1 + (width + 7) / 8)
             repeat(height) { z.write(row) }
         }

@@ -15,11 +15,20 @@ import zoukan.desktop.local.LocalFormat
 import zoukan.desktop.testing.FileSystemSandbox
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileTime
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.CRC32
+import java.util.zip.Deflater
 import javax.imageio.ImageIO
+import kotlin.random.Random
 
 class ChapterDownloaderTest {
 
@@ -62,7 +71,7 @@ class ChapterDownloaderTest {
 
     @Test
     fun `a CBZ write that fails leaves no partial archive, keeps the pages and every other download`() = runBlocking<Unit> {
-        val other = kotlin.random.Random(5).nextBytes(4096)
+        val other = Random(5).nextBytes(4096)
         File(temp, "Chapter 0.cbz").writeBytes(other) // an existing download in the same folder
         var calls = 0
         val failing = ChapterDownloader(
@@ -70,9 +79,9 @@ class ChapterDownloaderTest {
             imageUrl = { "https://example.org/${it.url}.png" },
             image = { pages[it.index] },
             parallelPages = 4,
-            writeEntry = { writer, name, bytes -> if (++calls == 2) throw java.io.IOException("No space left on device") else writer.write(name, bytes) },
+            writeEntry = { writer, name, bytes -> if (++calls == 2) throw IOException("No space left on device") else writer.write(name, bytes) },
         )
-        shouldThrow<java.io.IOException> { failing.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> } }
+        shouldThrow<IOException> { failing.download(temp, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> } }
 
         File(temp, "Chapter 1.cbz_tmp").exists() shouldBe false
         File(temp, "Chapter 1.cbz").exists() shouldBe false
@@ -141,7 +150,7 @@ class ChapterDownloaderTest {
             },
             parallelPages = 2,
         )
-        val error = shouldThrow<java.io.IOException> {
+        val error = shouldThrow<IOException> {
             downloader.download(temp, "Chapter 4", ChapterDownloader.Options(true, null, null)) { _, _ -> }
         }
         error.message shouldContain "not an image"
@@ -206,7 +215,7 @@ class ChapterDownloaderTest {
                 assumeTrue(link != null, "symbolic links cannot be made here")
                 sandbox.record()
 
-                shouldThrow<java.io.IOException> {
+                shouldThrow<IOException> {
                     downloader().download(mangaDir, "Chapter 1", ChapterDownloader.Options(asCbz, null, comicInfo)) { _, _ -> }
                 }
 
@@ -245,16 +254,16 @@ class ChapterDownloaderTest {
     /** A grey PNG that declares [width] by [height] pixels and holds one row of data. */
     private fun declaredPng(width: Int, height: Int): ByteArray {
         val out = ByteArrayOutputStream()
-        val data = java.io.DataOutputStream(out)
+        val data = DataOutputStream(out)
         fun chunk(type: String, body: ByteArray) {
             data.writeInt(body.size)
             val typed = type.toByteArray() + body
             data.write(typed)
-            data.writeInt(java.util.zip.CRC32().apply { update(typed) }.value.toInt())
+            data.writeInt(CRC32().apply { update(typed) }.value.toInt())
         }
         data.write(byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 13, 10, 26, 10))
         val ihdr = ByteArrayOutputStream().also { b ->
-            java.io.DataOutputStream(b).apply {
+            DataOutputStream(b).apply {
                 writeInt(width)
                 writeInt(height)
                 write(byteArrayOf(1, 0, 0, 0, 0))
@@ -262,7 +271,7 @@ class ChapterDownloaderTest {
         }.toByteArray()
         chunk("IHDR", ihdr)
         val row = ByteArray(1 + (width + 7) / 8)
-        val deflater = java.util.zip.Deflater().apply {
+        val deflater = Deflater().apply {
             setInput(row)
             finish()
         }
@@ -300,5 +309,70 @@ class ChapterDownloaderTest {
             format.pageCount shouldBe 12
             format.page(3).contentEquals(huge) shouldBe true
         }
+    }
+}
+
+/**
+ * [ChapterDownloader.isOwnPage]'s decision with the attributes Windows reports, which cannot be
+ * made on other systems: a file tagged with a reparse point (a cloud-sync client's, a deduplicated
+ * or compressed file) is "other", not a regular file, yet still the app's own page.
+ */
+class OwnPageDecisionTest {
+
+    private val page: Path = Paths.get("Chapter 1_tmp", "002.png")
+
+    private enum class Kind { REGULAR, DIRECTORY, SYMBOLIC_LINK, OTHER }
+
+    private fun attrs(kind: Kind) = object : BasicFileAttributes {
+        override fun lastModifiedTime(): FileTime = FileTime.fromMillis(0)
+        override fun lastAccessTime(): FileTime = FileTime.fromMillis(0)
+        override fun creationTime(): FileTime = FileTime.fromMillis(0)
+        override fun isRegularFile() = kind == Kind.REGULAR
+        override fun isDirectory() = kind == Kind.DIRECTORY
+        override fun isSymbolicLink() = kind == Kind.SYMBOLIC_LINK
+        override fun isOther() = kind == Kind.OTHER
+        override fun size() = 10L
+        override fun fileKey(): Any? = null
+    }
+
+    private fun decide(kind: Kind, resolvesToItself: Boolean, windows: Boolean = true) =
+        ChapterDownloader.isOwnPage(page, { attrs(kind) }, { resolvesToItself }, windows)
+
+    @Test
+    fun `a file tagged with a reparse point that resolves to itself is a page`() {
+        decide(Kind.OTHER, resolvesToItself = true) shouldBe true
+    }
+
+    @Test
+    fun `a reparse point that resolves elsewhere is not a page`() {
+        decide(Kind.OTHER, resolvesToItself = false) shouldBe false
+    }
+
+    @Test
+    fun `elsewhere an other file is a pipe, a socket or a device, never a page`() {
+        // Reading a pipe would block the download for good, and a device would fill the heap
+        decide(Kind.OTHER, resolvesToItself = true, windows = false) shouldBe false
+        decide(Kind.REGULAR, resolvesToItself = true, windows = false) shouldBe true
+    }
+
+    @Test
+    fun `a symbolic link is not a page, even one the real-path test would pass`() {
+        decide(Kind.SYMBOLIC_LINK, resolvesToItself = true) shouldBe false
+    }
+
+    @Test
+    fun `a folder is not a page`() {
+        decide(Kind.DIRECTORY, resolvesToItself = true) shouldBe false
+    }
+
+    @Test
+    fun `a regular file is a page`() {
+        decide(Kind.REGULAR, resolvesToItself = false) shouldBe true
+    }
+
+    @Test
+    fun `a file whose attributes or real path cannot be read is not a page`() {
+        ChapterDownloader.isOwnPage(page, { throw IOException("gone") }, { true }, windows = true) shouldBe false
+        ChapterDownloader.isOwnPage(page, { attrs(Kind.OTHER) }, { throw IOException("gone") }, windows = true) shouldBe false
     }
 }

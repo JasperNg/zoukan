@@ -4,12 +4,17 @@ import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -24,6 +29,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.MethodSource
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -34,6 +40,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.e2e.FixtureCatalog
 import zoukan.desktop.e2e.FixtureFailure
 import zoukan.desktop.e2e.FixtureServer
+import zoukan.desktop.image.PageSizeLimits
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.testing.UserMessages
@@ -43,7 +50,12 @@ import zoukan.desktop.testing.fakes.MemorySecretStore
 import zoukan.desktop.testing.fakes.WriteFaults
 import zoukan.i18n.desktop.DMR
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
+
+private fun <T> pref(value: T): Preference<T> = mockk { every { get() } returns value }
 
 /**
  * The download queue under injected faults: the image server failing (an error status, a connection
@@ -114,15 +126,13 @@ class DownloadFaultsTest {
 
     private fun chapter(id: Long) = Chapter.create().copy(id = id, mangaId = 1, url = "/c$id", name = "Chapter $id", sourceOrder = 1000 - id)
 
-    private fun <T> pref(value: T) = mockk<Preference<T>> { every { get() } returns value }
-
     private val sourceDir get() = File(temp, "downloads/$source")
     private val mangaDir get() = File(sourceDir, "Manga")
 
     private fun manager(
         secrets: SecretStore = MemorySecretStore(),
         protect: Boolean = false,
-        maxPageBytes: Long = zoukan.desktop.image.PageSizeLimits.MAX_PAGE_BYTES,
+        maxPageBytes: Long = PageSizeLimits.MAX_PAGE_BYTES,
         newDownloader: (suspend () -> List<Page>, suspend (Page) -> String, suspend (Page) -> ByteArray, Int) -> ChapterDownloader =
             { pageList, imageUrl, image, parallelPages -> ChapterDownloader(pageList, imageUrl, image, parallelPages) },
     ): DownloadManager {
@@ -155,7 +165,7 @@ class DownloadFaultsTest {
 
     /** A chapter already downloaded, with its bytes. */
     private fun existingChapter(): Pair<File, ByteArray> {
-        val bytes = kotlin.random.Random(1).nextBytes(4096)
+        val bytes = Random(1).nextBytes(4096)
         return File(mangaDir.apply { mkdirs() }, "Chapter 1.cbz").apply { writeBytes(bytes) } to bytes
     }
 
@@ -371,8 +381,8 @@ class DownloadFaultsTest {
         parallelPages,
         openOutput = writes::outputStream,
         publish = { from, to ->
-            if (renameFails) throw java.io.IOException("The process cannot access the file because it is being used by another process")
-            java.nio.file.Files.move(from, to)
+            if (renameFails) throw IOException("The process cannot access the file because it is being used by another process")
+            Files.move(from, to)
         },
     )
 
@@ -417,5 +427,194 @@ class DownloadFaultsTest {
             arrayOf("an HTML page with status 200", FixtureFailure.Answer(200, "text/html", "<html><body>Rate limited</body></html>".toByteArray())),
             arrayOf("a stall mid-body (the read timeout)", FixtureFailure.Stall(afterBytes = 64)),
         )
+    }
+}
+
+/** Downloads fail closed: no plain CBZ when the password can't be read, no deletions without categories, no duplicates. */
+class DownloadSafetyTest {
+
+    @TempDir
+    lateinit var temp: File
+
+    private val managers = mutableListOf<DownloadManager>()
+
+    @AfterEach
+    fun stop() {
+        runBlocking {
+            withTimeout(10_000) {
+                managers.forEach {
+                    it.pause()
+                    it.awaitBackgroundWork()
+                }
+            }
+        }
+    }
+
+    private class MapStore(private val failing: Boolean) : SecretStore {
+        val values = HashMap<String, String>()
+        var reads = 0
+        override val name = "Test store"
+        override fun get(key: String): String? {
+            reads++
+            return if (failing) throw IOException("The Keychain is locked") else values[key]
+        }
+        override fun set(key: String, value: String) {
+            values[key] = value
+        }
+        override fun delete(key: String) {
+            values.remove(key)
+        }
+    }
+
+    private fun security(protect: Boolean) = mockk<SecurityPreferences> {
+        every { passwordProtectDownloads() } returns pref(protect)
+        every { encryptionType() } returns pref(SecurityPreferences.EncryptionType.AES_256)
+    }
+
+    /** A source no download may reach: the password check comes first. */
+    private class UnreachableSource : HttpSource() {
+        override val name = "Fake"
+        override val lang = "en"
+        override val supportsLatest = false
+        override val baseUrl = "http://127.0.0.1:9"
+        override val client = OkHttpClient()
+        override fun headersBuilder() = Headers.Builder()
+        override suspend fun getPageList(chapter: SChapter): List<Page> = error("The download went ahead")
+    }
+
+    private val source = UnreachableSource()
+
+    private val manga = mockk<Manga>(relaxed = true) {
+        every { id } returns 1L
+        every { this@mockk.source } returns this@DownloadSafetyTest.source.id
+        every { title } returns "Manga"
+        every { ogTitle } returns "Manga"
+    }
+
+    private fun chapter(id: Long) =
+        Chapter.create().copy(id = id, mangaId = 1, url = "/c$id", name = "Chapter $id", sourceOrder = 1000 - id, read = true)
+
+    private fun manager(
+        password: CbzPassword = CbzPassword(MapStore(failing = false), security(false)),
+        getCategories: GetCategories = mockk(relaxed = true),
+        excluded: Set<String> = emptySet(),
+        asCbz: Boolean = true,
+    ): DownloadManager {
+        val sourceManager = mockk<SourceManager> {
+            every { get(source.id) } returns source
+            every { getOrStub(source.id) } returns source
+        }
+        val storage = mockk<ZoukanStorage> {
+            every { downloads } returns File(temp, "downloads")
+            every { isAvailable } returns true
+        }
+        val libraryPreferences = mockk<LibraryPreferences> { every { disallowNonAsciiFilenames() } returns pref(false) }
+        val downloadPreferences = mockk<DownloadPreferences> {
+            every { includeChapterUrlHash() } returns pref(false)
+            every { saveChaptersAsCBZ() } returns pref(asCbz)
+            every { parallelSourceLimit() } returns pref(1)
+            every { parallelPageLimit() } returns pref(1)
+            every { splitTallImages() } returns pref(false)
+            every { downloadCacheRenewInterval() } returns pref(1)
+            every { removeExcludeCategories() } returns pref(excluded)
+            every { removeBookmarkedChapters() } returns pref(true)
+        }
+        val paths = DownloadPaths(storage, sourceManager, libraryPreferences, downloadPreferences)
+        return DownloadManager(ZoukanDirs(temp), paths, sourceManager, downloadPreferences, password, mockk(), mockk(), getCategories)
+            .also { managers += it }
+    }
+
+    @Test
+    fun `a secret store error with password protection on fails instead of skipping encryption`() {
+        val password = CbzPassword(MapStore(failing = true), security(protect = true))
+        shouldThrow<CbzPasswordUnavailableException> { password.encryption() }
+        password.comicInfoPadding(null) shouldBe null
+        // Readers still just find no password
+        password.get() shouldBe null
+    }
+
+    @Test
+    fun `a secret store error says so in the app's words, and its own message stays out of the error shown`() {
+        val password = CbzPassword(MapStore(failing = true), security(protect = true))
+        val error = shouldThrow<CbzPasswordUnavailableException> { password.encryption() }
+        error.message shouldBe localized(DMR.strings.could_not_use_the_secret_store) +
+            ". " + localized(DMR.strings.download_password_unreadable_chapter_not_saved)
+        // Kept for the log
+        (error.cause != null) shouldBe true
+    }
+
+    @Test
+    fun `no encryption when protection is off, and the password when it is on`() {
+        CbzPassword(MapStore(failing = true), security(protect = false)).encryption() shouldBe null
+        val store = MapStore(failing = false).apply { values[CbzPassword.KEY] = "pw" }
+        CbzPassword(store, security(protect = true)).encryption()!!.password.concatToString() shouldBe "pw"
+    }
+
+    @Test
+    fun `protection on without a password fails instead of writing plain archives`() {
+        shouldThrow<CbzPasswordMissingException> { CbzPassword(MapStore(failing = false), security(protect = true)).encryption() }
+        val empty = MapStore(failing = false).apply { values[CbzPassword.KEY] = "" }
+        shouldThrow<CbzPasswordMissingException> { CbzPassword(empty, security(protect = true)).encryptDownloads() }
+            .message shouldBe localized(DMR.strings.no_download_password_chapter_not_saved)
+    }
+
+    @Test
+    fun `a CBZ download with protection on but no password fails with an error and writes nothing`() = runBlocking<Unit> {
+        val manager = manager(password = CbzPassword(MapStore(failing = false), security(protect = true)))
+        manager.enqueue(manga, listOf(chapter(1)))
+        val download = manager.queue.value.single()
+        withTimeout(10_000) { download.state.first { it == Download.State.ERROR } }
+        download.error!! shouldContain "no download password is set"
+        File(temp, "downloads").walkTopDown().filter { it.isFile }.toList().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a download fails with an error and writes nothing when the password can't be read`() = runBlocking<Unit> {
+        val manager = manager(password = CbzPassword(MapStore(failing = true), security(protect = true)))
+        manager.enqueue(manga, listOf(chapter(1)))
+        val download = manager.queue.value.single()
+        withTimeout(10_000) { download.state.first { it == Download.State.ERROR } }
+        download.error!! shouldContain "secret store"
+        File(temp, "downloads").walkTopDown().filter { it.isFile }.toList().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a folder download never reads the password, and a CBZ download reads it once`() = runBlocking<Unit> {
+        // A folder is never encrypted: a locked store must not fail it
+        val locked = MapStore(failing = true)
+        val folder = manager(password = CbzPassword(locked, security(protect = true)), asCbz = false)
+        folder.enqueue(manga, listOf(chapter(1)))
+        val folderDownload = folder.queue.value.single()
+        withTimeout(10_000) { folderDownload.state.first { it == Download.State.ERROR } }
+        folderDownload.error!! shouldContain "went ahead"
+        locked.reads shouldBe 0
+        folder.pause()
+        folder.awaitBackgroundWork()
+
+        // The encryption and the ComicInfo padding share one read
+        val store = MapStore(failing = false).apply { values[CbzPassword.KEY] = "pw" }
+        val cbz = manager(password = CbzPassword(store, security(protect = true)))
+        cbz.enqueue(manga, listOf(chapter(2)))
+        val cbzDownload = cbz.queue.value.single()
+        withTimeout(10_000) { cbzDownload.state.first { it == Download.State.ERROR } }
+        cbzDownload.error!! shouldContain "went ahead"
+        store.reads shouldBe 1
+    }
+
+    @Test
+    fun `automatic deletion deletes nothing when the categories can't be read`() = runBlocking<Unit> {
+        val getCategories = mockk<GetCategories> { coEvery { await(any<Long>()) } throws IOException("The database is busy") }
+        val manager = manager(getCategories = getCategories, excluded = setOf("5"))
+        manager.chaptersToDelete(manga, listOf(chapter(1), chapter(2))).shouldBeEmpty()
+    }
+
+    @Test
+    fun `enqueueing the same chapters at once queues each only once`() = runBlocking<Unit> {
+        val manager = manager()
+        val chapters = (1L..20L).map(::chapter)
+        (1..16).map {
+            async(Dispatchers.Default) { manager.enqueue(manga, chapters + chapters.take(3), start = false) }
+        }.awaitAll()
+        manager.queue.value.map { it.chapter.id }.sorted() shouldBe (1L..20L).toList()
     }
 }
