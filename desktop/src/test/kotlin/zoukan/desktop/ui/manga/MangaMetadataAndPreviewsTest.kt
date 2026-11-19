@@ -107,6 +107,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.Executors
 import javax.imageio.ImageIO
 
 /**
