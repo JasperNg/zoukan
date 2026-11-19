@@ -142,6 +142,7 @@ class FileMutationScanTest {
             Allowed("download/ChapterDownloader.kt", "", DOWNLOADS, function = "download", count = 4),
             Allowed("download/TallImageSplitter.kt", "", "$DOWNLOADS; a page's split parts, which it wrote itself", count = 4),
             Allowed("backup/AutoBackup.kt", "file.delete()", "the automatic backup folder: only the names this install wrote and recorded, never the Android app's (a link is removed as itself)", function = "prune"),
+            Allowed("local/LocalSource.kt", "Files.deleteIfExists(path)", "the local source folder: only the app's own stale cover temporary files (`.cover.<digits>.tmp`), regular files over an hour old, never a link", function = "removeStaleCoverTemps"),
             Allowed("manga/EditManga.kt", "old.delete()", "the local source folder: the entry's folder is checked to be inside it by its canonical path (mangaDir), and the old cover is replaced by the new one there (a link is removed as itself)", function = "setCover"),
             // A folder the user chose
             Allowed("backup/DesktopBackups.kt", "", "the backup's own .tmp beside the backup file, written and checked before it replaces anything", count = 2),

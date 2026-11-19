@@ -228,6 +228,7 @@ class LocalSource(
             val ext = ImageType.fromBytes(bytes)?.extension ?: "jpg"
             File(dir, "cover.$ext")
         }
+        removeStaleCoverTemps(dir)
         val tmp = File.createTempFile(".cover.", ".tmp", dir)
         try {
             if (encryption != null) {
@@ -240,6 +241,27 @@ class LocalSource(
             tmp.delete()
         }
         return cover
+    }
+
+    /**
+     * Deletes the temporary files of cover writes that were stopped half way (the app was killed)
+     * from [dir]: only names [writeCover] gives them (`.cover.<digits>.tmp`), only regular files,
+     * never a link, and only when older than [STALE_COVER_TEMP_MS], so a write going on now keeps
+     * its file. Anything that cannot be checked or deleted stays.
+     */
+    private fun removeStaleCoverTemps(dir: File) {
+        val names = dir.list() ?: return
+        val cutoff = System.currentTimeMillis() - STALE_COVER_TEMP_MS
+        for (name in names) {
+            if (!COVER_TEMP_NAME.matches(name)) continue
+            val path = File(dir, name).toPath()
+            try {
+                val attrs = Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes::class.java, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                if (attrs.isRegularFile && !attrs.isSymbolicLink && attrs.lastModifiedTime().toMillis() < cutoff) Files.deleteIfExists(path)
+            } catch (e: IOException) {
+                logcat(LogPriority.WARN, e) { "Could not remove the stale cover file $name" }
+            }
+        }
     }
 
     /**
@@ -276,6 +298,12 @@ class LocalSource(
         const val ID = 0L
         const val COMIC_INFO_ARCHIVE = "ComicInfo.cbm"
         const val COVER_ARCHIVE = "cover.cbi"
+
+        /** What File.createTempFile names [writeCover]'s temporary file: the prefix, a number, the suffix. */
+        private val COVER_TEMP_NAME = Regex("""\.cover\.\d+\.tmp""")
+
+        /** How old a cover's temporary file must be to be taken for a stopped write's. */
+        private const val STALE_COVER_TEMP_MS = 60L * 60 * 1000
 
         /** The one entry of [COVER_ARCHIVE], as Android names it whatever the image is. */
         private const val COVER_ARCHIVE_ENTRY = "cover.jpg"
