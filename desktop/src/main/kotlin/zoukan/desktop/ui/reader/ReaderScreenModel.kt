@@ -822,7 +822,7 @@ class ReaderScreenModel(
         val root = PageImages.picturesDir()
         val title = state.value.manga?.title
         return if (preferences.folderPerManga().get() && !title.isNullOrBlank()) {
-            java.io.File(root, PageImages.validFilename(title))
+            PageImages.entryPicturesFolder(root, title)
         } else {
             root
         }

@@ -257,6 +257,39 @@ object PageImages {
         return if (portable == PortableFileNames.INVALID && trimmed != portable) "image" else portable
     }
 
+    /**
+     * [root]'s folder for the entry [title]'s saved pictures ("Save in a folder per entry"): named
+     * by [validFilename], or the folder an older version named under its earlier rules when that
+     * one exists (a title starting with a dot kept it, `.hack__Sign`), so an entry's pictures stay
+     * in one folder after an upgrade, as the settings files keep their old names.
+     */
+    fun entryPicturesFolder(root: File, title: String): File {
+        val current = File(root, validFilename(title))
+        val legacy = legacyFilename(title)
+        if (legacy == current.name) return current
+        return try {
+            File(root, legacy).takeIf { java.nio.file.Files.isDirectory(it.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) } ?: current
+        } catch (_: java.nio.file.InvalidPathException) {
+            // A name the system refuses (half a surrogate pair) was never a folder
+            current
+        }
+    }
+
+    /** The name [validFilename] gave before it took the portable rules, to find a folder made then. */
+    private fun legacyFilename(name: String, maxBytes: Int = MAX_NAME): String {
+        val cleaned = name.map { c -> if (c < ' ' || c in "\\/:*?\"<>|") '_' else c }.joinToString("")
+            .trim().trimEnd('.').ifBlank { "image" }
+        val out = StringBuilder()
+        var size = 0
+        for (c in cleaned) {
+            val bytes = c.toString().toByteArray(Charsets.UTF_8).size
+            if (size + bytes > maxBytes) break
+            out.append(c)
+            size += bytes
+        }
+        return out.toString().trim().trimEnd('.').ifBlank { "image" }
+    }
+
     private fun decode(bytes: ByteArray): Image = try {
         // An absurd declared size is an error with a message, not an allocation that size
         zoukan.desktop.image.checkImageSize(bytes)
