@@ -7,7 +7,6 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.download.ImageType
 import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.secrets.EncryptedFiles
-import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
 import java.io.File
 import java.io.IOException
@@ -39,6 +38,16 @@ object CustomCovers {
      * operation deletes or replaces it.
      */
     private val lock = Any()
+
+    /**
+     * Reads, writes, deletes, lazy rewrites, and cache clears of source covers in [coverDir],
+     * kept separate from [lock] so source-cover cache clears and custom-cover operations never
+     * block or deadlock each other.
+     */
+    @PublishedApi
+    internal val cacheLock = Any()
+
+    internal inline fun <T> withCacheLock(block: () -> T): T = synchronized(cacheLock, block)
 
     fun file(mangaId: Long): File = File(File(coverDir, FOLDER), md5(mangaId.toString()))
 
@@ -127,7 +136,7 @@ object CustomCovers {
      * shown. Custom covers (the [FOLDER] subfolder) are the user's own and are never touched, as
      * Android's CoverCache keeps them apart. Returns how many files were deleted.
      */
-    fun clearCache(coverDir: File): Int = Images.withCoverLock {
+    fun clearCache(coverDir: File): Int = withCacheLock {
         coverDir.listFiles().orEmpty().count { it.isFile && it.name != FOLDER && it.delete() }
     }
 

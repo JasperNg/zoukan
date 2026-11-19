@@ -92,16 +92,6 @@ object Images {
     @Volatile
     internal var codec: SettingsFileCodec? = null
 
-    /**
-     * Reads, writes, deletes and lazy rewrites of cached source covers, so a rewrite never puts
-     * back a cover just forgotten or replaced, a read never holds the file open while another
-     * operation deletes or replaces it, and disk-cache clears are serialized.
-     */
-    @PublishedApi
-    internal val coverLock = Any()
-
-    internal inline fun <T> withCoverLock(block: () -> T): T = synchronized(coverLock, block)
-
     /** Whether incognito is on, for a source or (null) for the whole app; then nothing new is cached on disk. */
     @Volatile
     private var incognito: (sourceId: Long?) -> Boolean = ::incognitoFromSettings
@@ -168,7 +158,7 @@ object Images {
         this.incognito = incognito
         this.coverPassword = coverPassword
         // ZOUKAN -->
-        synchronized(coverLock) { EncryptedFiles.deleteTemporaryFiles(this.coverDir, CACHED_COVER_NAME) }
+        CustomCovers.withCacheLock { EncryptedFiles.deleteTemporaryFiles(this.coverDir, CACHED_COVER_NAME) }
         CustomCovers.deleteTemporaryFiles()
         // ZOUKAN <--
     }
@@ -253,7 +243,7 @@ object Images {
 
     /** Empties Coil's disk cache (Data and storage > Clear cover cache). */
     fun clearDiskCache() {
-        synchronized(coverLock) {
+        CustomCovers.withCacheLock {
             loader.diskCache?.clear()
         }
     }
@@ -261,7 +251,7 @@ object Images {
     /** Forgets a source cover kept on disk, so it downloads again (Advanced > Refresh library covers). */
     fun forget(manga: Manga) {
         val url = manga.thumbnailUrl?.takeIf { it.isNotBlank() } ?: return
-        synchronized(coverLock) {
+        CustomCovers.withCacheLock {
             File(coverDir, hash("${manga.source}:$url")).delete()
         }
     }
@@ -310,25 +300,25 @@ object Images {
 
     /**
      * A source cover kept in the disk cache, decrypted, or null when there is none or it cannot be
-     * read now. Held under [coverLock] so an open read handle cannot block a concurrent delete or
-     * replace on Windows, and a lazy rewrite or unreadable delete cannot overwrite a newer cover. One
-     * saved before encryption is rewritten encrypted in the same critical section; one that cannot be
-     * decrypted is deleted (it downloads again). One that cannot be read for another reason (on
-     * Windows, a file held open by another program, such as a virus scanner) is kept: for a source
-     * that is gone it is the only copy.
+     * read now. Held under [CustomCovers.withCacheLock] so an open read handle cannot block a
+     * concurrent delete or replace on Windows, and a lazy rewrite or unreadable delete cannot
+     * overwrite a newer cover. One saved before encryption is rewritten encrypted in the same
+     * critical section; one that cannot be decrypted is deleted (it downloads again). One that
+     * cannot be read for another reason (on Windows, a file held open by another program, such as a
+     * virus scanner) is kept: for a source that is gone it is the only copy.
      */
-    internal fun cachedCover(file: File): ByteArray? = synchronized(coverLock) {
-        val codec = codec ?: return@synchronized null
-        if (!file.isFile || file.length() == 0L) return@synchronized null
+    internal fun cachedCover(file: File): ByteArray? = CustomCovers.withCacheLock {
+        val codec = codec ?: return@withCacheLock null
+        if (!file.isFile || file.length() == 0L) return@withCacheLock null
         val contents = try {
             EncryptedFiles.read(file, codec)
         } catch (e: EncryptedFiles.UnreadableFileException) {
             logcat(LogPriority.WARN, e) { "Could not decrypt the cached cover ${file.name}; it downloads again" }
             file.delete()
-            return@synchronized null
+            return@withCacheLock null
         } catch (e: IOException) {
             logcat(LogPriority.WARN, e) { "Could not read the cached cover ${file.name}; it is kept" }
-            return@synchronized null
+            return@withCacheLock null
         }
         if (!contents.encrypted) {
             try {
@@ -342,9 +332,9 @@ object Images {
 
     /**
      * Writes [target] encrypted through a temporary file of its own, so two downloads of the same
-     * cover at once never share (and corrupt) one file, then moves it into place under [coverLock],
-     * and returns the image. When the move fails, a complete copy that another download put there
-     * first is kept; otherwise it is an error.
+     * cover at once never share (and corrupt) one file, then moves it into place under
+     * [CustomCovers.withCacheLock], and returns the image. When the move fails, a complete copy
+     * that another download put there first is kept; otherwise it is an error.
      */
     internal fun writeCoverFile(
         target: File,
@@ -354,7 +344,7 @@ object Images {
     ): ByteArray {
         val plain = ByteArrayOutputStream().also(write).toByteArray()
         validate(plain)
-        synchronized(coverLock) {
+        CustomCovers.withCacheLock {
             try {
                 EncryptedFiles.write(target, plain, codec)
             } catch (e: IOException) {
