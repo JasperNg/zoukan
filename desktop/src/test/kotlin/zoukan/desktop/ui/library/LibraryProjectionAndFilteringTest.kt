@@ -469,7 +469,9 @@ class LibraryProjectionAndFilteringTest {
                 categories = listOf(Category(1L, "Action", 1L, 0L, false)),
             )
             Await.until("initial load", 5_000, { model.state.value }) {
-                !model.state.value.loading && model.state.value.visible.size == 1
+                !model.state.value.loading &&
+                    model.state.value.visible.size == 1 &&
+                    model.state.value.settings.skipOutsideReleasePeriod
             }
             val initialView = model.state.value.view
             model.state.value.dialog shouldBe null

@@ -203,7 +203,10 @@ class LibrarySelectionAndStateTest {
         fun `a selection change keeps the shown list, tabs and counts`() {
             val model = newModel()
             Await.until("initial projection", 5_000, { model.state.value }) {
-                !model.state.value.loading && model.state.value.visible.size == 5000
+                !model.state.value.loading &&
+                    model.state.value.visible.size == 5000 &&
+                    model.state.value.settings.itemCounts &&
+                    model.state.value.settings.skipOutsideReleasePeriod
             }
 
             val before = model.state.value
