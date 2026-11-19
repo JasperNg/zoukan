@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.image.PageSizeLimits
 import zoukan.desktop.image.PageTooLargeException
@@ -19,6 +20,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.Locale
 
 /**
@@ -179,11 +181,39 @@ class ChapterDownloader(
 
     companion object {
         /**
-         * Whether [file] in a page folder is a file this download wrote: a regular file, not a link
-         * (which leads to a file that is not the app's and is never read into the archive).
+         * Whether [file] in a page folder is a file this download wrote, not a link (which leads to
+         * a file that is not the app's and is never read into the archive). See [isOwnPage].
          */
-        internal fun isOwnPage(file: File): Boolean =
-            Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS) && !SafeDelete.isLink(file.toPath())
+        internal fun isOwnPage(file: File): Boolean = isOwnPage(
+            file.toPath(),
+            { Files.readAttributes(it, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS) },
+            NoFollowDelete::resolvesToItself,
+        )
+
+        /**
+         * The decision of [isOwnPage] over [attributes] read without following links and the
+         * [resolvesToItself] real-path test: a symbolic link or a folder is not a page; a regular
+         * file is. Windows reports any file with a reparse point as "other": a cloud-sync client
+         * tags synced files with one even when they are kept on the device, and deduplicated and
+         * compressed files have one too. Such a file is a page when its real path is where it is
+         * listed; a link resolves elsewhere. A path that cannot be read is not a page (it is
+         * downloaded again).
+         */
+        internal fun isOwnPage(
+            path: Path,
+            attributes: (Path) -> BasicFileAttributes,
+            resolvesToItself: (Path) -> Boolean,
+        ): Boolean = try {
+            val attrs = attributes(path)
+            when {
+                attrs.isSymbolicLink || attrs.isDirectory -> false
+                attrs.isRegularFile -> true
+                attrs.isOther -> resolvesToItself(path)
+                else -> false
+            }
+        } catch (e: java.io.IOException) {
+            false
+        }
 
         /** The page images of a downloaded chapter folder, in order. */
         fun imageFiles(dir: File): List<File> =

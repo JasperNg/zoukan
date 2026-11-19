@@ -80,14 +80,23 @@ object NoFollowDelete {
         val link = when {
             attrs.isSymbolicLink -> true
             !attrs.isDirectory -> attrs.isOther
-            else -> {
-                val parent = path.toAbsolutePath().parent
-                parent != null && !samePath(path.toRealPath(), parent.toRealPath().resolve(path.fileName.toString()))
-            }
+            else -> !resolvesToItself(path)
         }
         if (link) LinkState.LINK else LinkState.NOT_A_LINK
     } catch (e: IOException) {
         LinkState.UNKNOWN
+    }
+
+    /**
+     * Whether [path]'s real location is where it is listed: true for an ordinary file or folder,
+     * also one Windows tags with a reparse point (a cloud-sync placeholder, a deduplicated or
+     * compressed file); false for a link, which resolves elsewhere.
+     *
+     * @throws IOException when the real location cannot be read
+     */
+    fun resolvesToItself(path: Path): Boolean {
+        val parent = path.toAbsolutePath().parent ?: return false
+        return samePath(path.toRealPath(), parent.toRealPath().resolve(path.fileName.toString()))
     }
 
     /**
