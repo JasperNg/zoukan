@@ -25,9 +25,14 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import tachiyomi.domain.manga.interactor.GetFlatMetadataById
+import tachiyomi.domain.manga.interactor.NetworkToLocalManga
+import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import xyz.nulldev.ts.api.http.serializer.FilterSerializer
+import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.testing.Await
+import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.HomeScreen
 import zoukan.desktop.ui.manga.EntrySearch
 import zoukan.desktop.ui.manga.MangaScreen
@@ -69,20 +74,24 @@ class SourceScreenInitialSearchTest {
         initialQuery: String? = null,
         initialGenre: String? = null,
     ): SourceScreenModel {
+        val id = source.id
+        val mangaRepository: MangaRepository = mockk(relaxed = true) {
+            coEvery { insertNetworkManga(any(), any()) } returns emptyList()
+        }
         val model = SourceScreenModel(
-            sourceId = source.id,
+            sourceId = id,
             latest = false,
             initialQuery = initialQuery,
             initialGenre = initialGenre,
-            sourceManager = mockk<SourceManager> { every { get(source.id) } returns source },
-            getFavorites = mockk { every { subscribe(source.id) } returns flowOf(emptyList()) },
-            getExhSavedSearch = mockk { every { subscribe(source.id, any()) } returns flowOf(emptyList()) },
+            sourceManager = mockk<SourceManager> { every { get(id) } returns source },
+            getFavorites = mockk { every { subscribe(id) } returns flowOf(emptyList()) },
+            getExhSavedSearch = mockk { every { subscribe(id, any()) } returns flowOf(emptyList()) },
             filterSerializer = FilterSerializer(),
-            preferences = mockk(relaxed = true),
-            networkToLocalManga = mockk(relaxed = true),
-            insertSavedSearch = mockk(),
-            deleteSavedSearchById = mockk(),
-            getFlatMetadataById = mockk(relaxed = true),
+            preferences = DesktopPreferences(TestPreferenceStore()),
+            networkToLocalManga = NetworkToLocalManga(mangaRepository),
+            insertSavedSearch = mockk(relaxed = true),
+            deleteSavedSearchById = mockk(relaxed = true),
+            getFlatMetadataById = GetFlatMetadataById(mockk(relaxed = true)),
         )
         models += model
         return model
@@ -93,6 +102,7 @@ class SourceScreenInitialSearchTest {
         var searchedQuery: String? = null
         val source: CatalogueSource = mockk(relaxed = true) {
             every { id } returns 11L
+            every { getFilterList() } answers { FilterList() }
             coEvery { getSearchManga(any(), any(), any()) } coAnswers {
                 searchedQuery = secondArg()
                 MangasPage(emptyList(), false)

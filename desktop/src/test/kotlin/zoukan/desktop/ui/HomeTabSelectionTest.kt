@@ -1,5 +1,6 @@
 package zoukan.desktop.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
@@ -73,19 +74,21 @@ class HomeTabSelectionTest {
         val windowTwo = HomeController()
 
         setContent {
-            CompositionLocalProvider(LocalHomeController provides windowOne) {
-                val home = LocalHomeController.current!!
-                Button(
-                    onClick = { home.selectTab(HomeTab.Browse) },
-                    modifier = Modifier.testTag("select-browse-one"),
-                ) { Text("One") }
-            }
-            CompositionLocalProvider(LocalHomeController provides windowTwo) {
-                val home = LocalHomeController.current!!
-                Button(
-                    onClick = { home.selectTab(HomeTab.More) },
-                    modifier = Modifier.testTag("select-more-two"),
-                ) { Text("Two") }
+            Column {
+                CompositionLocalProvider(LocalHomeController provides windowOne) {
+                    val home = LocalHomeController.current!!
+                    Button(
+                        onClick = { home.selectTab(HomeTab.Browse) },
+                        modifier = Modifier.testTag("select-browse-one"),
+                    ) { Text("One") }
+                }
+                CompositionLocalProvider(LocalHomeController provides windowTwo) {
+                    val home = LocalHomeController.current!!
+                    Button(
+                        onClick = { home.selectTab(HomeTab.More) },
+                        modifier = Modifier.testTag("select-more-two"),
+                    ) { Text("Two") }
+                }
             }
         }
         waitForIdle()
