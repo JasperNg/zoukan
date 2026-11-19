@@ -158,7 +158,8 @@ internal object KcefDevTools {
                     onResult(res, ex)
                 },
                 executor,
-            ).whenComplete { _, callbackEx ->
+            ).thenAccept { }
+            .whenComplete { _, callbackEx ->
                 if (callbackEx != null) Log.e(TAG, callbackFailureMessage, callbackEx)
             }
     }

@@ -18,6 +18,7 @@ import org.cef.handler.CefRequestHandler
 import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.handler.CefResourceRequestHandler
 import org.cef.misc.BoolRef
+import org.cef.network.CefRequest
 import java.lang.ref.Cleaner
 import java.lang.ref.WeakReference
 import java.util.Collections

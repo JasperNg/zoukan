@@ -233,7 +233,7 @@ class KcefLifecycleCleanerTest {
         WeakRequestHandler(targetRequestHandler).onBeforeBrowse(browser, mainFrame, httpsRequest, false, false) shouldBe true
 
         // Dead JS dialog handler suppresses dialogs and leaves onBeforeUnload
-        val suppress = BoolRef(false)
+        val suppress = BoolRef()
         val dialogCallback = mockk<CefJSDialogCallback>(relaxed = true)
         val deadDialogHandler = WeakJsDialogHandler(WeakReference(null))
         deadDialogHandler.onJSDialog(
@@ -271,7 +271,7 @@ class KcefLifecycleCleanerTest {
             "hi",
             null,
             aliveDialogCallback,
-            BoolRef(false),
+            BoolRef(),
         ) shouldBe true
 
         // Dead lifespan, display, and message-router handlers return safe defaults
