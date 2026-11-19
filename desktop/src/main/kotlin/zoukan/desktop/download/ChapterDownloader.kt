@@ -104,8 +104,9 @@ class ChapterDownloader(
             }.awaitAll()
         }
 
-        // Split pages are several files with the page's number before "__"
-        val pagesDone = imageFiles(tmp).map { it.nameWithoutExtension.substringBefore("__") }.distinct().size
+        // Split pages are several files with the page's number before "__". A link in the page
+        // folder is never one of this download's pages (see [isOwnPage])
+        val pagesDone = imageFiles(tmp).filter(::isOwnPage).map { it.nameWithoutExtension.substringBefore("__") }.distinct().size
         if (pagesDone != pages.size) error("Downloaded $pagesDone of ${pages.size} pages")
 
         File(tmp, ComicInfoXml.FILE).delete()
@@ -116,7 +117,7 @@ class ChapterDownloader(
             val part = File(mangaDir, "$chapterName.cbz${DownloadPaths.TMP_SUFFIX}")
             try {
                 CbzWriter(part, options.encryption, openOutput).use { writer ->
-                    tmp.listFiles().orEmpty().filter { it.isFile }.sortedWith(compareBy(FileNames.naturalOrder) { it.name })
+                    tmp.listFiles().orEmpty().filter(::isOwnPage).sortedWith(compareBy(FileNames.naturalOrder) { it.name })
                         .forEach { writeEntry(writer, it.name, it.readBytes()) }
                 }
             } catch (e: Throwable) {
@@ -170,6 +171,13 @@ class ChapterDownloader(
     }
 
     companion object {
+        /**
+         * Whether [file] in a page folder is a file this download wrote: a regular file, not a link
+         * (which leads to a file that is not the app's and is never read into the archive).
+         */
+        internal fun isOwnPage(file: File): Boolean =
+            Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS) && !SafeDelete.isLink(file.toPath())
+
         /** The page images of a downloaded chapter folder, in order. */
         fun imageFiles(dir: File): List<File> =
             dir.listFiles { f -> f.isFile && ImageType.isImageName(f.name) && !f.name.startsWith('.') }

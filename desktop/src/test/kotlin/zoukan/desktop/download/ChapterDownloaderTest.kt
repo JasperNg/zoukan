@@ -216,4 +216,29 @@ class ChapterDownloaderTest {
             }
         }
     }
+
+    @Test
+    fun `a file link in the page folder named like a page is never packed, and the page is downloaded instead`() = runBlocking<Unit> {
+        FileSystemSandbox.create(temp).use { sandbox ->
+            val mangaDir = File(sandbox.storageFolder, "downloads/Source/Manga")
+            // A link named like page 2, to one of the user's files, as a copied storage folder may hold
+            val secret = File(sandbox.userFolder, "notes.png").apply { writeText("the user's private notes") }
+            val link = sandbox.link(File(mangaDir, "Chapter 1_tmp/002.png"), secret)
+            assumeTrue(link != null, "symbolic links cannot be made here")
+            sandbox.record()
+
+            val file = downloader().download(mangaDir, "Chapter 1", ChapterDownloader.Options(true, null, comicInfo)) { _, _ -> }
+
+            // Every page is the source's own, page 2 too; nothing of the user's file is in the archive
+            LocalFormat.open(file).use { format ->
+                format.pageCount shouldBe 12
+                (0 until 12).forEach { format.page(it).contentEquals(pages[it]) shouldBe true }
+            }
+            CbzReader(file).use { r ->
+                r.entries.forEach { entry -> String(r.open(entry).use { it.readBytes() }).contains("private notes") shouldBe false }
+            }
+            secret.readText() shouldBe "the user's private notes"
+            sandbox.assertNothingOutsideAppChanged()
+        }
+    }
 }

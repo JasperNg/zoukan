@@ -42,7 +42,8 @@ object TallImageSplitter {
      * @return the page's files, or empty when the page still has to be downloaded
      */
     fun settle(dir: File, base: String, split: Boolean, partHeight: Int = optimalHeight): List<File> {
-        val files = dir.listFiles { f -> !f.name.endsWith(".tmp") && f.length() > 0 }.orEmpty()
+        // A link named like a page is not one: the page is downloaded again, in the link's place
+        val files = dir.listFiles { f -> !f.name.endsWith(".tmp") && ChapterDownloader.isOwnPage(f) && f.length() > 0 }.orEmpty()
         val original = files.firstOrNull { it.name.startsWith("$base.") && ImageType.isImageName(it.name) }
         val parts = files.filter { isSplitName(it.name, base) }.sortedBy { it.name }
         if (original == null) return parts
