@@ -376,36 +376,38 @@ class MangaScreenModel(
         onRefreshStart?.invoke(Thread.currentThread())
         mutableState.update { it.copy(refreshing = true, error = null) }
         screenModelScope.launch {
-            val error = try {
-                val update = refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = true, downloadNew = manualFetch)
-                // KMK: a successful refresh clears the entry's update error
-                zoukan.desktop.app.runCatchingCancellable { updateErrors.clear(manga.id) }
-                if (manualFetch) downloadNewChapters(update.manga, update.newChapters)
-                null
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                // The refresh ends before a fatal error goes on: a screen left refreshing can never
-                // refresh again. Only then: otherwise the refresh runs on to its end below, and
-                // ending it here would let a second refresh start and be overwritten by this one
-                if (e is VirtualMachineError && e !is StackOverflowError) {
-                    mutableState.update { it.copy(refreshing = false, error = sourceErrorText(e)) }
+            var error: String? = null
+            // The refresh always ends, last: a screen left refreshing can never refresh again, after a
+            // fatal error that goes on or a failure in the error handling itself. Not before: ending
+            // it earlier would let a second refresh start and be overwritten by this one
+            try {
+                try {
+                    val update = refreshManga(manga, fetchDetails = fetchDetails, fetchChapters = true, downloadNew = manualFetch)
+                    // KMK: a successful refresh clears the entry's update error
+                    zoukan.desktop.app.runCatchingCancellable { updateErrors.clear(manga.id) }
+                    if (manualFetch) downloadNewChapters(update.manga, update.newChapters)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    // A fatal error goes on to the crash report, after the refresh ends with an error
+                    if (e is VirtualMachineError && e !is StackOverflowError) error = sourceErrorText(e)
+                    e.rethrowIfVmFailure()
+                    // Throwable, not Exception: an extension built against another API fails with a
+                    // LinkageError, which would leave the screen refreshing for good
+                    // KMK: the failure is the entry's update error, as a library update's
+                    zoukan.desktop.app.runCatchingCancellable { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
+                    error = if (e is NoChaptersException) {
+                        localized(DMR.strings.the_source_lists_no_chapters)
+                    } else {
+                        logcat(LogPriority.WARN, e) { "Refreshing the entry failed" }
+                        sourceErrorText(e)
+                    }
                 }
-                e.rethrowIfVmFailure()
-                // Throwable, not Exception: an extension built against another API fails with a
-                // LinkageError, which would leave the screen refreshing for good
-                // KMK: the failure is the entry's update error, as a library update's
-                zoukan.desktop.app.runCatchingCancellable { updateErrors.record(manga.id, zoukan.desktop.library.LibraryUpdater.errorMessage(e)) }
-                if (e is NoChaptersException) {
-                    localized(DMR.strings.the_source_lists_no_chapters)
-                } else {
-                    logcat(LogPriority.WARN, e) { "Refreshing the entry failed" }
-                    sourceErrorText(e)
-                }
+                // KMK: a manual refresh also syncs progress from the trackers, as Android's fetchAllFromSource
+                if (manualFetch) launch { syncTrackers() }
+            } finally {
+                mutableState.update { it.copy(refreshing = false, error = error) }
             }
-            // KMK: a manual refresh also syncs progress from the trackers, as Android's fetchAllFromSource
-            if (manualFetch) launch { syncTrackers() }
-            mutableState.update { it.copy(refreshing = false, error = error) }
         }
     }
 

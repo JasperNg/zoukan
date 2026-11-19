@@ -163,6 +163,28 @@ class MangaScreenModelMissingEntryTest {
     }
 
     @Test
+    fun `a refresh whose error cannot even be logged still ends`() {
+        val manga = Manga.create().copy(id = 99, initialized = true)
+        val interactor = mockk<GetMangaWithChapters> {
+            coEvery { awaitManga(99L) } returns manga
+            coEvery { subscribe(99L) } returns flowOf(manga to listOf(Chapter.create().copy(id = 1, mangaId = 99)))
+        }
+        // An extension's exception whose message itself throws: putting it into words fails
+        val broken = object : java.net.UnknownHostException() {
+            override val message: String get() = throw IllegalStateException("the message cannot be read")
+        }
+        val refresh = mockk<zoukan.desktop.domain.RefreshManga> {
+            coEvery { this@mockk.invoke(any(), any(), any(), any(), any(), any()) } throws broken
+        }
+        val model = newModel(interactor, refresh)
+        waitUntil { model.state.value.manga != null && !model.state.value.refreshing }
+        runBlocking(main) { model.refresh(manualFetch = false) }
+
+        // Not left refreshing for the screen's lifetime: the refresh button works again
+        waitUntil { !model.state.value.refreshing }
+    }
+
+    @Test
     fun `a failed refresh stays refreshing until its error is recorded and shown`() {
         val manga = Manga.create().copy(id = 99, initialized = true)
         val interactor = mockk<GetMangaWithChapters> {
