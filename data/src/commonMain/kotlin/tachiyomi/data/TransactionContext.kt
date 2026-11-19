@@ -24,10 +24,11 @@ internal suspend fun AndroidDatabaseHandler.getCurrentDatabaseContext(): Corouti
     return currentCoroutineContext()[TransactionElement]?.transactionDispatcher ?: queryDispatcher
 }
 
+// ZOUKAN: the first paragraph corrected: cancelling the caller does not roll the transaction back
 /**
  * Calls the specified suspending [block] in a database transaction. The transaction will be
- * marked as successful unless an exception is thrown in the suspending [block] or the coroutine
- * is cancelled.
+ * marked as successful unless an exception is thrown in the suspending [block]. A caller
+ * cancelled while [block] runs does not roll it back: it still commits once [block] returns.
  *
  * SQLDelight will only perform at most one transaction at a time, additional transactions are queued
  * and executed on a first come, first serve order.
