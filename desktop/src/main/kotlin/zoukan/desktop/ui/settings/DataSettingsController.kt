@@ -19,7 +19,7 @@ import java.io.File
  * Non-UI state/business controller for Data and storage settings: storage folder verification and
  * switching, cover/chapter cache clearing, backup/restore trigger guard, and CSV library export.
  */
-class DataSettingsController(
+internal class DataSettingsController(
     private val dirs: ZoukanDirs,
     private val clearCoverCacheAction: () -> Unit = {
         CustomCovers.clearCache(dirs.covers)
