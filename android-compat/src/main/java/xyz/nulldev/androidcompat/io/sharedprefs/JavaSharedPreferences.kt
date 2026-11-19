@@ -121,7 +121,7 @@ class JavaSharedPreferences(
 
         /**
          * The file the preferences named [key] are kept in (Context.getSharedPreferencesPath).
-         * ZOUKAN: a name valid on every OS ([SafePath.buildValidFilename]); when only a file of the
+         * A name valid on every OS ([SafePath.buildValidFilename]); when only a file of the
          * name an older version gave exists ([SafePath.legacyValidFilename]), that one, so no
          * settings are lost and nothing is renamed.
          */
