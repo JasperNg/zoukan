@@ -156,7 +156,8 @@ class SyncDatabaseFaultsTest {
         Injekt.addSingleton(GetTracks(tracks))
         Injekt.addSingleton(InsertTrack(tracks))
         Injekt.addSingleton(FetchInterval(chapters))
-        Injekt.addSingleton(mockk<GetFavorites> { coEvery { await() } returns emptyList() })
+        // The library a backup made here holds (a safety backup, DesktopBackups.create)
+        Injekt.addSingleton(GetFavorites(mangas))
         Injekt.addSingleton(mockk<GetMergedManga> { coEvery { await() } returns emptyList() })
         Injekt.addSingleton(
             mockk<GetExtensionStores> {
@@ -523,6 +524,47 @@ class SyncDatabaseFaultsTest {
         manager().syncData()
         remoteUrls() shouldBe setOf("/local", "/remote")
         library() shouldBe mapOf("/local" to 0L, "/remote" to 3L)
+    }
+
+    @Test
+    fun `syncs that fail the same way on an unchanged library keep the snapshot from before them`() = runBlocking<Unit> {
+        preferences.lastSyncTimestamp().set(1L)
+        // The real safety backup, of the library as the app backs it up
+        val safety = File(temp, "safety")
+        val manager = SyncManager(
+            context = mockk<Application>(relaxed = true),
+            handler = Injekt.getInstance(DatabaseHandler::class.java),
+            syncPreferences = preferences,
+            getCategories = Injekt.getInstance(GetCategories::class.java),
+            dirs = ZoukanDirs(temp),
+            safetySnapshot = SafetySnapshot(
+                folder = { safety },
+                write = { file -> DesktopBackups(ZoukanDirs(temp).android).create(file, replaceExisting = false) },
+            ),
+        )
+
+        // The other device's entry fails to restore on every sync; nothing else changes here
+        repeat(SafetySnapshot.KEEP + 2) {
+            driver.failOn(FailingSqlDriver.insertInto("chapters"))
+            manager.syncData()
+            library() shouldBe mapOf("/local" to 0L)
+        }
+
+        // One snapshot: the library before the first of them, never rotated out
+        val kept = safety.listFiles()!!.filter { it.name.startsWith("safety_sync_") }
+        kept.size shouldBe 1
+        DesktopBackups(ZoukanDirs(temp).android).read(kept.single()).backupManga.map { it.url } shouldBe listOf("/local")
+
+        // A change here (a second entry) is a new snapshot before the next sync
+        driver.execute(
+            null,
+            "INSERT INTO mangas(source, url, title, status, favorite, initialized, viewer, chapter_flags, cover_last_modified, date_added, favorite_modified_at) " +
+                "VALUES (1, '/added', 'Added here', 0, 1, 1, 0, 0, 0, 0, 2000)",
+            0,
+        )
+        driver.failOn(FailingSqlDriver.insertInto("chapters"))
+        manager.syncData()
+        safety.listFiles()!!.count { it.name.startsWith("safety_sync_") } shouldBe 2
     }
 
     @Test

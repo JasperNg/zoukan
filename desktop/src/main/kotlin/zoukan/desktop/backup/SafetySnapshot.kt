@@ -68,9 +68,15 @@ class SafetySnapshot(
                     val dir = folder().apply { mkdirs() }
                     val file = freeFile(dir, "${PREFIX}${reason.tag}_${now().format(FILE_TIME)}")
                     writeWithin(file)
-                    prune(dir, reason, keep, file)
-                    logcat { "Safety backup saved to $file" }
-                    Result.success(file)
+                    val same = if (reason == SnapshotReason.SYNC) sameAsNewest(dir, reason, file) else null
+                    if (same != null) {
+                        logcat { "The library is as in the safety backup $same, which is kept" }
+                        Result.success(same)
+                    } else {
+                        prune(dir, reason, keep, file)
+                        logcat { "Safety backup saved to $file" }
+                        Result.success(file)
+                    }
                 }
             }
         }
@@ -159,15 +165,41 @@ class SafetySnapshot(
          * Newest by the time in the name, which this class writes; other files are never touched.
          */
         internal fun prune(folder: File, reason: SnapshotReason, keep: Int, justWritten: File) {
-            val pattern = Regex("""${Regex.escape(PREFIX + reason.tag)}_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})(?:-(\d+))?\.tachibk""")
-            folder.listFiles().orEmpty()
-                .filter { it.isFile && it != justWritten }
-                .mapNotNull { file -> pattern.matchEntire(file.name)?.let { m -> file to (m.groupValues[1] to (m.groupValues[2].toIntOrNull() ?: 1)) } }
-                .sortedWith(compareByDescending<Pair<File, Pair<String, Int>>> { it.second.first }.thenByDescending { it.second.second })
+            snapshots(folder, reason)
+                .filter { it.first != justWritten }
                 .drop((keep - 1).coerceAtLeast(0))
                 .forEach { (file, _) ->
                     if (!file.delete()) logcat(LogPriority.WARN) { "Could not delete the old safety backup $file" }
                 }
+        }
+
+        /**
+         * The newest earlier [reason] snapshot in [folder] when [written] has the same bytes, after
+         * [written] is deleted; else null, and [written] stays. For a sync, which takes a snapshot each
+         * time it would restore: when the same entries fail to restore on every sync and the library
+         * does not change, each sync would add a copy of the same library and rotate the snapshot from
+         * before the first of them out. Equal bytes are an equal backup, so a library that changed in
+         * any way the backup holds is always a new snapshot.
+         */
+        internal fun sameAsNewest(folder: File, reason: SnapshotReason, written: File): File? {
+            val newest = snapshots(folder, reason).firstOrNull { it.first != written }?.first ?: return null
+            val same = try {
+                newest.length() == written.length() && newest.readBytes().contentEquals(written.readBytes())
+            } catch (e: java.io.IOException) {
+                logcat(LogPriority.WARN) { "Could not compare the safety backup with ${newest.name}: $e" }
+                false
+            }
+            // A copy that cannot be deleted stays, and the snapshots rotate as usual
+            return newest.takeIf { same && written.delete() }
+        }
+
+        /** [reason]'s snapshots in [folder], newest first, by the time in the name. */
+        private fun snapshots(folder: File, reason: SnapshotReason): List<Pair<File, Pair<String, Int>>> {
+            val pattern = Regex("""${Regex.escape(PREFIX + reason.tag)}_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})(?:-(\d+))?\.tachibk""")
+            return folder.listFiles().orEmpty()
+                .filter { it.isFile }
+                .mapNotNull { file -> pattern.matchEntire(file.name)?.let { m -> file to (m.groupValues[1] to (m.groupValues[2].toIntOrNull() ?: 1)) } }
+                .sortedWith(compareByDescending<Pair<File, Pair<String, Int>>> { it.second.first }.thenByDescending { it.second.second })
         }
 
         /** [base] plus `.tachibk` if free, else `-2`, `-3`, ...: a snapshot never takes an existing file's name. */

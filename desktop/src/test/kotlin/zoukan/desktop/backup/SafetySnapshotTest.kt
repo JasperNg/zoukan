@@ -51,6 +51,47 @@ class SafetySnapshotTest {
     }
 
     @Test
+    fun `a sync snapshot of an unchanged library keeps the last one instead of rotating older ones out`() = runBlocking<Unit> {
+        var library = "the library before the first sync"
+        val snapshots = snapshot(write = { it.writeText(library) })
+        val good = snapshots.take(SnapshotReason.SYNC).getOrThrow()
+        library = "the library after a sync whose restore failed in part"
+        val first = snapshots.take(SnapshotReason.SYNC).getOrThrow()
+
+        // The same entries fail on every sync and the library does not change: more failing syncs
+        // than are kept must not push the snapshot before the first sync out
+        repeat(SafetySnapshot.KEEP + 2) { snapshots.take(SnapshotReason.SYNC).getOrThrow() shouldBe first }
+
+        folder.listFiles()!!.map { it.name } shouldContainExactlyInAnyOrder listOf(good.name, first.name)
+        good.readText() shouldBe "the library before the first sync"
+    }
+
+    @Test
+    fun `a sync snapshot is always taken when the library changed, even by one byte`() = runBlocking<Unit> {
+        var library = "library 1"
+        val snapshots = snapshot(write = { it.writeText(library) })
+        val first = snapshots.take(SnapshotReason.SYNC).getOrThrow()
+        library = "library 2"
+
+        val second = snapshots.take(SnapshotReason.SYNC).getOrThrow()
+
+        (second != first) shouldBe true
+        second.readText() shouldBe "library 2"
+        first.readText() shouldBe "library 1"
+    }
+
+    @Test
+    fun `other reasons keep a snapshot for each change, even of the same library`() = runBlocking<Unit> {
+        // The user starts each of these, and expects each to have its backup
+        val snapshots = snapshot(write = { it.writeText("same") })
+        val files = (1..3).map { snapshots.take(SnapshotReason.RESTORE).getOrThrow() }
+        files.toSet().size shouldBe 3
+        // A sync's snapshot is not compared with another reason's
+        val sync = snapshots.take(SnapshotReason.SYNC).getOrThrow()
+        (sync in files) shouldBe false
+    }
+
+    @Test
     fun `two snapshots in the same second get different names`() = runBlocking<Unit> {
         val fixed = LocalDateTime.of(2026, 1, 1, 10, 0, 0)
         val snapshots = SafetySnapshot(folder = { folder }, write = { it.writeText("b") }, now = { fixed })
