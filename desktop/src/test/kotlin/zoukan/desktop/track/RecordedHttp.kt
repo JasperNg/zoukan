@@ -6,13 +6,6 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -30,10 +23,9 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.internal.connection.RealCall
 import okio.Buffer
-import tachiyomi.core.common.preference.Preference
-import tachiyomi.core.common.preference.PreferenceStore
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import zoukan.desktop.testkit.TestPreferenceStore
 import java.net.URLDecoder
 import java.util.Collections
 
@@ -141,61 +133,8 @@ internal class RecordedHttp {
     }
 }
 
-/** A [PreferenceStore] in memory, whose values a test can read back. */
-internal class MapPreferenceStore : PreferenceStore {
-    private val values = MutableStateFlow<Map<String, Any?>>(emptyMap())
-
-    private inner class MapPreference<T>(private val key: String, private val default: T) : Preference<T> {
-        override fun key() = key
-
-        @Suppress("UNCHECKED_CAST")
-        override fun get(): T = if (key in values.value) values.value[key] as T else default
-
-        override fun set(value: T) {
-            values.value += (key to value)
-        }
-
-        override fun isSet() = key in values.value
-
-        override fun delete() {
-            values.value -= key
-        }
-
-        override fun defaultValue() = default
-
-        override fun changes(): Flow<T> = values.map { get() }
-
-        override fun stateIn(scope: CoroutineScope): StateFlow<T> = changes().stateIn(scope, SharingStarted.Eagerly, get())
-    }
-
-    override fun getString(key: String, defaultValue: String): Preference<String> = MapPreference(key, defaultValue)
-
-    override fun getLong(key: String, defaultValue: Long): Preference<Long> = MapPreference(key, defaultValue)
-
-    override fun getInt(key: String, defaultValue: Int): Preference<Int> = MapPreference(key, defaultValue)
-
-    override fun getFloat(key: String, defaultValue: Float): Preference<Float> = MapPreference(key, defaultValue)
-
-    override fun getBoolean(key: String, defaultValue: Boolean): Preference<Boolean> = MapPreference(key, defaultValue)
-
-    override fun getStringSet(key: String, defaultValue: Set<String>): Preference<Set<String>> = MapPreference(key, defaultValue)
-
-    override fun <T> getObjectFromString(
-        key: String,
-        defaultValue: T,
-        serializer: (T) -> String,
-        deserializer: (String) -> T,
-    ): Preference<T> = MapPreference(key, defaultValue)
-
-    override fun <T> getObjectFromInt(
-        key: String,
-        defaultValue: T,
-        serializer: (T) -> Int,
-        deserializer: (Int) -> T,
-    ): Preference<T> = MapPreference(key, defaultValue)
-
-    override fun getAll(): Map<String, *> = values.value
-}
+/** A [tachiyomi.core.common.preference.PreferenceStore] in memory, whose values a test can read back. */
+internal typealias MapPreferenceStore = TestPreferenceStore
 
 /**
  * What a hosted tracker needs to run in a unit test: registers the app's Json, track preferences

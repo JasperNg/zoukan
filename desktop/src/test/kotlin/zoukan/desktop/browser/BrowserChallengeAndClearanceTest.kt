@@ -7,14 +7,15 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import zoukan.desktop.testing.Await
+import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Parallel Cloudflare challenges for one host open one window, not one each. */
-class ChallengeSerializationTest {
+/** Cloudflare challenge serialization, cooldowns, and browser clearance URL filtering. */
+class BrowserChallengeAndClearanceTest {
     private val previous = DesktopBrowser.challengeSolver
 
     @AfterEach
@@ -28,7 +29,7 @@ class ChallengeSerializationTest {
         val windows = AtomicInteger(0)
         val concurrent = AtomicInteger(0)
         val maxConcurrent = AtomicInteger(0)
-        val threads: MutableList<Thread> = java.util.Collections.synchronizedList(mutableListOf())
+        val threads: MutableList<Thread> = Collections.synchronizedList(mutableListOf())
         val asked = AtomicInteger(0)
         DesktopBrowser.challengeSolver = DesktopBrowser.ChallengeSolver { _, _, _ ->
             windows.incrementAndGet()
@@ -88,5 +89,25 @@ class ChallengeSerializationTest {
         failures.shouldFailFast("example.org", waitStarted = 6 * minute, now = 6 * minute) shouldBe false
         // Another host is not affected
         failures.shouldFailFast("other.org", waitStarted = minute, now = minute) shouldBe false
+    }
+
+    @Test
+    fun `pages without cookies are skipped`() {
+        for (url in listOf("about:blank", "data:text/html,hi", "chrome://version", "file:///tmp/a.html", "", "not a url")) {
+            clearanceUrlOrNull(url) shouldBe null
+        }
+    }
+
+    @Test
+    fun `http and https pages are kept`() {
+        clearanceUrlOrNull("https://example.com/a")?.host shouldBe "example.com"
+        clearanceUrlOrNull("http://example.com/")?.host shouldBe "example.com"
+    }
+
+    @Test
+    fun `about blank returns before touching the app's services`() {
+        // Injekt has nothing registered here: reaching it would log a WARN with a stack trace (it
+        // never throws), so this checks only that the call returns quietly
+        recordClearanceUserAgent("about:blank", null)
     }
 }

@@ -25,18 +25,119 @@ import eu.kanade.tachiyomi.network.dohMullvad
 import eu.kanade.tachiyomi.network.dohNajalla
 import eu.kanade.tachiyomi.network.dohProviderUrl
 import eu.kanade.tachiyomi.network.dohQuad9
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
+import org.cef.CefSettings
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import xyz.nulldev.androidcompat.webkit.CefHelper
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import javax.swing.SwingUtilities
 
-/** The DNS over HTTPS preference as Chromium gets it. */
-class ChromiumDnsTest {
+/** JCEF settings, quit hooks, EDT startup safety, and Chromium DoH Local State configuration; no Chromium runs in these tests. */
+class JcefRuntimeAndSettingsTest {
+
+    // --- JCEF settings & privacy ---
+
+    @Test
+    fun `Chromium does not persist session cookies`(@TempDir dir: File) {
+        val settings = CefSettings()
+        JcefRuntime.applySettings(settings, File(dir, "cache"), dir, debugLogging = false)
+        settings.persist_session_cookies shouldBe false
+    }
+
+    @Test
+    fun `Chromium writes no log unless debugging`(@TempDir dir: File) {
+        val settings = CefSettings()
+        JcefRuntime.applySettings(settings, File(dir, "cache"), dir, debugLogging = false)
+        settings.log_severity shouldBe CefSettings.LogSeverity.LOGSEVERITY_DISABLE
+        settings.log_file shouldBe null
+    }
+
+    @Test
+    fun `Chromium logs verbosely to the browser folder when debugging`(@TempDir dir: File) {
+        val settings = CefSettings()
+        JcefRuntime.applySettings(settings, File(dir, "cache"), dir, debugLogging = true)
+        settings.log_severity shouldBe CefSettings.LogSeverity.LOGSEVERITY_VERBOSE
+        settings.log_file shouldBe File(dir, "chromium.log").absolutePath
+    }
+
+    @Test
+    fun `every disabled feature is in one switch`() {
+        val switches = JcefRuntime.PRIVACY_SWITCHES.filter { it.startsWith("--disable-features=") }
+        switches.size shouldBe 1
+        switches.single().removePrefix("--disable-features=").split(',') shouldContainAll listOf(
+            "OptimizationHints",
+            "Reporting",
+            "NetworkErrorLogging",
+            "NetworkTimeServiceQuerying",
+        )
+    }
+
+    @Test
+    fun `the HTTP and media caches are kept to the minimum`() {
+        JcefRuntime.PRIVACY_SWITCHES shouldContainAll listOf("--disk-cache-size=1", "--media-cache-size=1")
+    }
+
+    @Test
+    fun `the profile keeps no history and sends nothing it does not need`() {
+        val prefs = JcefRuntime.PRIVACY_PREFERENCES
+        prefs["safebrowsing.enabled"] shouldBe false
+        prefs["history.saving_disabled"] shouldBe true
+        prefs["net.network_prediction_options"] shouldBe 2
+        prefs["webrtc.ip_handling_policy"] shouldBe "disable_non_proxied_udp"
+        prefs["browser.enable_spellchecking"] shouldBe false
+        prefs["credentials_enable_service"] shouldBe false
+        prefs["autofill.profile_enabled"] shouldBe false
+        prefs["autofill.credit_card_enabled"] shouldBe false
+    }
+
+    // --- JCEF quit & EDT startup ---
+
+    @Test
+    fun `with the app's quit installed, Cmd+Q runs it and JCEF does not shut Chromium down itself`() {
+        var quits = 0
+        JcefRuntime.onBeforeTerminate { quits++ } shouldBe true
+        quits shouldBe 1
+    }
+
+    @Test
+    fun `once the app is quitting, another Cmd+Q still does not let JCEF shut Chromium down`() {
+        JcefRuntime.onBeforeTerminate(JcefRuntime.QUIT_UNDERWAY) shouldBe true
+    }
+
+    @Test
+    fun `without it, as in the command-line tools, JCEF's own shutdown ends the run`() {
+        JcefRuntime.onBeforeTerminate(null) shouldBe false
+    }
+
+    @Test
+    fun `asking for Chromium on the UI thread returns at once instead of blocking it`() {
+        val done = CountDownLatch(1)
+        var result: Any? = "not called"
+        try {
+            SwingUtilities.invokeLater {
+                result = JcefRuntime.app()
+                done.countDown()
+            }
+            done.await(5, TimeUnit.SECONDS) shouldBe true
+            result shouldBe null
+        } finally {
+            // Releases an event thread blocked by the old behaviour, so later tests in this JVM still run
+            CefHelper.cefApp.value = Result.failure(IllegalStateException("test over"))
+            done.await(5, TimeUnit.SECONDS)
+            CefHelper.cefApp.value = Result.success(null)
+        }
+    }
+
+    // --- Chromium Local State DNS over HTTPS ---
 
     @Test
     fun `each provider's template is the server OkHttp uses`() {

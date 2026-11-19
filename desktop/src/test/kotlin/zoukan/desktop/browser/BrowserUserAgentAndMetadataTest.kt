@@ -1,5 +1,8 @@
 package zoukan.desktop.browser
 
+import eu.kanade.tachiyomi.network.interceptor.DesktopBrowser
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -7,20 +10,75 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import xyz.nulldev.androidcompat.webkit.KcefWebSettings
 import xyz.nulldev.androidcompat.webkit.KcefWebSettings.UserAgentBrandVersion
+import java.io.File
 
-/** The client hints extensions' WebViews send with the app's Chromium user agent. */
-class DesktopUserAgentMetadataTest {
-    private val ua152Mac =
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+/**
+ * The built-in browser keeps Chromium's own user agent, learns what Chromium reports for
+ * [DesktopBrowser.userAgent], and supplies matching desktop client-hint metadata for WebViews.
+ */
+class BrowserUserAgentAndMetadataTest {
+    private val root: File = generateSequence(File("").absoluteFile) { it.parentFile }
+        .first { File(it, "settings.gradle.kts").isFile }
+
+    private val assumed = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+    private val reported = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
 
     @AfterEach
     fun reset() {
         KcefWebSettings.userAgentProvider = null
     }
 
+    // --- Built-in browser user-agent guard & Chromium reporting ---
+
+    @Test
+    fun `the built-in browser never overrides Chromium's user agent`() {
+        val sources = File(root, "desktop/src/main/kotlin/zoukan/desktop/browser")
+            .walk().filter { it.isFile && it.extension == "kt" }.toList()
+        sources.shouldNotBeEmpty()
+        sources.filter { "setUserAgentOverride" in it.readText() }.map { it.name }.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a valid reported user agent wins over the assumed one`() {
+        JcefRuntime.chromiumUserAgent(reported, assumed) shouldBe reported
+    }
+
+    @Test
+    fun `a failed or implausible report keeps the assumed user agent`() {
+        listOf(
+            null,
+            "",
+            "   ",
+            "null",
+            "Chrome/153.0.0.0",
+            "$reported\nX-Injected: 1",
+            "$reported\rX-Injected: 1",
+        ).forEach { JcefRuntime.chromiumUserAgent(it, assumed) shouldBe assumed }
+    }
+
+    @Test
+    fun `learning the reported user agent sets the one the app records clearances with`() {
+        val previous = DesktopBrowser.userAgent
+        try {
+            DesktopBrowser.userAgent = assumed
+            JcefRuntime.learnUserAgent("null")
+            DesktopBrowser.userAgent shouldBe assumed
+
+            JcefRuntime.learnUserAgent(reported)
+            DesktopBrowser.userAgent shouldBe reported
+            JcefRuntime.userAgentKnown shouldBe true
+        } finally {
+            DesktopBrowser.userAgent = previous
+        }
+    }
+
+    // --- Client-hint metadata for extensions' WebViews ---
+
     @Test
     fun `desktop metadata matches the user agent's Chromium and this OS`() {
-        val meta = KcefWebSettings.desktopUserAgentMetadata(ua152Mac, "152.0.7977.83", "Mac OS X", "15.2", "aarch64")
+        val meta = KcefWebSettings.desktopUserAgentMetadata(assumed, "152.0.7977.83", "Mac OS X", "15.2", "aarch64")
         meta.mobile shouldBe false
         meta.model shouldBe ""
         meta.platform shouldBe "macOS"
@@ -48,17 +106,17 @@ class DesktopUserAgentMetadataTest {
 
     @Test
     fun `Windows reports its platform version as Chromium does`() {
-        KcefWebSettings.desktopUserAgentMetadata(ua152Mac, null, "Windows 10", "10.0", "amd64").let {
+        KcefWebSettings.desktopUserAgentMetadata(assumed, null, "Windows 10", "10.0", "amd64").let {
             it.platform shouldBe "Windows"
             it.platformVersion shouldBe "10.0.0"
         }
-        KcefWebSettings.desktopUserAgentMetadata(ua152Mac, null, "Windows 11", "10.0", "amd64").platformVersion shouldBe "19.0.0"
+        KcefWebSettings.desktopUserAgentMetadata(assumed, null, "Windows 11", "10.0", "amd64").platformVersion shouldBe "19.0.0"
     }
 
     @Test
     fun `a known Windows build gives Chromium's platform version`() {
         fun version(osName: String, build: Int?) =
-            KcefWebSettings.desktopUserAgentMetadata(ua152Mac, null, osName, "10.0", "amd64", windowsBuild = build).platformVersion
+            KcefWebSettings.desktopUserAgentMetadata(assumed, null, osName, "10.0", "amd64", windowsBuild = build).platformVersion
         version("Windows 10", 19045) shouldBe "10.0.0"
         version("Windows 10", 17763) shouldBe "7.0.0"
         version("Windows 11", 22000) shouldBe "14.0.0"
@@ -70,7 +128,7 @@ class DesktopUserAgentMetadataTest {
         version("Windows 11", 9600) shouldBe "19.0.0"
         version("Windows 10", null) shouldBe "10.0.0"
         // Other systems ignore it
-        KcefWebSettings.desktopUserAgentMetadata(ua152Mac, null, "Mac OS X", "15.2", "aarch64", windowsBuild = 22631)
+        KcefWebSettings.desktopUserAgentMetadata(assumed, null, "Mac OS X", "15.2", "aarch64", windowsBuild = 22631)
             .platformVersion shouldBe "15.2.0"
     }
 
@@ -101,15 +159,15 @@ class DesktopUserAgentMetadataTest {
 
     @Test
     fun `a WebView on the default user agent sends desktop metadata, an extension's own user agent none`() {
-        KcefWebSettings.userAgentProvider = { ua152Mac }
+        KcefWebSettings.userAgentProvider = { assumed }
         val settings = KcefWebSettings()
-        settings.userAgentString shouldBe ua152Mac
+        settings.userAgentString shouldBe assumed
         settings.getUserAgentMetadata().shouldNotBeNull().mobile shouldBe false
 
         settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) Chrome/120.0.0.0 Mobile Safari/537.36"
         settings.getUserAgentMetadata().shouldBeNull()
 
-        settings.userAgentString = ua152Mac
+        settings.userAgentString = assumed
         settings.getUserAgentMetadata().shouldNotBeNull().platform shouldBe KcefWebSettings.defaultUserAgentMetadata().platform
     }
 

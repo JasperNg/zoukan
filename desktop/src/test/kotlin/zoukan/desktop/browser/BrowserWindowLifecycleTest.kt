@@ -5,10 +5,13 @@ import org.junit.jupiter.api.Test
 import zoukan.desktop.testing.Await
 
 /**
- * The registry the app's quit paths use to dispose the built-in browser windows (see
- * [BrowserWindow.disposeAllForQuit]), without Chromium on the classpath.
+ * Lifecycle, pop-up policy, lock visibility, and quit disposal for built-in browser windows
+ * (see [BrowserWindow.disposeAllForQuit]), without Chromium on the classpath.
  */
-class BrowserWindowRegistryTest {
+class BrowserWindowLifecycleTest {
+
+    // --- Pop-up decisions ---
+
     @Test
     fun `a pop-up to the same site loads in the window's own browser`() {
         BrowserPopups.decide("https://accounts.example.com/signin", "https://www.example.com/page", offerCrossSite = true) shouldBe
@@ -45,6 +48,21 @@ class BrowserWindowRegistryTest {
         listOf("file:///C:/Windows/win.ini", "javascript:alert(1)", "about:blank", "", null).forEach { url ->
             BrowserPopups.decide(url, "https://example.com/", offerCrossSite = true) shouldBe BrowserPopups.Action.Drop
         }
+    }
+
+    // --- Registry disposal and open failure ---
+
+    @Test
+    fun `a window refused before Chromium starts leaves the registry`() {
+        val before = BrowserWindow.registeredCount()
+        // Not a web address (and in a headless test run there is no display either): refused early
+        val window = BrowserWindow("file:///etc/hosts")
+        BrowserWindow.registeredCount() shouldBe before + 1
+
+        window.open() shouldBe false
+        BrowserWindow.registeredCount() shouldBe before
+        // Its await returns at once instead of waiting for a window that never came
+        window.await(timeoutMs = 5_000) shouldBe false
     }
 
     @Test
@@ -99,6 +117,8 @@ class BrowserWindowRegistryTest {
         registry.disposeAll()
         disposed shouldBe true
     }
+
+    // --- Lock visibility and waiting ---
 
     /** A browser window as the registry sees it: hidden while the app is locked, as BrowserWindow. */
     private class FakeWindow(private val registry: BrowserWindowRegistry) {
