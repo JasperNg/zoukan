@@ -4,7 +4,7 @@ import eu.kanade.domain.track.interactor.RefreshTracks
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.tachiyomi.data.track.Tracker
+import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -155,7 +155,7 @@ class MangaActionsTrimTest {
         val store = InMemoryPreferenceStore()
         val trackPrefs = TrackPreferences(store)
         val trackerManager = mockk<TrackerManager> {
-            every { loggedInTrackers() } returns listOf(mockk<Tracker>())
+            every { loggedInTrackers() } returns listOf(mockk<BaseTracker>())
         }
         val trackChapters = mockk<TrackChapters>(relaxed = true)
         val httpSource = mockk<HttpSource>(relaxed = true) {
@@ -268,7 +268,7 @@ class MangaActionsTrimTest {
         }
         val trackPrefs = TrackPreferences(store).apply { trackOnAddingToLibrary().set(true) }
         val trackerManager = mockk<TrackerManager> {
-            every { loggedInTrackers() } returns listOf(mockk<Tracker>())
+            every { loggedInTrackers() } returns listOf(mockk<BaseTracker>())
         }
         val model = MangaScreenModel(
             mangaId = manga.id,
