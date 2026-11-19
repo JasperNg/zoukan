@@ -152,6 +152,7 @@ class FatalErrorCatchScanTest {
             Allowed("network/AppDnsResolver.kt", "} catch (_: Throwable) {", "loading the JDK's resolver provider: an error escaping it leaves InetAddress unusable for the whole run, so the JDK's own resolver is used instead", function = "get"),
             Allowed("image/FfmpegImageDecoder.kt", "} catch (_: Throwable) {", "a read or seek callback from FFmpeg's native code: nothing may be thrown back into native code; the error code ends the decode, which then fails", function = "call", count = 2),
             Allowed("security/SecureScreen.kt", "} catch (e: Throwable) {", "a callback from macOS's main dispatch queue through JNA: nothing may be thrown back into native code", function = "invoke"),
+            Allowed("browser/blocking/ContentBlocker.kt", "} catch (e: Throwable) {", "called from native code: the built-in browser's blocker runs in Chromium's onBeforeResourceLoad on its IO thread and in onBeforePopup, so nothing may be thrown back into native code; an Error is logged and reported, and the request goes ahead", function = "failOpen"),
             Allowed("webkit/KcefContentRules.kt", "} catch (e: Throwable) {", "called from native code: the request filter runs in Chromium's onBeforeResourceLoad on its IO thread, so nothing may be thrown back into native code; an Error is logged and reported, and the request goes ahead", function = "shouldBlock"),
         )
 

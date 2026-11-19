@@ -11,6 +11,7 @@ class KcefContentRulesTest {
     @AfterEach
     fun clearFilter() {
         KcefRequestFilter.filter = null
+        KcefRequestFilter.reportError = null
     }
 
     @Test
@@ -36,5 +37,26 @@ class KcefContentRulesTest {
         KcefRequestFilter.shouldBlock(null, "https://site.example/") shouldBe false
         KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> error("boom") }
         KcefRequestFilter.shouldBlock("https://ads.example/x", null) shouldBe false
+    }
+
+    @Test
+    fun `the built-in browser's blocker throws nothing back into native code and reports the first error`() {
+        val reported = mutableListOf<Throwable>()
+        KcefRequestFilter.reportError = { reported += it }
+        // Runs in Chromium's onBeforeResourceLoad and onBeforePopup: every failure lets the request through
+        ContentBlocker.failOpen { true } shouldBe true
+        ContentBlocker.failOpen { error("block list not loaded") } shouldBe false
+        reported shouldBe emptyList()
+        ContentBlocker.failOpen { throw OutOfMemoryError("Java heap space") } shouldBe false
+        ContentBlocker.failOpen { throw NoClassDefFoundError("a class of the app") } shouldBe false
+        // Once, shared with the extension WebViews' filter: the checks run for every request
+        KcefRequestFilter.shouldBlock("https://ads.example/x", null) shouldBe false
+        KcefRequestFilter.filter = KcefRequestFilter.Filter { _, _ -> throw StackOverflowError() }
+        KcefRequestFilter.shouldBlock("https://ads.example/x", null) shouldBe false
+        reported.map { it::class } shouldBe listOf(OutOfMemoryError::class)
+
+        // A report that fails is not thrown back either
+        KcefRequestFilter.reportError = { throw IllegalStateException("no report folder") }
+        ContentBlocker.failOpen { throw StackOverflowError() } shouldBe false
     }
 }

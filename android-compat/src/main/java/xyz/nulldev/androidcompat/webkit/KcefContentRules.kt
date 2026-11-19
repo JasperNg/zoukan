@@ -59,13 +59,22 @@ object KcefRequestFilter {
                 logger.warn(e) { "The request filter failed; the request goes ahead" }
             } else {
                 logger.error(e) { "The request filter failed with an error; the request goes ahead" }
-                try {
-                    if (errorReported.compareAndSet(false, true)) reportError?.invoke(e)
-                } catch (notReported: Exception) {
-                    logger.warn(notReported) { "Could not report the request filter's error" }
-                }
+                reportOnce(e)
             }
             false
+        }
+    }
+
+    /**
+     * Gives [error] to [reportError] when no error was reported since it was set, and never throws.
+     * For the content blocker's other callbacks from Chromium's native code too (the built-in
+     * browser's), which cannot rethrow an [Error] either and share the one report.
+     */
+    fun reportOnce(error: Throwable) {
+        try {
+            if (errorReported.compareAndSet(false, true)) reportError?.invoke(error)
+        } catch (notReported: Exception) {
+            logger.warn(notReported) { "Could not report the request filter's error" }
         }
     }
 }

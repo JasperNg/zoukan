@@ -6,6 +6,7 @@ import logcat.LogPriority
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.webkit.KcefRequestFilter
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
@@ -75,14 +76,25 @@ object ContentBlocker {
             !BlockPolicy.isAlwaysAllowed(target)
     }
 
-    private inline fun check(block: () -> Boolean): Boolean {
-        if (!isEnabled()) return false
-        return try {
-            block()
-        } catch (e: Exception) {
+    private fun check(block: () -> Boolean): Boolean = failOpen { isEnabled() && block() }
+
+    /**
+     * [block]'s answer, or false when it fails. The checks run in callbacks from Chromium's native
+     * code (`onBeforeResourceLoad` on its IO thread, `onBeforePopup`), so nothing is thrown back
+     * there, an [Error] included: it is logged and the first one is reported as not fatal
+     * ([KcefRequestFilter.reportOnce], the extension WebViews' filter's hook). The blocker is a
+     * privacy feature, not a security boundary: every failure lets the request through.
+     */
+    internal fun failOpen(block: () -> Boolean): Boolean = try {
+        block()
+    } catch (e: Throwable) {
+        if (e is Exception) {
             logcat(LogPriority.WARN, e) { "The content blocker failed; the request goes ahead" }
-            false
+        } else {
+            logcat(LogPriority.ERROR, e) { "The content blocker failed with an error; the request goes ahead" }
+            KcefRequestFilter.reportOnce(e)
         }
+        false
     }
 
     private fun browserRules(): BlockRules = withUserLists ?: builtInRules
