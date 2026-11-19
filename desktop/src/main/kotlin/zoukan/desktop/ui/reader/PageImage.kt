@@ -85,6 +85,14 @@ class PageImage(
             // Neither Skia, ImageIO nor the bundled FFmpeg (no libjxl) reads JPEG XL: say so plainly
             if (format == Format.Jxl) throw UnreadableImageException(localized(DMR.strings.unsupported_image_format, JPEG_XL))
             val declared = checkDeclaredSize(bytes)
+            // The pixels decoding at once are bounded, not only each page's
+            return decodes.withPermit(declared?.let { (w, h) -> w.toLong() * h }) { decodeChecked(bytes, format, declared, cropBorders, maxWidth) }
+        }
+
+        /** Pages decoding at once, by their declared pixels: at most one page as large as [MAX_DECODED_PIXELS] allows. */
+        private val decodes = DecodeGate(MAX_DECODED_PIXELS)
+
+        private fun decodeChecked(bytes: ByteArray, format: Format?, declared: Pair<Int, Int>?, cropBorders: Boolean, maxWidth: Int?): PageImage {
             // Animated GIF and WebP pages play, as on Android; they are not cropped, nor given a background
             if (format == Format.Gif || format == Format.Webp) {
                 PageAnimation.of(bytes)?.let { return PageImage(it.width, it.height, emptyList(), null, it) }
