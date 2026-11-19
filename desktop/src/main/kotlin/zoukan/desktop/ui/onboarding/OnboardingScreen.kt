@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.Navigator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.i18n.MR
@@ -141,6 +143,8 @@ fun OnboardingScreen(
     val storagePath by storage.folderPreference.collectAsState()
     val storageReady by produceState(false, storagePath) { value = withContext(Dispatchers.IO) { storageFolderReady(storage.root) } }
     val window = LocalWindow.current?.window
+    val scope = rememberCoroutineScope()
+    var pickingBackup by remember { mutableStateOf(false) }
     Surface(
         Modifier.fillMaxSize().testTag("onboarding")
             // Clicks do not reach the app behind (not a clickable: that is a control with no name for a screen reader)
@@ -179,14 +183,24 @@ fun OnboardingScreen(
                         OnboardingStep.Storage -> StorageStep()
                         OnboardingStep.Guides -> GuidesStep(
                             onRestoreBackup = {
-                                val file = pickBackupFile(window)
-                                if (file != null) {
-                                    onComplete()
-                                    // The restore's progress shows in Settings > Data and storage
-                                    zoukan.desktop.ui.settings.openSettingsCategory(zoukan.desktop.ui.settings.SettingsCategory.Data)
-                                    onOpenSettings()
-                                    // Android's Restore backup screen: what to restore, and what the backup needs
-                                    onOpenScreen(zoukan.desktop.ui.settings.RestoreBackupScreen(file.path))
+                                // The picker's start folder is looked up off the UI thread first
+                                if (!pickingBackup) {
+                                    pickingBackup = true
+                                    scope.launch {
+                                        try {
+                                            val file = pickBackupFile(window)
+                                            if (file != null) {
+                                                onComplete()
+                                                // The restore's progress shows in Settings > Data and storage
+                                                zoukan.desktop.ui.settings.openSettingsCategory(zoukan.desktop.ui.settings.SettingsCategory.Data)
+                                                onOpenSettings()
+                                                // Android's Restore backup screen: what to restore, and what the backup needs
+                                                onOpenScreen(zoukan.desktop.ui.settings.RestoreBackupScreen(file.path))
+                                            }
+                                        } finally {
+                                            pickingBackup = false
+                                        }
+                                    }
                                 }
                             },
                         )

@@ -32,9 +32,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
@@ -291,6 +298,9 @@ private fun BackupButtons() {
     val window = LocalWindow.current?.window
     val status by backupStatusFlow.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
+    val scope = rememberCoroutineScope()
+    // The restore picker is being opened: its start folder is looked up first
+    var picking by remember { mutableStateOf(false) }
     SearchTerms(localized(MR.strings.pref_create_backup), localized(MR.strings.pref_restore_backup))
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.SettingsRowInset, vertical = 8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -298,8 +308,17 @@ private fun BackupButtons() {
                 Text(localized(MR.strings.pref_create_backup))
             }
             OutlinedButton(
-                onClick = { pickBackupFile(window, dirs)?.let { navigator.push(RestoreBackupScreen(it.path)) } },
-                enabled = status == null,
+                onClick = {
+                    picking = true
+                    scope.launch {
+                        try {
+                            pickBackupFile(window, dirs)?.let { navigator.push(RestoreBackupScreen(it.path)) }
+                        } finally {
+                            picking = false
+                        }
+                    }
+                },
+                enabled = status == null && !picking,
                 modifier = Modifier.weight(1f),
             ) { Text(localized(MR.strings.pref_restore_backup)) }
         }
@@ -322,12 +341,13 @@ private fun BackupButtons() {
  * Asks for a backup file to restore, as Android's restore picker; null when none was chosen. The
  * file then opens in [RestoreBackupScreen]. The first-run setup uses it too.
  */
-internal fun pickBackupFile(
+internal suspend fun pickBackupFile(
     window: java.awt.Window?,
     dirs: ZoukanDirs = Injekt.get(),
     storage: ZoukanStorage = Injekt.get(),
 ): File? {
-    val start = backupPickerFolder(dirs.backups, storage.autoBackups.takeIf { storage.isAvailable })
+    // Off the UI thread: a sleeping external drive or network share would freeze the window
+    val start = backupPickerStart(dirs.backups, automatic = { storage.autoBackups.takeIf { storage.isAvailable } })
     return SystemEffects.current.pickFile(
         FileRequest(window, localized(MR.strings.file_select_backup), save = false, directory = start) { name ->
             isBackupName(name)
@@ -336,6 +356,32 @@ internal fun pickBackupFile(
 }
 
 private fun isBackupName(name: String) = name.endsWith(".tachibk") || name.endsWith(".proto.gz")
+
+/**
+ * [backupPickerFolder] on [io], waiting at most [timeoutMillis]: a storage folder that does not
+ * answer by then (a sleeping drive, a network share) or fails gives the app's own backups folder
+ * ([manual]). A lookup still blocked is left to finish on its own; its answer is dropped.
+ */
+internal suspend fun backupPickerStart(
+    manual: File,
+    automatic: () -> File?,
+    timeoutMillis: Long = BACKUP_PICKER_LOOKUP_MILLIS,
+    io: CoroutineDispatcher = Dispatchers.IO,
+): File {
+    // Not a child of the caller: waiting for a call blocked in the OS is what the bound is for
+    val lookup = CoroutineScope(io).async { backupPickerFolder(manual, automatic()) }
+    return try {
+        withTimeoutOrNull(timeoutMillis) { lookup.await() } ?: manual.also { lookup.cancel() }
+    } catch (e: CancellationException) {
+        lookup.cancel()
+        throw e
+    } catch (e: Exception) {
+        logcat.logcat("DataSettings", LogPriority.WARN) { "Could not look for backups in the storage folder: ${e.message}" }
+        manual
+    }
+}
+
+private const val BACKUP_PICKER_LOOKUP_MILLIS = 2_000L
 
 /**
  * Where the restore picker opens: the app's own backups folder ([manual]), or the storage folder's
