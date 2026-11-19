@@ -988,7 +988,7 @@
     <string name="saving_safety_backup">Saving a safety backup…</string>
     <string name="replace_server_library">Replace the server\'s library with this computer\'s</string>
     <string name="replace_server_library_summary">When the library on the server cannot be read and every sync stops there</string>
-    <string name="replace_server_library_warning">This computer\'s library is uploaded over the server\'s, whatever the server holds. Entries, categories and progress that other devices synced and that are not on this computer are lost from the server, and those devices get this computer\'s library at their next sync. Nothing on this computer changes; a safety backup of its library is saved first.</string>
+    <string name="replace_server_library_warning">This computer\'s library is uploaded over the server\'s, whatever the server holds. What only the server holds (for example from devices that no longer sync) is lost. Other devices merge their own library into it again at their next sync. Nothing on this computer changes; a safety backup of its library is saved first.</string>
     <string name="replace">Replace</string>
     <string name="server_library_replaced">The server\'s library was replaced with this computer\'s</string>
     <string name="server_library_not_replaced_no_safety_backup">The server\'s library was not replaced because a safety backup could not be saved first: %1$s</string>

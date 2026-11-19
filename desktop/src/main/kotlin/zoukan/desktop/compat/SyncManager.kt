@@ -386,8 +386,10 @@ class SyncManager(
     /**
      * Uploads this computer's library over the server's, whatever the server holds (no If-Match):
      * the way out of a library on the server that cannot be read, which every sync stops at. Only
-     * on the user's confirmation (Settings > Data sync): the other devices' entries that are not on
-     * this computer are gone from the server. Nothing here changes: a safety backup of this
+     * on the user's confirmation (Settings > Data sync): what only the server held (from devices
+     * that no longer sync, and the unreadable data itself) is gone. Another device that still has
+     * its entries keeps its own ETag, so its next sync downloads this library, merges its own into
+     * it (the merge is a union) and uploads the result. Nothing here changes: a safety backup of this
      * computer's library comes first all the same, as before the other destructive actions, and
      * without one nothing is sent. Afterwards the server holds this computer's library under the
      * ETag the service saved, so the next sync is an ordinary one.

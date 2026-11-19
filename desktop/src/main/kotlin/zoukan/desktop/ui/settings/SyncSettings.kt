@@ -198,8 +198,9 @@ internal fun ResetSyncTimeRow(onReset: () -> Unit) {
 
 /**
  * "Replace the server's library with this computer's": the way out of a library on the server that
- * cannot be read. It deletes the other devices' entries from the server, so it asks first and says
- * so; [onReplace] runs only on confirmation, and not while a sync runs ([enabled]).
+ * cannot be read. What only the server holds (from devices that no longer sync) is lost; other
+ * devices merge their own library into it again at their next sync. So it asks first and says so;
+ * [onReplace] runs only on confirmation, and not while a sync runs ([enabled]).
  */
 @Composable
 internal fun ReplaceServerLibraryRow(enabled: Boolean, onReplace: () -> Unit) {
