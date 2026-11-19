@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
+import zoukan.desktop.compat.localized
+import zoukan.i18n.desktop.DMR
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -38,9 +40,11 @@ class RecommendationSearchErrorTest {
 
     @Test
     fun `an outdated extension's LinkageError ends the search with an error and goes no further`() {
-        val (helper, uncaught) = search(NoSuchMethodError("outdated"))
+        val (helper, uncaught) = search(NoSuchMethodError("'java.util.List eu.kanade.Removed.method(int)'"))
 
-        helper.status.value.shouldBeInstanceOf<SearchStatus.Error>()
+        val status = helper.status.value.shouldBeInstanceOf<SearchStatus.Error>()
+        // The user reads that the extension is outdated, not the JVM's method signature
+        status.message shouldBe localized(DMR.strings.source_extension_outdated)
         uncaught.shouldBeEmpty()
     }
 

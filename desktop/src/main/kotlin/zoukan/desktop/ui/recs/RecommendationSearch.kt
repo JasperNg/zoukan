@@ -66,6 +66,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.RowSwitch
 import zoukan.desktop.ui.common.checkRow
+import zoukan.desktop.ui.common.sourceErrorText
 import java.net.URI
 import java.util.Collections
 import kotlin.time.Duration.Companion.milliseconds
@@ -227,8 +228,9 @@ class RecommendationSearchHelper(
             publish(SearchStatus.Error(e.message.orEmpty()))
         } catch (e: Throwable) {
             // Throwable: an outdated extension's LinkageError is the search's error, as on every
-            // other path into a source. The VM's own failures go on, after the search stops spinning
-            publish(SearchStatus.Error(e.message.orEmpty()))
+            // other path into a source, in the same words (the extension is outdated, not the JVM's
+            // method signature). The VM's own failures go on, after the search stops spinning
+            publish(SearchStatus.Error(sourceErrorText(e)))
             e.rethrowIfVmFailure()
             logcat(LogPriority.ERROR, e) { "Error during recommendation search" }
         }
