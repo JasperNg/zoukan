@@ -315,8 +315,7 @@ dependencies {
 
     testImplementation(libs.bundles.test)
     testImplementation(zoukanlibs.compose.ui.test)
-    // On the compile classpath too: JourneyShardFilter is a launcher PostDiscoveryFilter
-    testImplementation(libs.junit.platform.launcher)
+    testRuntimeOnly(libs.junit.platform.launcher)
     // ContextStubsTest builds the emulated Context's files config in a temporary folder
     testImplementation(zoukanlibs.typesafe.config)
     // Property-based tests (zoukan.desktop.property), run as ordinary JUnit tests
@@ -513,7 +512,7 @@ val extensionWiringTest by tasks.registering {
 // The user journeys drive the real UI against a local fixture server (src/test/kotlin/zoukan/
 // desktop/e2e): browse a source, read every image format and check the pages drew, change a
 // source's settings, download chapters and read them offline, back up and restore. They need no
-// network but take a few minutes, so they run on request and in journeys.yml, not on every build:
+// network but take a few minutes, so they run on request and in ci.yml, not on every build:
 //   ./gradlew :desktop:journeyTest
 // Screenshots go to desktop/build/reports/journeys/.
 val journeyTest by tasks.registering(Test::class) {
@@ -527,7 +526,7 @@ val journeyTest by tasks.registering(Test::class) {
     // classes it scans to the forks in turn, so empty forks would leave journeys queued behind
     // each other in one fork while the other forks have nothing to do. Subpackages too: `test`
     // leaves out every zoukan.desktop.e2e.*JourneyTest, subpackages included (Gradle's * matches
-    // dots), so a journey must run here (JourneyShardTest checks the naming)
+    // dots), so a journey must run here
     include("zoukan/desktop/e2e/**/*JourneyTest.class")
     // Each journey starts the runtime with its own data folder, once per JVM
     forkEvery = 1
@@ -541,19 +540,7 @@ val journeyTest by tasks.registering(Test::class) {
     // ZoukanRuntime keeps a cachedir that is already set. AvifJourneyTest clears it to keep the
     // app's own path (FFmpeg in the data folder) under test
     systemProperty("org.bytedeco.javacpp.cachedir", layout.buildDirectory.dir("javacpp-cache").get().asFile.absolutePath)
-    // -Pzoukan.shard=2/3 runs the second third of the journeys (to split them over machines). Which
-    // journeys a shard keeps is decided only by JourneyShardFilter in the test JVMs (JourneyShard.includes);
-    // the build checks only the form of the value, so a typo fails here and not in every fork
-    providers.gradleProperty("zoukan.shard").orNull?.let { value ->
-        value.split('/').mapNotNull { it.trim().toIntOrNull() }
-            .takeIf { it.size == 2 && value.count { c -> c == '/' } == 1 && it[1] >= 1 && it[0] in 1..it[1] }
-            ?: error("zoukan.shard must be i/n with 1 <= i <= n, not \"$value\"")
-        systemProperty("zoukan.shard", value)
-        // With few journeys and many shards, a shard can hold none: that job has nothing to do and
-        // passes (Gradle would fail it with "No tests found for given includes")
-        filter.isFailOnNoMatchingTests = false
-    }
-    // Each journey that ran (so each journey a shard kept), as it ends
+    // Each journey that ran, as it ends
     testLogging { events("passed", "skipped", "failed") }
     // The journeys check this machine as much as the code (JDK, display, decoders): never skip
     // them as up to date, and start each run without the last run's screenshots

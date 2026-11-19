@@ -5,11 +5,10 @@ builds both installers and publishes the release on every merge to `master` that
 than docs; the published installers are unsigned. Nothing is published unless it passed two
 gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job)
 and the clean-install check of each installer (below), which `desktop-build.yml` runs on the
-installer it is about to publish. The CI check is the fast set only: Spotless, the build and unit
+installer it is about to publish. The CI check runs the offline checks: Spotless, the build and unit
 tests, the wiring tests, the whole unit tier on Windows and macOS (on pull requests and on
-master alike) and the Android compile and unit tests. `journeys.yml` runs the offline journeys on
-pull requests that change their hotspots, and `nightly.yml` runs the extension wiring check every
-night; neither gates a release.
+master alike), the Android compile and unit tests, and the offline journeys on Windows.
+`nightly.yml` runs the extension wiring check every night and does not gate a release.
 
 ## Installers
 

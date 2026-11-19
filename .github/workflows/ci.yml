@@ -6,10 +6,10 @@
 # below must stay the same as desktop-build.yml's push paths-ignore, which stops docs-only merges
 # from releasing.
 #
-# This is the fast set, and the release gate (desktop-build.yml calls it). Every pull request and
-# every push to master runs the whole unit tier on Linux, Windows and macOS, plus the wiring tier
-# and the Android compile and unit tests. nightly.yml runs the extension wiring check every night,
-# and journeys.yml runs the journeys on pull requests that change the code they cover.
+# This is the PR and release gate (desktop-build.yml calls it). Every pull request and every push
+# to master runs Spotless, the whole unit tier on Linux, Windows and macOS, the wiring tier, the
+# Android compile and unit tests, and the offline user journeys on Windows. nightly.yml runs the
+# extension wiring check every night.
 #
 # The installers are built by desktop-build.yml.
 name: CI
@@ -218,9 +218,37 @@ jobs:
             domain/build/reports/tests/
           if-no-files-found: ignore
 
+  journeys:
+    name: Journeys (windows-2025-vs2026)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # The same fixed image as files-os's Windows job and the Windows installer
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: ./.github/actions/setup-zoukan
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      # A real Windows desktop, so no xvfb; journeyTest runs half the cores' worth of journeys side by side
+      - name: Journeys
+        shell: bash
+        run: ./gradlew :desktop:journeyTest --continue
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: journeys-windows
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            desktop/build/reports/journeys/
+            desktop/build/reports/tests/journeyTest/
+            desktop/build/test-results/journeyTest/
+
   pr-gate:
     name: PR gate
-    needs: [changes, spotless, unit, files-os, wiring, android-compile]
+    needs: [changes, spotless, unit, files-os, wiring, android-compile, journeys]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

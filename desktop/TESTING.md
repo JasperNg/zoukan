@@ -9,7 +9,7 @@ repository root. On Windows, use `gradlew.bat`.
 | --- | --- | --- | --- |
 | Unit | `:desktop:test` | Wrong logic: mapping, state, parsing, single composables, Android API linkage (`AppLinkageTest`), contract and source-scan rules. | Every build, and on GitHub (`.github/workflows/ci.yml`): the whole tier (with `:extension-jvm:test`, `:domain:desktopTest`, `:android-compat:test`, `:backup:desktopTest`, `:data:desktopTest`, `:core:common:desktopTest` and `:source-api:desktopTest`, the shared modules' own tests) on Linux, Windows and macOS on every pull request and every push to master. |
 | Wiring | `:desktop:wiringTest` | Code that compiles but crashes when it runs: a missing Injekt registration (`InjektRegistrationsTest`), runtime start (`ZoukanRuntimeStartTest`), a screen or dialog that throws when it opens (`ScreenSmokeTest`). | Every build: `check`, and so `build`, depends on it. CI runs it under `xvfb-run -a` on Linux. |
-| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On Windows on pull requests that change downloads, the browser, the reader, backup or the storage folder (`.github/workflows/journeys.yml`, see [On GitHub](#on-github)), and on demand. |
+| Journeys | `:desktop:journeyTest` | Broken user flows: browse, read, download, back up, change source settings. Runs offline against a local fixture server. | On Windows on every pull request and every push to master that changes code (the `journeys` job in `.github/workflows/ci.yml`, see [On GitHub](#on-github)), and on demand. |
 | Extension wiring | `:desktop:extensionWiringTest` | Downloads every extension of the sample stores and checks it loads on the desktop. | Every night on Windows and macOS in `.github/workflows/nightly.yml` (see [On GitHub](#on-github)), and on demand. |
 | Android compile and unit tests | `:app:compileDebugKotlin` and `compileDebugKotlinAndroid` of `:data`, `:domain`, `:core:common`, `:source-api`, then `:app:testDebugUnitTest` and `:domain:testDebugUnitTest` | A desktop change to shared Android code (`app/.../data/track/`, `data/`, `domain/`) that breaks the Android build or the Android app's unit tests (they run on the JVM, not on a device). | Every pull request and every push to master: the "Android compile and unit tests" job in `.github/workflows/ci.yml`, described in the comment above it. Locally it needs `ANDROID_HOME` set to an Android SDK. |
 
@@ -28,10 +28,10 @@ the part you will change, and see them pass on the unchanged code. Then make the
 
 ## The release gate
 
-The release gate on GitHub (`ci.yml`, which `desktop-build.yml` runs before it publishes) is the
-fast set only: Spotless, the build and unit tests, the wiring tests, the unit tests on Windows and
-macOS and the Android compile and unit tests. Its jobs run side by side; the Windows and macOS
-runners are the slowest, so they set how long the gate takes.
+The release gate on GitHub (`ci.yml`, which `desktop-build.yml` runs before it publishes) runs the
+offline checks: Spotless, the build and unit tests, the wiring tests, the unit tests on Windows and
+macOS, the Android compile and unit tests, and the offline user journeys on Windows. Its jobs run
+side by side; the Windows and macOS runners are the slowest, so they set how long the gate takes.
 
 Every pull request and every push to master (and so every release, since `desktop-build.yml`
 calls `ci.yml`) runs the whole unit tier on Windows and macOS as well as on Linux: `:desktop:test`,
@@ -44,15 +44,13 @@ the macOS marks) therefore fails the pull request, not the first master run afte
 
 ### On GitHub
 
+- `.github/workflows/ci.yml` runs `:desktop:journeyTest` in its `journeys` job on a Windows
+  runner for every pull request and push to master that changes code (docs-only changes skip it),
+  and gates `pr-gate`.
 - `.github/workflows/nightly.yml` runs every night at 03:17 UTC on master, in the main repository
   only (forks skip it), and opens, updates or closes the `nightly-failure` issue. A run started by
   hand reports to the issue only when its `notify` box is ticked. It does not gate a merge. It
   runs `:desktop:extensionWiringTest` on Windows and macOS.
-- `.github/workflows/journeys.yml` runs `:desktop:journeyTest` on a Windows runner for pull
-  requests that change `desktop/src/main/kotlin/zoukan/desktop/` `download/`, `browser/`,
-  `ui/reader/`, `ui/downloads/`, `backup/` or `storage/`, the shared `backup/` or `core/archive/`
-  modules, or the journeys themselves. Other pull requests do not start it. It is not part of the PR
-  gate: do not make it a required check, since most pull requests never run it.
 
 ## Commands
 

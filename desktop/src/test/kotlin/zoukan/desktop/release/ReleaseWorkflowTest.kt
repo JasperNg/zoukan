@@ -94,7 +94,7 @@ class ReleaseWorkflowTest {
     }
 
     @Test
-    fun `the PR gate is the fast set`() {
+    fun `the PR gate covers offline checks and leaves live extension wiring to nightly`() {
         val ci = text(".github/workflows/ci.yml")
         val problems = mutableListOf<String>()
         val jobs = Regex("""(?m)^ {2}([\w-]+):\s*$""").findAll(ci.substringAfter("\njobs:\n")).map { it.groupValues[1] }.toList()
@@ -103,9 +103,7 @@ class ReleaseWorkflowTest {
         val missing = jobs - "pr-gate" - gateNeeds.toSet()
         if (jobs.isEmpty() || gateNeeds.isEmpty()) problems += "ci.yml: could not read the jobs or the PR gate's needs"
         if (missing.isNotEmpty()) problems += "ci.yml: PR gate does not need $missing, so they do not gate a merge or a release"
-        for (task in listOf(":desktop:journeyTest", ":desktop:extensionWiringTest")) {
-            if (task in ci) problems += "ci.yml runs $task"
-        }
+        if (":desktop:extensionWiringTest" in ci) problems += "ci.yml runs :desktop:extensionWiringTest"
         val nightly = text(".github/workflows/nightly.yml")
         val nightlyOn = nightly.substringAfter("\non:\n").substringBefore("\n\n")
         for (trigger in listOf("pull_request:", "push:")) {
@@ -120,13 +118,23 @@ class ReleaseWorkflowTest {
         if (":desktop:extensionWiringTest" !in job(nightly, "extension-wiring")) {
             problems += "nightly.yml: the extension-wiring job does not run :desktop:extensionWiringTest"
         }
-        // The journeys on pull requests that change their hotspots, in a workflow of their own
-        val journeys = text(".github/workflows/journeys.yml")
-        if (":desktop:journeyTest" !in journeys) problems += "journeys.yml does not run :desktop:journeyTest"
-        if (!Regex("""(?m)^ {2}pull_request:\n {4}paths:\n""").containsMatchIn(journeys)) {
-            problems += "journeys.yml does not start on pull requests filtered by paths, so it slows every pull request"
+        // The offline journeys run on Windows in ci.yml and gate PRs and releases
+        val journeys = job(ci, "journeys")
+        if (journeys.isEmpty()) {
+            problems += "ci.yml has no journeys job"
+        } else {
+            if (":desktop:journeyTest" !in journeys) problems += "ci.yml: the journeys job does not run :desktop:journeyTest"
+            if ("needs.changes.outputs.code == 'true'" !in journeys) {
+                problems += "ci.yml: the journeys job does not check needs.changes.outputs.code == 'true'"
+            }
+            if (!Regex("""(?m)^\s*runs-on:\s*windows-""").containsMatchIn(journeys)) {
+                problems += "ci.yml: the journeys job does not run on Windows"
+            }
         }
-        if (!Regex("""(?m)^\s*runs-on:\s*windows-""").containsMatchIn(journeys)) problems += "journeys.yml does not run on Windows"
+        if ("journeys" !in gateNeeds) problems += "ci.yml: PR gate does not need journeys"
+        if (File(root, ".github/workflows/journeys.yml").exists()) {
+            problems += ".github/workflows/journeys.yml still exists; journeys moved into ci.yml"
+        }
         // The whole unit tier on Windows and macOS on every pull request, not only after the merge
         val unitTier = ":desktop:test :extension-jvm:test :domain:desktopTest :android-compat:test :backup:desktopTest " +
             ":data:desktopTest :core:common:desktopTest :source-api:desktopTest"
