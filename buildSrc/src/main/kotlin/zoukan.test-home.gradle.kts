@@ -8,7 +8,7 @@
  * `user.home` is this folder. A key the task sets itself is left as it is.
  *
  * Apply it after the Kotlin plugin. In a Kotlin/JVM module it applies to every Test task (in
- * desktop: test, wiringTest, journeyTest, buttonCrawlTest, extensionWiringTest*); in a
+ * desktop: test, wiringTest, journeyTest, extensionWiringTest*); in a
  * multiplatform module only to desktopTest, so the Android unit tests are left as they are.
  *
  * The OS secret stores (Keychain, Credential Manager, the Secret Service) do not go by `user.home`,

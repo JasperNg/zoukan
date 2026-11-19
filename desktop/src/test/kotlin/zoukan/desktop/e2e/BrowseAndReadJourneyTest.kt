@@ -33,7 +33,7 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * The first thing a reader does: browse a source, open a title, add it to the library and read
  * it. Reads the JPEG, PNG and WebP chapters of the fixture title and checks each page drew on
- * screen (AVIF has its own journey, [AvifJourneyTest]).
+ * screen.
  *
  *   ./gradlew :desktop:journeyTest --tests "*BrowseAndReadJourneyTest"
  */

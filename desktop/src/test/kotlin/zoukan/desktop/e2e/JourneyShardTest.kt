@@ -72,7 +72,7 @@ class JourneyShardTest {
     @Test
     fun `the filter fails on a bad shard instead of running everything or nothing`() {
         val filter = JourneyShardFilter { "4/3" }
-        val error = shouldThrow<IllegalArgumentException> { filter.apply(classDescriptor("zoukan.desktop.e2e.AvifJourneyTest")) }
+        val error = shouldThrow<IllegalArgumentException> { filter.apply(classDescriptor("zoukan.desktop.e2e.BrowseAndReadJourneyTest")) }
         error.message shouldBe "zoukan.shard must be i/n with 1 <= i <= n, got 4/3"
     }
 
@@ -99,7 +99,7 @@ class JourneyShardTest {
             .filter { it !in unitTests && !JourneyShard.isJourney(it) }
             .filter { name -> Class.forName(name, false, javaClass.classLoader).declaredMethods.any { it.isAnnotationPresent(Test::class.java) } }
         withClue("name each journey *JourneyTest, or list a unit test of the kit here") { misnamed.shouldBeEmpty() }
-        journeyClasses() shouldContain AvifJourneyTest::class.java.name
+        journeyClasses() shouldContain BrowseAndReadJourneyTest::class.java.name
     }
 
     /** The compiled top-level classes of zoukan.desktop.e2e and its subpackages (no nested or lambda classes). */

@@ -78,11 +78,17 @@ class PageAsCoverInMemoryTest {
     private val app = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cipher = FileCipher(ByteArray(32) { 7 })
     private lateinit var appTemp: File
+    private var previousCoverDir: File? = null
+    private var previousCodec: xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec? = null
+    private var previousTempRoot: File? = null
 
     @BeforeEach
     fun setUp() {
         Injekt.addSingleton(mockk<GetCustomMangaInfo> { every { this@mockk.get(any()) } returns null })
         Dispatchers.setMain(main)
+        previousTempRoot = AppTempFiles.currentRoot()
+        previousCoverDir = runCatching { CustomCovers.coverDir }.getOrNull()
+        previousCodec = CustomCovers.codec
         appTemp = File(dir, "app-tmp").apply { mkdirs() }
         AppTempFiles.init(appTemp)
         CustomCovers.coverDir = File(dir, "cache/covers")
@@ -91,7 +97,10 @@ class PageAsCoverInMemoryTest {
 
     @AfterEach
     fun tearDown() {
-        CustomCovers.codec = null
+        if (::appTemp.isInitialized) appTemp.setWritable(true)
+        AppTempFiles.restoreRoot(previousTempRoot)
+        previousCoverDir?.let { CustomCovers.coverDir = it }
+        CustomCovers.codec = previousCodec
         app.cancel()
         Dispatchers.resetMain()
         main.close()
@@ -128,10 +137,16 @@ class PageAsCoverInMemoryTest {
     fun `EditManga setCover saves custom cover encrypted in memory without temporary files`() = runBlocking<Unit> {
         val manga = Manga.create().copy(id = 11, source = 4242, favorite = true, initialized = true)
         val pageBytes = pngBytes()
+        CustomCovers.file(manga.id).exists() shouldBe false
         val sysTmp = File(System.getProperty("java.io.tmpdir"))
         val sysTmpBefore = sysTmp.listFiles().orEmpty().map { it.name }.toSet()
 
-        newEditManga().setCover(manga, pageBytes)
+        appTemp.setWritable(false)
+        try {
+            newEditManga().setCover(manga, pageBytes)
+        } finally {
+            appTemp.setWritable(true)
+        }
 
         assertEncryptedCoverWithoutTempFiles(manga.id, pageBytes, sysTmpBefore)
     }
@@ -183,11 +198,17 @@ class PageAsCoverInMemoryTest {
             withTimeout(10_000) { model.state.first { it.pages.size == 1 } }
             model.state.value.pages[0].bytes shouldBe null
 
+            CustomCovers.file(manga.id).exists() shouldBe false
             val sysTmp = File(System.getProperty("java.io.tmpdir"))
             val sysTmpBefore = sysTmp.listFiles().orEmpty().map { it.name }.toSet()
 
-            model.setPageAsCover(0)
-            withTimeout(10_000) { awaitAppWork() }
+            appTemp.setWritable(false)
+            try {
+                model.setPageAsCover(0)
+                withTimeout(10_000) { awaitAppWork() }
+            } finally {
+                appTemp.setWritable(true)
+            }
 
             assertEncryptedCoverWithoutTempFiles(manga.id, pageBytes, sysTmpBefore)
         } finally {

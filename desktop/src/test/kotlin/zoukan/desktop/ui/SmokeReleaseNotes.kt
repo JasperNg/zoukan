@@ -18,7 +18,7 @@ import java.io.IOException
  * release showed an error instead; a slow answer left the screen loading when it was checked. A
  * fixed release, answered at once, keeps the checks offline and the same on every machine and
  * every day. Its body has a link in a paragraph, as Zoukan's notes do, so the link's
- * rendering stays covered (usability-allowlist.txt explains that link's finding).
+ * rendering stays covered.
  */
 internal object SmokeReleaseNotes {
     const val NAME = "Zoukan smoke release"

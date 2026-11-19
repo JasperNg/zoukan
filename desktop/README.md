@@ -165,7 +165,6 @@ fixture server instead of a website, so it runs offline and always sees the same
 
 - `BrowseAndReadJourneyTest` browses the fixture source, opens a title, adds it to the library and
   reads its JPEG, PNG and WebP chapters, checking from a screenshot that each page drew.
-- `AvifJourneyTest` does the same for the AVIF chapter.
 - `SourcePreferencesJourneyTest` changes the source's own settings (a switch and a list), checks the
   catalogue follows them, that they are in the source's settings file and that they show again.
 - `DownloadJourneyTest` downloads three chapters from the title's screen, checks every page in the

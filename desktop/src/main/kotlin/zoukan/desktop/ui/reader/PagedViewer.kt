@@ -146,11 +146,6 @@ class PageZoom {
     }
 }
 
-/** Test hook with no effect in the app: how often each pager page recomposed after its first composition. */
-internal object ReaderCompositionProbe {
-    val pageRecompositions = java.util.concurrent.ConcurrentHashMap<Int, Int>()
-}
-
 @Composable
 fun PagedViewer(
     model: ReaderScreenModel,
@@ -307,9 +302,6 @@ fun PagedViewer(
     // ZOUKAN <--
 
     val pageContent: @Composable (Int) -> Unit = { index ->
-        // Counts recompositions after the first, for tests
-        val first = remember { booleanArrayOf(true) }
-        SideEffect { if (first[0]) first[0] = false else ReaderCompositionProbe.pageRecompositions.merge(index, 1, Int::plus) }
         when (index) {
             0 -> ChapterTransition(content.chapter, content.previousChapter, next = false, color = foreground, onGo = { model.previousChapter(atEnd = true) })
             spreads.size + 1 -> ChapterTransition(content.chapter, content.nextChapter, next = true, color = foreground, onGo = { model.nextChapter() })

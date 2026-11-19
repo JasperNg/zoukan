@@ -502,7 +502,7 @@ object FixtureCatalog {
     const val HTML_TITLE = "Markup Description"
     const val HTML_DESCRIPTION = "Tom &amp; Jerry<br>Second line &lt;3"
 
-    /** Search-only: its chapter's pages are scrambled (see DescramblingJourneyTest). */
+    /** Search-only: its chapter's pages are scrambled. */
     const val SCRAMBLED_TITLE = "Scrambled Pages"
 
     /** The format of the scrambled chapter; its pages are manifest.json's "scrambled". */

@@ -21,6 +21,12 @@ object AppTempFiles {
         root = dir
     }
 
+    internal fun currentRoot(): File? = root
+
+    internal fun restoreRoot(dir: File?) {
+        root = dir
+    }
+
     /**
      * A new folder in the app's temporary folder. Before [init] (only in tests) it is in the
      * system's temporary folder.

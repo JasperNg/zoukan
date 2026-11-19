@@ -27,7 +27,7 @@ class SmokeReleaseNotesTest {
 
         notes.name shouldBe SmokeReleaseNotes.NAME
         notes.body shouldBe SmokeReleaseNotes.BODY
-        // The link sits in a paragraph that starts as usability-allowlist.txt's entry for it
+        // The link sits in a paragraph
         notes.body shouldContain "\nFull changes: [the compare page](https://"
     }
 
