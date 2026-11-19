@@ -2,6 +2,7 @@ package zoukan.desktop
 
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import xyz.nulldev.androidcompat.util.NoFollowDelete
 import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.FileVisitResult
@@ -101,7 +102,7 @@ internal object CacheFolders {
         if (keepNewer) recoverAside(old, new, aside, rename)
         val attrs = attributes(old) ?: return Outcome.NOTHING_TO_MOVE
         // A link or junction is the user's own arrangement: left as it is, and used where it is
-        if (isLink(attrs)) return Outcome.KEPT_IN_ROOT
+        if (isLink(old, attrs)) return Outcome.KEPT_IN_ROOT
         if (!attrs.isDirectory) return Outcome.NOTHING_TO_MOVE
         if (attributes(new) != null) {
             // Both exist: either a move whose old folder could not all be deleted, or an older
@@ -189,7 +190,7 @@ internal object CacheFolders {
      */
     private fun recoverAside(old: Path, new: Path, aside: Path, rename: (Path, Path) -> Unit) {
         val asideAttrs = attributes(aside) ?: return
-        if (isLink(asideAttrs) || !asideAttrs.isDirectory) return
+        if (isLink(aside, asideAttrs) || !asideAttrs.isDirectory) return
         when {
             attributes(new) != null -> if (!deleteTree(aside)) logcat(LogPriority.WARN) { "Caches: could not delete all of $aside" }
             attributes(old) == null -> try {
@@ -223,12 +224,12 @@ internal object CacheFolders {
                 }
 
                 override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    if (isLink(attrs)) return FileVisitResult.SKIP_SUBTREE
+                    if (isLink(dir, attrs)) return FileVisitResult.SKIP_SUBTREE
                     return see(attrs)
                 }
 
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    if (isLink(attrs)) return FileVisitResult.CONTINUE
+                    if (isLink(file, attrs)) return FileVisitResult.CONTINUE
                     return see(attrs)
                 }
 
@@ -246,8 +247,47 @@ internal object CacheFolders {
         null
     }
 
-    /** A symbolic link, or on Windows a junction or other reparse point. */
-    private fun isLink(attrs: BasicFileAttributes) = attrs.isSymbolicLink || attrs.isOther
+    private val IS_WINDOWS = System.getProperty("os.name").orEmpty().lowercase().contains("win")
+
+    private fun safeResolvesToItself(path: Path, resolvesToItself: (Path) -> Boolean): Boolean = try {
+        resolvesToItself(path)
+    } catch (_: IOException) {
+        false
+    }
+
+    /**
+     * A symbolic link, or on Windows a junction or other reparse point whose real path resolves
+     * elsewhere. Windows tags cloud-sync placeholders, deduplicated and compressed files or folders
+     * with a reparse point ("other"), yet their real path is where they are listed.
+     */
+    internal fun isLink(
+        path: Path,
+        attrs: BasicFileAttributes,
+        resolvesToItself: (Path) -> Boolean = NoFollowDelete::resolvesToItself,
+        windows: Boolean = IS_WINDOWS,
+    ): Boolean = when {
+        attrs.isSymbolicLink -> true
+        attrs.isDirectory -> attrs.isOther && !safeResolvesToItself(path, resolvesToItself)
+        attrs.isRegularFile -> false
+        attrs.isOther -> !windows || !safeResolvesToItself(path, resolvesToItself)
+        else -> false
+    }
+
+    /**
+     * Whether [path] with [attrs] is a plain file safe to copy: a regular file, or on [windows] a
+     * reparse-tagged non-directory file whose real location is where it is listed.
+     */
+    internal fun isPlainFile(
+        path: Path,
+        attrs: BasicFileAttributes,
+        resolvesToItself: (Path) -> Boolean = NoFollowDelete::resolvesToItself,
+        windows: Boolean = IS_WINDOWS,
+    ): Boolean = when {
+        attrs.isSymbolicLink || attrs.isDirectory -> false
+        attrs.isRegularFile -> true
+        attrs.isOther -> windows && safeResolvesToItself(path, resolvesToItself)
+        else -> false
+    }
 
     /** Copies the folder [from] to [to]; any link or special file in it fails the copy. */
     private fun copyTree(from: Path, to: Path) {
@@ -255,13 +295,13 @@ internal object CacheFolders {
             from,
             object : SimpleFileVisitor<Path>() {
                 override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    if (isLink(attrs)) throw IOException("$dir is a link; not copied")
+                    if (isLink(dir, attrs)) throw IOException("$dir is a link; not copied")
                     Files.createDirectories(to.resolve(from.relativize(dir).toString()))
                     return FileVisitResult.CONTINUE
                 }
 
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    if (isLink(attrs) || !attrs.isRegularFile) throw IOException("$file is not a plain file; not copied")
+                    if (!isPlainFile(file, attrs)) throw IOException("$file is not a plain file; not copied")
                     Files.copy(file, to.resolve(from.relativize(file).toString()), StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS)
                     return FileVisitResult.CONTINUE
                 }
@@ -281,13 +321,13 @@ internal object CacheFolders {
                 root,
                 object : SimpleFileVisitor<Path>() {
                     override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
-                        if (!isLink(attrs)) return FileVisitResult.CONTINUE
+                        if (!isLink(dir, attrs)) return FileVisitResult.CONTINUE
                         complete = false
                         return FileVisitResult.SKIP_SUBTREE
                     }
 
                     override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                        if (isLink(attrs) || !delete(file)) complete = false
+                        if (isLink(file, attrs) || !delete(file)) complete = false
                         return FileVisitResult.CONTINUE
                     }
 

@@ -5,10 +5,13 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import zoukan.desktop.testing.FileSystemSandbox
 import java.io.File
+import java.io.IOException
 import java.nio.file.AccessDeniedException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
 
 class CacheFoldersTest {
@@ -335,5 +338,74 @@ class CacheFoldersTest {
         CacheFolders.deleteTree(folder.toPath()) shouldBe false
         File(outside, "keep").readText() shouldBe "keep"
         File(folder, "file").exists() shouldBe false
+    }
+
+    private fun attrs(
+        regular: Boolean = false,
+        directory: Boolean = false,
+        symbolicLink: Boolean = false,
+        other: Boolean = false,
+    ) = object : BasicFileAttributes {
+        override fun lastModifiedTime(): FileTime = FileTime.fromMillis(0)
+        override fun lastAccessTime(): FileTime = FileTime.fromMillis(0)
+        override fun creationTime(): FileTime = FileTime.fromMillis(0)
+        override fun isRegularFile() = regular
+        override fun isDirectory() = directory
+        override fun isSymbolicLink() = symbolicLink
+        override fun isOther() = other
+        override fun size() = 0L
+        override fun fileKey(): Any? = null
+    }
+
+    @Test
+    fun `Windows reparse-tagged directory resolving to itself is not a link, while a junction is a link`() {
+        val path = Paths.get("cache", "browser")
+        val reparseDir = attrs(directory = true, other = true)
+        val plainDir = attrs(directory = true)
+
+        CacheFolders.isLink(path, reparseDir, resolvesToItself = { true }, windows = true) shouldBe false
+        CacheFolders.isPlainFile(path, reparseDir, resolvesToItself = { true }, windows = true) shouldBe false
+
+        CacheFolders.isLink(path, reparseDir, resolvesToItself = { false }, windows = true) shouldBe true
+        CacheFolders.isPlainFile(path, reparseDir, resolvesToItself = { false }, windows = true) shouldBe false
+
+        CacheFolders.isLink(path, plainDir, resolvesToItself = { false }, windows = true) shouldBe false
+        CacheFolders.isPlainFile(path, plainDir, resolvesToItself = { false }, windows = true) shouldBe false
+    }
+
+    @Test
+    fun `Windows reparse-tagged file resolving to itself is a plain file, while a symlink or elsewhere target is a link`() {
+        val path = Paths.get("cache", "Cookies")
+        val reparseFile = attrs(other = true)
+        val regularFile = attrs(regular = true)
+        val symlink = attrs(symbolicLink = true)
+
+        CacheFolders.isLink(path, reparseFile, resolvesToItself = { true }, windows = true) shouldBe false
+        CacheFolders.isPlainFile(path, reparseFile, resolvesToItself = { true }, windows = true) shouldBe true
+
+        CacheFolders.isLink(path, reparseFile, resolvesToItself = { false }, windows = true) shouldBe true
+        CacheFolders.isPlainFile(path, reparseFile, resolvesToItself = { false }, windows = true) shouldBe false
+
+        CacheFolders.isLink(path, symlink, resolvesToItself = { true }, windows = true) shouldBe true
+        CacheFolders.isPlainFile(path, symlink, resolvesToItself = { true }, windows = true) shouldBe false
+
+        CacheFolders.isLink(path, regularFile, resolvesToItself = { false }, windows = true) shouldBe false
+        CacheFolders.isPlainFile(path, regularFile, resolvesToItself = { false }, windows = true) shouldBe true
+    }
+
+    @Test
+    fun `non-Windows other file is a link and IOException from resolvesToItself fails closed`() {
+        val path = Paths.get("cache", "entry")
+        val otherFile = attrs(other = true)
+        val reparseDir = attrs(directory = true, other = true)
+
+        CacheFolders.isLink(path, otherFile, resolvesToItself = { true }, windows = false) shouldBe true
+        CacheFolders.isPlainFile(path, otherFile, resolvesToItself = { true }, windows = false) shouldBe false
+
+        CacheFolders.isLink(path, otherFile, resolvesToItself = { throw IOException("unreadable") }, windows = true) shouldBe true
+        CacheFolders.isPlainFile(path, otherFile, resolvesToItself = { throw IOException("unreadable") }, windows = true) shouldBe false
+
+        CacheFolders.isLink(path, reparseDir, resolvesToItself = { throw IOException("unreadable") }, windows = true) shouldBe true
+        CacheFolders.isPlainFile(path, reparseDir, resolvesToItself = { throw IOException("unreadable") }, windows = true) shouldBe false
     }
 }
