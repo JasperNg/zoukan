@@ -33,55 +33,60 @@ class LibraryGroupingTest {
         entry(4, source = LocalSource.ID, status = SManga.UNKNOWN),
     )
 
-    private fun state(group: Int) = LibraryScreenModel.State(
-        loading = false,
+    private fun input(group: Int) = LibraryViewInput(
         items = items,
-        settings = LibraryScreenModel.Settings(group = group),
+        settings = LibraryScreenModel.Settings(sortPrefs = LibraryScreenModel.SortPrefs(group = group)),
         sources = mapOf(10L to ("Zeta" to "en"), 20L to ("Alpha" to "ja")),
         trackStatuses = mapOf(1L to listOf(TrackStatus.READING), 3L to listOf(TrackStatus.READING, TrackStatus.COMPLETED)),
     )
 
     @Test
     fun `source groups are named after the source, in name order`() {
-        val state = state(LibraryGroup.BY_SOURCE)
-        state.tabs.map { it.name } shouldContainExactly listOf("Alpha", "Local source", "Zeta")
-        state.inCategory(10L).map { it.id } shouldContainExactly listOf(1L, 3L)
+        val inp = input(LibraryGroup.BY_SOURCE)
+        val projected = LibraryViewProjector.project(inp)
+        projected.tabs.map { it.name } shouldContainExactly listOf("Alpha", "Local source", "Zeta")
+        LibraryViewProjector.inCategory(inp.items, 10L, grouped = true, projected.groups).map { it.id } shouldContainExactly listOf(1L, 3L)
         // Local's id is the Default category's, which grouping must not treat as Default
-        state.inCategory(LocalSource.ID).map { it.id } shouldContainExactly listOf(4L)
+        LibraryViewProjector.inCategory(inp.items, LocalSource.ID, grouped = true, projected.groups).map { it.id } shouldContainExactly listOf(4L)
     }
 
     @Test
     fun `status groups follow Komikku's order, unknown last`() {
-        val state = state(LibraryGroup.BY_STATUS)
-        state.tabs.map { it.name } shouldContainExactly listOf("Ongoing", "Completed", "Unknown")
-        state.inCategory(SManga.COMPLETED + 1L).map { it.id } shouldContainExactly listOf(2L, 3L)
+        val inp = input(LibraryGroup.BY_STATUS)
+        val projected = LibraryViewProjector.project(inp)
+        projected.tabs.map { it.name } shouldContainExactly listOf("Ongoing", "Completed", "Unknown")
+        LibraryViewProjector.inCategory(inp.items, SManga.COMPLETED + 1L, grouped = true, projected.groups).map { it.id } shouldContainExactly listOf(2L, 3L)
     }
 
     @Test
     fun `an entry with several tracking statuses is in each, untracked ones in Not tracked`() {
-        val state = state(LibraryGroup.BY_TRACK_STATUS)
-        state.tabs.map { it.id } shouldContainExactly listOf(1L, 5L, 7L)
-        state.inCategory(TrackStatus.READING.int.toLong()).map { it.id } shouldContainExactly listOf(1L, 3L)
-        state.inCategory(TrackStatus.OTHER.int.toLong()).map { it.id } shouldContainExactly listOf(2L, 4L)
+        val inp = input(LibraryGroup.BY_TRACK_STATUS)
+        val projected = LibraryViewProjector.project(inp)
+        projected.tabs.map { it.id } shouldContainExactly listOf(1L, 5L, 7L)
+        LibraryViewProjector.inCategory(inp.items, TrackStatus.READING.int.toLong(), grouped = true, projected.groups).map { it.id } shouldContainExactly listOf(1L, 3L)
+        LibraryViewProjector.inCategory(inp.items, TrackStatus.OTHER.int.toLong(), grouped = true, projected.groups).map { it.id } shouldContainExactly listOf(2L, 4L)
     }
 
     @Test
     fun `group tab updates follow the library dynamic category updates setting`() {
-        val bySource = state(LibraryGroup.BY_SOURCE)
-        bySource.groupUpdateIds(10L, GroupLibraryMode.GLOBAL) shouldBe null
-        bySource.groupUpdateIds(10L, GroupLibraryMode.ALL_BUT_UNGROUPED) shouldBe setOf(1L, 3L)
-        bySource.groupUpdateIds(10L, GroupLibraryMode.ALL) shouldBe setOf(1L, 3L)
+        val bySource = input(LibraryGroup.BY_SOURCE)
+        val bySourceGroups = LibraryViewProjector.project(bySource).groups
+        LibraryViewProjector.groupUpdateIds(bySource, 10L, GroupLibraryMode.GLOBAL, bySourceGroups) shouldBe null
+        LibraryViewProjector.groupUpdateIds(bySource, 10L, GroupLibraryMode.ALL_BUT_UNGROUPED, bySourceGroups) shouldBe setOf(1L, 3L)
+        LibraryViewProjector.groupUpdateIds(bySource, 10L, GroupLibraryMode.ALL, bySourceGroups) shouldBe setOf(1L, 3L)
 
-        val ungrouped = state(LibraryGroup.UNGROUPED)
-        ungrouped.groupUpdateIds(null, GroupLibraryMode.GLOBAL) shouldBe null
-        ungrouped.groupUpdateIds(null, GroupLibraryMode.ALL_BUT_UNGROUPED) shouldBe null
-        ungrouped.groupUpdateIds(null, GroupLibraryMode.ALL) shouldBe setOf(1L, 2L, 3L, 4L)
+        val ungrouped = input(LibraryGroup.UNGROUPED)
+        val ungroupedGroups = LibraryViewProjector.project(ungrouped).groups
+        LibraryViewProjector.groupUpdateIds(ungrouped, null, GroupLibraryMode.GLOBAL, ungroupedGroups) shouldBe null
+        LibraryViewProjector.groupUpdateIds(ungrouped, null, GroupLibraryMode.ALL_BUT_UNGROUPED, ungroupedGroups) shouldBe null
+        LibraryViewProjector.groupUpdateIds(ungrouped, null, GroupLibraryMode.ALL, ungroupedGroups) shouldBe setOf(1L, 2L, 3L, 4L)
     }
 
     @Test
     fun `ungrouped shows only All`() {
-        val state = state(LibraryGroup.UNGROUPED)
-        state.tabs.size shouldBe 0
-        state.inCategory(null).size shouldBe 4
+        val inp = input(LibraryGroup.UNGROUPED)
+        val projected = LibraryViewProjector.project(inp)
+        projected.tabs.size shouldBe 0
+        LibraryViewProjector.inCategory(inp.items, null, grouped = true, projected.groups).size shouldBe 4
     }
 }

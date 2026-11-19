@@ -2,30 +2,28 @@ package zoukan.desktop.ui.library
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.manga.interactor.GetSortTag
 import eu.kanade.domain.manga.interactor.SmartSearchMerge
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
-import eu.kanade.tachiyomi.source.model.SManga
 import exh.md.utils.FollowStatus
 import exh.md.utils.MdUtil
 import exh.source.MERGED_SOURCE_ID
 import exh.source.isEhBasedManga
 import exh.source.mangaDexSourceIds
 import exh.source.nHentaiSourceIds
-import exh.util.isLewd
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -74,12 +72,22 @@ import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
-import java.text.Collator
-import java.util.Locale
 import kotlin.random.Random
 
 /** As Android's AppBar: the library search waits this long after the last key */
 private const val SEARCH_DEBOUNCE_MILLIS = 250L
+
+/** Active modal dialog shown over the library screen; at most one may be active at a time. */
+sealed interface LibraryDialog {
+    data object Settings : LibraryDialog
+    data class Categories(val ids: Set<Long>) : LibraryDialog
+    data class Remove(val ids: Set<Long>) : LibraryDialog
+    data class DeleteDownloads(val ids: Set<Long>) : LibraryDialog
+    data object FavoritesSyncNotes : LibraryDialog
+    data object FavoritesSyncConfirm : LibraryDialog
+    data class Recommendations(val manga: List<Manga>) : LibraryDialog
+    data class RemoveMerged(val mergingMangas: List<Manga>, val mergedMangaId: Long) : LibraryDialog
+}
 
 /**
  * The library, as the Android LibraryScreenModel shows it: the same filters, sorts, display modes
@@ -113,51 +121,109 @@ class LibraryScreenModel(
     private val libraryUpdater: Lazy<LibraryUpdater> = injectLazy(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
-    /** The library preferences that change what is shown. */
-    data class Settings(
-        val display: LibraryDisplayMode = LibraryDisplayMode.default,
+    /** Display layout and tab visibility preferences. */
+    data class DisplayPrefs(
+        val mode: LibraryDisplayMode = LibraryDisplayMode.default,
         val columns: Int = 0,
+        val continueReading: Boolean = false,
+        val categoryTabs: Boolean = true,
+        val itemCounts: Boolean = false,
+        val showHiddenCategories: Boolean = false,
+        val showEmptyCategoriesSearch: Boolean = false,
+    )
+
+    /** Entry cover badge preferences. */
+    data class BadgePrefs(
+        val unread: Boolean = true,
+        val download: Boolean = false,
+        val local: Boolean = true,
+        val language: Boolean = true,
+        val source: Boolean = true,
+        val useLangIcon: Boolean = true,
+    )
+
+    /** Library sorting and grouping preferences. */
+    data class SortPrefs(
         val sort: LibrarySort = LibrarySort.default,
         val randomSeed: Int = 0,
         val categorized: Boolean = false,
+        /** The "Tag sorting" tags (SY), in their order */
+        val sortTags: List<String> = emptyList(),
+        // ZOUKAN -->
+        /** How the tabs split the library: by category, source, status or tracking status (SY) */
+        val group: Int = LibraryGroup.BY_DEFAULT,
+        // ZOUKAN <--
+    )
+
+    /** Category inclusion and exclusion filter preferences (KMK). */
+    data class CategoryFilterPrefs(
+        val enabled: Boolean = false,
+        val included: Set<Long> = emptySet(),
+        val excluded: Set<Long> = emptySet(),
+    )
+
+    /** Library filter preferences across status, custom interval, lewd, categories, and trackers. */
+    data class FilterPrefs(
         val downloaded: TriState = TriState.DISABLED,
         val unread: TriState = TriState.DISABLED,
         val started: TriState = TriState.DISABLED,
         val bookmarked: TriState = TriState.DISABLED,
         val completed: TriState = TriState.DISABLED,
-        val tracking: Map<Long, TriState> = emptyMap(),
-        val unreadBadge: Boolean = true,
-        val downloadBadge: Boolean = false,
-        val localBadge: Boolean = true,
-        val languageBadge: Boolean = true,
-        val sourceBadge: Boolean = true,
-        val continueReading: Boolean = false,
-        val categoryTabs: Boolean = true,
-        val itemCounts: Boolean = false,
-        /** The "Tag sorting" tags (SY), in their order */
-        val sortTags: List<String> = emptyList(),
-        val showEmptyCategoriesSearch: Boolean = false,
-        // ZOUKAN -->
-        /** How the tabs split the library: by category, source, status or tracking status (SY) */
-        val group: Int = LibraryGroup.BY_DEFAULT,
-        // ZOUKAN <--
         // KMK -->
         /** "Customized update frequency": entries with their own update interval */
         val intervalCustom: TriState = TriState.DISABLED,
         /** The interval filter applies only with the "outside the release period" update restriction */
         val skipOutsideReleasePeriod: Boolean = false,
         val lewd: TriState = TriState.DISABLED,
-        val filterCategories: Boolean = false,
-        val includedCategories: Set<Long> = emptySet(),
-        val excludedCategories: Set<Long> = emptySet(),
-        val showHiddenCategories: Boolean = false,
-        val useLangIcon: Boolean = true,
+        val categories: CategoryFilterPrefs = CategoryFilterPrefs(),
         // KMK <--
+        val tracking: Map<Long, TriState> = emptyMap(),
     ) {
         val hasFilter: Boolean
             get() = listOf(downloaded, unread, started, bookmarked, completed, intervalCustom, lewd).any { it != TriState.DISABLED } ||
                 tracking.values.any { it != TriState.DISABLED } ||
-                filterCategories
+                categories.enabled
+    }
+
+    /** The library preferences that change what is shown. */
+    data class Settings(
+        val displayPrefs: DisplayPrefs = DisplayPrefs(),
+        val badgePrefs: BadgePrefs = BadgePrefs(),
+        val sortPrefs: SortPrefs = SortPrefs(),
+        val filterPrefs: FilterPrefs = FilterPrefs(),
+    ) {
+        val display: LibraryDisplayMode get() = displayPrefs.mode
+        val columns: Int get() = displayPrefs.columns
+        val sort: LibrarySort get() = sortPrefs.sort
+        val randomSeed: Int get() = sortPrefs.randomSeed
+        val categorized: Boolean get() = sortPrefs.categorized
+        val downloaded: TriState get() = filterPrefs.downloaded
+        val unread: TriState get() = filterPrefs.unread
+        val started: TriState get() = filterPrefs.started
+        val bookmarked: TriState get() = filterPrefs.bookmarked
+        val completed: TriState get() = filterPrefs.completed
+        val tracking: Map<Long, TriState> get() = filterPrefs.tracking
+        val unreadBadge: Boolean get() = badgePrefs.unread
+        val downloadBadge: Boolean get() = badgePrefs.download
+        val localBadge: Boolean get() = badgePrefs.local
+        val languageBadge: Boolean get() = badgePrefs.language
+        val sourceBadge: Boolean get() = badgePrefs.source
+        val continueReading: Boolean get() = displayPrefs.continueReading
+        val categoryTabs: Boolean get() = displayPrefs.categoryTabs
+        val itemCounts: Boolean get() = displayPrefs.itemCounts
+        val sortTags: List<String> get() = sortPrefs.sortTags
+        val showEmptyCategoriesSearch: Boolean get() = displayPrefs.showEmptyCategoriesSearch
+        val group: Int get() = sortPrefs.group
+        val intervalCustom: TriState get() = filterPrefs.intervalCustom
+        val skipOutsideReleasePeriod: Boolean get() = filterPrefs.skipOutsideReleasePeriod
+        val lewd: TriState get() = filterPrefs.lewd
+        val filterCategories: Boolean get() = filterPrefs.categories.enabled
+        val includedCategories: Set<Long> get() = filterPrefs.categories.included
+        val excludedCategories: Set<Long> get() = filterPrefs.categories.excluded
+        val showHiddenCategories: Boolean get() = displayPrefs.showHiddenCategories
+        val useLangIcon: Boolean get() = badgePrefs.useLangIcon
+
+        val hasFilter: Boolean get() = filterPrefs.hasFilter
 
         /** KMK: filtering by included categories shows the library ungrouped */
         val effectiveGroup: Int
@@ -180,29 +246,6 @@ class LibraryScreenModel(
     ) {
         val id: Long get() = library.id
         val manga: Manga get() = library.manga
-    }
-
-    /**
-     * What a [State] derives from everything but its selection (the shown list, tabs and counts),
-     * shared by its copies. A value is only used for the key it was computed for, so a copy with
-     * other inputs recomputes. All derived [State]s compare equal, so state de-duplication is unchanged.
-     */
-    class Derived {
-        internal class Slot(val key: Any?) {
-            @Volatile var visible: List<Item>? = null
-
-            @Volatile var tabs: List<Category>? = null
-
-            @Volatile var groups: List<Pair<Category, Set<Long>>>? = null
-
-            @Volatile var entryCount: Int? = null
-            val counts = java.util.concurrent.ConcurrentHashMap<Long, Int>()
-        }
-
-        @Volatile internal var slot: Slot = Slot(null)
-
-        override fun equals(other: Any?): Boolean = other is Derived
-        override fun hashCode(): Int = 0
     }
 
     data class State(
@@ -230,127 +273,45 @@ class LibraryScreenModel(
         /** Sources that are not installed */
         val stubSources: Set<Long> = emptySet(),
         // KMK <--
-        /** What is derived from everything but [selection], carried across copies; see [Derived] */
-        val derived: Derived = Derived(),
+        /** Active modal dialog, if any; at most one dialog can be active at a time. */
+        val dialog: LibraryDialog? = null,
+        /** Immutable projected view data computed by [LibraryViewProjector]. */
+        val view: LibraryViewProjection = LibraryViewProjection(),
     ) {
-        /** Everything the shown list, tabs and counts depend on: all of the state except the selection */
-        private data class ViewKey(
-            val items: List<LibraryManga>,
-            val categories: List<Category>,
-            val selectedCategory: Long?,
-            val query: String,
-            val settings: Settings,
-            val tracks: Map<Long, List<Track>>,
-            val downloadCounts: Map<Long, Int>,
-            val sources: Map<Long, Pair<String, String>>,
-            val trackStatuses: Map<Long, List<TrackStatus>>,
-            val searchResults: Set<Long>?,
-            val sourceIcons: Map<Long, String>,
-            val stubSources: Set<Long>,
+        fun viewInput(): LibraryViewInput = LibraryViewInput(
+            items = items,
+            categories = categories,
+            selectedCategory = selectedCategory,
+            query = query,
+            settings = settings,
+            tracks = tracks,
+            downloadCounts = downloadCounts,
+            sources = sources,
+            trackStatuses = trackStatuses,
+            searchResults = searchResults,
+            sourceIcons = sourceIcons,
+            stubSources = stubSources,
         )
 
-        private val viewKey: Any by lazy {
-            ViewKey(items, categories, selectedCategory, query, settings, tracks, downloadCounts, sources, trackStatuses, searchResults, sourceIcons, stubSources)
-        }
+        /** True when [other] has identical view inputs: only selection, loading, or dialog may differ. */
+        fun sameView(other: State): Boolean = viewInput() == other.viewInput()
 
-        /** True when [other] shows the same list: only the selection may differ */
-        fun sameView(other: State): Boolean = viewKey == other.viewKey
-
-        /** The cache for this state's inputs: a selection-only copy reuses it, any other change gets a fresh one */
-        private val slot: Derived.Slot
-            get() {
-                val current = derived.slot
-                if (current.key == viewKey) return current
-                return Derived.Slot(viewKey).also { derived.slot = it }
-            }
-
-        /** Computes the shown list, tabs and counts now, so the UI finds them ready */
-        fun warm(withCounts: Boolean) {
-            visible
-            if (withCounts) {
-                tabs.forEach { countIn(it.id) }
-                countIn(null)
-            }
-        }
-
-        val grouped: Boolean get() = settings.effectiveGroup != LibraryGroup.BY_DEFAULT
-
-        // ZOUKAN -->
-        /**
-         * The tabs when the library is grouped by source, status or tracking status, with the entries
-         * in each, as Android's getGroupedMangaItems. Ungrouped has none, so only All shows.
-         */
-        val groups: List<Pair<Category, Set<Long>>>
-            get() = slot.let { it.groups ?: computeGroups.also { g -> it.groups = g } }
-
-        private val computeGroups: List<Pair<Category, Set<Long>>> by lazy {
-            run {
-                fun tab(id: Long, name: String, order: Long) = Category(id = id, name = name, order = order, flags = 0, hidden = false)
-                when (settings.effectiveGroup) {
-                    LibraryGroup.BY_SOURCE -> items.groupBy { it.manga.source }
-                        .map { (source, list) ->
-                            val name = if (source == LocalSource.ID) localized(MR.strings.action_display_local_badge) else sources[source]?.first?.ifBlank { null } ?: source.toString()
-                            name to (source to list)
-                        }
-                        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.first })
-                        .mapIndexed { i, (name, pair) -> tab(pair.first, name, i.toLong()) to pair.second.mapTo(HashSet()) { it.id } }
-                    LibraryGroup.BY_STATUS -> items.groupBy { it.manga.status }
-                        .map { (status, list) ->
-                            val (name, order) = STATUS_GROUPS[status] ?: (localized(MR.strings.unknown) to 7L)
-                            tab(status + 1, name, order) to list.mapTo(HashSet()) { it.id }
-                        }
-                        .sortedBy { it.first.order }
-                    LibraryGroup.BY_TRACK_STATUS -> {
-                        val members = mutableMapOf<TrackStatus, MutableSet<Long>>()
-                        items.forEach { item ->
-                            trackStatuses[item.id].orEmpty().ifEmpty { listOf(TrackStatus.OTHER) }
-                                .forEach { members.getOrPut(it) { HashSet() }.add(item.id) }
-                        }
-                        members.entries.sortedBy { it.key.ordinal }
-                            .map { (status, ids) -> tab(status.int.toLong(), localized(status.res), status.ordinal.toLong()) to ids }
-                    }
-                    else -> emptyList()
-                }
-            }
-        }
-        // ZOUKAN <--
-
-        /**
-         * Category tabs: the user's categories, plus Default when entries have no category. While
-         * searching or filtering, categories with no match are left out unless "Show empty
-         * categories during search/filtering" is on, as Android's (KMK).
-         */
-        val tabs: List<Category>
-            get() = slot.let { it.tabs ?: computeTabs.also { t -> it.tabs = t } }
-
-        private val computeTabs: List<Category> by lazy {
-            run {
-                // ZOUKAN -->
-                if (grouped) return@run groups.map { it.first }
-                // ZOUKAN <--
-                val hasUncategorized = items.any { it.categories.isEmpty() || Category.UNCATEGORIZED_ID in it.categories }
-                // KMK: hidden categories show with "Show hidden categories"
-                val shown = categories.filter { (settings.showHiddenCategories || !it.hidden) && (!it.isSystemCategory || hasUncategorized) }
-                val searching = query.isNotBlank() || settings.hasFilter
-                if (!searching || settings.showEmptyCategoriesSearch) return@run shown
-                shown.filter { countIn(it.id) > 0 }
-            }
-        }
-
-        /** How many distinct entries the library holds, for the header */
-        val entryCount: Int
-            get() = slot.let { it.entryCount ?: items.distinctBy { i -> i.id }.size.also { n -> it.entryCount = n } }
+        val grouped: Boolean get() = LibraryViewProjector.isGrouped(settings)
+        val groups: List<Pair<Category, Set<Long>>> get() = view.groups
+        val tabs: List<Category> get() = view.tabs
+        val entryCount: Int get() = view.entryCount
+        val visible: List<Item> get() = view.visible
 
         /**
          * Whether the selection bar shows Download: as Android's LibraryTab, only when no selected
          * entry is from the local source, whose chapters are files already and cannot be downloaded.
          */
         val selectionCanDownload: Boolean
-            get() = selection.isNotEmpty() && items.none { it.id in selection && it.manga.source == LocalSource.ID }
+            get() = LibraryViewProjector.selectionCanDownload(items, selection)
 
         /** Whether a selected entry is not from the local source, so Delete downloads can delete something */
         val selectionHasRemote: Boolean
-            get() = items.any { it.id in selection && it.manga.source != LocalSource.ID }
+            get() = LibraryViewProjector.selectionHasRemote(items, selection)
 
         val selectedCategoryModel: Category? get() = categories.firstOrNull { it.id == selectedCategory }.takeIf { !grouped }
 
@@ -358,26 +319,7 @@ class LibraryScreenModel(
         val sort: LibrarySort
             get() = selectedCategoryModel?.takeIf { settings.categorized }?.sort ?: settings.sort
 
-        fun inCategory(category: Long?): List<LibraryManga> = when {
-            category == null -> items
-            // ZOUKAN -->
-            grouped -> groups.firstOrNull { it.first.id == category }?.second
-                .orEmpty().let { ids -> items.filter { it.id in ids } }
-            // ZOUKAN <--
-            category == Category.UNCATEGORIZED_ID -> items.filter { it.categories.isEmpty() || category in it.categories }
-            else -> items.filter { category in it.categories }
-        }.distinctBy { it.id }
-
-        // Counts are kept per view, not per state, so a selection change does not recount; nothing is
-        // locked while counting, so the UI never waits for the background warm-up
-        fun countIn(category: Long?): Int {
-            val slot = slot
-            val key = category ?: Long.MIN_VALUE
-            slot.counts[key]?.let { return it }
-            val count = inCategory(category).count { passes(it) }
-            slot.counts[key] = count
-            return count
-        }
+        fun countIn(category: Long?): Int = view.countIn(category)
 
         // ZOUKAN -->
         /**
@@ -386,132 +328,46 @@ class LibraryScreenModel(
          * library update categories), or the ids of the tab's entries; the whole library when
          * ungrouped.
          */
-        fun groupUpdateIds(category: Long?, mode: GroupLibraryMode): Set<Long>? {
-            val group = settings.effectiveGroup
-            val global = mode == GroupLibraryMode.GLOBAL ||
-                (mode == GroupLibraryMode.ALL_BUT_UNGROUPED && group == LibraryGroup.UNGROUPED)
-            return when {
-                global -> null
-                group == LibraryGroup.UNGROUPED -> inCategory(null).mapTo(HashSet()) { it.id }
-                category == null -> null
-                else -> inCategory(category).mapTo(HashSet()) { it.id }
-            }
-        }
+        fun groupUpdateIds(category: Long?, mode: GroupLibraryMode): Set<Long>? =
+            LibraryViewProjector.groupUpdateIds(viewInput(), category, mode, view.groups)
         // ZOUKAN <--
-
-        private fun TriState.test(value: Boolean): Boolean = when (this) {
-            TriState.DISABLED -> true
-            TriState.ENABLED_IS -> value
-            TriState.ENABLED_NOT -> !value
-        }
-
-        fun passes(item: LibraryManga): Boolean {
-            val s = settings
-            // SY: the search runs in the background; until its first result, nothing is hidden
-            if (query.isNotBlank() && searchResults != null && item.id !in searchResults) return false
-            val isLocal = item.manga.source == LocalSource.ID
-            if (!s.downloaded.test(isLocal || (downloadCounts[item.id] ?: 0) > 0)) return false
-            if (!s.unread.test(item.unreadCount > 0)) return false
-            if (!s.started.test(item.hasStarted)) return false
-            if (!s.bookmarked.test(item.hasBookmarks)) return false
-            if (!s.completed.test(item.manga.status.toInt() == eu.kanade.tachiyomi.source.model.SManga.COMPLETED)) return false
-            // KMK -->
-            if (s.skipOutsideReleasePeriod && !s.intervalCustom.test(item.manga.fetchInterval < 0)) return false
-            if (s.lewd != TriState.DISABLED && !s.lewd.test(item.manga.isLewd())) return false
-            return passesTracking(item) && passesCategories(item)
-        }
-
-        /** The included and excluded trackers, read from the settings once per state */
-        private val trackFilters by lazy {
-            settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_IS) it.key else null } to
-                settings.tracking.mapNotNull { if (it.value == TriState.ENABLED_NOT) it.key else null }
-        }
-
-        /** KMK's tracking filter: no excluded tracker, and one of the included ones if any */
-        private fun passesTracking(item: LibraryManga): Boolean {
-            val (includedTracks, excludedTracks) = trackFilters
-            if (includedTracks.isEmpty() && excludedTracks.isEmpty()) return true
-            val mangaTracks = tracks[item.id].orEmpty()
-            val isExcluded = excludedTracks.isNotEmpty() && mangaTracks.any { it.trackerId in excludedTracks }
-            val isIncluded = includedTracks.isEmpty() || mangaTracks.any { it.trackerId in includedTracks }
-            return !isExcluded && isIncluded
-        }
-
-        /** KMK's category filter: in every included category and in no excluded one */
-        private fun passesCategories(item: LibraryManga): Boolean {
-            if (!settings.filterCategories) return true
-            val mangaCategories = item.categories.filterNot { it == 0L }.toSet()
-            if (mangaCategories.isEmpty()) return settings.includedCategories.isEmpty()
-            val isExcluded = settings.excludedCategories.any { it in mangaCategories }
-            val isIncluded = settings.includedCategories.isEmpty() || settings.includedCategories.all { it in mangaCategories }
-            return !isExcluded && isIncluded
-        }
-        // KMK <--
-
-        // Computed once per view (everything but the selection), so neither a recomposition nor a selection change refilters or resorts
-        val visible: List<Item>
-            get() = slot.let { it.visible ?: computeVisible.also { v -> it.visible = v } }
-
-        private val computeVisible: List<Item> by lazy {
-            run {
-                val filtered = inCategory(selectedCategory).filter(::passes)
-                sorted(filtered).map { lm ->
-                    val (name, lang) = sources[lm.manga.source] ?: ("" to "")
-                    Item(
-                        lm,
-                        downloadCounts[lm.id] ?: 0,
-                        name,
-                        lang,
-                        lm.manga.source == LocalSource.ID,
-                        sourceIconUrl = sourceIcons[lm.manga.source],
-                        isStubSource = lm.manga.source in stubSources,
-                    )
-                }
-            }
-        }
-
-        private fun sorted(list: List<LibraryManga>): List<LibraryManga> {
-            val sort = sort
-            if (sort.type == LibrarySort.Type.Random) return list.shuffled(Random(settings.randomSeed))
-            val collator = Collator.getInstance(Locale.getDefault()).apply { strength = Collator.PRIMARY }
-            val byTitle = Comparator<LibraryManga> { a, b -> collator.compare(a.manga.title, b.manga.title) }
-            val comparator: Comparator<LibraryManga> = when (sort.type) {
-                LibrarySort.Type.LastRead -> compareBy { it.lastRead }
-                LibrarySort.Type.LastUpdate -> compareBy { it.manga.lastUpdate }
-                LibrarySort.Type.UnreadCount -> Comparator { a, b ->
-                    when {
-                        a.unreadCount == b.unreadCount -> 0
-                        // Unread entries first, either way
-                        a.unreadCount == 0L -> if (sort.isAscending) 1 else -1
-                        b.unreadCount == 0L -> if (sort.isAscending) -1 else 1
-                        else -> a.unreadCount.compareTo(b.unreadCount)
-                    }
-                }
-                LibrarySort.Type.TotalChapters -> compareBy { it.totalChapters }
-                LibrarySort.Type.LatestChapter -> compareBy { it.latestUpload }
-                LibrarySort.Type.ChapterFetchDate -> compareBy { it.chapterFetchedAt }
-                LibrarySort.Type.DateAdded -> compareBy { it.manga.dateAdded }
-                LibrarySort.Type.TrackerMean -> compareBy { meanScore(it.id) }
-                // SY's tag sorting: by the first sort tag the entry has; entries without one first
-                LibrarySort.Type.TagList -> compareBy { item ->
-                    val genres = item.manga.genre.orEmpty()
-                    settings.sortTags.indexOfFirst { it in genres }
-                }
-                else -> byTitle
-            }
-            return list.sortedWith((if (sort.isAscending) comparator else comparator.reversed()).thenComparing(byTitle))
-        }
-
-        private fun meanScore(id: Long): Double =
-            tracks[id].orEmpty().filter { it.score > 0 }.map { it.score }.average().takeUnless { it.isNaN() } ?: -1.0
     }
 
+    private val loadingFlow = MutableStateFlow(true)
+    private val viewInputs = MutableStateFlow(LibraryViewInput())
+
     init {
-        // Filter and sort in the background whenever the inputs change, so the UI finds the list ready
+        // Project the library view on a background thread whenever inputs change, keeping selection/dialog updates fast
         screenModelScope.launch(Dispatchers.Default) {
-            mutableState.distinctUntilChanged { a, b -> a.sameView(b) }.collectLatest { s ->
-                s.warm(withCounts = s.settings.itemCounts)
-            }
+            combine(loadingFlow, viewInputs) { isLoading, input -> isLoading to input }
+                .distinctUntilChanged()
+                .collectLatest { (isLoading, input) ->
+                    val projected = LibraryViewProjector.project(input, withCounts = input.settings.itemCounts)
+                    mutableState.update { current ->
+                        val nextSelection = if (input.items === current.items) {
+                            current.selection
+                        } else {
+                            val ids = input.items.mapTo(HashSet()) { it.id }
+                            current.selection.filterTo(HashSet()) { id -> id in ids }
+                        }
+                        current.copy(
+                            loading = isLoading,
+                            items = input.items,
+                            categories = input.categories,
+                            selectedCategory = input.selectedCategory,
+                            settings = input.settings,
+                            tracks = input.tracks,
+                            downloadCounts = input.downloadCounts,
+                            sources = input.sources,
+                            trackStatuses = input.trackStatuses,
+                            searchResults = input.searchResults,
+                            sourceIcons = input.sourceIcons,
+                            stubSources = input.stubSources,
+                            selection = nextSelection,
+                            view = projected,
+                        )
+                    }
+                }
         }
         screenModelScope.launch {
             // Download counts come from the same items they describe, so the two always match
@@ -522,17 +378,14 @@ class LibraryScreenModel(
                     val counts = withContext(Dispatchers.IO) { downloadCounts(items) }
                     val sourceModels = items.map { it.manga.source }.distinct().associateWith { sourceManager.getOrStub(it) }
                     val sources = sourceModels.mapValues { (_, source) -> source.name to source.lang }
-                    val ids = items.mapTo(HashSet()) { it.id }
-                    mutableState.update {
+                    loadingFlow.value = false
+                    viewInputs.update {
                         it.copy(
-                            loading = false,
                             items = items,
                             categories = categories,
                             downloadCounts = counts,
                             sources = sources,
                             stubSources = sourceModels.filterValues { source -> source is StubSource }.keys,
-                            // Entries that left the library leave the selection too
-                            selection = it.selection.filterTo(HashSet()) { id -> id in ids },
                         )
                     }
                 }
@@ -543,13 +396,13 @@ class LibraryScreenModel(
                 val statuses = tracks.mapValues { (_, list) ->
                     list.mapNotNull { TrackStatus.parseTrackerStatus(trackerManager, it.trackerId, it.status) }.distinct()
                 }
-                mutableState.update { it.copy(tracks = tracks, trackStatuses = statuses) }
+                viewInputs.update { it.copy(tracks = tracks, trackStatuses = statuses) }
                 // ZOUKAN <--
             }
         }
         screenModelScope.launch {
             settingsFlow().collect { settings ->
-                mutableState.update {
+                viewInputs.update {
                     // A new grouping has other tabs, so it starts from All
                     val tab = if (settings.effectiveGroup != it.settings.effectiveGroup) null else it.selectedCategory
                     it.copy(settings = settings, selectedCategory = tab)
@@ -560,12 +413,12 @@ class LibraryScreenModel(
         screenModelScope.launch {
             combine(
                 state.map { it.query }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MILLIS),
-                state.map { it.items }.distinctUntilChanged(),
-                state.map { it.tracks }.distinctUntilChanged(),
+                viewInputs.map { it.items }.distinctUntilChanged(),
+                viewInputs.map { it.tracks }.distinctUntilChanged(),
                 ::Triple,
             ).collectLatest { (query, items, tracks) ->
                 val results = if (query.isBlank()) null else withContext(Dispatchers.IO) { librarySearch.search(items, query, tracks) }
-                mutableState.update { it.copy(searchResults = results) }
+                viewInputs.update { it.copy(searchResults = results) }
             }
         }
         // SY <--
@@ -577,7 +430,7 @@ class LibraryScreenModel(
                     val icon = available[extension.pkgName]?.iconUrl ?: return@flatMap emptyList()
                     extension.sources.map { it.id to icon }
                 }.toMap()
-            }.collect { icons -> mutableState.update { it.copy(sourceIcons = icons) } }
+            }.collect { icons -> viewInputs.update { it.copy(sourceIcons = icons) } }
         }
         // KMK <--
     }
@@ -588,92 +441,166 @@ class LibraryScreenModel(
     /** The trackers the library can filter by: the ones signed in. */
     fun trackers() = trackerManager.loggedInTrackers()
 
-    private fun settingsFlow(): Flow<Settings> {
+    private fun settingsFlow(): Flow<Settings> =
+        combine(
+            displayPrefsFlow(),
+            badgePrefsFlow(),
+            sortPrefsFlow(),
+            filterPrefsFlow(),
+            ::Settings,
+        )
+
+    private fun displayPrefsFlow(): Flow<DisplayPrefs> {
         val p = preferences
-        // KMK -->
-        val extra = combine(
-            listOf<Flow<Any>>(
-                p.filterIntervalCustom().changes(),
-                p.autoUpdateMangaRestrictions().changes(),
-                p.filterLewd().changes(),
-                p.filterCategories().changes(),
-                p.filterCategoriesInclude().changes(),
-                p.filterCategoriesExclude().changes(),
-                p.showHiddenCategories().changes(),
-                p.useLangIcon().changes(),
-            ),
-        ) { v ->
-            { s: Settings ->
-                s.copy(
-                    intervalCustom = v[0] as TriState,
-                    skipOutsideReleasePeriod = LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in (v[1] as Set<*>),
-                    lewd = v[2] as TriState,
-                    filterCategories = v[3] as Boolean,
-                    includedCategories = (v[4] as Set<*>).mapNotNull { (it as String).toLongOrNull() }.toSet(),
-                    excludedCategories = (v[5] as Set<*>).mapNotNull { (it as String).toLongOrNull() }.toSet(),
-                    showHiddenCategories = v[6] as Boolean,
-                    useLangIcon = v[7] as Boolean,
-                )
-            }
+        val layoutFlow = combine(
+            p.displayMode().changes(),
+            p.landscapeColumns().changes(),
+            p.showContinueReadingButton().changes(),
+            p.categoryTabs().changes(),
+            p.categoryNumberOfItems().changes(),
+        ) { mode, columns, continueReading, categoryTabs, itemCounts ->
+            DisplayPrefs(
+                mode = mode,
+                columns = columns,
+                continueReading = continueReading,
+                categoryTabs = categoryTabs,
+                itemCounts = itemCounts,
+            )
         }
-        return combine(baseSettingsFlow(), extra) { settings, apply -> apply(settings) }
-        // KMK <--
+        return combine(
+            layoutFlow,
+            p.showHiddenCategories().changes(),
+            p.showEmptyCategoriesSearch().changes(),
+        ) { base, showHidden, showEmptySearch ->
+            base.copy(
+                showHiddenCategories = showHidden,
+                showEmptyCategoriesSearch = showEmptySearch,
+            )
+        }
+    }
+
+    private fun badgePrefsFlow(): Flow<BadgePrefs> {
+        val p = preferences
+        val coreBadgesFlow = combine(
+            p.unreadBadge().changes(),
+            p.downloadBadge().changes(),
+            p.localBadge().changes(),
+            p.languageBadge().changes(),
+            p.sourceBadge().changes(),
+        ) { unread, download, local, language, source ->
+            BadgePrefs(
+                unread = unread,
+                download = download,
+                local = local,
+                language = language,
+                source = source,
+            )
+        }
+        return combine(coreBadgesFlow, p.useLangIcon().changes()) { base, useLangIcon ->
+            base.copy(useLangIcon = useLangIcon)
+        }
+    }
+
+    private fun sortPrefsFlow(): Flow<SortPrefs> {
+        val p = preferences
+        return combine(
+            p.sortingMode().changes(),
+            p.randomSortSeed().changes(),
+            p.categorizedDisplaySettings().changes(),
+            p.sortTagsForLibrary().changes().map { GetSortTag.mapSortTags(it) },
+            p.groupLibraryBy().changes(),
+            ::SortPrefs,
+        )
+    }
+
+    private fun categoryFilterPrefsFlow(): Flow<CategoryFilterPrefs> {
+        val p = preferences
+        return combine(
+            p.filterCategories().changes(),
+            p.filterCategoriesInclude().changes().map { ids -> ids.mapNotNull { it.toLongOrNull() }.toSet() },
+            p.filterCategoriesExclude().changes().map { ids -> ids.mapNotNull { it.toLongOrNull() }.toSet() },
+            ::CategoryFilterPrefs,
+        )
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun baseSettingsFlow(): Flow<Settings> {
+    private fun trackingFiltersFlow(): Flow<Map<Long, TriState>> {
         val p = preferences
         return trackerManager.loggedInTrackersFlow()
             .map { trackers -> trackers.map { it.id } }
             .distinctUntilChanged()
             .flatMapLatest { trackerIds ->
-                val flows: List<Flow<Any>> = listOf(
-                    p.displayMode().changes(), p.landscapeColumns().changes(), p.sortingMode().changes(),
-                    p.randomSortSeed().changes(), p.categorizedDisplaySettings().changes(),
-                    p.filterDownloaded().changes(), p.filterUnread().changes(), p.filterStarted().changes(),
-                    p.filterBookmarked().changes(), p.filterCompleted().changes(),
-                    p.unreadBadge().changes(), p.downloadBadge().changes(), p.localBadge().changes(),
-                    p.languageBadge().changes(), p.sourceBadge().changes(), p.showContinueReadingButton().changes(),
-                    p.categoryTabs().changes(), p.categoryNumberOfItems().changes(),
-                    // ZOUKAN -->
-                    // More > Downloaded only shows only downloaded entries, as Android's library
-                    desktopPreferences.value.downloadedOnly().changes(),
-                    p.groupLibraryBy().changes(),
-                    // ZOUKAN <--
-                    p.sortTagsForLibrary().changes(), p.showEmptyCategoriesSearch().changes(),
-                ) + trackerIds.map { p.filterTracking(it.toInt()).changes() }
-                combine(flows) { v ->
-                    Settings(
-                        display = v[0] as LibraryDisplayMode,
-                        columns = v[1] as Int,
-                        sort = v[2] as LibrarySort,
-                        randomSeed = v[3] as Int,
-                        categorized = v[4] as Boolean,
-                        downloaded = if (v[18] as Boolean) TriState.ENABLED_IS else v[5] as TriState,
-                        unread = v[6] as TriState,
-                        started = v[7] as TriState,
-                        bookmarked = v[8] as TriState,
-                        completed = v[9] as TriState,
-                        unreadBadge = v[10] as Boolean,
-                        downloadBadge = v[11] as Boolean,
-                        localBadge = v[12] as Boolean,
-                        languageBadge = v[13] as Boolean,
-                        sourceBadge = v[14] as Boolean,
-                        continueReading = v[15] as Boolean,
-                        categoryTabs = v[16] as Boolean,
-                        itemCounts = v[17] as Boolean,
-                        group = v[19] as Int,
-                        sortTags = eu.kanade.domain.manga.interactor.GetSortTag.mapSortTags((v[20] as Set<*>).filterIsInstance<String>().toSet()),
-                        showEmptyCategoriesSearch = v[21] as Boolean,
-                        tracking = trackerIds.mapIndexed { i, id -> id to v[22 + i] as TriState }.toMap(),
-                    )
+                if (trackerIds.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    val trackerFlows = trackerIds.map { id ->
+                        p.filterTracking(id.toInt()).changes().map { id to it }
+                    }
+                    combine(trackerFlows) { entries -> entries.toMap() }
                 }
             }
     }
 
-    fun search(query: String) = mutableState.update { it.copy(query = query) }
+    private fun filterPrefsFlow(): Flow<FilterPrefs> {
+        val p = preferences
+        // ZOUKAN -->
+        // More > Downloaded only shows only downloaded entries, as Android's library
+        val downloadedFlow = combine(
+            p.filterDownloaded().changes(),
+            desktopPreferences.value.downloadedOnly().changes(),
+        ) { filter, downloadedOnly ->
+            if (downloadedOnly) TriState.ENABLED_IS else filter
+        }
+        // ZOUKAN <--
+        val statusFiltersFlow = combine(
+            downloadedFlow,
+            p.filterUnread().changes(),
+            p.filterStarted().changes(),
+            p.filterBookmarked().changes(),
+            p.filterCompleted().changes(),
+        ) { downloaded, unread, started, bookmarked, completed ->
+            FilterPrefs(
+                downloaded = downloaded,
+                unread = unread,
+                started = started,
+                bookmarked = bookmarked,
+                completed = completed,
+            )
+        }
+        val extraFiltersFlow = combine(
+            p.filterIntervalCustom().changes(),
+            p.autoUpdateMangaRestrictions().changes().map { LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in it },
+            p.filterLewd().changes(),
+            ::Triple,
+        )
+        return combine(
+            statusFiltersFlow,
+            extraFiltersFlow,
+            categoryFilterPrefsFlow(),
+            trackingFiltersFlow(),
+        ) { base, (intervalCustom, skipOutsideReleasePeriod, lewd), categories, tracking ->
+            base.copy(
+                intervalCustom = intervalCustom,
+                skipOutsideReleasePeriod = skipOutsideReleasePeriod,
+                lewd = lewd,
+                categories = categories,
+                tracking = tracking,
+            )
+        }
+    }
 
-    fun selectCategory(id: Long?) = mutableState.update { it.copy(selectedCategory = id) }
+    fun openDialog(dialog: LibraryDialog) = mutableState.update { it.copy(dialog = dialog) }
+
+    fun dismissDialog() = mutableState.update { it.copy(dialog = null) }
+
+    fun search(query: String) {
+        mutableState.update { it.copy(query = query) }
+        viewInputs.update { it.copy(query = query) }
+    }
+
+    fun selectCategory(id: Long?) {
+        viewInputs.update { it.copy(selectedCategory = id) }
+    }
 
     fun setSort(type: LibrarySort.Type) {
         val current = state.value.sort
@@ -844,29 +771,8 @@ class LibraryScreenModel(
     /** Which of the selection's overflow-menu actions apply, found in one pass over the library. */
     data class SelectionFlags(val cleanTitles: Boolean, val addToMangadex: Boolean, val resetInfo: Boolean)
 
-    fun selectionFlags(state: State = this.state.value): SelectionFlags {
-        var clean = false
-        var mangadex = false
-        var reset = false
-        if (state.selection.isNotEmpty()) {
-            for (item in state.items) {
-                if (item.id !in state.selection) continue
-                val manga = item.manga
-                clean = clean || manga.isEhBasedManga() || manga.source in nHentaiSourceIds
-                mangadex = mangadex || manga.source in mangaDexSourceIds
-                reset = reset ||
-                    manga.title != manga.ogTitle ||
-                    manga.author != manga.ogAuthor ||
-                    manga.artist != manga.ogArtist ||
-                    manga.thumbnailUrl != manga.ogThumbnailUrl ||
-                    manga.description != manga.ogDescription ||
-                    manga.genre != manga.ogGenre ||
-                    manga.status != manga.ogStatus
-                if (clean && mangadex && reset) break
-            }
-        }
-        return SelectionFlags(clean, mangadex, reset)
-    }
+    fun selectionFlags(state: State = this.state.value): SelectionFlags =
+        LibraryViewProjector.selectionFlags(state.items, state.selection)
 
     /** Removes bracketed tags (groups, events, languages) from gallery titles, as custom titles. */
     fun cleanTitles() {
@@ -979,18 +885,6 @@ class LibraryScreenModel(
     }
 
     /**
-     * After a multiple merge: the entries that were merged and the merged entry, for Android's
-     * "remove the merged entries?" prompt; null when nothing asks.
-     */
-    private val _removeMergedPrompt = MutableStateFlow<Pair<List<Manga>, Long>?>(null)
-    val removeMergedPrompt: StateFlow<Pair<List<Manga>, Long>?> = _removeMergedPrompt.asStateFlow()
-
-    /** Closes the "remove the merged entries?" prompt. */
-    fun dismissMergedPrompt() {
-        _removeMergedPrompt.value = null
-    }
-
-    /**
      * Merges [selectedMangas] in the screen model's scope, so leaving the screen doesn't stop the
      * merge partway, then asks whether to remove the merged entries.
      */
@@ -1007,7 +901,7 @@ class LibraryScreenModel(
             }
             if (mergedMangaId != null) {
                 Toasts.show(localized(SYMR.strings.entry_merged))
-                _removeMergedPrompt.value = mergingMangas to mergedMangaId
+                openDialog(LibraryDialog.RemoveMerged(mergingMangas, mergedMangaId))
             } else {
                 Toasts.show(localized(SYMR.strings.merged_references_invalid))
             }
@@ -1030,18 +924,6 @@ class LibraryScreenModel(
     /** A random entry of what is shown, for "Open a random entry". */
     fun randomEntry(): Long? = state.value.visible.randomOrNull()?.id
 }
-
-// ZOUKAN -->
-/** Status tabs' names and order, as Komikku's statusMap */
-private val STATUS_GROUPS: Map<Long, Pair<String, Long>> = mapOf(
-    SManga.ONGOING.toLong() to (localized(MR.strings.ongoing) to 1L),
-    SManga.COMPLETED.toLong() to (localized(MR.strings.completed) to 2L),
-    SManga.PUBLISHING_FINISHED.toLong() to (localized(MR.strings.publishing_finished) to 3L),
-    SManga.LICENSED.toLong() to (localized(MR.strings.licensed) to 4L),
-    SManga.ON_HIATUS.toLong() to (localized(MR.strings.on_hiatus) to 5L),
-    SManga.CANCELLED.toLong() to (localized(MR.strings.cancelled) to 6L),
-)
-// ZOUKAN <--
 
 /** Ctrl/Cmd + click: [selection] with [id] added, or removed when it was selected. */
 internal fun toggledSelection(selection: Set<Long>, id: Long): Set<Long> = if (id in selection) selection - id else selection + id

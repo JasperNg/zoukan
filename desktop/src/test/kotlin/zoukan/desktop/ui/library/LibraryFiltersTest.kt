@@ -38,12 +38,11 @@ class LibraryFiltersTest {
         entry(4, listOf(0L)),
     )
 
-    private fun state(
+    private fun input(
         settings: LibraryScreenModel.Settings,
         tracks: Map<Long, List<Track>> = emptyMap(),
         downloadCounts: Map<Long, Int> = emptyMap(),
-    ) = LibraryScreenModel.State(
-        loading = false,
+    ) = LibraryViewInput(
         items = items,
         categories = listOf(category(0), category(1), category(2, hidden = true)),
         settings = settings,
@@ -51,37 +50,76 @@ class LibraryFiltersTest {
         downloadCounts = downloadCounts,
     )
 
-    private fun LibraryScreenModel.State.shown() = visible.map { it.id }
+    private fun LibraryViewInput.projected() = LibraryViewProjector.project(this)
+    private fun LibraryViewInput.shown() = projected().visible.map { it.id }
 
     @Test
     fun `included categories need all of them, excluded ones none`() {
-        state(LibraryScreenModel.Settings(filterCategories = true, includedCategories = setOf(1L))).shown() shouldContainExactly listOf(1L, 2L)
-        state(LibraryScreenModel.Settings(filterCategories = true, includedCategories = setOf(1L, 2L))).shown() shouldContainExactly listOf(2L)
-        state(LibraryScreenModel.Settings(filterCategories = true, excludedCategories = setOf(2L))).shown() shouldContainExactly listOf(1L, 4L)
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(
+                    categories = LibraryScreenModel.CategoryFilterPrefs(enabled = true, included = setOf(1L)),
+                ),
+            ),
+        ).shown() shouldContainExactly listOf(1L, 2L)
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(
+                    categories = LibraryScreenModel.CategoryFilterPrefs(enabled = true, included = setOf(1L, 2L)),
+                ),
+            ),
+        ).shown() shouldContainExactly listOf(2L)
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(
+                    categories = LibraryScreenModel.CategoryFilterPrefs(enabled = true, excluded = setOf(2L)),
+                ),
+            ),
+        ).shown() shouldContainExactly listOf(1L, 4L)
         // Off, the chosen categories do nothing
-        state(LibraryScreenModel.Settings(includedCategories = setOf(1L))).shown().size shouldBe 4
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(
+                    categories = LibraryScreenModel.CategoryFilterPrefs(included = setOf(1L)),
+                ),
+            ),
+        ).shown().size shouldBe 4
     }
 
     @Test
     fun `including categories shows the library ungrouped`() {
-        val filtered = state(LibraryScreenModel.Settings(filterCategories = true, includedCategories = setOf(1L)))
+        val filtered = input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(
+                    categories = LibraryScreenModel.CategoryFilterPrefs(enabled = true, included = setOf(1L)),
+                ),
+            ),
+        )
         filtered.settings.effectiveGroup shouldBe LibraryGroup.UNGROUPED
-        filtered.tabs.size shouldBe 0
+        filtered.projected().tabs.size shouldBe 0
         filtered.settings.hasFilter shouldBe true
     }
 
     @Test
     fun `hidden categories show with Show hidden categories`() {
-        state(LibraryScreenModel.Settings()).tabs.map { it.id } shouldContainExactly listOf(0L, 1L)
-        state(LibraryScreenModel.Settings(showHiddenCategories = true)).tabs.map { it.id } shouldContainExactly listOf(0L, 1L, 2L)
+        input(LibraryScreenModel.Settings()).projected().tabs.map { it.id } shouldContainExactly listOf(0L, 1L)
+        input(
+            LibraryScreenModel.Settings(
+                displayPrefs = LibraryScreenModel.DisplayPrefs(showHiddenCategories = true),
+            ),
+        ).projected().tabs.map { it.id } shouldContainExactly listOf(0L, 1L, 2L)
     }
 
     @Test
     fun `customized update frequency applies with the release period restriction`() {
-        val only = LibraryScreenModel.Settings(intervalCustom = TriState.ENABLED_IS)
-        state(only).shown().size shouldBe 4
-        state(only.copy(skipOutsideReleasePeriod = true)).shown() shouldContainExactly listOf(3L)
-        state(only.copy(intervalCustom = TriState.ENABLED_NOT, skipOutsideReleasePeriod = true)).shown() shouldContainExactly listOf(1L, 2L, 4L)
+        val only = LibraryScreenModel.FilterPrefs(intervalCustom = TriState.ENABLED_IS)
+        input(LibraryScreenModel.Settings(filterPrefs = only)).shown().size shouldBe 4
+        input(LibraryScreenModel.Settings(filterPrefs = only.copy(skipOutsideReleasePeriod = true))).shown() shouldContainExactly listOf(3L)
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = only.copy(intervalCustom = TriState.ENABLED_NOT, skipOutsideReleasePeriod = true),
+            ),
+        ).shown() shouldContainExactly listOf(1L, 2L, 4L)
     }
 
     @Test
@@ -91,15 +129,19 @@ class LibraryFiltersTest {
             lastChapterRead = 0.0, totalChapters = 0, status = 0, score = 0.0, remoteUrl = "", startDate = 0, finishDate = 0, private = false,
         )
         val tracks = mapOf(1L to listOf(track(1, 1)), 2L to listOf(track(2, 2)), 3L to listOf(track(3, 1), track(3, 2)))
-        val both = LibraryScreenModel.Settings(tracking = mapOf(1L to TriState.ENABLED_IS, 2L to TriState.ENABLED_IS))
-        state(both, tracks).shown() shouldContainExactly listOf(1L, 2L, 3L)
-        val notTwo = LibraryScreenModel.Settings(tracking = mapOf(1L to TriState.ENABLED_IS, 2L to TriState.ENABLED_NOT))
-        state(notTwo, tracks).shown() shouldContainExactly listOf(1L)
+        val both = LibraryScreenModel.Settings(
+            filterPrefs = LibraryScreenModel.FilterPrefs(tracking = mapOf(1L to TriState.ENABLED_IS, 2L to TriState.ENABLED_IS)),
+        )
+        input(both, tracks).shown() shouldContainExactly listOf(1L, 2L, 3L)
+        val notTwo = LibraryScreenModel.Settings(
+            filterPrefs = LibraryScreenModel.FilterPrefs(tracking = mapOf(1L to TriState.ENABLED_IS, 2L to TriState.ENABLED_NOT)),
+        )
+        input(notTwo, tracks).shown() shouldContainExactly listOf(1L)
     }
 
     @Test
     fun `search results narrow the library once they arrive`() {
-        val searching = state(LibraryScreenModel.Settings()).copy(query = "x")
+        val searching = input(LibraryScreenModel.Settings()).copy(query = "x")
         searching.shown().size shouldBe 4
         searching.copy(searchResults = setOf(2L)).shown() shouldContainExactly listOf(2L)
     }
@@ -107,10 +149,18 @@ class LibraryFiltersTest {
     @Test
     fun `downloaded filter keeps only downloaded entries and restores all when disabled`() {
         val counts = mapOf(2L to 1, 4L to 0)
-        state(LibraryScreenModel.Settings(downloaded = TriState.ENABLED_IS), downloadCounts = counts)
-            .shown() shouldContainExactly listOf(2L)
-        state(LibraryScreenModel.Settings(downloaded = TriState.DISABLED), downloadCounts = counts)
-            .shown() shouldContainExactly listOf(1L, 2L, 3L, 4L)
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(downloaded = TriState.ENABLED_IS),
+            ),
+            downloadCounts = counts,
+        ).shown() shouldContainExactly listOf(2L)
+        input(
+            LibraryScreenModel.Settings(
+                filterPrefs = LibraryScreenModel.FilterPrefs(downloaded = TriState.DISABLED),
+            ),
+            downloadCounts = counts,
+        ).shown() shouldContainExactly listOf(1L, 2L, 3L, 4L)
     }
 
     @Test

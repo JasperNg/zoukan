@@ -102,6 +102,3 @@ fun SyncFavoritesConfirmDialog(onDismiss: () -> Unit) {
 
 private val FAVORITES_SYNC_NOTES get() =
     localized(DMR.strings.favorites_sync_notes)
-
-/** Which favorites sync dialog shows: the one-time notes, as Android, or the confirmation. */
-enum class FavoritesSyncDialog { Notes, Confirm }

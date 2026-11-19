@@ -60,7 +60,6 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -111,25 +110,11 @@ fun LibraryTab(model: LibraryScreenModel) {
     val navigator = LocalNavigator.currentOrThrow
     val home = LocalHomeController.current
     val scope = rememberCoroutineScope()
-    var settingsDialog by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     // ZOUKAN -->
-    var favoritesSyncDialog by remember { mutableStateOf<FavoritesSyncDialog?>(null) }
     val showSyncFavorites = LibrarySync.showFavorites()
     val showSyncLibrary = LibrarySync.showLibrary()
     // ZOUKAN <--
-    // The entries a categories or remove dialog is for: the selection, or one entry's context menu
-    var categoryDialog by remember { mutableStateOf<Set<Long>?>(null) }
-    var removeDialog by remember { mutableStateOf<Set<Long>?>(null) }
-    // ZOUKAN -->
-    var deleteDownloadsDialog by remember { mutableStateOf<Set<Long>?>(null) }
-    // ZOUKAN <--
-    // SY -->
-    var recommendationDialog by remember { mutableStateOf<List<Manga>?>(null) }
-    // SY <--
-    // KMK -->
-    val removeMerged by model.removeMergedPrompt.collectAsState()
-    // KMK <--
     val settings = state.settings
     // The overflow-menu flags, found once per selection instead of on every recomposition
     val selectionFlags by remember(state.selection, state.items) { derivedStateOf { model.selectionFlags(state) } }
@@ -153,10 +138,10 @@ fun LibraryTab(model: LibraryScreenModel) {
             LibrarySelectionBar(
                 model,
                 count = state.selection.size,
-                onCategories = { categoryDialog = state.selection },
-                onRemove = { removeDialog = state.selection },
+                onCategories = { model.openDialog(LibraryDialog.Categories(state.selection)) },
+                onRemove = { model.openDialog(LibraryDialog.Remove(state.selection)) },
                 // ZOUKAN -->
-                onDeleteDownloads = { deleteDownloadsDialog = state.selection }.takeIf { hasRemote },
+                onDeleteDownloads = { model.openDialog(LibraryDialog.DeleteDownloads(state.selection)) }.takeIf { hasRemote },
                 // ZOUKAN <--
                 showDownload = canDownload,
                 // ZOUKAN -->
@@ -192,7 +177,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                 // KMK <--
                 // SY -->
                 onCleanTitles = model::cleanTitles.takeIf { selectionFlags.cleanTitles },
-                onCollectRecommendations = { recommendationDialog = model.selectedManga() }.takeIf { state.selection.size > 1 },
+                onCollectRecommendations = { model.openDialog(LibraryDialog.Recommendations(model.selectedManga())) }.takeIf { state.selection.size > 1 },
                 onAddToMangaDex = model::syncMangaToDex.takeIf { selectionFlags.addToMangadex },
                 onResetInfo = model::resetInfo.takeIf { selectionFlags.resetInfo },
                 // SY <--
@@ -207,7 +192,7 @@ fun LibraryTab(model: LibraryScreenModel) {
                 TooltipIconButton(
                     Icons.Outlined.FilterList,
                     if (settings.hasFilter) localized(DMR.strings.filter_sort_and_display_filtered) else localized(DMR.strings.filter_sort_and_display),
-                    onClick = { settingsDialog = true },
+                    onClick = { model.openDialog(LibraryDialog.Settings) },
                 )
                 DownloadsButton()
                 // ZOUKAN -->
@@ -257,7 +242,9 @@ fun LibraryTab(model: LibraryScreenModel) {
                                 text = { Text(localized(SYMR.strings.sync_favorites)) },
                                 onClick = {
                                     moreMenu = false
-                                    favoritesSyncDialog = if (LibrarySync.showsNotes()) FavoritesSyncDialog.Notes else FavoritesSyncDialog.Confirm
+                                    model.openDialog(
+                                        if (LibrarySync.showsNotes()) LibraryDialog.FavoritesSyncNotes else LibraryDialog.FavoritesSyncConfirm,
+                                    )
                                 },
                             )
                         }
@@ -347,9 +334,9 @@ fun LibraryTab(model: LibraryScreenModel) {
                                 if (chapter != null) navigator.push(ReaderScreen(item.id, chapter.id)) else Toasts.show(localized(DMR.strings.no_unread_chapters))
                             }
                         },
-                        onCategories = { categoryDialog = ids },
-                        onRemove = { removeDialog = ids },
-                        onDeleteDownloads = { deleteDownloadsDialog = ids },
+                        onCategories = { model.openDialog(LibraryDialog.Categories(ids)) },
+                        onRemove = { model.openDialog(LibraryDialog.Remove(ids)) },
+                        onDeleteDownloads = { model.openDialog(LibraryDialog.DeleteDownloads(ids)) },
                         onMigrate = {
                             val ordered = state.visible.map { it.id }.filter { it in ids }.ifEmpty { ids.toList() }
                             if (ids == state.selection) model.clearSelection()
@@ -361,62 +348,50 @@ fun LibraryTab(model: LibraryScreenModel) {
         }
     }
 
-    if (settingsDialog) LibrarySettingsDialog(model) { settingsDialog = false }
-    categoryDialog?.let { ids ->
-        CategoriesDialog(model, ids, state.categories.filter { !it.isSystemCategory }) { categoryDialog = null }
-    }
-    removeDialog?.let { ids ->
-        RemoveDialog(ids.size, onConfirm = { model.removeFromLibrary(it, ids) }) { removeDialog = null }
-    }
-    // ZOUKAN -->
-    deleteDownloadsDialog?.let { ids ->
-        LibraryDeleteDownloadsDialog(
-            ids.size,
-            onConfirm = { model.deleteDownloads(ids) },
-            onDismiss = { deleteDownloadsDialog = null },
+    when (val dialog = state.dialog) {
+        null -> Unit
+        LibraryDialog.Settings -> LibrarySettingsDialog(model) { model.dismissDialog() }
+        is LibraryDialog.Categories -> CategoriesDialog(model, dialog.ids, state.categories.filter { !it.isSystemCategory }) { model.dismissDialog() }
+        is LibraryDialog.Remove -> RemoveDialog(dialog.ids.size, onConfirm = { model.removeFromLibrary(it, dialog.ids) }) { model.dismissDialog() }
+        // ZOUKAN -->
+        is LibraryDialog.DeleteDownloads -> LibraryDeleteDownloadsDialog(
+            dialog.ids.size,
+            onConfirm = { model.deleteDownloads(dialog.ids) },
+            onDismiss = { model.dismissDialog() },
         )
-    }
-    // ZOUKAN <--
-    // ZOUKAN -->
-    when (favoritesSyncDialog) {
-        FavoritesSyncDialog.Notes -> SyncFavoritesNotesDialog(
-            onDismiss = { favoritesSyncDialog = null },
-            onAccept = { favoritesSyncDialog = null },
+        LibraryDialog.FavoritesSyncNotes -> SyncFavoritesNotesDialog(
+            onDismiss = { model.dismissDialog() },
+            onAccept = { model.dismissDialog() },
         )
-        FavoritesSyncDialog.Confirm -> SyncFavoritesConfirmDialog { favoritesSyncDialog = null }
-        null -> {}
-    }
-    // ZOUKAN <--
-
-    // KMK -->
-    removeMerged?.let { (mergingMangas, mergedMangaId) ->
-        val close = { remove: Boolean ->
-            if (remove) model.removeMangas(mergingMangas)
-            model.dismissMergedPrompt()
-            navigator.push(MangaScreen(mergedMangaId))
+        LibraryDialog.FavoritesSyncConfirm -> SyncFavoritesConfirmDialog { model.dismissDialog() }
+        // ZOUKAN <--
+        // KMK -->
+        is LibraryDialog.RemoveMerged -> {
+            val close = { remove: Boolean ->
+                if (remove) model.removeMangas(dialog.mergingMangas)
+                model.dismissDialog()
+                navigator.push(MangaScreen(dialog.mergedMangaId))
+            }
+            AlertDialog(
+                onDismissRequest = { close(false) },
+                text = { Text(localized(KMR.strings.action_remove_merged)) },
+                confirmButton = { TextButton(onClick = { close(true) }) { Text(localized(MR.strings.action_remove)) } },
+                dismissButton = { TextButton(onClick = { close(false) }) { Text(localized(MR.strings.action_cancel)) } },
+            )
         }
-        AlertDialog(
-            onDismissRequest = { close(false) },
-            text = { Text(localized(KMR.strings.action_remove_merged)) },
-            confirmButton = { TextButton(onClick = { close(true) }) { Text(localized(MR.strings.action_remove)) } },
-            dismissButton = { TextButton(onClick = { close(false) }) { Text(localized(MR.strings.action_cancel)) } },
-        )
-    }
-    // KMK <--
-
-    // SY -->
-    recommendationDialog?.let { manga ->
-        RecommendationSearchDialog(
-            onDismissRequest = { recommendationDialog = null },
+        // KMK <--
+        // SY -->
+        is LibraryDialog.Recommendations -> RecommendationSearchDialog(
+            onDismissRequest = { model.dismissDialog() },
             onSearchRequest = {
-                recommendationDialog = null
+                model.dismissDialog()
                 model.clearSelection()
                 // The screen runs the search and shows its progress
-                navigator.push(CommonRecommendsScreen(manga.map { it.id }))
+                navigator.push(CommonRecommendsScreen(dialog.manga.map { it.id }))
             },
         )
+        // SY <--
     }
-    // SY <--
 }
 
 /** How many unread chapters of each entry a download queues; null for all of them. */
