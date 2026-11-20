@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -604,6 +605,14 @@ class MangaMetadataAndPreviewsTest {
                     }
                 }
 
+                val gridMatcher = SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)
+                fun scrollMaxValue(): Float =
+                    onAllNodes(gridMatcher)
+                        .onFirst()
+                        .fetchSemanticsNode()
+                        .config[SemanticsProperties.VerticalScrollAxisRange]
+                        .maxValue()
+
                 waitUntil(timeoutMillis = 5_000) {
                     onAllNodes(hasContentDescription(localized(DMR.strings.page, 1))).fetchSemanticsNodes().isNotEmpty()
                 }
@@ -611,12 +620,15 @@ class MangaMetadataAndPreviewsTest {
                 source.previewPagesAsked shouldBe listOf(1)
                 onAllNodes(hasContentDescription(localized(DMR.strings.page, perPage + 1))).fetchSemanticsNodes().shouldBeEmpty()
 
+                val maxBefore = scrollMaxValue()
                 // Scroll near the end of page 1 -> loads page 2, then scroll to page 2's first item
-                onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+                onAllNodes(gridMatcher)
                     .onFirst()
                     .performScrollToIndex(perPage - 1)
-                waitUntil(timeoutMillis = 5_000) { source.previewPagesAsked.contains(2) }
-                onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+                waitUntil(timeoutMillis = 5_000) {
+                    source.previewPagesAsked.contains(2) && scrollMaxValue() > maxBefore
+                }
+                onAllNodes(gridMatcher)
                     .onFirst()
                     .performScrollToIndex(perPage)
                 waitUntil(timeoutMillis = 5_000) {
@@ -624,7 +636,7 @@ class MangaMetadataAndPreviewsTest {
                 }
 
                 // Scroll to end of page 2 (hasNextPage = false) -> no page 3 requested
-                onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+                onAllNodes(gridMatcher)
                     .onFirst()
                     .performScrollToIndex(2 * perPage - 1)
                 waitUntil(timeoutMillis = 5_000) {

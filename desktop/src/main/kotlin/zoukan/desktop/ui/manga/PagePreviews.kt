@@ -202,8 +202,9 @@ internal fun PagePreviewGrid(
     val grid = rememberLazyGridState()
     val nearEnd by remember {
         derivedStateOf {
-            val last = grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= grid.layoutInfo.totalItemsCount - 6
+            val info = grid.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - 6
         }
     }
     LaunchedEffect(nearEnd, previews.size) { if (nearEnd) onLoadMore() }

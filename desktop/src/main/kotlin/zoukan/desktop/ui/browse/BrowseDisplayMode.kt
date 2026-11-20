@@ -172,6 +172,19 @@ private fun browseColumns(): GridCells {
 }
 
 /**
+ * Emits whether the browse list/grid is within 8 items of the end along with item and loaded counts
+ * so a page whose end stays visible still triggers the next load, while ignoring pre-layout empty state.
+ */
+private fun nearEndSignal(
+    lastVisibleIndex: Int?,
+    totalItemsCount: Int,
+    loadedCount: Int,
+): Triple<Boolean, Int, Int> {
+    val nearEnd = lastVisibleIndex != null && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - 8
+    return Triple(nearEnd, totalItemsCount, loadedCount)
+}
+
+/**
  * A source's results in the chosen display mode, as BrowseSourceContent: E-Hentai sources show
  * the detailed list while "Enhanced E-Hentai view" is on, other sources the comfortable,
  * panorama or compact grid, or the list. [onNearEnd] loads the next page; [footer] shows the
@@ -203,9 +216,7 @@ fun BrowseSourceContent(
         LaunchedEffect(listState, listingKey) {
             snapshotFlow {
                 val info = listState.layoutInfo
-                val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-                // The counts are part of the value so a page that lands with the end still visible asks again
-                Triple(last >= info.totalItemsCount - 8, info.totalItemsCount, loaded.value)
+                nearEndSignal(info.visibleItemsInfo.lastOrNull()?.index, info.totalItemsCount, loaded.value)
             }.distinctUntilChanged().collect { (nearEnd, _, _) -> if (nearEnd) onNearEnd() }
         }
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(vertical = if (ehentaiList) 0.dp else 8.dp)) {
@@ -240,8 +251,7 @@ fun BrowseSourceContent(
     LaunchedEffect(gridState, listingKey) {
         snapshotFlow {
             val info = gridState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-            Triple(last >= info.totalItemsCount - 8, info.totalItemsCount, loaded.value)
+            nearEndSignal(info.visibleItemsInfo.lastOrNull()?.index, info.totalItemsCount, loaded.value)
         }.distinctUntilChanged().collect { (nearEnd, _, _) -> if (nearEnd) onNearEnd() }
     }
     LazyVerticalGrid(
