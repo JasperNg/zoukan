@@ -10,6 +10,9 @@ import eu.kanade.tachiyomi.source.Source
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.reading
+import tachiyomi.i18n.unread
 import tachiyomi.domain.manga.model.Manga as DomainManga
 import tachiyomi.domain.track.model.Track as DomainTrack
 

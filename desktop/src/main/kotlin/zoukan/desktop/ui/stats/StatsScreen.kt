@@ -44,7 +44,25 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.chapters
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.in_library
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.label_local
+import tachiyomi.i18n.label_mean_score
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.label_overview_section
+import tachiyomi.i18n.label_read_chapters
+import tachiyomi.i18n.label_started
+import tachiyomi.i18n.label_stats
+import tachiyomi.i18n.label_titles_in_global_update
+import tachiyomi.i18n.label_titles_section
+import tachiyomi.i18n.label_total_chapters
+import tachiyomi.i18n.label_tracked_titles
+import tachiyomi.i18n.services
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.ignore_non_library_entries
+import tachiyomi.i18n.sy.include_all_read_entries
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -57,6 +75,11 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.duration_days
+import zoukan.i18n.desktop.duration_hours
+import zoukan.i18n.desktop.duration_minutes
+import zoukan.i18n.desktop.read_time
+import zoukan.i18n.desktop.trackers_used
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 

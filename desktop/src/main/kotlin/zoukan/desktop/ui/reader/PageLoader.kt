@@ -31,6 +31,8 @@ import zoukan.desktop.image.PageSizeLimits
 import zoukan.desktop.local.LocalFormat
 import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.the_page_is_gone
+import zoukan.i18n.desktop.the_source_of_this_entry_is
 import kotlin.math.abs
 
 /** One page of the open chapter, with its own loading state. */

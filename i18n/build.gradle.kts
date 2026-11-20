@@ -1,21 +1,23 @@
-import mihon.buildlogic.generatedBuildDir
-import mihon.buildlogic.tasks.getLocalesConfigTask
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import mihon.buildlogic.tasks.LocalesConfigTask
 
 plugins {
-    id("mihon.library")
-    kotlin("multiplatform")
+    id("mihon.library.kmp")
     alias(libs.plugins.moko)
     id("com.github.ben-manes.versions")
 }
 
 kotlin {
-    androidTarget()
-    // ZOUKAN -->
-    jvm("desktop")
-    // ZOUKAN <--
+    android {
+        namespace = "tachiyomi.i18n"
 
-    applyDefaultHierarchyTemplate()
+        androidResources {
+            enable = true
+        }
+
+        lint {
+            disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
+        }
+    }
 
     sourceSets {
         commonMain {
@@ -24,38 +26,18 @@ kotlin {
             }
         }
     }
-
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
-    }
-}
-
-val generatedAndroidResourceDir = generatedBuildDir.resolve("android/res")
-
-android {
-    namespace = "tachiyomi.i18n"
-
-    sourceSets {
-        val main by getting
-        main.res.srcDirs(
-            "src/commonMain/resources",
-            generatedAndroidResourceDir,
-        )
-    }
-
-    lint {
-        disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
-    }
 }
 
 multiplatformResources {
     resourcesPackage.set("tachiyomi.i18n")
 }
 
-tasks {
-    val localesConfigTask = project.getLocalesConfigTask(generatedAndroidResourceDir)
-    preBuild {
-        dependsOn(localesConfigTask)
+val localesConfigTask = tasks.register<LocalesConfigTask>("generateLocalesConfig") {
+    resourcesDir.set(layout.projectDirectory.dir("src/commonMain/moko-resources"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.res?.addGeneratedSourceDirectory(localesConfigTask, LocalesConfigTask::outputDir)
     }
 }

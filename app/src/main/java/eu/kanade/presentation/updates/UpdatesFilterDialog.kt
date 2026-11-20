@@ -23,7 +23,14 @@ import eu.kanade.tachiyomi.ui.updates.UpdatesSettingsScreenModel
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_filter_bookmarked
+import tachiyomi.i18n.action_filter_excluded_scanlators
+import tachiyomi.i18n.action_filter_unread
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_panorama_cover
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.label_started
 import tachiyomi.presentation.core.components.SettingsItemsPaddings
 import tachiyomi.presentation.core.components.TriStateItem
 import tachiyomi.presentation.core.components.material.padding

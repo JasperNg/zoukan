@@ -17,6 +17,7 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MergedMangaReference
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.merge_unknown_entry
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

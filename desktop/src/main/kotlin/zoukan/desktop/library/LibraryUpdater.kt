@@ -41,6 +41,8 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.notification_chapters_generic
+import tachiyomi.i18n.notification_update_error
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.Platform
@@ -53,6 +55,11 @@ import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.library_update_failed
+import zoukan.i18n.desktop.library_updated
+import zoukan.i18n.desktop.list_and_n_more
+import zoukan.i18n.desktop.new_chapters_in
+import zoukan.i18n.desktop.no_new_chapters
 import java.io.File
 import java.time.LocalDateTime
 import java.time.ZonedDateTime

@@ -44,6 +44,7 @@ import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.release.service.AppUpdatePolicy
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy

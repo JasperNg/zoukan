@@ -7,6 +7,11 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.data.source.NoResultsException
 import tachiyomi.domain.source.model.SourceNotInstalledException
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.exception_http
+import tachiyomi.i18n.exception_offline
+import tachiyomi.i18n.exception_unknown_host
+import tachiyomi.i18n.loader_not_implemented_error
+import tachiyomi.i18n.no_results_found
 import java.net.UnknownHostException
 
 context(context: Context)

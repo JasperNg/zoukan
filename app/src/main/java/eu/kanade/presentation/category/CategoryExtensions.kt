@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_default
 import tachiyomi.presentation.core.i18n.stringResource
 
 val Category.visualName: String

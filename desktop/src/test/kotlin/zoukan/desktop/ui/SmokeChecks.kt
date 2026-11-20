@@ -70,7 +70,10 @@ import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.web_dav
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.mangadex_sync_follows_to_library
+import tachiyomi.i18n.theme_nord
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
@@ -153,6 +156,11 @@ import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.lock_on_these_days
+import zoukan.i18n.desktop.no_settings_match
+import zoukan.i18n.desktop.search_all_sources
+import zoukan.i18n.desktop.this_entry_no_longer_exists
+import zoukan.i18n.desktop.use_japanese_titles
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File

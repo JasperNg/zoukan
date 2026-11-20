@@ -58,7 +58,10 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.manga_removed_library
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.entry_merged
+import tachiyomi.i18n.sy.merged_references_invalid
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -72,6 +75,15 @@ import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.recs.RecommendationSearchHelper
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.a_library_update_is_already_running
+import zoukan.i18n.desktop.could_not_update_the_mangadex_follows
+import zoukan.i18n.desktop.merging_failed
+import zoukan.i18n.desktop.removed_entries_from_library
+import zoukan.i18n.desktop.screen_action_failed_clean_titles
+import zoukan.i18n.desktop.screen_action_failed_delete_downloads
+import zoukan.i18n.desktop.screen_action_failed_mark_read
+import zoukan.i18n.desktop.screen_action_failed_remove_from_library
+import zoukan.i18n.desktop.screen_action_failed_set_categories
 import kotlin.random.Random
 
 /** As Android's AppBar: the library search waits this long after the last key */

@@ -10,11 +10,11 @@ plugins {
     id("zoukan.test-home")
 }
 
-android {
-    namespace = "eu.kanade.tachiyomi.data.backup"
-}
-
 kotlin {
+    android {
+        namespace = "eu.kanade.tachiyomi.data.backup"
+    }
+
     compilerOptions {
         optIn.add("kotlinx.serialization.ExperimentalSerializationApi")
     }

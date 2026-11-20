@@ -23,7 +23,16 @@ import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.SearchToolbar
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_open_random_manga
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_select_inverse
+import tachiyomi.i18n.action_update_category
+import tachiyomi.i18n.action_update_library
+import tachiyomi.i18n.pref_invalidate_download_cache
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.sync_favorites
+import tachiyomi.i18n.sy.sync_library
 import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.theme.active

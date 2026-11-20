@@ -14,7 +14,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_select_inverse
+import tachiyomi.i18n.add_to_library
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_bulk_select
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

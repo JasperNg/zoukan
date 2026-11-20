@@ -49,7 +49,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_select_inverse
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_scroll_to_bottom
+import tachiyomi.i18n.kmk.action_scroll_to_next
+import tachiyomi.i18n.kmk.action_scroll_to_previous
+import tachiyomi.i18n.kmk.action_scroll_to_top
+import tachiyomi.i18n.kmk.info_empty_library_update_errors
+import tachiyomi.i18n.kmk.label_library_update_errors
+import tachiyomi.i18n.migrate
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource

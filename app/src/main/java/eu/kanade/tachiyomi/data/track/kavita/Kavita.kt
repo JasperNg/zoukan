@@ -14,6 +14,9 @@ import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.reading
+import tachiyomi.i18n.unread
 import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 import tachiyomi.domain.track.model.Track as DomainTrack

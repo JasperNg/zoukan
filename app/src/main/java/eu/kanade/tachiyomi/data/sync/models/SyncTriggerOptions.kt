@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.data.sync.models
 import dev.icerock.moko.resources.StringResource
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.sync_on_app_resume
+import tachiyomi.i18n.sy.sync_on_app_start
+import tachiyomi.i18n.sy.sync_on_chapter_open
+import tachiyomi.i18n.sy.sync_on_chapter_read
 
 data class SyncTriggerOptions(
     val syncOnChapterRead: Boolean = false,

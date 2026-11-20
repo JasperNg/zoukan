@@ -11,8 +11,11 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_remove
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.remove_every_chapter_of_this_entry
 
 /** History's remove dialog: this chapter only, or every chapter of the entry when the box is ticked. */
 @OptIn(ExperimentalTestApi::class)

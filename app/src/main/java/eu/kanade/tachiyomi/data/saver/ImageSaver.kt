@@ -20,6 +20,8 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.error_saving_picture
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File

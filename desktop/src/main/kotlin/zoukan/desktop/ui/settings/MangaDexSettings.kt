@@ -30,7 +30,26 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.dropped
+import tachiyomi.i18n.logout
+import tachiyomi.i18n.logout_success
+import tachiyomi.i18n.on_hold
+import tachiyomi.i18n.plan_to_read
+import tachiyomi.i18n.reading
+import tachiyomi.i18n.repeating
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.mangadex_preffered_source
+import tachiyomi.i18n.sy.mangadex_preffered_source_summary
+import tachiyomi.i18n.sy.mangadex_push_favorites_to_mangadex
+import tachiyomi.i18n.sy.mangadex_push_favorites_to_mangadex_summary
+import tachiyomi.i18n.sy.mangadex_sync_follows_to_library
+import tachiyomi.i18n.sy.mangadex_sync_follows_to_library_summary
+import tachiyomi.i18n.sy.pref_category_mangadex
+import tachiyomi.i18n.sy.pref_google_drive_sign_in
+import tachiyomi.i18n.unknown_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
@@ -43,6 +62,19 @@ import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.added_mangadex_follows_some_failed
+import zoukan.i18n.desktop.added_mangadex_follows_to_the_library
+import zoukan.i18n.desktop.follow_library_on_mangadex_warning
+import zoukan.i18n.desktop.follow_on_mangadex
+import zoukan.i18n.desktop.followed_library_entries_on_mangadex
+import zoukan.i18n.desktop.following_the_library_on_mangadex_failed
+import zoukan.i18n.desktop.login
+import zoukan.i18n.desktop.no_mangadex_entries_in_the_library
+import zoukan.i18n.desktop.not_signed_in
+import zoukan.i18n.desktop.signed_in
+import zoukan.i18n.desktop.signed_in_to_mangadex
+import zoukan.i18n.desktop.signing_in_to_mangadex_failed
+import zoukan.i18n.desktop.syncing_mangadex_follows_failed
 
 /**
  * Settings > MangaDex, as the Android app's SettingsMangadexScreen: sign in to MangaDex (MDList),

@@ -22,7 +22,17 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import kotlinx.collections.immutable.ImmutableSet
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_open_in_browser
+import tachiyomi.i18n.action_open_in_web_view
+import tachiyomi.i18n.action_settings
+import tachiyomi.i18n.action_share
+import tachiyomi.i18n.chapters
+import tachiyomi.i18n.pref_crop_borders
+import tachiyomi.i18n.pref_rotation_type
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.page_layout
+import tachiyomi.i18n.sy.shift_double_pages
+import tachiyomi.i18n.viewer
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

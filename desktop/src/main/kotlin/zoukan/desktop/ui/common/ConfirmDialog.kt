@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
 import zoukan.desktop.compat.localized
 
 // ZOUKAN -->

@@ -2,6 +2,9 @@ package eu.kanade.domain.track.model
 
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.default_category_summary
+import tachiyomi.i18n.lock_always
+import tachiyomi.i18n.lock_never
 
 enum class AutoTrackState(val titleRes: StringResource) {
     ALWAYS(MR.strings.lock_always),

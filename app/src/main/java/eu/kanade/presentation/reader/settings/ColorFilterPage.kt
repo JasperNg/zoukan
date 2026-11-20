@@ -13,6 +13,15 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences.Companion.ColorFi
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.color_filter_a_value
+import tachiyomi.i18n.color_filter_b_value
+import tachiyomi.i18n.color_filter_g_value
+import tachiyomi.i18n.color_filter_r_value
+import tachiyomi.i18n.pref_color_filter_mode
+import tachiyomi.i18n.pref_custom_brightness
+import tachiyomi.i18n.pref_custom_color_filter
+import tachiyomi.i18n.pref_grayscale
+import tachiyomi.i18n.pref_inverted_colors
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem

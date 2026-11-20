@@ -34,6 +34,7 @@ import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.tachiyomi.ui.libraryUpdateError.LibraryUpdateErrorItem
 import tachiyomi.domain.libraryUpdateError.model.LibraryUpdateErrorWithRelations
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
 import tachiyomi.presentation.core.components.ListGroupHeader
 import tachiyomi.presentation.core.components.Scroller.STICKY_HEADER_KEY_PREFIX
 import tachiyomi.presentation.core.components.material.padding

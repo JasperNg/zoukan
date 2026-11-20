@@ -18,7 +18,17 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.are_you_sure
+import tachiyomi.i18n.remove_manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.save_search
+import tachiyomi.i18n.sy.save_search_delete
+import tachiyomi.i18n.sy.save_search_delete_message
+import tachiyomi.i18n.sy.save_search_hint
+import tachiyomi.i18n.sy.save_search_invalid_name
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

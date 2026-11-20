@@ -6,6 +6,7 @@ import coil3.fetch.SourceFetchResult
 import coil3.request.Options
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.the_image_is_too_large
 
 /**
  * Fails with an [UnreadableImageException] when [bytes] declare an image

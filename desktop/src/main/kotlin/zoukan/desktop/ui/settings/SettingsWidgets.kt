@@ -35,6 +35,11 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.all
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.none
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.RowRadioButton
@@ -46,6 +51,8 @@ import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.excluded
+import zoukan.i18n.desktop.include_exclude
 import kotlin.math.roundToInt
 
 /** A group header. Its list key is [id]; give a group an id of its own when another on the page has its title. */

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.window.DialogProperties
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.migrationListScreen_progressDialog_cancelLabel
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

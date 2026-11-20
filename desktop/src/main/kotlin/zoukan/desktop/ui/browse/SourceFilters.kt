@@ -38,6 +38,18 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_add_category
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_edit
+import tachiyomi.i18n.action_edit_categories
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_rename_category
+import tachiyomi.i18n.delete_category
+import tachiyomi.i18n.error_category_exists
+import tachiyomi.i18n.name
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -52,6 +64,11 @@ import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.category_names_cant_contain
+import zoukan.i18n.desktop.do_you_wish_to_delete_the
+import zoukan.i18n.desktop.no_sources_yet_install_an_extension
+import zoukan.i18n.desktop.rename
+import zoukan.i18n.desktop.you_have_no_categories_add_one
 
 /**
  * Android's Browse > Sources > filter (SourcesFilterScreen): a switch per language, and under each

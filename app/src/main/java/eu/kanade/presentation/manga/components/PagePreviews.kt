@@ -41,6 +41,7 @@ import exh.util.floor
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.more_previews
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 

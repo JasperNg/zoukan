@@ -15,6 +15,7 @@ import zoukan.desktop.download.ImageType
 import zoukan.desktop.image.MemoryImageIo
 import zoukan.desktop.local.LocalSource
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.not_an_image
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

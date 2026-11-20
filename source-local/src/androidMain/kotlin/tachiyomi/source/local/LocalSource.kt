@@ -38,6 +38,9 @@ import tachiyomi.core.metadata.tachiyomi.MangaDetails
 import tachiyomi.domain.chapter.service.ChapterRecognition
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.chapter_not_found
+import tachiyomi.i18n.local_invalid_format
+import tachiyomi.i18n.local_source
 import tachiyomi.source.local.filter.OrderBy
 import tachiyomi.source.local.image.LocalCoverManager
 import tachiyomi.source.local.io.Archive

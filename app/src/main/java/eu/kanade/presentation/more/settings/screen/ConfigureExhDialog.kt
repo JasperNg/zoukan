@@ -21,7 +21,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.eh_settings_configuration_failed
+import tachiyomi.i18n.sy.eh_settings_configuration_failed_message
+import tachiyomi.i18n.sy.eh_settings_successfully_uploaded
+import tachiyomi.i18n.sy.eh_settings_uploading_to_server
+import tachiyomi.i18n.sy.eh_settings_uploading_to_server_message
+import tachiyomi.i18n.sy.settings_profile_note
+import tachiyomi.i18n.sy.settings_profile_note_message
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

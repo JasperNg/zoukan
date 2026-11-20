@@ -37,6 +37,10 @@ import mihon.feature.upcoming.UpcomingScreen
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.internal_error
+import tachiyomi.i18n.label_recent_updates
+import tachiyomi.i18n.update_already_running
+import tachiyomi.i18n.updating_library
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt

@@ -25,6 +25,8 @@ import rikka.sui.Sui
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.clipboard_copy_error
+import tachiyomi.i18n.copied_to_clipboard
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File

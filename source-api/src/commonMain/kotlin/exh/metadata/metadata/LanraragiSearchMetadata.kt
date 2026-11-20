@@ -7,6 +7,11 @@ import eu.kanade.tachiyomi.source.model.copy
 import kotlinx.serialization.Serializable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.base_url
+import tachiyomi.i18n.sy.file_extension
+import tachiyomi.i18n.sy.filename
+import tachiyomi.i18n.sy.id
+import tachiyomi.i18n.sy.page_count
 
 @Serializable
 class LanraragiSearchMetadata : RaisedSearchMetadata() {

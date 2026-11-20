@@ -18,6 +18,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.error_opening_folder
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -34,6 +35,8 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.download.DownloadPaths
 import zoukan.desktop.local.LocalSource
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.local_files_not_trashed
+import zoukan.i18n.desktop.screen_action_failed_delete_downloads
 import java.io.File
 
 /**

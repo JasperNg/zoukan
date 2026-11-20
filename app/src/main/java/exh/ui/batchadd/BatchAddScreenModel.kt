@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.batch_add_error
+import tachiyomi.i18n.sy.batch_add_ok
+import tachiyomi.i18n.sy.batch_add_summary
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

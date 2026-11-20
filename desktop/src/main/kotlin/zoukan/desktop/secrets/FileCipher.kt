@@ -5,6 +5,7 @@ import tachiyomi.core.common.util.system.logcat
 import xyz.nulldev.androidcompat.io.sharedprefs.SettingsFileCodec
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.secret_store_unavailable
 import java.security.SecureRandom
 import java.util.HexFormat
 import javax.crypto.Cipher

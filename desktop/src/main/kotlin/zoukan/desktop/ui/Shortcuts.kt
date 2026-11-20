@@ -18,12 +18,22 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerButton
 import cafe.adriel.voyager.navigator.Navigator
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_settings
+import tachiyomi.i18n.action_webview_back
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.LibraryUpdater
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.a_library_update_is_already_running
+import zoukan.i18n.desktop.empty_the_search_box_clear_the
+import zoukan.i18n.desktop.escape
+import zoukan.i18n.desktop.library_updates_history_browse_more
+import zoukan.i18n.desktop.search_the_screen
+import zoukan.i18n.desktop.select_everything_in_the_library_or
+import zoukan.i18n.desktop.update_the_library
+import zoukan.i18n.desktop.updating_the_library
 
 /**
  * Per-window shortcut dispatcher holding the active screen's handlers; see [LocalShortcuts].

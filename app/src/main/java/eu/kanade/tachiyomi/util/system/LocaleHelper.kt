@@ -5,6 +5,10 @@ import androidx.core.os.LocaleListCompat
 import eu.kanade.tachiyomi.ui.browse.source.SourcesScreenModel
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.last_used_source
+import tachiyomi.i18n.multi_lang
+import tachiyomi.i18n.other_source
+import tachiyomi.i18n.pinned_sources
 import java.util.Locale
 
 /**

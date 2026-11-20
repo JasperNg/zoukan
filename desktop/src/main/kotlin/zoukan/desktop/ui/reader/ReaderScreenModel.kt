@@ -34,6 +34,7 @@ import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.chapter_not_found
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -53,6 +54,14 @@ import zoukan.desktop.local.LocalSource
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_open_the_browser
+import zoukan.i18n.desktop.no_pages_failed
+import zoukan.i18n.desktop.the_built_in_browser_could_not
+import zoukan.i18n.desktop.the_merged_entry_of_this_chapter
+import zoukan.i18n.desktop.the_source_of_this_entry_is
+import zoukan.i18n.desktop.the_source_returned_no_pages
+import zoukan.i18n.desktop.this_entry_no_longer_exists
+import zoukan.i18n.desktop.this_source_has_no_web_page
 import java.util.Date
 
 class ReaderScreenModel(

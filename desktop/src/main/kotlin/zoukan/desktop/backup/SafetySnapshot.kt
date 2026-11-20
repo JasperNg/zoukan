@@ -17,6 +17,9 @@ import xyz.nulldev.androidcompat.util.rethrowIfFatal
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.safety_backup_could_not_be_written
+import zoukan.i18n.desktop.safety_backup_too_large
+import zoukan.i18n.desktop.safety_backup_took_too_long
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter

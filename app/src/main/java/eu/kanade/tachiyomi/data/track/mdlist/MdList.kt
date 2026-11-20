@@ -17,7 +17,14 @@ import kotlinx.coroutines.flow.map
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.dropped
+import tachiyomi.i18n.on_hold
+import tachiyomi.i18n.plan_to_read
+import tachiyomi.i18n.reading
+import tachiyomi.i18n.repeating
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.md_follows_unfollowed
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 class MdList(id: Long) : BaseTracker(id, "MDList") {

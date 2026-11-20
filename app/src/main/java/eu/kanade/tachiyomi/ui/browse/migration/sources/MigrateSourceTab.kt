@@ -16,6 +16,8 @@ import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.ui.browse.migration.manga.MigrateMangaScreen
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_migration
+import tachiyomi.i18n.migration_help_guide
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

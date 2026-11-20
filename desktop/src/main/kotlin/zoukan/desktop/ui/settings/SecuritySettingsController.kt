@@ -14,6 +14,13 @@ import zoukan.desktop.security.AppLock
 import zoukan.desktop.security.Incognito
 import zoukan.desktop.ui.security.secretStoreError
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.all_day
+import zoukan.i18n.desktop.every_day
+import zoukan.i18n.desktop.no_day
+import zoukan.i18n.desktop.the_passwords_differ
+import zoukan.i18n.desktop.to
+import zoukan.i18n.desktop.use_at_least_4_characters
+import zoukan.i18n.desktop.use_hh_mm_with_the_end
 
 /**
  * Non-UI state/business controller for Security settings: app lock setup/verification, password

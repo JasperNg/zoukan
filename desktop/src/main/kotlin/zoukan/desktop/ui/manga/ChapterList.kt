@@ -45,6 +45,12 @@ import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_mark_as_read
+import tachiyomi.i18n.action_mark_as_unread
+import tachiyomi.i18n.action_mark_previous_as_read
+import tachiyomi.i18n.display_mode_chapter
+import tachiyomi.i18n.label_read_chapters
 import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.SyncChapters
 import zoukan.desktop.download.Download
@@ -60,6 +66,16 @@ import zoukan.desktop.ui.common.onRightClickAt
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.desktop.ui.downloads.DownloadIndicator
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.bookmark
+import zoukan.i18n.desktop.cancel_download
+import zoukan.i18n.desktop.chapter_state_bookmarked
+import zoukan.i18n.desktop.clear_selection
+import zoukan.i18n.desktop.delete_download
+import zoukan.i18n.desktop.delete_downloads
+import zoukan.i18n.desktop.deselect
+import zoukan.i18n.desktop.page
+import zoukan.i18n.desktop.remove_bookmark
+import zoukan.i18n.desktop.select
 
 // ZOUKAN -->
 /** What the chapter list does with a click, a swipe or a menu item: plain lambdas, no screen model. */

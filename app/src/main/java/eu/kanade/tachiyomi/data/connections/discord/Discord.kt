@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.data.connections.ConnectionsService
 import exh.log.xLogE
 import kotlinx.serialization.json.Json
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.connections_discord
 import timber.log.Timber
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

@@ -8,6 +8,7 @@ import androidx.core.net.toUri
 import eu.kanade.tachiyomi.util.system.getParcelableExtraCompat
 import eu.kanade.tachiyomi.util.system.toast
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.could_not_install_update
 
 class AppUpdateBroadcast : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

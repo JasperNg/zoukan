@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.upcoming_calendar_next
+import tachiyomi.i18n.upcoming_calendar_prev
 import tachiyomi.presentation.core.i18n.stringResource
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter

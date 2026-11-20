@@ -26,6 +26,7 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.information_webview_required
 import uy.kohesive.injekt.injectLazy
 
 class WebViewActivity : BaseActivity() {

@@ -27,7 +27,7 @@ java {
 // NoSuchMethodError. The Android target is unaffected: the Android Gradle plugin puts the SDK's
 // android.jar on its boot classpath, ahead of this jar.
 val androidJars: FileCollection = configurations.detachedConfiguration(
-    dependencies.create(project(":android-compat")),
+    dependencies.project(":android-compat"),
     dependencies.create(zoukanlibs.android.jar.get()),
 ).apply {
     isTransitive = false

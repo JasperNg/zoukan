@@ -16,6 +16,7 @@ import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_extensions
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 

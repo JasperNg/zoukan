@@ -79,6 +79,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_notes
+import tachiyomi.i18n.action_web_view
+import tachiyomi.i18n.add_to_library
+import tachiyomi.i18n.in_library
+import tachiyomi.i18n.manga_cover
+import tachiyomi.i18n.track
+import tachiyomi.i18n.unknown
+import tachiyomi.i18n.unknown_author
+import tachiyomi.i18n.unknown_title
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -91,6 +100,11 @@ import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.n_1_tracker
+import zoukan.i18n.desktop.show_less
+import zoukan.i18n.desktop.show_more
+import zoukan.i18n.desktop.source_not_installed_2
+import zoukan.i18n.desktop.trackers
 import java.util.concurrent.ConcurrentHashMap
 import androidx.compose.ui.graphics.Brush as GradientBrush
 

@@ -17,6 +17,7 @@ import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.source_extension_outdated
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**

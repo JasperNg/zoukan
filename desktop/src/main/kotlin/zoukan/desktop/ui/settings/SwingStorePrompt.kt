@@ -1,9 +1,16 @@
 package zoukan.desktop.ui.settings
 
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.pref_restore_backup
 import zoukan.desktop.backup.StorePrompt
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.and_more
+import zoukan.i18n.desktop.backup_adds_one_store
+import zoukan.i18n.desktop.backup_adds_stores
+import zoukan.i18n.desktop.restore_without
 
 /**
  * Asks whether a restore may add the extension stores a backup lists, in a Swing dialog. True adds

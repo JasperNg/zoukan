@@ -49,7 +49,21 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
 import tachiyomi.core.common.Constants
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_settings
+import tachiyomi.i18n.categories
+import tachiyomi.i18n.downloaded_only_summary
+import tachiyomi.i18n.history
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.option_label_library_update_errors
+import tachiyomi.i18n.label_data_storage
+import tachiyomi.i18n.label_download_queue
+import tachiyomi.i18n.label_downloaded_only
+import tachiyomi.i18n.label_help
+import tachiyomi.i18n.label_recent_updates
+import tachiyomi.i18n.label_stats
+import tachiyomi.i18n.pref_category_about
+import tachiyomi.i18n.pref_incognito_mode
+import tachiyomi.i18n.pref_incognito_mode_summary
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -76,6 +90,9 @@ import zoukan.desktop.ui.stats.StatsScreen
 import zoukan.desktop.ui.updates.UpdatesScreenModel
 import zoukan.desktop.ui.updates.UpdatesTab
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_open_the_page
+import zoukan.i18n.desktop.paused_remaining
+import zoukan.i18n.desktop.remaining
 
 /**
  * Android's More tab (MoreScreen): the app-wide switches, then the screens that have no tab of their

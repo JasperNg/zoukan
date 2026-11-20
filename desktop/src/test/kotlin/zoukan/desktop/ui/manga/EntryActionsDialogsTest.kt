@@ -40,7 +40,16 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_add_anyway
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_migrate
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.chapters_from_database
+import tachiyomi.i18n.kmk.downloaded_data
+import tachiyomi.i18n.kmk.`open`
+import tachiyomi.i18n.label_default
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.get
@@ -51,6 +60,11 @@ import zoukan.desktop.manga.EditManga
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.ui.common.Images
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add_the_entry_to_the_library
+import zoukan.i18n.desktop.change
+import zoukan.i18n.desktop.clear_local_files
+import zoukan.i18n.desktop.days
+import zoukan.i18n.desktop.every
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 

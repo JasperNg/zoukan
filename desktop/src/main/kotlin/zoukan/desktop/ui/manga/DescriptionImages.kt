@@ -57,6 +57,7 @@ import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.manga.DescriptionImages.Part
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_open_the_page
 import kotlin.math.roundToInt
 
 // ZOUKAN -->

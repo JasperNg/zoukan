@@ -27,6 +27,9 @@ import kotlinx.collections.immutable.toImmutableList
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.source.model.EXHSavedSearch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_reset
+import tachiyomi.i18n.action_save
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.CollapsibleBox
 import tachiyomi.presentation.core.components.HeadingItem

@@ -43,6 +43,13 @@ import tachiyomi.domain.manga.model.FavoriteEntry
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.favorites_sync_complete
+import tachiyomi.i18n.sy.favorites_sync_could_not_fetch
+import tachiyomi.i18n.sy.favorites_sync_gallery_multiple_categories_error
+import tachiyomi.i18n.sy.favorites_sync_ignoring_exception
+import tachiyomi.i18n.sy.favorites_sync_network_error
+import tachiyomi.i18n.sy.favorites_sync_remote_not_exist
+import tachiyomi.i18n.sy.favorites_sync_sync_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy

@@ -20,7 +20,16 @@ import eu.kanade.tachiyomi.source.Source
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_display_comfortable_grid
+import tachiyomi.i18n.action_display_grid
+import tachiyomi.i18n.action_display_list
+import tachiyomi.i18n.action_display_mode
+import tachiyomi.i18n.action_settings
+import tachiyomi.i18n.action_web_view
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_display_comfortable_grid_panorama
+import tachiyomi.i18n.label_help
+import tachiyomi.i18n.pref_incognito_mode
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.source.local.LocalSource
 

@@ -10,10 +10,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.creating_backup_error
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.backed_up_entries_to
+import zoukan.i18n.desktop.backing_up
+import zoukan.i18n.desktop.restore_errors
+import zoukan.i18n.desktop.restore_failed
+import zoukan.i18n.desktop.restored_entries
+import zoukan.i18n.desktop.restored_entries_with_errors
+import zoukan.i18n.desktop.restoring
+import zoukan.i18n.desktop.restoring_of
+import zoukan.i18n.desktop.saving_safety_backup
 import java.io.File
 
 /** The toast after a restore of [entries] entries that had [errors] errors, with both counts pluralised. */

@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.data.sync
 
 import android.content.Context
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.sync_complete
+import tachiyomi.i18n.sy.sync_error
 import zoukan.desktop.compat.localized
 import zoukan.desktop.tray.Notifications
 

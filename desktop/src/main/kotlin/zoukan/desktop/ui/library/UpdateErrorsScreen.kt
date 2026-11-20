@@ -66,8 +66,17 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_migrate
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.action_select_all
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_scroll_to_bottom
+import tachiyomi.i18n.kmk.action_scroll_to_top
+import tachiyomi.i18n.kmk.info_empty_library_update_errors
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.eh_retry_all
+import tachiyomi.i18n.unknown_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -87,6 +96,20 @@ import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.pickScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.a_library_update_is_already_running
+import zoukan.i18n.desktop.all_entries_failed_again
+import zoukan.i18n.desktop.all_entries_updated
+import zoukan.i18n.desktop.library_update_errors
+import zoukan.i18n.desktop.migrate_one_entry_at_a_time
+import zoukan.i18n.desktop.next_error
+import zoukan.i18n.desktop.open_entry
+import zoukan.i18n.desktop.previous_error
+import zoukan.i18n.desktop.retrying
+import zoukan.i18n.desktop.retrying_entries
+import zoukan.i18n.desktop.the_entry_failed_again
+import zoukan.i18n.desktop.the_entry_is_gone
+import zoukan.i18n.desktop.the_entry_updated
+import zoukan.i18n.desktop.updated_failed_again
 
 /**
  * Komikku's library update errors screen: the entries whose last update failed, grouped by the

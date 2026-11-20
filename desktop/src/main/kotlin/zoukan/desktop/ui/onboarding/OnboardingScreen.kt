@@ -42,6 +42,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_webview_back
+import tachiyomi.i18n.getting_started_guide
+import tachiyomi.i18n.nav_zone_next
+import tachiyomi.i18n.onboarding_action_finish
+import tachiyomi.i18n.onboarding_heading
+import tachiyomi.i18n.pref_restore_backup
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -61,6 +68,11 @@ import zoukan.desktop.ui.whatsnew.UpdatedDialog
 import zoukan.desktop.ui.whatsnew.WhatsNew
 import zoukan.desktop.ui.whatsnew.WhatsNewScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.coming_from_komikku_mihon_tachiyomisy_or
+import zoukan.i18n.desktop.could_not_open_the_page
+import zoukan.i18n.desktop.lets_set_some_things_up_first
+import zoukan.i18n.desktop.new_to_zoukan_we_recommend_checking
+import zoukan.i18n.desktop.select_a_folder_where_zoukan_will
 import java.io.File
 
 /** Komikku's getting started guide, which Android's onboarding links to; it covers Zoukan too. */

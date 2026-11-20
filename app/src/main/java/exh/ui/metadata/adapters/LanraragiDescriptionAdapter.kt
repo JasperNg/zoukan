@@ -14,6 +14,7 @@ import exh.metadata.metadata.LanraragiSearchMetadata
 import exh.ui.metadata.adapters.MetadataUIUtil.bindDrawable
 import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.num_pages
 
 @Composable
 fun LanraragiDescription(state: State.Success, openMetadataViewer: () -> Unit) {

@@ -8,6 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.az_recommends
+import tachiyomi.i18n.sy.merge_with_another_source
 import tachiyomi.presentation.core.components.material.Button
 import tachiyomi.presentation.core.i18n.stringResource
 

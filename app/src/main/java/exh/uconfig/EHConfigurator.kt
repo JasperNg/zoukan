@@ -15,6 +15,7 @@ import okhttp3.Request
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.eh_settings_out_of_slots_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy

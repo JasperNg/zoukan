@@ -1,4 +1,7 @@
 // ZOUKAN -->
+import mihon.buildlogic.AndroidConfig
+import mihon.buildlogic.checkMultiplatformSourceLayout
+import mihon.buildlogic.configureTest
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 /**
@@ -8,19 +11,33 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
  * desktop-only code in `desktopMain`.
  */
 plugins {
-    id("mihon.library")
+    id("com.android.kotlin.multiplatform.library")
     kotlin("multiplatform")
+    id("mihon.code.lint")
 }
 
 kotlin {
-    androidTarget()
+    android {
+        compileSdk = AndroidConfig.COMPILE_SDK
+        minSdk = AndroidConfig.MIN_SDK
+
+        compilerOptions {
+            jvmTarget.set(AndroidConfig.JvmTarget)
+        }
+    }
     jvm("desktop")
 
     applyDefaultHierarchyTemplate()
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+        freeCompilerArgs.addAll(
+            "-Xexpect-actual-classes",
+            "-opt-in=kotlin.RequiresOptIn",
+        )
     }
 }
+
+configureTest()
+checkMultiplatformSourceLayout()
 // ZOUKAN <--

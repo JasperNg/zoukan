@@ -23,11 +23,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.ext_downloading
+import tachiyomi.i18n.label_downloaded
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.Download
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.Tooltip
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.cancel_download
+import zoukan.i18n.desktop.delete_download
+import zoukan.i18n.desktop.download_failed
+import zoukan.i18n.desktop.download_failed_2
+import zoukan.i18n.desktop.queued
 
 /**
  * A chapter's download button: download, queued or downloading (with progress; click to cancel),

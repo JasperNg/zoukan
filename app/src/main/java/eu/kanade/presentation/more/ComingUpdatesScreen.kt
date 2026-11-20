@@ -19,8 +19,13 @@ import eu.kanade.presentation.manga.components.MarkdownRender
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_not_now
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.update_check_notification_preview_available
+import tachiyomi.i18n.kmk.update_check_try_now
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.latest_
+import tachiyomi.i18n.update_check_open
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.InfoScreen

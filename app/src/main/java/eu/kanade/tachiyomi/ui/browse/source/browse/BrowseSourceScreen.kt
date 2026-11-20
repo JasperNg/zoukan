@@ -76,7 +76,12 @@ import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_search
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.saved_searches_delete
+import tachiyomi.i18n.latest
+import tachiyomi.i18n.popular
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

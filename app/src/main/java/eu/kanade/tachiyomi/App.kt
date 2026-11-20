@@ -93,6 +93,8 @@ import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.storage.service.StorageManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.notification_incognito_text
+import tachiyomi.i18n.pref_incognito_mode
 import tachiyomi.presentation.widget.WidgetManager
 import timber.log.Timber
 import uy.kohesive.injekt.Injekt

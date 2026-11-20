@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.internal_error
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.error_tag_exists
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

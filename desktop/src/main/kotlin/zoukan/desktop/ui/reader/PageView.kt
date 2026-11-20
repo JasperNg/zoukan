@@ -25,9 +25,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.missing_chapters_warning
+import tachiyomi.i18n.nav_zone_next
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.current
+import zoukan.i18n.desktop.finished
+import zoukan.i18n.desktop.page_could_not_load
+import zoukan.i18n.desktop.previous
+import zoukan.i18n.desktop.read_next_chapter
+import zoukan.i18n.desktop.read_previous_chapter
+import zoukan.i18n.desktop.there_is_no_next_chapter
+import zoukan.i18n.desktop.there_is_no_previous_chapter
 
 /** Tells [image] that this composable draws it, so a released image keeps its pixels until this leaves */
 @Composable

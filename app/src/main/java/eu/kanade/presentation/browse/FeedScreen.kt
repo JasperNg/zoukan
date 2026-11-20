@@ -47,7 +47,13 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.latest
+import tachiyomi.i18n.no_results_found
+import tachiyomi.i18n.popular
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.feed
+import tachiyomi.i18n.sy.feed_tab_empty
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.padding

@@ -14,6 +14,10 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.download.DownloadManager.FolderMove
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.download_folder_not_moved_back_text
+import zoukan.i18n.desktop.download_folder_shared_not_renamed_text
+import zoukan.i18n.desktop.download_folders_not_renamed
+import zoukan.i18n.desktop.download_folders_not_renamed_text
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

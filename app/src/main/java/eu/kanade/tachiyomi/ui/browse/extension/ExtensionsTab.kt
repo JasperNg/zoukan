@@ -27,7 +27,16 @@ import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_webview_refresh
+import tachiyomi.i18n.ext_confirm_remove
+import tachiyomi.i18n.ext_remove
+import tachiyomi.i18n.extensionStores
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_toggle_nsfw_only
+import tachiyomi.i18n.label_extensions
+import tachiyomi.i18n.remove_private_extension_message
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

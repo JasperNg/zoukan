@@ -2,8 +2,13 @@ package zoukan.desktop.ui.common
 
 import eu.kanade.tachiyomi.network.HttpException
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.exception_http
+import tachiyomi.i18n.exception_unknown_host
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.source_extension_outdated
+import zoukan.i18n.desktop.source_request_failed
+import zoukan.i18n.desktop.source_timed_out
 
 /**
  * The text a screen shows for a source request that failed: what happened and what to do, never a

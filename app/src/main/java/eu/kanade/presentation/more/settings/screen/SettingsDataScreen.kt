@@ -90,12 +90,96 @@ import tachiyomi.domain.storage.service.StorageManager.Companion.allowAccessStor
 import tachiyomi.domain.storage.service.StorageManager.Companion.directoryAccessible
 import tachiyomi.domain.storage.service.StoragePreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.artist
+import tachiyomi.i18n.author
+import tachiyomi.i18n.backup_info
+import tachiyomi.i18n.cache_delete_error
+import tachiyomi.i18n.cache_deleted
+import tachiyomi.i18n.export
+import tachiyomi.i18n.file_null_uri_error
+import tachiyomi.i18n.file_picker_error
+import tachiyomi.i18n.file_picker_uri_permission_unsupported
+import tachiyomi.i18n.file_select_backup
+import tachiyomi.i18n.invalid_location
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.pref_show_restoring_progress_banner
+import tachiyomi.i18n.kmk.pref_show_syncing_progress_banner
+import tachiyomi.i18n.kmk.pref_webdav_folder
+import tachiyomi.i18n.kmk.pref_webdav_folder_summ
+import tachiyomi.i18n.kmk.pref_webdav_password
+import tachiyomi.i18n.kmk.pref_webdav_password_summ
+import tachiyomi.i18n.kmk.pref_webdav_url
+import tachiyomi.i18n.kmk.pref_webdav_url_summ
+import tachiyomi.i18n.kmk.pref_webdav_username
+import tachiyomi.i18n.kmk.pref_webdav_username_summ
+import tachiyomi.i18n.kmk.web_dav
+import tachiyomi.i18n.label_backup
+import tachiyomi.i18n.label_data_storage
+import tachiyomi.i18n.last_auto_backup_info
+import tachiyomi.i18n.library_exported
+import tachiyomi.i18n.library_list
+import tachiyomi.i18n.migration_dialog_what_to_include
+import tachiyomi.i18n.no_location_set
+import tachiyomi.i18n.off
+import tachiyomi.i18n.pref_auto_clear_chapter_cache
+import tachiyomi.i18n.pref_backup_interval
+import tachiyomi.i18n.pref_clear_chapter_cache
+import tachiyomi.i18n.pref_create_backup
+import tachiyomi.i18n.pref_restore_backup
+import tachiyomi.i18n.pref_storage_location
+import tachiyomi.i18n.pref_storage_location_info
+import tachiyomi.i18n.pref_storage_usage
+import tachiyomi.i18n.restore_in_progress
+import tachiyomi.i18n.restore_miui_warning
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.google_drive
+import tachiyomi.i18n.sy.google_drive_not_signed_in
+import tachiyomi.i18n.sy.google_drive_sync_data_not_found
+import tachiyomi.i18n.sy.google_drive_sync_data_purge_error
+import tachiyomi.i18n.sy.google_drive_sync_data_purged
+import tachiyomi.i18n.sy.last_synchronization
+import tachiyomi.i18n.sy.pref_choose_what_to_sync
+import tachiyomi.i18n.sy.pref_clear_page_preview_cache
+import tachiyomi.i18n.sy.pref_google_drive_purge_sync_data
+import tachiyomi.i18n.sy.pref_google_drive_sign_in
+import tachiyomi.i18n.sy.pref_purge_confirmation_message
+import tachiyomi.i18n.sy.pref_purge_confirmation_title
+import tachiyomi.i18n.sy.pref_sync_api_key
+import tachiyomi.i18n.sy.pref_sync_api_key_summ
+import tachiyomi.i18n.sy.pref_sync_automatic_category
+import tachiyomi.i18n.sy.pref_sync_host
+import tachiyomi.i18n.sy.pref_sync_host_summ
+import tachiyomi.i18n.sy.pref_sync_interval
+import tachiyomi.i18n.sy.pref_sync_now
+import tachiyomi.i18n.sy.pref_sync_now_group_title
+import tachiyomi.i18n.sy.pref_sync_now_subtitle
+import tachiyomi.i18n.sy.pref_sync_options
+import tachiyomi.i18n.sy.pref_sync_options_summ
+import tachiyomi.i18n.sy.pref_sync_service
+import tachiyomi.i18n.sy.pref_sync_service_category
+import tachiyomi.i18n.sy.scan_qr_code
+import tachiyomi.i18n.sy.sync_in_progress
+import tachiyomi.i18n.sy.syncyomi
+import tachiyomi.i18n.sy.update_30min
+import tachiyomi.i18n.title
+import tachiyomi.i18n.tracking_guide
+import tachiyomi.i18n.update_12hour
+import tachiyomi.i18n.update_1hour
+import tachiyomi.i18n.update_24hour
+import tachiyomi.i18n.update_3hour
+import tachiyomi.i18n.update_48hour
+import tachiyomi.i18n.update_6hour
+import tachiyomi.i18n.update_weekly
+import tachiyomi.i18n.used_cache
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.i18n.sy.update_1hour as sy_update_1hour
+import tachiyomi.i18n.sy.update_3hour as sy_update_3hour
 
 object SettingsDataScreen : SearchableSettings {
     @Suppress("unused")
@@ -894,8 +978,8 @@ object SettingsDataScreen : SearchableSettings {
                     entries = persistentMapOf(
                         0 to stringResource(MR.strings.off),
                         30 to stringResource(SYMR.strings.update_30min),
-                        60 to stringResource(SYMR.strings.update_1hour),
-                        180 to stringResource(SYMR.strings.update_3hour),
+                        60 to stringResource(SYMR.strings.sy_update_1hour),
+                        180 to stringResource(SYMR.strings.sy_update_3hour),
                         360 to stringResource(MR.strings.update_6hour),
                         720 to stringResource(MR.strings.update_12hour),
                         1440 to stringResource(MR.strings.update_24hour),

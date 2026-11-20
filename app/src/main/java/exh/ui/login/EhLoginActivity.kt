@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.util.view.setComposeContent
 import exh.log.xLogD
 import exh.source.ExhPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.information_webview_required
 import uy.kohesive.injekt.injectLazy
 import java.net.HttpCookie
 import java.util.Locale

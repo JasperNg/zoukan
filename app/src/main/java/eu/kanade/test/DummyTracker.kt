@@ -12,6 +12,12 @@ import kotlinx.coroutines.flow.flowOf
 import okhttp3.OkHttpClient
 import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.dropped
+import tachiyomi.i18n.on_hold
+import tachiyomi.i18n.plan_to_read
+import tachiyomi.i18n.reading
+import tachiyomi.i18n.repeating
 
 data class DummyTracker(
     override val id: Long,

@@ -54,6 +54,9 @@ import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.EntrySearch
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.source_blocked_open_the_site
+import zoukan.i18n.desktop.source_no_connection
+import zoukan.i18n.desktop.source_timed_out
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File

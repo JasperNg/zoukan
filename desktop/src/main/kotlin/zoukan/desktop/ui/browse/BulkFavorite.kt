@@ -44,6 +44,9 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.add_to_library
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
@@ -58,6 +61,12 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add_all
+import zoukan.i18n.desktop.add_to_categories
+import zoukan.i18n.desktop.already_in_your_library
+import zoukan.i18n.desktop.select_entries
+import zoukan.i18n.desktop.skip_these
+import zoukan.i18n.desktop.the_library_has_entries_with_the
 
 /**
  * Komikku's bulk favorite (BulkFavoriteScreenModel): select entries in a source, the global search

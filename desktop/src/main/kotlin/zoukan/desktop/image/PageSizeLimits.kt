@@ -5,6 +5,7 @@ import org.jetbrains.skia.Data
 import xyz.nulldev.androidcompat.graphics.byteArrayImageInputStream
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.the_page_is_too_large_to_show
 import javax.imageio.ImageIO
 
 /**

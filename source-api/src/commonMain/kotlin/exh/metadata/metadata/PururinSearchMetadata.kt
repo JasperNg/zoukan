@@ -7,6 +7,16 @@ import kotlinx.serialization.Serializable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.alt_title
+import tachiyomi.i18n.sy.average_rating
+import tachiyomi.i18n.sy.gallery_size
+import tachiyomi.i18n.sy.id
+import tachiyomi.i18n.sy.page_count
+import tachiyomi.i18n.sy.thumbnail_url
+import tachiyomi.i18n.sy.total_ratings
+import tachiyomi.i18n.sy.uploader
+import tachiyomi.i18n.sy.uploader_capital
+import tachiyomi.i18n.title
 
 @Serializable
 class PururinSearchMetadata : RaisedSearchMetadata() {

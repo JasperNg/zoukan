@@ -29,6 +29,10 @@ import mihon.domain.extension.model.KOMIKKU_SIGNATURE
 import mihon.domain.extension.model.REPO_HELP
 import mihon.domain.extension.model.REPO_SIGNATURE
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_webview_refresh
+import tachiyomi.i18n.extensionStores
+import tachiyomi.i18n.extensionStoresScreen_emptyLabel
+import tachiyomi.i18n.label_help
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues

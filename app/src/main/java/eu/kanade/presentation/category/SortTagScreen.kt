@@ -11,6 +11,8 @@ import eu.kanade.presentation.category.components.genre.SortTagContent
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.tachiyomi.ui.category.genre.SortTagScreenState
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.action_edit_tags
+import tachiyomi.i18n.sy.information_empty_tags
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues

@@ -59,6 +59,18 @@ import mihon.domain.extension.model.ExtensionStore
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_disable_all
+import tachiyomi.i18n.action_display_language_badge
+import tachiyomi.i18n.action_enable_all
+import tachiyomi.i18n.ext_info_age_rating
+import tachiyomi.i18n.ext_uninstall
+import tachiyomi.i18n.label_extension_info
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.pref_clear_cookies
+import tachiyomi.i18n.pref_incognito_mode
+import tachiyomi.i18n.source_settings
+import tachiyomi.i18n.version
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -76,6 +88,14 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.cleared_1_cookie
+import zoukan.i18n.desktop.cleared_cookies
+import zoukan.i18n.desktop.failed
+import zoukan.i18n.desktop.pauses_reading_history_and_tracking_for
+import zoukan.i18n.desktop.store
+import zoukan.i18n.desktop.this_extension_is_not_installed
+import zoukan.i18n.desktop.uninstall
+import zoukan.i18n.desktop.uninstalled
 
 /**
  * Android's extension details (ExtensionDetailsScreenModel): the extension's version, language and

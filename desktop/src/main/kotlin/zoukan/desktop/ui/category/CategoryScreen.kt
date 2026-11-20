@@ -66,7 +66,23 @@ import tachiyomi.domain.category.interactor.ReorderCategory
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_add_category
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_edit_categories
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_rename_category
+import tachiyomi.i18n.default_category
+import tachiyomi.i18n.default_category_summary
+import tachiyomi.i18n.delete_category
+import tachiyomi.i18n.delete_category_confirmation
+import tachiyomi.i18n.error_category_exists
+import tachiyomi.i18n.information_required_plain
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_hide
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.name
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -79,6 +95,10 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.an_internal_error_occurred
+import zoukan.i18n.desktop.reorder
+import zoukan.i18n.desktop.show
+import zoukan.i18n.desktop.you_have_no_categories_click_the
 
 /** Android's CategoryScreenModel: the user's categories, without the system Default one. */
 class CategoryScreenModel(

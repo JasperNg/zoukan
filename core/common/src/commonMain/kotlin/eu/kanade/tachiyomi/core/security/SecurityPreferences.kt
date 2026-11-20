@@ -5,7 +5,13 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.lock_always
+import tachiyomi.i18n.lock_never
+import tachiyomi.i18n.pref_incognito_mode
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.aes_128
+import tachiyomi.i18n.sy.aes_256
+import tachiyomi.i18n.sy.standard_zip_encryption
 
 class SecurityPreferences(
     private val preferenceStore: PreferenceStore,

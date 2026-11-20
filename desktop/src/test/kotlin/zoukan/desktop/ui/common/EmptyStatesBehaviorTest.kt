@@ -54,6 +54,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.browse
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.ZoukanDirs
@@ -78,6 +79,9 @@ import zoukan.desktop.ui.library.LibrarySearch
 import zoukan.desktop.ui.library.LibraryTab
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.no_downloads_queued_download_chapters_from
+import zoukan.i18n.desktop.nothing_read_yet
+import zoukan.i18n.desktop.your_library_is_empty_find_something
 import java.io.File
 import java.util.concurrent.Executors
 

@@ -79,6 +79,11 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.browse
+import tachiyomi.i18n.history
+import tachiyomi.i18n.label_library
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.label_recent_updates
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs
@@ -119,6 +124,12 @@ import zoukan.desktop.ui.updates.UpdatesTab
 import zoukan.desktop.update.Updates
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.a_zoukan_command_is_using_the_data_folder
+import zoukan.i18n.desktop.library_updates_and_downloads_go_on
+import zoukan.i18n.desktop.open_zoukan_to_see_the_details
+import zoukan.i18n.desktop.zoukan_closed_unexpectedly_last_time_the
+import zoukan.i18n.desktop.zoukan_is_already_running_open_it
+import zoukan.i18n.desktop.zoukan_is_still_running
 import java.awt.SystemTray
 
 /** The main window, for file dialogs; null in tests. */

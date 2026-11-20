@@ -22,6 +22,7 @@ import exh.ui.metadata.adapters.MetadataUIUtil.bindDrawable
 import exh.ui.metadata.adapters.MetadataUIUtil.getRatingString
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.more_info
 import kotlin.math.round
 
 @Composable

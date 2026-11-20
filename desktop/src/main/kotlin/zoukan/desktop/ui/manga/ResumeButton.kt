@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_resume
+import tachiyomi.i18n.action_start
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.reducedMotion
 import kotlin.math.roundToInt

@@ -50,6 +50,7 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.`open`
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
 import zoukan.desktop.local.LocalSource

@@ -1,8 +1,18 @@
 package zoukan.desktop.ui.reader
 
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.disabled
+import tachiyomi.i18n.edge_nav
+import tachiyomi.i18n.kindlish_nav
+import tachiyomi.i18n.l_nav
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.none
+import tachiyomi.i18n.tapping_inverted_both
+import tachiyomi.i18n.tapping_inverted_horizontal
+import tachiyomi.i18n.tapping_inverted_vertical
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.right_and_left
 
 /**
  * The reader's tap zones, as Android's ViewerNavigation and its layouts (L shaped, Kindle-ish,

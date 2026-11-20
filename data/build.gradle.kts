@@ -8,27 +8,26 @@ plugins {
     alias(libs.plugins.sqldelight)
 }
 
-android {
-    namespace = "tachiyomi.data"
-
-    defaultConfig {
-        consumerProguardFiles("consumer-rules.pro")
-    }
-
-    sqldelight {
-        databases {
-            create("Database") {
-                packageName.set("tachiyomi.data")
-                dialect(libs.sqldelight.dialects.sql)
-                // ZOUKAN -->
-                schemaOutputDirectory.set(project.file("./src/commonMain/sqldelight"))
-                // ZOUKAN <--
-            }
+sqldelight {
+    databases {
+        create("Database") {
+            packageName.set("tachiyomi.data")
+            dialect(libs.sqldelight.dialects.sql)
+            // ZOUKAN -->
+            schemaOutputDirectory.set(project.file("./src/commonMain/sqldelight"))
+            // ZOUKAN <--
         }
     }
 }
 
 kotlin {
+    android {
+        namespace = "tachiyomi.data"
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
+        }
+    }
+
     compilerOptions {
         optIn.add("kotlinx.serialization.ExperimentalSerializationApi")
     }

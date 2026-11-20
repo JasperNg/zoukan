@@ -8,6 +8,9 @@ import androidx.compose.ui.unit.DpOffset
 import eu.kanade.presentation.manga.DownloadAction
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.download_amount
+import tachiyomi.i18n.download_bookmarked
+import tachiyomi.i18n.download_unread
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 

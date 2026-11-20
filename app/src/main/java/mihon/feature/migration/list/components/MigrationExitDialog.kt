@@ -5,6 +5,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.migrationListScreen_exitDialogTitle
+import tachiyomi.i18n.migrationListScreen_exitDialog_cancelLabel
+import tachiyomi.i18n.migrationListScreen_exitDialog_stopLabel
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

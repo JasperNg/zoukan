@@ -129,6 +129,9 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.job_failed_schedule_backup_check
+import tachiyomi.i18n.kmk.job_failed_schedule_update_check
+import tachiyomi.i18n.unknown_error
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt

@@ -28,10 +28,15 @@ import androidx.compose.ui.unit.dp
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_move_down
+import tachiyomi.i18n.kmk.action_move_up
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.done
+import zoukan.i18n.desktop.feed_order
+import zoukan.i18n.desktop.reorder
 
 /**
  * Komikku's feed order screen (FeedOrderScreen and SourceFeedOrderScreen): drag the saved feeds,

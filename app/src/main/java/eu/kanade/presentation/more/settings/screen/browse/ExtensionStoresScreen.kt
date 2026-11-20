@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toast
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.extensions_page_need_refresh
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class ExtensionStoresScreen(

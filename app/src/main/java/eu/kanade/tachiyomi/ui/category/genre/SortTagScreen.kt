@@ -14,6 +14,11 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.action_add_tags_message
+import tachiyomi.i18n.sy.add_tag
+import tachiyomi.i18n.sy.delete_tag
+import tachiyomi.i18n.sy.delete_tag_confirmation
+import tachiyomi.i18n.sy.error_tag_exists
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 

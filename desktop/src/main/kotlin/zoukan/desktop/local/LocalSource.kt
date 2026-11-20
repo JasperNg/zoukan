@@ -24,6 +24,7 @@ import zoukan.desktop.download.ComicInfoXml
 import zoukan.desktop.download.FileNames
 import zoukan.desktop.download.ImageType
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.the_cover_is_encrypted_set_the_download_password
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException

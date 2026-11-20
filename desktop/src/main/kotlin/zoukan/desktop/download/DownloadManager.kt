@@ -40,6 +40,11 @@ import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.domain.toSChapter
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.chapters_downloaded
+import zoukan.i18n.desktop.download_disk_full
+import zoukan.i18n.desktop.download_failed
+import zoukan.i18n.desktop.downloads_finished
+import zoukan.i18n.desktop.n_failed
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger

@@ -11,6 +11,8 @@ import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.unlock_app_title
 
 /**
  * Blank activity with a BiometricPrompt.

@@ -69,6 +69,8 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.more_previews
+import tachiyomi.i18n.sy.page_previews
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -83,6 +85,13 @@ import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.couldnt_load_page_previews
+import zoukan.i18n.desktop.entry_not_found
+import zoukan.i18n.desktop.page
+import zoukan.i18n.desktop.retry
+import zoukan.i18n.desktop.the_source_of_this_preview_is
+import zoukan.i18n.desktop.this_entry_has_no_page_previews
+import zoukan.i18n.desktop.unknown_error
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 

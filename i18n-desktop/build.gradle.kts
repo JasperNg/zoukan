@@ -1,17 +1,21 @@
 plugins {
-    id("mihon.library")
-    kotlin("multiplatform")
+    id("mihon.library.kmp")
     alias(libs.plugins.moko)
     id("com.github.ben-manes.versions")
 }
 
 kotlin {
-    androidTarget()
-    // ZOUKAN -->
-    jvm("desktop")
-    // ZOUKAN <--
+    android {
+        namespace = "zoukan.i18n.desktop"
 
-    applyDefaultHierarchyTemplate()
+        androidResources {
+            enable = true
+        }
+
+        lint {
+            disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
+        }
+    }
 
     sourceSets {
         commonMain {
@@ -22,27 +26,7 @@ kotlin {
     }
 }
 
-android {
-    namespace = "zoukan.i18n.desktop"
-
-    sourceSets {
-        named("main") {
-            res.srcDir("src/commonMain/resources")
-        }
-    }
-
-    lint {
-        disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
-    }
-}
-
 multiplatformResources {
     resourcesClassName.set("DMR")
     resourcesPackage.set("zoukan.i18n.desktop")
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    compilerOptions.freeCompilerArgs.addAll(
-        "-Xexpect-actual-classes",
-    )
 }

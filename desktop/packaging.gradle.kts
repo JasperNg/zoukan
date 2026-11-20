@@ -188,7 +188,7 @@ fun signWindows(file: File) {
 // --- Tasks -----------------------------------------------------------------------------------
 
 /** The app's jar and its libraries, the input jpackage copies into the app. */
-val prepareAppJars by tasks.registering(Sync::class) {
+val prepareAppJars = tasks.register<Sync>("prepareAppJars") {
     group = "zoukan packaging"
     description = "Collects the app's jars for jpackage (and on macOS signs native code in them)"
     from(tasks.named("jar"))
@@ -204,7 +204,7 @@ val prepareAppJars by tasks.registering(Sync::class) {
 }
 
 /** The bundled Java runtime: every module of the packaging JDK, since extensions may use any. */
-val jlinkRuntime by tasks.registering {
+val jlinkRuntime = tasks.register("jlinkRuntime") {
     group = "zoukan packaging"
     description = "Builds the bundled Java runtime with jlink"
     val output = runtimeDir
@@ -229,7 +229,7 @@ val jlinkRuntime by tasks.registering {
 }
 
 /** The app folder: Zoukan/ with Zoukan.exe on Windows, Zoukan.app on macOS, Zoukan/bin/Zoukan on Linux. */
-val createDistributable by tasks.registering {
+val createDistributable = tasks.register("createDistributable") {
     group = "zoukan packaging"
     description = "Builds the app folder with jpackage"
     dependsOn(prepareAppJars, jlinkRuntime)
@@ -301,7 +301,7 @@ val wixDir = layout.buildDirectory.dir("packaging/wix")
  * WiX publishes no digest: the value was pinned from two downloads on 2026-11-16.
  */
 val wixSha256 = "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31"
-val downloadWix by tasks.registering {
+val downloadWix = tasks.register("downloadWix") {
     group = "zoukan packaging"
     description = "Downloads WiX Toolset 3.14 for jpackage, unless it is on the PATH"
     onlyIf { isWindows }
@@ -328,7 +328,7 @@ val downloadWix by tasks.registering {
     }
 }
 
-val packageMsi by tasks.registering {
+val packageMsi = tasks.register("packageMsi") {
     group = "zoukan packaging"
     description = "Builds the Windows installer (MSI) with jpackage and WiX"
     onlyIf("Windows only") { isWindows }
@@ -365,7 +365,7 @@ val packageMsi by tasks.registering {
     }
 }
 
-val packageDmg by tasks.registering {
+val packageDmg = tasks.register("packageDmg") {
     group = "zoukan packaging"
     description = "Builds the macOS disk image (DMG) with jpackage"
     onlyIf("macOS only") { isMac }
@@ -404,7 +404,7 @@ val packageDmg by tasks.registering {
     }
 }
 
-val notarizeDmg by tasks.registering {
+val notarizeDmg = tasks.register("notarizeDmg") {
     group = "zoukan packaging"
     description = "Notarizes the DMG with Apple and staples the ticket"
     onlyIf("macOS only") { isMac }

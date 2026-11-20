@@ -75,6 +75,14 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_menu
+import tachiyomi.i18n.nav_zone_left
+import tachiyomi.i18n.nav_zone_next
+import tachiyomi.i18n.nav_zone_prev
+import tachiyomi.i18n.nav_zone_right
+import tachiyomi.i18n.pref_category_general
+import tachiyomi.i18n.right_to_left_viewer
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.app.DesktopPreferences
@@ -92,6 +100,7 @@ import zoukan.desktop.ui.reader.ReaderKeys.Action
 import zoukan.desktop.ui.reader.ReaderNavigation.Region.LEFT
 import zoukan.desktop.ui.reader.ReaderNavigation.Region.RIGHT
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.settings_s
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors

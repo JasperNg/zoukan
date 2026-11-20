@@ -10,9 +10,13 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
 import zoukan.desktop.app.runCatchingCancellable
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.doh_notice_open_settings
+import zoukan.i18n.desktop.doh_notice_text
+import zoukan.i18n.desktop.doh_notice_title
 
 /**
  * Desktop only: DNS over HTTPS became on by default (Quad9) in this version, where it used to be off,

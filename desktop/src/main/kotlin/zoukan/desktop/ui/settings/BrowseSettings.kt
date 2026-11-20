@@ -21,8 +21,28 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import mihon.domain.extension.interactor.GetExtensionStores
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_edit_categories
+import tachiyomi.i18n.extensionStores
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.pref_source_related_mangas
+import tachiyomi.i18n.kmk.pref_source_related_mangas_summary
+import tachiyomi.i18n.label_sources
+import tachiyomi.i18n.parental_controls_info
+import tachiyomi.i18n.pref_category_nsfw_content
+import tachiyomi.i18n.pref_hide_in_library_items
+import tachiyomi.i18n.pref_show_nsfw_source
+import tachiyomi.i18n.requires_app_restart
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.feed
+import tachiyomi.i18n.sy.pref_feed_position
+import tachiyomi.i18n.sy.pref_feed_position_summery
+import tachiyomi.i18n.sy.pref_hide_feed
+import tachiyomi.i18n.sy.pref_local_source_hidden_folders
+import tachiyomi.i18n.sy.pref_local_source_hidden_folders_summery
+import tachiyomi.i18n.sy.pref_source_navigation
+import tachiyomi.i18n.sy.pref_source_navigation_summery
+import tachiyomi.i18n.sy.pref_source_source_filtering
+import tachiyomi.i18n.sy.pref_source_source_filtering_summery
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -34,6 +54,13 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.categories
+import zoukan.i18n.desktop.expand_related_titles
+import zoukan.i18n.desktop.n_1_store
+import zoukan.i18n.desktop.only_show_related_titles_from_the
+import zoukan.i18n.desktop.related_titles_in_overflow_menu
+import zoukan.i18n.desktop.show_the_related_titles_row_open
+import zoukan.i18n.desktop.stores_2
 
 /**
  * Settings > Browse, as the Android app's SettingsBrowseScreen: sources (suggestions, source

@@ -24,6 +24,7 @@ import eu.kanade.presentation.more.settings.LocalPreferenceHighlighted
 import eu.kanade.presentation.more.settings.LocalPreferenceMinHeight
 import eu.kanade.tachiyomi.data.connections.ConnectionsService
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.login_success
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 

@@ -11,7 +11,9 @@ import eu.kanade.presentation.category.components.sources.SourceCategoryContent
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.tachiyomi.ui.category.sources.SourceCategoryScreenState
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_edit_categories
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.no_source_categories
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues

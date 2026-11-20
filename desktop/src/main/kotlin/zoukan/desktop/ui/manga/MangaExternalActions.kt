@@ -26,6 +26,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.track_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -37,6 +38,9 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.domain.toSManga
 import zoukan.desktop.track.TrackChapters
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_open_the_browser
+import zoukan.i18n.desktop.the_built_in_browser_could_not
+import zoukan.i18n.desktop.this_source_has_no_web_page
 
 /**
  * External integrations and metadata helpers for the entry screen: trackers (sync, auto-track on

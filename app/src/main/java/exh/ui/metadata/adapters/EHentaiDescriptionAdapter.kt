@@ -26,6 +26,11 @@ import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.is_visible
+import tachiyomi.i18n.sy.language_translated
+import tachiyomi.i18n.sy.more_info
+import tachiyomi.i18n.sy.num_pages
+import tachiyomi.i18n.unknown
 import tachiyomi.presentation.core.icons.FlagEmoji.Companion.getEmojiLangFlag
 
 @Composable

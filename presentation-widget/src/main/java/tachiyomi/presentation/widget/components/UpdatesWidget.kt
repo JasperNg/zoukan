@@ -26,6 +26,7 @@ import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.core.common.Constants
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.information_no_recent
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.widget.util.calculateRowAndColumnCount
 

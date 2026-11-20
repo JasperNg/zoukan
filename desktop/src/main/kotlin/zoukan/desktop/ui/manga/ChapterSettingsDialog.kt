@@ -37,6 +37,27 @@ import androidx.compose.ui.unit.dp
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_asc
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_desc
+import tachiyomi.i18n.action_display
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_filter_bookmarked
+import tachiyomi.i18n.action_filter_unread
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_order_by_chapter_number
+import tachiyomi.i18n.action_order_by_upload_date
+import tachiyomi.i18n.action_reset
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.action_sort
+import tachiyomi.i18n.action_sort_alpha
+import tachiyomi.i18n.chapter_settings
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.set_chapter_settings_as_default
+import tachiyomi.i18n.show_chapter_number
+import tachiyomi.i18n.show_title
+import tachiyomi.i18n.sort_by_source
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.RowCheckbox
 import zoukan.desktop.ui.common.RowRadioButton
@@ -45,6 +66,13 @@ import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.a_box_with_a_dash_shows_2
+import zoukan.i18n.desktop.also_apply_them_to_every_entry
+import zoukan.i18n.desktop.make_these_the_default_chapter_settings
+import zoukan.i18n.desktop.not
+import zoukan.i18n.desktop.scanlators
+import zoukan.i18n.desktop.scanlators_some_hidden
+import zoukan.i18n.desktop.show_all
 
 private val SORTS = listOf(
     Manga.CHAPTER_SORTING_SOURCE to localized(MR.strings.sort_by_source),

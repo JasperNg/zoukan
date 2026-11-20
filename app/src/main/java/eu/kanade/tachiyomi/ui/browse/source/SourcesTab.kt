@@ -31,8 +31,14 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_global_search
+import tachiyomi.i18n.internal_error
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_toggle_nsfw_only
+import tachiyomi.i18n.label_sources
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.find_in_another_source
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

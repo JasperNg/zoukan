@@ -4,10 +4,37 @@ import eu.kanade.domain.source.service.SourcePreferences
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_open_in_browser
+import tachiyomi.i18n.action_open_in_web_view
+import tachiyomi.i18n.chapters
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.scale_type_16_9
+import tachiyomi.i18n.kmk.scale_type_20_9
+import tachiyomi.i18n.kmk.scale_type_3_2
+import tachiyomi.i18n.kmk.scale_type_4_3
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.left_to_right_viewer
+import tachiyomi.i18n.pref_image_scale_type
+import tachiyomi.i18n.right_to_left_viewer
+import tachiyomi.i18n.scale_type_fit_height
+import tachiyomi.i18n.scale_type_fit_screen
+import tachiyomi.i18n.scale_type_fit_width
+import tachiyomi.i18n.scale_type_original_size
+import tachiyomi.i18n.scale_type_smart_fit
+import tachiyomi.i18n.scale_type_stretch
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.entry_type_webtoon
+import tachiyomi.i18n.sy.page_layout
+import tachiyomi.i18n.vertical_viewer
+import tachiyomi.i18n.viewer
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.continuous_vertical
+import zoukan.i18n.desktop.crop_borders_continuous_vertical
+import zoukan.i18n.desktop.crop_borders_paged
+import zoukan.i18n.desktop.crop_borders_webtoon
+import zoukan.i18n.desktop.load_this_page_first
+import zoukan.i18n.desktop.retry_failed_pages
 
 /**
  * The settings the desktop UI reads. Keys are the Android app's where the setting exists there

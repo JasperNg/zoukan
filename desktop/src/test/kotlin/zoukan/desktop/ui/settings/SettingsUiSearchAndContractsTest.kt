@@ -51,12 +51,25 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.web_dav
+import tachiyomi.i18n.none
+import tachiyomi.i18n.pref_app_theme
+import tachiyomi.i18n.pref_crop_borders
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.mangadex_sync_follows_to_library
+import tachiyomi.i18n.sy.pref_google_drive_sign_in
+import tachiyomi.i18n.theme_nord
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.lock_on_these_days
+import zoukan.i18n.desktop.other_browser
+import zoukan.i18n.desktop.sync_service
+import zoukan.i18n.desktop.use_japanese_titles
 import java.io.File
 
 /**

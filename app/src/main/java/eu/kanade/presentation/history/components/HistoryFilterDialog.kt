@@ -23,7 +23,12 @@ import eu.kanade.tachiyomi.ui.history.HistorySettingsScreenModel
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.history.service.HistoryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_filter_non_library_entries
+import tachiyomi.i18n.kmk.action_filter_unfinished_chapter
+import tachiyomi.i18n.kmk.action_filter_unfinished_manga
+import tachiyomi.i18n.kmk.action_panorama_cover
 import tachiyomi.presentation.core.components.SettingsItemsPaddings
 import tachiyomi.presentation.core.components.TriStateItem
 import tachiyomi.presentation.core.components.material.padding

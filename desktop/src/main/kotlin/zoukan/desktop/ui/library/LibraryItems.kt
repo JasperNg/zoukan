@@ -63,6 +63,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_global_search_query
+import tachiyomi.i18n.selected
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.browse.languageName
 import zoukan.desktop.ui.common.ContextMenu
@@ -78,6 +80,8 @@ import zoukan.desktop.ui.common.languageIconPainter
 import zoukan.desktop.ui.common.onRightClickAt
 import zoukan.desktop.ui.common.rememberContextMenuState
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.continue_reading
+import zoukan.i18n.desktop.select
 
 /** How a click on an entry was made: a plain click, Ctrl/Cmd + click or Shift + click. */
 enum class ClickKind { Plain, Toggle, Range }

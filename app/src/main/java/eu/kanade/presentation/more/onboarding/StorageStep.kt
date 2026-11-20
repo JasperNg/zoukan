@@ -24,6 +24,12 @@ import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.domain.storage.service.StorageManager.Companion.directoryAccessible
 import tachiyomi.domain.storage.service.StoragePreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.file_picker_error
+import tachiyomi.i18n.onboarding_storage_action_select
+import tachiyomi.i18n.onboarding_storage_help_action
+import tachiyomi.i18n.onboarding_storage_help_info
+import tachiyomi.i18n.onboarding_storage_info
 import tachiyomi.presentation.core.components.material.Button
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

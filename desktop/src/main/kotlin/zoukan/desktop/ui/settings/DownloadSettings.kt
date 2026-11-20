@@ -6,13 +6,42 @@ import androidx.compose.runtime.remember
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.auto_download_while_reading
+import tachiyomi.i18n.categories
+import tachiyomi.i18n.disabled
+import tachiyomi.i18n.download_ahead
+import tachiyomi.i18n.download_ahead_info
+import tachiyomi.i18n.fifth_to_last
+import tachiyomi.i18n.fourth_to_last
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.download_cache_renew_interval
+import tachiyomi.i18n.kmk.download_cache_renew_interval_manual
+import tachiyomi.i18n.last_read_chapter
+import tachiyomi.i18n.pref_category_auto_download
+import tachiyomi.i18n.pref_category_delete_chapters
+import tachiyomi.i18n.pref_download_new
+import tachiyomi.i18n.pref_download_new_categories_details
+import tachiyomi.i18n.pref_download_new_unread_chapters_only
+import tachiyomi.i18n.pref_remove_after_marked_as_read
+import tachiyomi.i18n.pref_remove_after_read
+import tachiyomi.i18n.pref_remove_bookmarked_chapters
+import tachiyomi.i18n.pref_remove_exclude_categories
+import tachiyomi.i18n.second_to_last
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.time_between_batches_12_hours
+import tachiyomi.i18n.sy.time_between_batches_1_hour
+import tachiyomi.i18n.sy.time_between_batches_24_hours
+import tachiyomi.i18n.sy.time_between_batches_2_hours
+import tachiyomi.i18n.sy.time_between_batches_6_hours
+import tachiyomi.i18n.third_to_last
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.after_a_library_update
+import zoukan.i18n.desktop.how_often_the_app_reads_the
+import zoukan.i18n.desktop.next_unread_chapters
 
 /**
  * The Android app's download groups (SettingsDownloadScreen): delete chapters, auto-download and

@@ -22,6 +22,9 @@ import eu.kanade.tachiyomi.ui.manga.RelatedManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.related_mangas_more
+import tachiyomi.i18n.kmk.related_mangas_website_suggestions
+import tachiyomi.i18n.loading
 import tachiyomi.presentation.core.components.FastScrollLazyVerticalGrid
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

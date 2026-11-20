@@ -78,6 +78,11 @@ import zoukan.desktop.testing.UserMessages
 import zoukan.desktop.testing.fakes.FailingSqlDriver
 import zoukan.desktop.track.MapPreferenceStore
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.safety_backup_could_not_be_written
+import zoukan.i18n.desktop.server_library_not_replaced_refused
+import zoukan.i18n.desktop.server_library_not_replaced_service
+import zoukan.i18n.desktop.server_library_not_replaced_sync_running
+import zoukan.i18n.desktop.server_library_replaced
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

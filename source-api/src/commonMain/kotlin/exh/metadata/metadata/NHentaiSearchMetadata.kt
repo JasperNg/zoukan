@@ -7,7 +7,17 @@ import exh.metadata.MetadataUtil
 import kotlinx.serialization.Serializable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.scanlator
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.date_posted
+import tachiyomi.i18n.sy.english_title
+import tachiyomi.i18n.sy.id
+import tachiyomi.i18n.sy.japanese_title
+import tachiyomi.i18n.sy.media_id
+import tachiyomi.i18n.sy.page_count
+import tachiyomi.i18n.sy.short_title
+import tachiyomi.i18n.sy.thumbnail_url
+import tachiyomi.i18n.sy.total_favorites
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime

@@ -18,7 +18,10 @@ import eu.kanade.tachiyomi.ui.browse.source.SourcesFilterScreenModel
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_sources
+import tachiyomi.i18n.source_filter_empty_screen
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.pref_category_all_sources
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.Scroller.STICKY_HEADER_KEY_PREFIX
 import tachiyomi.presentation.core.components.material.Scaffold

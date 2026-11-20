@@ -29,6 +29,13 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_webview_back
+import tachiyomi.i18n.getting_started_guide
+import tachiyomi.i18n.nav_zone_next
+import tachiyomi.i18n.onboarding_action_finish
+import tachiyomi.i18n.onboarding_heading
+import tachiyomi.i18n.pref_storage_location
+import tachiyomi.i18n.theme_dark
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.ZoukanDirs

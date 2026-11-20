@@ -41,7 +41,15 @@ import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.chapter_error
+import tachiyomi.i18n.label_sources
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.could_not_open_entry
+import tachiyomi.i18n.sy.error_with_reason
+import tachiyomi.i18n.sy.launching_app
+import tachiyomi.i18n.sy.loading_entry
 import tachiyomi.presentation.core.components.material.Scaffold
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

@@ -17,6 +17,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import tachiyomi.core.common.Constants
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.appwidget_unavailable_locked
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

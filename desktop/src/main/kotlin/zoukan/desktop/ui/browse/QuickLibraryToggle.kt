@@ -18,6 +18,8 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_remove
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -29,6 +31,8 @@ import zoukan.desktop.ui.manga.DuplicateDialog
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.MigrateDialog
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_add_to_library
+import zoukan.i18n.desktop.remove_from_library
 
 /**
  * Android's long press on a browse result, as a right-click: removes a library entry after asking,

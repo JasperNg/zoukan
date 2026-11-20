@@ -62,7 +62,12 @@ import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_rename_category
+import tachiyomi.i18n.action_retry
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_hide
+import tachiyomi.i18n.kmk.info_empty_library_update_errors
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized
@@ -77,6 +82,8 @@ import zoukan.desktop.ui.category.CategoryScreen
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.clear_selection
+import zoukan.i18n.desktop.selected
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

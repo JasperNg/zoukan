@@ -24,6 +24,7 @@ import mihon.app.shizuku.ShellInterface
 import rikka.shizuku.Shizuku
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ext_installer_shizuku_stopped
 
 class ShizukuInstaller(private val service: Service) : Installer(service) {
 

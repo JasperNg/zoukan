@@ -4,6 +4,9 @@ import android.content.Context
 import eu.kanade.tachiyomi.source.model.Filter
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.date
+import tachiyomi.i18n.local_filter_order_by
+import tachiyomi.i18n.title
 
 sealed class OrderBy(context: Context, selection: Selection) : Filter.Sort(
     context.stringResource(MR.strings.local_filter_order_by),

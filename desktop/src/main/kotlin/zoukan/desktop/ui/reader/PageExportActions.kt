@@ -9,12 +9,20 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.copied_to_clipboard_plain
+import tachiyomi.i18n.cover_updated
+import tachiyomi.i18n.notification_cover_update_failed
+import tachiyomi.i18n.notification_first_add_to_library
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.manga.EditManga
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_copy_the_picture
+import zoukan.i18n.desktop.could_not_save_the_picture
+import zoukan.i18n.desktop.not_a_double_page
+import zoukan.i18n.desktop.picture_saved_to
 import java.io.File
 
 /**

@@ -16,7 +16,36 @@ import exh.favorites.FavoritesSyncStatus
 import kotlinx.coroutines.delay
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.favorites_sync_add_to_local
+import tachiyomi.i18n.sy.favorites_sync_adding_to_remote
+import tachiyomi.i18n.sy.favorites_sync_bad_library_state
+import tachiyomi.i18n.sy.favorites_sync_calculating_local_changes
+import tachiyomi.i18n.sy.favorites_sync_calculating_remote_changes
+import tachiyomi.i18n.sy.favorites_sync_cleaning_up
+import tachiyomi.i18n.sy.favorites_sync_done_errors
+import tachiyomi.i18n.sy.favorites_sync_done_errors_message
+import tachiyomi.i18n.sy.favorites_sync_downloading
+import tachiyomi.i18n.sy.favorites_sync_error
+import tachiyomi.i18n.sy.favorites_sync_error_string
+import tachiyomi.i18n.sy.favorites_sync_failed_to_add_to_local
+import tachiyomi.i18n.sy.favorites_sync_failed_to_add_to_local_error
+import tachiyomi.i18n.sy.favorites_sync_failed_to_add_to_local_unknown_type
+import tachiyomi.i18n.sy.favorites_sync_failed_to_featch
+import tachiyomi.i18n.sy.favorites_sync_gallery_in_multiple_categories
+import tachiyomi.i18n.sy.favorites_sync_initializing
+import tachiyomi.i18n.sy.favorites_sync_processing_throttle
+import tachiyomi.i18n.sy.favorites_sync_remove_from_local
+import tachiyomi.i18n.sy.favorites_sync_removing_galleries
+import tachiyomi.i18n.sy.favorites_sync_syncing_category_names
+import tachiyomi.i18n.sy.favorites_sync_unable_to_add_to_remote
+import tachiyomi.i18n.sy.favorites_sync_unable_to_delete
+import tachiyomi.i18n.sy.favorites_sync_unknown_error
+import tachiyomi.i18n.sy.favorites_sync_verifying_library
+import tachiyomi.i18n.sy.favorites_syncing
+import tachiyomi.i18n.sy.please_login
+import tachiyomi.i18n.sy.show_gallery
 import kotlin.time.Duration.Companion.seconds
 
 data class SyncFavoritesProgressProperties(

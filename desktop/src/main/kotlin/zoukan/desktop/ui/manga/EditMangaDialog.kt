@@ -36,7 +36,22 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_edit
+import tachiyomi.i18n.action_notes
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.artist
+import tachiyomi.i18n.author
+import tachiyomi.i18n.cover_updated
+import tachiyomi.i18n.status
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.entry_not_tracked
+import tachiyomi.i18n.sy.fill_from_tracker
+import tachiyomi.i18n.sy.select_tracker
+import tachiyomi.i18n.sy.thumbnail_url
+import tachiyomi.i18n.title
+import tachiyomi.i18n.track_error
+import tachiyomi.i18n.unknown
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
@@ -55,6 +70,15 @@ import zoukan.desktop.ui.common.coverOutline
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.track.Choice
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add_the_entry_to_the_library
+import zoukan.i18n.desktop.change_cover
+import zoukan.i18n.desktop.choose_a_cover
+import zoukan.i18n.desktop.could_not_save
+import zoukan.i18n.desktop.description
+import zoukan.i18n.desktop.details_of_entries_outside_the_library
+import zoukan.i18n.desktop.genres_separated_by_commas
+import zoukan.i18n.desktop.reset_details
+import zoukan.i18n.desktop.use_the_sources_cover
 
 private val STATUSES = listOf(
     SManga.UNKNOWN,

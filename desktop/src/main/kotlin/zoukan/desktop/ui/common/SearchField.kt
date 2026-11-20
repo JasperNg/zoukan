@@ -26,6 +26,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.OnShortcut
 import zoukan.desktop.ui.Shortcuts
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.clear_search
 
 /**
  * A screen's search box. Ctrl/Cmd + F puts the cursor in it, the X button or Escape empties it,

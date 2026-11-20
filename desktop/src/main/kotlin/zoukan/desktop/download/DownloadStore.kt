@@ -25,6 +25,10 @@ import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.compat.localized
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.download_queue_restore_failed
+import zoukan.i18n.desktop.download_queue_restore_failed_kept
+import zoukan.i18n.desktop.download_queue_unreadable
+import zoukan.i18n.desktop.download_queue_unreadable_kept
 import java.io.File
 import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException

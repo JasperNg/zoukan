@@ -80,6 +80,8 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.exception_http
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.app.DesktopPreferences
@@ -98,6 +100,8 @@ import zoukan.desktop.ui.LocalWindowState
 import zoukan.desktop.ui.common.UnreadableImageException
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.page_could_not_load
+import zoukan.i18n.desktop.the_page_is_too_large_to_show
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream

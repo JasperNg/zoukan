@@ -6,6 +6,11 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.entry_type_comic
+import tachiyomi.i18n.sy.entry_type_manga
+import tachiyomi.i18n.sy.entry_type_manhua
+import tachiyomi.i18n.sy.entry_type_manhwa
+import tachiyomi.i18n.sy.entry_type_webtoon
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Locale

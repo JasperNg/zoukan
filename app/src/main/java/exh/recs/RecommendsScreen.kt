@@ -24,6 +24,8 @@ import exh.recs.sources.RECOMMENDS_SOURCE
 import exh.recs.sources.StaticResultPagingSource
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.rec_common_recommendations
+import tachiyomi.i18n.sy.similar
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import java.io.Serializable

@@ -77,6 +77,17 @@ import eu.kanade.tachiyomi.data.track.model.TrackSearch
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_copy_to_clipboard
+import tachiyomi.i18n.action_open_in_browser
+import tachiyomi.i18n.action_search_hint
+import tachiyomi.i18n.action_toggle_private_on
+import tachiyomi.i18n.action_track
+import tachiyomi.i18n.label_started
+import tachiyomi.i18n.no_results_found
+import tachiyomi.i18n.score
+import tachiyomi.i18n.track_status
+import tachiyomi.i18n.track_type
+import tachiyomi.i18n.unknown_error
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding

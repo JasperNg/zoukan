@@ -58,7 +58,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_webview_refresh
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.connections_discord
+import tachiyomi.i18n.kmk.login_failed
+import tachiyomi.i18n.login_success
+import tachiyomi.i18n.login_title
+import tachiyomi.i18n.pref_clear_cookies
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

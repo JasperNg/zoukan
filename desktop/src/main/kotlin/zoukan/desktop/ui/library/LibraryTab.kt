@@ -61,8 +61,44 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_display_unread_badge
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_edit_categories
+import tachiyomi.i18n.action_mark_as_read
+import tachiyomi.i18n.action_mark_as_unread
+import tachiyomi.i18n.action_migrate
+import tachiyomi.i18n.action_move_category
+import tachiyomi.i18n.action_next_chapter
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_update_category
+import tachiyomi.i18n.action_update_library
+import tachiyomi.i18n.all
+import tachiyomi.i18n.browse
+import tachiyomi.i18n.download_bookmarked
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_remove_merged
+import tachiyomi.i18n.kmk.action_update
+import tachiyomi.i18n.kmk.`open`
+import tachiyomi.i18n.kmk.option_label_library_update_errors
+import tachiyomi.i18n.kmk.updating
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.label_library
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.label_stats
+import tachiyomi.i18n.remove_from_library
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.action_clean_titles
+import tachiyomi.i18n.sy.mangadex_add_to_follows
+import tachiyomi.i18n.sy.merge
+import tachiyomi.i18n.sy.no_valid_entry
+import tachiyomi.i18n.sy.rec_search_short
+import tachiyomi.i18n.sy.reset_info
+import tachiyomi.i18n.sy.sync_favorites
+import tachiyomi.i18n.sy.sync_library
+import tachiyomi.i18n.update_already_running
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -101,6 +137,31 @@ import zoukan.desktop.ui.recs.CommonRecommendsScreen
 import zoukan.desktop.ui.recs.RecommendationSearchDialog
 import zoukan.desktop.ui.stats.StatsScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.also_delete_downloaded_chapters
+import zoukan.i18n.desktop.change_categories
+import zoukan.i18n.desktop.continue_reading
+import zoukan.i18n.desktop.delete_downloads
+import zoukan.i18n.desktop.delete_downloads_cannot_be_undone
+import zoukan.i18n.desktop.delete_downloads_of_entries
+import zoukan.i18n.desktop.deselect
+import zoukan.i18n.desktop.entries
+import zoukan.i18n.desktop.filter_sort_and_display
+import zoukan.i18n.desktop.filter_sort_and_display_filtered
+import zoukan.i18n.desktop.next_10_chapters
+import zoukan.i18n.desktop.next_25_chapters
+import zoukan.i18n.desktop.next_5_chapters
+import zoukan.i18n.desktop.no_entries_match_the_filters
+import zoukan.i18n.desktop.no_unread_chapters
+import zoukan.i18n.desktop.nothing_matches
+import zoukan.i18n.desktop.open_a_random_entry
+import zoukan.i18n.desktop.remove_entries_from_library
+import zoukan.i18n.desktop.search_library
+import zoukan.i18n.desktop.select
+import zoukan.i18n.desktop.starting_the_library_update
+import zoukan.i18n.desktop.there_are_no_categories_yet_add
+import zoukan.i18n.desktop.updating_of
+import zoukan.i18n.desktop.your_library_is_empty_find_something
+import zoukan.i18n.desktop.remove_from_library as dmr_remove_from_library
 
 @Composable
 fun LibraryTab(model: LibraryScreenModel) {
@@ -626,7 +687,7 @@ private fun RemoveDialog(count: Int, onConfirm: (Boolean) -> Unit, onDismiss: ()
     var deleteDownloads by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (count == 1) localized(DMR.strings.remove_from_library) else localized(DMR.strings.remove_entries_from_library, count)) },
+        title = { Text(if (count == 1) localized(DMR.strings.dmr_remove_from_library) else localized(DMR.strings.remove_entries_from_library, count)) },
         text = {
             Row(Modifier.checkRow(deleteDownloads) { deleteDownloads = it }, verticalAlignment = Alignment.CenterVertically) {
                 RowCheckbox(deleteDownloads, onCheckedChange = null)

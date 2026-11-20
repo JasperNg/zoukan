@@ -23,7 +23,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_rename_category
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_hide
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 

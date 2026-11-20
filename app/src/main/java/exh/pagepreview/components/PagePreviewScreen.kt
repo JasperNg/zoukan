@@ -36,7 +36,11 @@ import exh.util.floor
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.page_preview_page_go_to
+import tachiyomi.i18n.sy.page_previews
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues

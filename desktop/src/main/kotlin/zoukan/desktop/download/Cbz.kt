@@ -11,6 +11,11 @@ import net.lingala.zip4j.model.enums.EncryptionMethod
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_use_the_secret_store
+import zoukan.i18n.desktop.download_password_unreadable_chapter_not_saved
+import zoukan.i18n.desktop.is_password_protected_set_the_download_password
+import zoukan.i18n.desktop.no_download_password_chapter_not_saved
+import zoukan.i18n.desktop.the_page_is_too_large_to_show
 import java.io.Closeable
 import java.io.File
 import java.io.InputStream

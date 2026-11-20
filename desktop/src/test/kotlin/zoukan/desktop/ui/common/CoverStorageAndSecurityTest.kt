@@ -30,6 +30,7 @@ import zoukan.desktop.secrets.FileCipher
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.testing.fakes.FailingSecretStore
 import zoukan.desktop.testing.fakes.MemorySecretStore
+import zoukan.i18n.desktop.not_an_image
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger

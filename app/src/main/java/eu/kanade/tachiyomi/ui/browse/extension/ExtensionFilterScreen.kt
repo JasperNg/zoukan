@@ -13,6 +13,7 @@ import eu.kanade.presentation.util.Screen
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.internal_error
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class ExtensionFilterScreen : Screen() {

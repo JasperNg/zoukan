@@ -16,6 +16,9 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.manga.model.MergedMangaReference
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.dedupe_highest_chapter
+import tachiyomi.i18n.sy.dedupe_most_chapters
+import tachiyomi.i18n.sy.dedupe_priority
 import uy.kohesive.injekt.injectLazy
 
 class EditMergedSettingsHeaderAdapter(

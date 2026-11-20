@@ -17,6 +17,9 @@ import eu.kanade.presentation.components.TabbedDialogPaddings
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.custom_filter
+import tachiyomi.i18n.pref_category_general
+import tachiyomi.i18n.pref_category_reading_mode
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

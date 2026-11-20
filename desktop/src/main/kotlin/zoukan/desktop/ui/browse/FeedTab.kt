@@ -70,7 +70,15 @@ import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_webview_back
+import tachiyomi.i18n.action_webview_refresh
+import tachiyomi.i18n.latest
+import tachiyomi.i18n.popular
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.feed
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -84,6 +92,25 @@ import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add
+import zoukan.i18n.desktop.add_a_feed
+import zoukan.i18n.desktop.could_not_load
+import zoukan.i18n.desktop.install_the_sources_extension_to_see
+import zoukan.i18n.desktop.latest_updates
+import zoukan.i18n.desktop.latest_updates_and_saved_searches_of
+import zoukan.i18n.desktop.no_feeds_yet_add_a_sources
+import zoukan.i18n.desktop.nothing_here
+import zoukan.i18n.desktop.remove_feed_question
+import zoukan.i18n.desktop.remove_from_the_feed
+import zoukan.i18n.desktop.reorder_the_feed
+import zoukan.i18n.desktop.save_a_search_in_the_source
+import zoukan.i18n.desktop.saved_search
+import zoukan.i18n.desktop.source
+import zoukan.i18n.desktop.source_not_installed
+import zoukan.i18n.desktop.source_not_installed_2
+import zoukan.i18n.desktop.this_sources_latest_popular_and_saved
+import zoukan.i18n.desktop.latest as dmr_latest
+import zoukan.i18n.desktop.popular as dmr_popular
 
 /**
  * Browse > Feed: Komikku's global feed. Each row is a source's latest updates (popular when it has
@@ -121,8 +148,8 @@ class FeedScreenModel(
                 popular == false -> localized(MR.strings.latest)
                 savedSearch != null && feed.global -> "${source.name} · ${savedSearch.name}"
                 savedSearch != null -> savedSearch.name
-                source.supportsLatest -> localized(DMR.strings.latest, source.name)
-                else -> localized(DMR.strings.popular, source.name)
+                source.supportsLatest -> localized(DMR.strings.dmr_latest, source.name)
+                else -> localized(DMR.strings.dmr_popular, source.name)
             }
     }
 

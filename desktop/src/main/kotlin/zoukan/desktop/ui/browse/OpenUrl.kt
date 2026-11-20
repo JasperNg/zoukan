@@ -46,7 +46,9 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.`open`
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -55,6 +57,10 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.enter_an_address_that_starts_with
+import zoukan.i18n.desktop.open_from_a_url
+import zoukan.i18n.desktop.opening
+import zoukan.i18n.desktop.paste_the_address_of_an_entry
 
 /** Browse's "Open from a URL": paste an entry's or a chapter's address. */
 @Composable

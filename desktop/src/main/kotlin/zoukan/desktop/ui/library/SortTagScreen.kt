@@ -39,8 +39,17 @@ import eu.kanade.domain.manga.interactor.DeleteSortTag
 import eu.kanade.domain.manga.interactor.GetSortTag
 import eu.kanade.domain.manga.interactor.ReorderSortTag
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_move_down
+import tachiyomi.i18n.kmk.action_move_up
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.action_edit_tags
+import tachiyomi.i18n.sy.delete_tag
+import tachiyomi.i18n.sy.error_tag_exists
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -50,6 +59,13 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add_a_tag
+import zoukan.i18n.desktop.add_tag
+import zoukan.i18n.desktop.do_you_wish_to_delete_the_2
+import zoukan.i18n.desktop.sort_the_library_by_these_tags
+import zoukan.i18n.desktop.tag
+import zoukan.i18n.desktop.tags_must_match_exactly_with_no
+import zoukan.i18n.desktop.you_have_no_tags_add_one
 
 /**
  * SY's "Tag sorting tags" (Settings > Library > Sorting): the ordered tags the library's "Tag

@@ -16,6 +16,7 @@ import zoukan.desktop.app.Version
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_use_the_secret_store
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest

@@ -32,8 +32,16 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
 import exh.ui.batchadd.BatchAddScreenModel
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.batch_add_description
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.batch_add
+import tachiyomi.i18n.sy.batch_add_no_valid_galleries
+import tachiyomi.i18n.sy.batch_add_no_valid_galleries_message
+import tachiyomi.i18n.sy.eh_batch_add_adding_galleries
+import tachiyomi.i18n.sy.eh_batch_add_finish
+import tachiyomi.i18n.sy.eh_batch_add_title
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -41,6 +49,9 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add_galleries
+import zoukan.i18n.desktop.eh_visited_supported
+import zoukan.i18n.desktop.example
 
 /**
  * The Android app's Batch add (More > Batch add): paste entry addresses, one per line (or E-H

@@ -10,6 +10,13 @@ import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.rotation_force_landscape
+import tachiyomi.i18n.rotation_force_portrait
+import tachiyomi.i18n.rotation_free
+import tachiyomi.i18n.rotation_landscape
+import tachiyomi.i18n.rotation_portrait
+import tachiyomi.i18n.rotation_reverse_portrait
 
 enum class ReaderOrientation(
     val flag: Int,

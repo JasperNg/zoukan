@@ -66,7 +66,19 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.isEhBasedSource
 import exh.source.isMdBasedSource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_reset
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.latest
+import tachiyomi.i18n.name
+import tachiyomi.i18n.popular
+import tachiyomi.i18n.source_settings
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.mangadex_follows
+import tachiyomi.i18n.sy.random
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -83,6 +95,17 @@ import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.settings.SourceSettingsScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.delete_the_saved_search
+import zoukan.i18n.desktop.filtered
+import zoukan.i18n.desktop.filters
+import zoukan.i18n.desktop.load_more
+import zoukan.i18n.desktop.nothing_found
+import zoukan.i18n.desktop.open_the_site_sign_in_cloudflare
+import zoukan.i18n.desktop.save_this_search
+import zoukan.i18n.desktop.search_2
+import zoukan.i18n.desktop.source_not_installed_2
+import zoukan.i18n.desktop.this_sources_extension_is_not_installed
+import zoukan.i18n.desktop.this_sources_feed
 
 data class SourceScreen(
     val sourceId: Long,

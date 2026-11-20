@@ -18,6 +18,8 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_reset
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -29,6 +31,8 @@ import zoukan.desktop.ui.more.SettingsScreen
 import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.reset_sync_time_warning
+import zoukan.i18n.desktop.reset_the_last_sync_time
 import kotlin.time.Duration.Companion.minutes
 
 /**

@@ -59,6 +59,17 @@ import eu.kanade.tachiyomi.ui.manga.track.TrackItem
 import eu.kanade.tachiyomi.util.lang.toLocalDate
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_copy_link
+import tachiyomi.i18n.action_open_in_browser
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_toggle_private_off
+import tachiyomi.i18n.action_toggle_private_on
+import tachiyomi.i18n.add_tracking
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.score
+import tachiyomi.i18n.track_finished_reading_date
+import tachiyomi.i18n.track_started_reading_date
+import tachiyomi.i18n.tracked_privately
 import tachiyomi.presentation.core.i18n.stringResource
 import java.time.format.DateTimeFormatter
 

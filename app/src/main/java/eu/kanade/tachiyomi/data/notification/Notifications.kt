@@ -11,6 +11,19 @@ import eu.kanade.tachiyomi.util.system.buildNotificationChannel
 import eu.kanade.tachiyomi.util.system.buildNotificationChannelGroup
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.channel_app_updates
+import tachiyomi.i18n.channel_common
+import tachiyomi.i18n.channel_complete
+import tachiyomi.i18n.channel_errors
+import tachiyomi.i18n.channel_ext_updates
+import tachiyomi.i18n.channel_new_chapters
+import tachiyomi.i18n.channel_progress
+import tachiyomi.i18n.download_notifier_downloader_title
+import tachiyomi.i18n.label_backup
+import tachiyomi.i18n.label_library
+import tachiyomi.i18n.label_recent_updates
+import tachiyomi.i18n.pref_incognito_mode
+import tachiyomi.i18n.syncing_library
 
 /**
  * Class to manage the basic information of all the notifications used in the app.

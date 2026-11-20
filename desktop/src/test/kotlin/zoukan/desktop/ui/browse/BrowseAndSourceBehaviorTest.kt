@@ -86,6 +86,8 @@ import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.source_blocked_open_the_site
+import zoukan.i18n.desktop.source_timed_out
 import java.io.File
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors

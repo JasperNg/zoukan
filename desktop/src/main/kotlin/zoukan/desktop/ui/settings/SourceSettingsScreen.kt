@@ -54,6 +54,9 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.source_settings
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -68,6 +71,13 @@ import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.radioRow
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.hide_value
+import zoukan.i18n.desktop.not_set
+import zoukan.i18n.desktop.settings
+import zoukan.i18n.desktop.show_value
+import zoukan.i18n.desktop.the_sources_settings_failed_to_load
+import zoukan.i18n.desktop.this_source_has_no_settings
+import zoukan.i18n.desktop.this_source_is_not_installed_or
 import java.util.Collections
 import java.util.WeakHashMap
 import kotlin.math.roundToInt

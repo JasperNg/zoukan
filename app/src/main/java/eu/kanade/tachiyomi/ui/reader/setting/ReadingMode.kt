@@ -11,6 +11,12 @@ import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.VerticalPagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.left_to_right_viewer
+import tachiyomi.i18n.right_to_left_viewer
+import tachiyomi.i18n.vertical_plus_viewer
+import tachiyomi.i18n.vertical_viewer
+import tachiyomi.i18n.webtoon_viewer
 
 enum class ReadingMode(
     val stringRes: StringResource,

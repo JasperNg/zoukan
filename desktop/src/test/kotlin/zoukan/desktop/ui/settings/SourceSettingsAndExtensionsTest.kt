@@ -74,6 +74,8 @@ import zoukan.desktop.ui.settings.MissingExtensionsInstall.State
 import zoukan.extension.ExtensionException
 import zoukan.extension.LoadResult
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.hide_value
+import zoukan.i18n.desktop.show_value
 import java.io.File
 import java.util.Properties
 

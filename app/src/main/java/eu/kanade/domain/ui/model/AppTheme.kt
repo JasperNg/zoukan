@@ -3,6 +3,27 @@ package eu.kanade.domain.ui.model
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.theme_cloudflare
+import tachiyomi.i18n.kmk.theme_cottoncandy
+import tachiyomi.i18n.kmk.theme_custom
+import tachiyomi.i18n.kmk.theme_doom
+import tachiyomi.i18n.kmk.theme_matrix
+import tachiyomi.i18n.kmk.theme_mocha
+import tachiyomi.i18n.kmk.theme_sapphire
+import tachiyomi.i18n.label_default
+import tachiyomi.i18n.theme_catppuccin
+import tachiyomi.i18n.theme_greenapple
+import tachiyomi.i18n.theme_lavender
+import tachiyomi.i18n.theme_midnightdusk
+import tachiyomi.i18n.theme_monet
+import tachiyomi.i18n.theme_monochrome
+import tachiyomi.i18n.theme_nord
+import tachiyomi.i18n.theme_strawberrydaiquiri
+import tachiyomi.i18n.theme_tako
+import tachiyomi.i18n.theme_tealturquoise
+import tachiyomi.i18n.theme_tidalwave
+import tachiyomi.i18n.theme_yinyang
+import tachiyomi.i18n.theme_yotsuba
 
 enum class AppTheme(val titleRes: StringResource?) {
     DEFAULT(MR.strings.label_default),

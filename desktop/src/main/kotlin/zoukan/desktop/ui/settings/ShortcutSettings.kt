@@ -4,6 +4,9 @@ import androidx.compose.foundation.lazy.LazyListScope
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.Shortcuts
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.in_the_reader
+import zoukan.i18n.desktop.keyboard_shortcuts_2
+import zoukan.i18n.desktop.press_for_the_readers_shortcuts
 
 /** Settings > Keyboard shortcuts: the app-wide shortcuts (the reader lists its own with `/`). */
 fun LazyListScope.shortcutSettings() {

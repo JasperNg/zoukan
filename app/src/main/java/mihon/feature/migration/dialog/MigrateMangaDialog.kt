@@ -33,6 +33,10 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_show_manga
+import tachiyomi.i18n.copy
+import tachiyomi.i18n.migrate
+import tachiyomi.i18n.migration_dialog_what_to_include
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

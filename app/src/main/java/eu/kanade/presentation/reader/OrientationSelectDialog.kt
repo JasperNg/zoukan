@@ -20,6 +20,7 @@ import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.rotation_type
 import tachiyomi.presentation.core.components.SettingsIconGrid
 import tachiyomi.presentation.core.components.material.IconToggleButton
 import tachiyomi.presentation.core.i18n.stringResource

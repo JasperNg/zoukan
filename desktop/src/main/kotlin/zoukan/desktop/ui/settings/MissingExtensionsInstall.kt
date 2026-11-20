@@ -12,6 +12,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.unknown_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -22,6 +23,9 @@ import zoukan.desktop.compat.localized
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_load
+import zoukan.i18n.desktop.could_not_load_the_extension_lists
+import zoukan.i18n.desktop.missing_extensions_installed
 
 /**
  * "Install missing extensions" after a restore (desktop only). Runs in [AppScope], so the

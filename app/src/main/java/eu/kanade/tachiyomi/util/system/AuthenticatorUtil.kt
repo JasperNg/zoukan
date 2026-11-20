@@ -13,6 +13,7 @@ import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.suspendCancellableCoroutine
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.confirm_lock_change
 import kotlin.coroutines.resume
 
 object AuthenticatorUtil {

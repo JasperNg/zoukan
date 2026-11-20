@@ -6,6 +6,9 @@ import xyz.nulldev.androidcompat.util.NoFollowDelete
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.SafeDelete
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.browser_data_not_all_cleared
+import zoukan.i18n.desktop.could_not_be_checked_and_was_not_cleared
+import zoukan.i18n.desktop.is_a_link_and_was_not_cleared
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

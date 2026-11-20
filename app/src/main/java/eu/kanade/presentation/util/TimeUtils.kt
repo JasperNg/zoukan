@@ -6,6 +6,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.day_short
+import tachiyomi.i18n.hour_short
+import tachiyomi.i18n.minute_short
+import tachiyomi.i18n.relative_time_span_never
+import tachiyomi.i18n.seconds_short
+import tachiyomi.i18n.updates_last_update_info_just_now
 import tachiyomi.presentation.core.i18n.stringResource
 import java.time.Instant
 import kotlin.time.Duration

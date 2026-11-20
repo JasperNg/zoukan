@@ -31,6 +31,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_install
+import tachiyomi.i18n.check_for_updates
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.get
@@ -55,6 +58,10 @@ import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.settings.aboutSettings
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_use_the_secret_store
+import zoukan.i18n.desktop.include_test_releases
+import zoukan.i18n.desktop.is_available
+import zoukan.i18n.desktop.zoukan_is_the_newest_version
 import java.awt.Window
 import java.awt.datatransfer.Transferable
 import java.io.File

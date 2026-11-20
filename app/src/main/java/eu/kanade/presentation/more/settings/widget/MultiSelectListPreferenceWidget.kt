@@ -13,6 +13,8 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.window.DialogProperties
 import eu.kanade.presentation.more.settings.Preference
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.i18n.stringResource
 

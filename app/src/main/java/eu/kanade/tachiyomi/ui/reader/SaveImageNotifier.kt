@@ -20,6 +20,10 @@ import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_share
+import tachiyomi.i18n.download_notifier_title_error
+import tachiyomi.i18n.picture_saved
+import tachiyomi.i18n.unknown_error
 
 /**
  * Class used to show BigPictureStyle notifications

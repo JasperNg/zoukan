@@ -12,6 +12,8 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.tachiyomi.ui.category.biometric.BiometricTimesScreenState
 import eu.kanade.tachiyomi.ui.category.biometric.TimeRangeItem
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.biometric_lock_times
+import tachiyomi.i18n.sy.biometric_lock_times_empty
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues

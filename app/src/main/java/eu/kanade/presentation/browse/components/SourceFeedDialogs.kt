@@ -29,7 +29,13 @@ import eu.kanade.presentation.more.settings.LocalPreferenceMinHeight
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import tachiyomi.domain.source.model.FeedSavedSearch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.feed
+import tachiyomi.i18n.sy.feed_add
+import tachiyomi.i18n.sy.feed_delete
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

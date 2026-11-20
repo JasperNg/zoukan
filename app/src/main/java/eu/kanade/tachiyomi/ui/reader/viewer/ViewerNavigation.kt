@@ -7,6 +7,11 @@ import dev.icerock.moko.resources.StringResource
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.lang.invert
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_menu
+import tachiyomi.i18n.nav_zone_left
+import tachiyomi.i18n.nav_zone_next
+import tachiyomi.i18n.nav_zone_prev
+import tachiyomi.i18n.nav_zone_right
 import uy.kohesive.injekt.injectLazy
 
 abstract class ViewerNavigation {

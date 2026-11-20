@@ -60,6 +60,8 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.has_results
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -75,6 +77,17 @@ import zoukan.desktop.ui.manga.SearchAgainField
 import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.desktop.ui.migration.MigrationPicks
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.all_sources
+import zoukan.i18n.desktop.merge_with
+import zoukan.i18n.desktop.migrate_to
+import zoukan.i18n.desktop.no_results
+import zoukan.i18n.desktop.of_sources
+import zoukan.i18n.desktop.pick_an_entry_in_one_of
+import zoukan.i18n.desktop.pinned_only
+import zoukan.i18n.desktop.search
+import zoukan.i18n.desktop.source_blocked_open_the_site
+import zoukan.i18n.desktop.source_no_connection
+import zoukan.i18n.desktop.source_timed_out
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException

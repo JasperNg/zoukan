@@ -53,8 +53,31 @@ import kotlinx.coroutines.withTimeoutOrNull
 import mihon.domain.migration.models.MigrationFlag
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_start
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_move_down
+import tachiyomi.i18n.kmk.action_move_up
+import tachiyomi.i18n.kmk.migrationConfigScreen_smartSearchSingleEntryTitle
+import tachiyomi.i18n.migrationConfigScreen_additionalSearchQueryLabel
+import tachiyomi.i18n.migrationConfigScreen_additionalSearchQuerySupportingText
+import tachiyomi.i18n.migrationConfigScreen_availableHeader
+import tachiyomi.i18n.migrationConfigScreen_dataToMigrateHeader
+import tachiyomi.i18n.migrationConfigScreen_deepSearchModeSubtitle
+import tachiyomi.i18n.migrationConfigScreen_deepSearchModeTitle
+import tachiyomi.i18n.migrationConfigScreen_enhancedOptionsWarning
+import tachiyomi.i18n.migrationConfigScreen_hideUnmatchedTitle
+import tachiyomi.i18n.migrationConfigScreen_hideWithoutUpdatesSubtitle
+import tachiyomi.i18n.migrationConfigScreen_hideWithoutUpdatesTitle
+import tachiyomi.i18n.migrationConfigScreen_prioritizeByChaptersSubtitle
+import tachiyomi.i18n.migrationConfigScreen_prioritizeByChaptersTitle
+import tachiyomi.i18n.migrationConfigScreen_removeDownloadsTitle
+import tachiyomi.i18n.migrationConfigScreen_selectEnabledLabel
+import tachiyomi.i18n.migrationConfigScreen_selectNoneLabel
+import tachiyomi.i18n.migrationConfigScreen_selectPinnedLabel
+import tachiyomi.i18n.selected
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.select_sources
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -75,6 +98,14 @@ import zoukan.desktop.ui.settings.SwitchPreference
 import zoukan.desktop.ui.settings.SwitchSetting
 import zoukan.desktop.ui.settings.settingsGroup
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.entries
+import zoukan.i18n.desktop.for_a_single_entry_if_enabled
+import zoukan.i18n.desktop.migration_config_subtitle
+import zoukan.i18n.desktop.n_1_source
+import zoukan.i18n.desktop.no_sources_to_search_install_an
+import zoukan.i18n.desktop.search_for_a_source
+import zoukan.i18n.desktop.select
+import zoukan.i18n.desktop.sources
 
 /**
  * The Android app's MigrationConfigScreen and its options sheet: which sources to search, in

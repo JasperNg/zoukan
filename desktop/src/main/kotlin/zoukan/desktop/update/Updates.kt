@@ -12,6 +12,7 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.update_check_notification_update_available
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
@@ -22,6 +23,7 @@ import zoukan.desktop.download.SafeDelete
 import zoukan.desktop.secrets.SecretStore
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.install_zoukan_version_from_about
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileSystems

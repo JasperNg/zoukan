@@ -76,7 +76,15 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.automatic_background
+import tachiyomi.i18n.pref_category_general
+import tachiyomi.i18n.pref_reader_theme
+import tachiyomi.i18n.scale_type_smart_fit
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.action_save_combined_page
+import tachiyomi.i18n.sy.action_set_second_page_cover
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.app.DesktopPreferences
@@ -96,6 +104,11 @@ import zoukan.desktop.ui.reader.ReaderFilter.Companion.readerFilter
 import zoukan.desktop.ui.settings.ReaderSettingRow
 import zoukan.desktop.ui.settings.ReaderSettingRows
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.inverted_colors
+import zoukan.i18n.desktop.page
+import zoukan.i18n.desktop.pages_and
+import zoukan.i18n.desktop.reading_mode_for_this_entry
+import zoukan.i18n.desktop.shift_double_pages
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors

@@ -16,7 +16,12 @@ import exh.favorites.FavoritesSyncHelper
 import exh.source.ExhPreferences
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.favorites_sync_conformation_message
+import tachiyomi.i18n.sy.sync_favorites
+import tachiyomi.i18n.sy.sync_in_progress
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
@@ -25,6 +30,10 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.favorites_sync_notes
+import zoukan.i18n.desktop.important_favorites_sync_notes
+import zoukan.i18n.desktop.sync_failed
+import zoukan.i18n.desktop.syncing_favorites_settings_e_hentai_shows
 
 /**
  * SY's library overflow entries: "Sync EH favorites" while signed in to ExHentai, and "Sync library"

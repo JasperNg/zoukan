@@ -10,6 +10,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.ZoukanStorage
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.automatic_backup_failed
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter

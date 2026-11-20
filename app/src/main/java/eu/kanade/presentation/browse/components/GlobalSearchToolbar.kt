@@ -31,6 +31,9 @@ import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.all
+import tachiyomi.i18n.has_results
+import tachiyomi.i18n.pinned_sources
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 

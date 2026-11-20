@@ -22,6 +22,7 @@ import org.cef.handler.CefResourceRequestHandlerAdapter
 import org.cef.misc.BoolRef
 import org.cef.network.CefRequest
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.i18n.action_close
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.webkit.CefCookieSync
 import xyz.nulldev.androidcompat.webkit.CefDownloadBlocker
@@ -33,6 +34,8 @@ import zoukan.desktop.browser.blocking.BlockPolicy
 import zoukan.desktop.browser.blocking.ContentBlocker
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.open_popup
+import zoukan.i18n.desktop.popup_blocked_from
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout

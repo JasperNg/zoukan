@@ -8,11 +8,11 @@ plugins {
     id("com.github.ben-manes.versions")
 }
 
-android {
-    namespace = "eu.kanade.tachiyomi.core.common"
-}
-
 kotlin {
+    android {
+        namespace = "eu.kanade.tachiyomi.core.common"
+    }
+
     compilerOptions {
         freeCompilerArgs.addAll(
             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
@@ -68,12 +68,6 @@ kotlin {
                 implementation(sylibs.xlog)
                 implementation(sylibs.exifinterface)
                 // SY <--
-            }
-        }
-        androidUnitTest {
-            dependencies {
-                implementation(libs.bundles.test)
-                runtimeOnly(libs.junit.platform.launcher)
             }
         }
         // The module's own tests run on the desktop target, as the desktop app uses the module:

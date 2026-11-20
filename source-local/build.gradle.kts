@@ -1,14 +1,32 @@
+import mihon.buildlogic.AndroidConfig
+import mihon.buildlogic.checkMultiplatformSourceLayout
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
-    id("mihon.library")
+    id("com.android.kotlin.multiplatform.library")
     kotlin("multiplatform")
+    id("mihon.code.lint")
 }
 
 kotlin {
-    androidTarget()
+    android {
+        compileSdk = AndroidConfig.COMPILE_SDK
+        minSdk = AndroidConfig.MIN_SDK
+        namespace = "tachiyomi.source.local"
+
+        compilerOptions {
+            jvmTarget.set(AndroidConfig.JvmTarget)
+        }
+
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
+        }
+
+        withHostTest {}
+    }
+
     sourceSets {
-        val commonMain by getting {
+        commonMain {
             dependencies {
                 implementation(projects.sourceApi)
                 api(projects.i18n)
@@ -19,7 +37,7 @@ kotlin {
                 implementation(libs.unifile)
             }
         }
-        val androidMain by getting {
+        androidMain {
             dependencies {
                 implementation(projects.core.archive)
                 implementation(projects.core.common)
@@ -42,11 +60,4 @@ kotlin {
     }
 }
 
-android {
-    namespace = "tachiyomi.source.local"
-
-    defaultConfig {
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
-    }
-}
+checkMultiplatformSourceLayout()

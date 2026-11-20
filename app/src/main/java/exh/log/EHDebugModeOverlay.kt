@@ -38,6 +38,7 @@ import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.DecimalFormat

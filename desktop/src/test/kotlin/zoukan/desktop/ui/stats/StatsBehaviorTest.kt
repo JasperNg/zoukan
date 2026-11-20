@@ -31,7 +31,13 @@ import tachiyomi.domain.manga.interactor.GetReadMangaNotInLibraryView
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.in_library
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.label_read_chapters
+import tachiyomi.i18n.label_total_chapters
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.ignore_non_library_entries
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized
@@ -40,6 +46,7 @@ import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.read_time
 import java.util.concurrent.Executors
 
 /**

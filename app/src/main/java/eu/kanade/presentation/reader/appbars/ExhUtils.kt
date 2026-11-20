@@ -40,6 +40,10 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.eh_autoscroll
+import tachiyomi.i18n.sy.eh_autoscroll_freq_invalid
+import tachiyomi.i18n.sy.eh_boost_page
+import tachiyomi.i18n.sy.eh_retry_all
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

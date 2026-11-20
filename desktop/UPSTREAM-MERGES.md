@@ -17,7 +17,7 @@ The relative path under the source folder is unchanged; only the source set chan
 | Upstream path | Zoukan path |
 | --- | --- |
 | `domain/src/main/java/` | `domain/src/commonMain/kotlin/` |
-| `domain/src/test/java/` | `domain/src/androidUnitTest/kotlin/` |
+| `domain/src/test/java/` | `domain/src/androidHostTest/kotlin/` |
 | `data/src/main/java/` | `data/src/commonMain/kotlin/` |
 | `data/src/main/sqldelight/` | `data/src/commonMain/sqldelight/` (schema and migrations) |
 | `core/common/src/main/kotlin/` | `core/common/src/commonMain/kotlin/` |
@@ -73,16 +73,13 @@ The `backup` module cannot depend on `app`, so it keeps copies of two app consta
 ## Android Gradle Plugin and the multiplatform modules
 
 The modules that apply `mihon.library.kmp` (`domain`, `data`, `backup`, `core/common`,
-`core/archive`), plus `source-api`, `source-local` and the `i18n*` modules, use
-`com.android.library` with `androidTarget()`. The Android documentation's path for Kotlin
-Multiplatform libraries is the `com.android.kotlin.multiplatform.library` plugin, and the
-`com.android.library` combination is the one being phased out. Every shared module carries the
-Android target, so an Android Gradle Plugin major that no longer supports it would break all of them,
-and the desktop build with them.
-
-Renovate does not propose Android Gradle Plugin majors (a rule in `renovate.json`); minor and patch
-updates still come. Before raising the major, migrate these modules to the new plugin. Check what
-upstream Komikku did first, since the `buildSrc` conventions come from upstream.
+`core/archive`, `source-api`, and the `i18n*` modules), plus `source-local`, use
+`com.android.kotlin.multiplatform.library` (AGP 9's Android KMP library plugin) rather than
+`com.android.library` with `androidTarget()`. Upstream library modules that are not multiplatform
+(`core-metadata`, `flagkit`, `presentation-core`, `presentation-widget`, `telemetry`) stay on
+`mihon.library` (`com.android.library`) with AGP 9's built-in Kotlin support. On upstream merges,
+keep the `kotlin { android { ... } }` configuration in the KMP modules and do not re-introduce
+`com.android.library` or `kotlin("android")` alongside `kotlin("multiplatform")`.
 
 ## Zoukan fixes in shared tracker code
 

@@ -12,6 +12,12 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.delete_downloads
+import zoukan.i18n.desktop.delete_local_files_text
+import zoukan.i18n.desktop.delete_local_files_title
+import zoukan.i18n.desktop.delete_selected_downloads_text
+import zoukan.i18n.desktop.delete_selected_downloads_title
+import zoukan.i18n.desktop.move_to_trash
 import java.io.File
 
 // ZOUKAN -->

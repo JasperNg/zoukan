@@ -32,6 +32,7 @@ import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.decoder.ImageDecoder
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.decode_image_error
 import kotlin.math.max
 
 /**

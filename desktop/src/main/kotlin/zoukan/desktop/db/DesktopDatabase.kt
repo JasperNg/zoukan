@@ -18,6 +18,10 @@ import tachiyomi.data.UpdateStrategyColumnAdapter
 import zoukan.desktop.compat.localized
 import zoukan.desktop.secrets.SecretStore
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.database_copy_failed
+import zoukan.i18n.desktop.database_journal_without_key
+import zoukan.i18n.desktop.database_key_missing
+import zoukan.i18n.desktop.database_too_new
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption

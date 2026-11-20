@@ -25,6 +25,8 @@ import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.reader.ReaderChapterListDialog
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.chapter_state_bookmarked
+import zoukan.i18n.desktop.chapter_state_read
 
 /**
  * Tests for the chapter list UI, accessibility semantics, [ChapterSettings] sorting/filtering,

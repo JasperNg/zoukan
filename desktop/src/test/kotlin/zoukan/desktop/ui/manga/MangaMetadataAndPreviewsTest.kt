@@ -94,6 +94,10 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.data_saver_summary
+import tachiyomi.i18n.sy.more_info
+import tachiyomi.i18n.sy.more_previews
+import tachiyomi.i18n.sy.wsrv
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.app.DesktopPreferences
@@ -109,6 +113,8 @@ import zoukan.desktop.ui.e2eEffectContext
 import zoukan.desktop.ui.reader.ReaderScreen
 import zoukan.desktop.ui.settings.dataSaverSettings
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.page
+import zoukan.i18n.desktop.related_titles
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File

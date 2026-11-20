@@ -14,6 +14,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_remove_everything
+import tachiyomi.i18n.clear_history_confirmation
+import tachiyomi.i18n.dialog_with_checkbox_remove_description
+import tachiyomi.i18n.dialog_with_checkbox_reset
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

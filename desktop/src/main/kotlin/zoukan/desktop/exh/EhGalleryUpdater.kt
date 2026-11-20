@@ -29,6 +29,7 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.library.PowerStatus
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.new_gallery_versions
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.days
 

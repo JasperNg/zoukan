@@ -2,6 +2,23 @@ package exh.md.utils
 
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.relation_adapted_from
+import tachiyomi.i18n.sy.relation_alternate_story
+import tachiyomi.i18n.sy.relation_alternate_version
+import tachiyomi.i18n.sy.relation_based_on
+import tachiyomi.i18n.sy.relation_colored
+import tachiyomi.i18n.sy.relation_doujinshi
+import tachiyomi.i18n.sy.relation_main_story
+import tachiyomi.i18n.sy.relation_monochrome
+import tachiyomi.i18n.sy.relation_prequel
+import tachiyomi.i18n.sy.relation_preserialization
+import tachiyomi.i18n.sy.relation_same_franchise
+import tachiyomi.i18n.sy.relation_sequel
+import tachiyomi.i18n.sy.relation_serialization
+import tachiyomi.i18n.sy.relation_shared_universe
+import tachiyomi.i18n.sy.relation_side_story
+import tachiyomi.i18n.sy.relation_similar
+import tachiyomi.i18n.sy.relation_spin_off
 
 enum class MangaDexRelation(val res: StringResource, val mdString: String?) {
     SIMILAR(SYMR.strings.relation_similar, null),

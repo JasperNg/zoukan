@@ -49,7 +49,11 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.in_library
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.rec_common_recommendations
+import tachiyomi.i18n.sy.rec_no_results
+import tachiyomi.i18n.sy.similar_titles
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
@@ -63,6 +67,9 @@ import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.no_related_titles
+import zoukan.i18n.desktop.no_results
+import zoukan.i18n.desktop.related_titles
 
 /**
  * Related titles from the entry's own source (Komikku's related titles) and recommendations from

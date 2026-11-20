@@ -28,11 +28,19 @@ import kotlinx.coroutines.flow.combine
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_filter_bookmarked
+import tachiyomi.i18n.action_filter_unread
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.label_started
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.library.TriStateRow
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.filter_filtered
+import zoukan.i18n.desktop.hide_excluded_scanlators
 
 /** The Updates filters, from Android's UpdatesPreferences, so they carry over in backups. */
 data class UpdatesFilters(

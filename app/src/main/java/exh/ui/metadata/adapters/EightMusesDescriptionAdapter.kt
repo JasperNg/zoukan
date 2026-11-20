@@ -18,6 +18,8 @@ import exh.ui.metadata.adapters.MetadataUIUtil.bindDrawable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.more_info
+import tachiyomi.i18n.unknown
 
 @Composable
 fun EightMusesDescription(state: State.Success, openMetadataViewer: () -> Unit) {

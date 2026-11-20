@@ -29,7 +29,10 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.mangadex_push_favorites_to_mangadex
+import tachiyomi.i18n.sy.mangadex_sync_follows_to_library
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.browser.blocking.ContentBlockerPreferences
 import zoukan.desktop.compat.localized
@@ -40,6 +43,12 @@ import zoukan.desktop.testing.fakes.FailingSecretStore
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.extension.DesktopExtensionManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.follow_library_on_mangadex_warning
+import zoukan.i18n.desktop.follow_on_mangadex
+import zoukan.i18n.desktop.refreshing_covers
+import zoukan.i18n.desktop.the_passwords_differ
+import zoukan.i18n.desktop.to
+import zoukan.i18n.desktop.use_at_least_4_characters
 import java.io.File
 
 class SettingsControllersTest {

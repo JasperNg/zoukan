@@ -22,6 +22,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.extensionStoresScreen_addStoreDeeplink_bodyText
+import tachiyomi.i18n.extensionStoresScreen_addStoreInput_inputLabel
+import tachiyomi.i18n.extensionStoresScreen_addStore_alreadyExists
+import tachiyomi.i18n.extensionStoresScreen_addStore_processing
+import tachiyomi.i18n.extensionStoresScreen_addStore_title
+import tachiyomi.i18n.extensionStoresScreen_deleteStore_body
+import tachiyomi.i18n.extensionStoresScreen_deleteStore_title
+import tachiyomi.i18n.information_required_plain
 import tachiyomi.presentation.core.i18n.stringResource
 import kotlin.time.Duration.Companion.seconds
 

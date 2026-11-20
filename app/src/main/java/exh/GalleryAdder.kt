@@ -17,6 +17,17 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.batch_add_not_exist_log_message
+import tachiyomi.i18n.sy.batch_add_success_log_message
+import tachiyomi.i18n.sy.batch_add_unknown_source_log_message
+import tachiyomi.i18n.sy.batch_add_unknown_type_log_message
+import tachiyomi.i18n.sy.gallery_adder_could_not_add_gallery
+import tachiyomi.i18n.sy.gallery_adder_could_not_identify_chapter
+import tachiyomi.i18n.sy.gallery_adder_importing_gallery
+import tachiyomi.i18n.sy.gallery_adder_source_uri_must_match
+import tachiyomi.i18n.sy.gallery_adder_uri_clean_error
+import tachiyomi.i18n.sy.gallery_adder_uri_map_to_chapter_error
+import tachiyomi.i18n.sy.gallery_adder_uri_map_to_gallery_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

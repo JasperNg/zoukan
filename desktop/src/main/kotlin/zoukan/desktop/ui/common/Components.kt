@@ -48,6 +48,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.SubcomposeAsyncImage
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_webview_back
 import zoukan.desktop.compat.localized
 
 /** A cover with Coil, a placeholder while loading and an icon when it fails. */

@@ -21,6 +21,8 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackChapters
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.background_work_stopped
+import zoukan.i18n.desktop.background_work_stopped_text
 
 /**
  * Background work while the app runs, in place of Android's WorkManager: the scheduled library

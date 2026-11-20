@@ -67,8 +67,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_bookmark
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_mark_as_read
+import tachiyomi.i18n.action_mark_as_unread
+import tachiyomi.i18n.action_mark_previous_as_read
+import tachiyomi.i18n.action_move_category
+import tachiyomi.i18n.action_remove_bookmark
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_update
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.migrate
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.action_clean_titles
+import tachiyomi.i18n.sy.mangadex_add_to_follows
+import tachiyomi.i18n.sy.merge
+import tachiyomi.i18n.sy.rec_search_short
+import tachiyomi.i18n.sy.reset_info
 import tachiyomi.presentation.core.i18n.stringResource
 import kotlin.time.Duration.Companion.seconds
 

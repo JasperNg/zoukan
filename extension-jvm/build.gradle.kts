@@ -40,7 +40,7 @@ tasks.test {
 }
 
 // AppInfo reports the Android app's version to extensions
-val appInfo by tasks.registering {
+val appInfo = tasks.register("appInfo") {
     val appBuild = rootProject.file("app/build.gradle.kts")
     val output = layout.buildDirectory.dir("generated/appInfo")
     inputs.file(appBuild)

@@ -33,6 +33,14 @@ import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import kotlinx.coroutines.flow.update
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_restore
+import tachiyomi.i18n.backup_restore_content_full
+import tachiyomi.i18n.backup_restore_missing_sources
+import tachiyomi.i18n.backup_restore_missing_trackers
+import tachiyomi.i18n.invalid_backup_file
+import tachiyomi.i18n.invalid_backup_file_error
+import tachiyomi.i18n.pref_restore_backup
+import tachiyomi.i18n.restore_miui_warning
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.components.LazyColumnWithAction
 import tachiyomi.presentation.core.components.SectionCard

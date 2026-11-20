@@ -18,6 +18,11 @@ import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.tachiyomi.util.CrashLogUtil
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.crash_screen_description
+import tachiyomi.i18n.crash_screen_restart_application
+import tachiyomi.i18n.crash_screen_title
+import tachiyomi.i18n.pref_dump_crash_logs
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.InfoScreen

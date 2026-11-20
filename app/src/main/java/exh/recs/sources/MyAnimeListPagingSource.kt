@@ -15,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.community_recommendations
 
 class MyAnimeListPagingSource(manga: Manga) : TrackerRecommendationPagingSource(
     "https://api.jikan.moe/v4/",

@@ -16,6 +16,9 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add_category
+import tachiyomi.i18n.delete_category
+import tachiyomi.i18n.delete_category_confirmation
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 

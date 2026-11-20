@@ -2,8 +2,13 @@ package zoukan.desktop.ui
 
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_update_library
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.open_zoukan
+import zoukan.i18n.desktop.pause_downloads
+import zoukan.i18n.desktop.quit
+import zoukan.i18n.desktop.start_downloads
 
 /**
  * The window's X: with "Close to tray" on and a tray to go to, the window hides and the app goes

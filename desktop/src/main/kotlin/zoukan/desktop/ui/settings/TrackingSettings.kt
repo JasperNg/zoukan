@@ -34,7 +34,14 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.lock_always
+import tachiyomi.i18n.lock_never
+import tachiyomi.i18n.password
+import tachiyomi.i18n.pref_auto_update_manga_sync
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.pref_google_drive_sign_in
+import tachiyomi.i18n.track
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
@@ -43,6 +50,34 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.track.TrackerLogin
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.about_sign_ins
+import zoukan.i18n.desktop.ask
+import zoukan.i18n.desktop.could_not_sign_in
+import zoukan.i18n.desktop.did_not_accept_the_sign_in
+import zoukan.i18n.desktop.find_the_tracker_entry_from_the
+import zoukan.i18n.desktop.its_source_extension_is_not_installed
+import zoukan.i18n.desktop.mark_chapters_read_when_a_tracker
+import zoukan.i18n.desktop.myanimelist_anilist_shikimori_and_bangumi_open
+import zoukan.i18n.desktop.not_signed_in
+import zoukan.i18n.desktop.open_the_sign_in_page
+import zoukan.i18n.desktop.other_browser
+import zoukan.i18n.desktop.resolve_with_source_metadata
+import zoukan.i18n.desktop.sign_in_on_the_page_that
+import zoukan.i18n.desktop.sign_in_to
+import zoukan.i18n.desktop.sign_in_with_another_browser
+import zoukan.i18n.desktop.sign_out
+import zoukan.i18n.desktop.sign_out_of
+import zoukan.i18n.desktop.signed_in
+import zoukan.i18n.desktop.signed_in_as
+import zoukan.i18n.desktop.signed_in_to
+import zoukan.i18n.desktop.signing_in_to_failed
+import zoukan.i18n.desktop.sync_progress_from_trackers
+import zoukan.i18n.desktop.track_when_adding_to_the_library
+import zoukan.i18n.desktop.tracked_entries_stay_linked_their_progress
+import zoukan.i18n.desktop.tracks_entries_from_its_source
+import zoukan.i18n.desktop.turn_off
+import zoukan.i18n.desktop.turn_on
+import zoukan.i18n.desktop.update_progress_when_marking_as_read
 
 /** Settings > Tracking: the tracking options and the trackers' sign-ins, as on Android. */
 fun LazyListScope.trackingSettings() {

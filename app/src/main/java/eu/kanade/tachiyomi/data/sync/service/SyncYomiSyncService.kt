@@ -25,6 +25,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.apache.http.HttpStatus
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.empty_backup_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

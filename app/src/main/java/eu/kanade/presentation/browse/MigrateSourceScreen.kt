@@ -46,7 +46,16 @@ import exh.source.eHentaiSourceIds
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_asc
+import tachiyomi.i18n.action_desc
+import tachiyomi.i18n.action_sort_alpha
+import tachiyomi.i18n.action_sort_count
+import tachiyomi.i18n.ext_obsolete
+import tachiyomi.i18n.information_empty_library
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_search_for_source
+import tachiyomi.i18n.migration_selection_prompt
+import tachiyomi.i18n.not_installed
 import tachiyomi.presentation.core.components.Badge
 import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.components.FastScrollLazyColumn

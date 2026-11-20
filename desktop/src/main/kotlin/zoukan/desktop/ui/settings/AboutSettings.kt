@@ -21,8 +21,18 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import logcat.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_install
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.check_for_updates
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.release_page
+import tachiyomi.i18n.pref_category_about
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.token
+import tachiyomi.i18n.whats_new
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
@@ -40,6 +50,35 @@ import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.UpdateStates
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.check_for_updates_automatically
+import zoukan.i18n.desktop.checking
+import zoukan.i18n.desktop.could_not_open_the_installer
+import zoukan.i18n.desktop.could_not_open_the_page
+import zoukan.i18n.desktop.could_not_use_the_secret_store
+import zoukan.i18n.desktop.crash_logs
+import zoukan.i18n.desktop.downloading_of_mb
+import zoukan.i18n.desktop.drag_zoukan_to_applications
+import zoukan.i18n.desktop.github_token
+import zoukan.i18n.desktop.github_token_set
+import zoukan.i18n.desktop.include_test_releases
+import zoukan.i18n.desktop.installing_closes_zoukan
+import zoukan.i18n.desktop.is_available
+import zoukan.i18n.desktop.is_downloaded
+import zoukan.i18n.desktop.komikku_for_windows_and_macos_on
+import zoukan.i18n.desktop.needed_while_the_release_repository_is
+import zoukan.i18n.desktop.no_crashes_recorded
+import zoukan.i18n.desktop.once_a_day_while_zoukan_runs
+import zoukan.i18n.desktop.open_the_log_folder
+import zoukan.i18n.desktop.release_notes_for_zoukan
+import zoukan.i18n.desktop.releases_from_github_com
+import zoukan.i18n.desktop.releases_marked_as_pre_release_on
+import zoukan.i18n.desktop.saved_newest
+import zoukan.i18n.desktop.try_again
+import zoukan.i18n.desktop.update_no_checksum
+import zoukan.i18n.desktop.update_no_installer
+import zoukan.i18n.desktop.zoukan
+import zoukan.i18n.desktop.zoukan_is_the_newest_version
+import zoukan.i18n.desktop.zoukan_log_has_what_zoukan_logged
 
 /** Settings > About: version, updates, the log file and crash logs (Phase 7). */
 fun LazyListScope.aboutSettings() {

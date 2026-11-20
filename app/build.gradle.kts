@@ -2,11 +2,11 @@ import mihon.buildlogic.Config
 import mihon.buildlogic.getBuildTime
 import mihon.buildlogic.getCommitCount
 import mihon.buildlogic.getGitSha
+import mihon.buildlogic.tasks.PrepareShortcutsTask
 
 plugins {
     id("mihon.android.application")
     id("mihon.android.application.compose")
-    id("com.github.zellius.shortcut-helper")
     kotlin("plugin.parcelize")
     kotlin("plugin.serialization")
     alias(libs.plugins.aboutLibraries)
@@ -19,8 +19,6 @@ if (Config.includeTelemetry) {
         apply(libs.plugins.firebase.crashlytics.get().pluginId)
     }
 }
-
-shortcutHelper.setFilePath("./shortcuts.xml")
 
 android {
     namespace = "eu.kanade.tachiyomi"
@@ -41,12 +39,12 @@ android {
     }
 
     buildTypes {
-        val debug by getting {
+        val debug = getByName("debug") {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-${getCommitCount()}"
             isPseudoLocalesEnabled = true
         }
-        val release by getting {
+        val release = getByName("release") {
             isMinifyEnabled = Config.enableCodeShrink
             isShrinkResources = Config.enableCodeShrink
 
@@ -100,8 +98,8 @@ android {
     }
 
     sourceSets {
-        getByName("preview").res.srcDirs("src/beta/res")
-        getByName("benchmark").res.srcDirs("src/debug/res")
+        getByName("preview").res.directories.add("src/beta/res")
+        getByName("benchmark").res.directories.add("src/debug/res")
     }
 
     splits {
@@ -153,7 +151,6 @@ android {
         aidl = true
 
         // Disable some unused things
-        renderScript = false
         shaders = false
     }
 
@@ -178,7 +175,6 @@ kotlin {
             "-opt-in=kotlinx.coroutines.FlowPreview",
             "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
             "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
-            "-Xannotation-default-target=param-property",
         )
     }
 }
@@ -298,6 +294,10 @@ dependencies {
     implementation(libs.reorderable)
     implementation(libs.bundles.markdown)
     implementation(libs.materialKolor)
+    // Align compileClasspath with materialKolor's runtime material3 (AGP 9 defaults android.dependency.useConstraints=false)
+    constraints {
+        implementation("androidx.compose.material3:material3:1.5.0-alpha14")
+    }
 
     // KMK -->
     implementation(libs.palette.ktx)
@@ -342,6 +342,16 @@ dependencies {
 }
 
 androidComponents {
+    onVariants { variant ->
+        val task = tasks.register<PrepareShortcutsTask>(
+            "prepare${variant.name.replaceFirstChar { it.uppercase() }}Shortcuts",
+        ) {
+            shortcutFile.set(layout.projectDirectory.file("shortcuts.xml"))
+            applicationId.set(variant.applicationId)
+        }
+        variant.sources.res?.addGeneratedSourceDirectory(task, PrepareShortcutsTask::outputDir)
+    }
+
     onVariants(selector().withFlavor("default" to "standard")) {
         // Only excluding in standard flavor because this breaks
         // Layout Inspector's Compose tree

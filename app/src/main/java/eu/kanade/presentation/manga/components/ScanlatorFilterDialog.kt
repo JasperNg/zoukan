@@ -30,6 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.collections.immutable.ImmutableSet
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_reset
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.exclude_scanlators
+import tachiyomi.i18n.no_scanlators_found
 import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

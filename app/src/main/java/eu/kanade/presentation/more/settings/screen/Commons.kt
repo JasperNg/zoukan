@@ -6,6 +6,10 @@ import androidx.compose.ui.platform.LocalContext
 import eu.kanade.presentation.category.visualName
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.all
+import tachiyomi.i18n.exclude
+import tachiyomi.i18n.include
+import tachiyomi.i18n.none
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**

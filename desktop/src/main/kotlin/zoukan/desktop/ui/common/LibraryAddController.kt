@@ -8,12 +8,16 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.manga_added_library
+import tachiyomi.i18n.manga_removed_library
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.added_1_entry_to_the_library
+import zoukan.i18n.desktop.added_entries_to_the_library
 
 /**
  * Coordinates the shared add-to-library decision flow across Browse ([zoukan.desktop.ui.browse.QuickLibraryToggle],

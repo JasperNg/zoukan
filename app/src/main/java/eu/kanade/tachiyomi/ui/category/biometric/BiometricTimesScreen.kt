@@ -16,6 +16,10 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.biometric_lock_end_time
+import tachiyomi.i18n.sy.biometric_lock_start_time
+import tachiyomi.i18n.sy.delete_time_range
+import tachiyomi.i18n.sy.delete_time_range_confirmation
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import kotlin.time.Duration

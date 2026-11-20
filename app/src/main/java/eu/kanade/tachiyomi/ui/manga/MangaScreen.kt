@@ -114,8 +114,16 @@ import tachiyomi.domain.source.interactor.GetRemoteManga
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_copy_link
+import tachiyomi.i18n.action_open_in_web_view
+import tachiyomi.i18n.action_share
+import tachiyomi.i18n.browse
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_open_folder
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.entry_merged
+import tachiyomi.i18n.sy.failed_merge
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

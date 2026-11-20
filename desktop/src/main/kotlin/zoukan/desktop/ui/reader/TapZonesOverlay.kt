@@ -27,9 +27,15 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_menu
+import tachiyomi.i18n.nav_zone_left
+import tachiyomi.i18n.nav_zone_next
+import tachiyomi.i18n.nav_zone_prev
+import tachiyomi.i18n.nav_zone_right
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.tap_zone_with_action
 
 /**
  * Android's tap zones overlay (ReaderNavigationOverlayView): the zones in color with their names.

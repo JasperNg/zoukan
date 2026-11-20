@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.presentation.util.isTabletUi
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_next_chapter
+import tachiyomi.i18n.action_previous_chapter
 import tachiyomi.presentation.core.components.material.Slider
 import tachiyomi.presentation.core.i18n.stringResource
 

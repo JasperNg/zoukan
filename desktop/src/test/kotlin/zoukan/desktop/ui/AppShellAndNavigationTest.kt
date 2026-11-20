@@ -16,11 +16,14 @@ import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_update_library
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.pause_downloads
+import zoukan.i18n.desktop.start_downloads
 
 /**
  * The main window's decisions in ZoukanApp.kt ([AppShell]): quitting and Cmd+Q, when the app is

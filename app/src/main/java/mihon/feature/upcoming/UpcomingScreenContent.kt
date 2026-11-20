@@ -36,6 +36,10 @@ import tachiyomi.core.common.Constants
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.label_to_be_updated
+import tachiyomi.i18n.label_upcoming
+import tachiyomi.i18n.pref_library_update_smart_update
+import tachiyomi.i18n.upcoming_guide
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.material.Scaffold

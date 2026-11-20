@@ -23,6 +23,10 @@ import org.junit.jupiter.api.Test
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_display_local_badge
+import tachiyomi.i18n.history
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.pref_incognito_mode
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -37,6 +41,9 @@ import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settingsPage
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.done
+import zoukan.i18n.desktop.incognito_extensions
+import zoukan.i18n.desktop.nothing_read_yet
 import kotlin.time.Duration.Companion.minutes
 
 /**

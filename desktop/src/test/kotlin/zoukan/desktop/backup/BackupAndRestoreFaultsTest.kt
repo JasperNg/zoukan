@@ -75,6 +75,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.creating_backup_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized
@@ -87,6 +88,8 @@ import zoukan.desktop.testing.fakes.FileFaults
 import zoukan.desktop.testing.fakes.WriteFaults
 import zoukan.desktop.track.MapPreferenceStore
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.automatic_backup_failed
+import zoukan.i18n.desktop.restore_failed
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors

@@ -38,8 +38,13 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.domain.source.interactor.GetRemoteManga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.internal_error
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_sort_feed
+import tachiyomi.i18n.kmk.too_many_in_feed
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.feed
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

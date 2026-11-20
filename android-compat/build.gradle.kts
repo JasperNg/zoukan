@@ -20,7 +20,6 @@ plugins {
 // AndroidCompat needs its language features
 kotlin {
     compilerOptions {
-        freeCompilerArgs.add("-Xcontext-parameters")
         optIn.add("kotlin.concurrent.atomics.ExperimentalAtomicApi")
     }
 }
@@ -100,7 +99,7 @@ tasks.test {
 // `shasum -a 256` here.
 val androidJarSha256 = "d719e8c95a224f970e4d8d5ceabf1a0f90afa9e7b5da62b64bf76f29cad269f5"
 
-val verifyAndroidJar by tasks.registering {
+val verifyAndroidJar = tasks.register("verifyAndroidJar") {
     group = "verification"
     description = "Checks Suwayomi's android.jar against its expected SHA-256."
     val jar: FileCollection = configurations.detachedConfiguration(

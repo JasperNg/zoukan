@@ -69,8 +69,14 @@ import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_copy_to_clipboard
+import tachiyomi.i18n.action_global_search
+import tachiyomi.i18n.action_search
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_library_search
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.fill_from_tracker
+import tachiyomi.i18n.sy.thumbnail_url
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences

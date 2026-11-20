@@ -18,7 +18,11 @@ import eu.kanade.tachiyomi.data.sync.SyncDataJob
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.flow.update
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.label_library
+import tachiyomi.i18n.label_settings
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.pref_choose_what_to_sync
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.components.LazyColumnWithAction
 import tachiyomi.presentation.core.components.SectionCard

@@ -38,6 +38,10 @@ import mihon.domain.extension.model.ExtensionStore
 import mihon.domain.extension.model.KOMIKKU_SIGNATURE
 import mihon.domain.extension.model.REPO_SIGNATURE
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_copy_to_clipboard
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_disable
+import tachiyomi.i18n.action_open_in_browser
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.icons.CustomIcons

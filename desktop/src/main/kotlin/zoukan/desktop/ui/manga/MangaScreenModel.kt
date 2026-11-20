@@ -67,6 +67,15 @@ import zoukan.desktop.ui.common.ListSelection
 import zoukan.desktop.ui.common.launchReporting
 import zoukan.desktop.ui.common.sourceErrorText
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.default_chapter_settings_updated
+import zoukan.i18n.desktop.screen_action_failed_add_to_library
+import zoukan.i18n.desktop.screen_action_failed_bookmark
+import zoukan.i18n.desktop.screen_action_failed_delete_downloads
+import zoukan.i18n.desktop.screen_action_failed_mark_read
+import zoukan.i18n.desktop.screen_action_failed_set_categories
+import zoukan.i18n.desktop.screen_action_failed_toggle_favorite
+import zoukan.i18n.desktop.the_source_lists_no_chapters
+import zoukan.i18n.desktop.this_entry_no_longer_exists
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 

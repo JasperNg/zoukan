@@ -2,6 +2,8 @@ package zoukan.desktop.ui.common
 
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.chapter_state_bookmarked
+import zoukan.i18n.desktop.chapter_state_read
 
 /**
  * What a screen reader says about a chapter row besides its text: "Read", "Bookmarked", both

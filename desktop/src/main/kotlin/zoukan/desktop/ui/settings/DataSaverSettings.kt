@@ -20,13 +20,35 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences.DataSaver
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.disabled
+import tachiyomi.i18n.none
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.bandwidth_data_saver_server
+import tachiyomi.i18n.sy.bandwidth_hero
+import tachiyomi.i18n.sy.data_saver
+import tachiyomi.i18n.sy.data_saver_color_bw
+import tachiyomi.i18n.sy.data_saver_downloader
+import tachiyomi.i18n.sy.data_saver_ignore_gif
+import tachiyomi.i18n.sy.data_saver_ignore_jpeg
+import tachiyomi.i18n.sy.data_saver_image_format
+import tachiyomi.i18n.sy.data_saver_image_format_summary_off
+import tachiyomi.i18n.sy.data_saver_image_format_summary_on
+import tachiyomi.i18n.sy.data_saver_image_quality
+import tachiyomi.i18n.sy.data_saver_image_quality_summary
+import tachiyomi.i18n.sy.data_saver_server_summary
+import tachiyomi.i18n.sy.data_saver_summary
+import tachiyomi.i18n.sy.wsrv
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.exclude_from_the_data_saver
+import zoukan.i18n.desktop.excluded
+import zoukan.i18n.desktop.excluded_sources
 
 /**
  * Settings > Data saver, as the data saver group of the Android app's Advanced settings: pages

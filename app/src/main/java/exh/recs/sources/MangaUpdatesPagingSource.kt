@@ -22,6 +22,8 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.source.NoResultsException
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.community_recommendations
+import tachiyomi.i18n.sy.similar_titles
 
 abstract class MangaUpdatesPagingSource(manga: Manga) : TrackerRecommendationPagingSource(
     "https://api.mangaupdates.com/v1/",

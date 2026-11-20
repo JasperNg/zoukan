@@ -22,12 +22,21 @@ import logcat.LogPriority
 import logcat.logcat
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_save
+import tachiyomi.i18n.password
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.download.CbzPassword
 import zoukan.desktop.ui.common.ConfirmDestructiveDialog
 import zoukan.desktop.ui.security.secretStoreError
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.download_password
+import zoukan.i18n.desktop.download_password_change_warning
+import zoukan.i18n.desktop.download_password_saved
+import zoukan.i18n.desktop.passwords_do_not_match
+import zoukan.i18n.desktop.repeat_the_password
 
 /** The change the user asked for, waiting for a second confirmation. */
 private enum class PendingChange { Save, Remove }

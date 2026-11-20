@@ -64,6 +64,11 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.download_insufficient_space
+import tachiyomi.i18n.download_notifier_split_page_not_found
+import tachiyomi.i18n.download_queue_size_warning
+import tachiyomi.i18n.page_list_empty_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File

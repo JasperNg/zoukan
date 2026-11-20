@@ -16,6 +16,7 @@ import zoukan.desktop.download.CbzEncryption
 import zoukan.desktop.download.CbzReader
 import zoukan.desktop.download.CbzWriter
 import zoukan.desktop.download.ComicInfoXml
+import zoukan.i18n.desktop.is_password_protected_set_the_download_password
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File

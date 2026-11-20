@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 

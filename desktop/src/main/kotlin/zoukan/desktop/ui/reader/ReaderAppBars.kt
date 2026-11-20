@@ -104,7 +104,15 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_open_in_browser
+import tachiyomi.i18n.action_open_in_web_view
+import tachiyomi.i18n.action_webview_back
+import tachiyomi.i18n.chapters
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.double_pages
+import tachiyomi.i18n.sy.page_layout
+import tachiyomi.i18n.sy.single_page
 import zoukan.desktop.app.FitModes
 import zoukan.desktop.app.ReaderBottomButtons
 import zoukan.desktop.app.ReadingModes
@@ -118,6 +126,28 @@ import zoukan.desktop.ui.common.Tooltip
 import zoukan.desktop.ui.common.chapterStateDescription
 import zoukan.desktop.ui.common.selectedMenuItem
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.auto_scroll_a
+import zoukan.i18n.desktop.automatic_double_in_a_wide_window
+import zoukan.i18n.desktop.bookmark
+import zoukan.i18n.desktop.bookmark_b
+import zoukan.i18n.desktop.chapter_state_bookmarked
+import zoukan.i18n.desktop.chapters_c
+import zoukan.i18n.desktop.crop_borders_off
+import zoukan.i18n.desktop.crop_borders_on
+import zoukan.i18n.desktop.full_screen_f
+import zoukan.i18n.desktop.keyboard_shortcuts
+import zoukan.i18n.desktop.leave_full_screen_f
+import zoukan.i18n.desktop.load_this_page_first_shift_r
+import zoukan.i18n.desktop.next_chapter_n
+import zoukan.i18n.desktop.page
+import zoukan.i18n.desktop.previous_chapter_p
+import zoukan.i18n.desktop.reading_mode
+import zoukan.i18n.desktop.remove_bookmark
+import zoukan.i18n.desktop.remove_bookmark_b
+import zoukan.i18n.desktop.retry_failed_pages_r
+import zoukan.i18n.desktop.scale_type
+import zoukan.i18n.desktop.settings_s
+import zoukan.i18n.desktop.stop_auto_scroll_a
 import kotlin.math.roundToInt
 
 // The reader menu, as Komikku's ReaderAppBars: the top bar, the floating chapter navigator (previous

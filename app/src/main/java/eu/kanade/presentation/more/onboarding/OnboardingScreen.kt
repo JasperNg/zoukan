@@ -20,6 +20,10 @@ import androidx.compose.ui.draw.clip
 import soup.compose.material.motion.animation.materialSharedAxisX
 import soup.compose.material.motion.animation.rememberSlideDistance
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.onboarding_action_finish
+import tachiyomi.i18n.onboarding_action_next
+import tachiyomi.i18n.onboarding_description
+import tachiyomi.i18n.onboarding_heading
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.InfoScreen

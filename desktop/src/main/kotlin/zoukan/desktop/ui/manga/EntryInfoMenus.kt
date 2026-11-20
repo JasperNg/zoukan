@@ -24,7 +24,16 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.source.Source
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_copy_to_clipboard
+import tachiyomi.i18n.action_global_search
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_search
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_library_search
+import tachiyomi.i18n.kmk.chapters_from_database
+import tachiyomi.i18n.kmk.downloaded_data
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.DropdownMenu
 import zoukan.desktop.ui.common.RowCheckbox
@@ -33,6 +42,7 @@ import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.onRightClick
 import zoukan.desktop.ui.common.radioRow
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.clear_local_files
 
 // ZOUKAN -->
 /** What the entry page's title, author, artist, source and tag menus search with. */

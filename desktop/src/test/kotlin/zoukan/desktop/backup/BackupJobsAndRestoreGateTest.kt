@@ -44,6 +44,7 @@ import zoukan.desktop.testing.Await
 import zoukan.desktop.testing.FreshInjekt
 import zoukan.desktop.testing.UserMessages
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.restore_failed
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.CompletableFuture

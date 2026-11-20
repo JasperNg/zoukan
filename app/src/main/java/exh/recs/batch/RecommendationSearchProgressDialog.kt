@@ -24,7 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.rec_collecting
+import tachiyomi.i18n.sy.rec_error_string
+import tachiyomi.i18n.sy.rec_error_title
+import tachiyomi.i18n.sy.rec_initializing
+import tachiyomi.i18n.sy.rec_processing_state
 
 data class RecommendationSearchProgressProperties(
     val title: String,

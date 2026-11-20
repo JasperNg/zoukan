@@ -10,7 +10,14 @@ import eu.kanade.tachiyomi.data.track.myanimelist.MyAnimeList
 import eu.kanade.tachiyomi.data.track.shikimori.Shikimori
 import exh.md.utils.FollowStatus
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.dropped
+import tachiyomi.i18n.on_hold
+import tachiyomi.i18n.plan_to_read
+import tachiyomi.i18n.reading
+import tachiyomi.i18n.repeating
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.not_tracked
 
 enum class TrackStatus(val int: Int, val res: StringResource) {
     READING(1, MR.strings.reading),

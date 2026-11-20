@@ -18,6 +18,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import tachiyomi.data.source.NoResultsException
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.community_recommendations
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy

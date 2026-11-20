@@ -40,7 +40,11 @@ import eu.kanade.tachiyomi.util.lang.toTimestampString
 import exh.debug.DebugToggles
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.add_to_library
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_filter_unfinished_manga
+import tachiyomi.i18n.recent_manga_time
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

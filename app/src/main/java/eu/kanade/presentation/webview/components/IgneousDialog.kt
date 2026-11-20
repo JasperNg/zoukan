@@ -15,7 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.window.DialogProperties
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.custom_igneous_cookie
+import tachiyomi.i18n.sy.custom_igneous_cookie_message
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

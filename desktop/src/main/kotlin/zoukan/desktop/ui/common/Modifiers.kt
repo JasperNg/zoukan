@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.more_actions
 
 /**
  * Calls [onClick] on a secondary (right) mouse click. The same action is a semantics custom action

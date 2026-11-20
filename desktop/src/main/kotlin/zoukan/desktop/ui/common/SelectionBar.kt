@@ -17,8 +17,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_select_all
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.clear_selection
+import zoukan.i18n.desktop.invert_selection
+import zoukan.i18n.desktop.selected
 
 /** The bar shown while items are selected: clear, the count, select all, invert, then the screen's own actions. */
 @Composable

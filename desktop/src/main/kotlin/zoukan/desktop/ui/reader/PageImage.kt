@@ -16,6 +16,10 @@ import zoukan.desktop.compat.localized
 import zoukan.desktop.image.PageSizeLimits
 import zoukan.desktop.image.UnreadableImageException
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.an_html_page_not_an_image
+import zoukan.i18n.desktop.bytes
+import zoukan.i18n.desktop.the_page_is_too_large_to_show
+import zoukan.i18n.desktop.unsupported_image_format
 import javax.imageio.ImageIO
 
 /**

@@ -40,6 +40,18 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_cancel_all
+import tachiyomi.i18n.action_move_to_bottom
+import tachiyomi.i18n.action_move_to_bottom_all_for_series
+import tachiyomi.i18n.action_move_to_top
+import tachiyomi.i18n.action_move_to_top_all_for_series
+import tachiyomi.i18n.action_pause
+import tachiyomi.i18n.action_sort
+import tachiyomi.i18n.action_start
+import tachiyomi.i18n.cancel_all_for_series
+import tachiyomi.i18n.label_more
+import tachiyomi.i18n.pref_category_downloads
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -53,6 +65,15 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.settings.openFolder
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.chapter_number_ascending
+import zoukan.i18n.desktop.chapter_number_descending
+import zoukan.i18n.desktop.download_first
+import zoukan.i18n.desktop.failed
+import zoukan.i18n.desktop.in_the_queue
+import zoukan.i18n.desktop.no_downloads_queued_download_chapters_from
+import zoukan.i18n.desktop.open_the_downloads_folder
+import zoukan.i18n.desktop.upload_date_newest
+import zoukan.i18n.desktop.upload_date_oldest
 
 /** The download queue. */
 object DownloadsScreen : Screen {

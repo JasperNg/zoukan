@@ -60,7 +60,9 @@ import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.too_many_in_feed
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.save_search_invalid
 import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

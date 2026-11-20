@@ -29,6 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.disabled
+import tachiyomi.i18n.not_selected
+import tachiyomi.i18n.selected
 import tachiyomi.presentation.core.i18n.stringResource
 
 private enum class State {

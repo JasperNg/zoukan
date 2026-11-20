@@ -17,6 +17,15 @@ import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel_all
+import tachiyomi.i18n.action_pause
+import tachiyomi.i18n.action_resume
+import tachiyomi.i18n.action_show_manga
+import tachiyomi.i18n.chapter_downloading_progress
+import tachiyomi.i18n.chapter_paused
+import tachiyomi.i18n.download_notifier_download_paused
+import tachiyomi.i18n.download_notifier_downloader_title
+import tachiyomi.i18n.download_notifier_unknown_error
 import uy.kohesive.injekt.injectLazy
 import java.util.regex.Pattern
 

@@ -15,6 +15,7 @@ import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.sync_progress_from_trackers_up_to_chapter
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

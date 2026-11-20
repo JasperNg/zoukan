@@ -9,6 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import eu.kanade.tachiyomi.BuildConfig
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.updated_version
+import tachiyomi.i18n.whats_new
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

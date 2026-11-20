@@ -17,6 +17,10 @@ import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_show_errors
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.notification_update_error
+import tachiyomi.i18n.notification_updating_progress
 import uy.kohesive.injekt.injectLazy
 import java.math.RoundingMode
 import java.text.NumberFormat

@@ -13,10 +13,15 @@ import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter_bookmarked
+import tachiyomi.i18n.action_filter_unread
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.label_started
 import xyz.nulldev.androidcompat.io.sharedprefs.JavaSharedPreferences
 import xyz.nulldev.ts.config.CONFIG_PREFIX
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.hide_excluded_scanlators
 import java.io.File
 
 /** The Updates filter dialog: each row drives its own preference, and only that one. */

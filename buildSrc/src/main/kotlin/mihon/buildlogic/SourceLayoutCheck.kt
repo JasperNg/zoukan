@@ -13,15 +13,16 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
  * An upstream merge can still add new files under the old `src/main` paths, where the
  * multiplatform plugin silently ignores them. This check makes that a build error instead.
  */
-internal fun Project.checkMultiplatformSourceLayout() {
+fun Project.checkMultiplatformSourceLayout() {
     val forbidden = listOf(
         "src/main/java",
         "src/main/kotlin",
         // data's schema and migrations moved to src/commonMain/sqldelight
         "src/main/sqldelight",
-        // domain's tests moved to src/androidUnitTest
+        // domain's tests moved to src/androidHostTest
         "src/test/java",
         "src/test/kotlin",
+        "src/androidUnitTest",
     ).associateWith { layout.projectDirectory.dir(it).asFile }
     val projectPath = path
     val check = tasks.register("checkMultiplatformSourceLayout") {
@@ -36,7 +37,7 @@ internal fun Project.checkMultiplatformSourceLayout() {
                         misplaced.joinToString() +
                         ", which the multiplatform plugin ignores. This is usually an upstream merge: move " +
                         "them to src/commonMain (src/androidMain if they use Android-only APIs, " +
-                        "src/androidUnitTest for tests). " +
+                        "src/androidHostTest for tests). " +
                         "See desktop/UPSTREAM-MERGES.md.",
                 )
             }

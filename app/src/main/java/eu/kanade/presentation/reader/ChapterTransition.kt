@@ -41,6 +41,14 @@ import kotlinx.collections.immutable.persistentMapOf
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.service.calculateChapterGap
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_downloaded
+import tachiyomi.i18n.missing_chapters_warning
+import tachiyomi.i18n.transition_current
+import tachiyomi.i18n.transition_finished
+import tachiyomi.i18n.transition_next
+import tachiyomi.i18n.transition_no_next
+import tachiyomi.i18n.transition_no_previous
+import tachiyomi.i18n.transition_previous
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.secondaryItemAlpha

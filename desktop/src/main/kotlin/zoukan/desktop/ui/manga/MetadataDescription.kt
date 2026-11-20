@@ -53,7 +53,14 @@ import exh.metadata.metadata.RaisedSearchMetadata
 import exh.source.eHentaiSourceIds
 import exh.source.getMainSource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_copy_to_clipboard
+import tachiyomi.i18n.copied_to_clipboard
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.is_visible
+import tachiyomi.i18n.sy.language_translated
+import tachiyomi.i18n.sy.more_info
+import tachiyomi.i18n.sy.num_pages
+import tachiyomi.i18n.unknown
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.exh.SourceTags

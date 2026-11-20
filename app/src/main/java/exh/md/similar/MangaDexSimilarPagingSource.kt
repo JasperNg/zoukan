@@ -20,6 +20,7 @@ import okhttp3.Headers
 import tachiyomi.data.source.NoResultsException
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.similar_titles
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

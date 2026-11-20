@@ -13,7 +13,10 @@ import eu.kanade.presentation.more.stats.StatsScreenState
 import eu.kanade.presentation.util.Screen
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.label_stats
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.ignore_non_library_entries
+import tachiyomi.i18n.sy.include_all_read_entries
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen

@@ -4,6 +4,9 @@ import android.content.Context
 import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.relative_time
+import tachiyomi.i18n.relative_time_today
+import tachiyomi.i18n.upcoming_relative_time
 import java.text.DateFormat
 import java.time.Instant
 import java.time.LocalDate

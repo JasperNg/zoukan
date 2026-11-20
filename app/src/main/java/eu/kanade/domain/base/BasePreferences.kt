@@ -6,6 +6,10 @@ import eu.kanade.tachiyomi.util.system.GLUtil
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ext_installer_legacy
+import tachiyomi.i18n.ext_installer_packageinstaller
+import tachiyomi.i18n.ext_installer_private
+import tachiyomi.i18n.ext_installer_shizuku
 
 class BasePreferences(
     val context: Context,

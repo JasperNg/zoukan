@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.data.sync.service.GoogleDriveService
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.google_drive_login_failed
+import tachiyomi.i18n.sy.google_drive_login_success
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

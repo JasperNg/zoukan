@@ -18,7 +18,24 @@ import eu.kanade.tachiyomi.util.system.notify
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.release.model.Release
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.action_install
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.ext_installing
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_manual_install
+import tachiyomi.i18n.kmk.could_not_install_update
+import tachiyomi.i18n.kmk.manual_download
+import tachiyomi.i18n.kmk.`open`
+import tachiyomi.i18n.kmk.release_page
+import tachiyomi.i18n.kmk.update_completed
+import tachiyomi.i18n.update_check_notification_download_complete
+import tachiyomi.i18n.update_check_notification_download_error
+import tachiyomi.i18n.update_check_notification_download_in_progress
+import tachiyomi.i18n.update_check_notification_update_available
+import tachiyomi.i18n.updated_version
+import tachiyomi.i18n.whats_new
 
 internal class AppUpdateNotifier(private val context: Context) {
 

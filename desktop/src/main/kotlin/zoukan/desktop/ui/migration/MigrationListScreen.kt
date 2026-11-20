@@ -51,6 +51,21 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_migrate
+import tachiyomi.i18n.action_webview_back
+import tachiyomi.i18n.copy
+import tachiyomi.i18n.migrationListScreenTitle
+import tachiyomi.i18n.migrationListScreen_copyNowActionLabel
+import tachiyomi.i18n.migrationListScreen_exitDialogTitle
+import tachiyomi.i18n.migrationListScreen_exitDialog_stopLabel
+import tachiyomi.i18n.migrationListScreen_matchWithoutChapterToast
+import tachiyomi.i18n.migrationListScreen_migrateNowActionLabel
+import tachiyomi.i18n.migrationListScreen_noMatchFoundText
+import tachiyomi.i18n.migrationListScreen_searchManuallyActionLabel
+import tachiyomi.i18n.migrationListScreen_skipActionLabel
+import tachiyomi.i18n.pref_reader_actions
+import tachiyomi.i18n.unknown
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.compat.localizedPlural
@@ -69,6 +84,23 @@ import zoukan.desktop.ui.manga.SearchPurpose
 import zoukan.desktop.ui.migration.MigrationListScreenModel.Item
 import zoukan.desktop.ui.migration.MigrationListScreenModel.SearchResult
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.chapters_latest
+import zoukan.i18n.desktop.copied_entries
+import zoukan.i18n.desktop.copied_entries_failed
+import zoukan.i18n.desktop.copy_count_of_entries
+import zoukan.i18n.desktop.copy_entries
+import zoukan.i18n.desktop.entries
+import zoukan.i18n.desktop.migrate_count_of_entries
+import zoukan.i18n.desktop.migrate_entries
+import zoukan.i18n.desktop.migrated_entries
+import zoukan.i18n.desktop.migrated_entries_failed
+import zoukan.i18n.desktop.migrating_of
+import zoukan.i18n.desktop.migration
+import zoukan.i18n.desktop.migration_failed
+import zoukan.i18n.desktop.one_skipped_without_match
+import zoukan.i18n.desktop.searching
+import zoukan.i18n.desktop.skipped_without_match
+import zoukan.i18n.desktop.stop_searching
 
 /**
  * The Android app's MigrationListScreen: each entry beside the match found for it, with a manual

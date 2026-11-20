@@ -24,6 +24,9 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.error_no_match
+import tachiyomi.i18n.information_no_manga_category
+import tachiyomi.i18n.no_results_found
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.util.plus
 

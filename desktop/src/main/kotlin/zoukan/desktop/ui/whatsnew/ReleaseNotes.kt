@@ -32,6 +32,7 @@ import zoukan.desktop.app.ExternalLinks
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_open_the_page
 
 /**
  * The Markdown of GitHub release notes, read into blocks: Android's What's new screen renders the

@@ -46,6 +46,7 @@ import eu.kanade.presentation.manga.components.MangaCoverHide
 import eu.kanade.presentation.manga.components.RatioSwitchToPanorama
 import exh.debug.DebugToggles
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_resume
 import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.selectedBackground

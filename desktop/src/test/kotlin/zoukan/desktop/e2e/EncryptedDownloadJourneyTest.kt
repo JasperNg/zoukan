@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_remove
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.DesktopPreferences
@@ -32,6 +34,8 @@ import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.settings.SettingsCategory
 import zoukan.desktop.ui.settings.openSettingsCategory
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.change_the_download_password
+import zoukan.i18n.desktop.download_password_change_warning
 import java.security.MessageDigest
 import kotlin.time.Duration.Companion.minutes
 

@@ -10,6 +10,7 @@ import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.presentation.manga.components.MangaNotesTextArea
 import eu.kanade.tachiyomi.ui.manga.notes.MangaNotesScreen
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_edit_notes
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 

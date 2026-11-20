@@ -5,6 +5,7 @@ import tachiyomi.core.common.preference.PreferenceStore
 import zoukan.desktop.ZoukanDirs
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.storage_folder_unavailable
 import java.io.File
 
 /**

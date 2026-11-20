@@ -66,6 +66,10 @@ import mihon.feature.upcoming.DateHeading
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter_bookmarked
+import tachiyomi.i18n.chapter_progress
+import tachiyomi.i18n.unread
+import tachiyomi.i18n.updates_last_update_info
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

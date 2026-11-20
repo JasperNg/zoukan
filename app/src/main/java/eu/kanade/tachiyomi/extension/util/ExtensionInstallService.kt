@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.util.system.notificationBuilder
 import exh.log.xLogE
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ext_install_service_notif
 
 /**
  * Foreground service that stages and installs extension APKs via [PackageInstallerInstaller] or

@@ -51,6 +51,7 @@ import zoukan.desktop.app.WebtoonScaleTypes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.moreActions
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.next_chapter_button
 
 /**
  * A strip page that is queued or loading. It keeps the shape the page decoded to before (also after

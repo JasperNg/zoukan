@@ -24,6 +24,7 @@ import mihon.feature.migration.list.components.MigrationMangaDialog
 import mihon.feature.migration.list.components.MigrationProgressDialog
 import mihon.feature.migration.list.models.MigratingManga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.migrationListScreen_matchWithoutChapterToast
 
 /**
  * Screen showing a list of pair of current-target manga entries being migrated.

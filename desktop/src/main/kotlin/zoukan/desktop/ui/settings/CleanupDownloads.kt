@@ -28,7 +28,17 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.repository.MangaMergeRepository
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.clean_orphaned_downloads
+import tachiyomi.i18n.sy.clean_read_downloads
+import tachiyomi.i18n.sy.clean_read_entries_not_in_library
+import tachiyomi.i18n.sy.clean_up_downloaded_chapters
+import tachiyomi.i18n.sy.delete_unused_chapters
+import tachiyomi.i18n.sy.no_folders_to_cleanup
+import tachiyomi.i18n.sy.starting_cleanup
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.app.AppScope
@@ -39,6 +49,21 @@ import zoukan.desktop.download.DownloadManager.CleanupItem
 import zoukan.desktop.download.DownloadManager.CleanupPlan
 import zoukan.desktop.download.DownloadManager.CleanupReason
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.cleaning_up_downloads_failed
+import zoukan.i18n.desktop.cleanup_done_removed_1_folder
+import zoukan.i18n.desktop.cleanup_done_removed_folders
+import zoukan.i18n.desktop.cleanup_finding
+import zoukan.i18n.desktop.cleanup_not_deleted
+import zoukan.i18n.desktop.cleanup_preview_keeps_unknown
+import zoukan.i18n.desktop.cleanup_preview_not_in_library
+import zoukan.i18n.desktop.cleanup_preview_nothing
+import zoukan.i18n.desktop.cleanup_preview_orphans
+import zoukan.i18n.desktop.cleanup_preview_permanent
+import zoukan.i18n.desktop.cleanup_preview_read
+import zoukan.i18n.desktop.cleanup_preview_title
+import zoukan.i18n.desktop.cleanup_preview_trash
+import zoukan.i18n.desktop.cleanup_preview_unfinished
+import zoukan.i18n.desktop.cleanup_skipped_changed
 import java.io.File
 
 /** Set while a clean-up looks or deletes, so a second one waits, as Android's single job. */

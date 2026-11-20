@@ -16,6 +16,7 @@ import org.w3c.dom.Element
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalFormat
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.the_page_is_too_large_to_show
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream

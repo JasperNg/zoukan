@@ -5,6 +5,7 @@ import android.os.Environment
 import androidx.core.net.toUri
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
 import java.io.File
 
 class AndroidStorageFolderProvider(

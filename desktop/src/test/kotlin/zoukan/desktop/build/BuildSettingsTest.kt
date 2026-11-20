@@ -3,7 +3,6 @@ package zoukan.desktop.build
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
@@ -82,19 +81,42 @@ class BuildSettingsTest {
             Regex("""taskRequests\.any \{(?! narrowsTests\(it\.args\) \})""").findAll(build).map { it.value }.toList().shouldBeEmpty()
             build shouldNotContain "\"--tests\" in"
         }
-        val wiring = build.substringAfter("val wiringTest by tasks.registering", "").substringBefore("\n}")
+        val wiring = build.substringAfter("val wiringTest = tasks.register<Test>(\"wiringTest\")", "").substringBefore("\n}")
         withClue("wiringTest's check of its classes") { wiring shouldContain "val narrowedOnCommandLine = testsNarrowedOnCommandLine" }
     }
 
     @Test
-    fun `the update bot never proposes a new Android Gradle Plugin major`() {
-        val renovate = text("renovate.json")
-        val rule = Regex("""\{[^{}]*"com\.android\.tools\.build:gradle"[^{}]*\}""").find(renovate)?.value
-        withClue("no update-bot rule for the Android Gradle Plugin") { rule.shouldNotBeNull() }
-        rule!! shouldContain "\"major\""
-        rule shouldContain "\"enabled\": false"
-        withClue("the Android KMP library plugin migration is not tracked") {
-            text("desktop/UPSTREAM-MERGES.md") shouldContain "com.android.kotlin.multiplatform.library"
+    fun `shared KMP modules use the AGP 9 Android KMP library plugin`() {
+        val kmpConvention = text("buildSrc/src/main/kotlin/mihon.library.kmp.gradle.kts")
+        kmpConvention shouldContain "com.android.kotlin.multiplatform.library"
+        kmpConvention shouldNotContain "com.android.library"
+        kmpConvention shouldNotContain """id("mihon.library")"""
+
+        val kmpModules = listOf(
+            "backup",
+            "core/archive",
+            "core/common",
+            "data",
+            "domain",
+            "source-api",
+            "source-local",
+            "i18n",
+            "i18n-kmk",
+            "i18n-sy",
+            "i18n-desktop",
+        )
+        for (module in kmpModules) {
+            val build = text("$module/build.gradle.kts")
+            val usesKmpPlugin = "id(\"mihon.library.kmp\")" in build ||
+                "id(\"com.android.kotlin.multiplatform.library\")" in build
+            withClue("$module does not use mihon.library.kmp or com.android.kotlin.multiplatform.library") {
+                usesKmpPlugin shouldBe true
+            }
+            withClue("$module mixes com.android.library with kotlin(\"multiplatform\")") {
+                build shouldNotContain "com.android.library"
+                build shouldNotContain """id("mihon.library")"""
+                build shouldNotContain "androidTarget()"
+            }
         }
     }
 }

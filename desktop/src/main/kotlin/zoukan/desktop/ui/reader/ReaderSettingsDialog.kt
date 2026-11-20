@@ -23,7 +23,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.automatic_background
+import tachiyomi.i18n.black_background
+import tachiyomi.i18n.gray_background
+import tachiyomi.i18n.nav_zone_left
+import tachiyomi.i18n.nav_zone_right
+import tachiyomi.i18n.none
+import tachiyomi.i18n.pref_category_general
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.double_pages
+import tachiyomi.i18n.viewer
+import tachiyomi.i18n.white_background
+import tachiyomi.i18n.zoom_start_automatic
+import tachiyomi.i18n.zoom_start_center
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.FitModes
 import zoukan.desktop.app.ReaderBottomButtons
@@ -41,6 +55,12 @@ import zoukan.desktop.ui.settings.ReaderSettingRowView
 import zoukan.desktop.ui.settings.ReaderSettingRows
 import zoukan.desktop.ui.settings.SwitchSetting
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.double_and_wide_pages
+import zoukan.i18n.desktop.pairs_from_the_first_page_for
+import zoukan.i18n.desktop.reading_mode_for_this_entry
+import zoukan.i18n.desktop.shift_double_pages
+import zoukan.i18n.desktop.white_and_black
+import zoukan.i18n.desktop.wide_pages
 
 /**
  * The reader's settings sheet, as Android's: Reading mode, General and Filter. Its rows are

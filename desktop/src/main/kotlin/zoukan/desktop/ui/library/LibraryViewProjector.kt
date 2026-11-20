@@ -15,6 +15,14 @@ import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.sort
 import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_display_local_badge
+import tachiyomi.i18n.cancelled
+import tachiyomi.i18n.completed
+import tachiyomi.i18n.licensed
+import tachiyomi.i18n.on_hiatus
+import tachiyomi.i18n.ongoing
+import tachiyomi.i18n.publishing_finished
+import tachiyomi.i18n.unknown
 import zoukan.desktop.compat.localized
 import zoukan.desktop.local.LocalSource
 import java.text.Collator

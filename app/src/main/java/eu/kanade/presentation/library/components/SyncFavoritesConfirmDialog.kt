@@ -6,7 +6,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.window.DialogProperties
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.favorites_sync
+import tachiyomi.i18n.sy.favorites_sync_conformation_message
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

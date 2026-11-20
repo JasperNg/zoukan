@@ -23,9 +23,16 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.repository.TrackRepository
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.migrationConfigScreen_removeDownloadsTitle
 import zoukan.desktop.domain.RefreshManga
 import zoukan.desktop.download.DownloadManager
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.migration_flag_categories
+import zoukan.i18n.desktop.migration_flag_chapters
+import zoukan.i18n.desktop.migration_flag_custom_cover
+import zoukan.i18n.desktop.migration_flag_extra
+import zoukan.i18n.desktop.migration_flag_notes
+import zoukan.i18n.desktop.migration_flag_tracking
 import java.time.Instant
 
 /**

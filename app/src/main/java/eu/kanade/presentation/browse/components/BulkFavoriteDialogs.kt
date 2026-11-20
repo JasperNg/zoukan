@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import mihon.feature.migration.dialog.MigrateMangaDialog
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.action_bulk_select
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**

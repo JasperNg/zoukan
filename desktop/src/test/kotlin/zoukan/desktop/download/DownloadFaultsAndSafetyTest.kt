@@ -49,6 +49,11 @@ import zoukan.desktop.testing.fakes.FileFaults
 import zoukan.desktop.testing.fakes.MemorySecretStore
 import zoukan.desktop.testing.fakes.WriteFaults
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_use_the_secret_store
+import zoukan.i18n.desktop.download_disk_full
+import zoukan.i18n.desktop.download_password_unreadable_chapter_not_saved
+import zoukan.i18n.desktop.no_download_password_chapter_not_saved
+import zoukan.i18n.desktop.the_page_is_too_large_to_show
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

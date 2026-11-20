@@ -56,6 +56,9 @@ import xyz.nulldev.androidcompat.webkit.KcefWebSettings
 import xyz.nulldev.androidcompat.webkit.KcefWebSettings.UserAgentBrandVersion
 import zoukan.desktop.browser.ChromiumNatives.forDownload
 import zoukan.desktop.testing.FileSystemSandbox
+import zoukan.i18n.desktop.browser_data_not_all_cleared
+import zoukan.i18n.desktop.could_not_be_checked_and_was_not_cleared
+import zoukan.i18n.desktop.is_a_link_and_was_not_cleared
 import java.io.File
 import java.io.IOException
 import java.net.UnknownHostException

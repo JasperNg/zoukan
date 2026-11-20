@@ -44,6 +44,17 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_delete
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_select_inverse
+import tachiyomi.i18n.are_you_sure
+import tachiyomi.i18n.clear_database_completed
+import tachiyomi.i18n.clear_database_history_warning
+import tachiyomi.i18n.clear_db_exclude_read
+import tachiyomi.i18n.database_clean
+import tachiyomi.i18n.pref_clear_database
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
@@ -59,6 +70,9 @@ import zoukan.desktop.ui.common.ScreenHeader
 import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_clear_the_database
+import zoukan.i18n.desktop.non_library_entries_in_database
+import zoukan.i18n.desktop.youre_about_to_remove_entries_from
 
 /**
  * Android's Advanced > Clear database: each source with entries outside the library, and deleting

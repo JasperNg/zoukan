@@ -40,12 +40,17 @@ import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.password
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
 import zoukan.desktop.compat.localized
 import zoukan.desktop.security.AppLock
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_use_the_secret_store
+import zoukan.i18n.desktop.unlock
+import zoukan.i18n.desktop.wrong_password
+import zoukan.i18n.desktop.zoukan_is_locked
 
 /** Covers the app while it is locked, as Android's UnlockActivity, and asks for the password. */
 @Composable

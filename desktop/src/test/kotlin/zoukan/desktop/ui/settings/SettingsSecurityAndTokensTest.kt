@@ -28,6 +28,9 @@ import org.junit.jupiter.api.io.TempDir
 import tachiyomi.core.common.preference.DesktopPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.action_save
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import xyz.nulldev.androidcompat.io.sharedprefs.ForTestsOnly
@@ -48,6 +51,12 @@ import zoukan.desktop.ui.common.LazyColumn
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_use_the_secret_store
+import zoukan.i18n.desktop.download_password_change_warning
+import zoukan.i18n.desktop.github_token
+import zoukan.i18n.desktop.github_token_set
+import zoukan.i18n.desktop.needed_while_the_release_repository_is
+import zoukan.i18n.desktop.passwords_do_not_match
 import java.io.File
 
 @OptIn(ExperimentalTestApi::class, ForTestsOnly::class)

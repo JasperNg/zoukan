@@ -36,6 +36,7 @@ import zoukan.desktop.download.ImageType
 import zoukan.desktop.ui.reader.PageImage
 import zoukan.desktop.ui.reader.PageImages
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.the_image_is_too_large
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
@@ -108,7 +109,7 @@ class ImageFormatsTest {
     @Test
     fun `text bodies are told from unknown binary ones`() {
         ImageType.looksLikeText("<!DOCTYPE html><html><body>Login</body></html>".toByteArray()) shouldBe true
-        ImageType.looksLikeText("﻿{\"error\":\"rate limited\"}\r\n".toByteArray()) shouldBe true
+        ImageType.looksLikeText("{\"error\":\"rate limited\"}\r\n".toByteArray()) shouldBe true
         ImageType.looksLikeText("Ceci n'est pas une image: éè".toByteArray()) shouldBe true
         // A BMP, which the sniffer does not know, has control bytes
         ImageType.looksLikeText(byteArrayOf('B'.code.toByte(), 'M'.code.toByte(), 0x36, 0, 0, 0, 0, 0)) shouldBe false

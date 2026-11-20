@@ -19,6 +19,7 @@ import tachiyomi.domain.category.interactor.RenameCategory
 import tachiyomi.domain.category.interactor.ReorderCategory
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.internal_error
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

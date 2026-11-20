@@ -52,7 +52,16 @@ import tachiyomi.domain.manga.model.MergeMangaSettingsUpdate
 import tachiyomi.domain.manga.model.MergedMangaReference
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_migrate
+import tachiyomi.i18n.action_search
+import tachiyomi.i18n.copy
+import tachiyomi.i18n.label_recent_updates
+import tachiyomi.i18n.pref_category_downloads
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.merge
+import tachiyomi.i18n.title
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -69,6 +78,21 @@ import zoukan.desktop.ui.common.TooltipIconButton
 import zoukan.desktop.ui.common.checkRow
 import zoukan.desktop.ui.common.snapshotFailedPrompt
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.both_entries_chapters_show_in_one
+import zoukan.i18n.desktop.copied_to
+import zoukan.i18n.desktop.fetching_chapters
+import zoukan.i18n.desktop.merge_with_2
+import zoukan.i18n.desktop.merged
+import zoukan.i18n.desktop.merged_entries
+import zoukan.i18n.desktop.merging
+import zoukan.i18n.desktop.merging_failed
+import zoukan.i18n.desktop.migrate_to_2
+import zoukan.i18n.desktop.migrated_to
+import zoukan.i18n.desktop.migration_failed
+import zoukan.i18n.desktop.remove_from_the_merge
+import zoukan.i18n.desktop.take_along
+import zoukan.i18n.desktop.the_entry_no_longer_exists
+import zoukan.i18n.desktop.the_selected_entry_gives_the_merged
 import java.io.Serializable
 
 /** Why a global search was opened: to browse, or to pick an entry for a merge or a migration. */

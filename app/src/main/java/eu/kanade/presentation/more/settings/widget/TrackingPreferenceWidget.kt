@@ -20,6 +20,7 @@ import eu.kanade.presentation.more.settings.LocalPreferenceHighlighted
 import eu.kanade.presentation.track.components.TrackLogoIcon
 import eu.kanade.tachiyomi.data.track.Tracker
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.login_success
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

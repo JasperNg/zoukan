@@ -27,6 +27,9 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.label_to_be_updated
+import tachiyomi.i18n.label_upcoming
+import tachiyomi.i18n.pref_library_update_smart_update
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.compat.localized

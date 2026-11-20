@@ -101,7 +101,7 @@ val appSharedRewrites: List<AppSharedRewrite> = file("app-shared-rewrites.txt").
         require(parts.size == 3) { "app-shared-rewrites.txt: expected 'path | search | replacement', got '$line'" }
         AppSharedRewrite(parts[0], parts[1], parts[2])
     }
-val syncAppShared by tasks.registering(Sync::class) {
+val syncAppShared = tasks.register<Sync>("syncAppShared") {
     from(rootProject.file("app/src/main/java")) {
         appSharedPatterns.filterNot { it.startsWith("!") }.forEach { include(it) }
         appSharedPatterns.filter { it.startsWith("!") }.forEach { exclude(it.removePrefix("!")) }
@@ -151,7 +151,7 @@ sourceSets.main {
 
 // The version and the repository releases come from, for the update check and crash logs
 val zoukanSignedRelease = objects.property<Boolean>().convention(false)
-val zoukanBuildInfo by tasks.registering {
+val zoukanBuildInfo = tasks.register("zoukanBuildInfo") {
     val output = layout.buildDirectory.dir("generated/zoukan-build-info")
     val version = zoukanVersion
     val repo = providers.gradleProperty("zoukan.releaseRepo").orElse("JasperNg/zoukan")
@@ -179,7 +179,7 @@ sourceSets.main {
 // KMK's language flags (flagkit and the app's globe, UN and Esperanto icons), Android vector
 // drawables that Compose loads as they are, for the library's language badge and the flag pickers;
 // and the MangaDex DMCA list behind the library's "mangadex-dmca" search
-val syncAndroidResources by tasks.registering(Sync::class) {
+val syncAndroidResources = tasks.register<Sync>("syncAndroidResources") {
     from(rootProject.file("flagkit/src/main/res/drawable")) { into("flags") }
     from(rootProject.file("app/src/main/res/drawable")) {
         include("globe.xml", "ic_flag_un.xml", "ic_flag_esperanto.xml", "ic_flag_lfn.xml")
@@ -191,7 +191,7 @@ val syncAndroidResources by tasks.registering(Sync::class) {
 
 // The app icon's vector master, which the window, tray and More header draw at their exact size
 val appIconSvg = file("packaging/icons/zoukan.svg")
-val syncAppIcon by tasks.registering(Sync::class) {
+val syncAppIcon = tasks.register<Sync>("syncAppIcon") {
     doFirst { check(appIconSvg.isFile) { "The app icon $appIconSvg is missing" } }
     from(appIconSvg) { rename { "zoukan-icon.svg" } }
     into(layout.buildDirectory.dir("generated/app-icon"))
@@ -205,17 +205,17 @@ sourceSets.main {
 // :desktop:test as they are. The others are Android-only: MigratorTest covers the upgrade
 // migrations of Android installs, ScreenSerializationTest the Android screens (its desktop port is
 // zoukan.desktop.ui.ScreenSerializationTest).
-val syncAppSharedTests by tasks.registering(Sync::class) {
+val syncAppSharedTests = tasks.register<Sync>("syncAppSharedTests") {
     from(rootProject.file("app/src/test/kotlin")) { include("Tester.kt") }
     into(layout.buildDirectory.dir("generated/app-shared-tests"))
 }
 sourceSets.test {
     kotlin.srcDir(syncAppSharedTests)
 }
-val testStandins by sourceSets.creating {
+val testStandins = sourceSets.create("testStandins") {
     compileClasspath += sourceSets.main.get().output + configurations.testCompileClasspath.get()
 }
-val tools by sourceSets.creating {
+val tools = sourceSets.create("tools") {
     compileClasspath += sourceSets.main.get().output + sourceSets.main.get().runtimeClasspath
     runtimeClasspath += sourceSets.main.get().output + sourceSets.main.get().runtimeClasspath
 }
@@ -358,7 +358,7 @@ tasks.named<JavaExec>("run") {
     }
 }
 
-val runTools by tasks.registering(JavaExec::class) {
+val runTools = tasks.register<JavaExec>("runTools") {
     group = "application"
     description = "Runs the desktop developer tools (harness, backup check/compare/synthetic)"
     classpath = tools.runtimeClasspath
@@ -429,7 +429,7 @@ fun narrowsTests(args: List<String>): Boolean = args.any { it == "--tests" || it
 val testsNarrowedOnCommandLine = gradle.startParameter.taskRequests.any { narrowsTests(it.args) }
 
 //   ./gradlew :desktop:wiringTest
-val wiringTest by tasks.registering(Test::class) {
+val wiringTest = tasks.register<Test>("wiringTest") {
     group = "verification"
     description = "Checks every Injekt lookup has a registration and every screen and dialog opens"
     testClassesDirs = sourceSets.test.get().output.classesDirs
@@ -503,7 +503,7 @@ val extensionWiringStoreTests = extensionWiringStores.map { store ->
 }
 // One store at a time: two 4 GB test JVMs at once need more memory than many machines have
 extensionWiringStoreTests.zipWithNext { a, b -> b.configure { mustRunAfter(a) } }
-val extensionWiringTest by tasks.registering {
+val extensionWiringTest = tasks.register("extensionWiringTest") {
     group = "verification"
     description = "Checks every extension of each sample store is wired up on the desktop (-Pzoukan.e2e.stores to pick)"
     dependsOn(extensionWiringStoreTests.filterIndexed { i, _ -> extensionWiringStores[i] in selectedWiringStores })
@@ -515,7 +515,7 @@ val extensionWiringTest by tasks.registering {
 // network but take a few minutes, so they run on request and in ci.yml, not on every build:
 //   ./gradlew :desktop:journeyTest
 // Screenshots go to desktop/build/reports/journeys/.
-val journeyTest by tasks.registering(Test::class) {
+val journeyTest = tasks.register<Test>("journeyTest") {
     group = "verification"
     description = "Runs the offline user journeys against the fixture source"
     testClassesDirs = sourceSets.test.get().output.classesDirs

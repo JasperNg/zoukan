@@ -16,6 +16,8 @@ import mihon.domain.extension.interactor.RemoveExtensionStore
 import mihon.domain.extension.model.ExtensionStore
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.last_used_source
+import tachiyomi.i18n.pinned_sources
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfFatal
@@ -28,6 +30,18 @@ import zoukan.desktop.ui.common.launchReporting
 import zoukan.extension.DesktopExtensionManager
 import zoukan.extension.LoadResult
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.add_an_extension_store_to_find
+import zoukan.i18n.desktop.could_not_add_the_store
+import zoukan.i18n.desktop.could_not_load
+import zoukan.i18n.desktop.could_not_load_the_extension_lists
+import zoukan.i18n.desktop.failed
+import zoukan.i18n.desktop.failed_to_load
+import zoukan.i18n.desktop.installed
+import zoukan.i18n.desktop.is_signed_with_an_unknown_key
+import zoukan.i18n.desktop.removed
+import zoukan.i18n.desktop.screen_action_failed_remove_store
+import zoukan.i18n.desktop.store_added
+import zoukan.i18n.desktop.uninstalled
 
 class BrowseScreenModel(
     private val extensionManager: DesktopExtensionManager = Injekt.get(),

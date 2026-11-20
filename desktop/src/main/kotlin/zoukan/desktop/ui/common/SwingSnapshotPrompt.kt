@@ -1,9 +1,13 @@
 package zoukan.desktop.ui.common
 
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
 import zoukan.desktop.backup.SnapshotFailedPrompt
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.continue_without_backup
+import zoukan.i18n.desktop.safety_backup_failed_text
+import zoukan.i18n.desktop.safety_backup_failed_title
 import javax.swing.JOptionPane
 import javax.swing.SwingUtilities
 

@@ -64,6 +64,8 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.manga_added_library
 import zoukan.desktop.app.Toasts
 import zoukan.desktop.compat.localized
 import zoukan.desktop.library.AddToLibrary
@@ -72,6 +74,10 @@ import zoukan.desktop.ui.browse.BulkFavorite
 import zoukan.desktop.ui.browse.BulkLibraryAdd
 import zoukan.desktop.ui.browse.QuickLibraryToggle
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.clear_selection
+import zoukan.i18n.desktop.invert_selection
+import zoukan.i18n.desktop.more_actions
+import zoukan.i18n.desktop.selected
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors

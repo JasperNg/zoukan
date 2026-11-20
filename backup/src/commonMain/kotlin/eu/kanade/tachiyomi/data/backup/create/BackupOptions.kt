@@ -3,8 +3,20 @@ package eu.kanade.tachiyomi.data.backup.create
 import dev.icerock.moko.resources.StringResource
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_settings
+import tachiyomi.i18n.categories
+import tachiyomi.i18n.chapters
+import tachiyomi.i18n.extensionStores
+import tachiyomi.i18n.history
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.saved_searches_feeds
+import tachiyomi.i18n.manga
+import tachiyomi.i18n.non_library_settings
+import tachiyomi.i18n.private_settings
+import tachiyomi.i18n.source_settings
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.custom_entry_info
+import tachiyomi.i18n.track
 
 data class BackupOptions(
     val libraryEntries: Boolean = true,

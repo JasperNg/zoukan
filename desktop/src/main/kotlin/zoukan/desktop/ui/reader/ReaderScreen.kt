@@ -52,6 +52,8 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_close
+import tachiyomi.i18n.action_retry
 import zoukan.desktop.app.ReadingModes
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.LocalWindowState
@@ -62,6 +64,48 @@ import zoukan.desktop.ui.common.OverlayColors
 import zoukan.desktop.ui.common.Spacing
 import zoukan.desktop.ui.common.reducedMotion
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.bookmark_the_chapter_or_remove_its
+import zoukan.i18n.desktop.chapter_downloaded
+import zoukan.i18n.desktop.chapter_list
+import zoukan.i18n.desktop.chapter_local_file
+import zoukan.i18n.desktop.click_left_right_third
+import zoukan.i18n.desktop.click_the_middle_m_or_enter
+import zoukan.i18n.desktop.close_the_menu_leave_full_screen
+import zoukan.i18n.desktop.double_click
+import zoukan.i18n.desktop.escape
+import zoukan.i18n.desktop.first_last_page
+import zoukan.i18n.desktop.full_screen
+import zoukan.i18n.desktop.next_previous_chapter
+import zoukan.i18n.desktop.next_previous_page
+import zoukan.i18n.desktop.next_previous_page_flipped_in_right
+import zoukan.i18n.desktop.previous_next_page
+import zoukan.i18n.desktop.reader_key_auto_scroll
+import zoukan.i18n.desktop.reader_key_bookmark
+import zoukan.i18n.desktop.reader_key_chapter
+import zoukan.i18n.desktop.reader_key_chapters
+import zoukan.i18n.desktop.reader_key_down_up
+import zoukan.i18n.desktop.reader_key_full_screen
+import zoukan.i18n.desktop.reader_key_home_end
+import zoukan.i18n.desktop.reader_key_retry
+import zoukan.i18n.desktop.reader_key_right_left
+import zoukan.i18n.desktop.reader_key_settings
+import zoukan.i18n.desktop.reader_key_shift_pages
+import zoukan.i18n.desktop.reader_key_space_page
+import zoukan.i18n.desktop.reader_key_zoom
+import zoukan.i18n.desktop.reader_key_zoom_reset
+import zoukan.i18n.desktop.reader_page_description
+import zoukan.i18n.desktop.reader_settings
+import zoukan.i18n.desktop.reader_shortcuts
+import zoukan.i18n.desktop.reset_zoom
+import zoukan.i18n.desktop.retry_failed_pages_load_the_shown
+import zoukan.i18n.desktop.right_click_or_long_press_a
+import zoukan.i18n.desktop.scroll_a_tall_or_zoomed_page
+import zoukan.i18n.desktop.set_it_as_the_cover_copy
+import zoukan.i18n.desktop.shift_double_pages_by_one
+import zoukan.i18n.desktop.show_or_hide_the_menu
+import zoukan.i18n.desktop.start_or_stop_auto_scroll
+import zoukan.i18n.desktop.zoom_in_out
+import zoukan.i18n.desktop.zoom_to_2x_and_back
 
 /** What a viewer draws: everything but the current page, which turns on every page change. */
 @Immutable

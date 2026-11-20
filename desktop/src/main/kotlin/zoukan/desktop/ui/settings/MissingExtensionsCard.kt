@@ -25,11 +25,27 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_install
+import tachiyomi.i18n.ext_nsfw_short
 import zoukan.desktop.backup.RestoreOutcome
 import zoukan.desktop.compat.localized
 import zoukan.desktop.ui.common.verticalScrollWithBar
 import zoukan.desktop.ui.settings.MissingExtensionsInstall.State
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.finding_missing_extensions
+import zoukan.i18n.desktop.install_missing_extensions
+import zoukan.i18n.desktop.missing_extensions_failed
+import zoukan.i18n.desktop.missing_extensions_found
+import zoukan.i18n.desktop.missing_extensions_installed_list
+import zoukan.i18n.desktop.missing_extensions_installing
+import zoukan.i18n.desktop.missing_extensions_need_trust
+import zoukan.i18n.desktop.missing_extensions_to_install
+import zoukan.i18n.desktop.missing_extensions_unavailable
+import zoukan.i18n.desktop.missing_extensions_waiting_for_restore
+import zoukan.i18n.desktop.no_missing_extensions
+import zoukan.i18n.desktop.restore_failed
+import zoukan.i18n.desktop.restore_finished
 
 /**
  * The restore screen's results once a restore started: its progress, then the missing

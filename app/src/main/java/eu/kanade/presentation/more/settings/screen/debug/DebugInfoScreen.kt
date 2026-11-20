@@ -30,6 +30,7 @@ import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import mihon.core.common.FeatureFlags
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.pref_debug_info
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

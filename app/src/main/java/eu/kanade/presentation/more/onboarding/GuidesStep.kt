@@ -15,6 +15,11 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
+import tachiyomi.i18n.getting_started_guide
+import tachiyomi.i18n.onboarding_guides_new_user
+import tachiyomi.i18n.onboarding_guides_returning_user
+import tachiyomi.i18n.pref_restore_backup
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 

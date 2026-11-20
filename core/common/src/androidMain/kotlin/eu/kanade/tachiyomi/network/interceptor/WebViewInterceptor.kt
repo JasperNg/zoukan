@@ -16,6 +16,7 @@ import okhttp3.Request
 import okhttp3.Response
 import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.information_webview_required
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit

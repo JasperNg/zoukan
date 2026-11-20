@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_retry
+import tachiyomi.i18n.transition_pages_error
+import tachiyomi.i18n.transition_pages_loading
 
 /**
  * View of the ViewPager that contains a chapter transition.

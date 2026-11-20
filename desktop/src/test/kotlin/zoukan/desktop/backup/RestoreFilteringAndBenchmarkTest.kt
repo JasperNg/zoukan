@@ -54,7 +54,12 @@ import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_settings
+import tachiyomi.i18n.categories
+import tachiyomi.i18n.extensionStores
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.saved_searches_feeds
+import tachiyomi.i18n.source_settings
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.ZoukanDirs

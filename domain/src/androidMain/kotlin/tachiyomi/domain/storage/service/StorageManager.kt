@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.shareIn
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.app_name
 import java.io.File
 
 class StorageManager(

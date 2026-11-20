@@ -46,7 +46,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.logcat
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_add
+import tachiyomi.i18n.action_delete
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.active_account
+import tachiyomi.i18n.kmk.discord_accounts
+import tachiyomi.i18n.kmk.no_accounts_found
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt

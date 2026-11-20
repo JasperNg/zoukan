@@ -31,7 +31,19 @@ import exh.source.MERGED_SOURCE_ID
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MergedMangaReference
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_save
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.chapter_updates_merged_entry
+import tachiyomi.i18n.sy.chapter_updates_merged_entry_desc
+import tachiyomi.i18n.sy.delete_merged_entry
+import tachiyomi.i18n.sy.delete_merged_entry_desc
+import tachiyomi.i18n.sy.download_merged_entry
+import tachiyomi.i18n.sy.download_merged_entry_desc
+import tachiyomi.i18n.sy.merged_chapter_updates_error
+import tachiyomi.i18n.sy.merged_references_invalid
+import tachiyomi.i18n.sy.merged_toggle_download_chapters_error
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Stable

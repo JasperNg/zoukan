@@ -12,6 +12,11 @@ import androidx.compose.runtime.setValue
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.action_remove
+import tachiyomi.i18n.downloaded_chapters
+import tachiyomi.i18n.manga_from_library
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.i18n.stringResource
 

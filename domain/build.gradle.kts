@@ -7,16 +7,15 @@ plugins {
     kotlin("plugin.serialization")
 }
 
-android {
-    namespace = "tachiyomi.domain"
-
-    defaultConfig {
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
-    }
-}
-
 kotlin {
+    android {
+        namespace = "tachiyomi.domain"
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
+        }
+        withHostTest {}
+    }
+
     compilerOptions {
         freeCompilerArgs.add("-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi")
     }
@@ -55,7 +54,7 @@ kotlin {
                 implementation(kotlinx.serialization.xml.core)
             }
         }
-        androidUnitTest {
+        getByName("androidHostTest") {
             dependencies {
                 implementation(libs.bundles.test)
                 implementation(kotlinx.coroutines.test)
@@ -65,7 +64,7 @@ kotlin {
         // Komikku's domain tests also run against the desktop target, as they are
         //   ./gradlew :domain:desktopTest
         getByName("desktopTest") {
-            kotlin.srcDir("src/androidUnitTest/kotlin")
+            kotlin.srcDir("src/androidHostTest/kotlin")
             dependencies {
                 implementation(libs.bundles.test)
                 implementation(kotlinx.coroutines.test)

@@ -18,6 +18,7 @@ import tachiyomi.domain.manga.model.Manga
 import zoukan.desktop.compat.localized
 import zoukan.desktop.storage.StorageUnavailableException
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.download_disk_full
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

@@ -8,7 +8,22 @@ import exh.metadata.metadata.base.TrackerIdMetadata
 import kotlinx.serialization.Serializable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.status
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.anilist_id
+import tachiyomi.i18n.sy.anime_planet_id
+import tachiyomi.i18n.sy.artist
+import tachiyomi.i18n.sy.author
+import tachiyomi.i18n.sy.average_rating
+import tachiyomi.i18n.sy.follow_status
+import tachiyomi.i18n.sy.id
+import tachiyomi.i18n.sy.kitsu_id
+import tachiyomi.i18n.sy.language
+import tachiyomi.i18n.sy.last_chapter_number
+import tachiyomi.i18n.sy.mal_id
+import tachiyomi.i18n.sy.manga_updates_id
+import tachiyomi.i18n.sy.thumbnail_url
+import tachiyomi.i18n.title
 
 @Serializable
 class MangaDexSearchMetadata : RaisedSearchMetadata(), TrackerIdMetadata {

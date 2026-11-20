@@ -40,6 +40,16 @@ import zoukan.desktop.backup.SnapshotReason
 import zoukan.desktop.compat.localized
 import zoukan.desktop.tray.Notifications
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.extension_repos
+import zoukan.i18n.desktop.list_and_n_more
+import zoukan.i18n.desktop.server_library_not_replaced_no_safety_backup
+import zoukan.i18n.desktop.server_library_not_replaced_refused
+import zoukan.i18n.desktop.server_library_not_replaced_service
+import zoukan.i18n.desktop.server_library_not_replaced_sync_running
+import zoukan.i18n.desktop.server_library_replaced
+import zoukan.i18n.desktop.sync_refused_plain_http
+import zoukan.i18n.desktop.sync_skipped_extension_stores
+import zoukan.i18n.desktop.sync_skipped_no_safety_backup
 import java.util.Date
 
 /**

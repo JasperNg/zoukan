@@ -39,6 +39,9 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.sign_in_or_pass_the_sites
+import zoukan.i18n.desktop.the_built_in_browser_could_not
+import zoukan.i18n.desktop.this_source_has_no_website
 
 class SourceScreenModel(
     sourceId: Long,

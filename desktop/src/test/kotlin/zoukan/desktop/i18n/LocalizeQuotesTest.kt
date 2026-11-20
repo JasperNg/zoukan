@@ -7,6 +7,13 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_global_search_query
+import tachiyomi.i18n.delete_category_confirmation
+import tachiyomi.i18n.extensionStoresScreen_deleteStore_body
+import tachiyomi.i18n.pref_relative_format_summary
+import tachiyomi.i18n.pref_update_only_non_completed
+import tachiyomi.i18n.remove_manga
+import tachiyomi.i18n.remove_private_extension_message
 import zoukan.desktop.compat.localized
 
 /** Shared strings written with escaped quotes must show plain quotes, never a backslash, on desktop. */

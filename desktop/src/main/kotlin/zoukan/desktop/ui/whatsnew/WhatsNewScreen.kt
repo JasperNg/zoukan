@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
+import tachiyomi.i18n.update_check_open
+import tachiyomi.i18n.whats_new
 import zoukan.desktop.app.AppVersion
 import zoukan.desktop.app.DesktopPreferences
 import zoukan.desktop.app.ExternalLinks
@@ -36,6 +39,15 @@ import zoukan.desktop.ui.common.InfoScreen
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.Updates
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.could_not_load_the_release_notes
+import zoukan.i18n.desktop.could_not_open_the_page
+import zoukan.i18n.desktop.loading_the_release_notes
+import zoukan.i18n.desktop.see_what_changed_in_this_version
+import zoukan.i18n.desktop.this_release_has_no_notes
+import zoukan.i18n.desktop.try_again
+import zoukan.i18n.desktop.updated_to_zoukan
+import zoukan.i18n.desktop.zoukan
+import zoukan.i18n.desktop.zoukan_2
 
 /**
  * Android's What's new screen: the release notes of the running version, read from its GitHub

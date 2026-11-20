@@ -60,6 +60,7 @@ import zoukan.desktop.download.DownloadManager
 import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.next_chapter_button
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors

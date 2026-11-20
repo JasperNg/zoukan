@@ -15,7 +15,10 @@ import androidx.core.text.HtmlCompat
 import exh.util.toAnnotatedString
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_ok
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.favorites_sync_notes
+import tachiyomi.i18n.sy.favorites_sync_notes_message
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

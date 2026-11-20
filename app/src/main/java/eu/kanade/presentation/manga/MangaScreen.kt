@@ -117,7 +117,12 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_resume
+import tachiyomi.i18n.action_start
+import tachiyomi.i18n.chapter_progress
+import tachiyomi.i18n.display_mode_chapter
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.pref_source_related_mangas
 import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.VerticalFastScroller
 import tachiyomi.presentation.core.components.material.PullRefresh

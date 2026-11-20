@@ -35,6 +35,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_filter
+import tachiyomi.i18n.action_select_all
+import tachiyomi.i18n.action_select_inverse
+import tachiyomi.i18n.action_update_library
+import tachiyomi.i18n.action_view_upcoming
+import tachiyomi.i18n.information_no_recent
+import tachiyomi.i18n.label_recent_updates
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold

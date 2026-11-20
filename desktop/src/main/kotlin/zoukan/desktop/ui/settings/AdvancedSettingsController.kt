@@ -28,6 +28,8 @@ import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.onboarding.Onboarding
 import zoukan.extension.ExtensionTrust
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.refreshing_covers
+import zoukan.i18n.desktop.refreshing_covers_of
 import java.io.File
 import java.net.CookieHandler
 import java.net.CookieManager

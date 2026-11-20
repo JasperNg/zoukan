@@ -40,7 +40,13 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.pref_category_advanced
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.alternative_login_page
+import tachiyomi.i18n.sy.custom_igneous_cookie
+import tachiyomi.i18n.sy.recheck_login_status
+import tachiyomi.i18n.sy.skip_page_restyling
 import tachiyomi.presentation.core.components.material.Button
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource

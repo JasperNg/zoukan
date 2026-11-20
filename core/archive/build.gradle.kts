@@ -5,12 +5,12 @@ plugins {
     kotlin("plugin.serialization")
 }
 
-android {
-    namespace = "mihon.core.archive"
-}
-
 // ZOUKAN -->
 kotlin {
+    android {
+        namespace = "mihon.core.archive"
+    }
+
     sourceSets {
         commonMain {
             dependencies {

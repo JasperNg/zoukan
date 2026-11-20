@@ -49,6 +49,9 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_mark_as_read
+import tachiyomi.i18n.action_mark_as_unread
+import tachiyomi.i18n.action_select_all
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import zoukan.desktop.app.DesktopPreferences
@@ -63,6 +66,11 @@ import zoukan.desktop.testkit.TestPreferenceStore
 import zoukan.desktop.ui.common.Images
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.bookmark
+import zoukan.i18n.desktop.collapse
+import zoukan.i18n.desktop.expand
+import zoukan.i18n.desktop.select
+import zoukan.i18n.desktop.selected
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

@@ -2,10 +2,22 @@ package zoukan.desktop.ui.common
 
 import eu.kanade.domain.ui.UiPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.lock_never
+import tachiyomi.i18n.relative_time_today
+import tachiyomi.i18n.updates_last_update_info_just_now
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.date_unknown
+import zoukan.i18n.desktop.days_ago
+import zoukan.i18n.desktop.hours_ago
+import zoukan.i18n.desktop.in_days
+import zoukan.i18n.desktop.minutes_ago
+import zoukan.i18n.desktop.n_1_hour_ago
+import zoukan.i18n.desktop.n_1_minute_ago
+import zoukan.i18n.desktop.tomorrow
+import zoukan.i18n.desktop.yesterday
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId

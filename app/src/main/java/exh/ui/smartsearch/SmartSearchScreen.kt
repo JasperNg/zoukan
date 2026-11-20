@@ -26,6 +26,9 @@ import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.util.system.toast
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.automatic_search_error
+import tachiyomi.i18n.sy.could_not_find_entry
+import tachiyomi.i18n.sy.searching_source
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 

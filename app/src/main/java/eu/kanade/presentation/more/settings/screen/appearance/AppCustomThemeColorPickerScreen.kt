@@ -21,6 +21,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.more.settings.widget.ThemeColorPickerWidget
 import eu.kanade.presentation.util.Screen
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.pref_custom_color
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState

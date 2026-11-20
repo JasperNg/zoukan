@@ -6,6 +6,7 @@ import org.w3c.dom.Element
 import zoukan.desktop.backup.restoredMessage
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.today_instead_of
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 

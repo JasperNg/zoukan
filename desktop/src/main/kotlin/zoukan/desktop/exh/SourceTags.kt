@@ -10,6 +10,34 @@ import exh.source.lanraragiSourceIds
 import exh.source.mangaDexSourceIds
 import exh.source.nHentaiSourceIds
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.artbook
+import tachiyomi.i18n.sy.artist_cg
+import tachiyomi.i18n.sy.asian_porn
+import tachiyomi.i18n.sy.cosplay
+import tachiyomi.i18n.sy.doujinshi
+import tachiyomi.i18n.sy.entry_type_comic
+import tachiyomi.i18n.sy.entry_type_manga
+import tachiyomi.i18n.sy.entry_type_manhua
+import tachiyomi.i18n.sy.entry_type_manhwa
+import tachiyomi.i18n.sy.entry_type_webtoon
+import tachiyomi.i18n.sy.game_cg
+import tachiyomi.i18n.sy.image_set
+import tachiyomi.i18n.sy.misc
+import tachiyomi.i18n.sy.no_rating
+import tachiyomi.i18n.sy.non_h
+import tachiyomi.i18n.sy.rating0
+import tachiyomi.i18n.sy.rating1
+import tachiyomi.i18n.sy.rating10
+import tachiyomi.i18n.sy.rating2
+import tachiyomi.i18n.sy.rating3
+import tachiyomi.i18n.sy.rating4
+import tachiyomi.i18n.sy.rating5
+import tachiyomi.i18n.sy.rating6
+import tachiyomi.i18n.sy.rating7
+import tachiyomi.i18n.sy.rating8
+import tachiyomi.i18n.sy.rating9
+import tachiyomi.i18n.sy.video
+import tachiyomi.i18n.sy.western
 
 /**
  * The parts of the Android app's `exh.util.SourceTagsUtil` and `MetadataUIUtil` the metadata

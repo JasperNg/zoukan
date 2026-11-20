@@ -35,8 +35,12 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import tachiyomi.domain.library.service.LibraryPreferences.ChapterSwipeAction
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_download
+import tachiyomi.i18n.disabled
 import zoukan.desktop.compat.localized
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.toggle_bookmark
+import zoukan.i18n.desktop.toggle_read
 import kotlin.math.abs
 import kotlin.math.roundToInt
 

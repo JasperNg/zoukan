@@ -55,7 +55,16 @@ import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.action_asc
+import tachiyomi.i18n.action_copy_to_clipboard
+import tachiyomi.i18n.action_desc
+import tachiyomi.i18n.action_migrate
+import tachiyomi.i18n.action_select_all
 import tachiyomi.i18n.kmk.KMR
+import tachiyomi.i18n.kmk.`open`
+import tachiyomi.i18n.label_titles_section
+import tachiyomi.i18n.name
+import tachiyomi.i18n.not_installed
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import zoukan.desktop.compat.localized
@@ -77,6 +86,13 @@ import zoukan.desktop.ui.manga.MangaScreen
 import zoukan.desktop.ui.manga.copyToClipboard
 import zoukan.desktop.ui.migration.MigrationConfigScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.find_a_source_by_name
+import zoukan.i18n.desktop.invert_the_selection
+import zoukan.i18n.desktop.migrate
+import zoukan.i18n.desktop.no_entries_in_the_library_to
+import zoukan.i18n.desktop.no_library_entries_from_this_source
+import zoukan.i18n.desktop.no_source_matches
+import zoukan.i18n.desktop.pick_the_entries_to_migrate
 
 /** A source with library entries, for Browse > Migrate */
 data class MigrateSourceItem(val id: Long, val name: String, val lang: String, val installed: Boolean, val count: Int)

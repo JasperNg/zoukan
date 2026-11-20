@@ -29,6 +29,11 @@ import zoukan.desktop.security.AppLock
 import zoukan.desktop.ui.ZoukanContent
 import zoukan.desktop.ui.e2eEffectContext
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.clear_search
+import zoukan.i18n.desktop.new_chapters_in_your_library_from
+import zoukan.i18n.desktop.search_history
+import zoukan.i18n.desktop.selected
+import zoukan.i18n.desktop.updating_the_library
 import kotlin.time.Duration.Companion.minutes
 
 /**

@@ -43,6 +43,7 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.in_library
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.util.rethrowIfVmFailure
@@ -55,6 +56,10 @@ import zoukan.desktop.ui.common.MangaGridItem
 import zoukan.desktop.ui.common.collectAsState
 import zoukan.desktop.ui.recs.RecommendsScreen
 import zoukan.i18n.desktop.DMR
+import zoukan.i18n.desktop.collapse
+import zoukan.i18n.desktop.expand
+import zoukan.i18n.desktop.related_titles
+import zoukan.i18n.desktop.see_all
 
 /**
  * Komikku's related titles on the entry page: the source's related titles in a row under the

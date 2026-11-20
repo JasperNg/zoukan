@@ -206,9 +206,9 @@ jobs:
           set -euo pipefail
           [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/platforms" ] || { echo "::error::No Android SDK at ANDROID_HOME on this image"; exit 1; }
           ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
-      - run: ./gradlew :app:compileDebugKotlin :data:compileDebugKotlinAndroid :domain:compileDebugKotlinAndroid :core:common:compileDebugKotlinAndroid :source-api:compileDebugKotlinAndroid
-      # The only Android unit tests: the app's (src/test) and domain's (src/androidUnitTest)
-      - run: ./gradlew :app:testDebugUnitTest :domain:testDebugUnitTest --continue
+      - run: ./gradlew :app:compileDebugKotlin :data:compileAndroidMain :domain:compileAndroidMain :core:common:compileAndroidMain :source-api:compileAndroidMain
+      # The only Android unit tests: the app's (src/test) and domain's (src/androidHostTest)
+      - run: ./gradlew :app:testDebugUnitTest :domain:testAndroidHostTest --continue
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:

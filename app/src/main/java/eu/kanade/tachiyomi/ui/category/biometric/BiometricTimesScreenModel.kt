@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.preference.plusAssign
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.internal_error
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.biometric_lock_time_conflicts
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

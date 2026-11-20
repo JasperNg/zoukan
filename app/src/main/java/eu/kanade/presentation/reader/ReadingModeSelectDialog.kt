@@ -22,6 +22,7 @@ import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.pref_category_reading_mode
 import tachiyomi.presentation.core.components.SettingsIconGrid
 import tachiyomi.presentation.core.components.material.IconToggleButton
 import tachiyomi.presentation.core.i18n.stringResource

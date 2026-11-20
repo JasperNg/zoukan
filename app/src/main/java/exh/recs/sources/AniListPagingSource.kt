@@ -20,6 +20,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.source.NoResultsException
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.community_recommendations
 
 class AniListPagingSource(manga: Manga) : TrackerRecommendationPagingSource(
     "https://graphql.anilist.co/",

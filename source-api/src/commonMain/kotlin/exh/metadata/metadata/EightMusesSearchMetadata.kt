@@ -8,6 +8,9 @@ import kotlinx.serialization.Serializable
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
+import tachiyomi.i18n.sy.path
+import tachiyomi.i18n.sy.thumbnail_url
+import tachiyomi.i18n.title
 
 @Serializable
 class EightMusesSearchMetadata : RaisedSearchMetadata() {
