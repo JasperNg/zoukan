@@ -64,7 +64,6 @@ Get the installer for your computer from the [latest release](https://github.com
 **On the desktop**
 - Tray or menu bar icon with notifications, and one window per profile
 - Keyboard shortcuts across the app (Settings > Keyboard shortcuts)
-- Discord Rich Presence
 
 [desktop/PARITY.md](desktop/PARITY.md) compares Zoukan with the Android app feature by feature.
 
