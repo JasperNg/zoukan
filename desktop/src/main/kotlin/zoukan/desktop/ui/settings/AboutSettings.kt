@@ -1,10 +1,18 @@
 package zoukan.desktop.ui.settings
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -14,27 +22,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.AppInfo
 import kotlinx.coroutines.launch
-import logcat.LogPriority
-import logcat.logcat
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.action_cancel
+import tachiyomi.i18n.action_close
 import tachiyomi.i18n.action_download
 import tachiyomi.i18n.action_install
-import tachiyomi.i18n.action_remove
-import tachiyomi.i18n.action_save
 import tachiyomi.i18n.check_for_updates
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.kmk.release_page
+import tachiyomi.i18n.licenses
 import tachiyomi.i18n.pref_category_about
-import tachiyomi.i18n.sy.SYMR
-import tachiyomi.i18n.sy.token
 import tachiyomi.i18n.whats_new
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import zoukan.desktop.Platform
 import zoukan.desktop.app.AppScope
 import zoukan.desktop.app.AppVersion
@@ -44,8 +44,6 @@ import zoukan.desktop.app.Toasts
 import zoukan.desktop.browser.BrowserWindow
 import zoukan.desktop.browser.JcefRuntime
 import zoukan.desktop.compat.localized
-import zoukan.desktop.secrets.SecretStore
-import zoukan.desktop.ui.security.secretStoreError
 import zoukan.desktop.update.UpdateChecker
 import zoukan.desktop.update.UpdateStates
 import zoukan.desktop.update.Updates
@@ -54,18 +52,18 @@ import zoukan.i18n.desktop.check_for_updates_automatically
 import zoukan.i18n.desktop.checking
 import zoukan.i18n.desktop.could_not_open_the_installer
 import zoukan.i18n.desktop.could_not_open_the_page
-import zoukan.i18n.desktop.could_not_use_the_secret_store
 import zoukan.i18n.desktop.crash_logs
 import zoukan.i18n.desktop.downloading_of_mb
 import zoukan.i18n.desktop.drag_zoukan_to_applications
-import zoukan.i18n.desktop.github_token
-import zoukan.i18n.desktop.github_token_set
 import zoukan.i18n.desktop.include_test_releases
 import zoukan.i18n.desktop.installing_closes_zoukan
 import zoukan.i18n.desktop.is_available
 import zoukan.i18n.desktop.is_downloaded
 import zoukan.i18n.desktop.komikku_for_windows_and_macos_on
-import zoukan.i18n.desktop.needed_while_the_release_repository_is
+import zoukan.i18n.desktop.license_apache_2
+import zoukan.i18n.desktop.license_mpl_2
+import zoukan.i18n.desktop.licenses_notice
+import zoukan.i18n.desktop.licenses_summary
 import zoukan.i18n.desktop.no_crashes_recorded
 import zoukan.i18n.desktop.once_a_day_while_zoukan_runs
 import zoukan.i18n.desktop.open_the_log_folder
@@ -73,6 +71,7 @@ import zoukan.i18n.desktop.release_notes_for_zoukan
 import zoukan.i18n.desktop.releases_from_github_com
 import zoukan.i18n.desktop.releases_marked_as_pre_release_on
 import zoukan.i18n.desktop.saved_newest
+import zoukan.i18n.desktop.source_code
 import zoukan.i18n.desktop.try_again
 import zoukan.i18n.desktop.update_no_checksum
 import zoukan.i18n.desktop.update_no_installer
@@ -80,7 +79,7 @@ import zoukan.i18n.desktop.zoukan
 import zoukan.i18n.desktop.zoukan_is_the_newest_version
 import zoukan.i18n.desktop.zoukan_log_has_what_zoukan_logged
 
-/** Settings > About: version, updates, the log file and crash logs (Phase 7). */
+/** Settings > About: version, updates, licenses, the log file and crash logs. */
 fun LazyListScope.aboutSettings() {
     settingsGroup(localized(MR.strings.pref_category_about))
     item(key = "about-version") {
@@ -103,7 +102,7 @@ fun LazyListScope.aboutSettings() {
     item(key = "about-prereleases") {
         SwitchPreference(localized(DMR.strings.include_test_releases), Updates.includePrereleases(), localized(DMR.strings.releases_marked_as_pre_release_on))
     }
-    item(key = "about-token") { TokenRow() }
+    item(key = "about-licenses") { LicensesRow() }
     item(key = "about-logs") {
         SettingRow(
             localized(DMR.strings.open_the_log_folder),
@@ -119,6 +118,71 @@ fun LazyListScope.aboutSettings() {
             onClick = { CrashReporter.crashDir?.let(::openFolder) },
         )
     }
+}
+
+internal enum class BundledLicense(val resourcePath: String) {
+    APACHE_2("licenses/LICENSE-Apache-2.0.txt"),
+    MPL_2("licenses/LICENSE-android-compat-MPL-2.0.txt"),
+}
+
+internal fun loadBundledLicense(license: BundledLicense): String =
+    BundledLicense::class.java.classLoader
+        ?.getResourceAsStream(license.resourcePath)
+        ?.bufferedReader()
+        ?.use { it.readText() }
+        .orEmpty()
+
+@Composable
+private fun LicensesRow() {
+    var open by remember { mutableStateOf(false) }
+    SettingRow(
+        localized(MR.strings.licenses),
+        localized(DMR.strings.licenses_summary),
+        onClick = { open = true },
+    )
+    if (open) {
+        LicensesDialog(onDismiss = { open = false })
+    }
+}
+
+@Composable
+private fun LicensesDialog(onDismiss: () -> Unit) {
+    var selected by remember { mutableStateOf(BundledLicense.APACHE_2) }
+    val licenseText = remember(selected) { loadBundledLicense(selected) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localized(MR.strings.licenses)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(localized(DMR.strings.licenses_notice), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = selected == BundledLicense.APACHE_2,
+                        onClick = { selected = BundledLicense.APACHE_2 },
+                        label = { Text(localized(DMR.strings.license_apache_2)) },
+                    )
+                    FilterChip(
+                        selected = selected == BundledLicense.MPL_2,
+                        onClick = { selected = BundledLicense.MPL_2 },
+                        label = { Text(localized(DMR.strings.license_mpl_2)) },
+                    )
+                }
+                Text(
+                    text = licenseText,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { browse("https://github.com/${AppVersion.releaseRepo}") }) {
+                Text(localized(DMR.strings.source_code))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(localized(MR.strings.action_close)) }
+        },
+    )
 }
 
 @Composable
@@ -188,74 +252,6 @@ private fun UpdateRow() {
     }
 }
 
-@Composable
-private fun TokenRow() {
-    var dialog by remember { mutableStateOf(false) }
-    var state by remember { mutableStateOf(tokenState(Updates.checker)) }
-    val hasToken = state == TokenState.SET
-    val storeName = remember { Injekt.get<SecretStore>().name }
-    SettingRow(
-        if (hasToken) localized(DMR.strings.github_token_set) else localized(DMR.strings.github_token),
-        tokenSubtitle(state, storeName),
-        onClick = { dialog = true },
-    )
-    if (dialog) {
-        var value by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { dialog = false },
-            title = { Text(localized(DMR.strings.github_token)) },
-            text = {
-                OutlinedTextField(
-                    value,
-                    { value = it },
-                    singleLine = true,
-                    label = { Text(localized(SYMR.strings.token)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                )
-            },
-            confirmButton = {
-                TextButton(enabled = value.isNotBlank(), onClick = {
-                    if (storeTokenOrToast(value)) {
-                        state = TokenState.SET
-                        dialog = false
-                    }
-                }) { Text(localized(MR.strings.action_save)) }
-            },
-            dismissButton = {
-                if (hasToken) {
-                    TextButton(onClick = {
-                        if (storeTokenOrToast(null)) {
-                            state = TokenState.NOT_SET
-                            dialog = false
-                        }
-                    }) { Text(localized(MR.strings.action_remove)) }
-                }
-                TextButton(onClick = { dialog = false }) { Text(localized(MR.strings.action_cancel)) }
-            },
-        )
-    }
-}
-
-/** Whether an update-check token is stored, or the secret store could not be read to tell. */
-internal enum class TokenState { SET, NOT_SET, UNREADABLE }
-
-internal fun tokenState(checker: UpdateChecker): TokenState = checker.storedToken().fold(
-    onSuccess = { if (it != null) TokenState.SET else TokenState.NOT_SET },
-    onFailure = { e ->
-        logcat("AboutSettings", LogPriority.WARN) { "Could not read the update-check token: ${e::class.simpleName}" }
-        TokenState.UNREADABLE
-    },
-)
-
-/**
- * The token row's second line: what the token is for, or that the secret store could not be read,
- * as the update check says (a locked store must not read as "no token").
- */
-internal fun tokenSubtitle(state: TokenState, storeName: String): String = when (state) {
-    TokenState.UNREADABLE -> localized(DMR.strings.could_not_use_the_secret_store)
-    else -> localized(DMR.strings.needed_while_the_release_repository_is, storeName)
-}
-
 private fun browse(url: String) {
     runCatching { zoukan.desktop.app.ExternalLinks.browse(url) }.onFailure { Toasts.error(localized(DMR.strings.could_not_open_the_page), it) }
 }
@@ -268,20 +264,4 @@ private fun exitApp(code: Int) {
     runCatching { BrowserWindow.disposeAllForQuit() }
     JcefRuntime.cleanProfileAtQuit()
     SystemEffects.current.exit(code)
-}
-
-/**
- * Saves (or with null, removes) the update-check token in the OS secret store. The store can
- * refuse (a denied Keychain prompt, a locked keyring): that is a toast, not an exception that
- * would close the app. @return whether it was stored
- */
-internal fun storeTokenOrToast(value: String?): Boolean = try {
-    Updates.checker.token = value
-    true
-} catch (e: Throwable) {
-    // A refusal, or the native store failing to load (a LinkageError from JNA)
-    if (e !is Exception && e !is LinkageError) throw e
-    logcat("AboutSettings", LogPriority.WARN) { "Could not store the update-check token: ${e.message}" }
-    Toasts.show(secretStoreError(e))
-    false
 }

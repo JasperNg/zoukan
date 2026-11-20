@@ -1,9 +1,9 @@
-# Builds the Zoukan desktop installers on GitHub's hosted runners after every merge to master, the
-# Windows x64 MSI and the Apple Silicon DMG, and publishes them as a GitHub release, which the
-# in-app update check finds (tag desktop-v<version>).
+# Builds the Zoukan desktop installers on GitHub's hosted runners — the Windows x64 MSI and the
+# Apple Silicon DMG — and publishes them as a GitHub release when triggered manually from master
+# (tag desktop-v<version>), which the in-app update check finds.
 #
 # Each release bumps PATCH over the newest desktop-v* tag. zoukan.versionFloor in gradle.properties
-# is the floor: raise it there for a new MINOR or MAJOR and the next merge releases that version.
+# is the floor: raise it there for a new MINOR or MAJOR and the next release picks that version.
 # The installers are unsigned on purpose: the project does not sign its builds.
 # Before anything is published, each job installs the installer it built (the MSI, or the app
 # copied out of the mounted DMG) and runs the installed app's self-test, so an installer that
@@ -12,25 +12,20 @@
 name: Desktop installers
 
 on:
-  # Merges that only change docs skip the build and the release, the same list as ci.yml
-  push:
-    branches: [master]
-    paths-ignore:
-      - '**.md'
-      - '.github/readme-images/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - 'desktop/reports/**'
-      - 'LICENSE'
   pull_request:
     paths:
       - .github/workflows/desktop-build.yml
       - desktop/packaging/**
       - desktop/packaging.gradle.kts
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Mark the GitHub release as a pre-release instead of latest
+        type: boolean
+        default: false
 
-# Pull requests cancel their older runs. Runs on master queue instead, so each release sees the
-# tag of the one before it and no two releases pick the same version. GitHub keeps one waiting run
-# per group: a newer merge replaces a waiting run, and that commit ships in the next release.
+# Pull requests cancel their older runs. Release runs on master queue instead, so each release sees
+# the tag of the one before it and no two releases pick the same version.
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -76,10 +71,10 @@ jobs:
             # The floor wins when it is above the newest release (a MINOR or MAJOR raise)
             version=$(printf '%s\n%s\n' "$next" "$floor" | sort -V | tail -n1)
           fi
-          # Publish from master only, and only once per commit (a re-run of a released commit
-          # rebuilds without releasing again)
+          # Publish from master only on manual workflow_dispatch, and only once per commit (a re-run
+          # of a released commit rebuilds without releasing again)
           release=false
-          if [ "$GITHUB_REF" = refs/heads/master ] && [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+          if [ "$GITHUB_REF" = refs/heads/master ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             if [ -z "$(git tag --points-at HEAD --list 'desktop-v*')" ]; then release=true; fi
           fi
           echo "Newest release: ${latest:-none}, floor: $floor, this build: $version, publish: $release"
@@ -115,6 +110,8 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
 
       - name: Build the MSI
         shell: pwsh
@@ -173,6 +170,8 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
 
       - name: Build the DMG
         run: ./gradlew :desktop:packageDmg "-Pzoukan.version=${{ needs.version.outputs.version }}"
@@ -243,10 +242,15 @@ jobs:
           rm -f "$RUNNER_TEMP/release-key.pem"
           previous=$(git tag --list 'desktop-v*' | sed 's/^desktop-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           cat > notes.md <<'EOF'
-          Built by GitHub Actions from the merge to master.
+          Built by GitHub Actions.
 
-          Both installers are unsigned: Windows SmartScreen may warn about an unknown publisher (More info > Run anyway), and on macOS the first start needs System Settings > Privacy & Security > Open Anyway.
+          Both installers are unsigned: Windows SmartScreen may warn about an unknown publisher (More info > Run anyway). On macOS, the first start needs System Settings > Privacy & Security > Open Anyway, and after an update macOS may ask to allow Keychain access for Zoukan (choose Always Allow).
           EOF
-          args=(--target "$GITHUB_SHA" --title "Zoukan $VERSION" --notes-file notes.md --generate-notes --latest)
+          args=(--target "$GITHUB_SHA" --title "Zoukan $VERSION" --notes-file notes.md --generate-notes)
+          if [ "${{ inputs.prerelease }}" = true ]; then
+            args+=(--prerelease)
+          else
+            args+=(--latest)
+          fi
           if [ -n "$previous" ]; then args+=(--notes-start-tag "desktop-v$previous"); fi
           gh release create "desktop-v$VERSION" installers/*.msi installers/*.dmg installers/*.sig "${args[@]}"

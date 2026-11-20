@@ -470,9 +470,11 @@
     <string name="is_downloaded">%1$s is downloaded</string>
     <string name="try_again">Try again</string>
     <string name="could_not_open_the_installer">Could not open the installer</string>
-    <string name="github_token_set">GitHub token: set</string>
-    <string name="github_token">GitHub token</string>
-    <string name="needed_while_the_release_repository_is">Needed while the release repository is private: a fine-grained token with read access to its contents. Kept in %1$s.</string>
+    <string name="licenses_summary">Apache License 2.0 and Mozilla Public License 2.0 (android-compat)</string>
+    <string name="licenses_notice">Zoukan is licensed under the Apache License, Version 2.0 (based on Komikku, Mihon, Tachiyomi and TachiyomiSY). The Android compatibility layer (android-compat, from Suwayomi-Server) is licensed under the Mozilla Public License 2.0; its source code is available in this repository.</string>
+    <string name="license_apache_2">Apache 2.0</string>
+    <string name="license_mpl_2">MPL 2.0</string>
+    <string name="source_code">Source code</string>
     <string name="signs_you_out_of_sites_and">Signs you out of sites and forgets passed Cloudflare checks</string>
     <string name="the_built_in_browsers_cookies_and">The built-in browser\'s cookies and cache</string>
     <string name="extensions_trusted_on_this_computer_must">Extensions trusted on this computer must be trusted again</string>

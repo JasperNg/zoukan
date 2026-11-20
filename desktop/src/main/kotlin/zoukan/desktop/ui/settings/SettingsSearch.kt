@@ -67,6 +67,7 @@ import tachiyomi.i18n.label_network
 import tachiyomi.i18n.label_sources
 import tachiyomi.i18n.last_read_chapter
 import tachiyomi.i18n.library_list
+import tachiyomi.i18n.licenses
 import tachiyomi.i18n.lock_always
 import tachiyomi.i18n.lock_never
 import tachiyomi.i18n.lock_when_idle
@@ -292,8 +293,6 @@ import zoukan.i18n.desktop.find_the_tracker_entry_from_the
 import zoukan.i18n.desktop.folder
 import zoukan.i18n.desktop.forget_what_was_synced_the_next
 import zoukan.i18n.desktop.front_page_categories
-import zoukan.i18n.desktop.github_token
-import zoukan.i18n.desktop.github_token_set
 import zoukan.i18n.desktop.hide_extensions_sources_that_are_incompatible
 import zoukan.i18n.desktop.hide_galleries_in_these_languages_from
 import zoukan.i18n.desktop.in_the_reader
@@ -307,6 +306,7 @@ import zoukan.i18n.desktop.keyboard_shortcuts_2
 import zoukan.i18n.desktop.language_filtering
 import zoukan.i18n.desktop.leave_storage_folder_out_of_time_machine
 import zoukan.i18n.desktop.leave_storage_folder_out_of_time_machine_summary
+import zoukan.i18n.desktop.licenses_summary
 import zoukan.i18n.desktop.lock_at_these_times
 import zoukan.i18n.desktop.lock_on_these_days
 import zoukan.i18n.desktop.mark_chapters_read_when_a_tracker
@@ -1456,9 +1456,9 @@ private fun buildSettingsSearchIndex(
     entry(
         SettingsCategory.About,
         aboutGroup,
-        localized(DMR.strings.github_token),
-        keywords = listOf(localized(DMR.strings.github_token_set)),
-        itemKey = "about-token",
+        localized(MR.strings.licenses),
+        localized(DMR.strings.licenses_summary),
+        itemKey = "about-licenses",
     )
     entry(
         SettingsCategory.About,

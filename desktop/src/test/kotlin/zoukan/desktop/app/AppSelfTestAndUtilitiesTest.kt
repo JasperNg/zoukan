@@ -74,8 +74,8 @@ class SelfTestUpdateCheckTest {
     }
 
     @Test
-    fun `without a token a private repository's not found still shows GitHub was reached`() {
-        val notFound = UpdateChecker.Result.Failed("No releases found. If the repository is private, add a GitHub token.")
+    fun `without a token a not found still shows GitHub was reached`() {
+        val notFound = UpdateChecker.Result.Failed("No releases found")
         SelfTest.updateCheckOutcome(notFound, withToken = false).status shouldBe Status.PASS
     }
 

@@ -88,9 +88,10 @@ class UpdateChecker(
             .build()
         try {
             client.newCall(request).execute().use { response ->
-                val hint = if (response.code == 404) missingTokenHint(stored, "") else null
+                val hint = if (response.code == 404) secretStoreFailureHint(stored) else null
                 when {
                     hint != null -> Result.Failed("No releases found. $hint")
+                    response.code == 404 -> Result.Failed("No releases found")
                     response.code == 401 -> Result.Failed("GitHub refused the token (401)")
                     response.code == 403 || response.code == 429 ->
                         Result.Failed("GitHub rate limit or no access (${response.code}); try again later", isRateLimited(response))
@@ -124,7 +125,7 @@ class UpdateChecker(
             .build()
         try {
             client.newCall(request).execute().use { response ->
-                val hint = if (response.code == 404) missingTokenHint(stored, " in Settings > About") else null
+                val hint = if (response.code == 404) secretStoreFailureHint(stored) else null
                 when {
                     hint != null -> kotlin.Result.failure(IOException("No release notes for $version. $hint"))
                     response.code == 404 -> kotlin.Result.failure(IOException("No release notes for $version on GitHub"))
@@ -153,13 +154,11 @@ class UpdateChecker(
     }
 
     /**
-     * Why a 404 may be a private repository read without its token: none is stored (add one,
-     * [where]), or the secret store could not be read, so a stored token was not sent. Null when
-     * the token [stored] was sent: then the 404 is GitHub's own answer.
+     * Reports a secret-store read failure alongside a 404 when a token could not be read; returns
+     * null when the store was readable (whether or not a token was present).
      */
-    private fun missingTokenHint(stored: kotlin.Result<String?>, where: String): String? = stored.fold(
-        onSuccess = { if (it == null) "If the repository is private, add a GitHub token$where." else null },
-        // A locked or unavailable store: telling the user to add a token they have would mislead
+    private fun secretStoreFailureHint(stored: kotlin.Result<String?>): String? = stored.fold(
+        onSuccess = { null },
         onFailure = { e -> "${localized(DMR.strings.could_not_use_the_secret_store)}: ${e.message ?: e::class.simpleName}" },
     )
 

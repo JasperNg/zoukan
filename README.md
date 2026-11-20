@@ -19,8 +19,8 @@ Zoukan is a free and open source manga reader for the desktop. It is a port of
 to Windows and macOS. It runs the same extensions, reads the same backups and keeps the same
 settings, so a library can move between a phone and a computer.
 
-The name comes from the Japanese word for a magazine's special extra issue (増刊 zōkan): this app is kinda like the extra edition of
-Komikku.
+The name comes from the Japanese word for a magazine's special extra issue (増刊 zōkan): an extra edition of
+Komikku for the desktop.
 
 ## Download
 
@@ -30,6 +30,11 @@ Get the installer for your computer from the [latest release](https://github.com
 |---|---|
 | Windows x64 | `Zoukan-<version>-windows-x64.msi` |
 | macOS, Apple Silicon | `Zoukan-<version>-macos-arm64.dmg` |
+
+> [!NOTE]
+> The installers are unsigned.
+> - **Windows:** SmartScreen may warn about an unknown publisher — choose **More info > Run anyway**.
+> - **macOS:** Gatekeeper blocks the first launch — open **System Settings > Privacy & Security > Open Anyway**. After an update, macOS may also ask whether Zoukan may access its Keychain items (for the encrypted database and file keys); choose **Always Allow** for Zoukan.
 
 ## Features
 

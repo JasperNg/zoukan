@@ -190,9 +190,17 @@ fun signWindows(file: File) {
 /** The app's jar and its libraries, the input jpackage copies into the app. */
 val prepareAppJars = tasks.register<Sync>("prepareAppJars") {
     group = "zoukan packaging"
-    description = "Collects the app's jars for jpackage (and on macOS signs native code in them)"
+    description = "Collects the app's jars and license files for jpackage (and on macOS signs native code in jars)"
     from(tasks.named("jar"))
     from(configurations.named("runtimeClasspath"))
+    from(rootProject.file("LICENSE")) {
+        into("licenses")
+        rename { "LICENSE-Apache-2.0.txt" }
+    }
+    from(rootProject.file("android-compat/LICENSE")) {
+        into("licenses")
+        rename { "LICENSE-android-compat-MPL-2.0.txt" }
+    }
     into(inputDir)
     if (isMac && macIdentity != null) {
         inputs.property("identity", macIdentity)

@@ -1,14 +1,15 @@
 # Releasing Zoukan desktop
 
-Phase 7 of the desktop port: the installers, the update check and crash logs. GitHub Actions
-builds both installers and publishes the release on every merge to `master` that changes more
-than docs; the published installers are unsigned. Nothing is published unless it passed two
-gates on the same commit: the CI check (`ci.yml`, called by `desktop-build.yml` as its tests job)
-and the clean-install check of each installer (below), which `desktop-build.yml` runs on the
-installer it is about to publish. The CI check runs the offline checks: Spotless, the build and unit
-tests, the wiring tests, the whole unit tier on Windows and macOS (on pull requests and on
-master alike), the Android compile and unit tests, and the offline journeys on Windows.
-`nightly.yml` runs the extension wiring check every night and does not gate a release.
+Installers, the update check and crash logs. GitHub Actions builds both installers and publishes
+a release when triggered manually on `master` (Actions > **Desktop installers** > **Run workflow**);
+merges to `master` do not publish a release on their own, and the published installers are unsigned.
+Nothing is published unless it passed two gates on the same commit: the CI check (`ci.yml`, called
+by `desktop-build.yml` as its tests job) and the clean-install check of each installer (below), which
+`desktop-build.yml` runs on the installer it is about to publish. The CI check runs the offline
+checks: Spotless, the build and unit tests, the wiring tests, the whole unit tier on Windows and
+macOS (on pull requests and on master alike), the Android compile and unit tests, and the offline
+journeys on Windows. `nightly.yml` runs the extension wiring check every night and does not gate a
+release.
 
 ## Installers
 
@@ -22,7 +23,7 @@ master alike), the Android compile and unit tests, and the offline journeys on W
 Each installer carries its own Java runtime, built with jlink from every module of the packaging
 JDK (extensions are arbitrary code and may use any module). The packaging JDK is
 `-Pzoukan.packageJdk=<JDK home>` or `ZOUKAN_PACKAGE_JDK`, else the JDK running Gradle; it must be a
-full JDK 21 with `jmods/` (the plan's choice is JetBrains Runtime 21, the `jbrsdk` download;
+full JDK 21 with `jmods/` (releases use JetBrains Runtime 21, the `jbrsdk` download;
 Temurin 21 works too).
 
 - **Windows**: the MSI installs for the current user under `%LOCALAPPDATA%` without an
@@ -41,21 +42,20 @@ upstream `compose` version catalog. `desktop/packaging.gradle.kts` calls jlink a
 
 `.github/workflows/desktop-build.yml` picks the version and publishes on `ubuntu-26.04`, and builds
 the Windows x64 MSI (`windows-2025-vs2026`) and the Apple Silicon DMG (`macos-26`, an arm64 image)
-with JetBrains Runtime 21 after every push to
-`master` that changes more than docs (the same list `ci.yml` ignores), then publishes both as a
-GitHub release tagged `desktop-v<version>`, which the update check finds. Nothing is built on a
-local machine for a release. A release is published only after the CI check of that commit passed.
-Runs on `master` queue in one group, and GitHub keeps at most one waiting run: when a merge lands
-while one release is building and another run is already waiting, the newer run replaces the
-waiting one, and the replaced commit ships in the next release instead of alone. Running the workflow from the Actions tab (Run workflow) on `master` releases the head commit
-if it has no release yet; a re-run of a released commit only rebuilds. The runner images are
-pinned (`ci.yml` runs on `ubuntu-26.04` too); moving to a newer image is a deliberate change made in
-both workflows and here. `ci.yml`'s "Android compile and unit tests" job (see `desktop/TESTING.md`) uses the
-image's preinstalled Android SDK, so a new Linux image must still ship the `compileSdk` platform.
+with JetBrains Runtime 21 when triggered manually from `master` (Actions > **Desktop installers** >
+**Run workflow**), then publishes both as a GitHub release tagged `desktop-v<version>`, which the
+update check finds. Merging to `master` does not publish a release automatically. Nothing is built
+on a local machine for a release. A release is published only after the CI check of that commit
+passed. Running the workflow on a commit that already has a `desktop-v*` tag rebuilds the
+installers without publishing again. Setting the `prerelease` input marks the release as a
+pre-release instead of `latest`. The runner images are pinned (`ci.yml` runs on `ubuntu-26.04` too);
+moving to a newer image is a deliberate change made in both workflows and here. `ci.yml`'s "Android
+compile and unit tests" job (see `desktop/TESTING.md`) uses the image's preinstalled Android SDK, so
+a new Linux image must still ship the `compileSdk` platform.
 
 The version bumps PATCH over the newest `desktop-v*` tag (1.0.2, then 1.0.3, ...) and is passed to
 Gradle as `-Pzoukan.version`. `zoukan.versionFloor` in `gradle.properties` is the floor: raise it
-there (to 1.1.0, say) and the next merge releases that version, then bumps from it. The release
+there (to 1.1.0, say) and the next release uses that version, then bumps from it. The release
 notes list the merged pull requests since the previous release.
 
 These installers are unsigned on purpose: the project does not sign its builds, so no signing
@@ -106,7 +106,7 @@ stored in Zoukan" before the window opens; Zoukan waits there until the user ans
 (the login password) lets that build in; Deny stops Zoukan with a crash report (the Keychain refused the key: status -128), and
 the database is left as it was.
 
-## Clean-install checks (the Phase 7 gate)
+## Clean-install checks
 
 `desktop-build.yml` runs these scripts with `--skip-build` / `-SkipBuild` on the MSI and DMG it
 built, before the release job, and a failure stops the release. They can also be run locally, as
@@ -141,7 +141,8 @@ token is kept in memory only and never written to the report or the log.
 
 ## Publishing a release
 
-Merge to `master`: the workflow publishes the release. Releases are never built or tagged by hand.
+Trigger **Desktop installers** from the Actions tab (**Run workflow**) on `master`. Releases are
+never built or tagged by hand.
 
 ## Update check
 
@@ -150,10 +151,6 @@ at build time changes it) for the newest `desktop-v*` tag above the running vers
 while Zoukan runs and on demand. It notifies once per new version, downloads the installer for the
 platform (checking the SHA-256 GitHub lists) into `<data>/updates`, and opens it: on Windows the
 MSI upgrades Zoukan, which quits first; on macOS the DMG opens to drag Zoukan to Applications.
-
-While the repository is private, the check needs a GitHub token: a fine-grained personal access
-token for that repository with read-only Contents access, entered under Settings > About >
-GitHub token and kept in the OS secret store. Without one the check says it found no releases.
 
 ### What an update must pass
 
@@ -189,11 +186,6 @@ downloaded. The public key is `desktop/src/main/resources/zoukan-release-key.pem
 the app; the private key is the repository secret `ZOUKAN_RELEASE_SIGNING_KEY` (PEM), read only by
 the `release` job, which fails without it and checks each signature against the public key before
 publishing. Apps built before this check do not look at the signature and keep updating.
-
-The first release published with `.sig` files is 1.1.0. Until 1.1.0 is published no release has a
-signature, so the positive path of `UpdateLiveTest` (a real release's installer whose signature
-verifies) cannot pass before then: the test checks that the unsigned installer is refused and
-skips the rest.
 
 To rotate the key: make a new Ed25519 key pair, replace the secret, and commit the new public key.
 The first release carrying the new public key must still be signed with the **old** private key

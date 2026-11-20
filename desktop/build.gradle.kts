@@ -196,9 +196,22 @@ val syncAppIcon = tasks.register<Sync>("syncAppIcon") {
     from(appIconSvg) { rename { "zoukan-icon.svg" } }
     into(layout.buildDirectory.dir("generated/app-icon"))
 }
+// License texts shown in Settings > About > Open source licenses
+val syncLicenses = tasks.register<Sync>("syncLicenses") {
+    from(rootProject.file("LICENSE")) {
+        into("licenses")
+        rename { "LICENSE-Apache-2.0.txt" }
+    }
+    from(rootProject.file("android-compat/LICENSE")) {
+        into("licenses")
+        rename { "LICENSE-android-compat-MPL-2.0.txt" }
+    }
+    into(layout.buildDirectory.dir("generated/licenses"))
+}
 sourceSets.main {
     resources.srcDir(syncAndroidResources)
     resources.srcDir(syncAppIcon)
+    resources.srcDir(syncLicenses)
 }
 
 // Komikku's own app tests that cover code the desktop app compiles (see app-shared.txt) run in

@@ -1,6 +1,6 @@
 # Zoukan desktop
 
-The desktop app for Windows x64 and Apple Silicon Macs. So far (Phase 6 of the desktop port) it has
+The desktop app for Windows x64 and Apple Silicon Macs. It includes
 the library, browse (sources, extensions, stores, global search, saved searches, the feed), manga
 details, updates, history, statistics, settings and per-source settings screens, and the reader,
 plus backups, downloads, the local source, scheduled library updates, automatic backups, a tray
@@ -136,7 +136,7 @@ Each release also starts the packaged app before publishing it: the release work
 
 ## End-to-end tests
 
-`EndToEndDownloadTest` is the Phase 5 gate: it installs an extension, adds three entries, updates the
+`EndToEndDownloadTest` exercises the download flow end to end: it installs an extension, adds three entries, updates the
 library from the Updates tab, downloads chapters from an entry (as a CBZ, then an encrypted one),
 reads the download, downloads every entry's newest chapter, reads from the local source and makes
 an automatic backup. The offline flows (the local source, browsing, migration, upcoming updates,

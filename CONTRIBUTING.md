@@ -25,8 +25,9 @@ Before you start, please note that the ability to use following technologies is 
 - Windows x64 or an Apple Silicon Mac to run and test the desktop app
 
 Before opening a pull request, run `./gradlew spotlessCheck :desktop:build` (see [desktop/README.md](desktop/README.md)).
-The [CI workflow](.github/workflows/ci.yml) runs the same command on every pull request (on Linux, so it stays quick; docs-only changes skip it).
-The end-to-end tests (`-Pzoukan.e2e=true`) are not part of it and run only locally.
+The desktop modules build without an Android SDK; avoid running root `./gradlew build` unless you also have `ANDROID_HOME` configured for the shared Android app.
+The [CI workflow](.github/workflows/ci.yml) runs the same desktop checks on every pull request (plus the Android compile and unit tests).
+The live end-to-end tests (`-Pzoukan.e2e=true`) are not part of it and run only locally.
 
 Every pull request's checks, however few tests the change touches, include the wiring tests:
 `:desktop:build` runs them through `check`, or run them alone with `./gradlew :desktop:wiringTest`.
@@ -53,8 +54,10 @@ configurations of `:desktop`. The `zoukan.targetPlatform` property
 (`windows-x64`, `macos-arm64` or `linux-x64`) exists only for this; it does not build another OS's app.
 
 A build that fails with "Dependency verification failed" means a checksum is missing or an artifact
-changed. If a checksum is missing, regenerate as above. If an artifact changed under the same version,
-find out why before touching the file: regenerating the checksum would accept the changed artifact.
+changed. Checksums are recorded for `windows-x64`, `macos-arm64` and `linux-x64`; building on
+another architecture (such as Intel macOS or ARM Linux) needs its platform checksums added first. If
+a checksum is missing, regenerate as above. If an artifact changed under the same version, find out
+why before touching the file: regenerating the checksum would accept the changed artifact.
 
 ## Getting help
 
@@ -67,33 +70,13 @@ The shared strings come from Komikku, which translates them on [Weblate](https:/
 
 # Forks
 
-Forks are allowed so long as they abide by [the project's LICENSE](https://github.com/JasperNg/zoukan/blob/master/LICENSE).
+Forks are allowed so long as they abide by [the project's LICENSE](https://github.com/JasperNg/zoukan/blob/master/LICENSE) and the Mozilla Public License 2.0 for `android-compat/`.
 
-When creating a fork, remember to:
+When creating a fork of the desktop app, remember to:
 
-- To avoid confusion with the main app:
-    - Change the app name
-    - Change the app icon
-    - Change or disable the [app update checker](https://github.com/JasperNg/zoukan/blob/master/app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt)
+- To avoid confusion with Zoukan:
+    - Change the app name and icons in [`desktop/packaging.gradle.kts`](desktop/packaging.gradle.kts) and `desktop/packaging/icons/`
+    - Point the updater at your own repository with `-Pzoukan.releaseRepo=owner/name` (or change the default in [`desktop/build.gradle.kts`](desktop/build.gradle.kts))
+    - Replace [`desktop/src/main/resources/zoukan-release-key.pem`](desktop/src/main/resources/zoukan-release-key.pem) with your own Ed25519 release signing public key and set `ZOUKAN_RELEASE_SIGNING_KEY` in your repository secrets
 - To avoid installation conflicts:
-    - Change the `applicationId` in [`build.gradle.kts`](https://github.com/JasperNg/zoukan/blob/master/app/build.gradle.kts)
-- To avoid having your data polluting the main app's analytics and crash report services:
-    - If you want to use Firebase analytics, replace [`google-services.json`](https://github.com/JasperNg/zoukan/blob/master/app/src/standard/google-services.json) with your own
-    - If you want to use ACRA crash reporting, replace the `ACRA_URI` endpoint in [`build.gradle.kts`](https://github.com/JasperNg/zoukan/blob/master/app/build.gradle.kts) with your own
-
-
-### Supporting Cloud Sync - Google Drive Implementation
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project
-3. Go to API & Services -> Library -> Google Drive API and click enable
-4. Go to API & Services -> Oauth consent screen
-5. Create it, fill in the app name, user support email, and developer contact information
-6. In the next screen, click add or remove scopes, and add the `.../auth/drive.appdata` and `.../auth/drive.file` scopes
-7. Don't add any test users and go back to the dashboard
-8. Click publish
-9. Go to API & Services -> Credentials
-10. Click Create credentials -> Oauth client ID
-11. Select Android, give it a name, and set `eu.kanade.google.oauth` as the package name
-12. To get the SHA-1 key, run `keytool -printcert -jarfile app-standard-universal-release.apk` on your apk, and copy the listed SHA-1
-13. Expand advanced settings, and enable Custom URL scheme
-14. After that just download the json, name it to `client_secrets.json` and put it in `app/src/main/assets/`
+    - Change the macOS `bundleId` and Windows `upgradeUuid` in [`desktop/packaging.gradle.kts`](desktop/packaging.gradle.kts)
