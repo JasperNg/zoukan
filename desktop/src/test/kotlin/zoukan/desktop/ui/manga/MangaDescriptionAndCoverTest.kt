@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -623,6 +624,70 @@ class MangaDescriptionAndCoverTest {
                 uiPrefs.themeCoverBased().set(false)
                 waitUntil(timeoutMillis = 5_000) { currentPrimary == basePrimary }
                 currentPrimary shouldBe basePrimary
+            }
+
+        @Test
+        fun `CoverBasedTheme preserves content state when themeCoverBased toggles and palette loads`() =
+            runDesktopComposeUiTest(effectContext = e2eEffectContext()) {
+                val store = TestPreferenceStore()
+                val uiPrefs = UiPreferences(store)
+                Injekt.addSingleton(uiPrefs)
+                val bluePng = solidPngBytes(0x2266EE)
+                val client = OkHttpClient.Builder()
+                    .addInterceptor { chain ->
+                        Response.Builder()
+                            .request(chain.request())
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(bluePng.toResponseBody("image/png".toMediaType()))
+                            .build()
+                    }
+                    .build()
+                Injekt.addSingleton(mockk<NetworkHelper> { every { this@mockk.client } returns client })
+                Injekt.addSingleton(mockk<SourceManager>(relaxed = true) { every { this@mockk.get(any()) } returns null })
+
+                val manga = Manga.create().copy(
+                    id = 702,
+                    source = 4242L,
+                    ogTitle = "State Preservation Cover",
+                    ogThumbnailUrl = "https://example.invalid/blue-cover.png",
+                    initialized = true,
+                )
+
+                uiPrefs.themeCoverBased().set(false)
+                var currentPrimary = Color.Unspecified
+                var observedCount = -1
+                setContent {
+                    MaterialTheme {
+                        CoverBasedTheme(manga) {
+                            currentPrimary = MaterialTheme.colorScheme.primary
+                            var count by remember { mutableStateOf(0) }
+                            observedCount = count
+                            TextButton(onClick = { count++ }) {
+                                Text("Count: $count")
+                            }
+                        }
+                    }
+                }
+                waitForIdle()
+                val basePrimary = currentPrimary
+
+                onNodeWithText("Count: 0").performClick()
+                waitUntil(timeoutMillis = 5_000) { observedCount == 1 }
+                onNodeWithText("Count: 1").assertExists()
+
+                uiPrefs.themeCoverBased().set(true)
+                waitUntil(timeoutMillis = 5_000) { currentPrimary != basePrimary }
+                waitForIdle()
+                observedCount shouldBe 1
+                onNodeWithText("Count: 1").assertExists()
+
+                uiPrefs.themeCoverBased().set(false)
+                waitUntil(timeoutMillis = 5_000) { currentPrimary == basePrimary }
+                waitForIdle()
+                observedCount shouldBe 1
+                onNodeWithText("Count: 1").assertExists()
             }
     }
 

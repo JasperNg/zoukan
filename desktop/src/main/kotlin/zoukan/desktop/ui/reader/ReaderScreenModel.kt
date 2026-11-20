@@ -138,6 +138,30 @@ class ReaderScreenModel(
     private var loadJob: Job? = null
     private var chapterOpenedAt = System.currentTimeMillis()
 
+    // ZOUKAN -->
+    // Must initialize before `init` launches loading, as `MangaScreenModel` does, so eager
+    // execution on Main cannot observe uninitialized properties or overwrite them afterward.
+    /** Read chapters whose downloads go when the reader closes, as Android's pending deletions */
+    private val pendingDeletes = LinkedHashMap<Long, Chapter>()
+
+    /** The chapter download ahead last ran for, so it runs once per chapter */
+    private var downloadedAheadFor: Long? = null
+
+    /**
+     * Whether the open chapter is read in incognito, for the source it comes from: a merged entry's
+     * chapter by its own entry's source, not the merged entry's. Set by [loadChapter] once that
+     * entry is known, true until then.
+     */
+    @Volatile
+    private var incognito: Boolean = true
+
+    /**
+     * Set when Voyager disposes the model, which it does as soon as the screen is popped, while the
+     * reader still fades out and can report a page. Only read and changed on the main thread.
+     */
+    private var disposed = false
+    // ZOUKAN <--
+
     /** Writes reading progress in page-turn order; on the app scope, so writes finish after the reader closes */
     private val progressWriter = ProgressWriter(appScope) { updateChapter.await(it) }
 
@@ -375,12 +399,6 @@ class ReaderScreenModel(
     }
 
     // ZOUKAN -->
-    /** Read chapters whose downloads go when the reader closes, as Android's pending deletions */
-    private val pendingDeletes = LinkedHashMap<Long, Chapter>()
-
-    /** The chapter download ahead last ran for, so it runs once per chapter */
-    private var downloadedAheadFor: Long? = null
-
     /**
      * After [chapter] was read to the end: "Automatically delete after reading" (the chapter that
      * many chapters back, in the reading list), and "Mark duplicate read chapters as read", as
@@ -542,16 +560,6 @@ class ReaderScreenModel(
         return true
     }
 
-    // ZOUKAN -->
-    /**
-     * Whether the open chapter is read in incognito, for the source it comes from: a merged entry's
-     * chapter by its own entry's source, not the merged entry's. Set by [loadChapter] once that
-     * entry is known, true until then.
-     */
-    @Volatile
-    private var incognito: Boolean = true
-    // ZOUKAN <--
-
     private fun saveHistory() {
         if (incognito) return
         val chapter = state.value.chapter ?: return
@@ -562,14 +570,6 @@ class ReaderScreenModel(
             upsertHistory.await(HistoryUpdate(chapter.id, Date(), duration))
         }
     }
-
-    // ZOUKAN -->
-    /**
-     * Set when Voyager disposes the model, which it does as soon as the screen is popped, while the
-     * reader still fades out and can report a page. Only read and changed on the main thread.
-     */
-    private var disposed = false
-    // ZOUKAN <--
 
     override fun onDispose() {
         // ZOUKAN -->

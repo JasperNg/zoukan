@@ -137,11 +137,12 @@ fun CoverBasedTheme(manga: Manga, content: @Composable () -> Unit) {
             )
         }
     }
-    if (scheme == null) {
-        content()
-    } else {
-        MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes, content = content)
-    }
+    MaterialTheme(
+        colorScheme = scheme ?: base,
+        typography = MaterialTheme.typography,
+        shapes = MaterialTheme.shapes,
+        content = content,
+    )
 }
 
 /** Each cover's seed color, picked as Material You picks one from a wallpaper. */

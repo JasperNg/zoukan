@@ -214,6 +214,7 @@ class HistoryScreenModel(
     }
 
     private val query = MutableStateFlow("")
+    private var namesJob: Job? = null
 
     init {
         screenModelScope.launch {
@@ -247,8 +248,6 @@ class HistoryScreenModel(
                 }
         }
     }
-
-    private var namesJob: Job? = null
 
     // History rows only carry the chapter number; sources name chapters like "Group 2 Chapter 1"
     private suspend fun loadChapterNames(items: List<HistoryWithRelations>) {

@@ -54,6 +54,8 @@ import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.history.interactor.UpsertHistory
+import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetManga
@@ -264,7 +266,11 @@ class ReaderProgressAndLifecycleTest {
             return folder
         }
 
-        private fun newModel(row: ChapterRow, folder: File): ReaderScreenModel {
+        private fun newModel(
+            row: ChapterRow,
+            folder: File,
+            upsertHistory: UpsertHistory = mockk(relaxed = true),
+        ): ReaderScreenModel {
             val store = TestPreferenceStore()
             return ReaderScreenModel(
                 mangaId = manga.id,
@@ -278,7 +284,7 @@ class ReaderProgressAndLifecycleTest {
                     }
                     coEvery { awaitAll(any()) } returns Unit
                 },
-                upsertHistory = mockk(relaxed = true),
+                upsertHistory = upsertHistory,
                 mangaRepository = mockk(relaxed = true),
                 downloadManager = mockk<DownloadManager>(relaxed = true) {
                     every { findChapter(any(), any()) } returns folder
@@ -338,6 +344,33 @@ class ReaderProgressAndLifecycleTest {
                     row.lastPageRead shouldBe (PAGES - 1).toLong()
                 }
             }
+        }
+
+        @Test
+        fun `eager init on Main keeps incognito off and still saves progress and history on dispose`() = runBlocking<Unit> {
+            val row = ChapterRow()
+            val historyUpdates = CopyOnWriteArrayList<HistoryUpdate>()
+            val upsertHistory = mockk<UpsertHistory> {
+                coEvery { await(any()) } answers { historyUpdates += firstArg<HistoryUpdate>() }
+            }
+            val folder = chapterFolder(PAGES)
+            val screen = TestScreen("reader-eager-init-test-${UUID.randomUUID()}")
+            val model = try {
+                Dispatchers.setMain(Dispatchers.Unconfined)
+                registerReaderModel(screen) { newModel(row, folder, upsertHistory) }
+            } finally {
+                Dispatchers.setMain(main)
+            }
+            withTimeout(10_000) { model.state.first { it.pages.size == PAGES } }
+            withContext(Dispatchers.Main) {
+                model.onPageChanged(PAGES - 1)
+                ScreenModelStore.onDispose(screen)
+            }
+            withTimeout(10_000) { awaitAppWork(app) }
+
+            row.read shouldBe true
+            row.lastPageRead shouldBe (PAGES - 1).toLong()
+            historyUpdates.map { it.chapterId } shouldContain chapter.id
         }
     }
 
