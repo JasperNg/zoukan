@@ -141,6 +141,10 @@ token is kept in memory only and never written to the report or the log.
 
 ## Publishing a release
 
+Before triggering a release, review `README.md` (and `desktop/README.md` and `desktop/PARITY.md`
+when features changed) to confirm all listed features, settings paths, supported formats,
+platform requirements, build commands and links are accurate and up to date with the code.
+
 Trigger **Desktop installers** from the Actions tab (**Run workflow**) on `master`. Releases are
 never built or tagged by hand.
 

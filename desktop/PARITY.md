@@ -217,5 +217,5 @@ between the two. "Exception" rows are the proposed differences; each says why.
 
 ## Not on desktop (by design)
 
-Home-screen widget, Android share sheet and system link handling (paste the address in Browse instead), biometrics, secure screen and Google Drive
+Home-screen widget, Android share sheet and system link handling (paste the address in Browse instead), biometrics and Google Drive
 sync. Backups keep their preferences, so nothing is lost moving back.

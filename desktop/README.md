@@ -72,7 +72,7 @@ left to right, paged right to left, vertical, webtoon and continuous vertical.
 | Escape | Empty the search box, clear the selection or go back |
 | Alt + Left, mouse back button | Back |
 
-The reader's keys win while it is open. Settings > Keyboard shortcuts lists them too.
+The reader's keys win while it is open. Settings > Advanced > Keyboard shortcuts lists them too.
 
 ## Trackers, E-Hentai, merged entries
 
@@ -101,7 +101,7 @@ synced or copied folder works on both:
 | Folder | What |
 |---|---|
 | `downloads/<source>/<manga>/<chapter>.cbz` | Downloads, named as Android names them (`Name (LANG)`, `Scanlator_Chapter`, optional URL hash) |
-| `local/<manga>/` | The local source: chapters as image folders, CBZ, ZIP or EPUB; `ComicInfo.xml`, `details.json` and `cover.*` as on Android |
+| `local/<manga>/` | The local source: chapters as image folders, CBZ, ZIP, RAR, 7z, TAR or EPUB; `ComicInfo.xml`, `details.json` and `cover.*` as on Android |
 | `autobackup/` | Automatic backups, the newest four, every 12 hours by default |
 
 - **Downloads** use the Android settings (CBZ or folder, sources and pages at once, URL hash,
@@ -114,7 +114,7 @@ synced or copied folder works on both:
   `<data>/reports/library-update-errors.txt` (`reports.noindex` on macOS).
 - **Background work** runs while the app is open, in place of WorkManager: the scheduled library
   update and automatic backup are checked every minute against when they last ran, so missed work
-  runs soon after launch. Closing the window keeps Zoukan in the tray (Settings > General), from
+  runs soon after launch. Closing the window keeps Zoukan in the tray (Settings > Advanced), from
   where it notifies about updates, downloads and failures.
 
 ## Wiring tests
@@ -257,7 +257,7 @@ asks once more.
 
 - Converting APKs with dex2jar fails JVM bytecode verification for R8-minified APKs, which is every
   current APK of the main extension store. Stores without jars only work for unminified extensions.
-- Google Drive sync and the secure screen are Android only. See [PARITY.md](PARITY.md) for the
+- Google Drive sync is Android only. See [PARITY.md](PARITY.md) for the
   other differences from Android.
 - The local source reads RAR 5 chapters through the system's `tar` command (bsdtar, on macOS and
   Windows 10 and later); RAR 4, 7z and TAR open without it. RAR, 7z and TAR chapters are unpacked

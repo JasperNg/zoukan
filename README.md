@@ -40,30 +40,38 @@ Get the installer for your computer from the [latest release](https://github.com
 
 **Library and reading**
 - Library with categories, filters, sorts, badges and five display modes, including panorama covers
-- Reader with paged (left to right, right to left), vertical, webtoon and continuous modes, zoom,
-  crop borders, page splitting, filters and keyboard, mouse and wheel controls
-- Updates and history tabs, statistics, and scheduled library updates with an update errors screen
+- Custom themes, pure black mode, and cover-based themes for entries and the reader
+- Reader with paged (left to right, right to left), vertical, webtoon and continuous modes,
+  double-page spreads, zoom, crop borders, page splitting, auto scroll, filters, and keyboard,
+  mouse and wheel controls
+- Updates (with an upcoming releases calendar) and history tabs, statistics, and scheduled library
+  updates with an update errors screen
 - Downloads as CBZ or folders, with optional password-protected CBZs, and a local source that reads
-  image folders, CBZ, ZIP, RAR, 7z and EPUB
+  image folders, CBZ, ZIP, RAR, 7z, TAR and EPUB
 
 **Sources**
-- The extensions can be installed and run as on Android
-- Browse, global search, saved searches and the feed, with source and language icons
-- A built-in Chromium browser for Cloudflare checks and site sign-in
-- E-Hentai and ExHentai, MangaDex follows sync, and metadata views for supported sources
-- Merged entries, migration between sources and source recommendations
+- Extensions can be installed and run on the desktop
+- Browse, global search, saved searches, batch add and the feed, with source and language icons
+- A built-in Chromium browser for Cloudflare checks and site sign-in, with a built-in ad and
+  tracker blocker
+- E-Hentai and ExHentai, MangaDex follows sync, data saver, and metadata views for supported sources
+- Merged entries, single and bulk migration between sources, and source recommendations
 
 **Your data**
-- Backups in the `.tachibk` format: restore one from Komikku, Mihon or TachiyomiSY, and back up
-  for any of them, by hand or on a schedule
-- Trackers: MyAnimeList, AniList, Kitsu, MangaUpdates, Shikimori, Bangumi, Komga, Kavita and Suwayomi
-- An encrypted database and encrypted logins, with keys in Windows Credential Manager or the macOS
-  Keychain
-- App lock, incognito mode and per-source incognito
+- Backups in the `.tachibk` format: restore one from Komikku, Mihon or TachiyomiSY, back up for
+  any of them by hand or on a schedule, plus automatic safety backups before destructive changes
+  and installing missing extensions after a restore
+- Data sync with SyncYomi and WebDAV
+- Trackers: MyAnimeList, AniList, Kitsu, MangaUpdates, Shikimori, Bangumi, MDList, Komga, Kavita
+  and Suwayomi
+- An encrypted database, encrypted logins and encrypted caches, with keys in Windows Credential
+  Manager or the macOS Keychain, plus DNS over HTTPS on by default
+- App lock, secure screen, incognito mode and per-source incognito
 
 **On the desktop**
 - Tray or menu bar icon with notifications, and one window per profile
-- Keyboard shortcuts across the app (Settings > Keyboard shortcuts)
+- Keyboard shortcuts across the app (Settings > Advanced > Keyboard shortcuts)
+- In-app update checks with signed release verification and release notes (Settings > About)
 
 [desktop/PARITY.md](desktop/PARITY.md) compares Zoukan with the Android app feature by feature.
 
@@ -96,7 +104,7 @@ covers installers, signing, notarization and releases.
 Report a bug or suggest a feature with the [issue forms](https://github.com/JasperNg/zoukan/issues/new/choose).
 Zoukan doesn't make or fix extensions, so take problems with a source to its extension's repository.
 Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+[Code of Conduct](CODE_OF_CONDUCT.md). For security vulnerabilities, see [SECURITY.md](SECURITY.md).
 
 ## Credits
 
