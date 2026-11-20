@@ -401,13 +401,16 @@ class UpdateFaultsTest {
     }
 
     @Test
-    fun `a private repository with no token stored still says to add one`() {
+    fun `a 404 with no token stored reports missing releases without a secret store or token hint`() {
         publish()
         server.fail(releases.releasesPath, FixtureFailure.Status(404))
         val checker = checker(MemorySecretStore())
 
-        runBlocking { checker.check() }.shouldBeInstanceOf<UpdateChecker.Result.Failed>().message shouldContain "add a GitHub token"
-        runBlocking { checker.releaseNotes(Version.parse("2.0.0")!!) }.exceptionOrNull()!!.message!! shouldContain "add a GitHub token"
+        val check = runBlocking { checker.check() }.shouldBeInstanceOf<UpdateChecker.Result.Failed>().message
+        val notes = runBlocking { checker.releaseNotes(Version.parse("2.0.0")!!) }.exceptionOrNull()!!.message!!
+
+        check shouldBe "No releases found"
+        notes shouldBe "No release notes for 2.0.0 on GitHub"
     }
 
     private companion object {
