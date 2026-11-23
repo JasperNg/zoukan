@@ -6,8 +6,14 @@
 allprojects {
     if (path == ":desktop") {
         tasks.register("resolveDesktopClasspaths") {
-            val files = listOf("runtimeClasspath", "testRuntimeClasspath", "compileClasspath", "testCompileClasspath")
-                .map { configurations.getByName(it) }
+            val files = listOf(
+                "runtimeClasspath",
+                "testRuntimeClasspath",
+                "compileClasspath",
+                "testCompileClasspath",
+                "toolsCompileClasspath",
+                "toolsRuntimeClasspath",
+            ).map { configurations.getByName(it) }
             doLast { files.forEach { it.files } }
         }
     }

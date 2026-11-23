@@ -49,9 +49,10 @@ and its native libraries differ per OS) and commit the changed file with the dep
 ```
 
 The init script in the last two registers `:desktop:resolveDesktopClasspaths`, a task that resolves the
-`runtimeClasspath`, `testRuntimeClasspath`, `compileClasspath` and `testCompileClasspath`
-configurations of `:desktop`. The `zoukan.targetPlatform` property
+`runtimeClasspath`, `testRuntimeClasspath`, `compileClasspath`, `testCompileClasspath`,
+`toolsCompileClasspath`, and `toolsRuntimeClasspath` configurations of `:desktop`. The `zoukan.targetPlatform` property
 (`windows-x64`, `macos-arm64` or `linux-x64`) exists only for this; it does not build another OS's app.
+You can also run `.github/scripts/refresh-verification-metadata.sh` to refresh checksums across all three operating systems, Spotless, and Android automatically (Renovate invokes it on automated Gradle PRs).
 
 A build that fails with "Dependency verification failed" means a checksum is missing or an artifact
 changed. Checksums are recorded for `windows-x64`, `macos-arm64` and `linux-x64`; building on

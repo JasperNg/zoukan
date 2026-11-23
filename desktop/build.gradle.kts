@@ -416,6 +416,8 @@ tasks.test {
         rootProject.file("gradle/verification-metadata.xml"),
         rootProject.file("gradle.properties"),
         rootProject.file("renovate.json"),
+        rootProject.file(".github/scripts/refresh-verification-metadata.sh"),
+        rootProject.fileTree(".github") { include("dependabot.yml") },
         rootProject.file("desktop/UPSTREAM-MERGES.md"),
         rootProject.file("desktop/RELEASING.md"),
         rootProject.file("extension-jvm/build.gradle.kts"),

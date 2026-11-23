@@ -1,6 +1,11 @@
 package zoukan.desktop.release
 
 import io.kotest.matchers.collections.shouldBeEmpty
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import java.io.File
 
@@ -260,6 +265,105 @@ class ReleaseWorkflowTest {
         }
         if ("desktop/build.gradle.kts" in pick) problems += "the pick step still reads desktop/build.gradle.kts"
         if ("floor: \$floor" !in pick && "Version floor" !in pick) problems += "the pick step does not print the floor it read"
+        problems.shouldBeEmpty()
+    }
+
+    @Test
+    fun `Renovate is self-hosted with checksum refresh and replaces Dependabot`() {
+        val problems = mutableListOf<String>()
+
+        if (File(root, ".github/dependabot.yml").exists()) {
+            problems += ".github/dependabot.yml still exists alongside Renovate"
+        }
+
+        val renovateJson = runCatching {
+            Json.parseToJsonElement(text("renovate.json")).jsonObject
+        }.getOrElse { error ->
+            problems += "renovate.json is not valid JSON: ${error.message}"
+            null
+        }
+        if (renovateJson != null) {
+            val rules = renovateJson["packageRules"]?.jsonArray.orEmpty().map { it.jsonObject }
+            val disablesActions = rules.any { rule ->
+                val managers = rule["matchManagers"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                "github-actions" in managers && rule["enabled"]?.jsonPrimitive?.booleanOrNull == false
+            }
+            if (disablesActions) problems += "renovate.json disables github-actions"
+
+            val refreshesChecksums = rules.any { rule ->
+                val managers = rule["matchManagers"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                val post = rule["postUpgradeTasks"]?.jsonObject
+                val commands = post?.get("commands")?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                val filters = post?.get("fileFilters")?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                "gradle" in managers &&
+                    "gradle-wrapper" in managers &&
+                    "bash .github/scripts/refresh-verification-metadata.sh" in commands &&
+                    "gradle/verification-metadata.xml" in filters
+            }
+            if (!refreshesChecksums) {
+                problems += "renovate.json does not refresh gradle/verification-metadata.xml in postUpgradeTasks"
+            }
+
+            val disablesAndroidJar = rules.any { rule ->
+                val packages = rule["matchPackageNames"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                "com.github.Suwayomi:android-jar" in packages && rule["enabled"]?.jsonPrimitive?.booleanOrNull == false
+            }
+            if (!disablesAndroidJar) problems += "renovate.json does not disable com.github.Suwayomi:android-jar"
+
+            val gatesJcef = rules.any { rule ->
+                val packages = rule["matchPackageNames"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                packages.any { """me\.friwi:jcef""" in it || "me.friwi:jcef" in it } &&
+                    rule["dependencyDashboardApproval"]?.jsonPrimitive?.booleanOrNull == true
+            }
+            if (!gatesJcef) problems += "renovate.json does not gate me.friwi:jcef behind dependencyDashboardApproval"
+        }
+
+        val workflowFile = File(root, ".github/workflows/renovate.yml")
+        if (!workflowFile.isFile) {
+            problems += ".github/workflows/renovate.yml is missing"
+        } else {
+            val workflow = workflowFile.readText()
+            if ("github.event_name != 'schedule' || !github.event.repository.fork" !in job(workflow, "renovate")) {
+                problems += "renovate.yml: the renovate job runs on the schedule in forks too"
+            }
+            if ("platformCommit: \"disabled\"" !in workflow) {
+                problems += "renovate.yml does not set platformCommit: \"disabled\""
+            }
+            if (!Regex("""gitAuthor:\s*"[^"]*users\.noreply\.github\.com>?"""").containsMatchIn(workflow)) {
+                problems += "renovate.yml does not set gitAuthor to a users.noreply.github.com address"
+            }
+            if ("exposeAllEnv" in workflow) {
+                problems += "renovate.yml sets exposeAllEnv, which would expose secrets to postUpgradeTasks"
+            }
+            val allowedCommandsBlock = Regex("""allowedCommands:\s*\[([^\]]*)]""", RegexOption.DOT_MATCHES_ALL)
+                .find(workflow)?.groupValues?.get(1)
+            val allowedCommands = Regex(""""([^"]+)"""")
+                .findAll(allowedCommandsBlock.orEmpty())
+                .map { it.groupValues[1] }
+                .toList()
+            val expectedAllowed = listOf("""^bash \\.github/scripts/refresh-verification-metadata\\.sh$""")
+            if (allowedCommands != expectedAllowed) {
+                problems += "renovate.yml allowedCommands must be $expectedAllowed, found $allowedCommands"
+            }
+        }
+
+        val scriptFile = File(root, ".github/scripts/refresh-verification-metadata.sh")
+        if (!scriptFile.isFile) {
+            problems += ".github/scripts/refresh-verification-metadata.sh is missing"
+        } else {
+            if (!scriptFile.canExecute()) problems += ".github/scripts/refresh-verification-metadata.sh is not executable"
+            val script = scriptFile.readText()
+            for (platform in listOf("linux-x64", "windows-x64", "macos-arm64")) {
+                if (platform !in script) problems += "refresh-verification-metadata.sh does not resolve $platform"
+            }
+            if (":desktop:resolveDesktopClasspaths" !in script) {
+                problems += "refresh-verification-metadata.sh does not run :desktop:resolveDesktopClasspaths"
+            }
+            if ("verify-metadata" !in script || "len(hashes) > 1" !in script) {
+                problems += "refresh-verification-metadata.sh does not verify XML single-hash integrity"
+            }
+        }
+
         problems.shouldBeEmpty()
     }
 }

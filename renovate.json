@@ -1,4 +1,8 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices"
+  ],
   "baseBranchPatterns": [
     "master"
   ],
@@ -7,13 +11,273 @@
   "labels": [
     "Dependencies"
   ],
-  "extends": [
-    "config:best-practices"
+  "dependencyDashboard": true,
+  "timezone": "UTC",
+  "schedule": [
+    "before 7am on monday"
+  ],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 5,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/renovate\\.yml$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[a-zA-Z0-9-._]+)\\s+depName=(?<depName>[^\\s]+)\\s+RENOVATE_VERSION:\\s*['\"]?(?<currentValue>[^'\"\\s]+)['\"]?"
+      ]
+    }
   ],
   "packageRules": [
     {
       "matchManagers": [
-        "github-actions"
+        "gradle",
+        "gradle-wrapper"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "bash .github/scripts/refresh-verification-metadata.sh"
+        ],
+        "fileFilters": [
+          "gradle/verification-metadata.xml"
+        ],
+        "executionMode": "branch"
+      }
+    },
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": [
+        "github-actions",
+        "custom.regex"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pinDigest"
+      ]
+    },
+    {
+      "groupName": "Android Gradle Plugin",
+      "matchPackageNames": [
+        "/^com\\.android\\.tools\\.build:/"
+      ]
+    },
+    {
+      "groupName": "Kotlin",
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.kotlin([:.]|$)/"
+      ]
+    },
+    {
+      "groupName": "Kotlinx",
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.kotlinx:/"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "groupName": "Compose Multiplatform",
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.compose\\./",
+        "org.jetbrains.androidx.navigationevent:navigationevent-compose"
+      ]
+    },
+    {
+      "groupName": "AndroidX",
+      "matchPackageNames": [
+        "/^androidx\\./"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "groupName": "OkHttp",
+      "matchPackageNames": [
+        "/^com\\.squareup\\.okhttp3:/"
+      ]
+    },
+    {
+      "groupName": "Coil",
+      "matchPackageNames": [
+        "/^io\\.coil-kt\\.coil3:/"
+      ]
+    },
+    {
+      "groupName": "SQLDelight",
+      "matchPackageNames": [
+        "/^app\\.cash\\.sqldelight([:.]|$)/",
+        "com.eygraber:sqldelight-androidx-driver"
+      ]
+    },
+    {
+      "groupName": "JavaCPP and FFmpeg",
+      "matchPackageNames": [
+        "/^org\\.bytedeco:/"
+      ]
+    },
+    {
+      "groupName": "GraalVM Polyglot",
+      "matchPackageNames": [
+        "/^org\\.graalvm\\.polyglot:/"
+      ]
+    },
+    {
+      "groupName": "TwelveMonkeys ImageIO",
+      "matchPackageNames": [
+        "/^com\\.twelvemonkeys\\./"
+      ]
+    },
+    {
+      "groupName": "OW2 ASM",
+      "matchPackageNames": [
+        "/^org\\.ow2\\.asm:/"
+      ]
+    },
+    {
+      "groupName": "dex2jar",
+      "matchPackageNames": [
+        "/^de\\.femtopedia\\.dex2jar:/"
+      ]
+    },
+    {
+      "groupName": "JNA",
+      "matchPackageNames": [
+        "/^net\\.java\\.dev\\.jna:/"
+      ]
+    },
+    {
+      "groupName": "Multiplatform Settings",
+      "matchPackageNames": [
+        "/^com\\.russhwolf:/"
+      ]
+    },
+    {
+      "groupName": "xmlutil",
+      "matchPackageNames": [
+        "/^io\\.github\\.pdvrieze\\.xmlutil:/"
+      ]
+    },
+    {
+      "groupName": "Voyager",
+      "matchPackageNames": [
+        "/^cafe\\.adriel\\.voyager:/"
+      ]
+    },
+    {
+      "groupName": "Moko Resources",
+      "matchPackageNames": [
+        "/^dev\\.icerock\\.(moko:|mobile\\.multiplatform-resources$)/"
+      ]
+    },
+    {
+      "groupName": "AboutLibraries",
+      "matchPackageNames": [
+        "/^com\\.mikepenz[:.]aboutlibraries/"
+      ]
+    },
+    {
+      "groupName": "Markdown Renderer",
+      "matchPackageNames": [
+        "/^com\\.mikepenz:multiplatform-markdown-renderer/"
+      ]
+    },
+    {
+      "groupName": "Firebase",
+      "matchPackageNames": [
+        "/^com\\.google\\.(firebase|gms)([:.]|$)/"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "groupName": "Shizuku",
+      "matchPackageNames": [
+        "/^dev\\.rikka\\.shizuku:/"
+      ]
+    },
+    {
+      "groupName": "LeakCanary",
+      "matchPackageNames": [
+        "/^com\\.squareup\\.leakcanary:/"
+      ]
+    },
+    {
+      "groupName": "Spotless and ktlint",
+      "matchPackageNames": [
+        "/^com\\.diffplug\\.spotless:/",
+        "/^com\\.pinterest\\.ktlint:/"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "groupName": "Logging",
+      "matchPackageNames": [
+        "/^org\\.slf4j:/",
+        "/^ch\\.qos\\.logback:/",
+        "/^io\\.github\\.oshai:/"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "groupName": "Kotest",
+      "matchPackageNames": [
+        "/^io\\.kotest:/"
+      ]
+    },
+    {
+      "groupName": "JUnit",
+      "matchPackageNames": [
+        "/^org\\.junit\\./"
+      ]
+    },
+    {
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true,
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "groupName": "JCEF / Chromium",
+      "matchPackageNames": [
+        "/^me\\.friwi:jcef/"
+      ],
+      "dependencyDashboardApproval": true,
+      "prBodyNotes": [
+        "After approving this PR, update `desktop/src/main/resources/jcef-natives.sha256` with the SHA-256 checksums for all platforms (see `desktop/RELEASING.md`, \"Chromium's checksum\"). `ChromiumNativesTest` will fail until those checksums are updated."
+      ]
+    },
+    {
+      "description": "Commit-pinned in settings.gradle.kts and SHA-256 verified in android-compat/build.gradle.kts",
+      "matchPackageNames": [
+        "com.github.Suwayomi:android-jar"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Alignment constraint pinned to match materialKolor's runtime material3 version",
+      "matchFileNames": [
+        "app/build.gradle.kts"
+      ],
+      "matchPackageNames": [
+        "androidx.compose.material3:material3"
       ],
       "enabled": false
     }
