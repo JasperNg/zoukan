@@ -93,7 +93,7 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 kotest-assertions = "io.kotest:kotest-assertions-core:6.2.1"
 # ZOUKAN: property-based tests in the desktop module, at the same version as the assertions
 kotest-property = "io.kotest:kotest-property:6.2.1"
-mockk = "io.mockk:mockk:1.14.11"
+mockk = "io.mockk:mockk:1.14.12"
 
 voyager-navigator = { module = "cafe.adriel.voyager:voyager-navigator", version.ref = "voyager" }
 voyager-screenmodel = { module = "cafe.adriel.voyager:voyager-screenmodel", version.ref = "voyager" }
