@@ -578,6 +578,9 @@ class ExtensionWiringCheck(
             "android.os.ResultReceiver" to
                 "Gets a result back from the extension's own Activity (pt.mangalivre's reader check), which the " +
                 "desktop cannot open",
+            "javax.el." to
+                "Optional Java EE Expression Language classes referenced by a library bundled in all.networkshare; " +
+                "neither Android nor the desktop JDK ships javax.el",
         )
 
         /**

@@ -45,12 +45,27 @@ class ViewOffscreenTest {
     }
 
     @Test
+    fun `accessibility importance is recorded and read back`() {
+        val view = View(null)
+        view.importantForAccessibility shouldBe View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        view.importantForAccessibility shouldBe View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    @Test
     fun `WebView inherits the tested versions rather than stubs of its own`() {
         // An override between View and WebView would shadow the tested methods for every extension
         val tested = setOf(View::class.java, ViewGroup::class.java)
-        listOf("setTranslationX", "setTranslationY", "getTranslationX", "getTranslationY", "dispatchWindowVisibilityChanged")
-            .forEach { name ->
-                WebView::class.java.methods.filter { it.name == name }.forEach { (it.declaringClass in tested) shouldBe true }
-            }
+        listOf(
+            "setTranslationX",
+            "setTranslationY",
+            "getTranslationX",
+            "getTranslationY",
+            "dispatchWindowVisibilityChanged",
+            "setImportantForAccessibility",
+            "getImportantForAccessibility",
+        ).forEach { name ->
+            WebView::class.java.methods.filter { it.name == name }.forEach { (it.declaringClass in tested) shouldBe true }
+        }
     }
 }

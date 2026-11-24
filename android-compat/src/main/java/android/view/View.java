@@ -2809,8 +2809,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         throw new RuntimeException("Stub!");
     }
 
+    // ZOUKAN -->
+    // Extensions hide an offscreen WebView from accessibility with this; desktop views are never
+    // shown, so the mode is only recorded.
+    private int mImportantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_AUTO;
+    // ZOUKAN <--
+
     public int getImportantForAccessibility() {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ return mImportantForAccessibility; /* ZOUKAN <-- */
     }
 
     public void setAccessibilityLiveRegion(int mode) {
@@ -2822,7 +2828,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     public void setImportantForAccessibility(int mode) {
-        throw new RuntimeException("Stub!");
+        /* ZOUKAN --> */ mImportantForAccessibility = mode; /* ZOUKAN <-- */
     }
 
     public boolean isImportantForAccessibility() {
