@@ -364,10 +364,12 @@ class BackupButtonsTest {
     @Test
     fun `two clicks on Restore before the button is disabled open one picker`() = runDesktopComposeUiTest {
         val releaseLookup = CountDownLatch(1)
+        val lookupCalls = AtomicInteger()
         Injekt.addSingleton(ZoukanDirs(temp))
         Injekt.addSingleton(
             mockk<ZoukanStorage> {
                 every { isAvailable } answers {
+                    lookupCalls.incrementAndGet()
                     releaseLookup.await(5, TimeUnit.SECONDS)
                     false
                 }
@@ -389,6 +391,7 @@ class BackupButtonsTest {
         Await.until("the picker to be asked for") { picks.get() > 0 }
         waitForIdle()
 
+        lookupCalls.get() shouldBe 1
         picks.get() shouldBe 1
     }
 }

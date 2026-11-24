@@ -394,7 +394,7 @@ internal suspend fun pickBackupFile(
     storage: ZoukanStorage = Injekt.get(),
 ): File? {
     // Off the UI thread: a sleeping external drive or network share would freeze the window
-    val start = backupPickerStart(dirs.backups, automatic = { storage.autoBackups.takeIf { storage.isAvailable } })
+    val start = backupPickerStart(dirs.backups, automatic = { if (storage.isAvailable) storage.autoBackups else null })
     return SystemEffects.current.pickFile(
         FileRequest(window, localized(MR.strings.file_select_backup), save = false, directory = start) { name ->
             isBackupName(name)
