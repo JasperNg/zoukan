@@ -54,6 +54,13 @@
       }
     },
     {
+      "description": "Verification metadata is refreshed across all platforms by postUpgradeTasks instead of Renovate's single-OS gradlew run",
+      "matchManagers": [
+        "gradle"
+      ],
+      "skipArtifactsUpdate": true
+    },
+    {
       "groupName": "GitHub Actions",
       "matchManagers": [
         "github-actions",
@@ -274,6 +281,17 @@
       "description": "Commit-pinned in settings.gradle.kts and SHA-256 verified in android-compat/build.gradle.kts",
       "matchPackageNames": [
         "com.github.Suwayomi:android-jar"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Commit-pinned JitPack forks without Maven release tags",
+      "matchPackageNames": [
+        "com.github.komikku-app:UniFile",
+        "com.github.mihonapp:injekt",
+        "com.github.tachiyomiorg:subsampling-scale-image-view",
+        "com.github.tachiyomiorg:image-decoder",
+        "com.github.zhanghai.quickjs-java:quickjs-android"
       ],
       "enabled": false
     },

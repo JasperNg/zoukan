@@ -332,6 +332,30 @@ class ReleaseWorkflowTest {
             if ((statusCheckWhen?.get("minimumReleaseAge") as? JsonPrimitive)?.contentOrNull != "never") {
                 problems += "renovate.json does not set statusCheckWhen.minimumReleaseAge to \"never\""
             }
+
+            val skipsGradleArtifacts = rules.any { rule ->
+                val managers = rule["matchManagers"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                "gradle" in managers && rule["skipArtifactsUpdate"]?.jsonPrimitive?.booleanOrNull == true
+            }
+            if (!skipsGradleArtifacts) {
+                problems += "renovate.json does not set skipArtifactsUpdate=true for gradle manager"
+            }
+
+            val disabledPackages = rules
+                .filter { it["enabled"]?.jsonPrimitive?.booleanOrNull == false }
+                .flatMap { it["matchPackageNames"]?.jsonArray.orEmpty().map { name -> name.jsonPrimitive.content } }
+                .toSet()
+            val commitPinnedJitpack = listOf(
+                "com.github.komikku-app:UniFile",
+                "com.github.mihonapp:injekt",
+                "com.github.tachiyomiorg:subsampling-scale-image-view",
+                "com.github.tachiyomiorg:image-decoder",
+            )
+            for (pkg in commitPinnedJitpack) {
+                if (pkg !in disabledPackages) {
+                    problems += "renovate.json does not disable commit-pinned JitPack package $pkg"
+                }
+            }
         }
 
         val workflowFile = File(root, ".github/workflows/renovate.yml")
