@@ -2,7 +2,10 @@ package zoukan.desktop.release
 
 import io.kotest.matchers.collections.shouldBeEmpty
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -316,6 +319,19 @@ class ReleaseWorkflowTest {
                     rule["dependencyDashboardApproval"]?.jsonPrimitive?.booleanOrNull == true
             }
             if (!gatesJcef) problems += "renovate.json does not gate me.friwi:jcef behind dependencyDashboardApproval"
+
+            val dashboard = renovateJson["dependencyDashboard"] as? JsonObject
+            if ((dashboard?.get("enabled") as? JsonPrimitive)?.booleanOrNull != true) {
+                problems += "renovate.json does not set dependencyDashboard.enabled to true"
+            }
+
+            val statusCheckWhen = renovateJson["statusCheckWhen"] as? JsonObject
+            if ((statusCheckWhen?.get("artifactError") as? JsonPrimitive)?.contentOrNull != "never") {
+                problems += "renovate.json does not set statusCheckWhen.artifactError to \"never\""
+            }
+            if ((statusCheckWhen?.get("minimumReleaseAge") as? JsonPrimitive)?.contentOrNull != "never") {
+                problems += "renovate.json does not set statusCheckWhen.minimumReleaseAge to \"never\""
+            }
         }
 
         val workflowFile = File(root, ".github/workflows/renovate.yml")
@@ -361,6 +377,9 @@ class ReleaseWorkflowTest {
             }
             if ("verify-metadata" !in script || "len(hashes) > 1" !in script) {
                 problems += "refresh-verification-metadata.sh does not verify XML single-hash integrity"
+            }
+            if ("""PIPESTATUS[@]""" !in script) {
+                problems += "refresh-verification-metadata.sh does not snapshot PIPESTATUS[@] before indexing"
             }
         }
 

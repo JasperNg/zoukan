@@ -11,13 +11,19 @@
   "labels": [
     "Dependencies"
   ],
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "timezone": "UTC",
   "schedule": [
     "before 7am on monday"
   ],
   "minimumReleaseAge": "3 days",
   "internalChecksFilter": "strict",
+  "statusCheckWhen": {
+    "artifactError": "never",
+    "minimumReleaseAge": "never"
+  },
   "prConcurrentLimit": 5,
   "prHourlyLimit": 5,
   "customManagers": [

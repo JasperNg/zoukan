@@ -19,11 +19,14 @@ run_gradle_collect_checksums() {
   local status=0
   local tee_status=0
 
+  local pipe_status=()
   set +e
   "$@" 2>&1 | tee "$log"
-  status=${PIPESTATUS[0]}
-  tee_status=${PIPESTATUS[1]}
+  pipe_status=("${PIPESTATUS[@]}")
   set -e
+
+  status=${pipe_status[0]}
+  tee_status=${pipe_status[1]}
 
   if [ "$status" -eq 0 ] && [ "$tee_status" -ne 0 ]; then
     status=$tee_status
