@@ -316,13 +316,61 @@ class ReleaseWorkflowTest {
             val gatesJcef = rules.any { rule ->
                 val packages = rule["matchPackageNames"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
                 packages.any { """me\.friwi:jcef""" in it || "me.friwi:jcef" in it } &&
-                    rule["dependencyDashboardApproval"]?.jsonPrimitive?.booleanOrNull == true
+                    rule["enabled"]?.jsonPrimitive?.booleanOrNull == false
             }
-            if (!gatesJcef) problems += "renovate.json does not gate me.friwi:jcef behind dependencyDashboardApproval"
+            if (!gatesJcef) {
+                problems += "renovate.json does not disable me.friwi:jcef"
+            }
 
             val dashboard = renovateJson["dependencyDashboard"] as? JsonObject
-            if ((dashboard?.get("enabled") as? JsonPrimitive)?.booleanOrNull != true) {
-                problems += "renovate.json does not set dependencyDashboard.enabled to true"
+            if ((dashboard?.get("enabled") as? JsonPrimitive)?.booleanOrNull != false) {
+                problems += "renovate.json does not set dependencyDashboard.enabled to false"
+            }
+
+            val usesDashboardApproval = rules.any {
+                it["dependencyDashboardApproval"]?.jsonPrimitive?.booleanOrNull == true
+            }
+            if (usesDashboardApproval) {
+                problems += "renovate.json sets dependencyDashboardApproval=true, which re-opens the Dependency Dashboard issue"
+            }
+
+            if ((renovateJson["automerge"] as? JsonPrimitive)?.booleanOrNull == true) {
+                problems += "renovate.json sets top-level automerge=true; only non-major updates should auto-merge"
+            }
+            if ((renovateJson["platformAutomerge"] as? JsonPrimitive)?.booleanOrNull != false) {
+                problems += "renovate.json does not set platformAutomerge=false"
+            }
+            if ((renovateJson["automergeType"] as? JsonPrimitive)?.contentOrNull != "pr") {
+                problems += "renovate.json does not set automergeType to \"pr\""
+            }
+            if ((renovateJson["automergeStrategy"] as? JsonPrimitive)?.contentOrNull != "squash") {
+                problems += "renovate.json does not set automergeStrategy to \"squash\""
+            }
+            if ((renovateJson["ignoreTests"] as? JsonPrimitive)?.booleanOrNull != false) {
+                problems += "renovate.json does not set ignoreTests=false"
+            }
+
+            val automergeRules = rules.filter { it["automerge"]?.jsonPrimitive?.booleanOrNull == true }
+            val hasNonMajorAutomerge = automergeRules.any { rule ->
+                val types = rule["matchUpdateTypes"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                "minor" in types && "patch" in types && "major" !in types
+            }
+            if (!hasNonMajorAutomerge) {
+                problems += "renovate.json does not enable automerge for minor/patch updates"
+            }
+            val hasUnsafeAutomerge = automergeRules.any { rule ->
+                val types = rule["matchUpdateTypes"]?.jsonArray?.map { it.jsonPrimitive.content }
+                types == null || "major" in types
+            }
+            if (hasUnsafeAutomerge) {
+                problems += "renovate.json enables automerge broadly or for major updates"
+            }
+            val disablesMajors = rules.any { rule ->
+                val types = rule["matchUpdateTypes"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
+                "major" in types && rule["enabled"]?.jsonPrimitive?.booleanOrNull == false
+            }
+            if (!disablesMajors) {
+                problems += "renovate.json does not disable major updates"
             }
 
             val statusCheckWhen = renovateJson["statusCheckWhen"] as? JsonObject

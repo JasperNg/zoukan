@@ -12,7 +12,7 @@
     "Dependencies"
   ],
   "dependencyDashboard": {
-    "enabled": true
+    "enabled": false
   },
   "timezone": "UTC",
   "schedule": [
@@ -26,6 +26,10 @@
   },
   "prConcurrentLimit": 5,
   "prHourlyLimit": 5,
+  "platformAutomerge": false,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "ignoreTests": false,
   "customManagers": [
     {
       "customType": "regex",
@@ -261,18 +265,27 @@
       ]
     },
     {
+      "description": "Auto-merge non-major updates once CI checks pass",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pinDigest"
+      ],
+      "automerge": true
+    },
+    {
       "matchUpdateTypes": [
         "major"
       ],
-      "dependencyDashboardApproval": true,
-      "minimumReleaseAge": "7 days"
+      "enabled": false
     },
     {
       "groupName": "JCEF / Chromium",
       "matchPackageNames": [
         "/^me\\.friwi:jcef/"
       ],
-      "dependencyDashboardApproval": true,
+      "enabled": false,
       "prBodyNotes": [
         "After approving this PR, update `desktop/src/main/resources/jcef-natives.sha256` with the SHA-256 checksums for all platforms (see `desktop/RELEASING.md`, \"Chromium's checksum\"). `ChromiumNativesTest` will fail until those checksums are updated."
       ]

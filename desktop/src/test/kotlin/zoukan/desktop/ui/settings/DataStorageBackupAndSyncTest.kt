@@ -363,16 +363,28 @@ class BackupButtonsTest {
 
     @Test
     fun `two clicks on Restore before the button is disabled open one picker`() = runDesktopComposeUiTest {
+        val releaseLookup = CountDownLatch(1)
         Injekt.addSingleton(ZoukanDirs(temp))
-        Injekt.addSingleton(mockk<ZoukanStorage> { every { isAvailable } returns false })
+        Injekt.addSingleton(
+            mockk<ZoukanStorage> {
+                every { isAvailable } answers {
+                    releaseLookup.await(5, TimeUnit.SECONDS)
+                    false
+                }
+            },
+        )
         SystemEffects.current = effects
         setContent { Navigator(Blank) { BackupButtons() } }
 
         val click = onNodeWithText(localized(MR.strings.pref_restore_backup)).fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
         // In one frame, as a fast double click lands before the recomposition that disables the button
-        runOnUiThread {
-            click()
-            click()
+        try {
+            runOnUiThread {
+                click()
+                click()
+            }
+        } finally {
+            releaseLookup.countDown()
         }
         Await.until("the picker to be asked for") { picks.get() > 0 }
         waitForIdle()
