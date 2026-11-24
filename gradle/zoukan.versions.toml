@@ -53,7 +53,7 @@ bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.86"
 
 # Extension install pipeline
 apk-parser = "net.dongliu:apk-parser:2.6.10"
-apksig = "com.android.tools.build:apksig:9.5.1"
+apksig = "com.android.tools.build:apksig:9.5.2"
 dex2jar-translator = { module = "de.femtopedia.dex2jar:dex-translator", version.ref = "dex2jar" }
 dex2jar-tools = { module = "de.femtopedia.dex2jar:dex-tools", version.ref = "dex2jar" }
 asm = { module = "org.ow2.asm:asm", version.ref = "asm" }

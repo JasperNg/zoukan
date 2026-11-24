@@ -195,6 +195,7 @@ class HarnessRunsTest {
         val wiringBlock = build.substringAfter("val extensionWiringStoreTests =").substringBefore("extensionWiringStoreTests.zipWithNext")
         build shouldContain "testStandins"
         wiringBlock shouldContain "testStandins.output"
+        wiringBlock shouldContain """include("**/ExtensionWiringTest.class")"""
         wiringBlock shouldContain """systemProperty("zoukan.fileSecrets", "true")"""
 
         val wiringTest = File(root, "desktop/src/test/kotlin/zoukan/desktop/harness/ExtensionWiringTest.kt").readText()

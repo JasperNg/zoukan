@@ -12,7 +12,7 @@
     "Dependencies"
   ],
   "dependencyDashboard": {
-    "enabled": true
+    "enabled": false
   },
   "timezone": "UTC",
   "schedule": [
@@ -26,6 +26,10 @@
   },
   "prConcurrentLimit": 5,
   "prHourlyLimit": 5,
+  "platformAutomerge": false,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "ignoreTests": false,
   "customManagers": [
     {
       "customType": "regex",
@@ -52,6 +56,13 @@
         ],
         "executionMode": "branch"
       }
+    },
+    {
+      "description": "Verification metadata is refreshed across all platforms by postUpgradeTasks instead of Renovate's single-OS gradlew run",
+      "matchManagers": [
+        "gradle"
+      ],
+      "skipArtifactsUpdate": true
     },
     {
       "groupName": "GitHub Actions",
@@ -254,18 +265,27 @@
       ]
     },
     {
+      "description": "Auto-merge non-major updates once CI checks pass",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pinDigest"
+      ],
+      "automerge": true
+    },
+    {
       "matchUpdateTypes": [
         "major"
       ],
-      "dependencyDashboardApproval": true,
-      "minimumReleaseAge": "7 days"
+      "enabled": false
     },
     {
       "groupName": "JCEF / Chromium",
       "matchPackageNames": [
         "/^me\\.friwi:jcef/"
       ],
-      "dependencyDashboardApproval": true,
+      "enabled": false,
       "prBodyNotes": [
         "After approving this PR, update `desktop/src/main/resources/jcef-natives.sha256` with the SHA-256 checksums for all platforms (see `desktop/RELEASING.md`, \"Chromium's checksum\"). `ChromiumNativesTest` will fail until those checksums are updated."
       ]
@@ -274,6 +294,17 @@
       "description": "Commit-pinned in settings.gradle.kts and SHA-256 verified in android-compat/build.gradle.kts",
       "matchPackageNames": [
         "com.github.Suwayomi:android-jar"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Commit-pinned JitPack forks without Maven release tags",
+      "matchPackageNames": [
+        "com.github.komikku-app:UniFile",
+        "com.github.mihonapp:injekt",
+        "com.github.tachiyomiorg:subsampling-scale-image-view",
+        "com.github.tachiyomiorg:image-decoder",
+        "com.github.zhanghai.quickjs-java:quickjs-android"
       ],
       "enabled": false
     },

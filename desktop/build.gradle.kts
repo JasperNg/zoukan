@@ -504,6 +504,7 @@ val extensionWiringStoreTests = extensionWiringStores.map { store ->
         classpath = sourceSets.test.get().runtimeClasspath.minus(testStandins.output)
         useJUnitPlatform()
         filter { includeTestsMatching("*ExtensionWiringTest") }
+        include("**/ExtensionWiringTest.class")
         systemProperty("zoukan.e2e", "true")
         systemProperty("zoukan.e2e.store", store)
         systemProperty("zoukan.fileSecrets", "true")
